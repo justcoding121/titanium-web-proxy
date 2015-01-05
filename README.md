@@ -16,3 +16,9 @@ Usage
 =====
 
 Refer the HTTP Proxy Server library in your project, look up sample project to learn usage.
+
+Future updates
+============
+* Cleanup code for better readability
+* Change system proxy settings to use our proxy on startup/stop
+* Support HTTP 2.0 Once spec is ready
