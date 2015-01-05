@@ -1,0 +1,65 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.30501.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Library", "Library", "{B6DBABDC-C985-4872-9C38-B4E5079CBC4B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.HTTPProxyServer", "Titanium.HTTPProxyServer\Titanium.HTTPProxyServer.csproj", "{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.ProxyTest", "Titanium.ProxyTest\Titanium.ProxyTest.csproj", "{F3B7E553-1904-4E80-BDC7-212342B5C952}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+		Release-Plus|Any CPU = Release-Plus|Any CPU
+		Release-Plus|x64 = Release-Plus|x64
+		Release-Plus|x86 = Release-Plus|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Debug|x64.ActiveCfg = Debug|x64
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Debug|x64.Build.0 = Debug|x64
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Debug|x86.ActiveCfg = Debug|x86
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Debug|x86.Build.0 = Debug|x86
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release|x64.ActiveCfg = Release|x64
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release|x64.Build.0 = Release|x64
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release|x86.ActiveCfg = Release|x86
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release|x86.Build.0 = Release|x86
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release-Plus|Any CPU.ActiveCfg = Release|Any CPU
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release-Plus|Any CPU.Build.0 = Release|Any CPU
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release-Plus|x64.ActiveCfg = Release|x64
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release-Plus|x64.Build.0 = Release|x64
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release-Plus|x86.ActiveCfg = Release|x86
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release-Plus|x86.Build.0 = Release|x86
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release|x64.ActiveCfg = Release|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release|x86.ActiveCfg = Release|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release-Plus|Any CPU.ActiveCfg = Release|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release-Plus|Any CPU.Build.0 = Release|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release-Plus|x64.ActiveCfg = Release|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release-Plus|x86.ActiveCfg = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906} = {B6DBABDC-C985-4872-9C38-B4E5079CBC4B}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		EnterpriseLibraryConfigurationToolBinariesPath = .1.505.2\lib\NET35
+	EndGlobalSection
+EndGlobal
