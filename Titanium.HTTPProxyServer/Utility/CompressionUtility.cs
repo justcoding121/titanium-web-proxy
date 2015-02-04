@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.IO;
 
-namespace HTTPProxyServer
+namespace Titanium.HTTPProxyServer
 {
     public partial class ProxyServer
     {

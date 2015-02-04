@@ -6,7 +6,7 @@ using System.IO;
 using System.Diagnostics;
 using System.Net;
 
-namespace HTTPProxyServer
+namespace Titanium.HTTPProxyServer
 {
    public partial  class ProxyServer
     {

@@ -1,13 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2013
-VisualStudioVersion = 12.0.30501.0
+VisualStudioVersion = 12.0.21005.1
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Library", "Library", "{B6DBABDC-C985-4872-9C38-B4E5079CBC4B}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{B6DBABDC-C985-4872-9C38-B4E5079CBC4B}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.HTTPProxyServer", "Titanium.HTTPProxyServer\Titanium.HTTPProxyServer.csproj", "{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.ProxyTest", "Titanium.ProxyTest\Titanium.ProxyTest.csproj", "{F3B7E553-1904-4E80-BDC7-212342B5C952}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Proxy.Test", "Titanium.ProxyTest\Titanium.Proxy.Test.csproj", "{F3B7E553-1904-4E80-BDC7-212342B5C952}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -57,7 +57,7 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906} = {B6DBABDC-C985-4872-9C38-B4E5079CBC4B}
+		{F3B7E553-1904-4E80-BDC7-212342B5C952} = {B6DBABDC-C985-4872-9C38-B4E5079CBC4B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		EnterpriseLibraryConfigurationToolBinariesPath = .1.505.2\lib\NET35

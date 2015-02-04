@@ -9,12 +9,13 @@ using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Diagnostics;
-using Titanium.HTTPProxyServer;
 
 
-namespace HTTPProxyServer
+namespace Titanium.HTTPProxyServer
 {
-
+    /// <summary>
+    /// Proxy Server Main class
+    /// </summary>
     public partial class ProxyServer
     {
 
@@ -96,13 +97,11 @@ namespace HTTPProxyServer
         private void Listen(Object obj)
         {
             TcpListener listener = (TcpListener)obj;
-            CredentialManager.Cache = new Dictionary<string, System.Security.Principal.WindowsPrincipal>();
+     
             try
             {
                 while (true)
                 {
-
-
                     TcpClient client = listener.AcceptTcpClient();
                     while (!ThreadPool.UnsafeQueueUserWorkItem(new WaitCallback(ProcessClient), client)) ;
                 }

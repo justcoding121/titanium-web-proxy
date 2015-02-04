@@ -74,18 +74,17 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CredentialManager.cs" />
-    <Compile Include="RequestHandler.cs" />
-    <Compile Include="RequestManager.cs" />
-    <Compile Include="ResponseManager.cs" />
-    <Compile Include="Utility\CertificateUtils.cs" />
+    <Compile Include="Request\RequestHandler.cs" />
+    <Compile Include="Request\RequestManager.cs" />
+    <Compile Include="Response\ResponseManager.cs" />
+    <Compile Include="Utility\CertificateUtility.cs" />
     <Compile Include="Utility\CustomBinaryReader.cs" />
-    <Compile Include="Utility\OtherUtils.cs" />
-    <Compile Include="Compression\EncodeCompressionUtils.cs" />
+    <Compile Include="Utility\GeneralUtility.cs" />
+    <Compile Include="Utility\CompressionUtility.cs" />
     <Compile Include="ProxyServer.cs" />
     <Compile Include="EventArgs\SessionEventArgs.cs" />
     <Compile Include="Utility\RawTCPRelay.cs" />
-    <Compile Include="Utility\StreamExtensions.cs" />
+    <Compile Include="Extensions\StreamExtensions.cs" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Properties\" />

@@ -9,13 +9,12 @@ using System.Net.Security;
 using System.Security.Authentication;
 using System.Net.Sockets;
 using System.Diagnostics;
-using HTTPProxyServer.Utility;
 using System.Security.Cryptography.X509Certificates;
 using System.Reflection;
-using Titanium.HTTPProxyServer;
 
 
-namespace HTTPProxyServer
+
+namespace Titanium.HTTPProxyServer
 {
 
     partial class ProxyServer
@@ -38,9 +37,6 @@ namespace HTTPProxyServer
             {
                 ConnectionGroup = Dns.GetHostEntry(((IPEndPoint)client.Client.RemoteEndPoint).Address).HostName;
 
-
-               if (CredentialManager.Cache.ContainsKey(ConnectionGroup))
-                    Thread.CurrentPrincipal = CredentialManager.Cache.First().Value; 
 
                 clientStream = client.GetStream();
                 clientStreamReader = new CustomBinaryReader(clientStream, Encoding.ASCII);

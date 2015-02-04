@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.IO;
 
-namespace HTTPProxyServer.Utility
+namespace Titanium.HTTPProxyServer
 {
     public static class StreamUtilities
     {

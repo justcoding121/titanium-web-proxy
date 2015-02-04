@@ -5,7 +5,7 @@ using System.Text;
 using System.IO;
 using System.Diagnostics;
 
-namespace HTTPProxyServer.Utility
+namespace Titanium.HTTPProxyServer
 {
     public class CustomBinaryReader : BinaryReader
     {

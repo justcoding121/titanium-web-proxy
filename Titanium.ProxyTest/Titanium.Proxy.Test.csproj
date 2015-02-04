@@ -51,21 +51,22 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Controller.cs" />
-    <Compile Include="Utility\ProcessDetails.cs" />
+    <Compile Include="ProxyTestController.cs" />
+    <Compile Include="Utility\Firefox.cs" />
+    <Compile Include="Utility\SystemProxyUtility.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="makecert.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="unity.debug.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <None Include="Titanium Proxy Test Root Certificate.cer" />
+    <None Include="Titanium Proxy Test Root Certificate.cer">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Titanium.HTTPProxyServer\Titanium.HTTPProxyServer.csproj">

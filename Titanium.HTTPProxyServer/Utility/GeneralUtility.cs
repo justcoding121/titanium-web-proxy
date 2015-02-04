@@ -3,10 +3,9 @@ using System.Collections.Generic;
 using System.Net;
 using System.IO;
 using System.Reflection;
-using HTTPProxyServer.Utility;
 using System.Linq;
 
-namespace HTTPProxyServer
+namespace Titanium.HTTPProxyServer
 {
     public partial class ProxyServer
     {
