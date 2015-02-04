@@ -58,6 +58,7 @@
     <Compile Include="Utility\SystemProxyUtility.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Capture.PNG" />
     <Content Include="makecert.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
