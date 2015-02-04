@@ -3,7 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Diagnostics;
 using System.Threading;
 
-namespace HTTPProxyServer
+namespace Titanium.HTTPProxyServer
 {
     public partial class ProxyServer
     {

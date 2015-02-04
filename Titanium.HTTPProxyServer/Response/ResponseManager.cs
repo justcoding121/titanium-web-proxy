@@ -10,7 +10,7 @@ using System.Threading;
 using System.Security.Authentication;
 using System.Diagnostics;
 
-namespace HTTPProxyServer
+namespace Titanium.HTTPProxyServer
 {
     partial class ProxyServer
     {

@@ -2,9 +2,9 @@
 using System.Text;
 using System.IO;
 using System.Net;
-using HTTPProxyServer.Utility;
 
-namespace HTTPProxyServer
+
+namespace Titanium.HTTPProxyServer
 {
     public class SessionEventArgs : EventArgs
     {

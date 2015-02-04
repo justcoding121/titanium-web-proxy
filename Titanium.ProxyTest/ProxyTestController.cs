@@ -3,42 +3,38 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Net;
-using Titanium.ProxyManager.Utitlity;
 using System.Text.RegularExpressions;
-using Titanium.ProxyManager;
 using System.DirectoryServices.AccountManagement;
 using System.DirectoryServices.ActiveDirectory;
-using HTTPProxyServer;
+using Titanium;
+using Titanium.HTTPProxyServer;
 
 
 
-namespace Titanium.Proxy
+namespace Titanium.HTTPProxyServer.Test
 {
-    public partial class Controller
+    public partial class ProxyTestController
     {
         private List<string> _URLList = new List<string>();
         private string _lastURL = string.Empty;
         private ProxyServer _server;
 
-        public static void Main(string[] args)
-        {
-            var controller = new Controller();
-            controller.StartProxy();
-            Console.WriteLine("To make Http(s) work install the test root certificate included in this project to both Personal and Trusted Root Certificate Authorities of client machine");
-            Console.WriteLine("Hit any key to exit");
-            Console.Read();
-
-            controller.Stop();
-        }
+        public int ListeningPort { get; set; }
 
         public void StartProxy()
         {
 
             _server = new ProxyServer();
             _server.BeforeRequest += OnRequest;
-            _server.BeforeResponse += OnResponse;
+            _server.BeforeResponse += OnResponse;   
             _server.Start();
 
+           
+            SystemProxyUtility.EnableProxyHTTP("localhost", _server.ListeningPort);
+            FireFoxUtility.AddFirefox();
+
+            ListeningPort = _server.ListeningPort;
+ 
             Console.WriteLine(String.Format("Proxy listening on local machine port: {0} ", _server.ListeningPort));
 
         }
@@ -151,8 +147,6 @@ namespace Titanium.Proxy
 
 
         }
-
-
 
 
         private Random random = new Random((int)DateTime.Now.Ticks);
