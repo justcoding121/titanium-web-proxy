@@ -9,7 +9,7 @@ namespace Titanium.HTTPProxyServer
     public partial class ProxyServer
     {
 
-        private  void SendNormal(Stream inStream, Stream outStream)
+        private static void SendNormal(Stream inStream, Stream outStream)
         {
 
             Byte[] buffer = new Byte[BUFFER_SIZE];
@@ -23,7 +23,7 @@ namespace Titanium.HTTPProxyServer
             }
            
         }
-        private  void SendChunked(Stream inStream, Stream outStream)
+        private static void SendChunked(Stream inStream, Stream outStream)
         {
 
             Byte[] buffer = new Byte[BUFFER_SIZE];
@@ -45,7 +45,7 @@ namespace Titanium.HTTPProxyServer
 
             outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
         }
-        private  void SendChunked(byte[] data, Stream outStream)
+        private static void SendChunked(byte[] data, Stream outStream)
         {
 
             Byte[] buffer = new Byte[BUFFER_SIZE];
@@ -67,14 +67,14 @@ namespace Titanium.HTTPProxyServer
         }
 
      
-        private  byte[] EncodeData(string ResponseData,  Encoding e)
+        private static  byte[] EncodeData(string ResponseData,  Encoding e)
         {
 
             return e.GetBytes(ResponseData);
            
 
         }
-        private  byte[] CompressZlib(string ResponseData,  Encoding e)
+        private static byte[] CompressZlib(string ResponseData,  Encoding e)
         {
 
             Byte[] bytes = e.GetBytes(ResponseData);
@@ -95,7 +95,7 @@ namespace Titanium.HTTPProxyServer
             }
         }
 
-        private  byte[] CompressDeflate(string ResponseData, Encoding e)
+        private static byte[] CompressDeflate(string ResponseData, Encoding e)
         {
             Byte[] bytes = e.GetBytes(ResponseData);
 
@@ -112,7 +112,7 @@ namespace Titanium.HTTPProxyServer
             }
         }
 
-        private  byte[]  CompressGzip(string ResponseData, Encoding e)
+        private static  byte[]  CompressGzip(string ResponseData, Encoding e)
         {
             Byte[] bytes = e.GetBytes(ResponseData);
 
@@ -131,7 +131,7 @@ namespace Titanium.HTTPProxyServer
             }
 
         }
-        private  void sendData(Stream outStream, byte[] data, bool isChunked)
+        private static void sendData(Stream outStream, byte[] data, bool isChunked)
         {
             if (!isChunked)
             {

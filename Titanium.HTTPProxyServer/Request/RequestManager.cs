@@ -19,13 +19,11 @@ namespace Titanium.HTTPProxyServer
 
     partial class ProxyServer
     {
-        private  int pending = 0;
+       
       
-        private  void DoHttpProcessing(TcpClient client)
+        private static void DoHttpProcessing(TcpClient client)
         {
 
-            pending++;
-           
             string ConnectionGroup = null;
 
             Stream clientStream = null;

@@ -14,7 +14,7 @@ namespace Titanium.HTTPProxyServer
 {
     partial class ProxyServer
     {
-        private  void GetResponseCallback(IAsyncResult asynchronousResult)
+        private static void GetResponseCallback(IAsyncResult asynchronousResult)
         {
 
             SessionEventArgs Args = (SessionEventArgs)asynchronousResult.AsyncState;
