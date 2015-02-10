@@ -32,18 +32,18 @@ namespace Titanium.HTTPProxyServer
         private static Dictionary<string, X509Certificate2> certificateCache = new Dictionary<string, X509Certificate2>();
         private static X509Store _store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
 
-        private TcpListener _listener;
-        private Thread _listenerThread;
+        private static TcpListener _listener;
+        private static Thread _listenerThread;
 
-        public event EventHandler<SessionEventArgs> BeforeRequest;
-        public event EventHandler<SessionEventArgs> BeforeResponse;
+        public static event EventHandler<SessionEventArgs> BeforeRequest;
+        public static event EventHandler<SessionEventArgs> BeforeResponse;
 
 
 
         public IPAddress ListeningIPInterface { get; set; }
 
 
-        public Int32 ListeningPort
+        public static Int32 ListeningPort
         {
             get
             {
@@ -73,7 +73,7 @@ namespace Titanium.HTTPProxyServer
         }
 
 
-        public bool Start()
+        public static bool Start()
         {
             _listener = new TcpListener(IPAddress.Any, 0);
             _listener.Start();
@@ -81,20 +81,20 @@ namespace Titanium.HTTPProxyServer
             _listenerThread.Start(_listener);
             _listenerThread.IsBackground = true;
 
-      
-
             return true;
         }
 
 
-        public void Stop()
+        public static void Stop()
         {
             _listener.Stop();
             _listenerThread.Abort();
             _listenerThread.Join();
         }
-
-        private void Listen(Object obj)
+        // Thread signal. 
+        public static ManualResetEvent tcpClientConnected =
+            new ManualResetEvent(false);
+        private static void Listen(Object obj)
         {
             TcpListener listener = (TcpListener)obj;
      
@@ -102,8 +102,13 @@ namespace Titanium.HTTPProxyServer
             {
                 while (true)
                 {
-                    TcpClient client = listener.AcceptTcpClient();
-                    while (!ThreadPool.UnsafeQueueUserWorkItem(new WaitCallback(ProcessClient), client)) ;
+                    // Set the event to nonsignaled state.
+                    tcpClientConnected.Reset();
+
+                    listener.BeginAcceptTcpClient(new AsyncCallback(DoAcceptTcpClientCallback), listener);
+                    // Wait until a connection is made and processed before  
+                    // continuing.
+                    tcpClientConnected.WaitOne();
                 }
             }
             catch (ThreadAbortException ex) { Debug.WriteLine(ex.Message); }
@@ -114,16 +119,35 @@ namespace Titanium.HTTPProxyServer
 
 
         }
-
-        private void ProcessClient(Object obj)
+        public static void DoAcceptTcpClientCallback(IAsyncResult ar)
         {
+            // Get the listener that handles the client request.
+            TcpListener listener = (TcpListener)ar.AsyncState;
+
+            // End the operation and display the received data on  
+            // the console.
+            TcpClient client = listener.EndAcceptTcpClient(ar);
+
+            while (!ThreadPool.UnsafeQueueUserWorkItem(new WaitCallback(ProcessClient), client)) ;
+
+            // Signal the calling thread to continue.
+            tcpClientConnected.Set();
+        }
+        private static int pending = 0;
+        private static void ProcessClient(Object param)
+        {
+          
             try
             {
-                TcpClient client = (TcpClient)obj;
+                TcpClient client = param as TcpClient;
                 DoHttpProcessing(client);
                 client.Close();
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+            }
+
         }
 
 

@@ -2,10 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Net.Security;
 using System.IO;
 using System.Net;
+using System.Threading.Tasks;
 
 namespace Titanium.HTTPProxyServer
 {
@@ -19,14 +19,13 @@ namespace Titanium.HTTPProxyServer
             var tunnelStream = tunnelClient.GetStream();
             var tunnelReadBuffer = new byte[BUFFER_SIZE];
 
-            Thread sendRelay = new Thread(() => StreamUtilities.CopyTo(clientStream, tunnelStream, BUFFER_SIZE));
-            Thread receiveRelay = new Thread(() => StreamUtilities.CopyTo(tunnelStream, clientStream, BUFFER_SIZE));
+            Task sendRelay = new Task(() => StreamUtilities.CopyTo(clientStream, tunnelStream, BUFFER_SIZE));
+            Task receiveRelay = new Task(() => StreamUtilities.CopyTo(tunnelStream, clientStream, BUFFER_SIZE));
 
             sendRelay.Start();
             receiveRelay.Start();
 
-            sendRelay.Join();
-            receiveRelay.Join();
+            Task.WaitAll(sendRelay, receiveRelay); 
 
             if (tunnelStream != null)
                 tunnelStream.Close();
@@ -81,7 +80,7 @@ namespace Titanium.HTTPProxyServer
             }
 
             System.Net.Sockets.TcpClient tunnelClient = new System.Net.Sockets.TcpClient(hostname, tunnelPort);
-            var tunnelStream = (System.IO.Stream)tunnelClient.GetStream();
+            var tunnelStream = tunnelClient.GetStream() as System.IO.Stream;
 
             if (isSecure)
             {
@@ -91,14 +90,13 @@ namespace Titanium.HTTPProxyServer
             }
 
        
-            Thread sendRelay = new Thread(() => StreamUtilities.CopyTo(sb.ToString(), clientStream, tunnelStream, BUFFER_SIZE));
-            Thread receiveRelay = new Thread(() => StreamUtilities.CopyTo(tunnelStream, clientStream, BUFFER_SIZE));
+            var sendRelay = new Task(() => StreamUtilities.CopyTo(sb.ToString(), clientStream, tunnelStream, BUFFER_SIZE));
+            var receiveRelay = new Task(() => StreamUtilities.CopyTo(tunnelStream, clientStream, BUFFER_SIZE));
 
             sendRelay.Start();
             receiveRelay.Start();
 
-            sendRelay.Join();
-            receiveRelay.Join();
+            Task.WaitAll(sendRelay, receiveRelay); 
 
             if (tunnelStream != null)
                 tunnelStream.Close();
