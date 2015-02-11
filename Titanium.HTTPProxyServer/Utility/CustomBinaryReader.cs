@@ -10,7 +10,7 @@ namespace Titanium.HTTPProxyServer
     public class CustomBinaryReader : BinaryReader
     {
 
-       
+
 
         public CustomBinaryReader(Stream stream, Encoding encoding)
             : base(stream, encoding)
@@ -20,13 +20,10 @@ namespace Titanium.HTTPProxyServer
 
         public string ReadLine()
         {
+            char[] buf = new char[1];
+            StringBuilder _readBuffer = new StringBuilder();
             try
             {
-
-                char[] buf = new char[1];
-                StringBuilder _readBuffer = new StringBuilder();
-
-
                 var charsRead = 0;
                 char lastChar = new char();
 
@@ -48,7 +45,11 @@ namespace Titanium.HTTPProxyServer
                 }
                 return _readBuffer.ToString();
             }
-            catch { throw new EndOfStreamException(); } 
+            catch (IOException)
+            { return _readBuffer.ToString(); }
+            catch (Exception e)
+            { throw e; }
+
         }
 
     }
