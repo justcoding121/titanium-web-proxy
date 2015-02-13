@@ -19,17 +19,19 @@ namespace Titanium.HTTPProxyServer.Test
 
             //Start proxy controller
             var controller = new ProxyTestController();
-            controller.StartProxy();
             controller.Visited += PageVisited;
 
-            Console.WriteLine("Do you want to monitor HTTPS? (Y/N)");
+            controller.StartProxy();
+     
+            Console.Write("Do you want to monitor HTTPS? (Y/N):");
 
             if(Console.ReadLine().Trim().ToLower()=="y" )
             {
                 InstallCertificate(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location));
                 SystemProxyUtility.EnableProxyHTTPS("localhost", controller.ListeningPort);
             }
-            Console.WriteLine("Hit any key to exit");
+            Console.WriteLine("Hit any key to exit..");
+            Console.WriteLine(); 
             Console.Read();
 
             //Reset System Proxy on exit
@@ -54,7 +56,7 @@ namespace Titanium.HTTPProxyServer.Test
         }
         private static void PageVisited(VisitedEventArgs e)
         {
-            Console.WriteLine(string.Concat("Visited:", e.URL));
+            Console.WriteLine(string.Concat("Visited: ", e.URL));
         }
         static bool ConsoleEventCallback(int eventType)
         {

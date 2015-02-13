@@ -17,34 +17,37 @@ namespace Titanium.HTTPProxyServer.Test
     {
         private List<string> _URLList = new List<string>();
         private string _lastURL = string.Empty;
-        private ProxyServer _server;
 
         public int ListeningPort { get; set; }
 
         public void StartProxy()
         {
 
-            _server = new ProxyServer();
-            _server.BeforeRequest += OnRequest;
-            _server.BeforeResponse += OnResponse;   
-            _server.Start();
+            if(Visited!=null)
+            {
+                ProxyServer.BeforeRequest += OnRequest;
+                ProxyServer.BeforeResponse += OnResponse;
+            }
+          
+            ProxyServer.Start();
 
-           
-            SystemProxyUtility.EnableProxyHTTP("localhost", _server.ListeningPort);
+
+            SystemProxyUtility.EnableProxyHTTP("localhost", ProxyServer.ListeningPort);
             FireFoxUtility.AddFirefox();
 
-            ListeningPort = _server.ListeningPort;
+            ListeningPort = ProxyServer.ListeningPort;
  
-            Console.WriteLine(String.Format("Proxy listening on local machine port: {0} ", _server.ListeningPort));
+            Console.WriteLine(String.Format("Proxy listening on local machine port: {0} ",  ProxyServer.ListeningPort));
 
         }
         public void Stop()
         {
-
-            _server.BeforeRequest -= OnRequest;
-            _server.BeforeResponse -= OnResponse;
-
-            _server.Stop(); 
+            if (Visited!=null)
+            {
+                ProxyServer.BeforeRequest -= OnRequest;
+                ProxyServer.BeforeResponse -= OnResponse;
+            }
+            ProxyServer.Stop(); 
         }
 
 
