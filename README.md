@@ -16,7 +16,7 @@ Features
 Usage
 =====
 
-Refer the HTTP Proxy Server library in your project, look up sample project to learn usage.
+Refer the HTTP Proxy Server library in your project, look up Test project to learn usage.
 
 Future updates
 ============
