@@ -4,9 +4,9 @@ using System.Linq;
 using System.Text;
 using System.IO;
 
-namespace Titanium.HTTPProxyServer.Test
+namespace Titanium.Web.Proxy.Test.Helpers
 {
-    public class FireFoxUtility
+    public class FireFoxHelper
     {
         public static void AddFirefox()
         {

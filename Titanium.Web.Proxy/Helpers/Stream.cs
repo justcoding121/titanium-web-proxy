@@ -4,9 +4,9 @@ using System.Linq;
 using System.Text;
 using System.IO;
 
-namespace Titanium.HTTPProxyServer
+namespace Titanium.Web.Proxy.Helpers
 {
-    public static class StreamUtilities
+    public static class StreamHelper
     {
         private const int DEFAULT_BUFFER_SIZE = 8192; // +32767
         public static void CopyTo(this Stream input, Stream output)

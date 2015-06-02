@@ -6,12 +6,13 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.DirectoryServices.AccountManagement;
 using System.DirectoryServices.ActiveDirectory;
-using Titanium;
-using Titanium.HTTPProxyServer;
+using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy;
+using Titanium.Web.Proxy.Test.Helpers;
 
 
 
-namespace Titanium.HTTPProxyServer.Test
+namespace Titanium.Web.Proxy.Test
 {
     public partial class ProxyTestController
     {
@@ -32,8 +33,8 @@ namespace Titanium.HTTPProxyServer.Test
             ProxyServer.Start();
 
 
-            SystemProxyUtility.EnableProxyHTTP("localhost", ProxyServer.ListeningPort);
-            FireFoxUtility.AddFirefox();
+            SystemProxyHelper.EnableProxyHTTP("localhost", ProxyServer.ListeningPort);
+            FireFoxHelper.AddFirefox();
 
             ListeningPort = ProxyServer.ListeningPort;
  
@@ -66,16 +67,16 @@ namespace Titanium.HTTPProxyServer.Test
         //Read browser URL send back to proxy by the injection script in OnResponse event
         public void OnRequest(object sender, SessionEventArgs e)
         {
-            string Random = e.requestURL.Substring(e.requestURL.LastIndexOf(@"/") + 1);
+            string Random = e.RequestURL.Substring(e.RequestURL.LastIndexOf(@"/") + 1);
             int index = _URLList.IndexOf(Random);
             if (index >= 0)
             {
 
-                string URL = e.decode();
+                string URL = e.Decode();
 
                 if (_lastURL != URL)
                 {
-                    OnChanged(new VisitedEventArgs() { hostname = e.hostName, URL = URL, remoteIP = e.ipAddress, remotePort = e.port });
+                    OnChanged(new VisitedEventArgs() { hostname = e.Hostname, URL = URL, remoteIP = e.ipAddress, remotePort = e.Port });
 
                 }
 
@@ -92,16 +93,16 @@ namespace Titanium.HTTPProxyServer.Test
             {
 
 
-                if (e.proxyRequest.Method == "GET" || e.proxyRequest.Method == "POST")
+                if (e.ProxyRequest.Method == "GET" || e.ProxyRequest.Method == "POST")
                 {
-                    if (e.serverResponse.StatusCode == HttpStatusCode.OK)
+                    if (e.ServerResponse.StatusCode == HttpStatusCode.OK)
                     {
-                        if (e.serverResponse.ContentType.Trim().ToLower().Contains("text/html"))
+                        if (e.ServerResponse.ContentType.Trim().ToLower().Contains("text/html"))
                         {
-                            string c = e.serverResponse.GetResponseHeader("X-Requested-With");
-                            if (e.serverResponse.GetResponseHeader("X-Requested-With") == "")
+                            string c = e.ServerResponse.GetResponseHeader("X-Requested-With");
+                            if (e.ServerResponse.GetResponseHeader("X-Requested-With") == "")
                             {
-                                e.getResponseBody();
+                                e.GetResponseBody();
 
                                 string functioname = "fr" + RandomString(10);
                                 string VisitedURL = RandomString(5);
@@ -111,10 +112,10 @@ namespace Titanium.HTTPProxyServer.Test
                                 string RandomLastRequest = RandomString(10);
                                 string LocalRequest;
 
-                                if (e.isSecure)
-                                    LocalRequest = "https://" + e.hostName + "/" + RandomURLEnding;
+                                if (e.IsSecure)
+                                    LocalRequest = "https://" + e.Hostname + "/" + RandomURLEnding;
                                 else
-                                    LocalRequest = "http://" + e.hostName + "/" + RandomURLEnding;
+                                    LocalRequest = "http://" + e.Hostname + "/" + RandomURLEnding;
 
                                 string script = "var " + RandomLastRequest + " = null;" +
                                  "if(window.top==self) { " + "\n" +
@@ -130,13 +131,13 @@ namespace Titanium.HTTPProxyServer.Test
                                  RequestVariable + ".open(\"POST\",\"" + LocalRequest + "\", true); " + "\n" +
                                  RequestVariable + ".send(" + VisitedURL + ");} " + RandomLastRequest + " = " + VisitedURL + "}";
 
-                                string response = e.responseString;
+                                string response = e.ResponseString;
                                 Regex RE = new Regex("</body>", RegexOptions.RightToLeft | RegexOptions.IgnoreCase | RegexOptions.Multiline);
 
                                 string replaced = RE.Replace(response, "<script type =\"text/javascript\">" + script + "</script></body>", 1);
                                 if (replaced.Length != response.Length)
                                 {
-                                    e.responseString = replaced;
+                                    e.ResponseString = replaced;
                                     _URLList.Add(RandomURLEnding);
 
                                 }

@@ -8,8 +8,8 @@
     <ProjectGuid>{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Titanium.HTTPProxyServer</RootNamespace>
-    <AssemblyName>Titanium.HTTPProxyServer</AssemblyName>
+    <RootNamespace>Titanium.Web.Proxy</RootNamespace>
+    <AssemblyName>Titanium.Web.Proxy</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <TargetFrameworkProfile>Client</TargetFrameworkProfile>
     <FileAlignment>512</FileAlignment>
@@ -74,17 +74,16 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Request\RequestHandler.cs" />
-    <Compile Include="Request\RequestManager.cs" />
-    <Compile Include="Response\ResponseManager.cs" />
-    <Compile Include="Utility\CertificateUtility.cs" />
-    <Compile Include="Utility\CustomBinaryReader.cs" />
-    <Compile Include="Utility\GeneralUtility.cs" />
-    <Compile Include="Utility\CompressionUtility.cs" />
+    <Compile Include="RequestHandler.cs" />
+    <Compile Include="ResponseHandler.cs" />
+    <Compile Include="Helpers\Certificate.cs" />
+    <Compile Include="Helpers\CustomBinaryReader.cs" />
+    <Compile Include="Helpers\NetFramework.cs" />
+    <Compile Include="Helpers\Compression.cs" />
     <Compile Include="ProxyServer.cs" />
-    <Compile Include="EventArgs\SessionEventArgs.cs" />
-    <Compile Include="Utility\RawTCPRelay.cs" />
-    <Compile Include="Extensions\StreamExtensions.cs" />
+    <Compile Include="Models\SessionEventArgs.cs" />
+    <Compile Include="Helpers\Tcp.cs" />
+    <Compile Include="Helpers\Stream.cs" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Properties\" />
