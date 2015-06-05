@@ -68,21 +68,22 @@ namespace Titanium.Web.Proxy
             {
                 if (sslPolicyErrors == SslPolicyErrors.None) return true;
                 else
-                return false;
+                    return false;
             };
 
             NetFrameworkHelper.URLPeriodFix();
 
         }
 
-
+        private static bool ShouldListen { get; set; }
         public static bool Start()
         {
             listener = new TcpListener(IPAddress.Any, 0);
             listener.Start();
             listenerThread = new Thread(new ParameterizedThreadStart(Listen));
-            listenerThread.Start(listener);
             listenerThread.IsBackground = true;
+            ShouldListen = true;
+            listenerThread.Start(listener);
 
             return true;
         }
@@ -90,18 +91,19 @@ namespace Titanium.Web.Proxy
 
         public static void Stop()
         {
+            ShouldListen = false;
             listener.Stop();
-            listenerThread.Abort();
-            listenerThread.Join();
+            listenerThread.Interrupt();
+
         }
-      
+
         private static void Listen(Object obj)
         {
             TcpListener listener = (TcpListener)obj;
-     
+
             try
             {
-                while (true)
+                while (ShouldListen)
                 {
                     // Set the event to nonsignaled state.
                     tcpClientConnected.Reset();
@@ -112,11 +114,12 @@ namespace Titanium.Web.Proxy
                     tcpClientConnected.WaitOne();
                 }
             }
-            catch (ThreadAbortException ex) { Debug.WriteLine(ex.Message); }
+            catch (ThreadInterruptedException) { }
             catch (SocketException ex)
             {
                 Debug.WriteLine(ex.Message);
             }
+
 
 
         }
@@ -124,12 +127,14 @@ namespace Titanium.Web.Proxy
         {
             // Get the listener that handles the client request.
             TcpListener listener = (TcpListener)ar.AsyncState;
+            TcpClient client = null;
+
 
             // End the operation and display the received data on  
             // the console.
-            TcpClient client = listener.EndAcceptTcpClient(ar);
+            client = listener.EndAcceptTcpClient(ar);
 
-            Task.Factory.StartNew(()=>ProcessClient(client));
+            Task.Factory.StartNew(() => ProcessClient(client));
 
             // Signal the calling thread to continue.
             tcpClientConnected.Set();
@@ -137,7 +142,7 @@ namespace Titanium.Web.Proxy
 
         private static void ProcessClient(Object param)
         {
-          
+
             try
             {
                 TcpClient client = param as TcpClient;
