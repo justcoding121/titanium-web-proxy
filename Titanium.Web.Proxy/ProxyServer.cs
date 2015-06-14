@@ -16,146 +16,151 @@ using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy
 {
-    /// <summary>
-    /// Proxy Server Main class
-    /// </summary>
-    public partial class ProxyServer
-    {
+	/// <summary>
+	/// Proxy Server Main class
+	/// </summary>
+	public partial class ProxyServer
+	{
 
-        private static readonly int BUFFER_SIZE = 8192;
-        private static readonly char[] semiSplit = new char[] { ';' };
+		private static readonly int BUFFER_SIZE = 8192;
+		private static readonly char[] semiSplit = new char[] { ';' };
 
-        private static readonly String[] colonSpaceSplit = new string[] { ": " };
-        private static readonly char[] spaceSplit = new char[] { ' ' };
+		private static readonly String[] colonSpaceSplit = new string[] { ": " };
+		private static readonly char[] spaceSplit = new char[] { ' ' };
 
-        private static readonly Regex cookieSplitRegEx = new Regex(@",(?! )");
+		private static readonly Regex cookieSplitRegEx = new Regex(@",(?! )");
 
-        private static object certificateAccessLock = new object();
-        private static List<string> pinnedCertificateClients = new List<string>();
+		private static bool DecryptSSL = false;
+		private static object certificateAccessLock = new object();
+		private static List<string> pinnedCertificateClients = new List<string>();
 
-        private static ManualResetEvent tcpClientConnected = new ManualResetEvent(false);
+		private static ManualResetEvent tcpClientConnected = new ManualResetEvent(false);
 
-        private static TcpListener listener;
-        private static Thread listenerThread;
+		private static TcpListener listener;
+		private static Thread listenerThread;
 
-        public static event EventHandler<SessionEventArgs> BeforeRequest;
-        public static event EventHandler<SessionEventArgs> BeforeResponse;
-
-
-
-        public IPAddress ListeningIPInterface { get; set; }
+		public static event EventHandler<SessionEventArgs> BeforeRequest;
+		public static event EventHandler<SessionEventArgs> BeforeResponse;
 
 
-        public static Int32 ListeningPort
-        {
-            get
-            {
-                return ((IPEndPoint)listener.LocalEndpoint).Port;
-            }
-        }
+		public static Int32 ListeningPort
+		{
+			get
+			{
+				return ((IPEndPoint)listener.LocalEndpoint).Port;
+			}
+		}
 
-        public ProxyServer()
-        {
-
-
-            System.Net.ServicePointManager.Expect100Continue = false;
-            System.Net.WebRequest.DefaultWebProxy = null;
-            System.Net.ServicePointManager.DefaultConnectionLimit = 10;
-            ServicePointManager.DnsRefreshTimeout = 3 * 60 * 1000;//3 minutes
-            ServicePointManager.MaxServicePointIdleTime = 3 * 60 * 1000;
-
-            ServicePointManager.ServerCertificateValidationCallback = delegate(object s, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-            {
-                if (sslPolicyErrors == SslPolicyErrors.None) return true;
-                else
-                    return false;
-            };
-
-            NetFrameworkHelper.URLPeriodFix();
-
-        }
-
-        private static bool ShouldListen { get; set; }
-        public static bool Start()
-        {
-            listener = new TcpListener(IPAddress.Any, 0);
-            listener.Start();
-            listenerThread = new Thread(new ParameterizedThreadStart(Listen));
-            listenerThread.IsBackground = true;
-            ShouldListen = true;
-            listenerThread.Start(listener);
-
-            return true;
-        }
+		public ProxyServer()
+		{
 
 
-        public static void Stop()
-        {
-            ShouldListen = false;
-            listener.Stop();
-            listenerThread.Interrupt();
+			System.Net.ServicePointManager.Expect100Continue = false;
+			System.Net.WebRequest.DefaultWebProxy = null;
+			System.Net.ServicePointManager.DefaultConnectionLimit = 10;
+			ServicePointManager.DnsRefreshTimeout = 3 * 60 * 1000;//3 minutes
+			ServicePointManager.MaxServicePointIdleTime = 3 * 60 * 1000;
 
-        }
+			ServicePointManager.ServerCertificateValidationCallback = delegate(object s, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+			{
+				if (sslPolicyErrors == SslPolicyErrors.None) return true;
+				else
+					return false;
+			};
 
-        private static void Listen(Object obj)
-        {
-            TcpListener listener = (TcpListener)obj;
+			NetFrameworkHelper.URLPeriodFix();
 
-            try
-            {
-                while (ShouldListen)
-                {
-                    // Set the event to nonsignaled state.
-                    tcpClientConnected.Reset();
+		}
 
-                    listener.BeginAcceptTcpClient(new AsyncCallback(AcceptTcpClientCallback), listener);
-                    // Wait until a connection is made and processed before  
-                    // continuing.
-                    tcpClientConnected.WaitOne();
-                }
-            }
-            catch (ThreadInterruptedException) { }
-            catch (SocketException ex)
-            {
-                Debug.WriteLine(ex.Message);
-            }
+		private static bool ShouldListen { get; set; }
+		public static bool Start(IPAddress address, int port)
+		{
+			listener = new TcpListener(address, port);
+			listener.Start();
+			listenerThread = new Thread(new ParameterizedThreadStart(Listen));
+			listenerThread.IsBackground = true;
+			ShouldListen = true;
+			listenerThread.Start(listener);
+
+			return true;
+		}
+
+
+		public static void Stop()
+		{
+			ShouldListen = false;
+			listener.Stop();
+			listenerThread.Interrupt();
+
+		}
+
+		private static void Listen(Object obj)
+		{
+			TcpListener listener = (TcpListener)obj;
+
+			try
+			{
+				while (ShouldListen)
+				{
+					// Set the event to nonsignaled state.
+					tcpClientConnected.Reset();
+
+					listener.BeginAcceptTcpClient(new AsyncCallback(AcceptTcpClientCallback), listener);
+					// Wait until a connection is made and processed before  
+					// continuing.
+					tcpClientConnected.WaitOne();
+				}
+			}
+			catch (ThreadInterruptedException) { }
+			catch (SocketException ex)
+			{
+				Debug.WriteLine(ex.Message);
+			}
 
 
 
-        }
-        public static void AcceptTcpClientCallback(IAsyncResult ar)
-        {
-            // Get the listener that handles the client request.
-            TcpListener listener = (TcpListener)ar.AsyncState;
-            TcpClient client = null;
+		}
+		public static void AcceptTcpClientCallback(IAsyncResult ar)
+		{
+			// Get the listener that handles the client request.
+			TcpListener listener = (TcpListener)ar.AsyncState;
+			TcpClient client = null;
 
 
-            // End the operation and display the received data on  
-            // the console.
-            client = listener.EndAcceptTcpClient(ar);
-
-            Task.Factory.StartNew(() => ProcessClient(client));
-
-            // Signal the calling thread to continue.
-            tcpClientConnected.Set();
-        }
-
-        private static void ProcessClient(Object param)
-        {
-
-            try
-            {
-                TcpClient client = param as TcpClient;
-                HandleClientRequest(client);
-                client.Close();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex.Message);
-            }
-
-        }
+			// End the operation and display the received data on  
+			// the console.
+			try
+			{
+				client = listener.EndAcceptTcpClient(ar);
+			}
+			catch (ObjectDisposedException)
+			{
+				return;
+			}
 
 
-    }
+			Task.Factory.StartNew(() => ProcessClient(client));
+
+			// Signal the calling thread to continue.
+			tcpClientConnected.Set();
+		}
+
+		private static void ProcessClient(Object param)
+		{
+
+			try
+			{
+				TcpClient client = param as TcpClient;
+				HandleClientRequest(client);
+				client.Close();
+			}
+			catch (Exception ex)
+			{
+				Debug.WriteLine(ex.Message);
+			}
+
+		}
+
+
+	}
 }

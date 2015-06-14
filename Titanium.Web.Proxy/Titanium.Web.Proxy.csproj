@@ -74,6 +74,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Models\ProxySetting.cs" />
     <Compile Include="RequestHandler.cs" />
     <Compile Include="ResponseHandler.cs" />
     <Compile Include="Helpers\Certificate.cs" />

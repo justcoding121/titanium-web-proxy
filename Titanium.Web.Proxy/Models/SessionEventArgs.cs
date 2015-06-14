@@ -28,6 +28,7 @@ namespace Titanium.Web.Proxy.Models
         public bool WasModified { get; set; }
         public System.Threading.ManualResetEvent FinishedRequestEvent { get; set; }
         public string UpgradeProtocol { get; set; }
+		public ProxySetting UpstreamProxy { get; set; }
 
         public SessionEventArgs(int BufferSize)
         {
@@ -80,7 +81,7 @@ namespace Titanium.Web.Proxy.Models
             if (ResponseString == null)
             {
 
-                Encoding = Encoding.GetEncoding(ServerResponse.CharacterSet);
+				Encoding = Encoding.ASCII;
 
 
                 if (Encoding == null) Encoding = Encoding.Default;
