@@ -5,12 +5,10 @@ using System.Text;
 using System.IO;
 using System.Diagnostics;
 
-namespace Titanium.HTTPProxyServer
+namespace Titanium.Web.Proxy.Helpers
 {
     public class CustomBinaryReader : BinaryReader
     {
-
-
 
         public CustomBinaryReader(Stream stream, Encoding encoding)
             : base(stream, encoding)

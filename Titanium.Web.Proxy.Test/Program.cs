@@ -6,8 +6,9 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using Titanium.Web.Proxy.Test.Helpers;
 
-namespace Titanium.HTTPProxyServer.Test
+namespace Titanium.Web.Proxy.Test
 {
     public class Program
     {
@@ -28,20 +29,20 @@ namespace Titanium.HTTPProxyServer.Test
             if(Console.ReadLine().Trim().ToLower()=="y" )
             {
                 InstallCertificate(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location));
-                SystemProxyUtility.EnableProxyHTTPS("localhost", controller.ListeningPort);
+                SystemProxyHelper.EnableProxyHTTPS("localhost", controller.ListeningPort);
             }
             Console.WriteLine("Hit any key to exit..");
             Console.WriteLine(); 
             Console.Read();
 
             //Reset System Proxy on exit
-            SystemProxyUtility.DisableAllProxy();
-            FireFoxUtility.RemoveFirefox();
+            SystemProxyHelper.DisableAllProxy();
+            FireFoxHelper.RemoveFirefox();
             controller.Stop();
         }
-        private static void InstallCertificate(string cerDirectory)
+        private static void InstallCertificate(string CertificateDirectory)
         {
-            X509Certificate2 certificate = new X509Certificate2(Path.Combine(cerDirectory , "Titanium Proxy Test Root Certificate.cer"));
+            X509Certificate2 certificate = new X509Certificate2(Path.Combine(CertificateDirectory , "Titanium Proxy Test Root Certificate.cer"));
             X509Store store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
 
             store.Open(OpenFlags.ReadWrite);
@@ -64,8 +65,8 @@ namespace Titanium.HTTPProxyServer.Test
             {
                 try
                 {
-                    SystemProxyUtility.DisableAllProxy();
-                    FireFoxUtility.RemoveFirefox();
+                    SystemProxyHelper.DisableAllProxy();
+                    FireFoxHelper.RemoveFirefox();
                   
                 }
                 catch { }
@@ -73,7 +74,7 @@ namespace Titanium.HTTPProxyServer.Test
             return false;
         }
         // Keeps it from getting garbage collected
-        static ConsoleEventDelegate handler;  
+        private static ConsoleEventDelegate handler;  
         // Pinvoke
         private delegate bool ConsoleEventDelegate(int eventType);
         [DllImport("kernel32.dll", SetLastError = true)]
