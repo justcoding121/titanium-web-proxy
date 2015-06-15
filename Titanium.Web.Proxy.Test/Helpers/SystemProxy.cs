@@ -5,9 +5,9 @@ using System.Text;
 using Microsoft.Win32;
 using System.Runtime.InteropServices;
 
-namespace Titanium.HTTPProxyServer.Test
+namespace Titanium.Web.Proxy.Test.Helpers
 {
-    public static class SystemProxyUtility
+    public static class SystemProxyHelper
     {
         [DllImport("wininet.dll")]
         public static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);

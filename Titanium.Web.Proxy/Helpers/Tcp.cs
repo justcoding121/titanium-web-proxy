@@ -7,20 +7,22 @@ using System.IO;
 using System.Net;
 using System.Threading.Tasks;
 
-namespace Titanium.HTTPProxyServer
+namespace Titanium.Web.Proxy.Helpers
 {
-  public partial class ProxyServer
+  public  class TcpHelper
     {
-      public static void sendRaw(string hostname, int tunnelPort, System.IO.Stream clientStream)
+      private static readonly int BUFFER_SIZE = 8192;
+      private static readonly String[] colonSpaceSplit = new string[] { ": " };
+      public static void SendRaw(string Hostname, int TunnelPort, System.IO.Stream ClientStream)
         {
            
 
-            System.Net.Sockets.TcpClient tunnelClient = new System.Net.Sockets.TcpClient(hostname, tunnelPort);
+            System.Net.Sockets.TcpClient tunnelClient = new System.Net.Sockets.TcpClient(Hostname, TunnelPort);
             var tunnelStream = tunnelClient.GetStream();
             var tunnelReadBuffer = new byte[BUFFER_SIZE];
 
-            Task sendRelay = new Task(() => StreamUtilities.CopyTo(clientStream, tunnelStream, BUFFER_SIZE));
-            Task receiveRelay = new Task(() => StreamUtilities.CopyTo(tunnelStream, clientStream, BUFFER_SIZE));
+            Task sendRelay = new Task(() => StreamHelper.CopyTo(ClientStream, tunnelStream, BUFFER_SIZE));
+            Task receiveRelay = new Task(() => StreamHelper.CopyTo(tunnelStream, ClientStream, BUFFER_SIZE));
 
             sendRelay.Start();
             receiveRelay.Start();
@@ -33,21 +35,21 @@ namespace Titanium.HTTPProxyServer
             if (tunnelClient != null)
                 tunnelClient.Close();
         }
-      private static void sendRaw(string httpCmd, string secureHostName, ref List<string> requestLines, bool isSecure, Stream clientStream)
+      public static void SendRaw(string HttpCmd, string SecureHostName, ref List<string> RequestLines, bool IsHttps, Stream ClientStream)
         {
             StringBuilder sb = new StringBuilder();
-            sb.Append(httpCmd);
+            sb.Append(HttpCmd);
             sb.Append(Environment.NewLine);
          
-            string hostname= secureHostName;
-            for(int i = 1; i < requestLines.Count;i++)
+            string hostname= SecureHostName;
+            for(int i = 1; i < RequestLines.Count;i++)
             {
-                var header = requestLines[i];
+                var header = RequestLines[i];
 
 
-                if (secureHostName == null)
+                if (SecureHostName == null)
                 {
-                    String[] headerParsed = httpCmd.Split(colonSpaceSplit, 2, StringSplitOptions.None);
+                    String[] headerParsed = HttpCmd.Split(colonSpaceSplit, 2, StringSplitOptions.None);
                     switch (headerParsed[0].ToLower())
                     {
                         case "host":
@@ -66,13 +68,8 @@ namespace Titanium.HTTPProxyServer
             }
             sb.Append(Environment.NewLine);  
 
-            if (hostname == null)
-            {
-              //  Dns.geth
-            }
-
             int tunnelPort = 80;
-            if (isSecure)
+            if (IsHttps)
             {
              
                 tunnelPort = 443;
@@ -82,7 +79,7 @@ namespace Titanium.HTTPProxyServer
             System.Net.Sockets.TcpClient tunnelClient = new System.Net.Sockets.TcpClient(hostname, tunnelPort);
             var tunnelStream = tunnelClient.GetStream() as System.IO.Stream;
 
-            if (isSecure)
+            if (IsHttps)
             {
                 var sslStream = new SslStream(tunnelStream);
                 sslStream.AuthenticateAsClient(hostname);
@@ -90,8 +87,8 @@ namespace Titanium.HTTPProxyServer
             }
 
        
-            var sendRelay = new Task(() => StreamUtilities.CopyTo(sb.ToString(), clientStream, tunnelStream, BUFFER_SIZE));
-            var receiveRelay = new Task(() => StreamUtilities.CopyTo(tunnelStream, clientStream, BUFFER_SIZE));
+            var sendRelay = new Task(() => StreamHelper.CopyTo(sb.ToString(), ClientStream, tunnelStream, BUFFER_SIZE));
+            var receiveRelay = new Task(() => StreamHelper.CopyTo(tunnelStream, ClientStream, BUFFER_SIZE));
 
             sendRelay.Start();
             receiveRelay.Start();
