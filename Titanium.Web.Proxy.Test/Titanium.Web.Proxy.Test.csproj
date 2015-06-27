@@ -54,20 +54,12 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ProxyTestController.cs" />
-    <Compile Include="Helpers\Firefox.cs" />
-    <Compile Include="Helpers\SystemProxy.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Capture.PNG" />
-    <Content Include="makecert.exe">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <None Include="Titanium Proxy Test Root Certificate.cer">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj">

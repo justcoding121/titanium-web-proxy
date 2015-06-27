@@ -8,7 +8,7 @@ using System.DirectoryServices.AccountManagement;
 using System.DirectoryServices.ActiveDirectory;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy;
-using Titanium.Web.Proxy.Test.Helpers;
+using Titanium.Web.Proxy.Helpers;
 
 
 
@@ -20,6 +20,8 @@ namespace Titanium.Web.Proxy.Test
         private string _lastURL = string.Empty;
 
         public int ListeningPort { get; set; }
+        public bool EnableSSL { get; set; }
+        public bool SetAsSystemProxy { get; set; }
 
         public void StartProxy()
         {
@@ -29,12 +31,14 @@ namespace Titanium.Web.Proxy.Test
                 ProxyServer.BeforeRequest += OnRequest;
                 ProxyServer.BeforeResponse += OnResponse;
             }
-          
+
+                ProxyServer.EnableSSL = EnableSSL;
+
+                ProxyServer.SetAsSystemProxy = SetAsSystemProxy;
+
+
             ProxyServer.Start();
 
-
-            SystemProxyHelper.EnableProxyHTTP("localhost", ProxyServer.ListeningPort);
-            FireFoxHelper.AddFirefox();
 
             ListeningPort = ProxyServer.ListeningPort;
  
@@ -167,6 +171,8 @@ namespace Titanium.Web.Proxy.Test
             return builder.ToString();
         }
 
+
+  
     }
     public class VisitedEventArgs : EventArgs
     {

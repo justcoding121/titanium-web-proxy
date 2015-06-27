@@ -6,55 +6,49 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using Titanium.Web.Proxy.Test.Helpers;
+using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Test
 {
     public class Program
     {
+        static ProxyTestController controller = new ProxyTestController();
         public static void Main(string[] args)
         {
-            //On Console exit reset system proxy
+            //On Console exit make sure we also exit the proxy
             handler = new ConsoleEventDelegate(ConsoleEventCallback);
             SetConsoleCtrlHandler(handler, true);
 
-            //Start proxy controller
-            var controller = new ProxyTestController();
-            controller.Visited += PageVisited;
-
-            controller.StartProxy();
-     
+          
+  
             Console.Write("Do you want to monitor HTTPS? (Y/N):");
 
             if(Console.ReadLine().Trim().ToLower()=="y" )
             {
-                InstallCertificate(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location));
-                SystemProxyHelper.EnableProxyHTTPS("localhost", controller.ListeningPort);
+                controller.EnableSSL = true;
+               
             }
+
+            Console.Write("Do you want to set this as a System Proxy? (Y/N):");
+
+            if (Console.ReadLine().Trim().ToLower() == "y")
+            {
+                controller.SetAsSystemProxy = true;
+
+            }
+
+            controller.Visited += PageVisited;
+
+            //Start proxy controller
+            controller.StartProxy();
+
             Console.WriteLine("Hit any key to exit..");
             Console.WriteLine(); 
             Console.Read();
 
-            //Reset System Proxy on exit
-            SystemProxyHelper.DisableAllProxy();
-            FireFoxHelper.RemoveFirefox();
             controller.Stop();
         }
-        private static void InstallCertificate(string CertificateDirectory)
-        {
-            X509Certificate2 certificate = new X509Certificate2(Path.Combine(CertificateDirectory , "Titanium Proxy Test Root Certificate.cer"));
-            X509Store store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
-
-            store.Open(OpenFlags.ReadWrite);
-            store.Add(certificate);
-            store.Close();
-
-            X509Store store1 = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-
-            store1.Open(OpenFlags.ReadWrite);
-            store1.Add(certificate);
-            store1.Close();
-        }
+       
         private static void PageVisited(VisitedEventArgs e)
         {
             Console.WriteLine(string.Concat("Visited: ", e.URL));
@@ -65,8 +59,7 @@ namespace Titanium.Web.Proxy.Test
             {
                 try
                 {
-                    SystemProxyHelper.DisableAllProxy();
-                    FireFoxHelper.RemoveFirefox();
+                    controller.Stop();
                   
                 }
                 catch { }
