@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>Titanium.Web.Proxy</id>
+    <version>$version$</version>
+    <title>Terrarium SDK</title>
+    <authors>Titanium</authors>
+    <owners>Titanium</owners>
+    <licenseUrl>https://github.com/titanium007/Titanium/blob/master/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/titanium007/Titanium/</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Titanium is a light weight web proxy.</description>
+    <releaseNotes></releaseNotes>
+    <copyright>Copyright &#x00A9; Titanium.  All rights reserved.</copyright>
+    <tags></tags>
+  </metadata>
+  <files>
+	<file src="Titanium.Web.Proxy\bin\$configuration$\Titanium.Web.Proxy.dll" target="lib\net40\" />
+	<file src="Titanium.Web.Proxy\bin\$configuration$\Ionic.Zip.dll" target="lib\net40\" />
+  </files>
+</package>
