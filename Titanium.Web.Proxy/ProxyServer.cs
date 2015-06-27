@@ -43,8 +43,9 @@ namespace Titanium.Web.Proxy
 
 
 
-        public IPAddress ListeningIPInterface { get; set; }
+        public static IPAddress ListeningIPInterface { get; set; }
 
+        public static string RootCertificateName { get; set; }
 
         public static Int32 ListeningPort
         {
@@ -78,6 +79,7 @@ namespace Titanium.Web.Proxy
         private static bool ShouldListen { get; set; }
         public static bool Start()
         {
+           
             listener = new TcpListener(IPAddress.Any, 0);
             listener.Start();
             listenerThread = new Thread(new ParameterizedThreadStart(Listen));
@@ -85,16 +87,37 @@ namespace Titanium.Web.Proxy
             ShouldListen = true;
             listenerThread.Start(listener);
 
+            if (SetAsSystemProxy)
+            {
+                SystemProxyHelper.EnableProxyHTTP("localhost", ListeningPort);
+                FireFoxHelper.AddFirefox();
+
+                RootCertificateName = RootCertificateName == null ? "DO_NOT_TRUST_FiddlerRoot" : RootCertificateName;
+                CertificateHelper.InstallCertificate(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), string.Concat(RootCertificateName, ".cer")));
+                
+                if (EnableSSL)
+                {
+                    SystemProxyHelper.EnableProxyHTTPS("localhost", ListeningPort);
+                }
+            }
+
             return true;
         }
 
 
         public static void Stop()
         {
+            if (SetAsSystemProxy)
+            {
+                SystemProxyHelper.DisableAllProxy();
+                FireFoxHelper.RemoveFirefox();
+            }
+
             ShouldListen = false;
             listener.Stop();
             listenerThread.Interrupt();
 
+           
         }
 
         private static void Listen(Object obj)
@@ -125,19 +148,23 @@ namespace Titanium.Web.Proxy
         }
         public static void AcceptTcpClientCallback(IAsyncResult ar)
         {
-            // Get the listener that handles the client request.
-            TcpListener listener = (TcpListener)ar.AsyncState;
-            TcpClient client = null;
+            try
+            {
+                // Get the listener that handles the client request.
+                TcpListener listener = (TcpListener)ar.AsyncState;
+                TcpClient client = null;
 
 
-            // End the operation and display the received data on  
-            // the console.
-            client = listener.EndAcceptTcpClient(ar);
+                // End the operation and display the received data on  
+                // the console.
+                client = listener.EndAcceptTcpClient(ar);
 
-            Task.Factory.StartNew(() => ProcessClient(client));
+                Task.Factory.StartNew(() => ProcessClient(client));
 
-            // Signal the calling thread to continue.
-            tcpClientConnected.Set();
+                // Signal the calling thread to continue.
+                tcpClientConnected.Set();
+            }
+            catch(ObjectDisposedException) { }
         }
 
         private static void ProcessClient(Object param)
@@ -157,5 +184,9 @@ namespace Titanium.Web.Proxy
         }
 
 
+
+        public static bool EnableSSL { get; set; }
+
+        public static bool SetAsSystemProxy { get; set; }
     }
 }

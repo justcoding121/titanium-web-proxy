@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy
 
     partial class ProxyServer
     {
-       
+
         private static void HandleClientRequest(TcpClient Client)
         {
 
@@ -82,20 +82,20 @@ namespace Titanium.Web.Proxy
                     int.TryParse(splitBuffer[1].Split(':')[1], out tunnelPort);
                     if (tunnelPort == 0) tunnelPort = 80;
                     var isSecure = true;
-                    for(int i=1;i<requestLines.Count;i++)
+                    for (int i = 1; i < requestLines.Count; i++)
                     {
-                         var rawHeader = requestLines[i];
-                         String[] header = rawHeader.ToLower().Trim().Split(colonSpaceSplit, 2, StringSplitOptions.None);
+                        var rawHeader = requestLines[i];
+                        String[] header = rawHeader.ToLower().Trim().Split(colonSpaceSplit, 2, StringSplitOptions.None);
 
-                            if ((header[0] == "host") )
+                        if ((header[0] == "host"))
+                        {
+                            var hostDetails = header[1].ToLower().Trim().Split(':');
+                            if (hostDetails.Length > 1)
                             {
-                               var hostDetails = header[1].ToLower().Trim().Split(':');
-                                if(hostDetails.Length>1)
-                                {
-                                    isSecure = false;
-                                }
+                                isSecure = false;
                             }
-                        
+                        }
+
                     }
                     requestLines.Clear();
 
@@ -106,7 +106,7 @@ namespace Titanium.Web.Proxy
                     connectStreamWriter.WriteLine();
                     connectStreamWriter.Flush();
 
-                 
+
 
                     if (tunnelPort != 443)
                     {
@@ -120,11 +120,11 @@ namespace Titanium.Web.Proxy
                         return;
                     }
                     Monitor.Enter(certificateAccessLock);
-                    var _certificate = CertificateHelper.GetCertificate(tunnelHostName);
+                    var _certificate = CertificateHelper.GetCertificate(RootCertificateName, tunnelHostName);
                     Monitor.Exit(certificateAccessLock);
 
                     SslStream sslStream = null;
-                    if (!pinnedCertificateClients.Contains(tunnelHostName)&&isSecure)
+                    if (!pinnedCertificateClients.Contains(tunnelHostName) && isSecure)
                     {
                         sslStream = new SslStream(clientStream, true);
                         try
@@ -134,18 +134,18 @@ namespace Titanium.Web.Proxy
 
                         catch (AuthenticationException ex)
                         {
-                          
+
                             if (pinnedCertificateClients.Contains(tunnelHostName) == false)
                             {
                                 pinnedCertificateClients.Add(tunnelHostName);
                             }
                             throw ex;
                         }
-                      
+
                     }
                     else
                     {
-                     
+
 
                         TcpHelper.SendRaw(tunnelHostName, tunnelPort, clientStreamReader.BaseStream);
 
@@ -182,7 +182,7 @@ namespace Titanium.Web.Proxy
                 {
 
                     count++;
-           
+
                     MemoryStream mw = null;
                     StreamWriter sw = null;
                     args = new SessionEventArgs(BUFFER_SIZE);
@@ -234,7 +234,7 @@ namespace Titanium.Web.Proxy
 
                             if ((header[0] == "upgrade") && (header[1] == "websocket"))
                             {
-                                
+
 
                                 TcpHelper.SendRaw(httpCmd, tunnelHostName, ref requestLines, args.IsSecure, clientStreamReader.BaseStream);
 
@@ -265,7 +265,7 @@ namespace Titanium.Web.Proxy
                             args.ipAddress = ((IPEndPoint)Client.Client.RemoteEndPoint).Address;
                             args.IsAlive = args.ProxyRequest.KeepAlive;
 
-                             BeforeRequest(null, args);
+                            BeforeRequest(null, args);
                         }
                         if (args.Cancel)
                         {
@@ -286,7 +286,7 @@ namespace Titanium.Web.Proxy
 
                         args.ProxyRequest.ConnectionGroupName = connectionGroup;
                         args.ProxyRequest.AllowWriteStreamBuffering = true;
-                        
+
                         args.FinishedRequestEvent = new ManualResetEvent(false);
 
 

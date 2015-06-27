@@ -9,13 +9,13 @@ using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-  public  class TcpHelper
+    public class TcpHelper
     {
-      private static readonly int BUFFER_SIZE = 8192;
-      private static readonly String[] colonSpaceSplit = new string[] { ": " };
-      public static void SendRaw(string Hostname, int TunnelPort, System.IO.Stream ClientStream)
+        private static readonly int BUFFER_SIZE = 8192;
+        private static readonly String[] colonSpaceSplit = new string[] { ": " };
+        public static void SendRaw(string Hostname, int TunnelPort, System.IO.Stream ClientStream)
         {
-           
+
 
             System.Net.Sockets.TcpClient tunnelClient = new System.Net.Sockets.TcpClient(Hostname, TunnelPort);
             var tunnelStream = tunnelClient.GetStream();
@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy.Helpers
             sendRelay.Start();
             receiveRelay.Start();
 
-            Task.WaitAll(sendRelay, receiveRelay); 
+            Task.WaitAll(sendRelay, receiveRelay);
 
             if (tunnelStream != null)
                 tunnelStream.Close();
@@ -35,14 +35,14 @@ namespace Titanium.Web.Proxy.Helpers
             if (tunnelClient != null)
                 tunnelClient.Close();
         }
-      public static void SendRaw(string HttpCmd, string SecureHostName, ref List<string> RequestLines, bool IsHttps, Stream ClientStream)
+        public static void SendRaw(string HttpCmd, string SecureHostName, ref List<string> RequestLines, bool IsHttps, Stream ClientStream)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append(HttpCmd);
             sb.Append(Environment.NewLine);
-         
-            string hostname= SecureHostName;
-            for(int i = 1; i < RequestLines.Count;i++)
+
+            string hostname = SecureHostName;
+            for (int i = 1; i < RequestLines.Count; i++)
             {
                 var header = RequestLines[i];
 
@@ -64,14 +64,14 @@ namespace Titanium.Web.Proxy.Helpers
                     }
                 }
                 sb.Append(header);
-                sb.Append(Environment.NewLine);   
+                sb.Append(Environment.NewLine);
             }
-            sb.Append(Environment.NewLine);  
+            sb.Append(Environment.NewLine);
 
             int tunnelPort = 80;
             if (IsHttps)
             {
-             
+
                 tunnelPort = 443;
 
             }
@@ -86,14 +86,14 @@ namespace Titanium.Web.Proxy.Helpers
                 tunnelStream = sslStream;
             }
 
-       
+
             var sendRelay = new Task(() => StreamHelper.CopyTo(sb.ToString(), ClientStream, tunnelStream, BUFFER_SIZE));
             var receiveRelay = new Task(() => StreamHelper.CopyTo(tunnelStream, ClientStream, BUFFER_SIZE));
 
             sendRelay.Start();
             receiveRelay.Start();
 
-            Task.WaitAll(sendRelay, receiveRelay); 
+            Task.WaitAll(sendRelay, receiveRelay);
 
             if (tunnelStream != null)
                 tunnelStream.Close();

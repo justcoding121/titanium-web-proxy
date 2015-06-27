@@ -5,7 +5,7 @@ using System.Text;
 using Microsoft.Win32;
 using System.Runtime.InteropServices;
 
-namespace Titanium.Web.Proxy.Test.Helpers
+namespace Titanium.Web.Proxy.Helpers
 {
     public static class SystemProxyHelper
     {

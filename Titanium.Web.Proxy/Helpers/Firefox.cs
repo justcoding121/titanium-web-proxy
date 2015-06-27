@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.IO;
 
-namespace Titanium.Web.Proxy.Test.Helpers
+namespace Titanium.Web.Proxy.Helpers
 {
     public class FireFoxHelper
     {
