@@ -19,12 +19,12 @@ Usage
 Refer the HTTP Proxy Server library in your project, look up Test project to learn usage.
 
 Add reference to 
-Titanium.Web.Proxy.dll
+* Titanium.Web.Proxy.dll
 
 These files also should be in your application directory
-Ionic.Zip.dll
-makecert.exe
-DO_NOT_TRUST_FiddlerRoot.cer
+* Ionic.Zip.dll
+* makecert.exe
+* DO_NOT_TRUST_FiddlerRoot.cer
 
 
 Setup HTTP proxy:
