@@ -51,13 +51,19 @@ namespace Titanium.Web.Proxy.Models
             mw.Close();
             return Encoding.Default.GetString(mw.ToArray());
         }
-        public void Ok()
+        public void Ok(string Html)
         {
+
+            if (Html == null)
+                Html = string.Empty;
+
+            var result = Encoding.Default.GetBytes(Html);
+
             StreamWriter connectStreamWriter = new StreamWriter(ClientStream);
             var s = String.Format("HTTP/{0}.{1} {2} {3}", HttpVersion.Major, HttpVersion.Minor, 200, "Ok");
             connectStreamWriter.WriteLine(s);
             connectStreamWriter.WriteLine(String.Format("Timestamp: {0}", DateTime.Now.ToString()));
-            connectStreamWriter.WriteLine("content-length: 0");
+            connectStreamWriter.WriteLine("content-length: " + result.Length);
             connectStreamWriter.WriteLine("Cache-Control: no-cache, no-store, must-revalidate");
             connectStreamWriter.WriteLine("Pragma: no-cache");
             connectStreamWriter.WriteLine("Expires: 0");
@@ -71,6 +77,9 @@ namespace Titanium.Web.Proxy.Models
 
             connectStreamWriter.WriteLine();
             connectStreamWriter.Flush();
+
+            ClientStream.Write(result, 0, result.Length);
+
 
             Cancel = true;
 

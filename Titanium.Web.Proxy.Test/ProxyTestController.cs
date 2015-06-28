@@ -84,7 +84,7 @@ namespace Titanium.Web.Proxy.Test
 
                 }
 
-                e.Ok();
+                e.Ok(null);
                 _lastURL = URL;
             }
         }
