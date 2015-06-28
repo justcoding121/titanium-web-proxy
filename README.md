@@ -18,6 +18,61 @@ Usage
 
 Refer the HTTP Proxy Server library in your project, look up Test project to learn usage.
 
+Add reference to 
+Titanium.Web.Proxy.dll
+
+These files also should be in your application directory
+Ionic.Zip.dll
+makecert.exe
+DO_NOT_TRUST_FiddlerRoot.cer
+
+
+Setup HTTP proxy:
+
+```csharp
+    ProxyServer.BeforeRequest += OnRequest;
+    ProxyServer.BeforeResponse += OnResponse;
+	ProxyServer.EnableSSL = true;
+	ProxyServer.SetAsSystemProxy = true;
+	ProxyServer.Start();
+	
+	// listen to client request & server response events
+	ProxyServer.BeforeRequest += OnRequest;
+    ProxyServer.BeforeResponse += OnResponse;
+	
+	//wait here (You can use something else as a wait function, I am using this as a demo)
+	Console.Read();
+	
+	//Unsubscribe & Quit
+	ProxyServer.BeforeRequest -= OnRequest;
+    ProxyServer.BeforeResponse -= OnResponse;
+	httpProxyServer.stop();
+	
+	
+```
+Sample request and response event handlers
+
+```csharp
+		
+        public void OnRequest(object sender, SessionEventArgs e)
+        {
+            //Modify  e.ProxyRequest
+        }
+		
+		 public void OnResponse(object sender, SessionEventArgs e)
+        {
+			if (e.ServerResponse.StatusCode == HttpStatusCode.OK)
+            {
+				if (e.ServerResponse.ContentType.Trim().ToLower().Contains("text/html"))
+				{
+					//Get response body
+					e.GetResponseBody();
+					//Modify e.ServerResponse
+					e.ResponseString = "<html><head></head><body>Response is modified!</body></html>";
+				}
+			}
+		}
+```
 Future updates
 ============
 * Cleanup code for better readability
