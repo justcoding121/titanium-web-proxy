@@ -44,7 +44,7 @@ Setup HTTP proxy:
 	//Unsubscribe & Quit
 	ProxyServer.BeforeRequest -= OnRequest;
     ProxyServer.BeforeResponse -= OnResponse;
-	httpProxyServer.stop();
+	ProxyServer.Stop();
 	
 	
 ```
