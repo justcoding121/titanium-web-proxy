@@ -73,5 +73,7 @@ Sample request and response event handlers
 ```
 Future updates
 ============
+* Expose APIs that are safe to be consumed by developer
+* Replace makecert.exe with other certificate generation APIs (like bouncy)
 * Cleanup code for better readability
 * Support HTTP 2.0 Once spec is ready
