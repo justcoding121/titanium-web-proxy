@@ -76,5 +76,5 @@ Future updates
 * Expose APIs that are safe to be consumed by developer
 * Replace makecert.exe with other certificate generation APIs (like bouncy)
 * Release nuget package
-* Cleanup code for better readability
+* Support modification of web socket requests
 * Support HTTP 2.0 Once spec is ready
