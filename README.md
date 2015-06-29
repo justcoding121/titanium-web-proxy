@@ -73,7 +73,7 @@ Sample request and response event handlers
 ```
 Future updates
 ============
-* Expose APIs that are safe to be consumed by developer
+* Expose only APIs that are safe to be consumed by developer
 * Replace makecert.exe with other certificate generation APIs (like bouncy)
 * Release nuget package
 * Support modification of web socket requests
