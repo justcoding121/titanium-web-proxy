@@ -120,7 +120,7 @@ namespace Titanium.Web.Proxy
                         return;
                     }
                     Monitor.Enter(certificateAccessLock);
-                    var _certificate = CertificateHelper.GetCertificate(RootCertificateName, tunnelHostName);
+                    var _certificate = ProxyServer.CertManager.CreateCertificate(tunnelHostName); //CertificateHelper.GetCertificate(RootCertificateName, tunnelHostName);
                     Monitor.Exit(certificateAccessLock);
 
                     SslStream sslStream = null;
