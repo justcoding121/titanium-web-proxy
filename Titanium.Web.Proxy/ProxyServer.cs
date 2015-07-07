@@ -60,7 +60,7 @@ namespace Titanium.Web.Proxy
         static ProxyServer()
         {
             CertManager = new CertificateManager("Titanium",
-                "Titanium Root Certificate");
+                "Titanium Root Certificate Authority");
         }
         public ProxyServer()
         {
