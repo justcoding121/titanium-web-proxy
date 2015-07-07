@@ -84,7 +84,7 @@ namespace Titanium.Web.Proxy.Helpers
                         FindCertificates(store, certificateSubject);
 
                     if (certificates != null)
-                        certificate = FindCertificates(store, certificateSubject)[0];
+                        certificate = certificates[0];
 
                     if (certificate == null)
                     {
