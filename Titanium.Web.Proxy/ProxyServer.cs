@@ -55,6 +55,13 @@ namespace Titanium.Web.Proxy
             }
         }
 
+        public static CertificateManager CertManager { get; set; }
+
+        static ProxyServer()
+        {
+            CertManager = new CertificateManager("Titanium",
+                "Titanium Root Certificate");
+        }
         public ProxyServer()
         {
 
@@ -93,7 +100,13 @@ namespace Titanium.Web.Proxy
                 FireFoxHelper.AddFirefox();
 
                 RootCertificateName = RootCertificateName == null ? "DO_NOT_TRUST_FiddlerRoot" : RootCertificateName;
-                CertificateHelper.InstallCertificate(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), string.Concat(RootCertificateName, ".cer")));
+
+                bool certTrusted = CertManager.CreateTrustedRootCertificate();
+                if (!certTrusted)
+                {
+                    // The user didn't want to install the self-signed certificate to the root store.
+                }
+                //CertificateHelper.InstallCertificate(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), string.Concat(RootCertificateName, ".cer")));
                 
                 if (EnableSSL)
                 {
