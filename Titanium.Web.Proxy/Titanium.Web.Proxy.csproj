@@ -81,7 +81,6 @@
     <Compile Include="Helpers\SystemProxy.cs" />
     <Compile Include="RequestHandler.cs" />
     <Compile Include="ResponseHandler.cs" />
-    <Compile Include="Helpers\Certificate.cs" />
     <Compile Include="Helpers\CustomBinaryReader.cs" />
     <Compile Include="Helpers\NetFramework.cs" />
     <Compile Include="Helpers\Compression.cs" />
