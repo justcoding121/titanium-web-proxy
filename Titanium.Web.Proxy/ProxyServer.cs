@@ -99,17 +99,17 @@ namespace Titanium.Web.Proxy
                 SystemProxyHelper.EnableProxyHTTP("localhost", ListeningPort);
                 FireFoxHelper.AddFirefox();
 
-                RootCertificateName = RootCertificateName == null ? "DO_NOT_TRUST_FiddlerRoot" : RootCertificateName;
-
-                bool certTrusted = CertManager.CreateTrustedRootCertificate();
-                if (!certTrusted)
-                {
-                    // The user didn't want to install the self-signed certificate to the root store.
-                }
-                //CertificateHelper.InstallCertificate(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), string.Concat(RootCertificateName, ".cer")));
-                
+             
                 if (EnableSSL)
                 {
+                    RootCertificateName = RootCertificateName == null ? "DO_NOT_TRUST_FiddlerRoot" : RootCertificateName;
+
+                    bool certTrusted = CertManager.CreateTrustedRootCertificate();
+                    if (!certTrusted)
+                    {
+                        // The user didn't want to install the self-signed certificate to the root store.
+                    }
+
                     SystemProxyHelper.EnableProxyHTTPS("localhost", ListeningPort);
                 }
             }
