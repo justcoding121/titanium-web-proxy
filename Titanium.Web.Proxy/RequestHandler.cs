@@ -193,7 +193,7 @@ namespace Titanium.Web.Proxy
 
                         if (splitBuffer.Length != 3)
                         {
-                            TcpHelper.SendRaw(httpCmd, tunnelHostName, ref requestLines, args.IsSecure, clientStreamReader.BaseStream);
+                            TcpHelper.SendRaw(httpCmd, tunnelHostName, ref requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
 
                             if (clientStream != null)
                                 clientStream.Close();
@@ -215,7 +215,7 @@ namespace Titanium.Web.Proxy
                         if (securehost != null)
                         {
                             remoteUri = securehost + remoteUri;
-                            args.IsSecure = true;
+                            args.IsSSLRequest = true;
                         }
 
                         //construct the web request that we are going to issue on behalf of the client.
@@ -236,7 +236,7 @@ namespace Titanium.Web.Proxy
                             {
 
 
-                                TcpHelper.SendRaw(httpCmd, tunnelHostName, ref requestLines, args.IsSecure, clientStreamReader.BaseStream);
+                                TcpHelper.SendRaw(httpCmd, tunnelHostName, ref requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
 
                                 if (clientStream != null)
                                     clientStream.Close();
@@ -255,21 +255,21 @@ namespace Titanium.Web.Proxy
 
                         if (BeforeRequest != null)
                         {
-                            args.Hostname = args.ProxyRequest.RequestUri.Host;
+                            args.RequestHostname = args.ProxyRequest.RequestUri.Host;
                             args.RequestURL = args.ProxyRequest.RequestUri.OriginalString;
 
                             args.RequestLength = contentLen;
 
-                            args.HttpVersion = version;
-                            args.Port = ((IPEndPoint)Client.Client.RemoteEndPoint).Port;
-                            args.ipAddress = ((IPEndPoint)Client.Client.RemoteEndPoint).Address;
-                            args.IsAlive = args.ProxyRequest.KeepAlive;
+                            args.RequestHttpVersion = version;
+                            args.ClientPort = ((IPEndPoint)Client.Client.RemoteEndPoint).Port;
+                            args.ClientIpAddress = ((IPEndPoint)Client.Client.RemoteEndPoint).Address;
+                            args.RequestIsAlive = args.ProxyRequest.KeepAlive;
 
                             BeforeRequest(null, args);
                         }
-                        if (args.Cancel)
+                        if (args.CancelRequest)
                         {
-                            if (args.IsAlive)
+                            if (args.RequestIsAlive)
                             {
                                 requestLines.Clear();
                                 while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
@@ -301,7 +301,7 @@ namespace Titanium.Web.Proxy
                         }
 
 
-                        if (args.IsSecure)
+                        if (args.IsSSLRequest)
                         {
                             if (args.ProxyRequest.Method == "POST" || args.ProxyRequest.Method == "PUT")
                                 args.FinishedRequestEvent.WaitOne();
