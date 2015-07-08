@@ -18,13 +18,26 @@ Usage
 
 Refer the HTTP Proxy Server library in your project, look up Test project to learn usage.
 
+Install by nuget:
+
+    Install-Package Titanium.Web.Proxy -Pre
+
+After installing nuget package mark following files to be copy to output directory
+
+* makecert.exe
+* Titanium_Proxy_Test_Root.cer
+
+Or install manually:
+
 Add reference to 
+
 * Titanium.Web.Proxy.dll
 
 These files also should be in your application directory
+
 * Ionic.Zip.dll
 * makecert.exe
-* DO_NOT_TRUST_FiddlerRoot.cer
+* Titanium_Proxy_Test_Root.cer
 
 
 Setup HTTP proxy:
@@ -55,6 +68,8 @@ Sample request and response event handlers
 	public void OnRequest(object sender, SessionEventArgs e)
 	{
 		//Modify  e.ProxyRequest
+		
+		//e.Ok("Request Cance
 	}
 	
 	 public void OnResponse(object sender, SessionEventArgs e)
@@ -73,8 +88,6 @@ Sample request and response event handlers
 ```
 Future updates
 ============
-* Expose only APIs that are safe to be consumed by developer
 * Replace makecert.exe with other certificate generation APIs (like bouncy)
-* Release nuget package
 * Support modification of web socket requests
 * Support HTTP 2.0 Once spec is ready
