@@ -62,25 +62,25 @@ namespace Titanium.Web.Proxy
                         switch (args.ServerResponse.ContentEncoding)
                         {
                             case "gzip":
-                                data = CompressionHelper.CompressGzip(args.ResponseString, args.Encoding);
+                                data = CompressionHelper.CompressGzip(args.ResponseHtmlBody, args.Encoding);
                                 WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, responseWriter);
                                 WriteResponseHeaders(responseWriter, responseHeaders, data.Length);
                                 SendData(clientWriteStream, data, isChunked);
                                 break;
                             case "deflate":
-                                data = CompressionHelper.CompressDeflate(args.ResponseString, args.Encoding);
+                                data = CompressionHelper.CompressDeflate(args.ResponseHtmlBody, args.Encoding);
                                 WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, responseWriter);
                                 WriteResponseHeaders(responseWriter, responseHeaders, data.Length);
                                 SendData(clientWriteStream, data, isChunked);
                                 break;
                             case "zlib":
-                                data = CompressionHelper.CompressZlib(args.ResponseString, args.Encoding);
+                                data = CompressionHelper.CompressZlib(args.ResponseHtmlBody, args.Encoding);
                                 WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, responseWriter);
                                 WriteResponseHeaders(responseWriter, responseHeaders, data.Length);
                                 SendData(clientWriteStream, data, isChunked);
                                 break;
                             default:
-                                data = EncodeData(args.ResponseString, args.Encoding);
+                                data = EncodeData(args.ResponseHtmlBody, args.Encoding);
                                 WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, responseWriter);
                                 WriteResponseHeaders(responseWriter, responseHeaders, data.Length);
                                 SendData(clientWriteStream, data, isChunked);

@@ -76,11 +76,11 @@ namespace Titanium.Web.Proxy.Test
             if (index >= 0)
             {
 
-                string URL = e.Decode();
+                string URL = e.GetRequestHtmlBody();
 
                 if (_lastURL != URL)
                 {
-                    OnChanged(new VisitedEventArgs() { hostname = e.Hostname, URL = URL, remoteIP = e.ipAddress, remotePort = e.Port });
+                    OnChanged(new VisitedEventArgs() { hostname = e.RequestHostname, URL = URL, remoteIP = e.ClientIpAddress, remotePort = e.ClientPort });
 
                 }
 
@@ -106,7 +106,7 @@ namespace Titanium.Web.Proxy.Test
                             string c = e.ServerResponse.GetResponseHeader("X-Requested-With");
                             if (e.ServerResponse.GetResponseHeader("X-Requested-With") == "")
                             {
-                                e.GetResponseBody();
+                                string responseHtmlBody = e.GetResponseHtmlBody();
 
                                 string functioname = "fr" + RandomString(10);
                                 string VisitedURL = RandomString(5);
@@ -116,10 +116,10 @@ namespace Titanium.Web.Proxy.Test
                                 string RandomLastRequest = RandomString(10);
                                 string LocalRequest;
 
-                                if (e.IsSecure)
-                                    LocalRequest = "https://" + e.Hostname + "/" + RandomURLEnding;
+                                if (e.IsSSLRequest)
+                                    LocalRequest = "https://" + e.RequestHostname + "/" + RandomURLEnding;
                                 else
-                                    LocalRequest = "http://" + e.Hostname + "/" + RandomURLEnding;
+                                    LocalRequest = "http://" + e.RequestHostname + "/" + RandomURLEnding;
 
                                 string script = "var " + RandomLastRequest + " = null;" +
                                  "if(window.top==self) { " + "\n" +
@@ -135,13 +135,13 @@ namespace Titanium.Web.Proxy.Test
                                  RequestVariable + ".open(\"POST\",\"" + LocalRequest + "\", true); " + "\n" +
                                  RequestVariable + ".send(" + VisitedURL + ");} " + RandomLastRequest + " = " + VisitedURL + "}";
 
-                                string response = e.ResponseString;
+                                
                                 Regex RE = new Regex("</body>", RegexOptions.RightToLeft | RegexOptions.IgnoreCase | RegexOptions.Multiline);
 
-                                string replaced = RE.Replace(response, "<script type =\"text/javascript\">" + script + "</script></body>", 1);
-                                if (replaced.Length != response.Length)
+                                string modifiedResponseHtmlBody = RE.Replace(responseHtmlBody, "<script type =\"text/javascript\">" + script + "</script></body>", 1);
+                                if (modifiedResponseHtmlBody.Length != responseHtmlBody.Length)
                                 {
-                                    e.ResponseString = replaced;
+                                    e.SetRequestHtmlBody(modifiedResponseHtmlBody);
                                     _URLList.Add(RandomURLEnding);
 
                                 }
