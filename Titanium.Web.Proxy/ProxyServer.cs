@@ -102,7 +102,7 @@ namespace Titanium.Web.Proxy
              
                 if (EnableSSL)
                 {
-                    RootCertificateName = RootCertificateName == null ? "DO_NOT_TRUST_FiddlerRoot" : RootCertificateName;
+                    RootCertificateName = RootCertificateName == null ? "Titanium_Proxy_Test_Root" : RootCertificateName;
 
                     bool certTrusted = CertManager.CreateTrustedRootCertificate();
                     if (!certTrusted)
