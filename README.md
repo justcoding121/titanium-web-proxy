@@ -22,7 +22,7 @@ Install by nuget:
 
     Install-Package Titanium.Web.Proxy -Pre
 
-After installing nuget package mark following files to be copy to output directory
+After installing nuget package mark following files to be copied to app directory
 
 * makecert.exe
 * Titanium_Proxy_Test_Root.cer
@@ -66,11 +66,14 @@ Sample request and response event handlers
 ```csharp
 		
 	public void OnRequest(object sender, SessionEventArgs e)
-	{
-		//Modify  e.ProxyRequest
-		
-		//e.Ok("Request Cance
-	}
+        {
+          //To cancel a request with a custom HTML content
+          //Filter URL
+            if (e.RequestURL.Contains("somewebsite.com"))
+            {
+                e.Ok("<!DOCTYPE html><html><body><h1>Blocked</h1><p>website blocked.</p></body></html>");
+            }
+        }
 	
 	 public void OnResponse(object sender, SessionEventArgs e)
 	{
@@ -79,9 +82,11 @@ Sample request and response event handlers
 			if (e.ServerResponse.ContentType.Trim().ToLower().Contains("text/html"))
 			{
 				//Get response body
-				e.GetResponseBody();
+				 string responseHtmlBody = e.GetResponseHtmlBody();
 				//Modify e.ServerResponse
-				e.ResponseString = "<html><head></head><body>Response is modified!</body></html>";
+				responseHtmlBody = "<html><head></head><body>Response is modified!</body></html>";
+				//Set modifed response Html Body
+				e.SetRequestHtmlBody(responseHtmlBody);
 			}
 		}
 	}
