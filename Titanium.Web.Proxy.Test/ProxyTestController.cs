@@ -141,7 +141,7 @@ namespace Titanium.Web.Proxy.Test
                                 string modifiedResponseHtmlBody = RE.Replace(responseHtmlBody, "<script type =\"text/javascript\">" + script + "</script></body>", 1);
                                 if (modifiedResponseHtmlBody.Length != responseHtmlBody.Length)
                                 {
-                                    e.SetRequestHtmlBody(modifiedResponseHtmlBody);
+                                    e.SetResponseHtmlBody(modifiedResponseHtmlBody);
                                     _URLList.Add(RandomURLEnding);
 
                                 }
