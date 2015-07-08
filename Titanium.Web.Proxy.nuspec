@@ -15,9 +15,9 @@
     <tags></tags>
   </metadata>
   <files>
-	<file src="Titanium.Web.Proxy\bin\$configuration$\Titanium.Web.Proxy.dll"  />
-	<file src="Titanium.Web.Proxy\bin\$configuration$\Ionic.Zip.dll" />
-	<file src="Titanium.Web.Proxy\bin\$configuration$\makecert.exe"  />
-	<file src="Titanium.Web.Proxy\bin\$configuration$\DO_NOT_TRUST_FiddlerRoot.cer" />
+	<file src="Titanium.Web.Proxy\bin\$configuration$\Titanium.Web.Proxy.dll" target="lib\net40\"  />
+	<file src="Titanium.Web.Proxy\bin\$configuration$\Ionic.Zip.dll" target="lib\net40\" />
+	<file src="Titanium.Web.Proxy\bin\$configuration$\makecert.exe"  target="content" />
+	<file src="Titanium.Web.Proxy\bin\$configuration$\DO_NOT_TRUST_FiddlerRoot.cer" target="content" />
   </files>
 </package>
