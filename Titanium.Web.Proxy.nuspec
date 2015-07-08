@@ -18,6 +18,6 @@
 	<file src="Titanium.Web.Proxy\bin\$configuration$\Titanium.Web.Proxy.dll" target="lib\net40\"  />
 	<file src="Titanium.Web.Proxy\bin\$configuration$\Ionic.Zip.dll" target="lib\net40\" />
 	<file src="Titanium.Web.Proxy\bin\$configuration$\makecert.exe"  target="content" />
-	<file src="Titanium.Web.Proxy\bin\$configuration$\DO_NOT_TRUST_FiddlerRoot.cer" target="content" />
+	<file src="Titanium.Web.Proxy\bin\$configuration$\Titanium_Proxy_Test_Root.cer" target="content" />
   </files>
 </package>
