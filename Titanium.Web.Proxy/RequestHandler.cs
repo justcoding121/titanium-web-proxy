@@ -13,6 +13,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Reflection;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
+using System.Threading.Tasks;
 
 
 namespace Titanium.Web.Proxy
@@ -21,7 +22,7 @@ namespace Titanium.Web.Proxy
     partial class ProxyServer
     {
 
-        private static void HandleClientRequest(TcpClient Client)
+        private static void HandleClient(TcpClient Client)
         {
 
             string connectionGroup = null;
@@ -120,7 +121,7 @@ namespace Titanium.Web.Proxy
                         return;
                     }
                     Monitor.Enter(certificateAccessLock);
-                    var _certificate = ProxyServer.CertManager.CreateCertificate(tunnelHostName); //CertificateHelper.GetCertificate(RootCertificateName, tunnelHostName);
+                    var _certificate = ProxyServer.CertManager.CreateCertificate(tunnelHostName);
                     Monitor.Exit(certificateAccessLock);
 
                     SslStream sslStream = null;
@@ -173,223 +174,202 @@ namespace Titanium.Web.Proxy
                     securehost = remoteUri;
                 }
 
-                int count = 0;
+                HandleHttpSessionRequest(Client, httpCmd, connectionGroup, clientStream, tunnelHostName, requestLines, clientStreamReader, securehost);
 
 
-                SessionEventArgs args = new SessionEventArgs(BUFFER_SIZE);
-
-                while (!String.IsNullOrEmpty(httpCmd))
-                {
-
-                    count++;
-
-                    MemoryStream mw = null;
-                    StreamWriter sw = null;
-                    args = new SessionEventArgs(BUFFER_SIZE);
-
-                    try
-                    {
-                        splitBuffer = httpCmd.Split(spaceSplit, 3);
-
-                        if (splitBuffer.Length != 3)
-                        {
-                            TcpHelper.SendRaw(httpCmd, tunnelHostName, ref requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
-
-                            if (clientStream != null)
-                                clientStream.Close();
-
-                            return;
-                        }
-                        method = splitBuffer[0];
-                        remoteUri = splitBuffer[1];
-
-                        if (splitBuffer[2] == "HTTP/1.1")
-                        {
-                            version = new Version(1, 1);
-                        }
-                        else
-                        {
-                            version = new Version(1, 0);
-                        }
-
-                        if (securehost != null)
-                        {
-                            remoteUri = securehost + remoteUri;
-                            args.IsSSLRequest = true;
-                        }
-
-                        //construct the web request that we are going to issue on behalf of the client.
-                        args.ProxyRequest = (HttpWebRequest)HttpWebRequest.Create(remoteUri.Trim());
-                        args.ProxyRequest.Proxy = null;
-                        args.ProxyRequest.UseDefaultCredentials = true;
-                        args.ProxyRequest.Method = method;
-                        args.ProxyRequest.ProtocolVersion = version;
-                        args.ClientStream = clientStream;
-                        args.ClientStreamReader = clientStreamReader;
-
-                        for (int i = 1; i < requestLines.Count; i++)
-                        {
-                            var rawHeader = requestLines[i];
-                            String[] header = rawHeader.ToLower().Trim().Split(colonSpaceSplit, 2, StringSplitOptions.None);
-
-                            if ((header[0] == "upgrade") && (header[1] == "websocket"))
-                            {
-
-
-                                TcpHelper.SendRaw(httpCmd, tunnelHostName, ref requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
-
-                                if (clientStream != null)
-                                    clientStream.Close();
-
-                                return;
-                            }
-                        }
-
-                        ReadRequestHeaders(ref requestLines, args.ProxyRequest);
-
-
-                        int contentLen = (int)args.ProxyRequest.ContentLength;
-
-                        args.ProxyRequest.AllowAutoRedirect = false;
-                        args.ProxyRequest.AutomaticDecompression = DecompressionMethods.None;
-
-                        if (BeforeRequest != null)
-                        {
-                            args.RequestHostname = args.ProxyRequest.RequestUri.Host;
-                            args.RequestURL = args.ProxyRequest.RequestUri.OriginalString;
-
-                            args.RequestLength = contentLen;
-
-                            args.RequestHttpVersion = version;
-                            args.ClientPort = ((IPEndPoint)Client.Client.RemoteEndPoint).Port;
-                            args.ClientIpAddress = ((IPEndPoint)Client.Client.RemoteEndPoint).Address;
-                            args.RequestIsAlive = args.ProxyRequest.KeepAlive;
-
-                            BeforeRequest(null, args);
-                        }
-                        if (args.CancelRequest)
-                        {
-                            if (args.RequestIsAlive)
-                            {
-                                requestLines.Clear();
-                                while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
-                                {
-                                    requestLines.Add(tmpLine);
-                                }
-
-                                httpCmd = requestLines.Count > 0 ? requestLines[0] : null;
-                                continue;
-                            }
-                            else
-                                break;
-                        }
-
-                        args.ProxyRequest.ConnectionGroupName = connectionGroup;
-                        args.ProxyRequest.AllowWriteStreamBuffering = true;
-
-                        args.FinishedRequestEvent = new ManualResetEvent(false);
-
-
-                        if (method.ToUpper() == "POST" || method.ToUpper() == "PUT")
-                        {
-                            args.ProxyRequest.BeginGetRequestStream(new AsyncCallback(GetRequestStreamCallback), args);
-                        }
-                        else
-                        {
-                            args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleServerResponse), args);
-
-                        }
-
-
-                        if (args.IsSSLRequest)
-                        {
-                            if (args.ProxyRequest.Method == "POST" || args.ProxyRequest.Method == "PUT")
-                                args.FinishedRequestEvent.WaitOne();
-                            else
-                                args.FinishedRequestEvent.Set();
-                        }
-                        else
-                            args.FinishedRequestEvent.WaitOne();
-
-                        httpCmd = null;
-                        if (args.ProxyRequest.KeepAlive)
-                        {
-                            requestLines.Clear();
-                            while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
-                            {
-                                requestLines.Add(tmpLine);
-                            }
-                            httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
-
-                        }
-
-
-                        if (args.ServerResponse != null)
-                            args.ServerResponse.Close();
-                    }
-                    catch (IOException ex)
-                    {
-                        throw ex;
-                    }
-                    catch (UriFormatException ex)
-                    {
-                        throw ex;
-                    }
-                    catch (WebException ex)
-                    {
-                        throw ex;
-                    }
-                    finally
-                    {
-
-                        if (sw != null) sw.Close();
-                        if (mw != null) mw.Close();
-
-                        if (args.ProxyRequest != null) args.ProxyRequest.Abort();
-                        if (args.ServerResponseStream != null) args.ServerResponseStream.Close();
-
-                    }
-                }
 
             }
-            catch (AuthenticationException ex)
+            catch (AuthenticationException)
             {
-                Debug.WriteLine(ex.Message);
+                return;
             }
-            catch (EndOfStreamException ex)
+            catch (EndOfStreamException)
             {
-                Debug.WriteLine(ex.Message);
+                return;
             }
-            catch (IOException ex)
+            catch (IOException)
             {
-                Debug.WriteLine(ex.Message);
+                return;
             }
-            catch (UriFormatException ex)
+            catch (UriFormatException)
             {
-                Debug.WriteLine(ex.Message);
+                return;
             }
-            catch (WebException ex)
+            catch (WebException)
             {
-                Debug.WriteLine(ex.Message);
+                return;
             }
             finally
             {
 
 
-                if (connectStreamWriter != null)
-                    connectStreamWriter.Close();
+            }
 
-                if (clientStreamReader != null)
-                    clientStreamReader.Close();
 
-                if (clientStream != null)
-                    clientStream.Close();
+        }
+        private static void HandleHttpSessionRequest(TcpClient Client, string httpCmd, string connectionGroup, Stream clientStream, string tunnelHostName, List<string> requestLines, CustomBinaryReader clientStreamReader, string securehost)
+        {
+
+
+            if (httpCmd == null) return;
+
+
+            var args = new SessionEventArgs(BUFFER_SIZE);
+            args.Client = Client;
+            args.tunnelHostName = tunnelHostName;
+            args.securehost = securehost;
+            try
+            {
+                var splitBuffer = httpCmd.Split(spaceSplit, 3);
+
+                if (splitBuffer.Length != 3)
+                {
+                    TcpHelper.SendRaw(httpCmd, tunnelHostName, ref requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
+
+                    if (clientStream != null)
+                        clientStream.Close();
+
+                    return;
+                }
+                var method = splitBuffer[0];
+                var remoteUri = splitBuffer[1];
+                Version version;
+                if (splitBuffer[2] == "HTTP/1.1")
+                {
+                    version = new Version(1, 1);
+                }
+                else
+                {
+                    version = new Version(1, 0);
+                }
+
+                if (securehost != null)
+                {
+                    remoteUri = securehost + remoteUri;
+                    args.IsSSLRequest = true;
+                }
+
+                //construct the web request that we are going to issue on behalf of the client.
+                args.ProxyRequest = (HttpWebRequest)HttpWebRequest.Create(remoteUri.Trim());
+                args.ProxyRequest.Proxy = null;
+                args.ProxyRequest.UseDefaultCredentials = true;
+                args.ProxyRequest.Method = method;
+                args.ProxyRequest.ProtocolVersion = version;
+                args.ClientStream = clientStream;
+                args.ClientStreamReader = clientStreamReader;
+
+                for (int i = 1; i < requestLines.Count; i++)
+                {
+                    var rawHeader = requestLines[i];
+                    String[] header = rawHeader.ToLower().Trim().Split(colonSpaceSplit, 2, StringSplitOptions.None);
+
+                    if ((header[0] == "upgrade") && (header[1] == "websocket"))
+                    {
+
+
+                        TcpHelper.SendRaw(httpCmd, tunnelHostName, ref requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
+
+                        if (clientStream != null)
+                            clientStream.Close();
+
+                        return;
+                    }
+                }
+
+                ReadRequestHeaders(ref requestLines, args.ProxyRequest);
+
+
+                int contentLen = (int)args.ProxyRequest.ContentLength;
+
+                args.ProxyRequest.AllowAutoRedirect = false;
+                args.ProxyRequest.AutomaticDecompression = DecompressionMethods.None;
+
+                if (BeforeRequest != null)
+                {
+                    args.RequestHostname = args.ProxyRequest.RequestUri.Host;
+                    args.RequestURL = args.ProxyRequest.RequestUri.OriginalString;
+
+                    args.RequestLength = contentLen;
+
+                    args.RequestHttpVersion = version;
+                    args.ClientPort = ((IPEndPoint)Client.Client.RemoteEndPoint).Port;
+                    args.ClientIpAddress = ((IPEndPoint)Client.Client.RemoteEndPoint).Address;
+                    args.RequestIsAlive = args.ProxyRequest.KeepAlive;
+
+                    BeforeRequest(null, args);
+                }
+                string tmpLine;
+                if (args.CancelRequest)
+                {
+                    if (args.RequestIsAlive)
+                    {
+                        requestLines.Clear();
+                        while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
+                        {
+                            requestLines.Add(tmpLine);
+                        }
+
+                        httpCmd = requestLines.Count > 0 ? requestLines[0] : null;
+                        return;
+                    }
+                    else
+                        return;
+                }
+
+                args.ProxyRequest.ConnectionGroupName = connectionGroup;
+                args.ProxyRequest.AllowWriteStreamBuffering = true;
+
+
+                if (args.RequestWasModified)
+                {
+                    ASCIIEncoding encoding = new ASCIIEncoding();
+                    byte[] requestBytes = encoding.GetBytes(args.RequestHtmlBody);
+                    args.ProxyRequest.ContentLength = requestBytes.Length;
+                    Stream newStream = args.ProxyRequest.GetRequestStream();
+                    newStream.Write(requestBytes, 0, requestBytes.Length);
+                    args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
+
+                }
+                else
+                {
+                    if (method.ToUpper() == "POST" || method.ToUpper() == "PUT")
+                    {
+                        args.ProxyRequest.BeginGetRequestStream(new AsyncCallback(GetRequestStreamCallback), args);
+                    }
+                    else
+                    {
+                        args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
+                    }
+
+
+                }
+
+
+
+            }
+            catch (IOException ex)
+            {
+                return;
+            }
+            catch (UriFormatException ex)
+            {
+                return;
+            }
+            catch (WebException ex)
+            {
+                return;
+            }
+            finally
+            {
+
+
+
+
 
             }
 
 
         }
-
         private static void ReadRequestHeaders(ref List<string> RequestLines, HttpWebRequest WebRequest)
         {
 
@@ -467,7 +447,7 @@ namespace Titanium.Web.Proxy
                             break;
 
                         default:
-                            if (header.Length > 0)
+                            if (header.Length >= 2)
                                 WebRequest.Headers.Add(header[0], header[1]);
                             else
                                 WebRequest.Headers.Add(header[0], "");
@@ -527,7 +507,6 @@ namespace Titanium.Web.Proxy
 
 
                     args.ProxyRequest.KeepAlive = false;
-                    args.FinishedRequestEvent.Set();
                     Debug.WriteLine(ex.Message);
                     return;
                 }
@@ -536,7 +515,6 @@ namespace Titanium.Web.Proxy
 
 
                     args.ProxyRequest.KeepAlive = false;
-                    args.FinishedRequestEvent.Set();
                     Debug.WriteLine(ex.Message);
                     return;
 
@@ -609,7 +587,6 @@ namespace Titanium.Web.Proxy
                         postStream.Close();
 
                     args.ProxyRequest.KeepAlive = false;
-                    args.FinishedRequestEvent.Set();
                     Debug.WriteLine(ex.Message);
                     return;
                 }
@@ -619,14 +596,13 @@ namespace Titanium.Web.Proxy
                         postStream.Close();
 
                     args.ProxyRequest.KeepAlive = false;
-                    args.FinishedRequestEvent.Set();
                     Debug.WriteLine(ex.Message);
                     return;
 
                 }
             }
 
-            args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleServerResponse), args);
+            args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
 
         }
 

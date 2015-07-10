@@ -33,7 +33,7 @@ namespace Titanium.Web.Proxy
         private static object certificateAccessLock = new object();
         private static List<string> pinnedCertificateClients = new List<string>();
 
-        private static ManualResetEvent tcpClientConnected = new ManualResetEvent(false);
+
 
         private static TcpListener listener;
         private static Thread listenerThread;
@@ -46,6 +46,8 @@ namespace Titanium.Web.Proxy
         public static IPAddress ListeningIPInterface { get; set; }
 
         public static string RootCertificateName { get; set; }
+        public static bool EnableSSL { get; set; }
+        public static bool SetAsSystemProxy { get; set; }
 
         public static Int32 ListeningPort
         {
@@ -141,65 +143,24 @@ namespace Titanium.Web.Proxy
             {
                 while (ShouldListen)
                 {
-                    // Set the event to nonsignaled state.
-                    tcpClientConnected.Reset();
-
-                    listener.BeginAcceptTcpClient(new AsyncCallback(AcceptTcpClientCallback), listener);
-                    // Wait until a connection is made and processed before  
-                    // continuing.
-                    tcpClientConnected.WaitOne();
+                    
+                    var client = listener.AcceptTcpClient();
+                    Task.Factory.StartNew(() => HandleClient(client));
+                  
                 }
             }
             catch (ThreadInterruptedException) { }
-            catch (SocketException ex)
+            catch (SocketException)
             {
-                Debug.WriteLine(ex.Message);
+              
             }
 
 
 
         }
-        public static void AcceptTcpClientCallback(IAsyncResult ar)
-        {
-            try
-            {
-                // Get the listener that handles the client request.
-                TcpListener listener = (TcpListener)ar.AsyncState;
-                TcpClient client = null;
-
-
-                // End the operation and display the received data on  
-                // the console.
-                client = listener.EndAcceptTcpClient(ar);
-
-                Task.Factory.StartNew(() => ProcessClient(client));
-
-                // Signal the calling thread to continue.
-                tcpClientConnected.Set();
-            }
-            catch(ObjectDisposedException) { }
-        }
-
-        private static void ProcessClient(Object param)
-        {
-
-            try
-            {
-                TcpClient client = param as TcpClient;
-                HandleClientRequest(client);
-                client.Close();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex.Message);
-            }
-
-        }
+      
 
 
 
-        public static bool EnableSSL { get; set; }
-
-        public static bool SetAsSystemProxy { get; set; }
     }
 }

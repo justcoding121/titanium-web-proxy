@@ -11,12 +11,13 @@ using System.Security.Authentication;
 using System.Diagnostics;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Helpers;
+using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy
 {
     partial class ProxyServer
     {
-        private static void HandleServerResponse(IAsyncResult AsynchronousResult)
+        private static void HandleHttpSessionResponse(IAsyncResult AsynchronousResult)
         {
 
             SessionEventArgs args = (SessionEventArgs)AsynchronousResult.AsyncState;
@@ -55,7 +56,7 @@ namespace Titanium.Web.Proxy
                     if (BeforeResponse != null)
                         BeforeResponse(null, args);
 
-                    if (args.WasModified)
+                    if (args.ResponseWasModified)
                     {
 
                         byte[] data;
@@ -137,21 +138,36 @@ namespace Titanium.Web.Proxy
             finally
             {
 
-                if (args.ProxyRequest.KeepAlive == false)
-                {
-                    if (responseWriter != null)
-                        responseWriter.Close();
-
-                    if (clientWriteStream != null)
-                        clientWriteStream.Close();
-                }
-
+                if (args.ProxyRequest != null) args.ProxyRequest.Abort();
+                if (args.ServerResponseStream != null) args.ServerResponseStream.Close();
 
                 if (args.ServerResponse != null)
                     args.ServerResponse.Close();
 
-                args.FinishedRequestEvent.Set();
+            }
 
+            if (args.ProxyRequest.KeepAlive == false)
+            {
+                if (responseWriter != null)
+                    responseWriter.Close();
+
+                if (clientWriteStream != null)
+                    clientWriteStream.Close();
+
+                args.Client.Close();
+            }
+            else
+            {
+                string httpCmd, tmpLine;
+                List<string> requestLines = new List<string>();
+                requestLines.Clear();
+                while (!String.IsNullOrEmpty(tmpLine = args.ClientStreamReader.ReadLine()))
+                {
+                    requestLines.Add(tmpLine);
+                }
+                httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
+                TcpClient Client = args.Client;
+                HandleHttpSessionRequest(Client, httpCmd, args.ProxyRequest.ConnectionGroupName, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost);
             }
 
         }
