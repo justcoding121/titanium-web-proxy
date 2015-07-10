@@ -156,19 +156,7 @@ namespace Titanium.Web.Proxy
 
                 args.Client.Close();
             }
-            else
-            {
-                string httpCmd, tmpLine;
-                List<string> requestLines = new List<string>();
-                requestLines.Clear();
-                while (!String.IsNullOrEmpty(tmpLine = args.ClientStreamReader.ReadLine()))
-                {
-                    requestLines.Add(tmpLine);
-                }
-                httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
-                TcpClient Client = args.Client;
-                HandleHttpSessionRequest(Client, httpCmd, args.ProxyRequest.ConnectionGroupName, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost);
-            }
+
 
         }
         private static List<Tuple<String, String>> ProcessResponse(HttpWebResponse Response)
