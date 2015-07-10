@@ -38,6 +38,7 @@ namespace Titanium.Web.Proxy
 
 
                 clientStream = Client.GetStream();
+ 
                 clientStreamReader = new CustomBinaryReader(clientStream, Encoding.ASCII);
                 string securehost = null;
 
@@ -422,6 +423,8 @@ namespace Titanium.Web.Proxy
                                 WebRequest.IfModifiedSince = d;
                             break;
                         case "proxy-connection":
+                             if (header[1].ToLower() == "keep-alive")
+                                WebRequest.KeepAlive = true;
                             break;
                         case "range":
                             var startEnd = header[1].Replace(Environment.NewLine, "").Remove(0, 6).Split('-');
@@ -449,8 +452,7 @@ namespace Titanium.Web.Proxy
                         default:
                             if (header.Length >= 2)
                                 WebRequest.Headers.Add(header[0], header[1]);
-                            else
-                                WebRequest.Headers.Add(header[0], "");
+                           
 
                             break;
                     }
