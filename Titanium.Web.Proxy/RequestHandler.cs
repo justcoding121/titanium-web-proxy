@@ -38,7 +38,7 @@ namespace Titanium.Web.Proxy
 
 
                 clientStream = Client.GetStream();
- 
+
                 clientStreamReader = new CustomBinaryReader(clientStream, Encoding.ASCII);
                 string securehost = null;
 
@@ -340,6 +340,18 @@ namespace Titanium.Web.Proxy
                     else
                     {
                         args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
+
+                        if (args.ProxyRequest.KeepAlive)
+                        {
+                            requestLines = new List<string>();
+                            requestLines.Clear();
+                            while (!String.IsNullOrEmpty(tmpLine = args.ClientStreamReader.ReadLine()))
+                            {
+                                requestLines.Add(tmpLine);
+                            }
+                            httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
+                            HandleHttpSessionRequest(Client, httpCmd, args.ProxyRequest.ConnectionGroupName, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost);
+                        }
                     }
 
 
@@ -347,16 +359,19 @@ namespace Titanium.Web.Proxy
 
 
 
+
+
+
             }
-            catch (IOException ex)
+            catch (IOException)
             {
                 return;
             }
-            catch (UriFormatException ex)
+            catch (UriFormatException)
             {
                 return;
             }
-            catch (WebException ex)
+            catch (WebException)
             {
                 return;
             }
@@ -423,7 +438,7 @@ namespace Titanium.Web.Proxy
                                 WebRequest.IfModifiedSince = d;
                             break;
                         case "proxy-connection":
-                             if (header[1].ToLower() == "keep-alive")
+                            if (header[1].ToLower() == "keep-alive")
                                 WebRequest.KeepAlive = true;
                             break;
                         case "range":
@@ -452,7 +467,7 @@ namespace Titanium.Web.Proxy
                         default:
                             if (header.Length >= 2)
                                 WebRequest.Headers.Add(header[0], header[1]);
-                           
+
 
                             break;
                     }
@@ -583,22 +598,20 @@ namespace Titanium.Web.Proxy
                     }
                     postStream.Close();
                 }
-                catch (IOException ex)
+                catch (IOException)
                 {
                     if (postStream != null)
                         postStream.Close();
 
                     args.ProxyRequest.KeepAlive = false;
-                    Debug.WriteLine(ex.Message);
                     return;
                 }
-                catch (WebException ex)
+                catch (WebException)
                 {
                     if (postStream != null)
                         postStream.Close();
 
                     args.ProxyRequest.KeepAlive = false;
-                    Debug.WriteLine(ex.Message);
                     return;
 
                 }
@@ -606,6 +619,19 @@ namespace Titanium.Web.Proxy
 
             args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
 
+            if (args.ProxyRequest.KeepAlive)
+            {
+                string httpCmd, tmpLine;
+                List<string> requestLines = new List<string>();
+                requestLines.Clear();
+                while (!String.IsNullOrEmpty(tmpLine = args.ClientStreamReader.ReadLine()))
+                {
+                    requestLines.Add(tmpLine);
+                }
+                httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
+                TcpClient Client = args.Client;
+                HandleHttpSessionRequest(Client, httpCmd, args.ProxyRequest.ConnectionGroupName, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost);
+            }
         }
 
 
