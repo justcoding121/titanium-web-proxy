@@ -33,8 +33,9 @@ namespace Titanium.Web.Proxy.Models
         internal Stream ClientStream { get; set; }
         internal Stream ServerResponseStream { get; set; }
         internal Encoding Encoding { get; set; }
-        internal bool WasModified { get; set; }
-        internal System.Threading.ManualResetEvent FinishedRequestEvent { get; set; }
+        internal bool RequestWasModified { get; set; }
+        internal bool ResponseWasModified { get; set; }
+
         internal string UpgradeProtocol { get; set; }
 
 
@@ -64,11 +65,13 @@ namespace Titanium.Web.Proxy.Models
                 mw.Close();
                 RequestHtmlBody = Encoding.Default.GetString(mw.ToArray());
             }
+            RequestWasModified = true;
             return RequestHtmlBody;
         }
         public void SetRequestHtmlBody(string Body)
         {
             this.RequestHtmlBody = Body;
+            RequestWasModified = true;
         }
         public string GetResponseHtmlBody()
         {
@@ -97,7 +100,7 @@ namespace Titanium.Web.Proxy.Models
                         break;
                 }
                 ResponseHtmlBody = ResponseData;
-                WasModified = true;
+                ResponseWasModified = true;
               
             }
             return ResponseHtmlBody;
@@ -153,7 +156,13 @@ namespace Titanium.Web.Proxy.Models
 
 
 
-        
+
+
+        public System.Net.Sockets.TcpClient Client { get; set; }
+
+        public string tunnelHostName { get; set; }
+
+        public string securehost { get; set; }
     }
 
 }
