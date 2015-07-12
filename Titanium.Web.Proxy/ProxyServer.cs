@@ -107,12 +107,12 @@ namespace Titanium.Web.Proxy
                     RootCertificateName = RootCertificateName == null ? "Titanium_Proxy_Test_Root" : RootCertificateName;
 
                     bool certTrusted = CertManager.CreateTrustedRootCertificate();
-                    if (!certTrusted)
+                    if (certTrusted)
                     {
-                        // The user didn't want to install the self-signed certificate to the root store.
+                        SystemProxyHelper.EnableProxyHTTPS("localhost", ListeningPort);
                     }
 
-                    SystemProxyHelper.EnableProxyHTTPS("localhost", ListeningPort);
+                 
                 }
             }
 
