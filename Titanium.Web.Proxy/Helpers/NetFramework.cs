@@ -8,6 +8,7 @@ namespace Titanium.Web.Proxy.Helpers
 {
     public class NetFrameworkHelper
     {
+        //http://stackoverflow.com/questions/856885/httpwebrequest-to-url-with-dot-at-the-end
         public static void URLPeriodFix()
         {
             MethodInfo getSyntax = typeof(UriParser).GetMethod("GetSyntax", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
