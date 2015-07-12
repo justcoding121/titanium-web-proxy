@@ -480,7 +480,7 @@ namespace Titanium.Web.Proxy
 
 
         }
-
+        //This is called when the request is PUT/POST to read the body
         private static void GetRequestStreamCallback(IAsyncResult AsynchronousResult)
         {
             var args = (SessionEventArgs)AsynchronousResult.AsyncState;
@@ -537,6 +537,7 @@ namespace Titanium.Web.Proxy
                 }
 
             }
+           //Need to revist, find any potential bugs
             else if (args.ProxyRequest.SendChunked)
             {
                 args.ProxyRequest.AllowWriteStreamBuffering = true;
