@@ -74,6 +74,7 @@ namespace Titanium.Web.Proxy
             ServicePointManager.DnsRefreshTimeout = 3 * 60 * 1000;//3 minutes
             ServicePointManager.MaxServicePointIdleTime = 3 * 60 * 1000;
 
+            //HttpWebRequest certificate validation callback
             ServicePointManager.ServerCertificateValidationCallback = delegate(object s, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
             {
                 if (sslPolicyErrors == SslPolicyErrors.None) return true;
@@ -81,6 +82,7 @@ namespace Titanium.Web.Proxy
                     return false;
             };
 
+            //Fix a bug in .NET 4.0
             NetFrameworkHelper.URLPeriodFix();
 
         }
@@ -107,6 +109,7 @@ namespace Titanium.Web.Proxy
                     RootCertificateName = RootCertificateName == null ? "Titanium_Proxy_Test_Root" : RootCertificateName;
 
                     bool certTrusted = CertManager.CreateTrustedRootCertificate();
+                    //If certificate was trusted by the machine
                     if (certTrusted)
                     {
                         SystemProxyHelper.EnableProxyHTTPS("localhost", ListeningPort);
@@ -143,18 +146,14 @@ namespace Titanium.Web.Proxy
             {
                 while (ShouldListen)
                 {
-                    
+
                     var client = listener.AcceptTcpClient();
                     Task.Factory.StartNew(() => HandleClient(client));
-                  
+
                 }
             }
             catch (ThreadInterruptedException) { }
-            catch (SocketException)
-            {
-              
-            }
-
+            catch (SocketException) { }
 
 
         }

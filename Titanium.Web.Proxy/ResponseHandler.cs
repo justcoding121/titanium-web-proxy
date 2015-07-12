@@ -17,6 +17,7 @@ namespace Titanium.Web.Proxy
 {
     partial class ProxyServer
     {
+        //Called asynchronously when a request was successfully and we received the response
         private static void HandleHttpSessionResponse(IAsyncResult AsynchronousResult)
         {
 
@@ -27,7 +28,8 @@ namespace Titanium.Web.Proxy
             }
             catch (WebException webEx)
             {
-                args.ProxyRequest.KeepAlive = false;
+                //Things line 404, 500 etc
+                //args.ProxyRequest.KeepAlive = false;
                 args.ServerResponse = webEx.Response as HttpWebResponse;
             }
 
@@ -109,35 +111,25 @@ namespace Titanium.Web.Proxy
 
 
             }
-            catch (IOException ex)
+            catch (IOException)
             {
-
                 args.ProxyRequest.KeepAlive = false;
-                Debug.WriteLine(ex.Message);
-
             }
             catch (SocketException ex)
             {
-
                 args.ProxyRequest.KeepAlive = false;
-                Debug.WriteLine(ex.Message);
-
             }
-            catch (ArgumentException ex)
-            {
-
-                args.ProxyRequest.KeepAlive = false;
-                Debug.WriteLine(ex.Message);
-
-            }
-            catch (WebException ex)
+            catch (ArgumentException)
             {
                 args.ProxyRequest.KeepAlive = false;
-                Debug.WriteLine(ex.Message);
+            }
+            catch (WebException)
+            {
+                args.ProxyRequest.KeepAlive = false;
             }
             finally
             {
-
+                //Close this HttpWebRequest session
                 if (args.ProxyRequest != null) args.ProxyRequest.Abort();
                 if (args.ServerResponseStream != null) args.ServerResponseStream.Close();
 
@@ -146,6 +138,7 @@ namespace Titanium.Web.Proxy
 
             }
 
+            //If this is false then terminate the tcp client
             if (args.ProxyRequest.KeepAlive == false)
             {
                 if (responseWriter != null)
@@ -245,6 +238,7 @@ namespace Titanium.Web.Proxy
             }
 
         }
+        //Send chunked response
         public static void SendChunked(Stream InStream, Stream OutStream)
         {
 
@@ -273,8 +267,6 @@ namespace Titanium.Web.Proxy
             Byte[] buffer = new Byte[BUFFER_SIZE];
 
             var ChunkTrail = Encoding.ASCII.GetBytes(Environment.NewLine);
-
-
 
             var ChunkHead = Encoding.ASCII.GetBytes(Data.Length.ToString("x2"));
             OutStream.Write(ChunkHead, 0, ChunkHead.Length);
