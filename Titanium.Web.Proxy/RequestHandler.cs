@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy
         private static void HandleClient(TcpClient Client)
         {
 
-            string connectionGroup = null;
+      
             Stream clientStream = null;
             CustomBinaryReader clientStreamReader = null;
             StreamWriter connectStreamWriter = null;
@@ -34,8 +34,7 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                //Separate HttpWebRequest connection group for each client
-                connectionGroup = ((IPEndPoint)Client.Client.RemoteEndPoint).Address.ToString();
+              
 
                 clientStream = Client.GetStream();
 
@@ -181,7 +180,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 //Now create the request
-                HandleHttpSessionRequest(Client, httpCmd, connectionGroup, clientStream, tunnelHostName, requestLines, clientStreamReader, securehost);
+                HandleHttpSessionRequest(Client, httpCmd, clientStream, tunnelHostName, requestLines, clientStreamReader, securehost);
 
 
 
@@ -212,7 +211,7 @@ namespace Titanium.Web.Proxy
             }
 
         }
-        private static void HandleHttpSessionRequest(TcpClient Client, string httpCmd, string connectionGroup, Stream clientStream, string tunnelHostName, List<string> requestLines, CustomBinaryReader clientStreamReader, string securehost)
+        private static void HandleHttpSessionRequest(TcpClient Client, string httpCmd, Stream clientStream, string tunnelHostName, List<string> requestLines, CustomBinaryReader clientStreamReader, string securehost)
         {
 
 
@@ -324,7 +323,7 @@ namespace Titanium.Web.Proxy
                         return;
                 }
 
-                args.ProxyRequest.ConnectionGroupName = connectionGroup;
+                args.ProxyRequest.ConnectionGroupName = args.RequestHostname;
                 args.ProxyRequest.AllowWriteStreamBuffering = true;
 
                 //If request was modified by user
@@ -361,7 +360,7 @@ namespace Titanium.Web.Proxy
                                 requestLines.Add(tmpLine);
                             }
                             httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
-                            HandleHttpSessionRequest(Client, httpCmd, args.ProxyRequest.ConnectionGroupName, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost);
+                            HandleHttpSessionRequest(Client, httpCmd, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost);
                         }
                     }
 
@@ -634,7 +633,7 @@ namespace Titanium.Web.Proxy
                 TcpClient Client = args.Client;
 
                 //Http request body sent, now wait for next request
-                HandleHttpSessionRequest(Client, httpCmd, args.ProxyRequest.ConnectionGroupName, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost);
+                HandleHttpSessionRequest(Client, httpCmd, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost);
             }
         }
 
