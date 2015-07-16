@@ -36,9 +36,7 @@ namespace Titanium.Web.Proxy.Test
                 controller.SetAsSystemProxy = true;
 
             }
-
-            controller.Visited += PageVisited;
-
+ 
             //Start proxy controller
             controller.StartProxy();
 
@@ -49,10 +47,7 @@ namespace Titanium.Web.Proxy.Test
             controller.Stop();
         }
        
-        private static void PageVisited(VisitedEventArgs e)
-        {
-            Console.WriteLine(string.Concat("Visited: ", e.URL));
-        }
+    
         static bool ConsoleEventCallback(int eventType)
         {
             if (eventType == 2)
