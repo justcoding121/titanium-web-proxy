@@ -12,6 +12,11 @@ Features
 * Supports script injection
 * Async using HTTPWebRequest class for better performance
 
+Outstanding Issues!
+=================
+
+* Stackoverflow exception occurs on long run
+* Performance degradation reported on long run
 
 Usage
 =====
