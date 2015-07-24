@@ -15,8 +15,7 @@ Features
 Outstanding Issues!
 =================
 
-* Stackoverflow exception occurs on long run
-* Performance degradation reported on long run
+* Stackoverflow/Performance degradation occurs on long run
 
 Usage
 =====
