@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.Helpers
         private const string CERT_CREATE_FORMAT =
             "-ss {0} -n \"CN={1}, O={2}\" -sky {3} -cy {4} -m 120 -a sha256 -eku 1.3.6.1.5.5.7.3.1 -b {5:MM/dd/yyyy} {6}";
 
-        private readonly IDictionary<string, X509Certificate2> _certificateCache;
+        private readonly IDictionary<string, X509Certificate2> certificateCache;
 
         public string Issuer { get; private set; }
         public string RootCertificateName { get; private set; }
@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy.Helpers
             MyStore = new X509Store(StoreName.My, StoreLocation.CurrentUser);
             RootStore = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
 
-            _certificateCache = new Dictionary<string, X509Certificate2>();
+            certificateCache = new Dictionary<string, X509Certificate2>();
         }
 
         /// <summary>
@@ -69,8 +69,8 @@ namespace Titanium.Web.Proxy.Helpers
         }
         protected virtual X509Certificate2 CreateCertificate(X509Store store, string certificateName)
         {
-            if (_certificateCache.ContainsKey(certificateName))
-                return _certificateCache[certificateName];
+            if (certificateCache.ContainsKey(certificateName))
+                return certificateCache[certificateName];
 
             lock (store)
             {
@@ -102,8 +102,8 @@ namespace Titanium.Web.Proxy.Helpers
                 finally
                 {
                     store.Close();
-                    if (certificate != null && !_certificateCache.ContainsKey(certificateName))
-                        _certificateCache.Add(certificateName, certificate);
+                    if (certificate != null && !certificateCache.ContainsKey(certificateName))
+                        certificateCache.Add(certificateName, certificate);
                 }
             }
         }
@@ -151,9 +151,9 @@ namespace Titanium.Web.Proxy.Helpers
                 {
                     store.Close();
                     if (certificates == null &&
-                        _certificateCache.ContainsKey(certificateName))
+                        certificateCache.ContainsKey(certificateName))
                     {
-                        _certificateCache.Remove(certificateName);
+                        certificateCache.Remove(certificateName);
                     }
                 }
             }

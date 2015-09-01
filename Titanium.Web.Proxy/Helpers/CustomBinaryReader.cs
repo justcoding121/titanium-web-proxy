@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.Helpers
         public string ReadLine()
         {
             char[] buf = new char[1];
-            StringBuilder _readBuffer = new StringBuilder();
+            StringBuilder readBuffer = new StringBuilder();
             try
             {
                 var charsRead = 0;
@@ -29,24 +29,24 @@ namespace Titanium.Web.Proxy.Helpers
                 {
                     if (lastChar == '\r' && buf[0] == '\n')
                     {
-                        return _readBuffer.Remove(_readBuffer.Length - 1, 1).ToString();
+                        return readBuffer.Remove(readBuffer.Length - 1, 1).ToString();
                     }
                     else
                         if (buf[0] == '\0')
                         {
-                            return _readBuffer.ToString();
+                            return readBuffer.ToString();
                         }
                         else
-                            _readBuffer.Append(buf[0]);
+                            readBuffer.Append(buf[0]);
 
                     lastChar = buf[0];
                 }
-                return _readBuffer.ToString();
+                return readBuffer.ToString();
             }
             catch (IOException)
-            { return _readBuffer.ToString(); }
-            catch (Exception e)
-            { throw e; }
+            { return readBuffer.ToString(); }
+            catch (Exception)
+            { throw; }
 
         }
 

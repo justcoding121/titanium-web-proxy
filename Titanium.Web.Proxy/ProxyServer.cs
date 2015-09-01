@@ -38,6 +38,8 @@ namespace Titanium.Web.Proxy
         private static TcpListener listener;
         private static Thread listenerThread;
 
+        private static bool ShouldListen { get; set; }
+
         public static event EventHandler<SessionEventArgs> BeforeRequest;
         public static event EventHandler<SessionEventArgs> BeforeResponse;
 
@@ -64,6 +66,7 @@ namespace Titanium.Web.Proxy
             CertManager = new CertificateManager("Titanium",
                 "Titanium Root Certificate Authority");
         }
+
         public ProxyServer()
         {
 
@@ -87,7 +90,26 @@ namespace Titanium.Web.Proxy
 
         }
 
-        private static bool ShouldListen { get; set; }
+        private static void Listen(Object obj)
+        {
+            TcpListener listener = (TcpListener)obj;
+
+            try
+            {
+                while (ShouldListen)
+                {
+
+                    var client = listener.AcceptTcpClient();
+                    Task.Factory.StartNew(() => HandleClient(client));
+
+                }
+            }
+            catch (ThreadInterruptedException) { }
+            catch (SocketException) { }
+
+
+        }
+
         public static bool Start()
         {
            
@@ -138,25 +160,7 @@ namespace Titanium.Web.Proxy
            
         }
 
-        private static void Listen(Object obj)
-        {
-            TcpListener listener = (TcpListener)obj;
 
-            try
-            {
-                while (ShouldListen)
-                {
-
-                    var client = listener.AcceptTcpClient();
-                    Task.Factory.StartNew(() => HandleClient(client));
-
-                }
-            }
-            catch (ThreadInterruptedException) { }
-            catch (SocketException) { }
-
-
-        }
       
 
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.IO;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -32,10 +33,11 @@ namespace Titanium.Web.Proxy.Helpers
 
         }
 
-        public static byte[] CompressZlib(string ResponseData, Encoding e)
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2202:Do not dispose objects multiple times")]
+        public static byte[] CompressZlib(string responseData, Encoding e)
         {
 
-            Byte[] bytes = e.GetBytes(ResponseData);
+            Byte[] bytes = e.GetBytes(responseData);
 
             using (MemoryStream ms = new MemoryStream())
             {
@@ -45,17 +47,16 @@ namespace Titanium.Web.Proxy.Helpers
                     zip.Write(bytes, 0, bytes.Length);
                 }
 
-
                 return ms.ToArray();
-
 
 
             }
         }
 
-        public static byte[] CompressDeflate(string ResponseData, Encoding e)
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2202:Do not dispose objects multiple times")]
+        public static byte[] CompressDeflate(string responseData, Encoding e)
         {
-            Byte[] bytes = e.GetBytes(ResponseData);
+            Byte[] bytes = e.GetBytes(responseData);
 
             using (MemoryStream ms = new MemoryStream())
             {
@@ -70,9 +71,10 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        public static byte[] CompressGzip(string ResponseData, Encoding e)
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2202:Do not dispose objects multiple times")]
+        public static byte[] CompressGzip(string responseData, Encoding e)
         {
-            Byte[] bytes = e.GetBytes(ResponseData);
+            Byte[] bytes = e.GetBytes(responseData);
 
             using (MemoryStream ms = new MemoryStream())
             {

@@ -8,6 +8,7 @@ namespace Titanium.Web.Proxy.Helpers
 {
     public class NetFrameworkHelper
     {
+        //Fix bug in .Net 4.0 HttpWebRequest (don't use this for 4.5 and above)
         //http://stackoverflow.com/questions/856885/httpwebrequest-to-url-with-dot-at-the-end
         public static void URLPeriodFix()
         {
