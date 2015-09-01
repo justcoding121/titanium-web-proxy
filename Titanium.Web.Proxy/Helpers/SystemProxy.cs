@@ -7,12 +7,16 @@ using System.Runtime.InteropServices;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    public static class SystemProxyHelper
+    internal static class NativeMethods
     {
         [DllImport("wininet.dll")]
-        public static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);
-        public  const int INTERNET_OPTION_SETTINGS_CHANGED = 39;
-        public  const int INTERNET_OPTION_REFRESH = 37;
+        internal static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);
+    }
+    public static class SystemProxyHelper
+    {
+
+        public const int INTERNET_OPTION_SETTINGS_CHANGED = 39;
+        public const int INTERNET_OPTION_REFRESH = 37;
         static bool settingsReturn, refreshReturn;
         static object prevProxyServer;
         static object prevProxyEnable;
@@ -23,7 +27,7 @@ namespace Titanium.Web.Proxy.Helpers
             prevProxyEnable = reg.GetValue("ProxyEnable");
             prevProxyServer = reg.GetValue("ProxyServer");
             reg.SetValue("ProxyEnable", 1);
-            reg.SetValue("ProxyServer", "http="+hostname+":" + port + ";");
+            reg.SetValue("ProxyServer", "http=" + hostname + ":" + port + ";");
             refresh();
         }
         public static void EnableProxyHTTPS(string hostname, int port)
@@ -43,8 +47,8 @@ namespace Titanium.Web.Proxy.Helpers
         }
         private static void refresh()
         {
-            settingsReturn = InternetSetOption(IntPtr.Zero, INTERNET_OPTION_SETTINGS_CHANGED, IntPtr.Zero, 0);
-            refreshReturn = InternetSetOption(IntPtr.Zero, INTERNET_OPTION_REFRESH, IntPtr.Zero, 0);
+            settingsReturn = NativeMethods.InternetSetOption(IntPtr.Zero, INTERNET_OPTION_SETTINGS_CHANGED, IntPtr.Zero, 0);
+            refreshReturn = NativeMethods.InternetSetOption(IntPtr.Zero, INTERNET_OPTION_REFRESH, IntPtr.Zero, 0);
         }
     }
 }

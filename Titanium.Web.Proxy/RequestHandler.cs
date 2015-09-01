@@ -22,7 +22,7 @@ namespace Titanium.Web.Proxy
     partial class ProxyServer
     {
 
-        private static void HandleClient(TcpClient Client)
+        private static void HandleClient(TcpClient client)
         {
 
       
@@ -36,7 +36,7 @@ namespace Titanium.Web.Proxy
             {
               
 
-                clientStream = Client.GetStream();
+                clientStream = client.GetStream();
 
                 clientStreamReader = new CustomBinaryReader(clientStream, Encoding.ASCII);
                 string securehost = null;
@@ -138,7 +138,7 @@ namespace Titanium.Web.Proxy
                             sslStream.AuthenticateAsServer(_certificate, false, SslProtocols.Tls | SslProtocols.Ssl3 | SslProtocols.Ssl2, false);
                         }
 
-                        catch (AuthenticationException ex)
+                        catch (AuthenticationException)
                         {
                             //if authentication failed it could be because client uses pinned certificates
                             //So add the hostname to this list so that next time we can relay without touching it (tunnel the request)
@@ -146,7 +146,7 @@ namespace Titanium.Web.Proxy
                             {
                                 pinnedCertificateClients.Add(tunnelHostName);
                             }
-                            throw ex;
+                            throw;
                         }
 
                     }
@@ -180,7 +180,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 //Now create the request
-                HandleHttpSessionRequest(Client, httpCmd, clientStream, tunnelHostName, requestLines, clientStreamReader, securehost);
+                Task.Factory.StartNew(()=>HandleHttpSessionRequest(client, httpCmd, clientStream, tunnelHostName, requestLines, clientStreamReader, securehost));
 
 
 
@@ -211,7 +211,7 @@ namespace Titanium.Web.Proxy
             }
 
         }
-        private static void HandleHttpSessionRequest(TcpClient Client, string httpCmd, Stream clientStream, string tunnelHostName, List<string> requestLines, CustomBinaryReader clientStreamReader, string securehost)
+        private static void HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream, string tunnelHostName, List<string> requestLines, CustomBinaryReader clientStreamReader, string securehost)
         {
 
 
@@ -219,7 +219,7 @@ namespace Titanium.Web.Proxy
 
 
             var args = new SessionEventArgs(BUFFER_SIZE);
-            args.Client = Client;
+            args.Client = client;
             args.tunnelHostName = tunnelHostName;
             args.securehost = securehost;
             try
@@ -229,7 +229,7 @@ namespace Titanium.Web.Proxy
 
                 if (splitBuffer.Length != 3)
                 {
-                    TcpHelper.SendRaw(httpCmd, tunnelHostName, ref requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
+                    TcpHelper.SendRaw(httpCmd, tunnelHostName, requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
 
                     if (clientStream != null)
                         clientStream.Close();
@@ -272,7 +272,7 @@ namespace Titanium.Web.Proxy
                     if ((header[0] == "upgrade") && (header[1] == "websocket"))
                     {
 
-                        TcpHelper.SendRaw(httpCmd, tunnelHostName, ref requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
+                        TcpHelper.SendRaw(httpCmd, tunnelHostName, requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
 
                         if (clientStream != null)
                             clientStream.Close();
@@ -281,7 +281,7 @@ namespace Titanium.Web.Proxy
                     }
                 }
 
-                ReadRequestHeaders(ref requestLines, args.ProxyRequest);
+                SetClientRequestHeaders(requestLines, args.ProxyRequest);
 
 
                 int contentLen = (int)args.ProxyRequest.ContentLength;
@@ -298,8 +298,8 @@ namespace Titanium.Web.Proxy
                     args.RequestLength = contentLen;
 
                     args.RequestHttpVersion = version;
-                    args.ClientPort = ((IPEndPoint)Client.Client.RemoteEndPoint).Port;
-                    args.ClientIpAddress = ((IPEndPoint)Client.Client.RemoteEndPoint).Address;
+                    args.ClientPort = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
+                    args.ClientIpAddress = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
                     args.RequestIsAlive = args.ProxyRequest.KeepAlive;
 
                     BeforeRequest(null, args);
@@ -342,29 +342,35 @@ namespace Titanium.Web.Proxy
                     //If its a post/put request, then read the client html body and send it to server
                     if (method.ToUpper() == "POST" || method.ToUpper() == "PUT")
                     {
-                        args.ProxyRequest.BeginGetRequestStream(new AsyncCallback(GetRequestStreamCallback), args);
+                        SendClientRequestBody(args);
+
+                        //Http request body sent, now wait asynchronously for response
+                        args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
+
+                        
                     }
                     else
                     {
                         //otherwise wait for response asynchronously
                         args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
-
-                        //Now read the next request (if keep-Alive is enabled, otherwise exit thus thread)
-                        //If client is pipeling the request, this will be immediately hit before response for previous request was made
-                        if (args.ProxyRequest.KeepAlive)
-                        {
-                            requestLines = new List<string>();
-                            requestLines.Clear();
-                            while (!String.IsNullOrEmpty(tmpLine = args.ClientStreamReader.ReadLine()))
-                            {
-                                requestLines.Add(tmpLine);
-                            }
-                            httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
-                            HandleHttpSessionRequest(Client, httpCmd, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost);
-                        }
                     }
 
+                    //Now read the next request (if keep-Alive is enabled, otherwise exit this thread)
+                    //If client is pipeling the request, this will be immediately hit before response for previous request was made
+                    if (args.ProxyRequest.KeepAlive)
+                    {
+                        tmpLine = null;
+                        requestLines.Clear();
+                        while (!String.IsNullOrEmpty(tmpLine = args.ClientStreamReader.ReadLine()))
+                        {
+                            requestLines.Add(tmpLine);
+                        }
+                        httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
+                        TcpClient Client = args.Client;
 
+                        //Http request body sent, now wait for next request
+                        Task.Factory.StartNew(() => HandleHttpSessionRequest(Client, httpCmd, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost));
+                    }
                 }
 
             }
@@ -387,13 +393,13 @@ namespace Titanium.Web.Proxy
 
 
         }
-        private static void ReadRequestHeaders(ref List<string> RequestLines, HttpWebRequest WebRequest)
+        private static void SetClientRequestHeaders(List<string> requestLines, HttpWebRequest webRequest)
         {
 
 
-            for (int i = 1; i < RequestLines.Count; i++)
+            for (int i = 1; i < requestLines.Count; i++)
             {
-                String httpCmd = RequestLines[i];
+                String httpCmd = requestLines[i];
 
                 String[] header = httpCmd.Split(colonSpaceSplit, 2, StringSplitOptions.None);
 
@@ -401,75 +407,75 @@ namespace Titanium.Web.Proxy
                     switch (header[0].ToLower())
                     {
                         case "accept":
-                            WebRequest.Accept = header[1];
+                            webRequest.Accept = header[1];
                             break;
                         case "accept-encoding":
-                            WebRequest.Headers.Add(header[0], "gzip,deflate,zlib");
+                            webRequest.Headers.Add(header[0], "gzip,deflate,zlib");
                             break;
                         case "cookie":
-                            WebRequest.Headers["Cookie"] = header[1];
+                            webRequest.Headers["Cookie"] = header[1];
                             break;
                         case "connection":
                             if (header[1].ToLower() == "keep-alive")
-                                WebRequest.KeepAlive = true;
+                                webRequest.KeepAlive = true;
 
                             break;
                         case "content-length":
                             int contentLen;
                             int.TryParse(header[1], out contentLen);
                             if (contentLen != 0)
-                                WebRequest.ContentLength = contentLen;
+                                webRequest.ContentLength = contentLen;
                             break;
                         case "content-type":
-                            WebRequest.ContentType = header[1];
+                            webRequest.ContentType = header[1];
                             break;
                         case "expect":
                             if (header[1].ToLower() == "100-continue")
-                                WebRequest.ServicePoint.Expect100Continue = true;
+                                webRequest.ServicePoint.Expect100Continue = true;
                             else
-                                WebRequest.Expect = header[1];
+                                webRequest.Expect = header[1];
                             break;
                         case "host":
-                            WebRequest.Host = header[1];
+                            webRequest.Host = header[1];
                             break;
                         case "if-modified-since":
                             String[] sb = header[1].Trim().Split(semiSplit);
                             DateTime d;
                             if (DateTime.TryParse(sb[0], out d))
-                                WebRequest.IfModifiedSince = d;
+                                webRequest.IfModifiedSince = d;
                             break;
                         case "proxy-connection":
                             if (header[1].ToLower() == "keep-alive")
-                                WebRequest.KeepAlive = true;
+                                webRequest.KeepAlive = true;
                             break;
                         case "range":
                             var startEnd = header[1].Replace(Environment.NewLine, "").Remove(0, 6).Split('-');
-                            if (startEnd.Length > 1) { if (!String.IsNullOrEmpty(startEnd[1])) WebRequest.AddRange(int.Parse(startEnd[0]), int.Parse(startEnd[1])); else WebRequest.AddRange(int.Parse(startEnd[0])); }
+                            if (startEnd.Length > 1) { if (!String.IsNullOrEmpty(startEnd[1])) webRequest.AddRange(int.Parse(startEnd[0]), int.Parse(startEnd[1])); else webRequest.AddRange(int.Parse(startEnd[0])); }
                             else
-                                WebRequest.AddRange(int.Parse(startEnd[0]));
+                                webRequest.AddRange(int.Parse(startEnd[0]));
                             break;
                         case "referer":
-                            WebRequest.Referer = header[1];
+                            webRequest.Referer = header[1];
                             break;
                         case "user-agent":
-                            WebRequest.UserAgent = header[1];
+                            webRequest.UserAgent = header[1];
                             break;
                         //revisit this, transfer-encoding is not a request header according to spec
                         //But how to identify if client is sending chunked body for PUT/POST?
                         case "transfer-encoding":
                             if (header[1].ToLower() == "chunked")
-                                WebRequest.SendChunked = true;
+                                webRequest.SendChunked = true;
                             else
-                                WebRequest.SendChunked = false;
+                                webRequest.SendChunked = false;
                             break;
                         case "upgrade":
                             if (header[1].ToLower() == "http/1.1")
-                                WebRequest.Headers.Add(header[0], header[1]);
+                                webRequest.Headers.Add(header[0], header[1]);
                             break;
 
                         default:
                             if (header.Length >= 2)
-                                WebRequest.Headers.Add(header[0], header[1]);
+                                webRequest.Headers.Add(header[0], header[1]);
 
                             break;
                     }
@@ -480,12 +486,12 @@ namespace Titanium.Web.Proxy
 
         }
         //This is called when the request is PUT/POST to read the body
-        private static void GetRequestStreamCallback(IAsyncResult AsynchronousResult)
+        private static void SendClientRequestBody(SessionEventArgs args)
         {
-            var args = (SessionEventArgs)AsynchronousResult.AsyncState;
+         
 
             // End the operation
-            Stream postStream = args.ProxyRequest.EndGetRequestStream(AsynchronousResult);
+            Stream postStream = args.ProxyRequest.GetRequestStream();
 
 
             if (args.ProxyRequest.ContentLength > 0)
@@ -525,13 +531,13 @@ namespace Titanium.Web.Proxy
                 {
 
                     args.ProxyRequest.KeepAlive = false;
-                    return;
+                    throw;
                 }
                 catch (WebException)
                 {
 
                     args.ProxyRequest.KeepAlive = false;
-                    return;
+                    throw;
 
                 }
 
@@ -603,7 +609,7 @@ namespace Titanium.Web.Proxy
                         postStream.Close();
 
                     args.ProxyRequest.KeepAlive = false;
-                    return;
+                    throw;
                 }
                 catch (WebException)
                 {
@@ -611,30 +617,13 @@ namespace Titanium.Web.Proxy
                         postStream.Close();
 
                     args.ProxyRequest.KeepAlive = false;
-                    return;
+                    throw;
 
                 }
             }
-            //Http request body sent, now wait asynchronously for response
-            args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
+           
             
-            //Now read the next request (if keep-Alive is enabled, otherwise exit thus thread)
-            //If client is pipeling the request, this will be immediately hit before response for previous request was made
-            if (args.ProxyRequest.KeepAlive)
-            {
-                string httpCmd, tmpLine;
-                List<string> requestLines = new List<string>();
-                requestLines.Clear();
-                while (!String.IsNullOrEmpty(tmpLine = args.ClientStreamReader.ReadLine()))
-                {
-                    requestLines.Add(tmpLine);
-                }
-                httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
-                TcpClient Client = args.Client;
-
-                //Http request body sent, now wait for next request
-                HandleHttpSessionRequest(Client, httpCmd, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost);
-            }
+          
         }
 
 

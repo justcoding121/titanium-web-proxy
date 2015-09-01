@@ -3,48 +3,73 @@ using System.Text;
 using System.IO;
 using System.Net;
 using Titanium.Web.Proxy.Helpers;
+using System.Net.Sockets;
 
 
 namespace Titanium.Web.Proxy.Models
 {
-    public class SessionEventArgs : EventArgs
+    public class SessionEventArgs : EventArgs, IDisposable
     {
-       
-        public string RequestURL { get; set; }
-        public string RequestHostname { get; set; }
-        
-        public bool IsSSLRequest { get; set; }
-
-        public int ClientPort { get; set; }
-        public IPAddress ClientIpAddress { get; set; }
-
-
-        public HttpWebRequest ProxyRequest { get; set; }
-        public HttpWebResponse ServerResponse { get; set; }
-        
 
         internal int BUFFER_SIZE;
 
+        internal Stream ClientStream { get; set; }
+        internal CustomBinaryReader ClientStreamReader { get; set; }
+        internal StreamWriter ClientStreamWriter { get; set; }
+
+        internal string UpgradeProtocol { get; set; }
+        internal Encoding Encoding { get; set; }
         internal int RequestLength { get; set; }
         internal Version RequestHttpVersion { get; set; }
         internal bool RequestIsAlive { get; set; }
         internal bool CancelRequest { get; set; }
-        internal CustomBinaryReader ClientStreamReader { get; set; }
-        internal Stream ClientStream { get; set; }
-        internal Stream ServerResponseStream { get; set; }
-        internal Encoding Encoding { get; set; }
+        internal string RequestHtmlBody { get; set; }
         internal bool RequestWasModified { get; set; }
+
+        internal Stream ServerResponseStream { get; set; }
+        internal string ResponseHtmlBody { get; set; }
         internal bool ResponseWasModified { get; set; }
 
-        internal string UpgradeProtocol { get; set; }
 
+        public TcpClient Client { get; set; }
+        public int ClientPort { get; set; }
+        public IPAddress ClientIpAddress { get; set; }
+        public string tunnelHostName { get; set; }
+        public string securehost { get; set; }
+        public bool IsSSLRequest { get; set; }
+        public string RequestURL { get; set; }
+        public string RequestHostname { get; set; }
 
-        internal string RequestHtmlBody { get; set; }
-        internal string ResponseHtmlBody { get; set; }
+        public HttpWebRequest ProxyRequest { get; set; }
+        public HttpWebResponse ServerResponse { get; set; }
 
-        public SessionEventArgs(int BufferSize)
+        public void Dispose()
         {
-            BUFFER_SIZE = BufferSize;
+            if (this.ProxyRequest != null)
+                this.ProxyRequest.Abort();
+
+            if (this.ServerResponseStream != null)
+                this.ServerResponseStream.Dispose();
+
+            if (this.ServerResponse != null)
+                this.ServerResponse.Close();
+
+            if (this.ClientStreamReader != null)
+                this.ClientStreamReader.Dispose();
+
+            if (this.ClientStreamWriter != null)
+                this.ClientStreamWriter.Dispose();
+
+            if (this.ClientStream != null)
+                this.ClientStream.Dispose();
+
+            if (this.Client != null)
+                this.Client.Close();
+        }
+
+        public SessionEventArgs(int bufferSize)
+        {
+            BUFFER_SIZE = bufferSize;
         }
         public string GetRequestHtmlBody()
         {
@@ -68,9 +93,9 @@ namespace Titanium.Web.Proxy.Models
             RequestWasModified = true;
             return RequestHtmlBody;
         }
-        public void SetRequestHtmlBody(string Body)
+        public void SetRequestHtmlBody(string body)
         {
-            this.RequestHtmlBody = Body;
+            this.RequestHtmlBody = body;
             RequestWasModified = true;
         }
         public string GetResponseHtmlBody()
@@ -101,30 +126,30 @@ namespace Titanium.Web.Proxy.Models
                 }
                 ResponseHtmlBody = ResponseData;
                 ResponseWasModified = true;
-              
+
             }
             return ResponseHtmlBody;
         }
 
-        public void SetResponseHtmlBody(string Body)
+        public void SetResponseHtmlBody(string body)
         {
-            this.ResponseHtmlBody = Body;
+            this.ResponseHtmlBody = body;
         }
         //stream reader not recomended for images
-        private string DecodeData(Stream ResponseStream, Encoding e)
+        private string DecodeData(Stream responseStream, Encoding e)
         {
-            StreamReader reader = new StreamReader(ResponseStream, e);
+            StreamReader reader = new StreamReader(responseStream, e);
             return reader.ReadToEnd();
 
         }
 
-        public void Ok(string Html)
+        public void Ok(string html)
         {
 
-            if (Html == null)
-                Html = string.Empty;
+            if (html == null)
+                html = string.Empty;
 
-            var result = Encoding.Default.GetBytes(Html);
+            var result = Encoding.Default.GetBytes(html);
 
             StreamWriter connectStreamWriter = new StreamWriter(ClientStream);
             var s = String.Format("HTTP/{0}.{1} {2} {3}", RequestHttpVersion.Major, RequestHttpVersion.Minor, 200, "Ok");
@@ -153,16 +178,6 @@ namespace Titanium.Web.Proxy.Models
         }
 
 
-
-
-
-
-
-        public System.Net.Sockets.TcpClient Client { get; set; }
-
-        public string tunnelHostName { get; set; }
-
-        public string securehost { get; set; }
     }
 
 }

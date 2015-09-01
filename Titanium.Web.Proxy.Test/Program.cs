@@ -16,17 +16,17 @@ namespace Titanium.Web.Proxy.Test
         public static void Main(string[] args)
         {
             //On Console exit make sure we also exit the proxy
-            handler = new ConsoleEventDelegate(ConsoleEventCallback);
-            SetConsoleCtrlHandler(handler, true);
+            NativeMethods.handler = new NativeMethods.ConsoleEventDelegate(ConsoleEventCallback);
+            NativeMethods.SetConsoleCtrlHandler(NativeMethods.handler, true);
 
-          
-  
+
+
             Console.Write("Do you want to monitor HTTPS? (Y/N):");
 
-            if(Console.ReadLine().Trim().ToLower()=="y" )
+            if (Console.ReadLine().Trim().ToLower() == "y")
             {
                 controller.EnableSSL = true;
-               
+
             }
 
             Console.Write("Do you want to set this as a System Proxy? (Y/N):");
@@ -36,18 +36,18 @@ namespace Titanium.Web.Proxy.Test
                 controller.SetAsSystemProxy = true;
 
             }
- 
+
             //Start proxy controller
             controller.StartProxy();
 
             Console.WriteLine("Hit any key to exit..");
-            Console.WriteLine(); 
+            Console.WriteLine();
             Console.Read();
 
             controller.Stop();
         }
-       
-    
+
+
         static bool ConsoleEventCallback(int eventType)
         {
             if (eventType == 2)
@@ -55,21 +55,25 @@ namespace Titanium.Web.Proxy.Test
                 try
                 {
                     controller.Stop();
-                  
+
                 }
                 catch { }
             }
             return false;
         }
-        // Keeps it from getting garbage collected
-        private static ConsoleEventDelegate handler;  
-        // Pinvoke
-        private delegate bool ConsoleEventDelegate(int eventType);
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool SetConsoleCtrlHandler(ConsoleEventDelegate callback, bool add);
-       
-
 
     }
-  
+    internal static class NativeMethods
+    {
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern bool SetConsoleCtrlHandler(ConsoleEventDelegate callback, bool add);
+
+        // Pinvoke
+        internal delegate bool ConsoleEventDelegate(int eventType);
+
+
+        // Keeps it from getting garbage collected
+        internal static ConsoleEventDelegate handler;
+    }
+
 }

@@ -59,14 +59,34 @@ namespace Titanium.Web.Proxy.Test
 
             Console.WriteLine(e.RequestURL);
 
+            //To cancel a request with a custom HTML content
+            //Filter URL
+
+            //if (e.RequestURL.Contains("somewebsite.com"))
+            //{
+            //    e.Ok("<!DOCTYPE html><html><body><h1>Blocked</h1><p>website blocked.</p></body></html>");
+            //}
+             
         }
 
         //Test script injection
         //Insert script to read the Browser URL and send it back to proxy
         public void OnResponse(object sender, SessionEventArgs e)
         {
+            //To modify a response 
 
-
+            //if (e.ServerResponse.StatusCode == HttpStatusCode.OK)
+            //{
+            //    if (e.ServerResponse.ContentType.Trim().ToLower().Contains("text/html"))
+            //    {
+            //        //Get response body
+            //        string responseHtmlBody = e.GetResponseHtmlBody();
+            //        //Modify e.ServerResponse
+            //        responseHtmlBody = "<html><head></head><body>Response is modified!</body></html>";
+            //        //Set modifed response Html Body
+            //        e.SetResponseHtmlBody(responseHtmlBody);
+            //    }
+            //}
 
         }
 
