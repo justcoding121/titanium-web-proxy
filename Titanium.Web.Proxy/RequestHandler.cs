@@ -355,24 +355,24 @@ namespace Titanium.Web.Proxy
                         args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
                     }
 
-                    //Now read the next request (if keep-Alive is enabled, otherwise exit this thread)
-                    //If client is pipeling the request, this will be immediately hit before response for previous request was made
-                    if (args.ProxyRequest.KeepAlive)
-                    {
-                        tmpLine = null;
-                        requestLines.Clear();
-                        while (!String.IsNullOrEmpty(tmpLine = args.ClientStreamReader.ReadLine()))
-                        {
-                            requestLines.Add(tmpLine);
-                        }
-                        httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
-                        TcpClient Client = args.Client;
-
-                        //Http request body sent, now wait for next request
-                        Task.Factory.StartNew(() => HandleHttpSessionRequest(Client, httpCmd, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost));
-                    }
                 }
 
+                //Now read the next request (if keep-Alive is enabled, otherwise exit this thread)
+                //If client is pipeling the request, this will be immediately hit before response for previous request was made
+                if (args.ProxyRequest.KeepAlive)
+                {
+                    tmpLine = null;
+                    requestLines.Clear();
+                    while (!String.IsNullOrEmpty(tmpLine = args.ClientStreamReader.ReadLine()))
+                    {
+                        requestLines.Add(tmpLine);
+                    }
+                    httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
+                    TcpClient Client = args.Client;
+
+                    //Http request body sent, now wait for next request
+                    Task.Factory.StartNew(() => HandleHttpSessionRequest(Client, httpCmd, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost));
+                }
             }
             catch (IOException)
             {
