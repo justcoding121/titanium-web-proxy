@@ -90,7 +90,7 @@ Sample request and response event handlers
 				//Modify e.ServerResponse
 				responseHtmlBody = "<html><head></head><body>Response is modified!</body></html>";
 				//Set modifed response Html Body
-				e.SetRequestHtmlBody(responseHtmlBody);
+				e.SetResponseHtmlBody(responseHtmlBody);
 			}
 		}
 	}
