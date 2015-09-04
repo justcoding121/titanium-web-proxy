@@ -97,24 +97,11 @@ namespace Titanium.Web.Proxy
                 }
             
 
-
             }
             catch
             {
-                if (args.ClientStreamReader != null)
-                    args.ClientStreamReader.Dispose();
-
-                if (args.ClientStreamWriter != null)
-                    args.ClientStreamWriter.Dispose();
-
-                if (args.ClientStream != null)
-                    args.ClientStream.Dispose();
-
-                if (args.Client != null)
-                    args.Client.Close();
-
+                Dispose(args.Client, args.ClientStream, args.ClientStreamReader, args.ClientStreamWriter, args);
             }
-
             finally
             {
                 if (args != null)
