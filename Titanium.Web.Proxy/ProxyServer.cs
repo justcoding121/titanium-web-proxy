@@ -33,8 +33,6 @@ namespace Titanium.Web.Proxy
         private static object certificateAccessLock = new object();
         private static List<string> pinnedCertificateClients = new List<string>();
 
-
-
         private static TcpListener listener;
         private static Thread listenerThread;
 
@@ -42,8 +40,6 @@ namespace Titanium.Web.Proxy
 
         public static event EventHandler<SessionEventArgs> BeforeRequest;
         public static event EventHandler<SessionEventArgs> BeforeResponse;
-
-
 
         public static IPAddress ListeningIPInterface { get; set; }
 
@@ -94,25 +90,27 @@ namespace Titanium.Web.Proxy
         {
             TcpListener listener = (TcpListener)obj;
 
-            try
+            while (ShouldListen)
             {
-                while (ShouldListen)
+                TcpClient client = null;
+                try
                 {
-
-                    var client = listener.AcceptTcpClient();
+                    client = listener.AcceptTcpClient();
                     Task.Factory.StartNew(() => HandleClient(client));
-
+                }
+                catch
+                {
+                    if (client != null)
+                        client.Close();
                 }
             }
-            catch (ThreadInterruptedException) { }
-            catch (SocketException) { }
 
 
         }
 
         public static bool Start()
         {
-           
+
             listener = new TcpListener(IPAddress.Any, 0);
             listener.Start();
             listenerThread = new Thread(new ParameterizedThreadStart(Listen));
@@ -125,7 +123,7 @@ namespace Titanium.Web.Proxy
                 SystemProxyHelper.EnableProxyHTTP("localhost", ListeningPort);
                 FireFoxHelper.AddFirefox();
 
-             
+
                 if (EnableSSL)
                 {
                     RootCertificateName = RootCertificateName == null ? "Titanium_Proxy_Test_Root" : RootCertificateName;
@@ -137,7 +135,7 @@ namespace Titanium.Web.Proxy
                         SystemProxyHelper.EnableProxyHTTPS("localhost", ListeningPort);
                     }
 
-                 
+
                 }
             }
 
@@ -156,12 +154,13 @@ namespace Titanium.Web.Proxy
             ShouldListen = false;
             listener.Stop();
             listenerThread.Interrupt();
+            CertManager.Dispose();
 
-           
+
         }
 
 
-      
+
 
 
 

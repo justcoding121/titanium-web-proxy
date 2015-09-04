@@ -9,20 +9,14 @@ namespace Titanium.Web.Proxy.Helpers
     public static class StreamHelper
     {
         private const int DEFAULT_BUFFER_SIZE = 8192; // +32767
-        public static void CopyTo(this Stream input, Stream output)
-        {
 
-            input.CopyTo(output, DEFAULT_BUFFER_SIZE);
-            return;
-        }
         public static void CopyTo(string initialData, Stream input, Stream output, int bufferSize)
         {
-             
             var bytes = Encoding.ASCII.GetBytes(initialData);
             output.Write(bytes,0, bytes.Length);
             CopyTo(input, output, bufferSize);  
         }
-        public static void CopyTo(this Stream input, Stream output, int bufferSize)
+        public static void CopyTo(Stream input, Stream output, int bufferSize)
         {
             try
             {

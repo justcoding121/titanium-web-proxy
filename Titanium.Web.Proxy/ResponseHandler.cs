@@ -22,6 +22,7 @@ namespace Titanium.Web.Proxy
         {
 
             SessionEventArgs args = (SessionEventArgs)asynchronousResult.AsyncState;
+
             try
             {
                 args.ServerResponse = (HttpWebResponse)args.ProxyRequest.EndGetResponse(asynchronousResult);
@@ -29,27 +30,18 @@ namespace Titanium.Web.Proxy
             catch (WebException webEx)
             {
                 //Things line 404, 500 etc
-                //args.ProxyRequest.KeepAlive = false;
                 args.ServerResponse = webEx.Response as HttpWebResponse;
             }
+
             try
             {
-                if (args.ClientStreamWriter == null)
-                {
-                    args.ClientStreamWriter = new StreamWriter(args.ClientStream);
-                }
-
-
                 if (args.ServerResponse != null)
                 {
                     List<Tuple<String, String>> responseHeaders = ProcessResponse(args.ServerResponse);
                     args.ServerResponseStream = args.ServerResponse.GetResponseStream();
 
-                    if (args.ServerResponse.Headers.Count == 0 && args.ServerResponse.ContentLength == -1)
-                        args.ProxyRequest.KeepAlive = false;
-
                     bool isChunked = args.ServerResponse.GetResponseHeader("transfer-encoding") == null ? false : args.ServerResponse.GetResponseHeader("transfer-encoding").ToLower() == "chunked" ? true : false;
-                    args.ProxyRequest.KeepAlive = args.ServerResponse.GetResponseHeader("connection") == null ? args.ProxyRequest.KeepAlive : (args.ServerResponse.GetResponseHeader("connection") == "close" ? false : args.ProxyRequest.KeepAlive);
+               
                     args.UpgradeProtocol = args.ServerResponse.GetResponseHeader("upgrade") == null ? null : args.ServerResponse.GetResponseHeader("upgrade");
 
                     if (BeforeResponse != null)
@@ -103,49 +95,30 @@ namespace Titanium.Web.Proxy
                     args.ClientStream.Flush();
 
                 }
-                else
-                    args.ProxyRequest.KeepAlive = false;
+            
 
 
             }
-            catch (IOException)
+            catch
             {
-                args.ProxyRequest.KeepAlive = false;
+                if (args.ClientStreamReader != null)
+                    args.ClientStreamReader.Dispose();
+
+                if (args.ClientStreamWriter != null)
+                    args.ClientStreamWriter.Dispose();
+
+                if (args.ClientStream != null)
+                    args.ClientStream.Dispose();
+
+                if (args.Client != null)
+                    args.Client.Close();
+
             }
-            catch (SocketException)
-            {
-                args.ProxyRequest.KeepAlive = false;
-            }
-            catch (ArgumentException)
-            {
-                args.ProxyRequest.KeepAlive = false;
-            }
-            catch (WebException)
-            {
-                args.ProxyRequest.KeepAlive = false;
-            }
+
             finally
             {
-                //If this is false then terminate the tcp client
-                if (args.ProxyRequest.KeepAlive == false)
-                {
+                if (args != null)
                     args.Dispose();
-                }
-                else
-                {
-
-                    //Close this HttpWebRequest session
-                    if (args.ProxyRequest != null)
-                        args.ProxyRequest.Abort();
-
-                    if (args.ServerResponse != null)
-                        args.ServerResponse.Close();
-
-                    if (args.ServerResponseStream != null)
-                        args.ServerResponseStream.Close();
-
-                }
-
             }
 
         }

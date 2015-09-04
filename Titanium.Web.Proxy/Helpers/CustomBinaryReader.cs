@@ -44,9 +44,13 @@ namespace Titanium.Web.Proxy.Helpers
                 return readBuffer.ToString();
             }
             catch (IOException)
-            { return readBuffer.ToString(); }
+            { 
+                return readBuffer.ToString();
+            }
             catch (Exception)
-            { throw; }
+            { 
+                throw;
+            }
 
         }
 

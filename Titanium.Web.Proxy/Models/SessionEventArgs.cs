@@ -13,6 +13,7 @@ namespace Titanium.Web.Proxy.Models
 
         internal int BUFFER_SIZE;
 
+        internal TcpClient Client { get; set; }
         internal Stream ClientStream { get; set; }
         internal CustomBinaryReader ClientStreamReader { get; set; }
         internal StreamWriter ClientStreamWriter { get; set; }
@@ -30,8 +31,7 @@ namespace Titanium.Web.Proxy.Models
         internal string ResponseHtmlBody { get; set; }
         internal bool ResponseWasModified { get; set; }
 
-
-        public TcpClient Client { get; set; }
+        
         public int ClientPort { get; set; }
         public IPAddress ClientIpAddress { get; set; }
         public string tunnelHostName { get; set; }
@@ -54,17 +54,6 @@ namespace Titanium.Web.Proxy.Models
             if (this.ServerResponse != null)
                 this.ServerResponse.Close();
 
-            if (this.ClientStreamReader != null)
-                this.ClientStreamReader.Dispose();
-
-            if (this.ClientStreamWriter != null)
-                this.ClientStreamWriter.Dispose();
-
-            if (this.ClientStream != null)
-                this.ClientStream.Dispose();
-
-            if (this.Client != null)
-                this.Client.Close();
         }
 
         public SessionEventArgs(int bufferSize)
