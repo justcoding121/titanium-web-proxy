@@ -99,17 +99,7 @@ namespace Titanium.Web.Proxy
                     {
                         TcpHelper.SendRaw(tunnelHostName, tunnelPort, clientStreamReader.BaseStream);
 
-                        if (clientStreamReader != null)
-                            clientStreamReader.Dispose();
-
-                        if (clientStreamWriter != null)
-                            clientStreamWriter.Dispose();
-
-                        if (clientStream != null)
-                            clientStream.Dispose();
-
-                        if (client != null)
-                            client.Close();
+                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
 
                         return;
                     }
@@ -159,17 +149,7 @@ namespace Titanium.Web.Proxy
                         //Hostname was a previously failed request due to certificate pinning, just relay (tunnel the request)
                         TcpHelper.SendRaw(tunnelHostName, tunnelPort, clientStreamReader.BaseStream);
 
-                        if (clientStreamReader != null)
-                            clientStreamReader.Dispose();
-
-                        if (clientStreamWriter != null)
-                            clientStreamWriter.Dispose();
-
-                        if (clientStream != null)
-                            clientStream.Dispose();
-
-                        if (client != null)
-                            client.Close();
+                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
 
                         return;
                     }
@@ -198,17 +178,7 @@ namespace Titanium.Web.Proxy
             }
             catch
             {
-                if (clientStreamReader != null)
-                    clientStreamReader.Dispose();
-
-                if (clientStreamWriter != null)
-                    clientStreamWriter.Dispose();
-
-                if (clientStream != null)
-                    clientStream.Dispose();
-
-                if (client != null)
-                    client.Close();
+                Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
             }
 
 
@@ -219,17 +189,7 @@ namespace Titanium.Web.Proxy
 
             if (httpCmd == null)
             {
-                if (clientStreamReader != null)
-                    clientStreamReader.Dispose();
-
-                if (clientStreamWriter != null)
-                    clientStreamWriter.Dispose();
-
-                if (clientStream != null)
-                    clientStream.Dispose();
-
-                if (client != null)
-                    client.Close();
+                Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
 
                 return;
             }
@@ -249,20 +209,7 @@ namespace Titanium.Web.Proxy
                 {
                     TcpHelper.SendRaw(httpCmd, tunnelHostName, requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
 
-                    if (args != null)
-                        args.Dispose();
-
-                    if (clientStreamReader != null)
-                        clientStreamReader.Dispose();
-
-                    if (clientStreamWriter != null)
-                        clientStreamWriter.Dispose();
-
-                    if (clientStream != null)
-                        clientStream.Dispose();
-
-                    if (client != null)
-                        client.Close();
+                    Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
 
                     return;
                 }
@@ -305,20 +252,7 @@ namespace Titanium.Web.Proxy
 
                         TcpHelper.SendRaw(httpCmd, tunnelHostName, requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
 
-                        if (args != null)
-                            args.Dispose();
-
-                        if (clientStreamReader != null)
-                            clientStreamReader.Dispose();
-
-                        if (clientStreamWriter != null)
-                            clientStreamWriter.Dispose();
-
-                        if (clientStream != null)
-                            clientStream.Dispose();
-
-                        if (client != null)
-                            client.Close();
+                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
 
                         return;
                     }
@@ -351,20 +285,7 @@ namespace Titanium.Web.Proxy
                 string tmpLine;
                 if (args.CancelRequest)
                 {
-                    if (args != null)
-                        args.Dispose();
-
-                    if (clientStreamReader != null)
-                        clientStreamReader.Dispose();
-
-                    if (clientStreamWriter != null)
-                        clientStreamWriter.Dispose();
-
-                    if (clientStream != null)
-                        clientStream.Dispose();
-
-                    if (client != null)
-                        client.Close();
+                    Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
 
                     return;
                 }
@@ -390,16 +311,10 @@ namespace Titanium.Web.Proxy
                     {
                         SendClientRequestBody(args);
 
-                        //Http request body sent, now wait asynchronously for response
-                        args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
-
-
                     }
-                    else
-                    {
-                        //otherwise wait for response asynchronously
-                        args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
-                    }
+
+                    //Http request body sent, now wait asynchronously for response
+                    args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
 
                 }
 
@@ -421,25 +336,27 @@ namespace Titanium.Web.Proxy
             }
             catch
             {
-                if (args != null)
-                    args.Dispose();
-
-                if (clientStreamReader != null)
-                    clientStreamReader.Dispose();
-
-                if (clientStreamWriter != null)
-                    clientStreamWriter.Dispose();
-
-                if (clientStream != null)
-                    clientStream.Dispose();
-
-                if (client != null)
-                    client.Close();
-
+                Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
             }
 
+          
+        }
+        private static void Dispose(TcpClient client, Stream clientStream, CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, SessionEventArgs args)
+        {
+            if (args != null)
+                args.Dispose();
 
+            if (clientStreamReader != null)
+                clientStreamReader.Dispose();
 
+            if (clientStreamWriter != null)
+                clientStreamWriter.Dispose();
+
+            if (clientStream != null)
+                clientStream.Dispose();
+
+            if (client != null)
+                client.Close();
         }
         private static void SetClientRequestHeaders(List<string> requestLines, HttpWebRequest webRequest)
         {
@@ -508,6 +425,7 @@ namespace Titanium.Web.Proxy
                         case "user-agent":
                             webRequest.UserAgent = header[1];
                             break;
+
                         //revisit this, transfer-encoding is not a request header according to spec
                         //But how to identify if client is sending chunked body for PUT/POST?
                         case "transfer-encoding":
@@ -536,7 +454,6 @@ namespace Titanium.Web.Proxy
         //This is called when the request is PUT/POST to read the body
         private static void SendClientRequestBody(SessionEventArgs args)
         {
-
 
             // End the operation
             Stream postStream = args.ProxyRequest.GetRequestStream();
@@ -574,12 +491,15 @@ namespace Titanium.Web.Proxy
                     }
 
                     postStream.Close();
+                    postStream.Dispose();
                 }
                 catch
                 {
                     if (postStream != null)
+                    {
                         postStream.Close();
-
+                        postStream.Dispose();
+                    }
                     throw;
                 }
 
@@ -649,7 +569,10 @@ namespace Titanium.Web.Proxy
                 catch
                 {
                     if (postStream != null)
+                    {
                         postStream.Close();
+                        postStream.Dispose();
+                    }
 
                     throw;
                 }
