@@ -96,24 +96,24 @@ namespace Titanium.Web.Proxy.Models
 
 
                 if (Encoding == null) Encoding = Encoding.Default;
-                string ResponseData = "";
+               
 
                 switch (ServerResponse.ContentEncoding)
                 {
                     case "gzip":
-                        ResponseData = CompressionHelper.DecompressGzip(ServerResponseStream, Encoding);
+                        ResponseHtmlBody = CompressionHelper.DecompressGzip(ServerResponseStream, Encoding);
                         break;
                     case "deflate":
-                        ResponseData = CompressionHelper.DecompressDeflate(ServerResponseStream, Encoding);
+                        ResponseHtmlBody = CompressionHelper.DecompressDeflate(ServerResponseStream, Encoding);
                         break;
                     case "zlib":
-                        ResponseData = CompressionHelper.DecompressZlib(ServerResponseStream, Encoding);
+                        ResponseHtmlBody = CompressionHelper.DecompressZlib(ServerResponseStream, Encoding);
                         break;
                     default:
-                        ResponseData = DecodeData(ServerResponseStream, Encoding);
+                        ResponseHtmlBody = DecodeData(ServerResponseStream, Encoding);
                         break;
                 }
-                ResponseHtmlBody = ResponseData;
+       
                 ResponseWasModified = true;
 
             }
@@ -123,6 +123,7 @@ namespace Titanium.Web.Proxy.Models
         public void SetResponseHtmlBody(string body)
         {
             this.ResponseHtmlBody = body;
+            ResponseWasModified = true;
         }
         //stream reader not recomended for images
         private string DecodeData(Stream responseStream, Encoding e)
