@@ -77,26 +77,14 @@ namespace Titanium.Web.Proxy
                     //instead = we are going to perform a man in the middle "attack"
                     //the user's browser should warn them of the certification errors, 
                     //to avoid that we need to install our root certficate in users machine as Certificate Authority.
+                   
                     remoteUri = "https://" + splitBuffer[1];
                     tunnelHostName = splitBuffer[1].Split(':')[0];
+                   
                     int.TryParse(splitBuffer[1].Split(':')[1], out tunnelPort);
-                    if (tunnelPort == 0) tunnelPort = 80;
-                    var isSecure = true;
-                    for (int i = 1; i < requestLines.Count; i++)
-                    {
-                        var rawHeader = requestLines[i];
-                        String[] header = rawHeader.ToLower().Trim().Split(colonSpaceSplit, 2, StringSplitOptions.None);
+                   
+                    if (tunnelPort == 0) tunnelPort = 443;
 
-                        if ((header[0] == "host"))
-                        {
-                            var hostDetails = header[1].ToLower().Trim().Split(':');
-                            if (hostDetails.Length > 1)
-                            {
-                                isSecure = false;
-                            }
-                        }
-
-                    }
                     requestLines.Clear();
 
                     clientStreamWriter.WriteLine(RequestVersion + " 200 Connection established");
@@ -135,7 +123,7 @@ namespace Titanium.Web.Proxy
                     //Pinned certificate clients cannot be proxied
                     //Example dropbox.com uses certificate pinning
                     //So just relay the request after identifying it by first failure
-                    if (!pinnedCertificateClients.Contains(tunnelHostName) && isSecure)
+                    if (!pinnedCertificateClients.Contains(tunnelHostName))
                     {
 
                         try
@@ -145,7 +133,7 @@ namespace Titanium.Web.Proxy
                             sslStream.AuthenticateAsServer(certificate, false, SslProtocols.Tls | SslProtocols.Ssl3 | SslProtocols.Ssl2, false);
 
                             clientStreamReader = new CustomBinaryReader(sslStream, Encoding.ASCII);
-                            clientStreamWriter = new StreamWriter(sslStream); 
+                            clientStreamWriter = new StreamWriter(sslStream);
                             //HTTPS server created - we can now decrypt the client's traffic
                             clientStream = sslStream;
                         }
@@ -449,7 +437,7 @@ namespace Titanium.Web.Proxy
                     client.Close();
 
             }
-          
+
 
 
         }
@@ -652,7 +640,7 @@ namespace Titanium.Web.Proxy
                                 args.ClientStream.ReadByte();
                             }
                             sb.Clear();
-                            
+
                         }
 
                     }
@@ -665,7 +653,7 @@ namespace Titanium.Web.Proxy
 
                     throw;
                 }
-               
+
             }
 
 
