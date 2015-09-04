@@ -6,7 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    public class CertificateManager
+    public class CertificateManager : IDisposable 
     {
         private const string CERT_CREATE_FORMAT =
             "-ss {0} -n \"CN={1}, O={2}\" -sky {3} -cy {4} -m 120 -a sha256 -eku 1.3.6.1.5.5.7.3.1 -b {5:MM/dd/yyyy} {6}";
@@ -171,6 +171,15 @@ namespace Titanium.Web.Proxy.Helpers
                 isRootCertificate ? "-h 1 -r" : string.Format("-pe -in \"{0}\" -is Root", RootCertificateName));
 
             return certCreatArgs;
+        }
+
+        public void Dispose()
+        {
+            if (MyStore != null)
+                MyStore.Close();
+
+            if (RootStore != null)
+                RootStore.Close();
         }
     }
 }

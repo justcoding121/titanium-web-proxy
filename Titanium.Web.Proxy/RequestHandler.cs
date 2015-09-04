@@ -25,20 +25,18 @@ namespace Titanium.Web.Proxy
         private static void HandleClient(TcpClient client)
         {
 
-      
-            Stream clientStream = null;
-            CustomBinaryReader clientStreamReader = null;
-            StreamWriter connectStreamWriter = null;
+
+            Stream clientStream = client.GetStream();
+            CustomBinaryReader clientStreamReader = new CustomBinaryReader(clientStream, Encoding.ASCII);
+            StreamWriter clientStreamWriter = new StreamWriter(clientStream);
+
             string tunnelHostName = null;
+
             int tunnelPort = 0;
 
             try
             {
-              
 
-                clientStream = client.GetStream();
-
-                clientStreamReader = new CustomBinaryReader(clientStream, Encoding.ASCII);
                 string securehost = null;
 
                 List<string> requestLines = new List<string>();
@@ -101,12 +99,11 @@ namespace Titanium.Web.Proxy
                     }
                     requestLines.Clear();
 
-                    connectStreamWriter = new StreamWriter(clientStream);
-                    connectStreamWriter.WriteLine(RequestVersion + " 200 Connection established");
-                    connectStreamWriter.WriteLine(String.Format("Timestamp: {0}", DateTime.Now.ToString()));
-                    connectStreamWriter.WriteLine(String.Format("connection:close"));
-                    connectStreamWriter.WriteLine();
-                    connectStreamWriter.Flush();
+                    clientStreamWriter.WriteLine(RequestVersion + " 200 Connection established");
+                    clientStreamWriter.WriteLine(String.Format("Timestamp: {0}", DateTime.Now.ToString()));
+                    clientStreamWriter.WriteLine(String.Format("connection:close"));
+                    clientStreamWriter.WriteLine();
+                    clientStreamWriter.Flush();
 
 
                     //If port is not 443 its not a HTTP request, so just relay 
@@ -114,15 +111,24 @@ namespace Titanium.Web.Proxy
                     {
                         TcpHelper.SendRaw(tunnelHostName, tunnelPort, clientStreamReader.BaseStream);
 
+                        if (clientStreamReader != null)
+                            clientStreamReader.Dispose();
+
+                        if (clientStreamWriter != null)
+                            clientStreamWriter.Dispose();
+
                         if (clientStream != null)
-                            clientStream.Close();
+                            clientStream.Dispose();
+
+                        if (client != null)
+                            client.Close();
 
                         return;
                     }
 
                     //Create the fake certificate signed using our fake certificate authority
                     Monitor.Enter(certificateAccessLock);
-                    var _certificate = ProxyServer.CertManager.CreateCertificate(tunnelHostName);
+                    var certificate = ProxyServer.CertManager.CreateCertificate(tunnelHostName);
                     Monitor.Exit(certificateAccessLock);
 
                     SslStream sslStream = null;
@@ -131,14 +137,20 @@ namespace Titanium.Web.Proxy
                     //So just relay the request after identifying it by first failure
                     if (!pinnedCertificateClients.Contains(tunnelHostName) && isSecure)
                     {
-                        sslStream = new SslStream(clientStream, true);
+
                         try
                         {
+                            sslStream = new SslStream(clientStream, true);
                             //Successfully managed to authenticate the client using the fake certificate
-                            sslStream.AuthenticateAsServer(_certificate, false, SslProtocols.Tls | SslProtocols.Ssl3 | SslProtocols.Ssl2, false);
+                            sslStream.AuthenticateAsServer(certificate, false, SslProtocols.Tls | SslProtocols.Ssl3 | SslProtocols.Ssl2, false);
+
+                            clientStreamReader = new CustomBinaryReader(sslStream, Encoding.ASCII);
+                            clientStreamWriter = new StreamWriter(sslStream); 
+                            //HTTPS server created - we can now decrypt the client's traffic
+                            clientStream = sslStream;
                         }
 
-                        catch (AuthenticationException)
+                        catch
                         {
                             //if authentication failed it could be because client uses pinned certificates
                             //So add the hostname to this list so that next time we can relay without touching it (tunnel the request)
@@ -146,6 +158,10 @@ namespace Titanium.Web.Proxy
                             {
                                 pinnedCertificateClients.Add(tunnelHostName);
                             }
+
+                            if (sslStream != null)
+                                sslStream.Dispose();
+
                             throw;
                         }
 
@@ -155,14 +171,21 @@ namespace Titanium.Web.Proxy
                         //Hostname was a previously failed request due to certificate pinning, just relay (tunnel the request)
                         TcpHelper.SendRaw(tunnelHostName, tunnelPort, clientStreamReader.BaseStream);
 
+                        if (clientStreamReader != null)
+                            clientStreamReader.Dispose();
+
+                        if (clientStreamWriter != null)
+                            clientStreamWriter.Dispose();
+
                         if (clientStream != null)
-                            clientStream.Close();
+                            clientStream.Dispose();
+
+                        if (client != null)
+                            client.Close();
 
                         return;
                     }
-                    clientStreamReader = new CustomBinaryReader(sslStream, Encoding.ASCII);
-                    //HTTPS server created - we can now decrypt the client's traffic
-                    clientStream = sslStream;
+
 
                     while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
                     {
@@ -180,48 +203,55 @@ namespace Titanium.Web.Proxy
                 }
 
                 //Now create the request
-                Task.Factory.StartNew(()=>HandleHttpSessionRequest(client, httpCmd, clientStream, tunnelHostName, requestLines, clientStreamReader, securehost));
+                Task.Factory.StartNew(() => HandleHttpSessionRequest(client, httpCmd, clientStream, tunnelHostName, requestLines, clientStreamReader, clientStreamWriter, securehost));
 
 
 
             }
-            catch (AuthenticationException)
+            catch
             {
-                return;
-            }
-            catch (EndOfStreamException)
-            {
-                return;
-            }
-            catch (IOException)
-            {
-                return;
-            }
-            catch (UriFormatException)
-            {
-                return;
-            }
-            catch (WebException)
-            {
-                return;
-            }
-            finally
-            {
+                if (clientStreamReader != null)
+                    clientStreamReader.Dispose();
 
+                if (clientStreamWriter != null)
+                    clientStreamWriter.Dispose();
+
+                if (clientStream != null)
+                    clientStream.Dispose();
+
+                if (client != null)
+                    client.Close();
             }
+
 
         }
-        private static void HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream, string tunnelHostName, List<string> requestLines, CustomBinaryReader clientStreamReader, string securehost)
+        private static void HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream, string tunnelHostName, List<string> requestLines, CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string securehost)
         {
 
 
-            if (httpCmd == null) return;
+            if (httpCmd == null)
+            {
+                if (clientStreamReader != null)
+                    clientStreamReader.Dispose();
+
+                if (clientStreamWriter != null)
+                    clientStreamWriter.Dispose();
+
+                if (clientStream != null)
+                    clientStream.Dispose();
+
+                if (client != null)
+                    client.Close();
+
+                return;
+            }
 
 
             var args = new SessionEventArgs(BUFFER_SIZE);
             args.Client = client;
             args.tunnelHostName = tunnelHostName;
             args.securehost = securehost;
+
             try
             {
                 //break up the line into three components (method, remote URL & Http Version)
@@ -231,8 +261,20 @@ namespace Titanium.Web.Proxy
                 {
                     TcpHelper.SendRaw(httpCmd, tunnelHostName, requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
 
+                    if (args != null)
+                        args.Dispose();
+
+                    if (clientStreamReader != null)
+                        clientStreamReader.Dispose();
+
+                    if (clientStreamWriter != null)
+                        clientStreamWriter.Dispose();
+
                     if (clientStream != null)
-                        clientStream.Close();
+                        clientStream.Dispose();
+
+                    if (client != null)
+                        client.Close();
 
                     return;
                 }
@@ -262,6 +304,7 @@ namespace Titanium.Web.Proxy
                 args.ProxyRequest.ProtocolVersion = version;
                 args.ClientStream = clientStream;
                 args.ClientStreamReader = clientStreamReader;
+                args.ClientStreamWriter = clientStreamWriter;
 
                 for (int i = 1; i < requestLines.Count; i++)
                 {
@@ -274,8 +317,20 @@ namespace Titanium.Web.Proxy
 
                         TcpHelper.SendRaw(httpCmd, tunnelHostName, requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
 
+                        if (args != null)
+                            args.Dispose();
+
+                        if (clientStreamReader != null)
+                            clientStreamReader.Dispose();
+
+                        if (clientStreamWriter != null)
+                            clientStreamWriter.Dispose();
+
                         if (clientStream != null)
-                            clientStream.Close();
+                            clientStream.Dispose();
+
+                        if (client != null)
+                            client.Close();
 
                         return;
                     }
@@ -308,19 +363,22 @@ namespace Titanium.Web.Proxy
                 string tmpLine;
                 if (args.CancelRequest)
                 {
-                    if (args.RequestIsAlive)
-                    {
-                        requestLines.Clear();
-                        while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
-                        {
-                            requestLines.Add(tmpLine);
-                        }
+                    if (args != null)
+                        args.Dispose();
 
-                        httpCmd = requestLines.Count > 0 ? requestLines[0] : null;
-                        return;
-                    }
-                    else
-                        return;
+                    if (clientStreamReader != null)
+                        clientStreamReader.Dispose();
+
+                    if (clientStreamWriter != null)
+                        clientStreamWriter.Dispose();
+
+                    if (clientStream != null)
+                        clientStream.Dispose();
+
+                    if (client != null)
+                        client.Close();
+
+                    return;
                 }
 
                 args.ProxyRequest.ConnectionGroupName = args.RequestHostname;
@@ -347,7 +405,7 @@ namespace Titanium.Web.Proxy
                         //Http request body sent, now wait asynchronously for response
                         args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
 
-                        
+
                     }
                     else
                     {
@@ -359,37 +417,39 @@ namespace Titanium.Web.Proxy
 
                 //Now read the next request (if keep-Alive is enabled, otherwise exit this thread)
                 //If client is pipeling the request, this will be immediately hit before response for previous request was made
-                if (args.ProxyRequest.KeepAlive)
+
+                tmpLine = null;
+                requestLines.Clear();
+                while (!String.IsNullOrEmpty(tmpLine = args.ClientStreamReader.ReadLine()))
                 {
-                    tmpLine = null;
-                    requestLines.Clear();
-                    while (!String.IsNullOrEmpty(tmpLine = args.ClientStreamReader.ReadLine()))
-                    {
-                        requestLines.Add(tmpLine);
-                    }
-                    httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
-                    TcpClient Client = args.Client;
-
-                    //Http request body sent, now wait for next request
-                    Task.Factory.StartNew(() => HandleHttpSessionRequest(Client, httpCmd, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost));
+                    requestLines.Add(tmpLine);
                 }
-            }
-            catch (IOException)
-            {
-                return;
-            }
-            catch (UriFormatException)
-            {
-                return;
-            }
-            catch (WebException)
-            {
-                return;
-            }
-            finally
-            {
+                httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
+                TcpClient Client = args.Client;
+
+                //Http request body sent, now wait for next request
+                Task.Factory.StartNew(() => HandleHttpSessionRequest(Client, httpCmd, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.ClientStreamWriter, args.securehost));
 
             }
+            catch
+            {
+                if (args != null)
+                    args.Dispose();
+
+                if (clientStreamReader != null)
+                    clientStreamReader.Dispose();
+
+                if (clientStreamWriter != null)
+                    clientStreamWriter.Dispose();
+
+                if (clientStream != null)
+                    clientStream.Dispose();
+
+                if (client != null)
+                    client.Close();
+
+            }
+          
 
 
         }
@@ -488,7 +548,7 @@ namespace Titanium.Web.Proxy
         //This is called when the request is PUT/POST to read the body
         private static void SendClientRequestBody(SessionEventArgs args)
         {
-         
+
 
             // End the operation
             Stream postStream = args.ProxyRequest.GetRequestStream();
@@ -527,22 +587,16 @@ namespace Titanium.Web.Proxy
 
                     postStream.Close();
                 }
-                catch (IOException)
+                catch
                 {
+                    if (postStream != null)
+                        postStream.Close();
 
-                    args.ProxyRequest.KeepAlive = false;
                     throw;
-                }
-                catch (WebException)
-                {
-
-                    args.ProxyRequest.KeepAlive = false;
-                    throw;
-
                 }
 
             }
-           //Need to revist, find any potential bugs
+            //Need to revist, find any potential bugs
             else if (args.ProxyRequest.SendChunked)
             {
                 args.ProxyRequest.AllowWriteStreamBuffering = true;
@@ -598,32 +652,24 @@ namespace Titanium.Web.Proxy
                                 args.ClientStream.ReadByte();
                             }
                             sb.Clear();
+                            
                         }
 
                     }
                     postStream.Close();
                 }
-                catch (IOException)
+                catch
                 {
                     if (postStream != null)
                         postStream.Close();
 
-                    args.ProxyRequest.KeepAlive = false;
                     throw;
                 }
-                catch (WebException)
-                {
-                    if (postStream != null)
-                        postStream.Close();
-
-                    args.ProxyRequest.KeepAlive = false;
-                    throw;
-
-                }
+               
             }
-           
-            
-          
+
+
+
         }
 
 

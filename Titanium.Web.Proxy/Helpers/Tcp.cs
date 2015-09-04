@@ -6,6 +6,7 @@ using System.Net.Security;
 using System.IO;
 using System.Net;
 using System.Threading.Tasks;
+using System.Net.Sockets;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -16,24 +17,38 @@ namespace Titanium.Web.Proxy.Helpers
         public static void SendRaw(string hostname, int tunnelPort, System.IO.Stream clientStream)
         {
 
+            System.Net.Sockets.TcpClient tunnelClient = null;
+            NetworkStream tunnelStream = null;
 
-            System.Net.Sockets.TcpClient tunnelClient = new System.Net.Sockets.TcpClient(hostname, tunnelPort);
-            var tunnelStream = tunnelClient.GetStream();
-            var tunnelReadBuffer = new byte[BUFFER_SIZE];
+            try
+            {
+                tunnelClient = new System.Net.Sockets.TcpClient(hostname, tunnelPort);
 
-            Task sendRelay = new Task(() => StreamHelper.CopyTo(clientStream, tunnelStream, BUFFER_SIZE));
-            Task receiveRelay = new Task(() => StreamHelper.CopyTo(tunnelStream, clientStream, BUFFER_SIZE));
+                tunnelStream = tunnelClient.GetStream();
 
-            sendRelay.Start();
-            receiveRelay.Start();
+                var tunnelReadBuffer = new byte[BUFFER_SIZE];
 
-            Task.WaitAll(sendRelay, receiveRelay);
+                Task sendRelay = Task.Factory.StartNew(() => StreamHelper.CopyTo(clientStream, tunnelStream, BUFFER_SIZE));
+                Task receiveRelay = Task.Factory.StartNew(() => StreamHelper.CopyTo(tunnelStream, clientStream, BUFFER_SIZE));
 
-            if (tunnelStream != null)
-                tunnelStream.Close();
+                sendRelay.Start();
+                receiveRelay.Start();
 
-            if (tunnelClient != null)
-                tunnelClient.Close();
+                Task.WaitAll(sendRelay, receiveRelay);
+            }
+            catch
+            {
+                if (tunnelStream != null)
+                {
+                    tunnelStream.Close();
+                    tunnelStream.Dispose();
+                }
+
+                if (tunnelClient != null)
+                    tunnelClient.Close();
+
+                throw;
+            }
         }
         public static void SendRaw(string httpCmd, string secureHostName, List<string> requestLines, bool isHttps, Stream clientStream)
         {
@@ -76,30 +91,51 @@ namespace Titanium.Web.Proxy.Helpers
 
             }
 
-            System.Net.Sockets.TcpClient tunnelClient = new System.Net.Sockets.TcpClient(hostname, tunnelPort);
-            var tunnelStream = tunnelClient.GetStream() as System.IO.Stream;
-
-            if (isHttps)
+            System.Net.Sockets.TcpClient tunnelClient = null;
+            Stream tunnelStream = null;
+            try
             {
-                var sslStream = new SslStream(tunnelStream);
-                sslStream.AuthenticateAsClient(hostname);
-                tunnelStream = sslStream;
+                tunnelClient = new System.Net.Sockets.TcpClient(hostname, tunnelPort);
+                tunnelStream = tunnelClient.GetStream() as Stream;
+
+                if (isHttps)
+                {
+                    SslStream sslStream = null;
+                    try
+                    {
+                        sslStream = new SslStream(tunnelStream);
+                        sslStream.AuthenticateAsClient(hostname);
+                        tunnelStream = sslStream;
+                    }
+                    catch
+                    {
+                        if (sslStream != null)
+                            sslStream.Dispose();
+                    }
+                }
+
+
+                var sendRelay = new Task(() => StreamHelper.CopyTo(sb.ToString(), clientStream, tunnelStream, BUFFER_SIZE));
+                var receiveRelay = new Task(() => StreamHelper.CopyTo(tunnelStream, clientStream, BUFFER_SIZE));
+
+                sendRelay.Start();
+                receiveRelay.Start();
+
+                Task.WaitAll(sendRelay, receiveRelay);
             }
+            catch
+            {
+                if (tunnelStream != null)
+                {
+                    tunnelStream.Close();
+                    tunnelStream.Dispose();
+                }
 
+                if (tunnelClient != null)
+                    tunnelClient.Close();
 
-            var sendRelay = new Task(() => StreamHelper.CopyTo(sb.ToString(), clientStream, tunnelStream, BUFFER_SIZE));
-            var receiveRelay = new Task(() => StreamHelper.CopyTo(tunnelStream, clientStream, BUFFER_SIZE));
-
-            sendRelay.Start();
-            receiveRelay.Start();
-
-            Task.WaitAll(sendRelay, receiveRelay);
-
-            if (tunnelStream != null)
-                tunnelStream.Close();
-
-            if (tunnelClient != null)
-                tunnelClient.Close();
+                throw;
+            }
         }
     }
 }
