@@ -14,25 +14,28 @@ namespace Titanium.Web.Proxy.Models
 
         internal int BUFFER_SIZE;
 
-        internal TcpClient Client { get; set; }
-        internal Stream ClientStream { get; set; }
-        internal CustomBinaryReader ClientStreamReader { get; set; }
-        internal StreamWriter ClientStreamWriter { get; set; }
+        internal TcpClient client { get; set; }
+        internal Stream clientStream { get; set; }
+        internal CustomBinaryReader clientStreamReader { get; set; }
+        internal StreamWriter clientStreamWriter { get; set; }
 
-        internal string HttpsHostName { get; set; }
-        internal string HttpsDecoratedHostName { get; set; }
-        internal int RequestContentLength { get; set; }
-        internal Encoding RequestEncoding { get; set; }
-        internal Version RequestHttpVersion { get; set; }
-        internal bool RequestIsAlive { get; set; }
-        internal bool CancelRequest { get; set; }
-        internal string RequestBody { get; set; }
-        internal bool RequestBodyRead { get; set; }
+        internal string httpsHostName { get; set; }
+        internal string httpsDecoratedHostName { get; set; }
+        internal int requestContentLength { get; set; }
+        internal Encoding requestEncoding { get; set; }
+        internal Version requestHttpVersion { get; set; }
+        internal bool requestIsAlive { get; set; }
+        internal bool cancelRequest { get; set; }
+        internal string requestBody { get; set; }
+        internal bool requestBodyRead { get; set; }
 
-        internal Encoding ResponseEncoding { get; set; }
-        internal Stream ResponseStream { get; set; }
-        internal string ResponseBody { get; set; }
-        internal bool ResponseBodyRead { get; set; }
+        internal Encoding responseEncoding { get; set; }
+        internal Stream responseStream { get; set; }
+        internal string responseBody { get; set; }
+        internal bool responseBodyRead { get; set; }
+
+        internal HttpWebRequest proxyRequest { get; set; }
+        internal HttpWebResponse serverResponse { get; set; }
 
         public int ClientPort { get; set; }
         public IPAddress ClientIpAddress { get; set; }
@@ -40,38 +43,44 @@ namespace Titanium.Web.Proxy.Models
         public bool IsHttps { get; set; }
         public string RequestURL { get; set; }
         public string RequestHostname { get; set; }
+        public string RequestMethod { get { return this.proxyRequest.Method; } }
+        public int RequestContentLength { get { return requestContentLength; } }
 
-        public HttpWebRequest ProxyRequest { get; set; }
-        public HttpWebResponse ServerResponse { get; set; }
+        public HttpStatusCode ResponseStatusCode { get { return this.serverResponse.StatusCode; } }
+        public string ResponseContentType { get { return this.serverResponse.ContentType; } }
+        
+       
 
-        public void Dispose()
-        {
-            if (this.ProxyRequest != null)
-                this.ProxyRequest.Abort();
-
-            if (this.ResponseStream != null)
-                this.ResponseStream.Dispose();
-
-            if (this.ServerResponse != null)
-                this.ServerResponse.Close();
-
-        }
-
-        public SessionEventArgs(int bufferSize)
+        internal SessionEventArgs(int bufferSize)
         {
             BUFFER_SIZE = bufferSize;
         }
+
+        public void Dispose()
+        {
+            if (this.proxyRequest != null)
+                this.proxyRequest.Abort();
+
+            if (this.responseStream != null)
+                this.responseStream.Dispose();
+
+            if (this.serverResponse != null)
+                this.serverResponse.Close();
+        }
+
+
+
         public string GetRequestBody()
         {
-            if ((ProxyRequest.Method.ToUpper() == "POST" || ProxyRequest.Method.ToUpper() == "PUT") && RequestContentLength > 0)
+            if ((proxyRequest.Method.ToUpper() == "POST" || proxyRequest.Method.ToUpper() == "PUT") && requestContentLength > 0)
             {
-                if (RequestBody == null)
+                if (requestBody == null)
                 {
-                    var buffer = ClientStreamReader.ReadBytes(RequestContentLength);
-                    RequestBody = RequestEncoding.GetString(buffer);
+                    var buffer = clientStreamReader.ReadBytes(requestContentLength);
+                    requestBody = requestEncoding.GetString(buffer);
                 }
-                RequestBodyRead = true;
-                return RequestBody;
+                requestBodyRead = true;
+                return requestBody;
             }
             else
                 throw new BodyNotFoundException("Request don't have a body." +
@@ -80,47 +89,47 @@ namespace Titanium.Web.Proxy.Models
         }
         public void SetRequestBody(string body)
         {
-            this.RequestBody = body;
-            RequestBodyRead = true;
+            this.requestBody = body;
+            requestBodyRead = true;
         }
         public string GetResponseBody()
         {
-            if (ResponseBody == null)
+            if (responseBody == null)
             {
 
-                if (ResponseEncoding == null) ResponseEncoding = Encoding.GetEncoding(ServerResponse.CharacterSet);
-                if (ResponseEncoding == null) ResponseEncoding = Encoding.Default;
+                if (responseEncoding == null) responseEncoding = Encoding.GetEncoding(serverResponse.CharacterSet);
+                if (responseEncoding == null) responseEncoding = Encoding.Default;
 
 
-                switch (ServerResponse.ContentEncoding)
+                switch (serverResponse.ContentEncoding)
                 {
                     case "gzip":
-                        ResponseBody = CompressionHelper.DecompressGzip(ResponseStream, ResponseEncoding);
+                        responseBody = CompressionHelper.DecompressGzip(responseStream, responseEncoding);
                         break;
                     case "deflate":
-                        ResponseBody = CompressionHelper.DecompressDeflate(ResponseStream, ResponseEncoding);
+                        responseBody = CompressionHelper.DecompressDeflate(responseStream, responseEncoding);
                         break;
                     case "zlib":
-                        ResponseBody = CompressionHelper.DecompressZlib(ResponseStream, ResponseEncoding);
+                        responseBody = CompressionHelper.DecompressZlib(responseStream, responseEncoding);
                         break;
                     default:
-                        ResponseBody = DecodeData(ResponseStream, ResponseEncoding);
+                        responseBody = DecodeData(responseStream, responseEncoding);
                         break;
                 }
 
-                ResponseBodyRead = true;
+                responseBodyRead = true;
 
             }
-            return ResponseBody;
+            return responseBody;
         }
 
         public void SetResponseBody(string body)
         {
-            if (ResponseEncoding == null) ResponseEncoding = Encoding.GetEncoding(ServerResponse.CharacterSet);
-            if (ResponseEncoding == null) ResponseEncoding = Encoding.Default;
+            if (responseEncoding == null) responseEncoding = Encoding.GetEncoding(serverResponse.CharacterSet);
+            if (responseEncoding == null) responseEncoding = Encoding.Default;
 
-            this.ResponseBody = body;
-            ResponseBodyRead = true;
+            this.responseBody = body;
+            responseBodyRead = true;
         }
         //stream reader not recomended for images
         private string DecodeData(Stream responseStream, Encoding e)
@@ -138,8 +147,8 @@ namespace Titanium.Web.Proxy.Models
 
             var result = Encoding.Default.GetBytes(html);
 
-            StreamWriter connectStreamWriter = new StreamWriter(ClientStream);
-            var s = String.Format("HTTP/{0}.{1} {2} {3}", RequestHttpVersion.Major, RequestHttpVersion.Minor, 200, "Ok");
+            StreamWriter connectStreamWriter = new StreamWriter(clientStream);
+            var s = String.Format("HTTP/{0}.{1} {2} {3}", requestHttpVersion.Major, requestHttpVersion.Minor, 200, "Ok");
             connectStreamWriter.WriteLine(s);
             connectStreamWriter.WriteLine(String.Format("Timestamp: {0}", DateTime.Now.ToString()));
             connectStreamWriter.WriteLine("content-length: " + result.Length);
@@ -147,7 +156,7 @@ namespace Titanium.Web.Proxy.Models
             connectStreamWriter.WriteLine("Pragma: no-cache");
             connectStreamWriter.WriteLine("Expires: 0");
 
-            if (RequestIsAlive)
+            if (requestIsAlive)
             {
                 connectStreamWriter.WriteLine("Connection: Keep-Alive");
             }
@@ -157,10 +166,10 @@ namespace Titanium.Web.Proxy.Models
             connectStreamWriter.WriteLine();
             connectStreamWriter.Flush();
 
-            ClientStream.Write(result, 0, result.Length);
+            clientStream.Write(result, 0, result.Length);
 
 
-            CancelRequest = true;
+            cancelRequest = true;
 
         }
 

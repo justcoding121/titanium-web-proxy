@@ -25,72 +25,72 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                args.ServerResponse = (HttpWebResponse)args.ProxyRequest.EndGetResponse(asynchronousResult);
+                args.serverResponse = (HttpWebResponse)args.proxyRequest.EndGetResponse(asynchronousResult);
             }
             catch (WebException webEx)
             {
                 //Things line 404, 500 etc
-                args.ServerResponse = webEx.Response as HttpWebResponse;
+                args.serverResponse = webEx.Response as HttpWebResponse;
             }
 
             try
             {
-                if (args.ServerResponse != null)
+                if (args.serverResponse != null)
                 {
-                    List<Tuple<String, String>> responseHeaders = ProcessResponse(args.ServerResponse);
-                    args.ResponseStream = args.ServerResponse.GetResponseStream();
+                    List<Tuple<String, String>> responseHeaders = ProcessResponse(args.serverResponse);
+                    args.responseStream = args.serverResponse.GetResponseStream();
 
-                    bool isChunked = args.ServerResponse.GetResponseHeader("transfer-encoding") == null ? false : args.ServerResponse.GetResponseHeader("transfer-encoding").ToLower() == "chunked" ? true : false;
+                    bool isChunked = args.serverResponse.GetResponseHeader("transfer-encoding") == null ? false : args.serverResponse.GetResponseHeader("transfer-encoding").ToLower() == "chunked" ? true : false;
  
                     if (BeforeResponse != null)
                         BeforeResponse(null, args);
 
-                    if (args.ResponseBodyRead)
+                    if (args.responseBodyRead)
                     {
 
                         byte[] data;
-                        switch (args.ServerResponse.ContentEncoding)
+                        switch (args.serverResponse.ContentEncoding)
                         {
                             case "gzip":
-                                data = CompressionHelper.CompressGzip(args.ResponseBody, args.ResponseEncoding);
-                                WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, args.ClientStreamWriter);
-                                WriteResponseHeaders(args.ClientStreamWriter, responseHeaders, data.Length);
-                                SendData(args.ClientStream, data, isChunked);
+                                data = CompressionHelper.CompressGzip(args.responseBody, args.responseEncoding);
+                                WriteResponseStatus(args.serverResponse.ProtocolVersion, args.serverResponse.StatusCode, args.serverResponse.StatusDescription, args.clientStreamWriter);
+                                WriteResponseHeaders(args.clientStreamWriter, responseHeaders, data.Length);
+                                SendData(args.clientStream, data, isChunked);
                                 break;
                             case "deflate":
-                                data = CompressionHelper.CompressDeflate(args.ResponseBody, args.ResponseEncoding);
-                                WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, args.ClientStreamWriter);
-                                WriteResponseHeaders(args.ClientStreamWriter, responseHeaders, data.Length);
-                                SendData(args.ClientStream, data, isChunked);
+                                data = CompressionHelper.CompressDeflate(args.responseBody, args.responseEncoding);
+                                WriteResponseStatus(args.serverResponse.ProtocolVersion, args.serverResponse.StatusCode, args.serverResponse.StatusDescription, args.clientStreamWriter);
+                                WriteResponseHeaders(args.clientStreamWriter, responseHeaders, data.Length);
+                                SendData(args.clientStream, data, isChunked);
                                 break;
                             case "zlib":
-                                data = CompressionHelper.CompressZlib(args.ResponseBody, args.ResponseEncoding);
-                                WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, args.ClientStreamWriter);
-                                WriteResponseHeaders(args.ClientStreamWriter, responseHeaders, data.Length);
-                                SendData(args.ClientStream, data, isChunked);
+                                data = CompressionHelper.CompressZlib(args.responseBody, args.responseEncoding);
+                                WriteResponseStatus(args.serverResponse.ProtocolVersion, args.serverResponse.StatusCode, args.serverResponse.StatusDescription, args.clientStreamWriter);
+                                WriteResponseHeaders(args.clientStreamWriter, responseHeaders, data.Length);
+                                SendData(args.clientStream, data, isChunked);
                                 break;
                             default:
-                                data = EncodeData(args.ResponseBody, args.ResponseEncoding);
-                                WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, args.ClientStreamWriter);
-                                WriteResponseHeaders(args.ClientStreamWriter, responseHeaders, data.Length);
-                                SendData(args.ClientStream, data, isChunked);
+                                data = EncodeData(args.responseBody, args.responseEncoding);
+                                WriteResponseStatus(args.serverResponse.ProtocolVersion, args.serverResponse.StatusCode, args.serverResponse.StatusDescription, args.clientStreamWriter);
+                                WriteResponseHeaders(args.clientStreamWriter, responseHeaders, data.Length);
+                                SendData(args.clientStream, data, isChunked);
                                 break;
                         }
 
                     }
                     else
                     {
-                        WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, args.ClientStreamWriter);
-                        WriteResponseHeaders(args.ClientStreamWriter, responseHeaders);
+                        WriteResponseStatus(args.serverResponse.ProtocolVersion, args.serverResponse.StatusCode, args.serverResponse.StatusDescription, args.clientStreamWriter);
+                        WriteResponseHeaders(args.clientStreamWriter, responseHeaders);
 
                         if (isChunked)
-                            SendChunked(args.ResponseStream, args.ClientStream);
+                            SendChunked(args.responseStream, args.clientStream);
                         else
-                            SendNormal(args.ResponseStream, args.ClientStream);
+                            SendNormal(args.responseStream, args.clientStream);
 
                     }
 
-                    args.ClientStream.Flush();
+                    args.clientStream.Flush();
 
                 }
             
@@ -98,7 +98,7 @@ namespace Titanium.Web.Proxy
             }
             catch
             {
-                Dispose(args.Client, args.ClientStream, args.ClientStreamReader, args.ClientStreamWriter, args);
+                Dispose(args.client, args.clientStream, args.clientStreamReader, args.clientStreamWriter, args);
             }
             finally
             {
