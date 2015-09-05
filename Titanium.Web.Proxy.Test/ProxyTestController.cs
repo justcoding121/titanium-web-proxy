@@ -60,22 +60,22 @@ namespace Titanium.Web.Proxy.Test
 
             Console.WriteLine(e.RequestURL);
 
-            if (e.RequestURL.Contains("somewebsite.com"))
-                if ((e.ProxyRequest.Method.ToUpper() == "POST" || e.ProxyRequest.Method.ToUpper() == "PUT") && e.ProxyRequest.ContentLength > 0)
-                {
+            //if (e.RequestURL.Contains("somewebsite.com"))
+            //    if ((e.ProxyRequest.Method.ToUpper() == "POST" || e.ProxyRequest.Method.ToUpper() == "PUT") && e.ProxyRequest.ContentLength > 0)
+            //    {
 
-                    var m = e.GetRequestBody().Replace("a", "b");
-                    e.SetRequestBody(m);
+            //        var m = e.GetRequestBody().Replace("a", "b");
+            //        e.SetRequestBody(m);
 
-                }
+            //    }
 
-            //To cancel a request with a custom HTML content
-            //Filter URL
+            ////To cancel a request with a custom HTML content
+            ////Filter URL
 
-            if (e.RequestURL.Contains("somewebsite.com"))
-            {
-                e.Ok("<!DOCTYPE html><html><body><h1>Blocked</h1><p>Website blocked.</p></body></html>");
-            }
+            //if (e.RequestURL.Contains("somewebsite.com"))
+            //{
+            //    e.Ok("<!DOCTYPE html><html><body><h1>Blocked</h1><p>Website blocked.</p></body></html>");
+            //}
 
         }
 
@@ -85,21 +85,21 @@ namespace Titanium.Web.Proxy.Test
         {
             //To modify a response 
 
-            if (e.ServerResponse.StatusCode == HttpStatusCode.OK)
-            {
-                if (e.ServerResponse.ContentType.Trim().ToLower().Contains("text/html"))
-                {
-                    //Get response body
-                    string responseBody = e.GetResponseBody();
+            //if (e.ServerResponse.StatusCode == HttpStatusCode.OK)
+            //{
+            //    if (e.ServerResponse.ContentType.Trim().ToLower().Contains("text/html"))
+            //    {
+            //        //Get response body
+            //        string responseBody = e.GetResponseBody();
                    
-                    //Modify e.ServerResponse
-                    Regex rex = new Regex("</body>", RegexOptions.RightToLeft | RegexOptions.IgnoreCase | RegexOptions.Multiline);
-                    string modified = rex.Replace(responseBody, "<script type =\"text/javascript\">alert('Response was modified by this script!');</script></body>", 1);
+            //        //Modify e.ServerResponse
+            //        Regex rex = new Regex("</body>", RegexOptions.RightToLeft | RegexOptions.IgnoreCase | RegexOptions.Multiline);
+            //        string modified = rex.Replace(responseBody, "<script type =\"text/javascript\">alert('Response was modified by this script!');</script></body>", 1);
                     
-                    //Set modifed response Html Body
-                    e.SetResponseBody(modified);
-                }
-            }
+            //        //Set modifed response Html Body
+            //        e.SetResponseBody(modified);
+            //    }
+            //}
 
         }
 

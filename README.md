@@ -26,18 +26,6 @@ After installing nuget package mark following files to be copied to app director
 * makecert.exe
 * Titanium_Proxy_Test_Root.cer
 
-Or install manually:
-
-Add reference to 
-
-* Titanium.Web.Proxy.dll
-
-These files also should be in your application directory
-
-* Ionic.Zip.dll
-* makecert.exe
-* Titanium_Proxy_Test_Root.cer
-
 
 Setup HTTP proxy:
 
