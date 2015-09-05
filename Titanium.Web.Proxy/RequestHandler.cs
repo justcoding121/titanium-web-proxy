@@ -233,7 +233,7 @@ namespace Titanium.Web.Proxy
                     //if request was upgrade to web-socket protocol then relay the request without proxying
                     if ((header[0] == "upgrade") && (header[1] == "websocket"))
                     {
-
+   
                         TcpHelper.SendRaw(httpCmd, httpsHostName, requestLines, args.isHttps, clientStreamReader.BaseStream);
 
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
