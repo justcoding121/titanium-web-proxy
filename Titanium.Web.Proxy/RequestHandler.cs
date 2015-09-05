@@ -191,7 +191,7 @@ namespace Titanium.Web.Proxy
 
                 if (splitBuffer.Length != 3)
                 {
-                    TcpHelper.SendRaw(httpCmd, httpsHostName, requestLines, args.IsHttps, clientStreamReader.BaseStream);
+                    TcpHelper.SendRaw(httpCmd, httpsHostName, requestLines, args.isHttps, clientStreamReader.BaseStream);
 
                     Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
 
@@ -212,7 +212,7 @@ namespace Titanium.Web.Proxy
                 if (httpsDecoratedHostName != null)
                 {
                     remoteUri = httpsDecoratedHostName + remoteUri;
-                    args.IsHttps = true;
+                    args.isHttps = true;
                 }
 
                 //construct the web request that we are going to issue on behalf of the client.
@@ -234,7 +234,7 @@ namespace Titanium.Web.Proxy
                     if ((header[0] == "upgrade") && (header[1] == "websocket"))
                     {
 
-                        TcpHelper.SendRaw(httpCmd, httpsHostName, requestLines, args.IsHttps, clientStreamReader.BaseStream);
+                        TcpHelper.SendRaw(httpCmd, httpsHostName, requestLines, args.isHttps, clientStreamReader.BaseStream);
 
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
 
@@ -246,10 +246,10 @@ namespace Titanium.Web.Proxy
 
                 args.proxyRequest.AllowAutoRedirect = false;
                 args.proxyRequest.AutomaticDecompression = DecompressionMethods.None;
-                args.RequestHostname = args.proxyRequest.RequestUri.Host;
-                args.RequestURL = args.proxyRequest.RequestUri.OriginalString;
-                args.ClientPort = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
-                args.ClientIpAddress = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+                args.requestHostname = args.proxyRequest.RequestUri.Host;
+                args.requestURL = args.proxyRequest.RequestUri.OriginalString;
+                args.clientPort = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
+                args.clientIpAddress = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
                 args.requestHttpVersion = version;
                 args.requestIsAlive = args.proxyRequest.KeepAlive;
 
@@ -270,7 +270,7 @@ namespace Titanium.Web.Proxy
                     return;
                 }
 
-                args.proxyRequest.ConnectionGroupName = args.RequestHostname;
+                args.proxyRequest.ConnectionGroupName = args.requestHostname;
                 args.proxyRequest.AllowWriteStreamBuffering = true;
 
                 //If request was modified by user
