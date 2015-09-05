@@ -60,7 +60,7 @@ Sample request and response event handlers
             Console.WriteLine(e.RequestURL);
 
             if (e.RequestURL.Contains("somewebsite.com"))
-                if ((e.ProxyRequest.Method.ToUpper() == "POST" || e.ProxyRequest.Method.ToUpper() == "PUT") && e.ProxyRequest.ContentLength > 0)
+                if ((e.RequestMethod.ToUpper() == "POST" || e.RequestMethod.ToUpper() == "PUT") && e.RequestContentLength > 0)
                 {
 
                     var m = e.GetRequestBody().Replace("a", "b");
@@ -80,9 +80,10 @@ Sample request and response event handlers
 	
 	 public void OnResponse(object sender, SessionEventArgs e)
 	{
-		 if (e.ServerResponse.StatusCode == HttpStatusCode.OK)
+		  if (e.RequestURL.Contains("somewebsite.com"))
+            if (e.ResponseStatusCode == HttpStatusCode.OK)
             {
-                if (e.ServerResponse.ContentType.Trim().ToLower().Contains("text/html"))
+                if (e.ResponseContentType.Trim().ToLower().Contains("text/html"))
                 {
                     //Get response body
                     string responseBody = e.GetResponseBody();

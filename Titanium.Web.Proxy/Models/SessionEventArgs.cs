@@ -69,7 +69,6 @@ namespace Titanium.Web.Proxy.Models
         }
 
 
-
         public string GetRequestBody()
         {
             if ((proxyRequest.Method.ToUpper() == "POST" || proxyRequest.Method.ToUpper() == "PUT") && requestContentLength > 0)
