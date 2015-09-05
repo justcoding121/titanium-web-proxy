@@ -37,12 +37,20 @@ namespace Titanium.Web.Proxy.Models
         internal HttpWebRequest proxyRequest { get; set; }
         internal HttpWebResponse serverResponse { get; set; }
 
-        public int ClientPort { get; set; }
-        public IPAddress ClientIpAddress { get; set; }
+        internal bool isHttps { get; set; }
+        internal string requestURL { get; set; }
+        internal string requestHostname { get; set; }
 
-        public bool IsHttps { get; set; }
-        public string RequestURL { get; set; }
-        public string RequestHostname { get; set; }
+        internal int clientPort { get; set; }
+        internal IPAddress clientIpAddress { get; set; }
+
+        public int ClientPort { get { return this.clientPort; } }
+        public IPAddress ClientIpAddress { get { return this.clientIpAddress; } }
+
+        public bool IsHttps { get { return this.isHttps; } }
+        public string RequestURL { get { return this.requestURL; } }
+        public string RequestHostname { get { return this.requestHostname; } }
+
         public string RequestMethod { get { return this.proxyRequest.Method; } }
         public int RequestContentLength { get { return requestContentLength; } }
 
