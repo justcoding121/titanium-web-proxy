@@ -64,30 +64,49 @@ Sample request and response event handlers
 
 ```csharp
 		
-	public void OnRequest(object sender, SessionEventArgs e)
+		//Test On Request, intecept requests
+        //Read browser URL send back to proxy by the injection script in OnResponse event
+        public void OnRequest(object sender, SessionEventArgs e)
         {
-          //To cancel a request with a custom HTML content
-          //Filter URL
+
+            Console.WriteLine(e.RequestURL);
+
+            if (e.RequestURL.Contains("somewebsite.com"))
+                if ((e.ProxyRequest.Method.ToUpper() == "POST" || e.ProxyRequest.Method.ToUpper() == "PUT") && e.ProxyRequest.ContentLength > 0)
+                {
+
+                    var m = e.GetRequestBody().Replace("a", "b");
+                    e.SetRequestBody(m);
+
+                }
+
+            //To cancel a request with a custom HTML content
+            //Filter URL
+
             if (e.RequestURL.Contains("somewebsite.com"))
             {
-                e.Ok("<!DOCTYPE html><html><body><h1>Blocked</h1><p>website blocked.</p></body></html>");
+                e.Ok("<!DOCTYPE html><html><body><h1>Blocked</h1><p>Website blocked.</p></body></html>");
             }
+
         }
 	
 	 public void OnResponse(object sender, SessionEventArgs e)
 	{
-		if (e.ServerResponse.StatusCode == HttpStatusCode.OK)
-		{
-			if (e.ServerResponse.ContentType.Trim().ToLower().Contains("text/html"))
-			{
-				//Get response body
-				 string responseHtmlBody = e.GetResponseHtmlBody();
-				//Modify e.ServerResponse
-				responseHtmlBody = "<html><head></head><body>Response is modified!</body></html>";
-				//Set modifed response Html Body
-				e.SetResponseHtmlBody(responseHtmlBody);
-			}
-		}
+		 if (e.ServerResponse.StatusCode == HttpStatusCode.OK)
+            {
+                if (e.ServerResponse.ContentType.Trim().ToLower().Contains("text/html"))
+                {
+                    //Get response body
+                    string responseBody = e.GetResponseBody();
+                   
+                    //Modify e.ServerResponse
+                    Regex rex = new Regex("</body>", RegexOptions.RightToLeft | RegexOptions.IgnoreCase | RegexOptions.Multiline);
+                    string modified = rex.Replace(responseBody, "<script type =\"text/javascript\">alert('Response was modified by this script!');</script></body>", 1);
+                    
+                    //Set modifed response Html Body
+                    e.SetResponseBody(modified);
+                }
+            }
 	}
 ```
 Future updates

@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using Titanium.Web.Proxy.Helpers;
 using System.Net.Sockets;
+using Titanium.Web.Proxy.Exceptions;
 
 
 namespace Titanium.Web.Proxy.Models
@@ -18,25 +19,25 @@ namespace Titanium.Web.Proxy.Models
         internal CustomBinaryReader ClientStreamReader { get; set; }
         internal StreamWriter ClientStreamWriter { get; set; }
 
-        internal string UpgradeProtocol { get; set; }
-        internal Encoding Encoding { get; set; }
-        internal int RequestLength { get; set; }
+        internal string HttpsHostName { get; set; }
+        internal string HttpsDecoratedHostName { get; set; }
+        internal int RequestContentLength { get; set; }
+        internal Encoding RequestEncoding { get; set; }
         internal Version RequestHttpVersion { get; set; }
         internal bool RequestIsAlive { get; set; }
         internal bool CancelRequest { get; set; }
-        internal string RequestHtmlBody { get; set; }
-        internal bool RequestWasModified { get; set; }
+        internal string RequestBody { get; set; }
+        internal bool RequestBodyRead { get; set; }
 
-        internal Stream ServerResponseStream { get; set; }
-        internal string ResponseHtmlBody { get; set; }
-        internal bool ResponseWasModified { get; set; }
+        internal Encoding ResponseEncoding { get; set; }
+        internal Stream ResponseStream { get; set; }
+        internal string ResponseBody { get; set; }
+        internal bool ResponseBodyRead { get; set; }
 
-        
         public int ClientPort { get; set; }
         public IPAddress ClientIpAddress { get; set; }
-        public string tunnelHostName { get; set; }
-        public string securehost { get; set; }
-        public bool IsSSLRequest { get; set; }
+
+        public bool IsHttps { get; set; }
         public string RequestURL { get; set; }
         public string RequestHostname { get; set; }
 
@@ -48,8 +49,8 @@ namespace Titanium.Web.Proxy.Models
             if (this.ProxyRequest != null)
                 this.ProxyRequest.Abort();
 
-            if (this.ServerResponseStream != null)
-                this.ServerResponseStream.Dispose();
+            if (this.ResponseStream != null)
+                this.ResponseStream.Dispose();
 
             if (this.ServerResponse != null)
                 this.ServerResponse.Close();
@@ -60,70 +61,66 @@ namespace Titanium.Web.Proxy.Models
         {
             BUFFER_SIZE = bufferSize;
         }
-        public string GetRequestHtmlBody()
+        public string GetRequestBody()
         {
-            if (RequestHtmlBody == null)
+            if ((ProxyRequest.Method.ToUpper() == "POST" || ProxyRequest.Method.ToUpper() == "PUT") && RequestContentLength > 0)
             {
-
-                int bytesRead;
-                int totalBytesRead = 0;
-                MemoryStream mw = new MemoryStream();
-                var buffer = ClientStreamReader.ReadBytes(RequestLength);
-                while (totalBytesRead < RequestLength && (bytesRead = buffer.Length) > 0)
+                if (RequestBody == null)
                 {
-                    totalBytesRead += bytesRead;
-                    mw.Write(buffer, 0, bytesRead);
-
+                    var buffer = ClientStreamReader.ReadBytes(RequestContentLength);
+                    RequestBody = RequestEncoding.GetString(buffer);
                 }
-
-                mw.Close();
-                RequestHtmlBody = Encoding.Default.GetString(mw.ToArray());
+                RequestBodyRead = true;
+                return RequestBody;
             }
-            RequestWasModified = true;
-            return RequestHtmlBody;
+            else
+                throw new BodyNotFoundException("Request don't have a body." +
+            "Please verify that this request is a Http POST/PUT and request content length is greater than zero before accessing the body.");
+      
         }
-        public void SetRequestHtmlBody(string body)
+        public void SetRequestBody(string body)
         {
-            this.RequestHtmlBody = body;
-            RequestWasModified = true;
+            this.RequestBody = body;
+            RequestBodyRead = true;
         }
-        public string GetResponseHtmlBody()
+        public string GetResponseBody()
         {
-            if (ResponseHtmlBody == null)
+            if (ResponseBody == null)
             {
 
-                Encoding = Encoding.GetEncoding(ServerResponse.CharacterSet);
+                if (ResponseEncoding == null) ResponseEncoding = Encoding.GetEncoding(ServerResponse.CharacterSet);
+                if (ResponseEncoding == null) ResponseEncoding = Encoding.Default;
 
-
-                if (Encoding == null) Encoding = Encoding.Default;
-               
 
                 switch (ServerResponse.ContentEncoding)
                 {
                     case "gzip":
-                        ResponseHtmlBody = CompressionHelper.DecompressGzip(ServerResponseStream, Encoding);
+                        ResponseBody = CompressionHelper.DecompressGzip(ResponseStream, ResponseEncoding);
                         break;
                     case "deflate":
-                        ResponseHtmlBody = CompressionHelper.DecompressDeflate(ServerResponseStream, Encoding);
+                        ResponseBody = CompressionHelper.DecompressDeflate(ResponseStream, ResponseEncoding);
                         break;
                     case "zlib":
-                        ResponseHtmlBody = CompressionHelper.DecompressZlib(ServerResponseStream, Encoding);
+                        ResponseBody = CompressionHelper.DecompressZlib(ResponseStream, ResponseEncoding);
                         break;
                     default:
-                        ResponseHtmlBody = DecodeData(ServerResponseStream, Encoding);
+                        ResponseBody = DecodeData(ResponseStream, ResponseEncoding);
                         break;
                 }
-       
-                ResponseWasModified = true;
+
+                ResponseBodyRead = true;
 
             }
-            return ResponseHtmlBody;
+            return ResponseBody;
         }
 
-        public void SetResponseHtmlBody(string body)
+        public void SetResponseBody(string body)
         {
-            this.ResponseHtmlBody = body;
-            ResponseWasModified = true;
+            if (ResponseEncoding == null) ResponseEncoding = Encoding.GetEncoding(ServerResponse.CharacterSet);
+            if (ResponseEncoding == null) ResponseEncoding = Encoding.Default;
+
+            this.ResponseBody = body;
+            ResponseBodyRead = true;
         }
         //stream reader not recomended for images
         private string DecodeData(Stream responseStream, Encoding e)

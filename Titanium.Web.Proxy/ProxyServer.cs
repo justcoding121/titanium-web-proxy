@@ -31,29 +31,23 @@ namespace Titanium.Web.Proxy
         private static readonly Regex cookieSplitRegEx = new Regex(@",(?! )");
 
         private static object certificateAccessLock = new object();
-        private static List<string> pinnedCertificateClients = new List<string>();
-
+       
         private static TcpListener listener;
         private static Thread listenerThread;
 
         private static bool ShouldListen { get; set; }
 
+        public static List<string> ExcludedHttpsHostNameRegex = new List<string>();
+
         public static event EventHandler<SessionEventArgs> BeforeRequest;
         public static event EventHandler<SessionEventArgs> BeforeResponse;
-
-        public static IPAddress ListeningIPInterface { get; set; }
 
         public static string RootCertificateName { get; set; }
         public static bool EnableSSL { get; set; }
         public static bool SetAsSystemProxy { get; set; }
 
-        public static Int32 ListeningPort
-        {
-            get
-            {
-                return ((IPEndPoint)listener.LocalEndpoint).Port;
-            }
-        }
+        public static Int32 ListeningPort { get; set; }
+        public static IPAddress ListeningIpAddress { get; set; }
 
         public static CertificateManager CertManager { get; set; }
 
@@ -61,11 +55,13 @@ namespace Titanium.Web.Proxy
         {
             CertManager = new CertificateManager("Titanium",
                 "Titanium Root Certificate Authority");
+
+            ListeningIpAddress = IPAddress.Any;
+            ListeningPort = 0;
         }
 
         public ProxyServer()
         {
-
 
             System.Net.ServicePointManager.Expect100Continue = false;
             System.Net.WebRequest.DefaultWebProxy = null;
@@ -111,12 +107,15 @@ namespace Titanium.Web.Proxy
         public static bool Start()
         {
 
-            listener = new TcpListener(IPAddress.Any, 0);
+            listener = new TcpListener(ListeningIpAddress, ListeningPort);
+
             listener.Start();
             listenerThread = new Thread(new ParameterizedThreadStart(Listen));
             listenerThread.IsBackground = true;
             ShouldListen = true;
             listenerThread.Start(listener);
+
+            ListeningPort = ((IPEndPoint)listener.LocalEndpoint).Port;
 
             if (SetAsSystemProxy)
             {

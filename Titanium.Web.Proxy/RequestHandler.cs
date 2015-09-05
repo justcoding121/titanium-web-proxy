@@ -14,7 +14,8 @@ using System.Reflection;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using System.Threading.Tasks;
-
+using Titanium.Web.Proxy.Extensions;
+using System.Text.RegularExpressions;
 
 namespace Titanium.Web.Proxy
 {
@@ -30,17 +31,14 @@ namespace Titanium.Web.Proxy
             CustomBinaryReader clientStreamReader = new CustomBinaryReader(clientStream, Encoding.ASCII);
             StreamWriter clientStreamWriter = new StreamWriter(clientStream);
 
-            string tunnelHostName = null;
-
-            int tunnelPort = 0;
+            string HttpsHostName = null;
+            int httpsPort = 443;
 
             try
             {
-
-                string securehost = null;
-
+                string httpsDecoratedHostName = null, tmpLine = null;
                 List<string> requestLines = new List<string>();
-                string tmpLine;
+ 
                 while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
                 {
                     requestLines.Add(tmpLine);
@@ -79,12 +77,10 @@ namespace Titanium.Web.Proxy
                     //to avoid that we need to install our root certficate in users machine as Certificate Authority.
                    
                     remoteUri = "https://" + splitBuffer[1];
-                    tunnelHostName = splitBuffer[1].Split(':')[0];
+                    HttpsHostName = splitBuffer[1].Split(':')[0];
                    
-                    int.TryParse(splitBuffer[1].Split(':')[1], out tunnelPort);
+                    int.TryParse(splitBuffer[1].Split(':')[1], out httpsPort);
                    
-                    if (tunnelPort == 0) tunnelPort = 443;
-
                     requestLines.Clear();
 
                     clientStreamWriter.WriteLine(RequestVersion + " 200 Connection established");
@@ -94,10 +90,10 @@ namespace Titanium.Web.Proxy
                     clientStreamWriter.Flush();
 
 
-                    //If port is not 443 its not a HTTP request, so just relay 
-                    if (tunnelPort != 443)
+                    //If port is not 443 its not a HTTP request (may be tcp), so just relay 
+                    if (httpsPort != 443)
                     {
-                        TcpHelper.SendRaw(tunnelHostName, tunnelPort, clientStreamReader.BaseStream);
+                        TcpHelper.SendRaw(HttpsHostName, httpsPort, clientStreamReader.BaseStream);
 
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
 
@@ -106,16 +102,16 @@ namespace Titanium.Web.Proxy
 
                     //Create the fake certificate signed using our fake certificate authority
                     Monitor.Enter(certificateAccessLock);
-                    var certificate = ProxyServer.CertManager.CreateCertificate(tunnelHostName);
+                    var certificate = ProxyServer.CertManager.CreateCertificate(HttpsHostName);
                     Monitor.Exit(certificateAccessLock);
 
                     SslStream sslStream = null;
-                    //Pinned certificate clients cannot be proxied
-                    //Example dropbox.com uses certificate pinning
-                    //So just relay the request after identifying it by first failure
-                    if (!pinnedCertificateClients.Contains(tunnelHostName))
-                    {
 
+                    //Pinned certificate clients cannot be proxied
+                    //For example dropbox clients use certificate pinning
+                    //So just relay the request
+                    if (!ExcludedHttpsHostNameRegex.Any(x=> Regex.IsMatch(HttpsHostName,x)))
+                    {
                         try
                         {
                             sslStream = new SslStream(clientStream, true);
@@ -129,14 +125,7 @@ namespace Titanium.Web.Proxy
                         }
 
                         catch
-                        {
-                            //if authentication failed it could be because client uses pinned certificates
-                            //So add the hostname to this list so that next time we can relay without touching it (tunnel the request)
-                            if (pinnedCertificateClients.Contains(tunnelHostName) == false)
-                            {
-                                pinnedCertificateClients.Add(tunnelHostName);
-                            }
-
+                        {  
                             if (sslStream != null)
                                 sslStream.Dispose();
 
@@ -147,13 +136,10 @@ namespace Titanium.Web.Proxy
                     else
                     {
                         //Hostname was a previously failed request due to certificate pinning, just relay (tunnel the request)
-                        TcpHelper.SendRaw(tunnelHostName, tunnelPort, clientStreamReader.BaseStream);
-
+                        TcpHelper.SendRaw(HttpsHostName, httpsPort, clientStreamReader.BaseStream);
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
-
                         return;
                     }
-
 
                     while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
                     {
@@ -167,13 +153,11 @@ namespace Titanium.Web.Proxy
                         throw new EndOfStreamException();
                     }
 
-                    securehost = remoteUri;
+                    httpsDecoratedHostName = remoteUri;
                 }
 
                 //Now create the request
-                Task.Factory.StartNew(() => HandleHttpSessionRequest(client, httpCmd, clientStream, tunnelHostName, requestLines, clientStreamReader, clientStreamWriter, securehost));
-
-
+                Task.Factory.StartNew(() => HandleHttpSessionRequest(client, httpCmd, clientStream, HttpsHostName, requestLines, clientStreamReader, clientStreamWriter, httpsDecoratedHostName));
 
             }
             catch
@@ -183,7 +167,7 @@ namespace Titanium.Web.Proxy
 
 
         }
-        private static void HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream, string tunnelHostName, List<string> requestLines, CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string securehost)
+        private static void HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream, string httpsHostName, List<string> requestLines, CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsDecoratedHostName)
         {
 
 
@@ -197,8 +181,8 @@ namespace Titanium.Web.Proxy
 
             var args = new SessionEventArgs(BUFFER_SIZE);
             args.Client = client;
-            args.tunnelHostName = tunnelHostName;
-            args.securehost = securehost;
+            args.HttpsHostName = httpsHostName;
+            args.HttpsDecoratedHostName = httpsDecoratedHostName;
 
             try
             {
@@ -207,7 +191,7 @@ namespace Titanium.Web.Proxy
 
                 if (splitBuffer.Length != 3)
                 {
-                    TcpHelper.SendRaw(httpCmd, tunnelHostName, requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
+                    TcpHelper.SendRaw(httpCmd, httpsHostName, requestLines, args.IsHttps, clientStreamReader.BaseStream);
 
                     Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
 
@@ -225,10 +209,10 @@ namespace Titanium.Web.Proxy
                     version = new Version(1, 0);
                 }
 
-                if (securehost != null)
+                if (httpsDecoratedHostName != null)
                 {
-                    remoteUri = securehost + remoteUri;
-                    args.IsSSLRequest = true;
+                    remoteUri = httpsDecoratedHostName + remoteUri;
+                    args.IsHttps = true;
                 }
 
                 //construct the web request that we are going to issue on behalf of the client.
@@ -250,7 +234,7 @@ namespace Titanium.Web.Proxy
                     if ((header[0] == "upgrade") && (header[1] == "websocket"))
                     {
 
-                        TcpHelper.SendRaw(httpCmd, tunnelHostName, requestLines, args.IsSSLRequest, clientStreamReader.BaseStream);
+                        TcpHelper.SendRaw(httpCmd, httpsHostName, requestLines, args.IsHttps, clientStreamReader.BaseStream);
 
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
 
@@ -260,24 +244,20 @@ namespace Titanium.Web.Proxy
 
                 SetClientRequestHeaders(requestLines, args.ProxyRequest);
 
-
-                int contentLen = (int)args.ProxyRequest.ContentLength;
-
                 args.ProxyRequest.AllowAutoRedirect = false;
                 args.ProxyRequest.AutomaticDecompression = DecompressionMethods.None;
+                args.RequestHostname = args.ProxyRequest.RequestUri.Host;
+                args.RequestURL = args.ProxyRequest.RequestUri.OriginalString;
+                args.ClientPort = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
+                args.ClientIpAddress = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+                args.RequestHttpVersion = version;
+                args.RequestIsAlive = args.ProxyRequest.KeepAlive;
 
                 //If requested interception
                 if (BeforeRequest != null)
                 {
-                    args.RequestHostname = args.ProxyRequest.RequestUri.Host;
-                    args.RequestURL = args.ProxyRequest.RequestUri.OriginalString;
-
-                    args.RequestLength = contentLen;
-
-                    args.RequestHttpVersion = version;
-                    args.ClientPort = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
-                    args.ClientIpAddress = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
-                    args.RequestIsAlive = args.ProxyRequest.KeepAlive;
+                    args.RequestContentLength = (int)args.ProxyRequest.ContentLength;
+                    args.RequestEncoding = args.ProxyRequest.GetEncoding();
 
                     BeforeRequest(null, args);
                 }
@@ -294,13 +274,13 @@ namespace Titanium.Web.Proxy
                 args.ProxyRequest.AllowWriteStreamBuffering = true;
 
                 //If request was modified by user
-                if (args.RequestWasModified)
+                if (args.RequestBodyRead)
                 {
-                    ASCIIEncoding encoding = new ASCIIEncoding();
-                    byte[] requestBytes = encoding.GetBytes(args.RequestHtmlBody);
+                    byte[] requestBytes = args.RequestEncoding.GetBytes(args.RequestBody);
                     args.ProxyRequest.ContentLength = requestBytes.Length;
                     Stream newStream = args.ProxyRequest.GetRequestStream();
                     newStream.Write(requestBytes, 0, requestBytes.Length);
+
                     args.ProxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
 
                 }
@@ -331,7 +311,7 @@ namespace Titanium.Web.Proxy
                 TcpClient Client = args.Client;
 
                 //Http request body sent, now wait for next request
-                Task.Factory.StartNew(() => HandleHttpSessionRequest(Client, httpCmd, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.ClientStreamWriter, args.securehost));
+                Task.Factory.StartNew(() => HandleHttpSessionRequest(Client, httpCmd, args.ClientStream, args.HttpsHostName, requestLines, args.ClientStreamReader, args.ClientStreamWriter, args.HttpsDecoratedHostName));
 
             }
             catch
@@ -392,7 +372,7 @@ namespace Titanium.Web.Proxy
                                 webRequest.ContentLength = contentLen;
                             break;
                         case "content-type":
-                            webRequest.ContentType = header[1];
+                            webRequest.ContentType = header[1];           
                             break;
                         case "expect":
                             if (header[1].ToLower() == "100-continue")
@@ -491,7 +471,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     postStream.Close();
-                    postStream.Dispose();
+                   
                 }
                 catch
                 {

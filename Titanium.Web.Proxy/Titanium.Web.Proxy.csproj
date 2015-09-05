@@ -76,6 +76,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Exceptions\BodyNotFoundException.cs" />
+    <Compile Include="Extensions\HttpWebRequestExtensions.cs" />
     <Compile Include="Helpers\CertificateManager.cs" />
     <Compile Include="Helpers\Firefox.cs" />
     <Compile Include="Helpers\SystemProxy.cs" />

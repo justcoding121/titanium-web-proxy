@@ -38,41 +38,39 @@ namespace Titanium.Web.Proxy
                 if (args.ServerResponse != null)
                 {
                     List<Tuple<String, String>> responseHeaders = ProcessResponse(args.ServerResponse);
-                    args.ServerResponseStream = args.ServerResponse.GetResponseStream();
+                    args.ResponseStream = args.ServerResponse.GetResponseStream();
 
                     bool isChunked = args.ServerResponse.GetResponseHeader("transfer-encoding") == null ? false : args.ServerResponse.GetResponseHeader("transfer-encoding").ToLower() == "chunked" ? true : false;
-               
-                    args.UpgradeProtocol = args.ServerResponse.GetResponseHeader("upgrade") == null ? null : args.ServerResponse.GetResponseHeader("upgrade");
-
+ 
                     if (BeforeResponse != null)
                         BeforeResponse(null, args);
 
-                    if (args.ResponseWasModified)
+                    if (args.ResponseBodyRead)
                     {
 
                         byte[] data;
                         switch (args.ServerResponse.ContentEncoding)
                         {
                             case "gzip":
-                                data = CompressionHelper.CompressGzip(args.ResponseHtmlBody, args.Encoding);
+                                data = CompressionHelper.CompressGzip(args.ResponseBody, args.ResponseEncoding);
                                 WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, args.ClientStreamWriter);
                                 WriteResponseHeaders(args.ClientStreamWriter, responseHeaders, data.Length);
                                 SendData(args.ClientStream, data, isChunked);
                                 break;
                             case "deflate":
-                                data = CompressionHelper.CompressDeflate(args.ResponseHtmlBody, args.Encoding);
+                                data = CompressionHelper.CompressDeflate(args.ResponseBody, args.ResponseEncoding);
                                 WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, args.ClientStreamWriter);
                                 WriteResponseHeaders(args.ClientStreamWriter, responseHeaders, data.Length);
                                 SendData(args.ClientStream, data, isChunked);
                                 break;
                             case "zlib":
-                                data = CompressionHelper.CompressZlib(args.ResponseHtmlBody, args.Encoding);
+                                data = CompressionHelper.CompressZlib(args.ResponseBody, args.ResponseEncoding);
                                 WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, args.ClientStreamWriter);
                                 WriteResponseHeaders(args.ClientStreamWriter, responseHeaders, data.Length);
                                 SendData(args.ClientStream, data, isChunked);
                                 break;
                             default:
-                                data = EncodeData(args.ResponseHtmlBody, args.Encoding);
+                                data = EncodeData(args.ResponseBody, args.ResponseEncoding);
                                 WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, args.ClientStreamWriter);
                                 WriteResponseHeaders(args.ClientStreamWriter, responseHeaders, data.Length);
                                 SendData(args.ClientStream, data, isChunked);
@@ -86,9 +84,9 @@ namespace Titanium.Web.Proxy
                         WriteResponseHeaders(args.ClientStreamWriter, responseHeaders);
 
                         if (isChunked)
-                            SendChunked(args.ServerResponseStream, args.ClientStream);
+                            SendChunked(args.ResponseStream, args.ClientStream);
                         else
-                            SendNormal(args.ServerResponseStream, args.ClientStream);
+                            SendNormal(args.ResponseStream, args.ClientStream);
 
                     }
 

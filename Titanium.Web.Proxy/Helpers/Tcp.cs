@@ -31,9 +31,6 @@ namespace Titanium.Web.Proxy.Helpers
                 Task sendRelay = Task.Factory.StartNew(() => StreamHelper.CopyTo(clientStream, tunnelStream, BUFFER_SIZE));
                 Task receiveRelay = Task.Factory.StartNew(() => StreamHelper.CopyTo(tunnelStream, clientStream, BUFFER_SIZE));
 
-                sendRelay.Start();
-                receiveRelay.Start();
-
                 Task.WaitAll(sendRelay, receiveRelay);
             }
             catch
@@ -117,9 +114,6 @@ namespace Titanium.Web.Proxy.Helpers
 
                 var sendRelay = new Task(() => StreamHelper.CopyTo(sb.ToString(), clientStream, tunnelStream, BUFFER_SIZE));
                 var receiveRelay = new Task(() => StreamHelper.CopyTo(tunnelStream, clientStream, BUFFER_SIZE));
-
-                sendRelay.Start();
-                receiveRelay.Start();
 
                 Task.WaitAll(sendRelay, receiveRelay);
             }
