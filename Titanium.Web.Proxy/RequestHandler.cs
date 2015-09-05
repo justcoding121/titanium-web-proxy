@@ -38,7 +38,7 @@ namespace Titanium.Web.Proxy
             {
                 string httpsDecoratedHostName = null, tmpLine = null;
                 List<string> requestLines = new List<string>();
- 
+
                 while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
                 {
                     requestLines.Add(tmpLine);
@@ -75,12 +75,12 @@ namespace Titanium.Web.Proxy
                     //instead = we are going to perform a man in the middle "attack"
                     //the user's browser should warn them of the certification errors, 
                     //to avoid that we need to install our root certficate in users machine as Certificate Authority.
-                   
+
                     remoteUri = "https://" + splitBuffer[1];
                     HttpsHostName = splitBuffer[1].Split(':')[0];
-                   
+
                     int.TryParse(splitBuffer[1].Split(':')[1], out httpsPort);
-                   
+
                     requestLines.Clear();
 
                     clientStreamWriter.WriteLine(RequestVersion + " 200 Connection established");
@@ -110,7 +110,7 @@ namespace Titanium.Web.Proxy
                     //Pinned certificate clients cannot be proxied
                     //For example dropbox clients use certificate pinning
                     //So just relay the request
-                    if (!ExcludedHttpsHostNameRegex.Any(x=> Regex.IsMatch(HttpsHostName,x)))
+                    if (!ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(HttpsHostName, x)))
                     {
                         try
                         {
@@ -125,7 +125,7 @@ namespace Titanium.Web.Proxy
                         }
 
                         catch
-                        {  
+                        {
                             if (sslStream != null)
                                 sslStream.Dispose();
 
@@ -319,7 +319,7 @@ namespace Titanium.Web.Proxy
                 Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
             }
 
-          
+
         }
         private static void Dispose(TcpClient client, Stream clientStream, CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, SessionEventArgs args)
         {
@@ -372,7 +372,7 @@ namespace Titanium.Web.Proxy
                                 webRequest.ContentLength = contentLen;
                             break;
                         case "content-type":
-                            webRequest.ContentType = header[1];           
+                            webRequest.ContentType = header[1];
                             break;
                         case "expect":
                             if (header[1].ToLower() == "100-continue")
@@ -471,7 +471,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     postStream.Close();
-                   
+
                 }
                 catch
                 {
