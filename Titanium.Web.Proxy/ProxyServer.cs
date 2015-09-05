@@ -36,6 +36,7 @@ namespace Titanium.Web.Proxy
         private static Thread listenerThread;
 
         private static bool ShouldListen { get; set; }
+        private static CertificateManager CertManager { get; set; }
 
         public static List<string> ExcludedHttpsHostNameRegex = new List<string>();
 
@@ -49,8 +50,6 @@ namespace Titanium.Web.Proxy
         public static Int32 ListeningPort { get; set; }
         public static IPAddress ListeningIpAddress { get; set; }
 
-        public static CertificateManager CertManager { get; set; }
-
         static ProxyServer()
         {
             CertManager = new CertificateManager("Titanium",
@@ -58,9 +57,12 @@ namespace Titanium.Web.Proxy
 
             ListeningIpAddress = IPAddress.Any;
             ListeningPort = 0;
+
+            Initialize();
+
         }
 
-        public ProxyServer()
+        public static void Initialize()
         {
 
             System.Net.ServicePointManager.Expect100Continue = false;
