@@ -18,20 +18,24 @@ namespace Titanium.Web.Proxy.Helpers
       
         public static void SendRaw(Stream clientStream, string httpCmd, List<string> requestLines, string hostName, int tunnelPort, bool isHttps)
         {
-            StringBuilder sb = new StringBuilder();
-
-            if (httpCmd != null)
+            StringBuilder sb = null;
+            if (httpCmd != null || requestLines != null)
             {
-                sb.Append(httpCmd);
+                sb = new StringBuilder();
+                if (httpCmd != null)
+                {
+                    sb.Append(httpCmd);
+                    sb.Append(Environment.NewLine);
+                }
+                for (int i = 0; i < requestLines.Count; i++)
+                {
+                    var header = requestLines[i];
+                    sb.Append(header);
+                    sb.Append(Environment.NewLine);
+                }
                 sb.Append(Environment.NewLine);
             }
-            for (int i = 0; i < requestLines.Count; i++)
-            {
-                var header = requestLines[i];
-                sb.Append(header);
-                sb.Append(Environment.NewLine);
-            }
-            sb.Append(Environment.NewLine);
+        
 
             System.Net.Sockets.TcpClient tunnelClient = null;
             Stream tunnelStream = null;
@@ -58,7 +62,13 @@ namespace Titanium.Web.Proxy.Helpers
                 }
 
 
-                var sendRelay = Task.Factory.StartNew(() => clientStream.CopyToAsync(sb.ToString(), tunnelStream, BUFFER_SIZE));
+                var sendRelay = Task.Factory.StartNew(() => { 
+                    if(sb!=null) 
+                        clientStream.CopyToAsync(sb.ToString(), tunnelStream, BUFFER_SIZE);
+                    else
+                        clientStream.CopyToAsync(tunnelStream, BUFFER_SIZE);
+                });
+
                 var receiveRelay = Task.Factory.StartNew(() => tunnelStream.CopyToAsync(clientStream, BUFFER_SIZE));
 
                 Task.WaitAll(sendRelay, receiveRelay);

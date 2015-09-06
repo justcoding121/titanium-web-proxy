@@ -104,11 +104,10 @@ namespace Titanium.Web.Proxy
                 {
                     clientStreamReader.ReadAllLines();
                     WriteConnectedResponse(clientStreamWriter, httpVersion);
-                    TcpHelper.SendRaw(clientStreamReader.BaseStream, null, new List<string>(), httpRemoteUri.Host, httpRemoteUri.Port, false);
+                    TcpHelper.SendRaw(clientStreamReader.BaseStream, null, null, httpRemoteUri.Host, httpRemoteUri.Port, false);
                     Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
                     return;
                 }
-
 
                 //Now create the request
                 Task.Factory.StartNew(() => HandleHttpSessionRequest(client, httpCmd, clientStream, clientStreamReader, clientStreamWriter, httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.OriginalString : null));
