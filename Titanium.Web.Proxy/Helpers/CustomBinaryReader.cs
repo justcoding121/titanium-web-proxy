@@ -7,16 +7,16 @@ using System.Diagnostics;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    public class CustomBinaryReader : BinaryReader
+    internal class CustomBinaryReader : BinaryReader
     {
 
-        public CustomBinaryReader(Stream stream, Encoding encoding)
+        internal CustomBinaryReader(Stream stream, Encoding encoding)
             : base(stream, encoding)
         {
 
         }
 
-        public string ReadLine()
+        internal string ReadLine()
         {
             char[] buf = new char[1];
             StringBuilder readBuffer = new StringBuilder();
@@ -54,5 +54,16 @@ namespace Titanium.Web.Proxy.Helpers
 
         }
 
+
+        internal List<string> ReadAllLines()
+        {
+            string tmpLine = null;
+            List<string> requestLines = new List<string>();
+            while (!String.IsNullOrEmpty(tmpLine = ReadLine()))
+            {
+                requestLines.Add(tmpLine);
+            }
+            return requestLines;
+        }
     }
 }
