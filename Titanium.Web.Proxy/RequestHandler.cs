@@ -25,84 +25,48 @@ namespace Titanium.Web.Proxy
 
         private static void HandleClient(TcpClient client)
         {
-
-
             Stream clientStream = client.GetStream();
             CustomBinaryReader clientStreamReader = new CustomBinaryReader(clientStream, Encoding.ASCII);
             StreamWriter clientStreamWriter = new StreamWriter(clientStream);
 
-            string HttpsHostName = null;
-            int httpsPort = 443;
-
+            Uri httpRemoteUri;
             try
             {
-                string httpsDecoratedHostName = null, tmpLine = null;
-                List<string> requestLines = new List<string>();
-
-                while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
-                {
-                    requestLines.Add(tmpLine);
-                }
-
                 //read the first line HTTP command
-                String httpCmd = requestLines.Count > 0 ? requestLines[0] : null;
+                String httpCmd = clientStreamReader.ReadLine();
+
                 if (String.IsNullOrEmpty(httpCmd))
                 {
                     throw new EndOfStreamException();
                 }
+
                 //break up the line into three components (method, remote URL & Http Version)
-                String[] splitBuffer = httpCmd.Split(spaceSplit, 3);
+                String[] httpCmdSplit = httpCmd.Split(spaceSplit, 3);
 
-                String method = splitBuffer[0];
-                String remoteUri = splitBuffer[1];
-                Version version;
-                string RequestVersion;
-                if (splitBuffer[2] == "HTTP/1.1")
-                {
-                    version = new Version(1, 1);
-                    RequestVersion = "HTTP/1.1";
-                }
+                var httpVerb = httpCmdSplit[0];
+
+                if (httpVerb.ToUpper() == "CONNECT")
+                    httpRemoteUri = new Uri("http://" + httpCmdSplit[1]);
                 else
-                {
-                    version = new Version(1, 0);
-                    RequestVersion = "HTTP/1.0";
-                }
+                    httpRemoteUri = new Uri(httpCmdSplit[1]);
 
+                var httpVersion = httpCmdSplit[2];
+              
                 //Client wants to create a secure tcp tunnel (its a HTTPS request)
-                if (splitBuffer[0].ToUpper() == "CONNECT")
+                var excluded = ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
+           
+                if (httpVerb.ToUpper() == "CONNECT" && !excluded && httpRemoteUri.Port == 443)
                 {
-                    //Browser wants to create a secure tunnel
-                    //instead = we are going to perform a man in the middle "attack"
-                    //the user's browser should warn them of the certification errors, 
-                    //to avoid that we need to install our root certficate in users machine as Certificate Authority.
 
-                    remoteUri = "https://" + splitBuffer[1];
-                    HttpsHostName = splitBuffer[1].Split(':')[0];
+                    httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
+                    clientStreamReader.ReadAllLines();
 
-                    int.TryParse(splitBuffer[1].Split(':')[1], out httpsPort);
+                    WriteConnectedResponse(clientStreamWriter, httpVersion);
 
-                    requestLines.Clear();
-
-                    clientStreamWriter.WriteLine(RequestVersion + " 200 Connection established");
-                    clientStreamWriter.WriteLine(String.Format("Timestamp: {0}", DateTime.Now.ToString()));
-                    clientStreamWriter.WriteLine(String.Format("connection:close"));
-                    clientStreamWriter.WriteLine();
-                    clientStreamWriter.Flush();
-
-
-                    //If port is not 443 its not a HTTP request (may be tcp), so just relay 
-                    if (httpsPort != 443)
-                    {
-                        TcpHelper.SendRaw(HttpsHostName, httpsPort, clientStreamReader.BaseStream);
-
-                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
-
-                        return;
-                    }
 
                     //Create the fake certificate signed using our fake certificate authority
                     Monitor.Enter(certificateAccessLock);
-                    var certificate = ProxyServer.CertManager.CreateCertificate(HttpsHostName);
+                    var certificate = ProxyServer.CertManager.CreateCertificate(httpRemoteUri.Host);
                     Monitor.Exit(certificateAccessLock);
 
                     SslStream sslStream = null;
@@ -110,54 +74,44 @@ namespace Titanium.Web.Proxy
                     //Pinned certificate clients cannot be proxied
                     //For example dropbox clients use certificate pinning
                     //So just relay the request
-                    if (!ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(HttpsHostName, x)))
+
+                    try
                     {
-                        try
-                        {
-                            sslStream = new SslStream(clientStream, true);
-                            //Successfully managed to authenticate the client using the fake certificate
-                            sslStream.AuthenticateAsServer(certificate, false, SslProtocols.Tls | SslProtocols.Ssl3 | SslProtocols.Ssl2, false);
+                        sslStream = new SslStream(clientStream, true);
+                        //Successfully managed to authenticate the client using the fake certificate
+                        sslStream.AuthenticateAsServer(certificate, false, SslProtocols.Tls | SslProtocols.Ssl3 | SslProtocols.Ssl2, false);
 
-                            clientStreamReader = new CustomBinaryReader(sslStream, Encoding.ASCII);
-                            clientStreamWriter = new StreamWriter(sslStream);
-                            //HTTPS server created - we can now decrypt the client's traffic
-                            clientStream = sslStream;
-                        }
-
-                        catch
-                        {
-                            if (sslStream != null)
-                                sslStream.Dispose();
-
-                            throw;
-                        }
-
-                    }
-                    else
-                    {
-                        //Hostname was a previously failed request due to certificate pinning, just relay (tunnel the request)
-                        TcpHelper.SendRaw(HttpsHostName, httpsPort, clientStreamReader.BaseStream);
-                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
-                        return;
+                        clientStreamReader = new CustomBinaryReader(sslStream, Encoding.ASCII);
+                        clientStreamWriter = new StreamWriter(sslStream);
+                        //HTTPS server created - we can now decrypt the client's traffic
+                        clientStream = sslStream;
                     }
 
-                    while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
+                    catch
                     {
-                        requestLines.Add(tmpLine);
+                        if (sslStream != null)
+                            sslStream.Dispose();
+
+                        throw;
                     }
 
-                    //read the new http command.
-                    httpCmd = requestLines.Count > 0 ? requestLines[0] : null;
-                    if (String.IsNullOrEmpty(httpCmd))
-                    {
-                        throw new EndOfStreamException();
-                    }
 
-                    httpsDecoratedHostName = remoteUri;
+
+                    httpCmd = clientStreamReader.ReadLine();
+
+                }
+                else if (httpVerb.ToUpper() == "CONNECT")
+                {
+                    clientStreamReader.ReadAllLines();
+                    WriteConnectedResponse(clientStreamWriter, httpVersion);
+                    TcpHelper.SendRaw(clientStreamReader.BaseStream, null, new List<string>(), httpRemoteUri.Host, httpRemoteUri.Port, false);
+                    Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
+                    return;
                 }
 
+
                 //Now create the request
-                Task.Factory.StartNew(() => HandleHttpSessionRequest(client, httpCmd, clientStream, HttpsHostName, requestLines, clientStreamReader, clientStreamWriter, httpsDecoratedHostName));
+                Task.Factory.StartNew(() => HandleHttpSessionRequest(client, httpCmd, clientStream, clientStreamReader, clientStreamWriter, httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.OriginalString : null));
 
             }
             catch
@@ -167,40 +121,45 @@ namespace Titanium.Web.Proxy
 
 
         }
-        private static void HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream, string httpsHostName, List<string> requestLines, CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsDecoratedHostName)
+
+        private static void WriteConnectedResponse(StreamWriter clientStreamWriter, string httpVersion)
+        {
+            clientStreamWriter.WriteLine(httpVersion + " 200 Connection established");
+            clientStreamWriter.WriteLine(String.Format("Timestamp: {0}", DateTime.Now.ToString()));
+            clientStreamWriter.WriteLine(String.Format("connection:close"));
+            clientStreamWriter.WriteLine();
+            clientStreamWriter.Flush();
+        }
+        private static void HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream, CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string secureTunnelHostName)
         {
 
-
-            if (httpCmd == null)
+            if (String.IsNullOrEmpty(httpCmd))
             {
                 Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
-
                 return;
             }
 
+            string tmpLine = null;
+            List<string> requestLines = new List<string>();
+            while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
+            {
+                requestLines.Add(tmpLine);
+            }
 
             var args = new SessionEventArgs(BUFFER_SIZE);
             args.client = client;
-            args.httpsHostName = httpsHostName;
-            args.httpsDecoratedHostName = httpsDecoratedHostName;
 
             try
             {
                 //break up the line into three components (method, remote URL & Http Version)
-                var splitBuffer = httpCmd.Split(spaceSplit, 3);
+                String[] httpCmdSplit = httpCmd.Split(spaceSplit, 3);
 
-                if (splitBuffer.Length != 3)
-                {
-                    TcpHelper.SendRaw(httpCmd, httpsHostName, requestLines, args.isHttps, clientStreamReader.BaseStream);
+                var httpMethod = httpCmdSplit[0];
+                var httpRemoteUri = new Uri(secureTunnelHostName == null ? httpCmdSplit[1] : (secureTunnelHostName + httpCmdSplit[1]));
+                var httpVersion = httpCmdSplit[2];
 
-                    Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
-
-                    return;
-                }
-                var method = splitBuffer[0];
-                var remoteUri = splitBuffer[1];
                 Version version;
-                if (splitBuffer[2] == "HTTP/1.1")
+                if (httpVersion == "HTTP/1.1")
                 {
                     version = new Version(1, 1);
                 }
@@ -209,23 +168,22 @@ namespace Titanium.Web.Proxy
                     version = new Version(1, 0);
                 }
 
-                if (httpsDecoratedHostName != null)
+                if (httpRemoteUri.Scheme == Uri.UriSchemeHttps)
                 {
-                    remoteUri = httpsDecoratedHostName + remoteUri;
                     args.isHttps = true;
                 }
 
                 //construct the web request that we are going to issue on behalf of the client.
-                args.proxyRequest = (HttpWebRequest)HttpWebRequest.Create(remoteUri.Trim());
+                args.proxyRequest = (HttpWebRequest)HttpWebRequest.Create(httpRemoteUri);
                 args.proxyRequest.Proxy = null;
                 args.proxyRequest.UseDefaultCredentials = true;
-                args.proxyRequest.Method = method;
+                args.proxyRequest.Method = httpMethod;
                 args.proxyRequest.ProtocolVersion = version;
                 args.clientStream = clientStream;
                 args.clientStreamReader = clientStreamReader;
                 args.clientStreamWriter = clientStreamWriter;
 
-                for (int i = 1; i < requestLines.Count; i++)
+                for (int i = 0; i < requestLines.Count; i++)
                 {
                     var rawHeader = requestLines[i];
                     String[] header = rawHeader.ToLower().Trim().Split(colonSpaceSplit, 2, StringSplitOptions.None);
@@ -233,11 +191,9 @@ namespace Titanium.Web.Proxy
                     //if request was upgrade to web-socket protocol then relay the request without proxying
                     if ((header[0] == "upgrade") && (header[1] == "websocket"))
                     {
-   
-                        TcpHelper.SendRaw(httpCmd, httpsHostName, requestLines, args.isHttps, clientStreamReader.BaseStream);
 
+                        TcpHelper.SendRaw(clientStreamReader.BaseStream, httpCmd, requestLines, httpRemoteUri.Host, httpRemoteUri.Port, httpRemoteUri.Scheme == Uri.UriSchemeHttps);
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
-
                         return;
                     }
                 }
@@ -262,11 +218,10 @@ namespace Titanium.Web.Proxy
                     BeforeRequest(null, args);
                 }
 
-                string tmpLine;
+
                 if (args.cancelRequest)
                 {
                     Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
-
                     return;
                 }
 
@@ -287,12 +242,11 @@ namespace Titanium.Web.Proxy
                 else
                 {
                     //If its a post/put request, then read the client html body and send it to server
-                    if (method.ToUpper() == "POST" || method.ToUpper() == "PUT")
+                    if (httpMethod.ToUpper() == "POST" || httpMethod.ToUpper() == "PUT")
                     {
                         SendClientRequestBody(args);
 
                     }
-
                     //Http request body sent, now wait asynchronously for response
                     args.proxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
 
@@ -300,18 +254,9 @@ namespace Titanium.Web.Proxy
 
                 //Now read the next request (if keep-Alive is enabled, otherwise exit this thread)
                 //If client is pipeling the request, this will be immediately hit before response for previous request was made
-
-                tmpLine = null;
-                requestLines.Clear();
-                while (!String.IsNullOrEmpty(tmpLine = args.clientStreamReader.ReadLine()))
-                {
-                    requestLines.Add(tmpLine);
-                }
-                httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
-                TcpClient Client = args.client;
-
+                httpCmd = clientStreamReader.ReadLine();
                 //Http request body sent, now wait for next request
-                Task.Factory.StartNew(() => HandleHttpSessionRequest(Client, httpCmd, args.clientStream, args.httpsHostName, requestLines, args.clientStreamReader, args.clientStreamWriter, args.httpsDecoratedHostName));
+                Task.Factory.StartNew(() => HandleHttpSessionRequest(args.client, httpCmd, args.clientStream, args.clientStreamReader, args.clientStreamWriter, secureTunnelHostName));
 
             }
             catch
@@ -564,5 +509,9 @@ namespace Titanium.Web.Proxy
         }
 
 
+
+
+
+        public static bool isHttps { get; set; }
     }
 }

@@ -4,19 +4,20 @@ using System.Linq;
 using System.Text;
 using System.IO;
 
-namespace Titanium.Web.Proxy.Helpers
+namespace Titanium.Web.Proxy.Extensions
 {
     public static class StreamHelper
     {
         private const int DEFAULT_BUFFER_SIZE = 8192; // +32767
 
-        public static void CopyTo(string initialData, Stream input, Stream output, int bufferSize)
+        public static void CopyToAsync(this Stream input, string initialData, Stream output, int bufferSize)
         {
             var bytes = Encoding.ASCII.GetBytes(initialData);
             output.Write(bytes,0, bytes.Length);
-            CopyTo(input, output, bufferSize);  
+            CopyToAsync(input, output, bufferSize);  
         }
-        public static void CopyTo(Stream input, Stream output, int bufferSize)
+        //http://stackoverflow.com/questions/1540658/net-asynchronous-stream-read-write
+        public static void CopyToAsync(this Stream input, Stream output, int bufferSize)
         {
             try
             {

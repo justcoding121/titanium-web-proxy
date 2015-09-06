@@ -19,8 +19,7 @@ namespace Titanium.Web.Proxy.Models
         internal CustomBinaryReader clientStreamReader { get; set; }
         internal StreamWriter clientStreamWriter { get; set; }
 
-        internal string httpsHostName { get; set; }
-        internal string httpsDecoratedHostName { get; set; }
+
         internal int requestContentLength { get; set; }
         internal Encoding requestEncoding { get; set; }
         internal Version requestHttpVersion { get; set; }

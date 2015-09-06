@@ -90,7 +90,7 @@
     <Compile Include="ProxyServer.cs" />
     <Compile Include="Models\SessionEventArgs.cs" />
     <Compile Include="Helpers\Tcp.cs" />
-    <Compile Include="Helpers\Stream.cs" />
+    <Compile Include="Extensions\StreamExtensions.cs" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>
