@@ -19,10 +19,8 @@ using System.Text.RegularExpressions;
 
 namespace Titanium.Web.Proxy
 {
-
     partial class ProxyServer
     {
-
         private static void HandleClient(TcpClient client)
         {
             Stream clientStream = client.GetStream();
@@ -51,10 +49,10 @@ namespace Titanium.Web.Proxy
                     httpRemoteUri = new Uri(httpCmdSplit[1]);
 
                 var httpVersion = httpCmdSplit[2];
-              
+
                 //Client wants to create a secure tcp tunnel (its a HTTPS request)
                 var excluded = ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
-           
+
                 if (httpVerb.ToUpper() == "CONNECT" && !excluded && httpRemoteUri.Port == 443)
                 {
 
@@ -265,23 +263,7 @@ namespace Titanium.Web.Proxy
 
 
         }
-        private static void Dispose(TcpClient client, Stream clientStream, CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, SessionEventArgs args)
-        {
-            if (args != null)
-                args.Dispose();
 
-            if (clientStreamReader != null)
-                clientStreamReader.Dispose();
-
-            if (clientStreamWriter != null)
-                clientStreamWriter.Dispose();
-
-            if (clientStream != null)
-                clientStream.Dispose();
-
-            if (client != null)
-                client.Close();
-        }
         private static void SetClientRequestHeaders(List<string> requestLines, HttpWebRequest webRequest)
         {
 
@@ -370,9 +352,7 @@ namespace Titanium.Web.Proxy
                             break;
                     }
 
-
             }
-
 
         }
         //This is called when the request is PUT/POST to read the body
@@ -503,14 +483,24 @@ namespace Titanium.Web.Proxy
 
             }
 
-
-
         }
 
+        private static void Dispose(TcpClient client, Stream clientStream, CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, SessionEventArgs args)
+        {
+            if (args != null)
+                args.Dispose();
 
+            if (clientStreamReader != null)
+                clientStreamReader.Dispose();
 
+            if (clientStreamWriter != null)
+                clientStreamWriter.Dispose();
 
+            if (clientStream != null)
+                clientStream.Dispose();
 
-        public static bool isHttps { get; set; }
+            if (client != null)
+                client.Close();
+        }
     }
 }

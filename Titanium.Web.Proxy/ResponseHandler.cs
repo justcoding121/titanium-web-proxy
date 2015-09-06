@@ -94,7 +94,6 @@ namespace Titanium.Web.Proxy
 
                 }
             
-
             }
             catch
             {
@@ -107,7 +106,7 @@ namespace Titanium.Web.Proxy
             }
 
         }
-        static List<Tuple<String, String>> ProcessResponse(HttpWebResponse response)
+        private static List<Tuple<String, String>> ProcessResponse(HttpWebResponse response)
         {
             String value = null;
             String header = null;
@@ -135,31 +134,27 @@ namespace Titanium.Web.Proxy
             return returnHeaders;
         }
 
-        static void WriteResponseStatus(Version version, HttpStatusCode code, String description, StreamWriter responseWriter)
+        private static void WriteResponseStatus(Version version, HttpStatusCode code, String description, StreamWriter responseWriter)
         {
             String s = String.Format("HTTP/{0}.{1} {2} {3}", version.Major, version.Minor, (Int32)code, description);
             responseWriter.WriteLine(s);
-
         }
 
-        static void WriteResponseHeaders(StreamWriter responseWriter, List<Tuple<String, String>> headers)
+        private static void WriteResponseHeaders(StreamWriter responseWriter, List<Tuple<String, String>> headers)
         {
             if (headers != null)
             {
                 foreach (Tuple<String, String> header in headers)
                 {
-
                     responseWriter.WriteLine(String.Format("{0}: {1}", header.Item1, header.Item2));
-
                 }
             }
 
             responseWriter.WriteLine();
             responseWriter.Flush();
 
-
         }
-        static void WriteResponseHeaders(StreamWriter responseWriter, List<Tuple<String, String>> headers, int length)
+        private static void WriteResponseHeaders(StreamWriter responseWriter, List<Tuple<String, String>> headers, int length)
         {
             if (headers != null)
             {
@@ -170,16 +165,14 @@ namespace Titanium.Web.Proxy
                         responseWriter.WriteLine(String.Format("{0}: {1}", header.Item1, header.Item2));
                     else
                         responseWriter.WriteLine(String.Format("{0}: {1}", "content-length", length.ToString()));
-
                 }
             }
 
             responseWriter.WriteLine();
             responseWriter.Flush();
 
-
         }
-        static void SendNormal(Stream inStream, Stream outStream)
+        private static void SendNormal(Stream inStream, Stream outStream)
         {
 
             Byte[] buffer = new Byte[BUFFER_SIZE];
@@ -187,14 +180,12 @@ namespace Titanium.Web.Proxy
             int bytesRead;
             while ((bytesRead = inStream.Read(buffer, 0, buffer.Length)) > 0)
             {
-
                 outStream.Write(buffer, 0, bytesRead);
-
             }
 
         }
         //Send chunked response
-        static void SendChunked(Stream inStream, Stream outStream)
+        private static void SendChunked(Stream inStream, Stream outStream)
         {
 
             Byte[] buffer = new Byte[BUFFER_SIZE];
@@ -204,7 +195,6 @@ namespace Titanium.Web.Proxy
             int bytesRead;
             while ((bytesRead = inStream.Read(buffer, 0, buffer.Length)) > 0)
             {
-
                 var chunkHead = Encoding.ASCII.GetBytes(bytesRead.ToString("x2"));
                 outStream.Write(chunkHead, 0, chunkHead.Length);
                 outStream.Write(chunkTrail, 0, chunkTrail.Length);
@@ -216,7 +206,7 @@ namespace Titanium.Web.Proxy
 
             outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
         }
-        static void SendChunked(byte[] data, Stream outStream)
+        private static void SendChunked(byte[] data, Stream outStream)
         {
 
             Byte[] buffer = new Byte[BUFFER_SIZE];
@@ -229,20 +219,17 @@ namespace Titanium.Web.Proxy
             outStream.Write(data, 0, data.Length);
             outStream.Write(chunkTrail, 0, chunkTrail.Length);
 
-
             var ChunkEnd = Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
 
             outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
         }
 
-
-        static byte[] EncodeData(string responseData, Encoding e)
+        private static byte[] EncodeData(string responseData, Encoding e)
         {
             return e.GetBytes(responseData);
-
         }
 
-        static void SendData(Stream outStream, byte[] data, bool isChunked)
+        private static void SendData(Stream outStream, byte[] data, bool isChunked)
         {
             if (!isChunked)
             {
@@ -251,9 +238,6 @@ namespace Titanium.Web.Proxy
             else
                 SendChunked(data, outStream);
         }
-
-
-
 
     }
 }
