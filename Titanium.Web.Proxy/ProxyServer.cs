@@ -21,7 +21,6 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer
     {
-
         private static readonly int BUFFER_SIZE = 8192;
         private static readonly char[] semiSplit = new char[] { ';' };
 
@@ -59,7 +58,6 @@ namespace Titanium.Web.Proxy
             ListeningPort = 0;
 
             Initialize();
-
         }
 
         public static void Initialize()
@@ -102,19 +100,18 @@ namespace Titanium.Web.Proxy
                         client.Close();
                 }
             }
-
-
         }
 
         public static bool Start()
         {
-
             listener = new TcpListener(ListeningIpAddress, ListeningPort);
-
             listener.Start();
+
             listenerThread = new Thread(new ParameterizedThreadStart(Listen));
             listenerThread.IsBackground = true;
+
             ShouldListen = true;
+
             listenerThread.Start(listener);
 
             ListeningPort = ((IPEndPoint)listener.LocalEndpoint).Port;
@@ -135,14 +132,11 @@ namespace Titanium.Web.Proxy
                     {
                         SystemProxyHelper.EnableProxyHTTPS("localhost", ListeningPort);
                     }
-
-
                 }
             }
 
             return true;
         }
-
 
         public static void Stop()
         {
@@ -157,13 +151,6 @@ namespace Titanium.Web.Proxy
             listenerThread.Interrupt();
             CertManager.Dispose();
 
-
         }
-
-
-
-
-
-
     }
 }

@@ -16,6 +16,7 @@ namespace Titanium.Web.Proxy.Extensions
             output.Write(bytes,0, bytes.Length);
             CopyToAsync(input, output, bufferSize);  
         }
+
         //http://stackoverflow.com/questions/1540658/net-asynchronous-stream-read-write
         public static void CopyToAsync(this Stream input, Stream output, int bufferSize)
         {
