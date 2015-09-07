@@ -38,10 +38,10 @@ namespace Titanium.Web.Proxy
             {
                 if (args.serverResponse != null)
                 {
-                    args.ResponseHeaders = ReadResponseHeaders(args.serverResponse);
+                    args.responseHeaders = ReadResponseHeaders(args.serverResponse);
                     args.responseStream = args.serverResponse.GetResponseStream();
-                   
-                   
+
+
                     if (BeforeResponse != null)
                     {
                         args.responseEncoding = args.serverResponse.GetEncoding();
@@ -52,11 +52,11 @@ namespace Titanium.Web.Proxy
 
                     if (args.responseBodyRead)
                     {
-                        bool isChunked = args.ResponseHeaders.Any(x => x.Name.ToLower() == "transfer-encoding") == false ? false : args.ResponseHeaders.First(x => x.Name.ToLower() == "transfer-encoding").Value.ToLower() == "chunked" ? true : false;
-                        var contentEncoding = args.ResponseHeaders.FirstOrDefault(x => x.Name.ToLower() == "content-encoding");
+                        bool isChunked = args.serverResponse.GetResponseHeader("transfer-encoding") == null ? false : args.serverResponse.GetResponseHeader("transfer-encoding").ToLower().Contains("chunked") ? true : false;
+                        var contentEncoding = args.serverResponse.ContentEncoding;
 
                         if (contentEncoding != null)
-                            switch (contentEncoding.Value.ToLower())
+                            switch (contentEncoding.ToLower())
                             {
                                 case "gzip":
                                     args.responseBody = CompressionHelper.CompressGzip(args.responseBody);
@@ -68,20 +68,20 @@ namespace Titanium.Web.Proxy
                                     args.responseBody = CompressionHelper.CompressZlib(args.responseBody);
                                     break;
                                 default:
-                                    throw new Exception("Specified content-encoding header is not supported");
+                                    break;
                             }
 
                         WriteResponseStatus(args.serverResponse.ProtocolVersion, args.serverResponse.StatusCode, args.serverResponse.StatusDescription, args.clientStreamWriter);
-                        WriteResponseHeaders(args.clientStreamWriter, args.ResponseHeaders, args.responseBody.Length, isChunked);
+                        WriteResponseHeaders(args.clientStreamWriter, args.responseHeaders, args.responseBody.Length, isChunked);
                         WriteResponseBody(args.clientStream, args.responseBody, isChunked);
 
                     }
                     else
                     {
-                        bool isChunked = args.serverResponse.GetResponseHeader("transfer-encoding") == null ? false : args.serverResponse.GetResponseHeader("transfer-encoding").ToLower() == "chunked" ? true : false;
+                        bool isChunked = args.serverResponse.GetResponseHeader("transfer-encoding") == null ? false : args.serverResponse.GetResponseHeader("transfer-encoding").ToLower().Contains("chunked") ? true : false;
 
                         WriteResponseStatus(args.serverResponse.ProtocolVersion, args.serverResponse.StatusCode, args.serverResponse.StatusDescription, args.clientStreamWriter);
-                        WriteResponseHeaders(args.clientStreamWriter, args.ResponseHeaders);
+                        WriteResponseHeaders(args.clientStreamWriter, args.responseHeaders);
                         WriteResponseBody(args.responseStream, args.clientStream, isChunked);
 
                     }

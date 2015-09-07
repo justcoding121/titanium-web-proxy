@@ -60,10 +60,10 @@ namespace Titanium.Web.Proxy.Test
 
             Console.WriteLine(e.RequestURL);
 
-            ////modify request headers
+            ////read request headers
             //var requestHeaders = e.RequestHeaders;
 
-            //if ((e.RequestMethod.ToUpper() == "POST" || e.RequestMethod.ToUpper() == "PUT") && e.RequestContentLength > 0)
+            //if ((e.RequestMethod.ToUpper() == "POST" || e.RequestMethod.ToUpper() == "PUT"))
             //{
             //    //Get/Set request body bytes
             //    byte[] bodyBytes = e.GetRequestBody();
@@ -89,9 +89,9 @@ namespace Titanium.Web.Proxy.Test
         //Insert script to read the Browser URL and send it back to proxy
         public void OnResponse(object sender, SessionEventArgs e)
         {
-            ////modify response headers
+            ////read response headers
             //var responseHeaders = e.ResponseHeaders;
-       
+
 
             //if (e.ResponseStatusCode == HttpStatusCode.OK)
             //{

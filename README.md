@@ -57,9 +57,9 @@ Sample request and response event handlers
         {
 
            
-          Console.WriteLine(e.RequestURL);
+           Console.WriteLine(e.RequestURL);
 
-            //modify request headers
+            //read request headers
             var requestHeaders = e.RequestHeaders;
 
             if ((e.RequestMethod.ToUpper() == "POST" || e.RequestMethod.ToUpper() == "PUT") && e.RequestContentLength > 0)
@@ -87,8 +87,9 @@ Sample request and response event handlers
 	 public void OnResponse(object sender, SessionEventArgs e)
 	{
 		 
-             //modify response headers
+            //read response headers
             var responseHeaders = e.ResponseHeaders;
+
 
             if (e.ResponseStatusCode == HttpStatusCode.OK)
             {
@@ -101,7 +102,7 @@ Sample request and response event handlers
                     //Get response body as string
                     string responseBody = e.GetResponseBodyAsString();
 
-                    //Inject script in to body
+                    //Modify e.ServerResponse
                     Regex rex = new Regex("</body>", RegexOptions.RightToLeft | RegexOptions.IgnoreCase | RegexOptions.Multiline);
                     string modified = rex.Replace(responseBody, "<script type =\"text/javascript\">alert('Response was modified by this script!');</script></body>", 1);
 

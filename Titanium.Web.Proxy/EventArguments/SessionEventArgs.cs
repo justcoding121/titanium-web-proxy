@@ -21,25 +21,6 @@ namespace Titanium.Web.Proxy.EventArguments
         internal CustomBinaryReader clientStreamReader { get; set; }
         internal StreamWriter clientStreamWriter { get; set; }
 
-        internal Encoding requestEncoding { get; set; }
-        internal Version requestHttpVersion { get; set; }
-        internal bool requestIsAlive { get; set; }
-        internal bool cancelRequest { get; set; }
-        internal byte[] requestBody { get; set; }
-        internal string requestBodyString { get; set; }
-        internal bool requestBodyRead { get; set; }
-
-        internal Encoding responseEncoding { get; set; }
-        internal Stream responseStream { get; set; }
-        internal byte[] responseBody { get; set; }
-        internal string responseBodyString { get; set; }
-        internal bool responseBodyRead { get; set; }
-
-        internal bool RequestLocked { get; set; }
-        internal HttpWebRequest proxyRequest { get; set; }
-
-        internal bool ResponseLocked { get; set; }
-        internal HttpWebResponse serverResponse { get; set; }
 
         internal bool isHttps { get; set; }
         internal string requestURL { get; set; }
@@ -47,6 +28,27 @@ namespace Titanium.Web.Proxy.EventArguments
 
         internal int clientPort { get; set; }
         internal IPAddress clientIpAddress { get; set; }
+
+        internal Encoding requestEncoding { get; set; }
+        internal Version requestHttpVersion { get; set; }
+        internal bool requestIsAlive { get; set; }
+        internal bool cancelRequest { get; set; }
+        internal byte[] requestBody { get; set; }
+        internal string requestBodyString { get; set; }
+        internal bool requestBodyRead { get; set; }
+        internal List<HttpHeader> requestHeaders { get; set; }
+        internal bool RequestLocked { get; set; }
+        internal HttpWebRequest proxyRequest { get; set; }
+
+        internal Encoding responseEncoding { get; set; }
+        internal Stream responseStream { get; set; }
+        internal byte[] responseBody { get; set; }
+        internal string responseBodyString { get; set; }
+        internal bool responseBodyRead { get; set; }
+        internal List<HttpHeader> responseHeaders { get; set; }
+        internal bool ResponseLocked { get; set; }
+        internal HttpWebResponse serverResponse { get; set; }
+
 
         public int ClientPort { get { return this.clientPort; } }
         public IPAddress ClientIpAddress { get { return this.clientIpAddress; } }
@@ -56,14 +58,17 @@ namespace Titanium.Web.Proxy.EventArguments
         public string RequestURL { get { return this.requestURL; } }
         public string RequestHostname { get { return this.requestHostname; } }
 
+        public List<HttpHeader> RequestHeaders { get { return this.requestHeaders; } }
+        public List<HttpHeader> ResponseHeaders { get { return this.responseHeaders; } }
+
         public int RequestContentLength
         {
             get
             {
-                if (this.RequestHeaders.Any(x => x.Name.ToLower() == "content-length"))
+                if (this.requestHeaders.Any(x => x.Name.ToLower() == "content-length"))
                 {
                     int contentLen;
-                    int.TryParse(this.RequestHeaders.First(x => x.Name.ToLower() == "content-length").Value, out contentLen);
+                    int.TryParse(this.requestHeaders.First(x => x.Name.ToLower() == "content-length").Value, out contentLen);
                     if (contentLen != 0)
                         return contentLen;
                 }
@@ -72,11 +77,11 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         public string RequestMethod { get { return this.proxyRequest.Method; } }
-        public List<HttpHeader> RequestHeaders { get; set; }
+
 
         public HttpStatusCode ResponseStatusCode { get { return this.serverResponse.StatusCode; } }
-        public string ResponseContentType { get { return this.ResponseHeaders.Any(x => x.Name.ToLower() == "content-type") ? this.ResponseHeaders.First(x => x.Name.ToLower() == "content-type").Value : null; } }
-        public List<HttpHeader> ResponseHeaders { get; set; }
+        public string ResponseContentType { get { return this.responseHeaders.Any(x => x.Name.ToLower() == "content-type") ? this.responseHeaders.First(x => x.Name.ToLower() == "content-type").Value : null; } }
+
 
         internal SessionEventArgs(int bufferSize)
         {
@@ -85,9 +90,88 @@ namespace Titanium.Web.Proxy.EventArguments
 
         private void readRequestBody()
         {
+            if ((proxyRequest.Method.ToUpper() != "POST" && proxyRequest.Method.ToUpper() != "PUT"))
+            {
+                throw new BodyNotFoundException("Request don't have a body." +
+                     "Please verify that this request is a Http POST/PUT and request content length is greater than zero before accessing the body.");
+            }
+
             if (requestBody == null)
             {
-                requestBody = clientStreamReader.ReadBytes(RequestContentLength);
+                bool isChunked = false;
+                string requestContentEncoding = null;
+
+
+                if (requestHeaders.Any(x => x.Name.ToLower() == "content-encoding"))
+                {
+                    requestContentEncoding = requestHeaders.First(x => x.Name.ToLower() == "content-encoding").Value;
+                }
+
+                if (requestHeaders.Any(x => x.Name.ToLower() == "transfer-encoding"))
+                {
+                    var transferEncoding = requestHeaders.First(x => x.Name.ToLower() == "transfer-encoding").Value.ToLower();
+                    if (transferEncoding.Contains("chunked"))
+                    {
+
+                        isChunked = true;
+                    }
+                }
+
+
+                if (requestContentEncoding == null && !isChunked)
+                    requestBody = clientStreamReader.ReadBytes(RequestContentLength);
+                else
+                {
+                    using (var requestBodyStream = new MemoryStream())
+                    {
+                        if (isChunked)
+                        {
+                            while (true)
+                            {
+                                var chuchkHead = clientStreamReader.ReadLine();
+                                var chunkSize = int.Parse(chuchkHead, System.Globalization.NumberStyles.HexNumber);
+
+                                if (chunkSize != 0)
+                                {
+                                    var buffer = clientStreamReader.ReadBytes(chunkSize);
+                                    requestBodyStream.Write(buffer, 0, buffer.Length);
+
+                                    var chunkTrail = clientStreamReader.ReadLine();
+                                }
+                                else
+                                {
+                                    clientStreamReader.ReadLine();
+                                    break;
+                                }
+
+                            }
+                            
+                        }
+                        try
+                        {
+                            switch (requestContentEncoding)
+                            {
+                                case "gzip":
+                                    requestBody = CompressionHelper.DecompressGzip(requestBodyStream);
+                                    break;
+                                case "deflate":
+                                    requestBody = CompressionHelper.DecompressDeflate(requestBodyStream);
+                                    break;
+                                case "zlib":
+                                    requestBody = CompressionHelper.DecompressGzip(requestBodyStream);
+                                    break;
+                                default:
+                                    requestBody = requestBodyStream.ToArray();
+                                    break;
+                            }
+                        }
+                        catch {
+                            requestBody = requestBodyStream.ToArray();
+                        }
+                    }
+
+                }
+
             }
             requestBodyRead = true;
         }
@@ -95,6 +179,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (responseBody == null)
             {
+
                 switch (serverResponse.ContentEncoding)
                 {
                     case "gzip":
@@ -144,34 +229,25 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
 
-            if ((proxyRequest.Method.ToUpper() == "POST" || proxyRequest.Method.ToUpper() == "PUT") && RequestContentLength > 0)
-            {
-                readRequestBody();
+            readRequestBody();
+            return requestBody;
 
-                return requestBody;
-            }
-            else
-                throw new BodyNotFoundException("Request don't have a body." +
-            "Please verify that this request is a Http POST/PUT and request content length is greater than zero before accessing the body.");
 
         }
         public string GetRequestBodyAsString()
         {
             if (RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
 
-            if ((proxyRequest.Method.ToUpper() == "POST" || proxyRequest.Method.ToUpper() == "PUT") && RequestContentLength > 0)
-            {
-                readRequestBody();
 
-                if (requestBodyString == null)
-                {
-                    requestBodyString = requestEncoding.GetString(requestBody);
-                }
-                return requestBodyString;
+            readRequestBody();
+
+            if (requestBodyString == null)
+            {
+                requestBodyString = requestEncoding.GetString(requestBody);
             }
-            else
-                throw new BodyNotFoundException("Request don't have a body." +
-            "Please verify that this request is a Http POST/PUT and request content length is greater than zero before accessing the body.");
+            return requestBodyString;
+
+
 
         }
 
@@ -300,7 +376,6 @@ namespace Titanium.Web.Proxy.EventArguments
             if (this.serverResponse != null)
                 this.serverResponse.Close();
         }
-
 
 
     }

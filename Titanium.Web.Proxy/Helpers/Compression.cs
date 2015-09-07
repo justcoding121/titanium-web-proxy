@@ -59,7 +59,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         public static byte[] DecompressGzip(Stream input)
         {
-            using (System.IO.Compression.GZipStream decompressor = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress))
+            using (var decompressor = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress))
             {
 
                 int read = 0;
