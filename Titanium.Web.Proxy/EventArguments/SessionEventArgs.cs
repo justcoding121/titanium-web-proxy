@@ -35,7 +35,10 @@ namespace Titanium.Web.Proxy.EventArguments
         internal string responseBodyString { get; set; }
         internal bool responseBodyRead { get; set; }
 
+        internal bool RequestLocked { get; set; }
         internal HttpWebRequest proxyRequest { get; set; }
+
+        internal bool ResponseLocked { get; set; }
         internal HttpWebResponse serverResponse { get; set; }
 
         internal bool isHttps { get; set; }
@@ -132,11 +135,15 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public Encoding GetRequestBodyEncoding()
         {
+            if (RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
+
             return requestEncoding;
         }
 
         public byte[] GetRequestBody()
         {
+            if (RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
+
             if ((proxyRequest.Method.ToUpper() == "POST" || proxyRequest.Method.ToUpper() == "PUT") && RequestContentLength > 0)
             {
                 readRequestBody();
@@ -150,6 +157,8 @@ namespace Titanium.Web.Proxy.EventArguments
         }
         public string GetRequestBodyAsString()
         {
+            if (RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
+
             if ((proxyRequest.Method.ToUpper() == "POST" || proxyRequest.Method.ToUpper() == "PUT") && RequestContentLength > 0)
             {
                 readRequestBody();
@@ -168,6 +177,8 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public void SetRequestBody(byte[] body)
         {
+            if (RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
+
             if (!requestBodyRead)
             {
                 readRequestBody();
@@ -178,6 +189,8 @@ namespace Titanium.Web.Proxy.EventArguments
         }
         public void SetRequestBodyString(string body)
         {
+
+            if (RequestLocked) throw new Exception("Youcannot call this function after request is made to server.");
 
             if (!requestBodyRead)
             {
@@ -190,17 +203,24 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public Encoding GetResponseBodyEncoding()
         {
+            if (!RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
+
             return responseEncoding;
         }
 
         public byte[] GetResponseBody()
         {
+            if (!RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
+
             readResponseBody();
             return responseBody;
         }
         public string GetResponseBodyAsString()
         {
+            if (!RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
+
             GetResponseBody();
+
             if (responseBodyString == null)
             {
                 responseBodyString = responseEncoding.GetString(responseBody);
@@ -209,6 +229,8 @@ namespace Titanium.Web.Proxy.EventArguments
         }
         public void SetResponseBody(byte[] body)
         {
+            if (!RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
+
             if (responseBody == null)
             {
                 GetResponseBody();
@@ -220,6 +242,8 @@ namespace Titanium.Web.Proxy.EventArguments
         }
         public void SetResponseBodyString(string body)
         {
+            if (!RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
+
             if (responseBody == null)
             {
                 GetResponseBody();
@@ -232,6 +256,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public void Ok(string html)
         {
+            if (RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
 
             if (html == null)
                 html = string.Empty;

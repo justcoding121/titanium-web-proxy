@@ -60,7 +60,7 @@ namespace Titanium.Web.Proxy
                     httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
                     clientStreamReader.ReadAllLines();
                     
-                    WriteConnectedResponse(clientStreamWriter, httpVersion);
+                    WriteConnectResponse(clientStreamWriter, httpVersion);
 
                     var certificate = ProxyServer.CertManager.CreateCertificate(httpRemoteUri.Host);
            
@@ -94,7 +94,7 @@ namespace Titanium.Web.Proxy
                 else if (httpVerb.ToUpper() == "CONNECT")
                 {
                     clientStreamReader.ReadAllLines();
-                    WriteConnectedResponse(clientStreamWriter, httpVersion);
+                    WriteConnectResponse(clientStreamWriter, httpVersion);
                     TcpHelper.SendRaw(clientStreamReader.BaseStream, null, null, httpRemoteUri.Host, httpRemoteUri.Port, false);
                     Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
                     return;
@@ -112,14 +112,7 @@ namespace Titanium.Web.Proxy
 
         }
 
-        private static void WriteConnectedResponse(StreamWriter clientStreamWriter, string httpVersion)
-        {
-            clientStreamWriter.WriteLine(httpVersion + " 200 Connection established");
-            clientStreamWriter.WriteLine(String.Format("Timestamp: {0}", DateTime.Now.ToString()));
-            clientStreamWriter.WriteLine(String.Format("connection:close"));
-            clientStreamWriter.WriteLine();
-            clientStreamWriter.Flush();
-        }
+       
         private static void HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream, CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string secureTunnelHostName)
         {
 
@@ -202,14 +195,16 @@ namespace Titanium.Web.Proxy
                 args.requestIsAlive = args.proxyRequest.KeepAlive;
                 args.proxyRequest.ConnectionGroupName = args.requestHostname;
                 args.proxyRequest.AllowWriteStreamBuffering = true;
+              
 
                 //If requested interception
                 if (BeforeRequest != null)
                 {
                     args.requestEncoding = args.proxyRequest.GetEncoding();
-
                     BeforeRequest(null, args);
                 }
+
+                args.RequestLocked = true;
 
                 if (args.cancelRequest)
                 {
@@ -255,6 +250,15 @@ namespace Titanium.Web.Proxy
             }
 
 
+        }
+
+        private static void WriteConnectResponse(StreamWriter clientStreamWriter, string httpVersion)
+        {
+            clientStreamWriter.WriteLine(httpVersion + " 200 Connection established");
+            clientStreamWriter.WriteLine(String.Format("Timestamp: {0}", DateTime.Now.ToString()));
+            clientStreamWriter.WriteLine(String.Format("connection:close"));
+            clientStreamWriter.WriteLine();
+            clientStreamWriter.Flush();
         }
 
         private static void SetRequestHeaders(List<HttpHeader> requestHeaders, HttpWebRequest webRequest)
