@@ -12,10 +12,11 @@ using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
 using System.Reflection;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.EventArguments;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using System.Text.RegularExpressions;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy
 {
@@ -49,29 +50,21 @@ namespace Titanium.Web.Proxy
                     httpRemoteUri = new Uri(httpCmdSplit[1]);
 
                 var httpVersion = httpCmdSplit[2];
-
-                //Client wants to create a secure tcp tunnel (its a HTTPS request)
+            
                 var excluded = ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
 
+                //Client wants to create a secure tcp tunnel (its a HTTPS request)
                 if (httpVerb.ToUpper() == "CONNECT" && !excluded && httpRemoteUri.Port == 443)
                 {
 
                     httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
                     clientStreamReader.ReadAllLines();
-
+                    
                     WriteConnectedResponse(clientStreamWriter, httpVersion);
 
-
-                    //Create the fake certificate signed using our fake certificate authority
-                    Monitor.Enter(certificateAccessLock);
                     var certificate = ProxyServer.CertManager.CreateCertificate(httpRemoteUri.Host);
-                    Monitor.Exit(certificateAccessLock);
-
+           
                     SslStream sslStream = null;
-
-                    //Pinned certificate clients cannot be proxied
-                    //For example dropbox clients use certificate pinning
-                    //So just relay the request
 
                     try
                     {
@@ -136,15 +129,9 @@ namespace Titanium.Web.Proxy
                 return;
             }
 
-            string tmpLine = null;
-            List<string> requestLines = new List<string>();
-            while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
-            {
-                requestLines.Add(tmpLine);
-            }
-
             var args = new SessionEventArgs(BUFFER_SIZE);
             args.client = client;
+        
 
             try
             {
@@ -170,6 +157,32 @@ namespace Titanium.Web.Proxy
                     args.isHttps = true;
                 }
 
+                args.RequestHeaders = new List<HttpHeader>();
+
+                string tmpLine = null;
+
+                while (!String.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
+                {
+                    String[] header = tmpLine.Split(colonSpaceSplit, 2, StringSplitOptions.None);
+                    args.RequestHeaders.Add(new HttpHeader(header[0], header[1]));
+                }
+
+                for (int i = 0; i <  args.RequestHeaders.Count; i++)
+                {
+                    var rawHeader = args.RequestHeaders[i];
+                 
+
+                    //if request was upgrade to web-socket protocol then relay the request without proxying
+                    if ((rawHeader.Name.ToLower() == "upgrade") && (rawHeader.Value.ToLower() == "websocket"))
+                    {
+
+                        TcpHelper.SendRaw(clientStreamReader.BaseStream, httpCmd, args.RequestHeaders, httpRemoteUri.Host, httpRemoteUri.Port, httpRemoteUri.Scheme == Uri.UriSchemeHttps);
+                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
+                        return;
+                    }
+                }
+
+
                 //construct the web request that we are going to issue on behalf of the client.
                 args.proxyRequest = (HttpWebRequest)HttpWebRequest.Create(httpRemoteUri);
                 args.proxyRequest.Proxy = null;
@@ -178,25 +191,7 @@ namespace Titanium.Web.Proxy
                 args.proxyRequest.ProtocolVersion = version;
                 args.clientStream = clientStream;
                 args.clientStreamReader = clientStreamReader;
-                args.clientStreamWriter = clientStreamWriter;
-
-                for (int i = 0; i < requestLines.Count; i++)
-                {
-                    var rawHeader = requestLines[i];
-                    String[] header = rawHeader.ToLower().Trim().Split(colonSpaceSplit, 2, StringSplitOptions.None);
-
-                    //if request was upgrade to web-socket protocol then relay the request without proxying
-                    if ((header[0] == "upgrade") && (header[1] == "websocket"))
-                    {
-
-                        TcpHelper.SendRaw(clientStreamReader.BaseStream, httpCmd, requestLines, httpRemoteUri.Host, httpRemoteUri.Port, httpRemoteUri.Scheme == Uri.UriSchemeHttps);
-                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
-                        return;
-                    }
-                }
-
-                SetClientRequestHeaders(requestLines, args.proxyRequest);
-
+                args.clientStreamWriter = clientStreamWriter; 
                 args.proxyRequest.AllowAutoRedirect = false;
                 args.proxyRequest.AutomaticDecompression = DecompressionMethods.None;
                 args.requestHostname = args.proxyRequest.RequestUri.Host;
@@ -205,16 +200,16 @@ namespace Titanium.Web.Proxy
                 args.clientIpAddress = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
                 args.requestHttpVersion = version;
                 args.requestIsAlive = args.proxyRequest.KeepAlive;
+                args.proxyRequest.ConnectionGroupName = args.requestHostname;
+                args.proxyRequest.AllowWriteStreamBuffering = true;
 
                 //If requested interception
                 if (BeforeRequest != null)
                 {
-                    args.requestContentLength = (int)args.proxyRequest.ContentLength;
                     args.requestEncoding = args.proxyRequest.GetEncoding();
 
                     BeforeRequest(null, args);
                 }
-
 
                 if (args.cancelRequest)
                 {
@@ -222,16 +217,14 @@ namespace Titanium.Web.Proxy
                     return;
                 }
 
-                args.proxyRequest.ConnectionGroupName = args.requestHostname;
-                args.proxyRequest.AllowWriteStreamBuffering = true;
+                SetRequestHeaders(args.RequestHeaders, args.proxyRequest);
 
                 //If request was modified by user
                 if (args.requestBodyRead)
                 {
-                    byte[] requestBytes = args.requestEncoding.GetBytes(args.requestBody);
-                    args.proxyRequest.ContentLength = requestBytes.Length;
+                    args.proxyRequest.ContentLength = args.requestBody.Length;
                     Stream newStream = args.proxyRequest.GetRequestStream();
-                    newStream.Write(requestBytes, 0, requestBytes.Length);
+                    newStream.Write(args.requestBody, 0, args.requestBody.Length);
 
                     args.proxyRequest.BeginGetResponse(new AsyncCallback(HandleHttpSessionResponse), args);
 
@@ -264,90 +257,82 @@ namespace Titanium.Web.Proxy
 
         }
 
-        private static void SetClientRequestHeaders(List<string> requestLines, HttpWebRequest webRequest)
+        private static void SetRequestHeaders(List<HttpHeader> requestHeaders, HttpWebRequest webRequest)
         {
 
-
-            for (int i = 1; i < requestLines.Count; i++)
+            for (int i = 0; i < requestHeaders.Count; i++)
             {
-                String httpCmd = requestLines[i];
-
-                String[] header = httpCmd.Split(colonSpaceSplit, 2, StringSplitOptions.None);
-
-                if (!String.IsNullOrEmpty(header[0].Trim()))
-                    switch (header[0].ToLower())
+                switch (requestHeaders[i].Name.ToLower())
                     {
                         case "accept":
-                            webRequest.Accept = header[1];
+                            webRequest.Accept = requestHeaders[i].Value;
                             break;
                         case "accept-encoding":
-                            webRequest.Headers.Add(header[0], "gzip,deflate,zlib");
+                            webRequest.Headers.Add("Accept-Encoding", "gzip,deflate,zlib");
                             break;
                         case "cookie":
-                            webRequest.Headers["Cookie"] = header[1];
+                            webRequest.Headers["Cookie"] = requestHeaders[i].Value;
                             break;
                         case "connection":
-                            if (header[1].ToLower() == "keep-alive")
+                            if (requestHeaders[i].Value.ToLower() == "keep-alive")
                                 webRequest.KeepAlive = true;
-
                             break;
                         case "content-length":
                             int contentLen;
-                            int.TryParse(header[1], out contentLen);
+                            int.TryParse(requestHeaders[i].Value, out contentLen);
                             if (contentLen != 0)
                                 webRequest.ContentLength = contentLen;
                             break;
                         case "content-type":
-                            webRequest.ContentType = header[1];
+                            webRequest.ContentType = requestHeaders[i].Value;
                             break;
                         case "expect":
-                            if (header[1].ToLower() == "100-continue")
+                            if (requestHeaders[i].Value.ToLower() == "100-continue")
                                 webRequest.ServicePoint.Expect100Continue = true;
                             else
-                                webRequest.Expect = header[1];
+                                webRequest.Expect = requestHeaders[i].Value;
                             break;
                         case "host":
-                            webRequest.Host = header[1];
+                            webRequest.Host = requestHeaders[i].Value;
                             break;
                         case "if-modified-since":
-                            String[] sb = header[1].Trim().Split(semiSplit);
+                            String[] sb = requestHeaders[i].Value.Trim().Split(semiSplit);
                             DateTime d;
                             if (DateTime.TryParse(sb[0], out d))
                                 webRequest.IfModifiedSince = d;
                             break;
                         case "proxy-connection":
-                            if (header[1].ToLower() == "keep-alive")
+                            if (requestHeaders[i].Value.ToLower() == "keep-alive")
                                 webRequest.KeepAlive = true;
                             break;
                         case "range":
-                            var startEnd = header[1].Replace(Environment.NewLine, "").Remove(0, 6).Split('-');
+                            var startEnd = requestHeaders[i].Value.Replace(Environment.NewLine, "").Remove(0, 6).Split('-');
                             if (startEnd.Length > 1) { if (!String.IsNullOrEmpty(startEnd[1])) webRequest.AddRange(int.Parse(startEnd[0]), int.Parse(startEnd[1])); else webRequest.AddRange(int.Parse(startEnd[0])); }
                             else
                                 webRequest.AddRange(int.Parse(startEnd[0]));
                             break;
                         case "referer":
-                            webRequest.Referer = header[1];
+                            webRequest.Referer = requestHeaders[i].Value;
                             break;
                         case "user-agent":
-                            webRequest.UserAgent = header[1];
+                            webRequest.UserAgent = requestHeaders[i].Value;
                             break;
 
                         //revisit this, transfer-encoding is not a request header according to spec
                         //But how to identify if client is sending chunked body for PUT/POST?
                         case "transfer-encoding":
-                            if (header[1].ToLower() == "chunked")
+                            if (requestHeaders[i].Value.ToLower() == "chunked")
                                 webRequest.SendChunked = true;
                             else
                                 webRequest.SendChunked = false;
                             break;
                         case "upgrade":
-                            if (header[1].ToLower() == "http/1.1")
-                                webRequest.Headers.Add(header[0], header[1]);
+                            if (requestHeaders[i].Value.ToLower() == "http/1.1")
+                                webRequest.Headers.Add("Upgrade", requestHeaders[i].Value);
                             break;
 
                         default:
-                            if (header.Length >= 2)
-                                webRequest.Headers.Add(header[0], header[1]);
+                                webRequest.Headers.Add(requestHeaders[i].Name, requestHeaders[i].Value);
 
                             break;
                     }
@@ -485,22 +470,6 @@ namespace Titanium.Web.Proxy
 
         }
 
-        private static void Dispose(TcpClient client, Stream clientStream, CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, SessionEventArgs args)
-        {
-            if (args != null)
-                args.Dispose();
-
-            if (clientStreamReader != null)
-                clientStreamReader.Dispose();
-
-            if (clientStreamWriter != null)
-                clientStreamWriter.Dispose();
-
-            if (clientStream != null)
-                clientStream.Dispose();
-
-            if (client != null)
-                client.Close();
-        }
+       
     }
 }
