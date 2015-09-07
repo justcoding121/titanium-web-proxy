@@ -28,6 +28,7 @@ namespace Titanium.Web.Proxy.Helpers
                     sb.Append(httpCmd);
                     sb.Append(Environment.NewLine);
                 }
+                if (requestHeaders != null)
                 for (int i = 0; i < requestHeaders.Count; i++)
                 {
                     var header = requestHeaders[i].ToString();
