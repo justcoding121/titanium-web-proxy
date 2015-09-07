@@ -52,8 +52,7 @@ Sample request and response event handlers
 
 ```csharp
 		
-		//Test On Request, intecept requests
-        //Read browser URL send back to proxy by the injection script in OnResponse event
+		//Test On Request, intercept requests
         public void OnRequest(object sender, SessionEventArgs e)
         {
 
@@ -102,7 +101,7 @@ Sample request and response event handlers
                     //Get response body as string
                     string responseBody = e.GetResponseBodyAsString();
 
-                    //Modify e.ServerResponse
+                    //Inject script in to body
                     Regex rex = new Regex("</body>", RegexOptions.RightToLeft | RegexOptions.IgnoreCase | RegexOptions.Multiline);
                     string modified = rex.Replace(responseBody, "<script type =\"text/javascript\">alert('Response was modified by this script!');</script></body>", 1);
 
