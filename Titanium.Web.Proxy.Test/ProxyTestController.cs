@@ -60,28 +60,28 @@ namespace Titanium.Web.Proxy.Test
 
             Console.WriteLine(e.RequestURL);
 
-            ////modify request headers
-            //var requestHeaders = e.RequestHeaders;
+            //modify request headers
+            var requestHeaders = e.RequestHeaders;
 
-            //if ((e.RequestMethod.ToUpper() == "POST" || e.RequestMethod.ToUpper() == "PUT") && e.RequestContentLength > 0)
-            //{
-            //    //Get/Set request body bytes
-            //    byte[] bodyBytes = e.GetRequestBody();
-            //    e.SetRequestBody(bodyBytes);
+            if ((e.RequestMethod.ToUpper() == "POST" || e.RequestMethod.ToUpper() == "PUT") && e.RequestContentLength > 0)
+            {
+                //Get/Set request body bytes
+                byte[] bodyBytes = e.GetRequestBody();
+                e.SetRequestBody(bodyBytes);
 
-            //    //Get/Set request body as string
-            //    string bodyString = e.GetRequestBodyAsString();
-            //    e.SetRequestBodyString(bodyString);
+                //Get/Set request body as string
+                string bodyString = e.GetRequestBodyAsString();
+                e.SetRequestBodyString(bodyString);
 
-            //}
+            }
 
-            ////To cancel a request with a custom HTML content
-            ////Filter URL
+            //To cancel a request with a custom HTML content
+            //Filter URL
 
-            //if (e.RequestURL.Contains("google.com"))
-            //{
-            //    e.Ok("<!DOCTYPE html><html><body><h1>Website Blocked</h1><p>Blocked by titanium web proxy.</p></body></html>");
-            //}
+            if (e.RequestURL.Contains("google.com"))
+            {
+                e.Ok("<!DOCTYPE html><html><body><h1>Website Blocked</h1><p>Blocked by titanium web proxy.</p></body></html>");
+            }
 
         }
 
@@ -90,27 +90,28 @@ namespace Titanium.Web.Proxy.Test
         public void OnResponse(object sender, SessionEventArgs e)
         {
             //modify response headers
-            //var responseHeaders = e.ResponseHeaders;
+            var responseHeaders = e.ResponseHeaders;
+       
 
-            //if (e.ResponseStatusCode == HttpStatusCode.OK)
-            //{
-            //    if (e.ResponseContentType.Trim().ToLower().Contains("text/html"))
-            //    {
-            //        //Get/Set response body bytes
-            //        byte[] responseBodyBytes = e.GetResponseBody();
-            //        e.SetResponseBody(responseBodyBytes);
+            if (e.ResponseStatusCode == HttpStatusCode.OK)
+            {
+                if (e.ResponseContentType.Trim().ToLower().Contains("text/html"))
+                {
+                    //Get/Set response body bytes
+                    byte[] responseBodyBytes = e.GetResponseBody();
+                    e.SetResponseBody(responseBodyBytes);
 
-            //        //Get response body as string
-            //        string responseBody = e.GetResponseBodyAsString();
+                    //Get response body as string
+                    string responseBody = e.GetResponseBodyAsString();
 
-            //        //Modify e.ServerResponse
-            //        Regex rex = new Regex("</body>", RegexOptions.RightToLeft | RegexOptions.IgnoreCase | RegexOptions.Multiline);
-            //        string modified = rex.Replace(responseBody, "<script type =\"text/javascript\">alert('Response was modified by this script!');</script></body>", 1);
+                    //Modify e.ServerResponse
+                    Regex rex = new Regex("</body>", RegexOptions.RightToLeft | RegexOptions.IgnoreCase | RegexOptions.Multiline);
+                    string modified = rex.Replace(responseBody, "<script type =\"text/javascript\">alert('Response was modified by this script!');</script></body>", 1);
 
-            //        //Set modifed response Html Body
-            //        e.SetResponseBodyString(modified);
-            //    }
-            //}
+                    //Set modifed response Html Body
+                    e.SetResponseBodyString(modified);
+                }
+            }
 
         }
 

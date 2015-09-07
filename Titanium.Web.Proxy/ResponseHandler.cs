@@ -40,12 +40,15 @@ namespace Titanium.Web.Proxy
                 {
                     args.ResponseHeaders = ReadResponseHeaders(args.serverResponse);
                     args.responseStream = args.serverResponse.GetResponseStream();
-
+                   
+                   
                     if (BeforeResponse != null)
                     {
                         args.responseEncoding = args.serverResponse.GetEncoding();
                         BeforeResponse(null, args);
                     }
+
+                    args.ResponseLocked = true;
 
                     if (args.responseBodyRead)
                     {
