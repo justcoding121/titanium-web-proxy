@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Models
             this.Name = name.Trim();
             this.Value = value.Trim();
         }
-        public string ToString()
+        public override string ToString()
         {
             return String.Format("{0}: {1}", this.Name, this.Value);
         }
