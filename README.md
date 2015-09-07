@@ -88,7 +88,7 @@ Sample request and response event handlers
 	 public void OnResponse(object sender, SessionEventArgs e)
 	{
 		 
-             //To modify a response headers
+             //modify response headers
             var responseHeaders = e.ResponseHeaders;
 
             if (e.ResponseStatusCode == HttpStatusCode.OK)
