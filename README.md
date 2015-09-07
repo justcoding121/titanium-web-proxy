@@ -55,10 +55,8 @@ Sample request and response event handlers
 		//Test On Request, intercept requests
         public void OnRequest(object sender, SessionEventArgs e)
         {
-
-           
            Console.WriteLine(e.RequestURL);
-
+		   
             //read request headers
             var requestHeaders = e.RequestHeaders;
 
@@ -81,15 +79,12 @@ Sample request and response event handlers
             {
                 e.Ok("<!DOCTYPE html><html><body><h1>Website Blocked</h1><p>Blocked by titanium web proxy.</p></body></html>");
             }
-
         }
 	
 	 public void OnResponse(object sender, SessionEventArgs e)
 	{
-		 
             //read response headers
             var responseHeaders = e.ResponseHeaders;
-
 
             if (e.ResponseStatusCode == HttpStatusCode.OK)
             {
