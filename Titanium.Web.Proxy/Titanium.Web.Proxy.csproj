@@ -77,10 +77,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Exceptions\BodyNotFoundException.cs" />
+    <Compile Include="Extensions\HttpWebResponseExtensions.cs" />
     <Compile Include="Extensions\HttpWebRequestExtensions.cs" />
     <Compile Include="Helpers\CertificateManager.cs" />
     <Compile Include="Helpers\Firefox.cs" />
     <Compile Include="Helpers\SystemProxy.cs" />
+    <Compile Include="Models\HttpHeader.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RequestHandler.cs" />
     <Compile Include="ResponseHandler.cs" />
@@ -88,7 +90,7 @@
     <Compile Include="Helpers\NetFramework.cs" />
     <Compile Include="Helpers\Compression.cs" />
     <Compile Include="ProxyServer.cs" />
-    <Compile Include="Models\SessionEventArgs.cs" />
+    <Compile Include="EventArgs\SessionEventArgs.cs" />
     <Compile Include="Helpers\Tcp.cs" />
     <Compile Include="Extensions\StreamExtensions.cs" />
   </ItemGroup>

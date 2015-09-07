@@ -8,6 +8,7 @@ using System.Net;
 using System.Threading.Tasks;
 using System.Net.Sockets;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -16,10 +17,10 @@ namespace Titanium.Web.Proxy.Helpers
         private static readonly int BUFFER_SIZE = 8192;
         private static readonly String[] colonSpaceSplit = new string[] { ": " };
       
-        public static void SendRaw(Stream clientStream, string httpCmd, List<string> requestLines, string hostName, int tunnelPort, bool isHttps)
+        public static void SendRaw(Stream clientStream, string httpCmd, List<HttpHeader> requestHeaders, string hostName, int tunnelPort, bool isHttps)
         {
             StringBuilder sb = null;
-            if (httpCmd != null || requestLines != null)
+            if (httpCmd != null || requestHeaders != null)
             {
                 sb = new StringBuilder();
                 if (httpCmd != null)
@@ -27,9 +28,9 @@ namespace Titanium.Web.Proxy.Helpers
                     sb.Append(httpCmd);
                     sb.Append(Environment.NewLine);
                 }
-                for (int i = 0; i < requestLines.Count; i++)
+                for (int i = 0; i < requestHeaders.Count; i++)
                 {
-                    var header = requestLines[i];
+                    var header = requestHeaders[i].ToString();
                     sb.Append(header);
                     sb.Append(Environment.NewLine);
                 }

@@ -10,8 +10,9 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Diagnostics;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
+using System.Text;
 
 
 namespace Titanium.Web.Proxy
@@ -29,12 +30,12 @@ namespace Titanium.Web.Proxy
 
         private static readonly Regex cookieSplitRegEx = new Regex(@",(?! )");
 
-        private static object certificateAccessLock = new object();
-       
-        private static TcpListener listener;
-        private static Thread listenerThread;
+        private static readonly byte[] chunkTrail = Encoding.ASCII.GetBytes(Environment.NewLine);
+        private static readonly byte[] ChunkEnd = Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
 
-        private static bool ShouldListen { get; set; }
+        private static object certificateAccessLock = new object();
+
+        private static TcpListener listener;
         private static CertificateManager CertManager { get; set; }
 
         public static List<string> ExcludedHttpsHostNameRegex = new List<string>();
@@ -82,43 +83,20 @@ namespace Titanium.Web.Proxy
 
         }
 
-        private static void Listen(Object obj)
-        {
-            TcpListener listener = (TcpListener)obj;
 
-            while (ShouldListen)
-            {
-                TcpClient client = null;
-                try
-                {
-                    client = listener.AcceptTcpClient();
-                    Task.Factory.StartNew(() => HandleClient(client));
-                }
-                catch
-                {
-                    if (client != null)
-                        client.Close();
-                }
-            }
-        }
 
         public static bool Start()
         {
             listener = new TcpListener(ListeningIpAddress, ListeningPort);
             listener.Start();
 
-            listenerThread = new Thread(new ParameterizedThreadStart(Listen));
-            listenerThread.IsBackground = true;
-
-            ShouldListen = true;
-
-            listenerThread.Start(listener);
-
             ListeningPort = ((IPEndPoint)listener.LocalEndpoint).Port;
+            // accept clients asynchronously
+            listener.BeginAcceptTcpClient(OnAcceptConnection, listener);
 
             if (SetAsSystemProxy)
             {
-                SystemProxyHelper.EnableProxyHTTP("localhost", ListeningPort);
+                SystemProxyHelper.EnableProxyHTTP(ListeningIpAddress == IPAddress.Any ? "127.0.0.1" : ListeningIpAddress.ToString(), ListeningPort);
                 FireFoxHelper.AddFirefox();
 
 
@@ -130,13 +108,28 @@ namespace Titanium.Web.Proxy
                     //If certificate was trusted by the machine
                     if (certTrusted)
                     {
-                        SystemProxyHelper.EnableProxyHTTPS("localhost", ListeningPort);
+                        SystemProxyHelper.EnableProxyHTTPS(ListeningIpAddress == IPAddress.Any ? "127.0.0.1" : ListeningIpAddress.ToString(), ListeningPort);
                     }
                 }
             }
 
             return true;
         }
+        private static void OnAcceptConnection(IAsyncResult asyn)
+        {        
+            try
+            {
+                // Get the listener that handles the client request.
+                listener.BeginAcceptTcpClient(OnAcceptConnection, listener);
+
+                TcpClient client = listener.EndAcceptTcpClient(asyn);
+                Task.Factory.StartNew(() => HandleClient(client));
+            }
+            catch { }
+          
+        
+        }
+
 
         public static void Stop()
         {
@@ -146,9 +139,7 @@ namespace Titanium.Web.Proxy
                 FireFoxHelper.RemoveFirefox();
             }
 
-            ShouldListen = false;
             listener.Stop();
-            listenerThread.Interrupt();
             CertManager.Dispose();
 
         }
