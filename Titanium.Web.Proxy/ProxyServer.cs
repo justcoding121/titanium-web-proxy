@@ -80,7 +80,8 @@ namespace Titanium.Web.Proxy
 
             //Fix a bug in .NET 4.0
             NetFrameworkHelper.URLPeriodFix();
-
+            //useUnsafeHeaderParsing 
+            NetFrameworkHelper.ToggleAllowUnsafeHeaderParsing(true);
         }
 
 
