@@ -8,10 +8,10 @@ namespace Titanium.Web.Proxy.Helpers
 {
     public class CertificateManager : IDisposable 
     {
-        private const string CERT_CREATE_FORMAT =
+        private const string CertCreateFormat =
             "-ss {0} -n \"CN={1}, O={2}\" -sky {3} -cy {4} -m 120 -a sha256 -eku 1.3.6.1.5.5.7.3.1 -b {5:MM/dd/yyyy} {6}";
 
-        private readonly IDictionary<string, X509Certificate2> certificateCache;
+        private readonly IDictionary<string, X509Certificate2> _certificateCache;
 
         public string Issuer { get; private set; }
         public string RootCertificateName { get; private set; }
@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy.Helpers
             MyStore = new X509Store(StoreName.My, StoreLocation.CurrentUser);
             RootStore = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
 
-            certificateCache = new Dictionary<string, X509Certificate2>();
+            _certificateCache = new Dictionary<string, X509Certificate2>();
         }
 
         /// <summary>
@@ -69,8 +69,9 @@ namespace Titanium.Web.Proxy.Helpers
         }
         protected virtual X509Certificate2 CreateCertificate(X509Store store, string certificateName)
         {
-            if (certificateCache.ContainsKey(certificateName))
-                return certificateCache[certificateName];
+
+            if (_certificateCache.ContainsKey(certificateName))
+                return _certificateCache[certificateName];
 
             lock (store)
             {
@@ -80,7 +81,7 @@ namespace Titanium.Web.Proxy.Helpers
                     store.Open(OpenFlags.ReadWrite);
                     string certificateSubject = string.Format("CN={0}, O={1}", certificateName, Issuer);
 
-                    X509Certificate2Collection certificates =
+                    var certificates =
                         FindCertificates(store, certificateSubject);
 
                     if (certificates != null)
@@ -102,8 +103,8 @@ namespace Titanium.Web.Proxy.Helpers
                 finally
                 {
                     store.Close();
-                    if (certificate != null && !certificateCache.ContainsKey(certificateName))
-                        certificateCache.Add(certificateName, certificate);
+                    if (certificate != null && !_certificateCache.ContainsKey(certificateName))
+                        _certificateCache.Add(certificateName, certificate);
                 }
             }
         }
@@ -151,9 +152,9 @@ namespace Titanium.Web.Proxy.Helpers
                 {
                     store.Close();
                     if (certificates == null &&
-                        certificateCache.ContainsKey(certificateName))
+                        _certificateCache.ContainsKey(certificateName))
                     {
-                        certificateCache.Remove(certificateName);
+                        _certificateCache.Remove(certificateName);
                     }
                 }
             }
@@ -164,7 +165,7 @@ namespace Titanium.Web.Proxy.Helpers
             bool isRootCertificate =
                 (certificateName == RootCertificateName);
 
-            string certCreatArgs = string.Format(CERT_CREATE_FORMAT,
+            string certCreatArgs = string.Format(CertCreateFormat,
                 store.Name, certificateName, Issuer,
                 isRootCertificate ? "signature" : "exchange",
                 isRootCertificate ? "authority" : "end", DateTime.Now,

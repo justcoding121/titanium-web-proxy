@@ -1,18 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Net.Sockets;
 using System.IO;
+using System.Linq;
 using System.Net;
-using System.Net.Security;
-using System.Threading;
-using System.Security.Authentication;
-using System.Diagnostics;
+using System.Net.Sockets;
+using System.Text;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Helpers;
-using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy
@@ -22,94 +17,89 @@ namespace Titanium.Web.Proxy
         //Called asynchronously when a request was successfully and we received the response
         private static void HandleHttpSessionResponse(IAsyncResult asynchronousResult)
         {
-            SessionEventArgs args = (SessionEventArgs)asynchronousResult.AsyncState;
+            var args = (SessionEventArgs)asynchronousResult.AsyncState;
 
             try
             {
-                args.serverResponse = (HttpWebResponse)args.proxyRequest.EndGetResponse(asynchronousResult);
+                args.ServerResponse = (HttpWebResponse)args.ProxyRequest.EndGetResponse(asynchronousResult);
             }
             catch (WebException webEx)
             {
                 //Things line 404, 500 etc
-                args.serverResponse = webEx.Response as HttpWebResponse;
+                args.ServerResponse = webEx.Response as HttpWebResponse;
             }
 
             try
             {
-                if (args.serverResponse != null)
+                if (args.ServerResponse != null)
                 {
-                    args.responseHeaders = ReadResponseHeaders(args.serverResponse);
-                    args.responseStream = args.serverResponse.GetResponseStream();
+                    args.ResponseHeaders = ReadResponseHeaders(args.ServerResponse);
+                    args.ResponseStream = args.ServerResponse.GetResponseStream();
 
 
                     if (BeforeResponse != null)
                     {
-                        args.responseEncoding = args.serverResponse.GetEncoding();
+                        args.ResponseEncoding = args.ServerResponse.GetEncoding();
                         BeforeResponse(null, args);
                     }
 
                     args.ResponseLocked = true;
 
-                    if (args.responseBodyRead)
+                    if (args.ResponseBodyRead)
                     {
-                        bool isChunked = args.serverResponse.GetResponseHeader("transfer-encoding") == null ? false : args.serverResponse.GetResponseHeader("transfer-encoding").ToLower().Contains("chunked") ? true : false;
-                        var contentEncoding = args.serverResponse.ContentEncoding;
+                        var isChunked = args.ServerResponse.GetResponseHeader("transfer-encoding").ToLower().Contains("chunked");
+                        var contentEncoding = args.ServerResponse.ContentEncoding;
 
-                        if (contentEncoding != null)
-                            switch (contentEncoding.ToLower())
-                            {
-                                case "gzip":
-                                    args.responseBody = CompressionHelper.CompressGzip(args.responseBody);
-                                    break;
-                                case "deflate":
-                                    args.responseBody = CompressionHelper.CompressDeflate(args.responseBody);
-                                    break;
-                                case "zlib":
-                                    args.responseBody = CompressionHelper.CompressZlib(args.responseBody);
-                                    break;
-                                default:
-                                    break;
-                            }
+                        switch (contentEncoding.ToLower())
+                        {
+                            case "gzip":
+                                args.ResponseBody = CompressionHelper.CompressGzip(args.ResponseBody);
+                                break;
+                            case "deflate":
+                                args.ResponseBody = CompressionHelper.CompressDeflate(args.ResponseBody);
+                                break;
+                            case "zlib":
+                                args.ResponseBody = CompressionHelper.CompressZlib(args.ResponseBody);
+                                break;
+                        }
 
-                        WriteResponseStatus(args.serverResponse.ProtocolVersion, args.serverResponse.StatusCode, args.serverResponse.StatusDescription, args.clientStreamWriter);
-                        WriteResponseHeaders(args.clientStreamWriter, args.responseHeaders, args.responseBody.Length, isChunked);
-                        WriteResponseBody(args.clientStream, args.responseBody, isChunked);
-
+                        WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode,
+                            args.ServerResponse.StatusDescription, args.ClientStreamWriter);
+                        WriteResponseHeaders(args.ClientStreamWriter, args.ResponseHeaders, args.ResponseBody.Length,
+                            isChunked);
+                        WriteResponseBody(args.ClientStream, args.ResponseBody, isChunked);
                     }
                     else
                     {
-                        bool isChunked = args.serverResponse.GetResponseHeader("transfer-encoding") == null ? false : args.serverResponse.GetResponseHeader("transfer-encoding").ToLower().Contains("chunked") ? true : false;
+                        var isChunked = args.ServerResponse.GetResponseHeader("transfer-encoding").ToLower().Contains("chunked");
 
-                        WriteResponseStatus(args.serverResponse.ProtocolVersion, args.serverResponse.StatusCode, args.serverResponse.StatusDescription, args.clientStreamWriter);
-                        WriteResponseHeaders(args.clientStreamWriter, args.responseHeaders);
-                        WriteResponseBody(args.responseStream, args.clientStream, isChunked);
-
+                        WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode,
+                            args.ServerResponse.StatusDescription, args.ClientStreamWriter);
+                        WriteResponseHeaders(args.ClientStreamWriter, args.ResponseHeaders);
+                        WriteResponseBody(args.ResponseStream, args.ClientStream, isChunked);
                     }
 
-                    args.clientStream.Flush();
-
+                    args.ClientStream.Flush();
                 }
-
             }
             catch
             {
-                Dispose(args.client, args.clientStream, args.clientStreamReader, args.clientStreamWriter, args);
+                Dispose(args.Client, args.ClientStream, args.ClientStreamReader, args.ClientStreamWriter, args);
             }
             finally
             {
-                if (args != null)
-                    args.Dispose();
+                args.Dispose();
             }
-
         }
+
         private static List<HttpHeader> ReadResponseHeaders(HttpWebResponse response)
         {
             var returnHeaders = new List<HttpHeader>();
 
-            String cookieHeaderName = null;
-            String cookieHeaderValue = null;
+            string cookieHeaderName = null;
+            string cookieHeaderValue = null;
 
-            foreach (String headerKey in response.Headers.Keys)
+            foreach (string headerKey in response.Headers.Keys)
             {
                 if (headerKey.ToLower() == "set-cookie")
                 {
@@ -120,21 +110,21 @@ namespace Titanium.Web.Proxy
                     returnHeaders.Add(new HttpHeader(headerKey, response.Headers[headerKey]));
             }
 
-            if (!String.IsNullOrWhiteSpace(cookieHeaderValue))
+            if (!string.IsNullOrWhiteSpace(cookieHeaderValue))
             {
                 response.Headers.Remove(cookieHeaderName);
-                String[] cookies = cookieSplitRegEx.Split(cookieHeaderValue);
-                foreach (String cookie in cookies)
+                var cookies = CookieSplitRegEx.Split(cookieHeaderValue);
+                foreach (var cookie in cookies)
                     returnHeaders.Add(new HttpHeader("Set-Cookie", cookie));
-
             }
 
             return returnHeaders;
         }
 
-        private static void WriteResponseStatus(Version version, HttpStatusCode code, String description, StreamWriter responseWriter)
+        private static void WriteResponseStatus(Version version, HttpStatusCode code, string description,
+            StreamWriter responseWriter)
         {
-            String s = String.Format("HTTP/{0}.{1} {2} {3}", version.Major, version.Minor, (Int32)code, description);
+            var s = string.Format("HTTP/{0}.{1} {2} {3}", version.Major, version.Minor, (int)code, description);
             responseWriter.WriteLine(s);
         }
 
@@ -150,9 +140,10 @@ namespace Titanium.Web.Proxy
 
             responseWriter.WriteLine();
             responseWriter.Flush();
-
         }
-        private static void WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers, int length, bool isChunked)
+
+        private static void WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers, int length,
+            bool isChunked)
         {
             if (!isChunked)
             {
@@ -175,7 +166,6 @@ namespace Titanium.Web.Proxy
 
             responseWriter.WriteLine();
             responseWriter.Flush();
-
         }
 
         private static void WriteResponseBody(Stream clientStream, byte[] data, bool isChunked)
@@ -192,7 +182,7 @@ namespace Titanium.Web.Proxy
         {
             if (!isChunked)
             {
-                Byte[] buffer = new Byte[BUFFER_SIZE];
+                var buffer = new byte[BUFFER_SIZE];
 
                 int bytesRead;
                 while ((bytesRead = inStream.Read(buffer, 0, buffer.Length)) > 0)
@@ -203,11 +193,11 @@ namespace Titanium.Web.Proxy
             else
                 WriteResponseBodyChunked(inStream, outStream);
         }
+
         //Send chunked response
         private static void WriteResponseBodyChunked(Stream inStream, Stream outStream)
         {
-
-            Byte[] buffer = new Byte[BUFFER_SIZE];
+            var buffer = new byte[BUFFER_SIZE];
 
             int bytesRead;
             while ((bytesRead = inStream.Read(buffer, 0, buffer.Length)) > 0)
@@ -215,31 +205,29 @@ namespace Titanium.Web.Proxy
                 var chunkHead = Encoding.ASCII.GetBytes(bytesRead.ToString("x2"));
 
                 outStream.Write(chunkHead, 0, chunkHead.Length);
-                outStream.Write(chunkTrail, 0, chunkTrail.Length);
+                outStream.Write(ChunkTrail, 0, ChunkTrail.Length);
                 outStream.Write(buffer, 0, bytesRead);
-                outStream.Write(chunkTrail, 0, chunkTrail.Length);
-
+                outStream.Write(ChunkTrail, 0, ChunkTrail.Length);
             }
 
             outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
         }
+
         private static void WriteResponseBodyChunked(byte[] data, Stream outStream)
         {
-
-            Byte[] buffer = new Byte[BUFFER_SIZE];
-
             var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
 
             outStream.Write(chunkHead, 0, chunkHead.Length);
-            outStream.Write(chunkTrail, 0, chunkTrail.Length);
+            outStream.Write(ChunkTrail, 0, ChunkTrail.Length);
             outStream.Write(data, 0, data.Length);
-            outStream.Write(chunkTrail, 0, chunkTrail.Length);
+            outStream.Write(ChunkTrail, 0, ChunkTrail.Length);
 
             outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
         }
 
 
-        private static void Dispose(TcpClient client, Stream clientStream, CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, SessionEventArgs args)
+        private static void Dispose(TcpClient client, IDisposable clientStream, IDisposable clientStreamReader,
+            IDisposable clientStreamWriter, IDisposable args)
         {
             if (args != null)
                 args.Dispose();
