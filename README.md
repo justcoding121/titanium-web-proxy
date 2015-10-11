@@ -109,6 +109,8 @@ Sample request and response event handlers
 ```
 Future updates
 ============
-* Replace makecert.exe with other certificate generation APIs (like bouncy)
+* Support mutual authentication
+* Support HTTP 2.0 
 * Support modification of web socket requests
-* Support HTTP 2.0 Once spec is ready
+
+
