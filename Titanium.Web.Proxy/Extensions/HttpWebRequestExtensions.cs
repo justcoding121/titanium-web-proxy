@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
+﻿using System.Net;
 using System.Text;
 
 namespace Titanium.Web.Proxy.Extensions
@@ -24,7 +21,10 @@ namespace Titanium.Web.Proxy.Extensions
                     }
                 }
             }
-            catch { }
+            catch
+            {
+                // ignored
+            }
 
             return Encoding.GetEncoding("ISO-8859-1");
         }

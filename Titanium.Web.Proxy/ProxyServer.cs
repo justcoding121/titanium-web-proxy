@@ -1,54 +1,38 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.IO;
 using System.Net;
-using System.Net.Sockets;
 using System.Net.Security;
-using System.Security.Authentication;
+using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
-using System.Diagnostics;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
-using System.Text;
-
 
 namespace Titanium.Web.Proxy
 {
     /// <summary>
-    /// Proxy Server Main class
+    ///     Proxy Server Main class
     /// </summary>
     public partial class ProxyServer
     {
         private static readonly int BUFFER_SIZE = 8192;
-        private static readonly char[] semiSplit = new char[] { ';' };
+        private static readonly char[] SemiSplit = {';'};
 
-        private static readonly String[] colonSpaceSplit = new string[] { ": " };
-        private static readonly char[] spaceSplit = new char[] { ' ' };
+        private static readonly string[] ColonSpaceSplit = {": "};
+        private static readonly char[] SpaceSplit = {' '};
 
-        private static readonly Regex cookieSplitRegEx = new Regex(@",(?! )");
+        private static readonly Regex CookieSplitRegEx = new Regex(@",(?! )");
 
-        private static readonly byte[] chunkTrail = Encoding.ASCII.GetBytes(Environment.NewLine);
-        private static readonly byte[] ChunkEnd = Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
+        private static readonly byte[] ChunkTrail = Encoding.ASCII.GetBytes(Environment.NewLine);
 
-        private static object certificateAccessLock = new object();
+        private static readonly byte[] ChunkEnd =
+            Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
 
-        private static TcpListener listener;
-        private static CertificateManager CertManager { get; set; }
+        private static TcpListener _listener;
 
         public static List<string> ExcludedHttpsHostNameRegex = new List<string>();
-
-        public static event EventHandler<SessionEventArgs> BeforeRequest;
-        public static event EventHandler<SessionEventArgs> BeforeResponse;
-
-        public static string RootCertificateName { get; set; }
-        public static bool EnableSSL { get; set; }
-        public static bool SetAsSystemProxy { get; set; }
-
-        public static Int32 ListeningPort { get; set; }
-        public static IPAddress ListeningIpAddress { get; set; }
 
         static ProxyServer()
         {
@@ -61,74 +45,89 @@ namespace Titanium.Web.Proxy
             Initialize();
         }
 
+        private static CertificateManager CertManager { get; set; }
+
+        public static string RootCertificateName { get; set; }
+        public static bool EnableSsl { get; set; }
+        public static bool SetAsSystemProxy { get; set; }
+
+        public static int ListeningPort { get; set; }
+        public static IPAddress ListeningIpAddress { get; set; }
+
+        public static event EventHandler<SessionEventArgs> BeforeRequest;
+        public static event EventHandler<SessionEventArgs> BeforeResponse;
+
         public static void Initialize()
         {
-
-            System.Net.ServicePointManager.Expect100Continue = false;
-            System.Net.WebRequest.DefaultWebProxy = null;
-            System.Net.ServicePointManager.DefaultConnectionLimit = 10;
-            ServicePointManager.DnsRefreshTimeout = 3 * 60 * 1000;//3 minutes
-            ServicePointManager.MaxServicePointIdleTime = 3 * 60 * 1000;
+            ServicePointManager.Expect100Continue = false;
+            WebRequest.DefaultWebProxy = null;
+            ServicePointManager.DefaultConnectionLimit = 10;
+            ServicePointManager.DnsRefreshTimeout = 3*60*1000; //3 minutes
+            ServicePointManager.MaxServicePointIdleTime = 3*60*1000;
 
             //HttpWebRequest certificate validation callback
-            ServicePointManager.ServerCertificateValidationCallback = delegate(object s, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-            {
-                if (sslPolicyErrors == SslPolicyErrors.None) return true;
-                else
+            ServicePointManager.ServerCertificateValidationCallback =
+                delegate(object s, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+                {
+                    if (sslPolicyErrors == SslPolicyErrors.None) return true;
                     return false;
-            };
+                };
 
             //Fix a bug in .NET 4.0
-            NetFrameworkHelper.URLPeriodFix();
+            NetFrameworkHelper.UrlPeriodFix();
             //useUnsafeHeaderParsing 
             NetFrameworkHelper.ToggleAllowUnsafeHeaderParsing(true);
         }
 
 
-
         public static bool Start()
         {
-            listener = new TcpListener(ListeningIpAddress, ListeningPort);
-            listener.Start();
+            _listener = new TcpListener(ListeningIpAddress, ListeningPort);
+            _listener.Start();
 
-            ListeningPort = ((IPEndPoint)listener.LocalEndpoint).Port;
+            ListeningPort = ((IPEndPoint) _listener.LocalEndpoint).Port;
             // accept clients asynchronously
-            listener.BeginAcceptTcpClient(OnAcceptConnection, listener);
+            _listener.BeginAcceptTcpClient(OnAcceptConnection, _listener);
 
             if (SetAsSystemProxy)
             {
-                SystemProxyHelper.EnableProxyHTTP(ListeningIpAddress == IPAddress.Any ? "127.0.0.1" : ListeningIpAddress.ToString(), ListeningPort);
+                SystemProxyHelper.EnableProxyHttp(
+                    Equals(ListeningIpAddress, IPAddress.Any) ? "127.0.0.1" : ListeningIpAddress.ToString(), ListeningPort);
                 FireFoxHelper.AddFirefox();
 
 
-                if (EnableSSL)
+                if (EnableSsl)
                 {
-                    RootCertificateName = RootCertificateName == null ? "Titanium_Proxy_Test_Root" : RootCertificateName;
+                    RootCertificateName = RootCertificateName ?? "Titanium_Proxy_Test_Root";
 
-                    bool certTrusted = CertManager.CreateTrustedRootCertificate();
+                    var certTrusted = CertManager.CreateTrustedRootCertificate();
                     //If certificate was trusted by the machine
                     if (certTrusted)
                     {
-                        SystemProxyHelper.EnableProxyHTTPS(ListeningIpAddress == IPAddress.Any ? "127.0.0.1" : ListeningIpAddress.ToString(), ListeningPort);
+                        SystemProxyHelper.EnableProxyHttps(
+                            Equals(ListeningIpAddress, IPAddress.Any) ? "127.0.0.1" : ListeningIpAddress.ToString(),
+                            ListeningPort);
                     }
                 }
             }
 
             return true;
         }
+
         private static void OnAcceptConnection(IAsyncResult asyn)
-        {        
+        {
             try
             {
                 // Get the listener that handles the client request.
-                listener.BeginAcceptTcpClient(OnAcceptConnection, listener);
+                _listener.BeginAcceptTcpClient(OnAcceptConnection, _listener);
 
-                TcpClient client = listener.EndAcceptTcpClient(asyn);
+                var client = _listener.EndAcceptTcpClient(asyn);
                 Task.Factory.StartNew(() => HandleClient(client));
             }
-            catch { }
-          
-        
+            catch
+            {
+                // ignored
+            }
         }
 
 
@@ -140,9 +139,8 @@ namespace Titanium.Web.Proxy
                 FireFoxHelper.RemoveFirefox();
             }
 
-            listener.Stop();
+            _listener.Stop();
             CertManager.Dispose();
-
         }
     }
 }

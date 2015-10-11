@@ -1,125 +1,137 @@
 ﻿using System;
-using System.Text;
-using System.IO;
-using System.Net;
-using Titanium.Web.Proxy.Helpers;
-using System.Net.Sockets;
-using Titanium.Web.Proxy.Exceptions;
-using System.Linq;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
     public class SessionEventArgs : EventArgs, IDisposable
     {
+        readonly int _bufferSize;
 
-        internal int BUFFER_SIZE;
+        internal SessionEventArgs(int bufferSize)
+        {
+            _bufferSize = bufferSize;
+        }
 
-        internal TcpClient client { get; set; }
-        internal Stream clientStream { get; set; }
-        internal CustomBinaryReader clientStreamReader { get; set; }
-        internal StreamWriter clientStreamWriter { get; set; }
+        internal TcpClient Client { get; set; }
+        internal Stream ClientStream { get; set; }
+        internal CustomBinaryReader ClientStreamReader { get; set; }
+        internal StreamWriter ClientStreamWriter { get; set; }
 
 
-        internal bool isHttps { get; set; }
-        internal string requestURL { get; set; }
-        internal string requestHostname { get; set; }
+        public bool IsHttps { get; internal set; }
+        public string RequestUrl { get; internal set; }
+        public string RequestHostname { get; internal set; }
 
-        internal int clientPort { get; set; }
-        internal IPAddress clientIpAddress { get; set; }
+        public int ClientPort { get; internal set; }
+        public IPAddress ClientIpAddress { get; internal set; }
 
-        internal Encoding requestEncoding { get; set; }
-        internal Version requestHttpVersion { get; set; }
-        internal bool requestIsAlive { get; set; }
-        internal bool cancelRequest { get; set; }
-        internal byte[] requestBody { get; set; }
-        internal string requestBodyString { get; set; }
-        internal bool requestBodyRead { get; set; }
-        internal List<HttpHeader> requestHeaders { get; set; }
+        internal Encoding RequestEncoding { get; set; }
+        internal Version RequestHttpVersion { get; set; }
+        internal bool RequestIsAlive { get; set; }
+        internal bool CancelRequest { get; set; }
+        internal byte[] RequestBody { get; set; }
+        internal string RequestBodyString { get; set; }
+        internal bool RequestBodyRead { get; set; }
+        public List<HttpHeader> RequestHeaders { get; internal set; }
         internal bool RequestLocked { get; set; }
-        internal HttpWebRequest proxyRequest { get; set; }
+        internal HttpWebRequest ProxyRequest { get; set; }
 
-        internal Encoding responseEncoding { get; set; }
-        internal Stream responseStream { get; set; }
-        internal byte[] responseBody { get; set; }
-        internal string responseBodyString { get; set; }
-        internal bool responseBodyRead { get; set; }
-        internal List<HttpHeader> responseHeaders { get; set; }
+        internal Encoding ResponseEncoding { get; set; }
+        internal Stream ResponseStream { get; set; }
+        internal byte[] ResponseBody { get; set; }
+        internal string ResponseBodyString { get; set; }
+        internal bool ResponseBodyRead { get; set; }
+        public List<HttpHeader> ResponseHeaders { get; internal set; }
         internal bool ResponseLocked { get; set; }
-        internal HttpWebResponse serverResponse { get; set; }
-
-
-        public int ClientPort { get { return this.clientPort; } }
-        public IPAddress ClientIpAddress { get { return this.clientIpAddress; } }
-
-        public bool IsHttps { get { return this.isHttps; } }
-
-        public string RequestURL { get { return this.requestURL; } }
-        public string RequestHostname { get { return this.requestHostname; } }
-
-        public List<HttpHeader> RequestHeaders { get { return this.requestHeaders; } }
-        public List<HttpHeader> ResponseHeaders { get { return this.responseHeaders; } }
+        internal HttpWebResponse ServerResponse { get; set; }
 
         public int RequestContentLength
         {
             get
             {
-                if (this.requestHeaders.Any(x => x.Name.ToLower() == "content-length"))
-                {
-                    int contentLen;
-                    int.TryParse(this.requestHeaders.First(x => x.Name.ToLower() == "content-length").Value, out contentLen);
-                    if (contentLen != 0)
-                        return contentLen;
-                }
+                if (RequestHeaders.All(x => x.Name.ToLower() != "content-length")) return -1;
+                int contentLen;
+                int.TryParse(RequestHeaders.First(x => x.Name.ToLower() == "content-length").Value, out contentLen);
+                if (contentLen != 0)
+                    return contentLen;
                 return -1;
             }
         }
 
-        public string RequestMethod { get { return this.proxyRequest.Method; } }
-
-
-        public HttpStatusCode ResponseStatusCode { get { return this.serverResponse.StatusCode; } }
-        public string ResponseContentType { get { return this.responseHeaders.Any(x => x.Name.ToLower() == "content-type") ? this.responseHeaders.First(x => x.Name.ToLower() == "content-type").Value : null; } }
-
-
-        internal SessionEventArgs(int bufferSize)
+        public string RequestMethod
         {
-            BUFFER_SIZE = bufferSize;
+            get { return ProxyRequest.Method; }
         }
 
-        private void readRequestBody()
+
+        public HttpStatusCode ResponseStatusCode
         {
-            if ((proxyRequest.Method.ToUpper() != "POST" && proxyRequest.Method.ToUpper() != "PUT"))
+            get { return ServerResponse.StatusCode; }
+        }
+
+        public string ResponseContentType
+        {
+            get
+            {
+                return ResponseHeaders.Any(x => x.Name.ToLower() == "content-type")
+                    ? ResponseHeaders.First(x => x.Name.ToLower() == "content-type").Value
+                    : null;
+            }
+        }
+
+        public void Dispose()
+        {
+            if (ProxyRequest != null)
+                ProxyRequest.Abort();
+
+            if (ResponseStream != null)
+                ResponseStream.Dispose();
+
+            if (ServerResponse != null)
+                ServerResponse.Close();
+        }
+
+        private void ReadRequestBody()
+        {
+            if ((ProxyRequest.Method.ToUpper() != "POST" && ProxyRequest.Method.ToUpper() != "PUT"))
             {
                 throw new BodyNotFoundException("Request don't have a body." +
-                     "Please verify that this request is a Http POST/PUT and request content length is greater than zero before accessing the body.");
+                                                "Please verify that this request is a Http POST/PUT and request content length is greater than zero before accessing the body.");
             }
 
-            if (requestBody == null)
+            if (RequestBody == null)
             {
-                bool isChunked = false;
+                var isChunked = false;
                 string requestContentEncoding = null;
 
 
-                if (requestHeaders.Any(x => x.Name.ToLower() == "content-encoding"))
+                if (RequestHeaders.Any(x => x.Name.ToLower() == "content-encoding"))
                 {
-                    requestContentEncoding = requestHeaders.First(x => x.Name.ToLower() == "content-encoding").Value;
+                    requestContentEncoding = RequestHeaders.First(x => x.Name.ToLower() == "content-encoding").Value;
                 }
 
-                if (requestHeaders.Any(x => x.Name.ToLower() == "transfer-encoding"))
+                if (RequestHeaders.Any(x => x.Name.ToLower() == "transfer-encoding"))
                 {
-                    var transferEncoding = requestHeaders.First(x => x.Name.ToLower() == "transfer-encoding").Value.ToLower();
+                    var transferEncoding =
+                        RequestHeaders.First(x => x.Name.ToLower() == "transfer-encoding").Value.ToLower();
                     if (transferEncoding.Contains("chunked"))
                     {
-
                         isChunked = true;
                     }
                 }
 
 
                 if (requestContentEncoding == null && !isChunked)
-                    requestBody = clientStreamReader.ReadBytes(RequestContentLength);
+                    RequestBody = ClientStreamReader.ReadBytes(RequestContentLength);
                 else
                 {
                     using (var requestBodyStream = new MemoryStream())
@@ -128,76 +140,72 @@ namespace Titanium.Web.Proxy.EventArguments
                         {
                             while (true)
                             {
-                                var chuchkHead = clientStreamReader.ReadLine();
-                                var chunkSize = int.Parse(chuchkHead, System.Globalization.NumberStyles.HexNumber);
+                                var chuchkHead = ClientStreamReader.ReadLine();
+                                var chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
 
                                 if (chunkSize != 0)
                                 {
-                                    var buffer = clientStreamReader.ReadBytes(chunkSize);
+                                    var buffer = ClientStreamReader.ReadBytes(chunkSize);
                                     requestBodyStream.Write(buffer, 0, buffer.Length);
-
-                                    var chunkTrail = clientStreamReader.ReadLine();
+                                    //chunk trail
+                                    ClientStreamReader.ReadLine();
                                 }
                                 else
                                 {
-                                    clientStreamReader.ReadLine();
+                                    ClientStreamReader.ReadLine();
                                     break;
                                 }
-
                             }
-                            
                         }
                         try
                         {
                             switch (requestContentEncoding)
                             {
                                 case "gzip":
-                                    requestBody = CompressionHelper.DecompressGzip(requestBodyStream);
+                                    RequestBody = CompressionHelper.DecompressGzip(requestBodyStream);
                                     break;
                                 case "deflate":
-                                    requestBody = CompressionHelper.DecompressDeflate(requestBodyStream);
+                                    RequestBody = CompressionHelper.DecompressDeflate(requestBodyStream);
                                     break;
                                 case "zlib":
-                                    requestBody = CompressionHelper.DecompressGzip(requestBodyStream);
+                                    RequestBody = CompressionHelper.DecompressGzip(requestBodyStream);
                                     break;
                                 default:
-                                    requestBody = requestBodyStream.ToArray();
+                                    RequestBody = requestBodyStream.ToArray();
                                     break;
                             }
                         }
-                        catch {
-                            requestBody = requestBodyStream.ToArray();
+                        catch
+                        {
+                            RequestBody = requestBodyStream.ToArray();
                         }
                     }
-
                 }
-
             }
-            requestBodyRead = true;
+            RequestBodyRead = true;
         }
-        private void readResponseBody()
-        {
-            if (responseBody == null)
-            {
 
-                switch (serverResponse.ContentEncoding)
+        private void ReadResponseBody()
+        {
+            if (ResponseBody == null)
+            {
+                switch (ServerResponse.ContentEncoding)
                 {
                     case "gzip":
-                        responseBody = CompressionHelper.DecompressGzip(responseStream);
+                        ResponseBody = CompressionHelper.DecompressGzip(ResponseStream);
                         break;
                     case "deflate":
-                        responseBody = CompressionHelper.DecompressDeflate(responseStream);
+                        ResponseBody = CompressionHelper.DecompressDeflate(ResponseStream);
                         break;
                     case "zlib":
-                        responseBody = CompressionHelper.DecompressZlib(responseStream);
+                        ResponseBody = CompressionHelper.DecompressZlib(ResponseStream);
                         break;
                     default:
-                        responseBody = DecodeData(responseStream);
+                        ResponseBody = DecodeData(ResponseStream);
                         break;
                 }
 
-                responseBodyRead = true;
-
+                ResponseBodyRead = true;
             }
         }
 
@@ -205,8 +213,8 @@ namespace Titanium.Web.Proxy.EventArguments
         //stream reader not recomended for images
         private byte[] DecodeData(Stream responseStream)
         {
-            byte[] buffer = new byte[BUFFER_SIZE];
-            using (MemoryStream ms = new MemoryStream())
+            var buffer = new byte[_bufferSize];
+            using (var ms = new MemoryStream())
             {
                 int read;
                 while ((read = responseStream.Read(buffer, 0, buffer.Length)) > 0)
@@ -215,117 +223,105 @@ namespace Titanium.Web.Proxy.EventArguments
                 }
                 return ms.ToArray();
             }
-
         }
 
         public Encoding GetRequestBodyEncoding()
         {
             if (RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
 
-            return requestEncoding;
+            return RequestEncoding;
         }
 
         public byte[] GetRequestBody()
         {
             if (RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
 
-            readRequestBody();
-            return requestBody;
-
-
+            ReadRequestBody();
+            return RequestBody;
         }
+
         public string GetRequestBodyAsString()
         {
             if (RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
 
 
-            readRequestBody();
+            ReadRequestBody();
 
-            if (requestBodyString == null)
-            {
-                requestBodyString = requestEncoding.GetString(requestBody);
-            }
-            return requestBodyString;
-
-
-
+            return RequestBodyString ?? (RequestBodyString = RequestEncoding.GetString(RequestBody));
         }
 
         public void SetRequestBody(byte[] body)
         {
             if (RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
 
-            if (!requestBodyRead)
+            if (!RequestBodyRead)
             {
-                readRequestBody();
+                ReadRequestBody();
             }
 
-            requestBody = body;
-            requestBodyRead = true;
+            RequestBody = body;
+            RequestBodyRead = true;
         }
+
         public void SetRequestBodyString(string body)
         {
-
             if (RequestLocked) throw new Exception("Youcannot call this function after request is made to server.");
 
-            if (!requestBodyRead)
+            if (!RequestBodyRead)
             {
-                readRequestBody();
+                ReadRequestBody();
             }
 
-            this.requestBody = requestEncoding.GetBytes(body);
-            requestBodyRead = true;
+            RequestBody = RequestEncoding.GetBytes(body);
+            RequestBodyRead = true;
         }
 
         public Encoding GetResponseBodyEncoding()
         {
             if (!RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
 
-            return responseEncoding;
+            return ResponseEncoding;
         }
 
         public byte[] GetResponseBody()
         {
             if (!RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
 
-            readResponseBody();
-            return responseBody;
+            ReadResponseBody();
+            return ResponseBody;
         }
+
         public string GetResponseBodyAsString()
         {
             if (!RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
 
             GetResponseBody();
 
-            if (responseBodyString == null)
-            {
-                responseBodyString = responseEncoding.GetString(responseBody);
-            }
-            return responseBodyString;
+            return ResponseBodyString ?? (ResponseBodyString = ResponseEncoding.GetString(ResponseBody));
         }
+
         public void SetResponseBody(byte[] body)
         {
             if (!RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
 
-            if (responseBody == null)
+            if (ResponseBody == null)
             {
                 GetResponseBody();
             }
 
-            responseBody = body;
-
-
+            ResponseBody = body;
         }
+
         public void SetResponseBodyString(string body)
         {
             if (!RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
 
-            if (responseBody == null)
+            if (ResponseBody == null)
             {
                 GetResponseBody();
             }
 
-            var bodyBytes = responseEncoding.GetBytes(body);
+            var bodyBytes = ResponseEncoding.GetBytes(body);
             SetResponseBody(bodyBytes);
         }
 
@@ -339,45 +335,24 @@ namespace Titanium.Web.Proxy.EventArguments
 
             var result = Encoding.Default.GetBytes(html);
 
-            StreamWriter connectStreamWriter = new StreamWriter(clientStream);
-            var s = String.Format("HTTP/{0}.{1} {2} {3}", requestHttpVersion.Major, requestHttpVersion.Minor, 200, "Ok");
+            var connectStreamWriter = new StreamWriter(ClientStream);
+            var s = string.Format("HTTP/{0}.{1} {2} {3}", RequestHttpVersion.Major, RequestHttpVersion.Minor, 200, "Ok");
             connectStreamWriter.WriteLine(s);
-            connectStreamWriter.WriteLine(String.Format("Timestamp: {0}", DateTime.Now.ToString()));
+            connectStreamWriter.WriteLine("Timestamp: {0}", DateTime.Now);
             connectStreamWriter.WriteLine("content-length: " + result.Length);
             connectStreamWriter.WriteLine("Cache-Control: no-cache, no-store, must-revalidate");
             connectStreamWriter.WriteLine("Pragma: no-cache");
             connectStreamWriter.WriteLine("Expires: 0");
 
-            if (requestIsAlive)
-            {
-                connectStreamWriter.WriteLine("Connection: Keep-Alive");
-            }
-            else
-                connectStreamWriter.WriteLine("Connection: close");
+            connectStreamWriter.WriteLine(RequestIsAlive ? "Connection: Keep-Alive" : "Connection: close");
 
             connectStreamWriter.WriteLine();
             connectStreamWriter.Flush();
 
-            clientStream.Write(result, 0, result.Length);
+            ClientStream.Write(result, 0, result.Length);
 
 
-            cancelRequest = true;
-
+            CancelRequest = true;
         }
-
-        public void Dispose()
-        {
-            if (this.proxyRequest != null)
-                this.proxyRequest.Abort();
-
-            if (this.responseStream != null)
-                this.responseStream.Dispose();
-
-            if (this.serverResponse != null)
-                this.serverResponse.Close();
-        }
-
-
     }
-
 }

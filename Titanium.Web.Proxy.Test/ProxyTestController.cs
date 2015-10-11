@@ -1,33 +1,20 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Net;
-using System.Text.RegularExpressions;
-using System.DirectoryServices.AccountManagement;
-using System.DirectoryServices.ActiveDirectory;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy;
-using Titanium.Web.Proxy.Helpers;
-
-
 
 namespace Titanium.Web.Proxy.Test
 {
-    public partial class ProxyTestController
+    public class ProxyTestController
     {
-
         public int ListeningPort { get; set; }
-        public bool EnableSSL { get; set; }
+        public bool EnableSsl { get; set; }
         public bool SetAsSystemProxy { get; set; }
 
         public void StartProxy()
         {
-
             ProxyServer.BeforeRequest += OnRequest;
             ProxyServer.BeforeResponse += OnResponse;
 
-            ProxyServer.EnableSSL = EnableSSL;
+            ProxyServer.EnableSsl = EnableSsl;
 
             ProxyServer.SetAsSystemProxy = SetAsSystemProxy;
 
@@ -40,9 +27,9 @@ namespace Titanium.Web.Proxy.Test
 
             ProxyServer.ListeningPort = ProxyServer.ListeningPort;
 
-            Console.WriteLine(String.Format("Proxy listening on local machine port: {0} ", ProxyServer.ListeningPort));
-
+            Console.WriteLine("Proxy listening on local machine port: {0} ", ProxyServer.ListeningPort);
         }
+
         public void Stop()
         {
             ProxyServer.BeforeRequest -= OnRequest;
@@ -52,13 +39,11 @@ namespace Titanium.Web.Proxy.Test
         }
 
 
-
         //Test On Request, intecept requests
         //Read browser URL send back to proxy by the injection script in OnResponse event
         public void OnRequest(object sender, SessionEventArgs e)
         {
-
-            Console.WriteLine(e.RequestURL);
+            Console.WriteLine(e.RequestUrl);
 
             ////read request headers
             //var requestHeaders = e.RequestHeaders;
@@ -82,7 +67,6 @@ namespace Titanium.Web.Proxy.Test
             //{
             //    e.Ok("<!DOCTYPE html><html><body><h1>Website Blocked</h1><p>Blocked by titanium web proxy.</p></body></html>");
             //}
-
         }
 
         //Test script injection
@@ -112,9 +96,6 @@ namespace Titanium.Web.Proxy.Test
             //        e.SetResponseBodyString(modified);
             //    }
             //}
-
         }
-
     }
-
 }
