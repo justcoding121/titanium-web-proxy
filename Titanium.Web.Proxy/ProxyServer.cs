@@ -18,10 +18,10 @@ namespace Titanium.Web.Proxy
     public partial class ProxyServer
     {
         private static readonly int BUFFER_SIZE = 8192;
-        private static readonly char[] SemiSplit = {';'};
+        private static readonly char[] SemiSplit = { ';' };
 
-        private static readonly string[] ColonSpaceSplit = {": "};
-        private static readonly char[] SpaceSplit = {' '};
+        private static readonly string[] ColonSpaceSplit = { ": " };
+        private static readonly char[] SpaceSplit = { ' ' };
 
         private static readonly Regex CookieSplitRegEx = new Regex(@",(?! )");
 
@@ -62,8 +62,8 @@ namespace Titanium.Web.Proxy
             ServicePointManager.Expect100Continue = false;
             WebRequest.DefaultWebProxy = null;
             ServicePointManager.DefaultConnectionLimit = 10;
-            ServicePointManager.DnsRefreshTimeout = 3*60*1000; //3 minutes
-            ServicePointManager.MaxServicePointIdleTime = 3*60*1000;
+            ServicePointManager.DnsRefreshTimeout = 3 * 60 * 1000; //3 minutes
+            ServicePointManager.MaxServicePointIdleTime = 3 * 60 * 1000;
 
             //HttpWebRequest certificate validation callback
             ServicePointManager.ServerCertificateValidationCallback =
@@ -85,9 +85,14 @@ namespace Titanium.Web.Proxy
             _listener = new TcpListener(ListeningIpAddress, ListeningPort);
             _listener.Start();
 
-            ListeningPort = ((IPEndPoint) _listener.LocalEndpoint).Port;
+            ListeningPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
             // accept clients asynchronously
             _listener.BeginAcceptTcpClient(OnAcceptConnection, _listener);
+
+            var certTrusted = false;
+
+            if (EnableSsl)
+                certTrusted = CertManager.CreateTrustedRootCertificate();
 
             if (SetAsSystemProxy)
             {
@@ -100,7 +105,6 @@ namespace Titanium.Web.Proxy
                 {
                     RootCertificateName = RootCertificateName ?? "Titanium_Proxy_Test_Root";
 
-                    var certTrusted = CertManager.CreateTrustedRootCertificate();
                     //If certificate was trusted by the machine
                     if (certTrusted)
                     {

@@ -43,16 +43,14 @@ namespace Titanium.Web.Proxy.Test
 
         private static bool ConsoleEventCallback(int eventType)
         {
-            if (eventType == 2)
+            if (eventType != 2) return false;
+            try
             {
-                try
-                {
-                    Controller.Stop();
-                }
-                catch
-                {
-                    // ignored
-                }
+                Controller.Stop();
+            }
+            catch
+            {
+                // ignored
             }
             return false;
         }
