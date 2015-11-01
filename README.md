@@ -113,4 +113,4 @@ Future updates
 * Support HTTP 2.0 
 * Support modification of web socket requests
 
-
+[![titanium MyGet Build Status](https://www.myget.org/BuildSource/Badge/titanium?identifier=36bd545d-87aa-4c0c-ae98-6de9a078b016)](https://www.myget.org/)
