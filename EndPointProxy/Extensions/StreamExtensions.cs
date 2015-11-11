@@ -2,7 +2,7 @@
 using System.IO;
 using System.Text;
 
-namespace Titanium.Web.Proxy.Extensions
+namespace EndPointProxy.Extensions
 {
     public static class StreamHelper
     {
