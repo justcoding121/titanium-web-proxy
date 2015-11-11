@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Titanium.Web.Proxy.Models
+namespace ProxyLanguage.Models
 {
     public class HttpHeader
     {

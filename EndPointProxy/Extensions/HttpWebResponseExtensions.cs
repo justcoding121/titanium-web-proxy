@@ -1,7 +1,7 @@
 ﻿using System.Net;
 using System.Text;
 
-namespace Titanium.Web.Proxy.Extensions
+namespace EndPointProxy.Extensions
 {
     public static class HttpWebResponseExtensions
     {

@@ -1,4 +1,6 @@
-﻿using System;
+﻿using EndPointProxy.Extensions;
+using ProxyLanguage.Models;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -6,9 +8,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy
 {

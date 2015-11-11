@@ -1,4 +1,7 @@
-﻿using System;
+﻿using EndPointProxy;
+using ProxyLanguage;
+using ProxyLanguage.Models;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -11,9 +14,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy
 {
@@ -174,30 +175,23 @@ namespace Titanium.Web.Proxy
 
 
                 //construct the web request that we are going to issue on behalf of the client.
-                args.ProxyRequest = (HttpWebRequest) WebRequest.Create(httpRemoteUri);
-                args.ProxyRequest.Proxy = null;
-                args.ProxyRequest.UseDefaultCredentials = true;
-                args.ProxyRequest.Method = httpMethod;
-                args.ProxyRequest.ProtocolVersion = version;
+                args.ProxyRequest = new EndPointProxyRequest(httpRemoteUri, httpMethod, version);// (HttpWebRequest) WebRequest.Create(httpRemoteUri);                
                 args.ClientStream = clientStream;
                 args.ClientStreamReader = clientStreamReader;
                 args.ClientStreamWriter = clientStreamWriter;
-                args.ProxyRequest.AllowAutoRedirect = false;
-                args.ProxyRequest.AutomaticDecompression = DecompressionMethods.None;
+                
                 args.RequestHostname = args.ProxyRequest.RequestUri.Host;
                 args.RequestUrl = args.ProxyRequest.RequestUri.OriginalString;
                 args.ClientPort = ((IPEndPoint) client.Client.RemoteEndPoint).Port;
                 args.ClientIpAddress = ((IPEndPoint) client.Client.RemoteEndPoint).Address;
                 args.RequestHttpVersion = version;
                 args.RequestIsAlive = args.ProxyRequest.KeepAlive;
-                args.ProxyRequest.ConnectionGroupName = args.RequestHostname;
-                args.ProxyRequest.AllowWriteStreamBuffering = true;
-
-
+                
                 //If requested interception
                 if (BeforeRequest != null)
                 {
-                    args.RequestEncoding = args.ProxyRequest.GetEncoding();
+                    //((HttpWebRequest)WebRequest.Create(httpRemoteUri)).GetEncoding();
+                    args.RequestEncoding = args.ProxyRequest.RequestEncoding;
                     BeforeRequest(null, args);
                 }
 
@@ -255,91 +249,9 @@ namespace Titanium.Web.Proxy
             clientStreamWriter.Flush();
         }
 
-        private static void SetRequestHeaders(List<HttpHeader> requestHeaders, HttpWebRequest webRequest)
+        private static void SetRequestHeaders(List<HttpHeader> requestHeaders, IProxyRequest webRequest)
         {
-            for (var i = 0; i < requestHeaders.Count; i++)
-            {
-                switch (requestHeaders[i].Name.ToLower())
-                {
-                    case "accept":
-                        webRequest.Accept = requestHeaders[i].Value;
-                        break;
-                    case "accept-encoding":
-                        webRequest.Headers.Add("Accept-Encoding", "gzip,deflate,zlib");
-                        break;
-                    case "cookie":
-                        webRequest.Headers["Cookie"] = requestHeaders[i].Value;
-                        break;
-                    case "connection":
-                        if (requestHeaders[i].Value.ToLower() == "keep-alive")
-                            webRequest.KeepAlive = true;
-
-                        break;
-                    case "content-length":
-                        int contentLen;
-                        int.TryParse(requestHeaders[i].Value, out contentLen);
-                        if (contentLen != 0)
-                            webRequest.ContentLength = contentLen;
-                        break;
-                    case "content-type":
-                        webRequest.ContentType = requestHeaders[i].Value;
-                        break;
-                    case "expect":
-                        if (requestHeaders[i].Value.ToLower() == "100-continue")
-                            webRequest.ServicePoint.Expect100Continue = true;
-                        else
-                            webRequest.Expect = requestHeaders[i].Value;
-                        break;
-                    case "host":
-                        webRequest.Host = requestHeaders[i].Value;
-                        break;
-                    case "if-modified-since":
-                        var sb = requestHeaders[i].Value.Trim().Split(SemiSplit);
-                        DateTime d;
-                        if (DateTime.TryParse(sb[0], out d))
-                            webRequest.IfModifiedSince = d;
-                        break;
-                    case "proxy-connection":
-                        if (requestHeaders[i].Value.ToLower() == "keep-alive")
-                            webRequest.KeepAlive = true;
-                        break;
-                    case "range":
-                        var startEnd = requestHeaders[i].Value.Replace(Environment.NewLine, "").Remove(0, 6).Split('-');
-                        if (startEnd.Length > 1)
-                        {
-                            if (!string.IsNullOrEmpty(startEnd[1]))
-                                webRequest.AddRange(int.Parse(startEnd[0]), int.Parse(startEnd[1]));
-                            else webRequest.AddRange(int.Parse(startEnd[0]));
-                        }
-                        else
-                            webRequest.AddRange(int.Parse(startEnd[0]));
-                        break;
-                    case "referer":
-                        webRequest.Referer = requestHeaders[i].Value;
-                        break;
-                    case "user-agent":
-                        webRequest.UserAgent = requestHeaders[i].Value;
-                        break;
-
-                    //revisit this, transfer-encoding is not a request header according to spec
-                    //But how to identify if client is sending chunked body for PUT/POST?
-                    case "transfer-encoding":
-                        if (requestHeaders[i].Value.ToLower().Contains("chunked"))
-                            webRequest.SendChunked = true;
-                        else
-                            webRequest.SendChunked = false;
-                        break;
-                    case "upgrade":
-                        if (requestHeaders[i].Value.ToLower() == "http/1.1")
-                            webRequest.Headers.Add("Upgrade", requestHeaders[i].Value);
-                        break;
-
-                    default:
-                        webRequest.Headers.Add(requestHeaders[i].Name, requestHeaders[i].Value);
-
-                        break;
-                }
-            }
+            webRequest.SetRequestHeaders(requestHeaders);
         }
 
         //This is called when the request is PUT/POST to read the body

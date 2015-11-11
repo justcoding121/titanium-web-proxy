@@ -1,4 +1,6 @@
-﻿using System;
+﻿using ProxyLanguage;
+using ProxyLanguage.Models;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -8,7 +10,6 @@ using System.Net.Sockets;
 using System.Text;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -43,7 +44,7 @@ namespace Titanium.Web.Proxy.EventArguments
         internal bool RequestBodyRead { get; set; }
         public List<HttpHeader> RequestHeaders { get; internal set; }
         internal bool RequestLocked { get; set; }
-        internal HttpWebRequest ProxyRequest { get; set; }
+        internal IProxyRequest ProxyRequest { get; set; }
 
         internal Encoding ResponseEncoding { get; set; }
         internal Stream ResponseStream { get; set; }

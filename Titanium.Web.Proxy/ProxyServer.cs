@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Autofac;
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Security;
@@ -18,8 +19,7 @@ namespace Titanium.Web.Proxy
     public partial class ProxyServer
     {
         private static readonly int BUFFER_SIZE = 8192;
-        private static readonly char[] SemiSplit = { ';' };
-
+        
         private static readonly string[] ColonSpaceSplit = { ": " };
         private static readonly char[] SpaceSplit = { ' ' };
 
@@ -33,6 +33,8 @@ namespace Titanium.Web.Proxy
         private static TcpListener _listener;
 
         public static List<string> ExcludedHttpsHostNameRegex = new List<string>();
+        private static IContainer _container;
+        private static ILifetimeScope _scope;
 
         static ProxyServer()
         {
@@ -42,7 +44,18 @@ namespace Titanium.Web.Proxy
             ListeningIpAddress = IPAddress.Any;
             ListeningPort = 0;
 
+            SetupAutofac();
+
             Initialize();
+        }
+
+        private static void SetupAutofac()
+        {
+            var builder = new ContainerBuilder();
+            builder.RegisterModule(new AutofacSetup());
+            _container = builder.Build();
+
+            _scope = _container.BeginLifetimeScope();
         }
 
         private static CertificateManager CertManager { get; set; }
