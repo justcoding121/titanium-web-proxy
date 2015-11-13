@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.Helpers
     public class CertificateManager : IDisposable 
     {
         private const string CertCreateFormat =
-            "-ss {0} -n \"CN={1}, O={2}\" -sky {3} -cy {4} -m 120 -a sha256 -eku 1.3.6.1.5.5.7.3.1 -b {5:MM/dd/yyyy} {6}";
+            "-ss {0} -n \"CN={1}, O={2}\" -sky {3} -cy {4} -m 120 -a sha256 -eku 1.3.6.1.5.5.7.3.1 {5}";
 
         private readonly IDictionary<string, X509Certificate2> _certificateCache;
 
@@ -168,7 +168,7 @@ namespace Titanium.Web.Proxy.Helpers
             string certCreatArgs = string.Format(CertCreateFormat,
                 store.Name, certificateName, Issuer,
                 isRootCertificate ? "signature" : "exchange",
-                isRootCertificate ? "authority" : "end", DateTime.Now,
+                isRootCertificate ? "authority" : "end",
                 isRootCertificate ? "-h 1 -r" : string.Format("-pe -in \"{0}\" -is Root", RootCertificateName));
 
             return certCreatArgs;
