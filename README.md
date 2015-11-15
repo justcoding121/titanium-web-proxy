@@ -2,6 +2,8 @@ Titanium
 ========
 [![titanium MyGet Build Status](https://www.myget.org/BuildSource/Badge/titanium?identifier=36bd545d-87aa-4c0c-ae98-6de9a078b016)](https://www.myget.org/)
 
+Ask non-bug questions/help at [StackOverflow](http://stackoverflow.com/questions/tagged/titanium-web-proxy).
+
 A light weight http(s) proxy server written in C#
 
 ![alt tag](https://raw.githubusercontent.com/titanium007/Titanium/master/Titanium.Web.Proxy.Test/Capture.PNG)
