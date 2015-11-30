@@ -172,7 +172,8 @@ namespace Titanium.Web.Proxy
                     }
                 }
 
-
+                //验证服务器证书回调自动验证
+                System.Net.ServicePointManager.ServerCertificateValidationCallback =new System.Net.Security.RemoteCertificateValidationCallback(CheckValidationResult);
                 //construct the web request that we are going to issue on behalf of the client.
                 args.ProxyRequest = (HttpWebRequest) WebRequest.Create(httpRemoteUri);
                 args.ProxyRequest.Proxy = null;
@@ -244,6 +245,10 @@ namespace Titanium.Web.Proxy
             {
                 Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
             }
+        }
+        protected static bool CheckValidationResult(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors errors)
+        {   // 总是接受  
+            return true;
         }
 
         private static void WriteConnectResponse(StreamWriter clientStreamWriter, string httpVersion)
