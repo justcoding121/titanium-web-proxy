@@ -265,7 +265,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public void SetRequestBodyString(string body)
         {
-            if (RequestLocked) throw new Exception("Youcannot call this function after request is made to server.");
+            if (RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
 
             if (!RequestBodyRead)
             {
