@@ -6,10 +6,10 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    public class CertificateManager
+    public class CertificateManager : IDisposable 
     {
-        private const string CERT_CREATE_FORMAT =
-            "-ss {0} -n \"CN={1}, O={2}\" -sky {3} -cy {4} -m 120 -a sha256 -eku 1.3.6.1.5.5.7.3.1 -b {5:MM/dd/yyyy} {6}";
+        private const string CertCreateFormat =
+            "-ss {0} -n \"CN={1}, O={2}\" -sky {3} -cy {4} -m 120 -a sha256 -eku 1.3.6.1.5.5.7.3.1 {5}";
 
         private readonly IDictionary<string, X509Certificate2> _certificateCache;
 
@@ -69,6 +69,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
         protected virtual X509Certificate2 CreateCertificate(X509Store store, string certificateName)
         {
+
             if (_certificateCache.ContainsKey(certificateName))
                 return _certificateCache[certificateName];
 
@@ -80,7 +81,7 @@ namespace Titanium.Web.Proxy.Helpers
                     store.Open(OpenFlags.ReadWrite);
                     string certificateSubject = string.Format("CN={0}, O={1}", certificateName, Issuer);
 
-                    X509Certificate2Collection certificates =
+                    var certificates =
                         FindCertificates(store, certificateSubject);
 
                     if (certificates != null)
@@ -164,13 +165,22 @@ namespace Titanium.Web.Proxy.Helpers
             bool isRootCertificate =
                 (certificateName == RootCertificateName);
 
-            string certCreatArgs = string.Format(CERT_CREATE_FORMAT,
+            string certCreatArgs = string.Format(CertCreateFormat,
                 store.Name, certificateName, Issuer,
                 isRootCertificate ? "signature" : "exchange",
-                isRootCertificate ? "authority" : "end", DateTime.Now,
+                isRootCertificate ? "authority" : "end",
                 isRootCertificate ? "-h 1 -r" : string.Format("-pe -in \"{0}\" -is Root", RootCertificateName));
 
             return certCreatArgs;
+        }
+
+        public void Dispose()
+        {
+            if (MyStore != null)
+                MyStore.Close();
+
+            if (RootStore != null)
+                RootStore.Close();
         }
     }
 }

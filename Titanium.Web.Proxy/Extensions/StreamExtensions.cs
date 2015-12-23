@@ -1,43 +1,34 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
+using System.Text;
 
-namespace Titanium.Web.Proxy.Helpers
+namespace Titanium.Web.Proxy.Extensions
 {
     public static class StreamHelper
     {
-        private const int DEFAULT_BUFFER_SIZE = 8192; // +32767
-        public static void CopyTo(this Stream input, Stream output)
+        public static void CopyToAsync(this Stream input, string initialData, Stream output, int bufferSize)
         {
-
-            input.CopyTo(output, DEFAULT_BUFFER_SIZE);
-            return;
-        }
-        public static void CopyTo(string initialData, Stream input, Stream output, int bufferSize)
-        {
-             
             var bytes = Encoding.ASCII.GetBytes(initialData);
-            output.Write(bytes,0, bytes.Length);
-            CopyTo(input, output, bufferSize);  
+            output.Write(bytes, 0, bytes.Length);
+            CopyToAsync(input, output, bufferSize);
         }
-        public static void CopyTo(this Stream input, Stream output, int bufferSize)
+
+        //http://stackoverflow.com/questions/1540658/net-asynchronous-stream-read-write
+        public static void CopyToAsync(this Stream input, Stream output, int bufferSize)
         {
             try
             {
                 if (!input.CanRead) throw new InvalidOperationException("input must be open for reading");
                 if (!output.CanWrite) throw new InvalidOperationException("output must be open for writing");
 
-                byte[][] buf = { new byte[bufferSize], new byte[bufferSize] };
-                int[] bufl = { 0, 0 };
-                int bufno = 0;
-                IAsyncResult read = input.BeginRead(buf[bufno], 0, buf[bufno].Length, null, null);
+                byte[][] buf = {new byte[bufferSize], new byte[bufferSize]};
+                int[] bufl = {0, 0};
+                var bufno = 0;
+                var read = input.BeginRead(buf[bufno], 0, buf[bufno].Length, null, null);
                 IAsyncResult write = null;
 
                 while (true)
                 {
-
                     // wait for the read operation to complete
                     read.AsyncWaitHandle.WaitOne();
                     bufl[bufno] = input.EndRead(read);
@@ -66,7 +57,6 @@ namespace Titanium.Web.Proxy.Helpers
                     // A little speedier than using a ternary expression.
                     bufno ^= 1; // bufno = ( bufno == 0 ? 1 : 0 ) ;
                     read = input.BeginRead(buf[bufno], 0, buf[bufno].Length, null, null);
-
                 }
 
                 // wait for the final in-flight write operation, if one exists, to complete
@@ -79,9 +69,11 @@ namespace Titanium.Web.Proxy.Helpers
 
                 output.Flush();
             }
-            catch { }
+            catch
+            {
+                // ignored
+            }
             // return to the caller ;
-            return;
         }
     }
 }

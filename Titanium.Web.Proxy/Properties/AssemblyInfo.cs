@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 
-[assembly: AssemblyTitle("Demo")]
+[assembly: AssemblyTitle("Titanium.Web.Proxy.Properties")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("Demo")]
-[assembly: AssemblyCopyright("Copyright ©2013 Telerik")]
+[assembly: AssemblyProduct("Titanium.Web.Proxy.Properties")]
+[assembly: AssemblyCopyright("Copyright ©  2015")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -22,7 +22,7 @@ using System.Runtime.InteropServices;
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
 
-[assembly: Guid("33a2109d-0312-4c94-aa51-fbb2a83e63ab")]
+[assembly: Guid("5036e0b7-a0d0-4070-8eb0-72c129dee9b3")]
 
 // Version information for an assembly consists of the following four values:
 //
@@ -31,9 +31,6 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-// You can specify all the values or you can default the Build and Revision Numbers 
-// by using the '*' as shown below:
-// [assembly: AssemblyVersion("1.0.*")]
 
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: AssemblyFileVersion("1.0.0.0")]

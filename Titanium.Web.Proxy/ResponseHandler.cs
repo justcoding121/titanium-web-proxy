@@ -1,326 +1,242 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Net.Sockets;
 using System.IO;
+using System.Linq;
 using System.Net;
-using System.Net.Security;
-using System.Threading;
-using System.Security.Authentication;
-using System.Diagnostics;
-using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Helpers;
+using System.Net.Sockets;
+using System.Text;
 using System.Threading.Tasks;
+using Titanium.Web.Http;
+using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
+
 
 namespace Titanium.Web.Proxy
 {
     partial class ProxyServer
     {
-        private static void HandleHttpSessionResponse(IAsyncResult AsynchronousResult)
-        {
+        //Called asynchronously when a request was successfully and we received the response
+        private static async Task HandleHttpSessionResponse(SessionEventArgs args)
+        {       
+           
+          await  args.ProxyRequest.ReceiveResponse();
+           
 
-            SessionEventArgs args = (SessionEventArgs)AsynchronousResult.AsyncState;
             try
             {
-                args.ServerResponse = (HttpWebResponse)args.ProxyRequest.EndGetResponse(AsynchronousResult);
-            }
-            catch (WebException webEx)
-            {
-                args.ProxyRequest.KeepAlive = false;
-                args.ServerResponse = webEx.Response as HttpWebResponse;
-            }
-
-            Stream serverResponseStream = null;
-            Stream clientWriteStream = args.ClientStream;
-            StreamWriter responseWriter = null;
-            try
-            {
-
-                responseWriter = new StreamWriter(clientWriteStream);
-
-                if (args.ServerResponse != null)
+                if (args.ProxyRequest != null)
                 {
-                    List<Tuple<String, String>> responseHeaders = ProcessResponse(args.ServerResponse);
+                    args.ResponseHeaders = ReadResponseHeaders(args.ProxyRequest);
+                    args.ResponseStream = args.ProxyRequest.GetResponseStream();
 
-                    serverResponseStream = args.ServerResponse.GetResponseStream();
-                    args.ServerResponseStream = serverResponseStream;
-
-                    if (args.ServerResponse.Headers.Count == 0 && args.ServerResponse.ContentLength == -1)
-                        args.ProxyRequest.KeepAlive = false;
-
-                    bool isChunked = args.ServerResponse.GetResponseHeader("transfer-encoding") == null ? false : args.ServerResponse.GetResponseHeader("transfer-encoding").ToLower() == "chunked" ? true : false;
-                    args.ProxyRequest.KeepAlive = args.ServerResponse.GetResponseHeader("connection") == null ? args.ProxyRequest.KeepAlive : (args.ServerResponse.GetResponseHeader("connection") == "close" ? false : args.ProxyRequest.KeepAlive);
-                    args.UpgradeProtocol = args.ServerResponse.GetResponseHeader("upgrade") == null ? null : args.ServerResponse.GetResponseHeader("upgrade");
 
                     if (BeforeResponse != null)
-                        BeforeResponse(null, args);
-
-                    if (args.ResponseWasModified)
                     {
+                        args.ResponseEncoding = args.ProxyRequest.GetEncoding();
+                        BeforeResponse(null, args);
+                    }
 
-                        byte[] data;
-                        switch (args.ServerResponse.ContentEncoding)
+                    args.ResponseLocked = true;
+
+                    if (args.ResponseBodyRead)
+                    {
+                        var isChunked = args.ProxyRequest.GetResponseHeader("transfer-encoding").ToLower().Contains("chunked");
+                        var contentEncoding = args.ProxyRequest.ContentEncoding;
+
+                        switch (contentEncoding.ToLower())
                         {
                             case "gzip":
-                                data = CompressionHelper.CompressGzip(args.ResponseHtmlBody, args.Encoding);
-                                WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, responseWriter);
-                                WriteResponseHeaders(responseWriter, responseHeaders, data.Length);
-                                SendData(clientWriteStream, data, isChunked);
+                                args.ResponseBody = CompressionHelper.CompressGzip(args.ResponseBody);
                                 break;
                             case "deflate":
-                                data = CompressionHelper.CompressDeflate(args.ResponseHtmlBody, args.Encoding);
-                                WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, responseWriter);
-                                WriteResponseHeaders(responseWriter, responseHeaders, data.Length);
-                                SendData(clientWriteStream, data, isChunked);
+                                args.ResponseBody = CompressionHelper.CompressDeflate(args.ResponseBody);
                                 break;
                             case "zlib":
-                                data = CompressionHelper.CompressZlib(args.ResponseHtmlBody, args.Encoding);
-                                WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, responseWriter);
-                                WriteResponseHeaders(responseWriter, responseHeaders, data.Length);
-                                SendData(clientWriteStream, data, isChunked);
-                                break;
-                            default:
-                                data = EncodeData(args.ResponseHtmlBody, args.Encoding);
-                                WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, responseWriter);
-                                WriteResponseHeaders(responseWriter, responseHeaders, data.Length);
-                                SendData(clientWriteStream, data, isChunked);
+                                args.ResponseBody = CompressionHelper.CompressZlib(args.ResponseBody);
                                 break;
                         }
 
+                        WriteResponseStatus(args.ProxyRequest.ProtocolVersion, args.ProxyRequest.StatusCode,
+                            args.ProxyRequest.StatusDescription, args.ClientStreamWriter);
+                        WriteResponseHeaders(args.ClientStreamWriter, args.ResponseHeaders, args.ResponseBody.Length,
+                            isChunked);
+                        WriteResponseBody(args.ClientStream, args.ResponseBody, isChunked);
                     }
                     else
                     {
-                        WriteResponseStatus(args.ServerResponse.ProtocolVersion, args.ServerResponse.StatusCode, args.ServerResponse.StatusDescription, responseWriter);
-                        WriteResponseHeaders(responseWriter, responseHeaders);
+                        var isChunked = args.ProxyRequest.GetResponseHeader("transfer-encoding").ToLower().Contains("chunked");
 
-                        if (isChunked)
-                            SendChunked(serverResponseStream, clientWriteStream);
-                        else
-                            SendNormal(serverResponseStream, clientWriteStream);
-
+                        WriteResponseStatus(args.ProxyRequest.ProtocolVersion, args.ProxyRequest.StatusCode,
+                            args.ProxyRequest.StatusDescription, args.ClientStreamWriter);
+                        WriteResponseHeaders(args.ClientStreamWriter, args.ResponseHeaders);
+                        WriteResponseBody(args.ResponseStream, args.ClientStream, isChunked);
                     }
 
-                    clientWriteStream.Flush();
-
+                    args.ClientStream.Flush();
                 }
-                else
-                    args.ProxyRequest.KeepAlive = false;
-
-
             }
-            catch (IOException ex)
+            catch
             {
-
-                args.ProxyRequest.KeepAlive = false;
-                Debug.WriteLine(ex.Message);
-
-            }
-            catch (SocketException ex)
-            {
-
-                args.ProxyRequest.KeepAlive = false;
-                Debug.WriteLine(ex.Message);
-
-            }
-            catch (ArgumentException ex)
-            {
-
-                args.ProxyRequest.KeepAlive = false;
-                Debug.WriteLine(ex.Message);
-
-            }
-            catch (WebException ex)
-            {
-                args.ProxyRequest.KeepAlive = false;
-                Debug.WriteLine(ex.Message);
+                Dispose(args.Client, args.ClientStream, null, args.ClientStreamWriter, args);
             }
             finally
             {
-
-                if (args.ProxyRequest != null) args.ProxyRequest.Abort();
-                if (args.ServerResponseStream != null) args.ServerResponseStream.Close();
-
-                if (args.ServerResponse != null)
-                    args.ServerResponse.Close();
-
+                args.Dispose();
             }
-
-            if (args.ProxyRequest.KeepAlive == false)
-            {
-                if (responseWriter != null)
-                    responseWriter.Close();
-
-                if (clientWriteStream != null)
-                    clientWriteStream.Close();
-
-                args.Client.Close();
-            }
-            else
-            {
-                string httpCmd, tmpLine;
-                List<string> requestLines = new List<string>();
-                requestLines.Clear();
-                while (!String.IsNullOrEmpty(tmpLine = args.ClientStreamReader.ReadLine()))
-                {
-                    requestLines.Add(tmpLine);
-                }
-                httpCmd = requestLines.Count() > 0 ? requestLines[0] : null;
-                TcpClient Client = args.Client;
-                HandleHttpSessionRequest(Client, httpCmd, args.ProxyRequest.ConnectionGroupName, args.ClientStream, args.tunnelHostName, requestLines, args.ClientStreamReader, args.securehost);
-            }
-
         }
-        private static List<Tuple<String, String>> ProcessResponse(HttpWebResponse Response)
+
+        private static List<HttpHeader> ReadResponseHeaders(HttpWebResponse response)
         {
-            String value = null;
-            String header = null;
-            List<Tuple<String, String>> returnHeaders = new List<Tuple<String, String>>();
-            foreach (String s in Response.Headers.Keys)
+            var returnHeaders = new List<HttpHeader>();
+
+            string cookieHeaderName = null;
+            string cookieHeaderValue = null;
+
+            foreach (string headerKey in response.Headers.Keys)
             {
-                if (s.ToLower() == "set-cookie")
+                if (headerKey.ToLower() == "set-cookie")
                 {
-                    header = s;
-                    value = Response.Headers[s];
+                    cookieHeaderName = headerKey;
+                    cookieHeaderValue = response.Headers[headerKey];
                 }
                 else
-                    returnHeaders.Add(new Tuple<String, String>(s, Response.Headers[s]));
+                    returnHeaders.Add(new HttpHeader(headerKey, response.Headers[headerKey]));
             }
 
-            if (!String.IsNullOrWhiteSpace(value))
+            if (!string.IsNullOrWhiteSpace(cookieHeaderValue))
             {
-                Response.Headers.Remove(header);
-                String[] cookies = cookieSplitRegEx.Split(value);
-                foreach (String cookie in cookies)
-                    returnHeaders.Add(new Tuple<String, String>("Set-Cookie", cookie));
-
+                response.Headers.Remove(cookieHeaderName);
+                var cookies = CookieSplitRegEx.Split(cookieHeaderValue);
+                foreach (var cookie in cookies)
+                    returnHeaders.Add(new HttpHeader("Set-Cookie", cookie));
             }
 
             return returnHeaders;
         }
 
-        private static void WriteResponseStatus(Version Version, HttpStatusCode Code, String Description, StreamWriter ResponseWriter)
+        private static void WriteResponseStatus(Version version, HttpStatusCode code, string description,
+            StreamWriter responseWriter)
         {
-            String s = String.Format("HTTP/{0}.{1} {2} {3}", Version.Major, Version.Minor, (Int32)Code, Description);
-            ResponseWriter.WriteLine(s);
-
+            var s = string.Format("HTTP/{0}.{1} {2} {3}", version.Major, version.Minor, (int)code, description);
+            responseWriter.WriteLine(s);
         }
 
-        private static void WriteResponseHeaders(StreamWriter ResponseWriter, List<Tuple<String, String>> Headers)
+        private static void WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers)
         {
-            if (Headers != null)
+            if (headers != null)
             {
-                foreach (Tuple<String, String> header in Headers)
+                foreach (var header in headers)
                 {
-
-                    ResponseWriter.WriteLine(String.Format("{0}: {1}", header.Item1, header.Item2));
-
+                    responseWriter.WriteLine(header.ToString());
                 }
             }
 
-            ResponseWriter.WriteLine();
-            ResponseWriter.Flush();
-
-
+            responseWriter.WriteLine();
+            responseWriter.Flush();
         }
-        private static void WriteResponseHeaders(StreamWriter ResponseWriter, List<Tuple<String, String>> Headers, int Length)
+
+        private static void WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers, int length,
+            bool isChunked)
         {
-            if (Headers != null)
+            if (!isChunked)
             {
-
-                foreach (Tuple<String, String> header in Headers)
+                if (headers.Any(x => x.Name.ToLower() == "content-length") == false)
                 {
-                    if (header.Item1.ToLower() != "content-length")
-                        ResponseWriter.WriteLine(String.Format("{0}: {1}", header.Item1, header.Item2));
-                    else
-                        ResponseWriter.WriteLine(String.Format("{0}: {1}", "content-length", Length.ToString()));
-
+                    headers.Add(new HttpHeader("Content-Length", length.ToString()));
                 }
             }
 
-            ResponseWriter.WriteLine();
-            ResponseWriter.Flush();
-
-
-        }
-        public static void SendNormal(Stream InStream, Stream OutStream)
-        {
-
-            Byte[] buffer = new Byte[BUFFER_SIZE];
-
-            int bytesRead;
-            while ((bytesRead = InStream.Read(buffer, 0, buffer.Length)) > 0)
+            if (headers != null)
             {
+                foreach (var header in headers)
+                {
+                    if (!isChunked && header.Name.ToLower() == "content-length")
+                        header.Value = length.ToString();
 
-                OutStream.Write(buffer, 0, bytesRead);
-
+                    responseWriter.WriteLine(header.ToString());
+                }
             }
 
+            responseWriter.WriteLine();
+            responseWriter.Flush();
         }
-        public static void SendChunked(Stream InStream, Stream OutStream)
+
+        private static void WriteResponseBody(Stream clientStream, byte[] data, bool isChunked)
         {
-
-            Byte[] buffer = new Byte[BUFFER_SIZE];
-
-            var ChunkTrail = Encoding.ASCII.GetBytes(Environment.NewLine);
-
-            int bytesRead;
-            while ((bytesRead = InStream.Read(buffer, 0, buffer.Length)) > 0)
+            if (!isChunked)
             {
-
-                var ChunkHead = Encoding.ASCII.GetBytes(bytesRead.ToString("x2"));
-                OutStream.Write(ChunkHead, 0, ChunkHead.Length);
-                OutStream.Write(ChunkTrail, 0, ChunkTrail.Length);
-                OutStream.Write(buffer, 0, bytesRead);
-                OutStream.Write(ChunkTrail, 0, ChunkTrail.Length);
-
-            }
-            var ChunkEnd = Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
-
-            OutStream.Write(ChunkEnd, 0, ChunkEnd.Length);
-        }
-        public static void SendChunked(byte[] Data, Stream OutStream)
-        {
-
-            Byte[] buffer = new Byte[BUFFER_SIZE];
-
-            var ChunkTrail = Encoding.ASCII.GetBytes(Environment.NewLine);
-
-
-
-            var ChunkHead = Encoding.ASCII.GetBytes(Data.Length.ToString("x2"));
-            OutStream.Write(ChunkHead, 0, ChunkHead.Length);
-            OutStream.Write(ChunkTrail, 0, ChunkTrail.Length);
-            OutStream.Write(Data, 0, Data.Length);
-            OutStream.Write(ChunkTrail, 0, ChunkTrail.Length);
-
-
-            var ChunkEnd = Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
-
-            OutStream.Write(ChunkEnd, 0, ChunkEnd.Length);
-        }
-
-
-        public static byte[] EncodeData(string ResponseData, Encoding e)
-        {
-
-            return e.GetBytes(ResponseData);
-
-
-        }
-
-        public static void SendData(Stream OutStream, byte[] Data, bool IsChunked)
-        {
-            if (!IsChunked)
-            {
-                OutStream.Write(Data, 0, Data.Length);
+                clientStream.Write(data, 0, data.Length);
             }
             else
-                SendChunked(Data, OutStream);
+                WriteResponseBodyChunked(data, clientStream);
+        }
+
+        private static void WriteResponseBody(Stream inStream, Stream outStream, bool isChunked)
+        {
+            if (!isChunked)
+            {
+                var buffer = new byte[BUFFER_SIZE];
+
+                int bytesRead;
+                while ((bytesRead = inStream.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    outStream.Write(buffer, 0, bytesRead);
+                }
+            }
+            else
+                WriteResponseBodyChunked(inStream, outStream);
+        }
+
+        //Send chunked response
+        private static void WriteResponseBodyChunked(Stream inStream, Stream outStream)
+        {
+            var buffer = new byte[BUFFER_SIZE];
+
+            int bytesRead;
+            while ((bytesRead = inStream.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                var chunkHead = Encoding.ASCII.GetBytes(bytesRead.ToString("x2"));
+
+                outStream.Write(chunkHead, 0, chunkHead.Length);
+                outStream.Write(ChunkTrail, 0, ChunkTrail.Length);
+                outStream.Write(buffer, 0, bytesRead);
+                outStream.Write(ChunkTrail, 0, ChunkTrail.Length);
+            }
+
+            outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
+        }
+
+        private static void WriteResponseBodyChunked(byte[] data, Stream outStream)
+        {
+            var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
+
+            outStream.Write(chunkHead, 0, chunkHead.Length);
+            outStream.Write(ChunkTrail, 0, ChunkTrail.Length);
+            outStream.Write(data, 0, data.Length);
+            outStream.Write(ChunkTrail, 0, ChunkTrail.Length);
+
+            outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
         }
 
 
+        private static void Dispose(TcpClient client, IDisposable clientStream, IDisposable clientStreamReader,
+            IDisposable clientStreamWriter, IDisposable args)
+        {
+            if (args != null)
+                args.Dispose();
 
+            if (clientStreamReader != null)
+                clientStreamReader.Dispose();
 
+            if (clientStreamWriter != null)
+                clientStreamWriter.Dispose();
+
+            if (clientStream != null)
+                clientStream.Dispose();
+
+            if (client != null)
+                client.Close();
+        }
     }
 }

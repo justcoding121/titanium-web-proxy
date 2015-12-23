@@ -1,80 +1,70 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Test
 {
     public class Program
     {
-        static ProxyTestController controller = new ProxyTestController();
+        private static readonly ProxyTestController Controller = new ProxyTestController();
+
         public static void Main(string[] args)
         {
             //On Console exit make sure we also exit the proxy
-            handler = new ConsoleEventDelegate(ConsoleEventCallback);
-            SetConsoleCtrlHandler(handler, true);
+            NativeMethods.Handler = ConsoleEventCallback;
+            NativeMethods.SetConsoleCtrlHandler(NativeMethods.Handler, true);
 
-          
-  
+
             Console.Write("Do you want to monitor HTTPS? (Y/N):");
 
-            if(Console.ReadLine().Trim().ToLower()=="y" )
+            var readLine = Console.ReadLine();
+            if (readLine != null && readLine.Trim().ToLower() == "y")
             {
-                controller.EnableSSL = true;
-               
+                Controller.EnableSsl = true;
             }
 
             Console.Write("Do you want to set this as a System Proxy? (Y/N):");
 
-            if (Console.ReadLine().Trim().ToLower() == "y")
+            var line = Console.ReadLine();
+            if (line != null && line.Trim().ToLower() == "y")
             {
-                controller.SetAsSystemProxy = true;
-
+                Controller.SetAsSystemProxy = true;
             }
 
-            controller.Visited += PageVisited;
-
             //Start proxy controller
-            controller.StartProxy();
+            Controller.StartProxy();
 
             Console.WriteLine("Hit any key to exit..");
-            Console.WriteLine(); 
+            Console.WriteLine();
             Console.Read();
 
-            controller.Stop();
+            Controller.Stop();
         }
-       
-        private static void PageVisited(VisitedEventArgs e)
+
+
+        private static bool ConsoleEventCallback(int eventType)
         {
-            Console.WriteLine(string.Concat("Visited: ", e.URL));
-        }
-        static bool ConsoleEventCallback(int eventType)
-        {
-            if (eventType == 2)
+            if (eventType != 2) return false;
+            try
             {
-                try
-                {
-                    controller.Stop();
-                  
-                }
-                catch { }
+                Controller.Stop();
+            }
+            catch
+            {
+                // ignored
             }
             return false;
         }
-        // Keeps it from getting garbage collected
-        private static ConsoleEventDelegate handler;  
-        // Pinvoke
-        private delegate bool ConsoleEventDelegate(int eventType);
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool SetConsoleCtrlHandler(ConsoleEventDelegate callback, bool add);
-       
-
-
     }
-  
+
+    internal static class NativeMethods
+    {
+        // Keeps it from getting garbage collected
+        internal static ConsoleEventDelegate Handler;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern bool SetConsoleCtrlHandler(ConsoleEventDelegate callback, bool add);
+
+        // Pinvoke
+        internal delegate bool ConsoleEventDelegate(int eventType);
+    }
 }

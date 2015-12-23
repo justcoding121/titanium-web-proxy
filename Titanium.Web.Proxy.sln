@@ -16,6 +16,12 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{6FD3B8
 		.nuget\NuGet.targets = .nuget\NuGet.targets
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "HttpClient", "HttpClient", "{867333C8-3C44-41F4-913C-63802970CF82}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Http", "Titanium.Web.Http\Titanium.Web.Http.csproj", "{51F8273A-39E4-4C9F-9972-BC78F8B3B32E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Http.Tests", "Titanium.Web.Http.Tests\Titanium.Web.Http.Tests.csproj", "{95550A47-B2D2-43C4-8E79-17BDF09B797F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -46,12 +52,30 @@ Global
 		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release|x64.Build.0 = Release|x64
 		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release|x86.ActiveCfg = Release|x86
 		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release|x86.Build.0 = Release|x86
+		{51F8273A-39E4-4C9F-9972-BC78F8B3B32E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{51F8273A-39E4-4C9F-9972-BC78F8B3B32E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{51F8273A-39E4-4C9F-9972-BC78F8B3B32E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{51F8273A-39E4-4C9F-9972-BC78F8B3B32E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{51F8273A-39E4-4C9F-9972-BC78F8B3B32E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{51F8273A-39E4-4C9F-9972-BC78F8B3B32E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{51F8273A-39E4-4C9F-9972-BC78F8B3B32E}.Release|x64.ActiveCfg = Release|Any CPU
+		{51F8273A-39E4-4C9F-9972-BC78F8B3B32E}.Release|x86.ActiveCfg = Release|Any CPU
+		{95550A47-B2D2-43C4-8E79-17BDF09B797F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{95550A47-B2D2-43C4-8E79-17BDF09B797F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{95550A47-B2D2-43C4-8E79-17BDF09B797F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{95550A47-B2D2-43C4-8E79-17BDF09B797F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{95550A47-B2D2-43C4-8E79-17BDF09B797F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{95550A47-B2D2-43C4-8E79-17BDF09B797F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{95550A47-B2D2-43C4-8E79-17BDF09B797F}.Release|x64.ActiveCfg = Release|Any CPU
+		{95550A47-B2D2-43C4-8E79-17BDF09B797F}.Release|x86.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{F3B7E553-1904-4E80-BDC7-212342B5C952} = {B6DBABDC-C985-4872-9C38-B4E5079CBC4B}
+		{51F8273A-39E4-4C9F-9972-BC78F8B3B32E} = {867333C8-3C44-41F4-913C-63802970CF82}
+		{95550A47-B2D2-43C4-8E79-17BDF09B797F} = {867333C8-3C44-41F4-913C-63802970CF82}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		EnterpriseLibraryConfigurationToolBinariesPath = .1.505.2\lib\NET35

@@ -1,105 +1,95 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Net.Security;
 using System.IO;
-using System.Net;
+using System.Linq;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Text;
 using System.Threading.Tasks;
+using Titanium.Web.Http;
+using Titanium.Web.Proxy.Extensions;
+
 
 namespace Titanium.Web.Proxy.Helpers
 {
     public class TcpHelper
     {
         private static readonly int BUFFER_SIZE = 8192;
-        private static readonly String[] colonSpaceSplit = new string[] { ": " };
-        public static void SendRaw(string Hostname, int TunnelPort, System.IO.Stream ClientStream)
+
+        public static void SendRaw(Stream clientStream, string httpCmd, List<HttpHeader> requestHeaders, string hostName,
+            int tunnelPort, bool isHttps)
         {
-
-
-            System.Net.Sockets.TcpClient tunnelClient = new System.Net.Sockets.TcpClient(Hostname, TunnelPort);
-            var tunnelStream = tunnelClient.GetStream();
-            var tunnelReadBuffer = new byte[BUFFER_SIZE];
-
-            Task sendRelay = new Task(() => StreamHelper.CopyTo(ClientStream, tunnelStream, BUFFER_SIZE));
-            Task receiveRelay = new Task(() => StreamHelper.CopyTo(tunnelStream, ClientStream, BUFFER_SIZE));
-
-            sendRelay.Start();
-            receiveRelay.Start();
-
-            Task.WaitAll(sendRelay, receiveRelay);
-
-            if (tunnelStream != null)
-                tunnelStream.Close();
-
-            if (tunnelClient != null)
-                tunnelClient.Close();
-        }
-        public static void SendRaw(string HttpCmd, string SecureHostName, ref List<string> RequestLines, bool IsHttps, Stream ClientStream)
-        {
-            StringBuilder sb = new StringBuilder();
-            sb.Append(HttpCmd);
-            sb.Append(Environment.NewLine);
-
-            string hostname = SecureHostName;
-            for (int i = 1; i < RequestLines.Count; i++)
+            StringBuilder sb = null;
+            if (httpCmd != null || requestHeaders != null)
             {
-                var header = RequestLines[i];
-
-
-                if (SecureHostName == null)
+                sb = new StringBuilder();
+                if (httpCmd != null)
                 {
-                    String[] headerParsed = HttpCmd.Split(colonSpaceSplit, 2, StringSplitOptions.None);
-                    switch (headerParsed[0].ToLower())
-                    {
-                        case "host":
-                            var hostdetail = headerParsed[1];
-                            if (hostdetail.Contains(":"))
-                                hostname = hostdetail.Split(':')[0].Trim();
-                            else
-                                hostname = hostdetail.Trim();
-                            break;
-                        default:
-                            break;
-                    }
+                    sb.Append(httpCmd);
+                    sb.Append(Environment.NewLine);
                 }
-                sb.Append(header);
+                if (requestHeaders != null)
+                    foreach (var header in requestHeaders.Select(t => t.ToString()))
+                    {
+                        sb.Append(header);
+                        sb.Append(Environment.NewLine);
+                    }
                 sb.Append(Environment.NewLine);
             }
-            sb.Append(Environment.NewLine);
 
-            int tunnelPort = 80;
-            if (IsHttps)
+
+            TcpClient tunnelClient = null;
+            Stream tunnelStream = null;
+
+            try
             {
+                tunnelClient = new TcpClient(hostName, tunnelPort);
+                tunnelStream = tunnelClient.GetStream();
 
-                tunnelPort = 443;
+                if (isHttps)
+                {
+                    SslStream sslStream = null;
+                    try
+                    {
+                        sslStream = new SslStream(tunnelStream);
+                        sslStream.AuthenticateAsClient(hostName);
+                        tunnelStream = sslStream;
+                    }
+                    catch
+                    {
+                        if (sslStream != null)
+                            sslStream.Dispose();
 
+                        throw;
+                    }
+                }
+
+
+                var sendRelay = Task.Factory.StartNew(() =>
+                {
+                    if (sb != null)
+                        clientStream.CopyToAsync(sb.ToString(), tunnelStream, BUFFER_SIZE);
+                    else
+                        clientStream.CopyToAsync(tunnelStream, BUFFER_SIZE);
+                });
+
+                var receiveRelay = Task.Factory.StartNew(() => tunnelStream.CopyToAsync(clientStream, BUFFER_SIZE));
+
+                Task.WaitAll(sendRelay, receiveRelay);
             }
-
-            System.Net.Sockets.TcpClient tunnelClient = new System.Net.Sockets.TcpClient(hostname, tunnelPort);
-            var tunnelStream = tunnelClient.GetStream() as System.IO.Stream;
-
-            if (IsHttps)
+            catch
             {
-                var sslStream = new SslStream(tunnelStream);
-                sslStream.AuthenticateAsClient(hostname);
-                tunnelStream = sslStream;
+                if (tunnelStream != null)
+                {
+                    tunnelStream.Close();
+                    tunnelStream.Dispose();
+                }
+
+                if (tunnelClient != null)
+                    tunnelClient.Close();
+
+                throw;
             }
-
-
-            var sendRelay = new Task(() => StreamHelper.CopyTo(sb.ToString(), ClientStream, tunnelStream, BUFFER_SIZE));
-            var receiveRelay = new Task(() => StreamHelper.CopyTo(tunnelStream, ClientStream, BUFFER_SIZE));
-
-            sendRelay.Start();
-            receiveRelay.Start();
-
-            Task.WaitAll(sendRelay, receiveRelay);
-
-            if (tunnelStream != null)
-                tunnelStream.Close();
-
-            if (tunnelClient != null)
-                tunnelClient.Close();
         }
     }
 }
