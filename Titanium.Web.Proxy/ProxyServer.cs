@@ -1,122 +1,137 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.IO;
 using System.Net;
-using System.Net.Sockets;
 using System.Net.Security;
-using System.Security.Authentication;
+using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
-using System.Diagnostics;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
-
 
 namespace Titanium.Web.Proxy
 {
     /// <summary>
-    /// Proxy Server Main class
+    ///     Proxy Server Main class
     /// </summary>
     public partial class ProxyServer
     {
-
         private static readonly int BUFFER_SIZE = 8192;
-        private static readonly char[] semiSplit = new char[] { ';' };
+        private static readonly char[] SemiSplit = { ';' };
 
-        private static readonly String[] colonSpaceSplit = new string[] { ": " };
-        private static readonly char[] spaceSplit = new char[] { ' ' };
+        private static readonly string[] ColonSpaceSplit = { ": " };
+        private static readonly char[] SpaceSplit = { ' ' };
 
-        private static readonly Regex cookieSplitRegEx = new Regex(@",(?! )");
+        private static readonly Regex CookieSplitRegEx = new Regex(@",(?! )");
 
-        private static object certificateAccessLock = new object();
-        private static List<string> pinnedCertificateClients = new List<string>();
+        private static readonly byte[] ChunkTrail = Encoding.ASCII.GetBytes(Environment.NewLine);
 
+        private static readonly byte[] ChunkEnd =
+            Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
 
+        private static TcpListener _listener;
 
-        private static TcpListener listener;
-        private static Thread listenerThread;
-
-        public static event EventHandler<SessionEventArgs> BeforeRequest;
-        public static event EventHandler<SessionEventArgs> BeforeResponse;
-
-
-
-        public static IPAddress ListeningIPInterface { get; set; }
-
-        public static string RootCertificateName { get; set; }
-        public static bool EnableSSL { get; set; }
-        public static bool SetAsSystemProxy { get; set; }
-
-        public static Int32 ListeningPort
-        {
-            get
-            {
-                return ((IPEndPoint)listener.LocalEndpoint).Port;
-            }
-        }
-
-        public static CertificateManager CertManager { get; set; }
+        public static List<string> ExcludedHttpsHostNameRegex = new List<string>();
 
         static ProxyServer()
         {
             CertManager = new CertificateManager("Titanium",
                 "Titanium Root Certificate Authority");
+
+            ListeningIpAddress = IPAddress.Any;
+            ListeningPort = 0;
+
+            Initialize();
         }
-        public ProxyServer()
+
+        private static CertificateManager CertManager { get; set; }
+
+        public static string RootCertificateName { get; set; }
+        public static bool EnableSsl { get; set; }
+        public static bool SetAsSystemProxy { get; set; }
+
+        public static int ListeningPort { get; set; }
+        public static IPAddress ListeningIpAddress { get; set; }
+
+        public static event EventHandler<SessionEventArgs> BeforeRequest;
+        public static event EventHandler<SessionEventArgs> BeforeResponse;
+
+        public static void Initialize()
         {
-
-
-            System.Net.ServicePointManager.Expect100Continue = false;
-            System.Net.WebRequest.DefaultWebProxy = null;
-            System.Net.ServicePointManager.DefaultConnectionLimit = 10;
-            ServicePointManager.DnsRefreshTimeout = 3 * 60 * 1000;//3 minutes
+            ServicePointManager.Expect100Continue = false;
+            WebRequest.DefaultWebProxy = null;
+            ServicePointManager.DefaultConnectionLimit = 10;
+            ServicePointManager.DnsRefreshTimeout = 3 * 60 * 1000; //3 minutes
             ServicePointManager.MaxServicePointIdleTime = 3 * 60 * 1000;
 
-            ServicePointManager.ServerCertificateValidationCallback = delegate(object s, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-            {
-                if (sslPolicyErrors == SslPolicyErrors.None) return true;
-                else
+            //HttpWebRequest certificate validation callback
+            ServicePointManager.ServerCertificateValidationCallback =
+                delegate(object s, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+                {
+                    if (sslPolicyErrors == SslPolicyErrors.None) return true;
                     return false;
-            };
+                };
 
-            NetFrameworkHelper.URLPeriodFix();
-
+            //Fix a bug in .NET 4.0
+            NetFrameworkHelper.UrlPeriodFix();
+            //useUnsafeHeaderParsing 
+            NetFrameworkHelper.ToggleAllowUnsafeHeaderParsing(true);
         }
 
-        private static bool ShouldListen { get; set; }
+
         public static bool Start()
         {
-           
-            listener = new TcpListener(IPAddress.Any, 0);
-            listener.Start();
-            listenerThread = new Thread(new ParameterizedThreadStart(Listen));
-            listenerThread.IsBackground = true;
-            ShouldListen = true;
-            listenerThread.Start(listener);
+            _listener = new TcpListener(ListeningIpAddress, ListeningPort);
+            _listener.Start();
+
+            ListeningPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            // accept clients asynchronously
+            _listener.BeginAcceptTcpClient(OnAcceptConnection, _listener);
+
+            var certTrusted = false;
+
+            if (EnableSsl)
+                certTrusted = CertManager.CreateTrustedRootCertificate();
 
             if (SetAsSystemProxy)
             {
-                SystemProxyHelper.EnableProxyHTTP("localhost", ListeningPort);
+                SystemProxyHelper.EnableProxyHttp(
+                    Equals(ListeningIpAddress, IPAddress.Any) ? "127.0.0.1" : ListeningIpAddress.ToString(), ListeningPort);
                 FireFoxHelper.AddFirefox();
+                 
 
-             
-                if (EnableSSL)
+                if (EnableSsl)
                 {
-                    RootCertificateName = RootCertificateName == null ? "Titanium_Proxy_Test_Root" : RootCertificateName;
+                    RootCertificateName = RootCertificateName ?? "Titanium_Proxy_Test_Root";
 
-                    bool certTrusted = CertManager.CreateTrustedRootCertificate();
-                    if (!certTrusted)
+                    //If certificate was trusted by the machine
+                    if (certTrusted)
                     {
-                        // The user didn't want to install the self-signed certificate to the root store.
+                        SystemProxyHelper.EnableProxyHttps(
+                            Equals(ListeningIpAddress, IPAddress.Any) ? "127.0.0.1" : ListeningIpAddress.ToString(),
+                            ListeningPort);
                     }
-
-                    SystemProxyHelper.EnableProxyHTTPS("localhost", ListeningPort);
                 }
             }
 
             return true;
+        }
+
+        private static void OnAcceptConnection(IAsyncResult asyn)
+        {
+            try
+            {
+                // Get the listener that handles the client request.
+                _listener.BeginAcceptTcpClient(OnAcceptConnection, _listener);
+
+                var client = _listener.EndAcceptTcpClient(asyn);
+                var Task = HandleClient(client);
+            }
+            catch
+            {
+                // ignored
+            }
         }
 
 
@@ -128,39 +143,8 @@ namespace Titanium.Web.Proxy
                 FireFoxHelper.RemoveFirefox();
             }
 
-            ShouldListen = false;
-            listener.Stop();
-            listenerThread.Interrupt();
-
-           
+            _listener.Stop();
+            CertManager.Dispose();
         }
-
-        private static void Listen(Object obj)
-        {
-            TcpListener listener = (TcpListener)obj;
-
-            try
-            {
-                while (ShouldListen)
-                {
-                    
-                    var client = listener.AcceptTcpClient();
-                    Task.Factory.StartNew(() => HandleClient(client));
-                  
-                }
-            }
-            catch (ThreadInterruptedException) { }
-            catch (SocketException)
-            {
-              
-            }
-
-
-
-        }
-      
-
-
-
     }
 }
