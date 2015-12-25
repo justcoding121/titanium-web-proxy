@@ -73,9 +73,11 @@ namespace Titanium.Web.Proxy
                     return false;
                 };
 
+#if NET40
             //Fix a bug in .NET 4.0
             NetFrameworkHelper.UrlPeriodFix();
             //useUnsafeHeaderParsing 
+#endif
             NetFrameworkHelper.ToggleAllowUnsafeHeaderParsing(true);
         }
 
