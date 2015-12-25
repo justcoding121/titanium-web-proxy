@@ -35,6 +35,10 @@ assembly_info:
 # to disable automatic tests 
 test: off
 
+# skip building commits that add tags (such as release tag)
+skip_tags: true
+
+
 #---------------------------------#
 #       artifacts configuration   #
 #---------------------------------#

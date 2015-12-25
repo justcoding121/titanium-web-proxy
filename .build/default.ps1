@@ -38,17 +38,17 @@ Task Build -depends Restore-Packages {
     exec { . $MSBuild $SolutionFile /t:Build /v:normal /p:Configuration=$Configuration-Net45 }
 }
 
-Task Package -depends Update-AssemblyInfoFiles, Build {
+Task Package -depends Build {
 	exec { . $NuGet pack "$SolutionRoot\Titanium.Web.Proxy\Titanium.Web.Proxy.nuspec" -Properties Configuration=$Configuration -OutputDirectory "$SolutionRoot" -Version "$Version" }
 }
 
-Task Clean {
+Task Clean -depends Install-BuildTools {
 	Remove-Item -Path "$SolutionRoot\packages\*" -Exclude repositories.config -Recurse -Force 
 	Get-ChildItem .\ -include bin,obj -Recurse | foreach ($_) { Remove-Item $_.fullname -Force -Recurse }
 	exec { . $MSBuild $SolutionFile /t:Clean /v:quiet }
 }
 
-Task Restore-Packages -depends Install-BuildTools {
+Task Restore-Packages  {
 	exec { . $NuGet restore $SolutionFile }
 }
 
@@ -60,25 +60,3 @@ Task Install-MSBuild {
 }
 
 Task Install-BuildTools -depends Install-MSBuild
-
-# Borrowed from Luis Rocha's Blog (http://www.luisrocha.net/2009/11/setting-assembly-version-with-windows.html)
-Task Update-AssemblyInfoFiles {
-	$assemblyVersionPattern = 'AssemblyVersion\("[0-9]+(\.([0-9]+|\*)){1,3}"\)'
-    $fileVersionPattern = 'AssemblyFileVersion\("[0-9]+(\.([0-9]+|\*)){1,3}"\)'
-    $fileCommitPattern = 'AssemblyInformationalVersion\("(.*?)"\)'
-
-    $assemblyVersion = 'AssemblyVersion("' + $Version + '")';
-    $fileVersion = 'AssemblyFileVersion("' + $Version + '")';
-    $commitVersion = 'AssemblyInformationalVersion("' + $InformationalVersion + '")';
-
-    Get-ChildItem -path $SolutionRoot -r -filter AssemblyInfo.cs | ForEach-Object {
-        $filename = $_.Directory.ToString() + '\' + $_.Name
-        $filename + ' -> ' + $Version
-    
-        (Get-Content $filename) | ForEach-Object {
-            % {$_ -replace $assemblyVersionPattern, $assemblyVersion } |
-            % {$_ -replace $fileVersionPattern, $fileVersion } |
-            % {$_ -replace $fileCommitPattern, $commitVersion }
-        } | Set-Content $filename
-    }
-}
