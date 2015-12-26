@@ -15,27 +15,27 @@ namespace Titanium.Web.Proxy.Helpers
         internal string ReadLine()
         {
             var readBuffer = new StringBuilder();
-           
+
             try
             {
                 var lastChar = default(char);
+                var buffer = new char[1];
 
-                while (true)
+                while (Read(buffer, 0, 1) > 0)
                 {
-                    var buf = ReadChar();
-                    if (lastChar == '\r' && buf == '\n')
+                    if (lastChar == '\r' && buffer[0] == '\n')
                     {
                         return readBuffer.Remove(readBuffer.Length - 1, 1).ToString();
                     }
-                    if (buf == '\0')
+                    if (buffer[0] == '\0')
                     {
                         return readBuffer.ToString();
                     }
-                    readBuffer.Append(buf);
-
-                    lastChar = buf;
+                    readBuffer.Append(buffer);
+                    lastChar = buffer[0];
                 }
 
+                return readBuffer.ToString();
             }
             catch (IOException)
             {

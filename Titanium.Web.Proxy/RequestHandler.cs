@@ -33,7 +33,8 @@ namespace Titanium.Web.Proxy
 
                 if (string.IsNullOrEmpty(httpCmd))
                 {
-                    throw new EndOfStreamException();
+                    Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
+                    return;
                 }
 
                 //break up the line into three components (method, remote URL & Http Version)
@@ -80,11 +81,13 @@ namespace Titanium.Web.Proxy
                         if (sslStream != null)
                             sslStream.Dispose();
 
-                        throw;
+                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
+                        return;
                     }
 
 
                     httpCmd = clientStreamReader.ReadLine();
+                   
                 }
                 else if (httpVerb.ToUpper() == "CONNECT")
                 {
@@ -120,7 +123,6 @@ namespace Titanium.Web.Proxy
 
                 var args = new SessionEventArgs(BUFFER_SIZE);
                 args.Client = client;
-
 
                 try
                 {
@@ -227,26 +229,21 @@ namespace Titanium.Web.Proxy
 
                     HandleHttpSessionResponse(args);
 
+                    //if connection is closing exit
                     if (args.ResponseHeaders.Any(x => x.Name.ToLower() == "connection" && x.Value.ToLower() == "close"))
                     {
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
                         return;
                     }
-                    //Now read the next request (if keep-Alive is enabled, otherwise exit this thread)
-                    //If client is pipeling the request, this will be immediately hit before response for previous request was made
-                    httpCmd = clientStreamReader.ReadLine();
-                    //Http request body sent, now wait for next request
 
-                    client = args.Client;
-                    clientStream = args.ClientStream;
-                    clientStreamReader = args.ClientStreamReader;
-                    args.ClientStreamWriter = clientStreamWriter;
+                    // read the next request 
+                    httpCmd = clientStreamReader.ReadLine();
 
                 }
                 catch
                 {
                     Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
-                    throw;
+                    return;
                 }
             }
         }
