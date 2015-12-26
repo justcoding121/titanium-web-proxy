@@ -14,7 +14,6 @@ Features
 * Supports Http(s) and all features of HTTP 1.1 
 * Supports relaying of WebSockets
 * Supports script injection
-* Async using HttpWebRequest class for better performance
 
 Usage
 =====
