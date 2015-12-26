@@ -227,7 +227,7 @@ namespace Titanium.Web.Proxy
 
                     HandleHttpSessionResponse(args);
 
-                    if (args.ResponseHeaders.Any(x => x.Name.ToLower() == "proxy-connection" && x.Value.ToLower() == "close"))
+                    if (args.ResponseHeaders.Any(x => x.Name.ToLower() == "connection" && x.Value.ToLower() == "close"))
                     {
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
                         return;
