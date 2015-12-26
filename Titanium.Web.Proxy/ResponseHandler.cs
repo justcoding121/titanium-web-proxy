@@ -15,13 +15,12 @@ namespace Titanium.Web.Proxy
     partial class ProxyServer
     {
         //Called asynchronously when a request was successfully and we received the response
-        private static void HandleHttpSessionResponse(IAsyncResult asynchronousResult)
+        private static void HandleHttpSessionResponse(SessionEventArgs args)
         {
-            var args = (SessionEventArgs)asynchronousResult.AsyncState;
 
             try
             {
-                args.ServerResponse = (HttpWebResponse)args.ProxyRequest.EndGetResponse(asynchronousResult);
+                args.ServerResponse = (HttpWebResponse)args.ProxyRequest.GetResponse();
             }
             catch (WebException webEx)
             {
@@ -132,6 +131,8 @@ namespace Titanium.Web.Proxy
         {
             if (headers != null)
             {
+                FixProxyHeaders(headers);
+
                 foreach (var header in headers)
                 {
                     responseWriter.WriteLine(header.ToString());
@@ -141,10 +142,24 @@ namespace Titanium.Web.Proxy
             responseWriter.WriteLine();
             responseWriter.Flush();
         }
+        private static void FixProxyHeaders(List<HttpHeader> headers)
+        {
+            //If proxy-connection close was returned inform to close the connection
+            if (headers.Any(x => x.Name.ToLower() == "proxy-connection" && x.Value.ToLower() == "close"))
+                if (headers.Any(x => x.Name.ToLower() == "connection") == false)
+                {
+                    headers.Add(new HttpHeader("connection", "close"));
+                    headers.RemoveAll(x => x.Name.ToLower() == "proxy-connection");
+                }
+                else
+                    headers.Find(x => x.Name.ToLower() == "connection").Value = "close";
+        }
 
         private static void WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers, int length,
             bool isChunked)
         {
+            FixProxyHeaders(headers);
+
             if (!isChunked)
             {
                 if (headers.Any(x => x.Name.ToLower() == "content-length") == false)

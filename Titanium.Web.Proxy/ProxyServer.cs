@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy
         {
             ServicePointManager.Expect100Continue = false;
             WebRequest.DefaultWebProxy = null;
-            ServicePointManager.DefaultConnectionLimit = 10;
+            ServicePointManager.DefaultConnectionLimit = int.MaxValue;
             ServicePointManager.DnsRefreshTimeout = 3 * 60 * 1000; //3 minutes
             ServicePointManager.MaxServicePointIdleTime = 3 * 60 * 1000;
 
