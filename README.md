@@ -11,7 +11,7 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 Features
 ========
 
-* Supports Http(s) and all features of HTTP 1.1 
+* Supports Http(s) and most features of HTTP 1.1 
 * Supports relaying of WebSockets
 * Supports script injection
 
