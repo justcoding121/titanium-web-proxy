@@ -97,10 +97,8 @@ namespace Titanium.Web.Proxy
                 }
 
                 //Now create the request
-                Task.Factory.StartNew(
-                    () =>
-                        HandleHttpSessionRequest(client, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                            httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.OriginalString : null));
+                HandleHttpSessionRequest(client, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
+                    httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.OriginalString : null);
             }
             catch
             {
@@ -112,137 +110,144 @@ namespace Titanium.Web.Proxy
         private static void HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
             CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string secureTunnelHostName)
         {
-            if (string.IsNullOrEmpty(httpCmd))
+            while (true)
             {
-                Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
-                return;
-            }
-
-            var args = new SessionEventArgs(BUFFER_SIZE);
-            args.Client = client;
-
-
-            try
-            {
-                //break up the line into three components (method, remote URL & Http Version)
-                var httpCmdSplit = httpCmd.Split(SpaceSplit, 3);
-
-                var httpMethod = httpCmdSplit[0];
-                var httpRemoteUri =
-                    new Uri(secureTunnelHostName == null ? httpCmdSplit[1] : (secureTunnelHostName + httpCmdSplit[1]));
-                var httpVersion = httpCmdSplit[2];
-
-                Version version;
-                if (httpVersion == "HTTP/1.1")
+                if (string.IsNullOrEmpty(httpCmd))
                 {
-                    version = new Version(1, 1);
-                }
-                else
-                {
-                    version = new Version(1, 0);
-                }
-
-                if (httpRemoteUri.Scheme == Uri.UriSchemeHttps)
-                {
-                    args.IsHttps = true;
-                }
-
-                args.RequestHeaders = new List<HttpHeader>();
-
-                string tmpLine;
-
-                while (!string.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
-                {
-                    var header = tmpLine.Split(ColonSpaceSplit, 2, StringSplitOptions.None);
-                    args.RequestHeaders.Add(new HttpHeader(header[0], header[1]));
-                }
-
-                for (var i = 0; i < args.RequestHeaders.Count; i++)
-                {
-                    var rawHeader = args.RequestHeaders[i];
-
-
-                    //if request was upgrade to web-socket protocol then relay the request without proxying
-                    if ((rawHeader.Name.ToLower() == "upgrade") && (rawHeader.Value.ToLower() == "websocket"))
-                    {
-                        TcpHelper.SendRaw(clientStreamReader.BaseStream, httpCmd, args.RequestHeaders,
-                            httpRemoteUri.Host, httpRemoteUri.Port, httpRemoteUri.Scheme == Uri.UriSchemeHttps);
-                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
-                        return;
-                    }
-                }
-
-
-                //construct the web request that we are going to issue on behalf of the client.
-                args.ProxyRequest = (HttpWebRequest) WebRequest.Create(httpRemoteUri);
-                args.ProxyRequest.Proxy = null;
-                args.ProxyRequest.UseDefaultCredentials = true;
-                args.ProxyRequest.Method = httpMethod;
-                args.ProxyRequest.ProtocolVersion = version;
-                args.ClientStream = clientStream;
-                args.ClientStreamReader = clientStreamReader;
-                args.ClientStreamWriter = clientStreamWriter;
-                args.ProxyRequest.AllowAutoRedirect = false;
-                args.ProxyRequest.AutomaticDecompression = DecompressionMethods.None;
-                args.RequestHostname = args.ProxyRequest.RequestUri.Host;
-                args.RequestUrl = args.ProxyRequest.RequestUri.OriginalString;
-                args.ClientPort = ((IPEndPoint) client.Client.RemoteEndPoint).Port;
-                args.ClientIpAddress = ((IPEndPoint) client.Client.RemoteEndPoint).Address;
-                args.RequestHttpVersion = version;
-                args.RequestIsAlive = args.ProxyRequest.KeepAlive;
-                args.ProxyRequest.ConnectionGroupName = args.RequestHostname;
-                args.ProxyRequest.AllowWriteStreamBuffering = true;
-
-
-                //If requested interception
-                if (BeforeRequest != null)
-                {
-                    args.RequestEncoding = args.ProxyRequest.GetEncoding();
-                    BeforeRequest(null, args);
-                }
-
-                args.RequestLocked = true;
-
-                if (args.CancelRequest)
-                {
-                    Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
+                    Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
                     return;
                 }
 
-                SetRequestHeaders(args.RequestHeaders, args.ProxyRequest);
+                var args = new SessionEventArgs(BUFFER_SIZE);
+                args.Client = client;
 
-                //If request was modified by user
-                if (args.RequestBodyRead)
-                {
-                    args.ProxyRequest.ContentLength = args.RequestBody.Length;
-                    var newStream = args.ProxyRequest.GetRequestStream();
-                    newStream.Write(args.RequestBody, 0, args.RequestBody.Length);
 
-                    args.ProxyRequest.BeginGetResponse(HandleHttpSessionResponse, args);
-                }
-                else
+                try
                 {
-                    //If its a post/put request, then read the client html body and send it to server
-                    if (httpMethod.ToUpper() == "POST" || httpMethod.ToUpper() == "PUT")
+                    //break up the line into three components (method, remote URL & Http Version)
+                    var httpCmdSplit = httpCmd.Split(SpaceSplit, 3);
+
+                    var httpMethod = httpCmdSplit[0];
+                    var httpRemoteUri =
+                        new Uri(secureTunnelHostName == null ? httpCmdSplit[1] : (secureTunnelHostName + httpCmdSplit[1]));
+                    var httpVersion = httpCmdSplit[2];
+
+                    Version version;
+                    if (httpVersion == "HTTP/1.1")
                     {
-                        SendClientRequestBody(args);
+                        version = new Version(1, 1);
                     }
-                    //Http request body sent, now wait asynchronously for response
-                    args.ProxyRequest.BeginGetResponse(HandleHttpSessionResponse, args);
-                }
+                    else
+                    {
+                        version = new Version(1, 0);
+                    }
 
-                //Now read the next request (if keep-Alive is enabled, otherwise exit this thread)
-                //If client is pipeling the request, this will be immediately hit before response for previous request was made
-                httpCmd = clientStreamReader.ReadLine();
-                //Http request body sent, now wait for next request
-                Task.Factory.StartNew(
-                    () =>
-                        HandleHttpSessionRequest(args.Client, httpCmd, args.ClientStream, args.ClientStreamReader,
-                            args.ClientStreamWriter, secureTunnelHostName));
-            }
-            catch
-            {
-                Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
+                    if (httpRemoteUri.Scheme == Uri.UriSchemeHttps)
+                    {
+                        args.IsHttps = true;
+                    }
+
+                    args.RequestHeaders = new List<HttpHeader>();
+
+                    string tmpLine;
+
+                    while (!string.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
+                    {
+                        var header = tmpLine.Split(ColonSpaceSplit, 2, StringSplitOptions.None);
+                        args.RequestHeaders.Add(new HttpHeader(header[0], header[1]));
+                    }
+
+                    for (var i = 0; i < args.RequestHeaders.Count; i++)
+                    {
+                        var rawHeader = args.RequestHeaders[i];
+
+
+                        //if request was upgrade to web-socket protocol then relay the request without proxying
+                        if ((rawHeader.Name.ToLower() == "upgrade") && (rawHeader.Value.ToLower() == "websocket"))
+                        {
+                            TcpHelper.SendRaw(clientStreamReader.BaseStream, httpCmd, args.RequestHeaders,
+                                httpRemoteUri.Host, httpRemoteUri.Port, httpRemoteUri.Scheme == Uri.UriSchemeHttps);
+                            Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
+                            return;
+                        }
+                    }
+
+                    //construct the web request that we are going to issue on behalf of the client.
+                    args.ProxyRequest = (HttpWebRequest)WebRequest.Create(httpRemoteUri);
+                    args.ProxyRequest.Proxy = null;
+                    args.ProxyRequest.UseDefaultCredentials = true;
+                    args.ProxyRequest.Method = httpMethod;
+                    args.ProxyRequest.ProtocolVersion = version;
+                    args.ClientStream = clientStream;
+                    args.ClientStreamReader = clientStreamReader;
+                    args.ClientStreamWriter = clientStreamWriter;
+                    args.ProxyRequest.AllowAutoRedirect = false;
+                    args.ProxyRequest.AutomaticDecompression = DecompressionMethods.None;
+                    args.RequestHostname = args.ProxyRequest.RequestUri.Host;
+                    args.RequestUrl = args.ProxyRequest.RequestUri.OriginalString;
+                    args.ClientPort = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
+                    args.ClientIpAddress = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+                    args.RequestHttpVersion = version;
+                    args.RequestIsAlive = args.ProxyRequest.KeepAlive;
+                    args.ProxyRequest.AllowWriteStreamBuffering = true;
+
+
+                    //If requested interception
+                    if (BeforeRequest != null)
+                    {
+                        args.RequestEncoding = args.ProxyRequest.GetEncoding();
+                        BeforeRequest(null, args);
+                    }
+
+                    args.RequestLocked = true;
+
+                    if (args.CancelRequest)
+                    {
+                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
+                        return;
+                    }
+
+                    SetRequestHeaders(args.RequestHeaders, args.ProxyRequest);
+
+                    //If request was modified by user
+                    if (args.RequestBodyRead)
+                    {
+                        args.ProxyRequest.ContentLength = args.RequestBody.Length;
+                        var newStream = args.ProxyRequest.GetRequestStream();
+                        newStream.Write(args.RequestBody, 0, args.RequestBody.Length);
+                    }
+                    else
+                    {
+                        //If its a post/put request, then read the client html body and send it to server
+                        if (httpMethod.ToUpper() == "POST" || httpMethod.ToUpper() == "PUT")
+                        {
+                            SendClientRequestBody(args);
+                        }
+                    }
+
+                    HandleHttpSessionResponse(args);
+
+                    if (args.ResponseHeaders.Any(x => x.Name.ToLower() == "proxy-connection" && x.Value.ToLower() == "close"))
+                    {
+                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
+                        return;
+                    }
+                    //Now read the next request (if keep-Alive is enabled, otherwise exit this thread)
+                    //If client is pipeling the request, this will be immediately hit before response for previous request was made
+                    httpCmd = clientStreamReader.ReadLine();
+                    //Http request body sent, now wait for next request
+
+                    client = args.Client;
+                    clientStream = args.ClientStream;
+                    clientStreamReader = args.ClientStreamReader;
+                    args.ClientStreamWriter = clientStreamWriter;
+
+                }
+                catch
+                {
+                    Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
+                    throw;
+                }
             }
         }
 
@@ -250,7 +255,7 @@ namespace Titanium.Web.Proxy
         {
             clientStreamWriter.WriteLine(httpVersion + " 200 Connection established");
             clientStreamWriter.WriteLine("Timestamp: {0}", DateTime.Now);
-            clientStreamWriter.WriteLine("connection:close");
+            //clientStreamWriter.WriteLine("connection:close");
             clientStreamWriter.WriteLine();
             clientStreamWriter.Flush();
         }
@@ -302,6 +307,8 @@ namespace Titanium.Web.Proxy
                     case "proxy-connection":
                         if (requestHeaders[i].Value.ToLower() == "keep-alive")
                             webRequest.KeepAlive = true;
+                        else if (requestHeaders[i].Value.ToLower() == "close")
+                            webRequest.KeepAlive = false;
                         break;
                     case "range":
                         var startEnd = requestHeaders[i].Value.Replace(Environment.NewLine, "").Remove(0, 6).Split('-');
@@ -359,18 +366,18 @@ namespace Titanium.Web.Proxy
                     int bytesToRead;
                     if (args.ProxyRequest.ContentLength < BUFFER_SIZE)
                     {
-                        bytesToRead = (int) args.ProxyRequest.ContentLength;
+                        bytesToRead = (int)args.ProxyRequest.ContentLength;
                     }
                     else
                         bytesToRead = BUFFER_SIZE;
 
 
-                    while (totalbytesRead < (int) args.ProxyRequest.ContentLength)
+                    while (totalbytesRead < (int)args.ProxyRequest.ContentLength)
                     {
                         var buffer = args.ClientStreamReader.ReadBytes(bytesToRead);
                         totalbytesRead += buffer.Length;
 
-                        var remainingBytes = (int) args.ProxyRequest.ContentLength - totalbytesRead;
+                        var remainingBytes = (int)args.ProxyRequest.ContentLength - totalbytesRead;
                         if (remainingBytes < bytesToRead)
                         {
                             bytesToRead = remainingBytes;
@@ -413,7 +420,6 @@ namespace Titanium.Web.Proxy
                             break;
                         }
                     }
-
 
                     postStream.Close();
                 }

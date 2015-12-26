@@ -14,34 +14,34 @@ namespace Titanium.Web.Proxy.Helpers
 
         internal string ReadLine()
         {
-            var buf = new char[1];
             var readBuffer = new StringBuilder();
+           
             try
             {
-                var lastChar = new char();
+                var lastChar = default(char);
 
-                while ((Read(buf, 0, 1)) > 0)
+                while (true)
                 {
-                    if (lastChar == '\r' && buf[0] == '\n')
+                    var buf = ReadChar();
+                    if (lastChar == '\r' && buf == '\n')
                     {
                         return readBuffer.Remove(readBuffer.Length - 1, 1).ToString();
                     }
-                    if (buf[0] == '\0')
+                    if (buf == '\0')
                     {
                         return readBuffer.ToString();
                     }
-                    readBuffer.Append(buf[0]);
+                    readBuffer.Append(buf);
 
-                    lastChar = buf[0];
+                    lastChar = buf;
                 }
-                return readBuffer.ToString();
+
             }
             catch (IOException)
             {
                 return readBuffer.ToString();
             }
         }
-
 
         internal List<string> ReadAllLines()
         {
