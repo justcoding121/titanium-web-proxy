@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy
         {
             ServicePointManager.Expect100Continue = false;
             WebRequest.DefaultWebProxy = null;
-            ServicePointManager.DefaultConnectionLimit = 10;
+            ServicePointManager.DefaultConnectionLimit = int.MaxValue;
             ServicePointManager.DnsRefreshTimeout = 3 * 60 * 1000; //3 minutes
             ServicePointManager.MaxServicePointIdleTime = 3 * 60 * 1000;
 
@@ -73,9 +73,11 @@ namespace Titanium.Web.Proxy
                     return false;
                 };
 
+#if NET40
             //Fix a bug in .NET 4.0
             NetFrameworkHelper.UrlPeriodFix();
             //useUnsafeHeaderParsing 
+#endif
             NetFrameworkHelper.ToggleAllowUnsafeHeaderParsing(true);
         }
 
@@ -98,8 +100,11 @@ namespace Titanium.Web.Proxy
             {
                 SystemProxyHelper.EnableProxyHttp(
                     Equals(ListeningIpAddress, IPAddress.Any) ? "127.0.0.1" : ListeningIpAddress.ToString(), ListeningPort);
+
+#if !DEBUG
                 FireFoxHelper.AddFirefox();
-                 
+#endif
+
 
                 if (EnableSsl)
                 {
@@ -126,7 +131,7 @@ namespace Titanium.Web.Proxy
                 _listener.BeginAcceptTcpClient(OnAcceptConnection, _listener);
 
                 var client = _listener.EndAcceptTcpClient(asyn);
-                var Task = HandleClient(client);
+                Task.Factory.StartNew(() => HandleClient(client));
             }
             catch
             {
@@ -140,7 +145,9 @@ namespace Titanium.Web.Proxy
             if (SetAsSystemProxy)
             {
                 SystemProxyHelper.DisableAllProxy();
+#if !DEBUG
                 FireFoxHelper.RemoveFirefox();
+#endif
             }
 
             _listener.Stop();

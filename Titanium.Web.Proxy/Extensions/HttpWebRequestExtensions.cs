@@ -1,17 +1,18 @@
 ﻿using System.Net;
 using System.Text;
+using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Extensions
 {
     public static class HttpWebRequestExtensions
     {
-        public static Encoding GetEncoding(this HttpWebRequest request)
+        public static Encoding GetEncoding(this HttpWebClient request)
         {
             try
             {
-                if (request.ContentType == null) return Encoding.GetEncoding("ISO-8859-1");
+                if (request.RequestContentType == null) return Encoding.GetEncoding("ISO-8859-1");
 
-                var contentTypes = request.ContentType.Split(';');
+                var contentTypes = request.RequestContentType.Split(';');
                 foreach (var contentType in contentTypes)
                 {
                     var encodingSplit = contentType.Split('=');

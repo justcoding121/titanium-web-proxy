@@ -6,10 +6,10 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using Titanium.Web.Http;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
-
+using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -24,6 +24,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         internal TcpClient Client { get; set; }
         internal Stream ClientStream { get; set; }
+        internal CustomBinaryReader ClientStreamReader { get; set; }
         internal StreamWriter ClientStreamWriter { get; set; }
 
 
@@ -43,7 +44,7 @@ namespace Titanium.Web.Proxy.EventArguments
         internal bool RequestBodyRead { get; set; }
         public List<HttpHeader> RequestHeaders { get; internal set; }
         internal bool RequestLocked { get; set; }
-        internal HttpClient ProxyRequest { get; set; }
+        internal HttpWebClient ProxySession { get; set; }
 
         internal Encoding ResponseEncoding { get; set; }
         internal Stream ResponseStream { get; set; }
@@ -52,7 +53,6 @@ namespace Titanium.Web.Proxy.EventArguments
         internal bool ResponseBodyRead { get; set; }
         public List<HttpHeader> ResponseHeaders { get; internal set; }
         internal bool ResponseLocked { get; set; }
-       // internal HttpWebResponse ProxyRequest { get; set; }
 
         public int RequestContentLength
         {
@@ -69,13 +69,13 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public string RequestMethod
         {
-            get { return ProxyRequest.Method; }
+            get { return ProxySession.Method; }
         }
 
 
-        public HttpStatusCode ResponseStatusCode
+        public string ResponseStatusCode
         {
-            get { return ProxyRequest.StatusCode; }
+            get { return  ProxySession.ResponseStatusCode; }
         }
 
         public string ResponseContentType
@@ -90,19 +90,19 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public void Dispose()
         {
-            if (ProxyRequest != null)
-                ProxyRequest.Abort();
+            //if (ProxyRequest != null)
+            //    ProxyRequest.Abort();
 
             if (ResponseStream != null)
                 ResponseStream.Dispose();
 
-            if (ProxyRequest != null)
-                ProxyRequest.Close();
+            //if (ServerResponse != null)
+            //    ServerResponse.Close();
         }
 
         private void ReadRequestBody()
         {
-            if ((ProxyRequest.Method.ToUpper() != "POST" && ProxyRequest.Method.ToUpper() != "PUT"))
+            if ((ProxySession.Method.ToUpper() != "POST" && ProxySession.Method.ToUpper() != "PUT"))
             {
                 throw new BodyNotFoundException("Request don't have a body." +
                                                 "Please verify that this request is a Http POST/PUT and request content length is greater than zero before accessing the body.");
@@ -168,7 +168,7 @@ namespace Titanium.Web.Proxy.EventArguments
                                     RequestBody = CompressionHelper.DecompressDeflate(requestBodyStream);
                                     break;
                                 case "zlib":
-                                    RequestBody = CompressionHelper.DecompressGzip(requestBodyStream);
+                                    RequestBody = CompressionHelper.DecompressZlib(requestBodyStream);
                                     break;
                                 default:
                                     RequestBody = requestBodyStream.ToArray();
@@ -189,7 +189,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (ResponseBody == null)
             {
-                switch (ProxyRequest.ContentEncoding)
+                switch ( ProxySession.ResponseContentEncoding)
                 {
                     case "gzip":
                         ResponseBody = CompressionHelper.DecompressGzip(ResponseStream);
@@ -265,7 +265,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public void SetRequestBodyString(string body)
         {
-            if (RequestLocked) throw new Exception("Youcannot call this function after request is made to server.");
+            if (RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
 
             if (!RequestBodyRead)
             {
