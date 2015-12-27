@@ -13,11 +13,14 @@
     <releaseNotes></releaseNotes>
     <copyright>Copyright &#x00A9; Titanium.  All rights reserved.</copyright>
     <tags></tags>
+	 <dependencies>
+		 <dependency id="DotNetZip" version="1.9.7" />
+    </dependencies>
   </metadata>
   <files>
-	<file src="Titanium.Web.Proxy\bin\$configuration$\Titanium.Web.Proxy.dll" target="lib\net40\"  />
-	<file src="Titanium.Web.Proxy\bin\$configuration$\Ionic.Zip.dll" target="lib\net40\" />
-	<file src="Titanium.Web.Proxy\bin\$configuration$\makecert.exe"  target="content" />
-	<file src="Titanium.Web.Proxy\bin\$configuration$\Titanium_Proxy_Test_Root.cer" target="content" />
+	<file src="bin\$configuration$\Titanium.Web.Proxy.dll" target="lib\net40"  />
+	<file src="bin\$configuration$-Net45\Titanium.Web.Proxy.dll" target="lib\net45"  />
+	<file src="bin\$configuration$\makecert.exe"  target="content" />
+	<file src="bin\$configuration$\Titanium_Proxy_Test_Root.cer" target="content" />
   </files>
 </package>

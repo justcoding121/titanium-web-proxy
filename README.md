@@ -2,7 +2,7 @@ Titanium
 ========
 A light weight http(s) proxy server written in C#
 
-[![titanium MyGet Build Status](https://www.myget.org/BuildSource/Badge/titanium?identifier=36bd545d-87aa-4c0c-ae98-6de9a078b016)](https://www.myget.org/)
+![Build Status](https://ci.appveyor.com/api/projects/status/rvlxv8xgj0m7lkr4?svg=true)
 
 Kindly report only issues/bugs here . For programming help or questions use [StackOverflow](http://stackoverflow.com/questions/tagged/titanium-web-proxy) with the tag Titanium-Web-Proxy.
 
@@ -11,10 +11,9 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 Features
 ========
 
-* Supports Http(s) and all features of HTTP 1.1 
+* Supports Http(s) and most features of HTTP 1.1 
 * Supports relaying of WebSockets
 * Supports script injection
-* Async using HttpWebRequest class for better performance
 
 Usage
 =====

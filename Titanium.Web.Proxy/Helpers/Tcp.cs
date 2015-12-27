@@ -6,9 +6,8 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
-using Titanium.Web.Http;
 using Titanium.Web.Proxy.Extensions;
-
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Helpers
 {

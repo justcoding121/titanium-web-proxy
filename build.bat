@@ -1,23 +1,11 @@
-@echo Off
-set config=%1
-if "%config%" == "" (
-   set config=Release
-)
- 
-set version=1.0.0
-if not "%PackageVersion%" == "" (
-   set version=%PackageVersion%
-)
- 
-set nuget=
-if "%nuget%" == "" (
-	set nuget=.nuget\nuget.exe
-)
- 
-%WINDIR%\Microsoft.NET\Framework\v4.0.30319\msbuild Titanium.Web.Proxy.sln /p:Configuration="%config%" /m /v:M /fl /flp:LogFile=msbuild.log;Verbosity=diag /nr:false
- 
-mkdir Build
-mkdir Build\lib
-mkdir Build\lib\net40
- 
-%nuget% pack "Titanium.Web.Proxy.nuspec" -NoPackageAnalysis -verbosity detailed -o Build -Version %version% -p Configuration="%config%"
+@echo off
+
+if '%1'=='/?' goto help
+if '%1'=='-help' goto help
+if '%1'=='-h' goto help
+
+powershell -NoProfile -ExecutionPolicy bypass -Command "%~dp0.build\bootstrap.ps1 %*; if ($psake.build_success -eq $false) { exit 1 } else { exit 0 }"
+exit /B %errorlevel%
+
+:help
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%~dp0.build\bootstrap.ps1' -help"

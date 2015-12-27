@@ -1,11 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
-namespace Titanium.Web.Http
+namespace Titanium.Web.Proxy.Models
 {
-
     public class HttpHeader
     {
         public HttpHeader(string name, string value)
