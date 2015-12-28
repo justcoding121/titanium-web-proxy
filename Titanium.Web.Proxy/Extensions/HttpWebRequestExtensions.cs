@@ -6,13 +6,13 @@ namespace Titanium.Web.Proxy.Extensions
 {
     public static class HttpWebRequestExtensions
     {
-        public static Encoding GetEncoding(this HttpWebClient request)
+        public static Encoding GetEncoding(this HttpWebSession request)
         {
             try
             {
-                if (request.RequestContentType == null) return Encoding.GetEncoding("ISO-8859-1");
+                if (request.Request.RequestContentType == null) return Encoding.GetEncoding("ISO-8859-1");
 
-                var contentTypes = request.RequestContentType.Split(';');
+                var contentTypes = request.Request.RequestContentType.Split(';');
                 foreach (var contentType in contentTypes)
                 {
                     var encodingSplit = contentType.Split('=');

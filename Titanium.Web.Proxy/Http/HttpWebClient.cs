@@ -12,10 +12,8 @@ using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http
 {
-    public class HttpWebClient
+    public class Request
     {
-        private const string Space = " ";
-
         public string Method { get; set; }
 
         public Uri RequestUri { get; set; }
@@ -24,28 +22,73 @@ namespace Titanium.Web.Proxy.Http
 
         public List<HttpHeader> RequestHeaders { get; set; }
 
-        public bool IsSecure
-        {
-            get
-            {
-                return this.RequestUri.Scheme == Uri.UriSchemeHttps;
-            }
-        }
-
-        public TcpClient Client { get; set; }
-
         public string RequestStatus { get; set; }
-
-        public List<HttpHeader> ResponseHeaders { get; set; }
 
         public int RequestContentLength { get; set; }
 
         public bool RequestSendChunked { get; set; }
 
-        public HttpWebClient()
+        public string RequestContentType { get; set; }
+
+        public bool RequestKeepAlive { get; set; }
+
+        public string RequestHost { get; set; }
+
+        public Request()
         {
             this.RequestHeaders = new List<HttpHeader>();
+        }
+    }
+
+    public class Response
+    {
+
+        public List<HttpHeader> ResponseHeaders { get; set; }
+
+        public string ResponseCharacterSet { get; set; }
+
+        public string ResponseContentEncoding { get; set; }
+
+        public System.Version ResponseProtocolVersion { get; set; }
+
+        public string ResponseStatusCode { get; set; }
+
+        public string ResponseStatusDescription { get; set; }
+
+        public bool ResponseKeepAlive { get; set; }
+
+        public string ResponseContentType { get; set; }
+
+        public Response()
+        {
             this.ResponseHeaders = new List<HttpHeader>();
+        }
+
+        public int ContentLength { get; set; }
+    }
+
+    public class HttpWebSession
+    {
+        private const string Space = " ";
+
+        public bool IsSecure
+        {
+            get
+            {
+                return this.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
+            }
+        }
+
+        public Request Request { get; set; }
+        public Response Response { get; set; }
+        public TcpClient Client { get; set; }
+
+       
+        public HttpWebSession()
+        {
+            this.Request = new Request();
+            this.Response = new Response();
+          
         }
 
         public CustomBinaryReader ServerStreamReader { get; set; }
@@ -58,12 +101,12 @@ namespace Titanium.Web.Proxy.Http
 
             requestLines.AppendLine(string.Join(" ", new string[3]
               {
-                this.Method,
-                this.RequestUri.AbsolutePath,
-                this.Version
+                this.Request.Method,
+                this.Request.RequestUri.AbsolutePath,
+                this.Request.Version
               }));
 
-            foreach (HttpHeader httpHeader in this.RequestHeaders)
+            foreach (HttpHeader httpHeader in this.Request.RequestHeaders)
             {
                 requestLines.AppendLine(httpHeader.Name + ':' + httpHeader.Value);
 
@@ -77,7 +120,7 @@ namespace Titanium.Web.Proxy.Http
             await AsyncExtensions.FlushAsync((Stream)stream);
         }
 
-        public  void ReceiveResponse()
+        public void ReceiveResponse()
         {
             Stream stream = Client.GetStream();
             ServerStreamReader = new CustomBinaryReader(stream, Encoding.ASCII);
@@ -95,45 +138,25 @@ namespace Titanium.Web.Proxy.Http
                 version = new Version(1, 0);
             }
 
-            this.ResponseProtocolVersion = version;
-            this.ResponseStatusCode = httpResult[1];
+            this.Response.ResponseProtocolVersion = version;
+            this.Response.ResponseStatusCode = httpResult[1];
             string status = httpResult[2];
             for (int i = 3; i < httpResult.Length; i++)
             {
                 status = status + Space + httpResult[i];
             }
-            this.ResponseStatusDescription = status;
+            this.Response.ResponseStatusDescription = status;
 
             List<string> responseLines = ServerStreamReader.ReadAllLines();
          
             for (int index = 0; index < responseLines.Count; ++index)
             {
                 string[] strArray = responseLines[index].Split(':');
-                this.ResponseHeaders.Add(new HttpHeader(strArray[0], strArray[1]));
+                this.Response.ResponseHeaders.Add(new HttpHeader(strArray[0], strArray[1]));
             }
         }
 
 
-
-        public string RequestContentType { get; set; }
-
-        public bool RequestKeepAlive { get; set; }
-
-        public string RequestHost { get; set; }
-
-        public string ResponseCharacterSet { get; set; }
-
-        public string ResponseContentEncoding { get; set; }
-
-        public System.Version ResponseProtocolVersion { get; set; }
-
-        public string ResponseStatusCode { get; set; }
-
-        public string ResponseStatusDescription { get; set; }
-
-        public bool ResponseKeepAlive { get; set; }
-
-        public string ResponseContentType { get; set; }
 
     }
 

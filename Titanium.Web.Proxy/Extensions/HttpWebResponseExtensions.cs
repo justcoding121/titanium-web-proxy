@@ -6,10 +6,10 @@ namespace Titanium.Web.Proxy.Extensions
 {
     public static class HttpWebResponseExtensions
     {
-        public static Encoding GetResponseEncoding(this HttpWebClient response)
+        public static Encoding GetResponseEncoding(this HttpWebSession response)
         {
-            if (string.IsNullOrEmpty(response.ResponseCharacterSet)) return Encoding.GetEncoding("ISO-8859-1");
-            return Encoding.GetEncoding(response.ResponseCharacterSet.Replace(@"""",string.Empty));
+            if (string.IsNullOrEmpty(response.Response.ResponseCharacterSet)) return Encoding.GetEncoding("ISO-8859-1");
+            return Encoding.GetEncoding(response.Response.ResponseCharacterSet.Replace(@"""", string.Empty));
         }
     }
 }
