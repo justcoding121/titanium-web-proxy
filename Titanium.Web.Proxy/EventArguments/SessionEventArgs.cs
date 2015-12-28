@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy.EventArguments
         internal bool RequestBodyRead { get; set; }
         public List<HttpHeader> RequestHeaders { get; internal set; }
         internal bool RequestLocked { get; set; }
-        internal HttpWebClient ProxySession { get; set; }
+        internal HttpWebSession ProxySession { get; set; }
 
         internal Encoding ResponseEncoding { get; set; }
         internal Stream ResponseStream { get; set; }
@@ -69,13 +69,13 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public string RequestMethod
         {
-            get { return ProxySession.Method; }
+            get { return ProxySession.Request.Method; }
         }
 
 
         public string ResponseStatusCode
         {
-            get { return  ProxySession.ResponseStatusCode; }
+            get { return  ProxySession.Response.ResponseStatusCode; }
         }
 
         public string ResponseContentType
@@ -102,7 +102,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         private void ReadRequestBody()
         {
-            if ((ProxySession.Method.ToUpper() != "POST" && ProxySession.Method.ToUpper() != "PUT"))
+            if ((ProxySession.Request.Method.ToUpper() != "POST" && ProxySession.Request.Method.ToUpper() != "PUT"))
             {
                 throw new BodyNotFoundException("Request don't have a body." +
                                                 "Please verify that this request is a Http POST/PUT and request content length is greater than zero before accessing the body.");
@@ -189,7 +189,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (ResponseBody == null)
             {
-                switch ( ProxySession.ResponseContentEncoding)
+                switch ( ProxySession.Response.ResponseContentEncoding)
                 {
                     case "gzip":
                         ResponseBody = CompressionHelper.DecompressGzip(ResponseStream);

@@ -39,8 +39,8 @@ namespace Titanium.Web.Proxy
 
                 if (args.ResponseBodyRead)
                 {
-                    var isChunked = args.ProxySession.ResponseHeaders.Any(x => x.Name.ToLower() == "transfer-encoding" && x.Value.ToLower().Contains("chunked"));
-                    var contentEncoding = args.ProxySession.ResponseContentEncoding;
+                    var isChunked = args.ProxySession.Response.ResponseHeaders.Any(x => x.Name.ToLower() == "transfer-encoding" && x.Value.ToLower().Contains("chunked"));
+                    var contentEncoding = args.ProxySession.Response.ResponseContentEncoding;
 
                     switch (contentEncoding.ToLower())
                     {
@@ -55,8 +55,8 @@ namespace Titanium.Web.Proxy
                             break;
                     }
 
-                    WriteResponseStatus(args.ProxySession.ResponseProtocolVersion, args.ProxySession.ResponseStatusCode,
-                        args.ProxySession.ResponseStatusDescription, args.ClientStreamWriter);
+                    WriteResponseStatus(args.ProxySession.Response.ResponseProtocolVersion, args.ProxySession.Response.ResponseStatusCode,
+                        args.ProxySession.Response.ResponseStatusDescription, args.ClientStreamWriter);
                     WriteResponseHeaders(args.ClientStreamWriter, args.ResponseHeaders, args.ResponseBody.Length,
                         isChunked);
                     WriteResponseBody(args.ClientStream, args.ResponseBody, isChunked);
@@ -65,10 +65,10 @@ namespace Titanium.Web.Proxy
                 {
                   //  var isChunked = args.ProxySession.ResponseHeaders.Any(x => x.Name.ToLower() == "transfer-encoding" && x.Value.ToLower().Contains("chunked"));
 
-                    WriteResponseStatus(args.ProxySession.ResponseProtocolVersion, args.ProxySession.ResponseStatusCode,
-                         args.ProxySession.ResponseStatusDescription, args.ClientStreamWriter);
+                    WriteResponseStatus(args.ProxySession.Response.ResponseProtocolVersion, args.ProxySession.Response.ResponseStatusCode,
+                         args.ProxySession.Response.ResponseStatusDescription, args.ClientStreamWriter);
                     WriteResponseHeaders(args.ClientStreamWriter, args.ResponseHeaders);
-                    WriteResponseBody(args.ResponseStream, args.ClientStream, false);
+                    WriteResponseBody(args.ResponseStream, args.ClientStream, false, args.ProxySession.Response.ContentLength);
                 }
 
                 args.ClientStream.Flush();
@@ -84,24 +84,24 @@ namespace Titanium.Web.Proxy
             }
         }
 
-        private static List<HttpHeader> ReadResponseHeaders(HttpWebClient response)
+        private static List<HttpHeader> ReadResponseHeaders(HttpWebSession response)
         {
-            for (var i = 0; i < response.ResponseHeaders.Count; i++)
+            for (var i = 0; i < response.Response.ResponseHeaders.Count; i++)
             {
-                switch (response.ResponseHeaders[i].Name.ToLower())
+                switch (response.Response.ResponseHeaders[i].Name.ToLower())
                 {
                     case "content-encoding":
-                        response.ResponseContentEncoding = response.ResponseHeaders[i].Value;
+                        response.Response.ResponseContentEncoding = response.Response.ResponseHeaders[i].Value;
                         break;
 
                     case "content-type":
-                        if (response.ResponseHeaders[i].Value.Contains(";"))
+                        if (response.Response.ResponseHeaders[i].Value.Contains(";"))
                         {
-                            response.ResponseContentType = response.ResponseHeaders[i].Value.Split(';')[0].Trim();
-                            response.ResponseCharacterSet = response.ResponseHeaders[i].Value.Split(';')[1].Replace("charset=", string.Empty).Trim();
+                            response.Response.ResponseContentType = response.Response.ResponseHeaders[i].Value.Split(';')[0].Trim();
+                            response.Response.ResponseCharacterSet = response.Response.ResponseHeaders[i].Value.Split(';')[1].Replace("charset=", string.Empty).Trim();
                         }
                         else
-                            response.ResponseContentType = response.ResponseHeaders[i].Value.Trim();
+                            response.Response.ResponseContentType = response.Response.ResponseHeaders[i].Value.Trim();
 
                         break;
 
@@ -113,8 +113,8 @@ namespace Titanium.Web.Proxy
                 }
             }
            //  response.ResponseHeaders.RemoveAll(x => x.Name.ToLower() == "connection");
-                          
-            return response.ResponseHeaders;
+
+            return response.Response.ResponseHeaders;
         }
 
         private static void WriteResponseStatus(Version version, string code, string description,
@@ -190,7 +190,7 @@ namespace Titanium.Web.Proxy
                 WriteResponseBodyChunked(data, clientStream);
         }
 
-        private static void WriteResponseBody(Stream inStream, Stream outStream, bool isChunked)
+        private static void WriteResponseBody(Stream inStream, Stream outStream, bool isChunked, int BodyLength)
         {
             if (!isChunked)
             {
