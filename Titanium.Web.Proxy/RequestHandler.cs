@@ -30,6 +30,7 @@ namespace Titanium.Web.Proxy
             try
             {
                 //read the first line HTTP command
+
                 var httpCmd = clientStreamReader.ReadLine();
 
                 if (string.IsNullOrEmpty(httpCmd))
@@ -156,7 +157,7 @@ namespace Titanium.Web.Proxy
 
                     while (!string.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
                     {
-                        var header = tmpLine.Split(ColonSpaceSplit, 2, StringSplitOptions.None);
+                        var header = tmpLine.Split(new char[] { ':' }, 2);
                         args.RequestHeaders.Add(new HttpHeader(header[0], header[1]));
                     }
 
@@ -175,10 +176,11 @@ namespace Titanium.Web.Proxy
                         }
                     }
 
-                    //construct the web request that we are going to issue on behalf of the client.
-                    args.ProxySession = new Http.HttpWebSession();
-                    args.ProxySession.Request.RequestUri = httpRemoteUri;
                   
+                    args.ProxySession = new Http.HttpWebSession();
+
+                    args.ProxySession.Request.RequestUri = httpRemoteUri;
+
                     //args.ProxyRequest.Proxy = null;
                     //args.ProxyRequest.UseDefaultCredentials = true;
                     args.ProxySession.Request.Method = httpMethod;
@@ -197,8 +199,8 @@ namespace Titanium.Web.Proxy
                     //args.RequestIsAlive = args.ProxyRequest.KeepAlive;
                     //args.ProxyRequest.AllowWriteStreamBuffering = true;
 
-                    args.Client = await TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps);
-                    args.ProxySession.Client = args.Client;
+
+
                     //If requested interception
                     if (BeforeRequest != null)
                     {
@@ -215,7 +217,9 @@ namespace Titanium.Web.Proxy
                     }
 
                     SetRequestHeaders(args.RequestHeaders, args.ProxySession);
-
+                      //construct the web request that we are going to issue on behalf of the client.
+                    var connection = await TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps);
+                    args.ProxySession.SetConnection(connection);
                     await args.ProxySession.SendRequest();
 
                     //If request was modified by user
@@ -233,8 +237,8 @@ namespace Titanium.Web.Proxy
                             SendClientRequestBody(args);
                         }
                     }
-                  
-                    await HandleHttpSessionResponse(args);
+
+                    HandleHttpSessionResponse(args);
 
                     //if connection is closing exit
                     if (args.ResponseHeaders.Any(x => x.Name.ToLower() == "connection" && x.Value.ToLower() == "close"))
@@ -243,7 +247,7 @@ namespace Titanium.Web.Proxy
                         return;
                     }
 
-                    //TcpConnectionManager.AddClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps, args.ProxySession.Client);
+                    TcpConnectionManager.AddClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps, args.ProxySession.Client);
                     // read the next request 
                     httpCmd = clientStreamReader.ReadLine();
 
@@ -351,10 +355,27 @@ namespace Titanium.Web.Proxy
                         break;
                 }
             }
-
+            FixRequestProxyHeaders(requestHeaders);
             webRequest.Request.RequestHeaders = requestHeaders;
         }
+        private static void FixRequestProxyHeaders(List<HttpHeader> headers)
+        {
+            //If proxy-connection close was returned inform to close the connection
+            var proxyHeader = headers.FirstOrDefault(x => x.Name.ToLower() == "proxy-connection");
+            var connectionheader = headers.FirstOrDefault(x => x.Name.ToLower() == "connection");
 
+            if (proxyHeader != null)
+                if (connectionheader == null)
+                {
+                    headers.Add(new HttpHeader("connection", proxyHeader.Value));
+                }
+                else
+                {
+                    connectionheader.Value = proxyHeader.Value;
+                }
+
+            headers.RemoveAll(x => x.Name.ToLower() == "proxy-connection");
+        }
         //This is called when the request is PUT/POST to read the body
         private static void SendClientRequestBody(SessionEventArgs args)
         {

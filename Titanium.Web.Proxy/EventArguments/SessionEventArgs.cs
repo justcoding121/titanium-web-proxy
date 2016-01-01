@@ -93,8 +93,8 @@ namespace Titanium.Web.Proxy.EventArguments
             //if (ProxyRequest != null)
             //    ProxyRequest.Abort();
 
-            if (ResponseStream != null)
-                ResponseStream.Dispose();
+            //if (ResponseStream != null)
+            //    ResponseStream.Dispose();
 
             //if (ServerResponse != null)
             //    ServerResponse.Close();

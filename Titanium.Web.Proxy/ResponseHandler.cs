@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -17,10 +18,10 @@ namespace Titanium.Web.Proxy
     partial class ProxyServer
     {
         //Called asynchronously when a request was successfully and we received the response
-        private static async Task HandleHttpSessionResponse(SessionEventArgs args)
+        private static void HandleHttpSessionResponse(SessionEventArgs args)
         {
 
-          args.ProxySession.ReceiveResponse();
+            args.ProxySession.ReceiveResponse();
 
             try
             {
@@ -63,12 +64,14 @@ namespace Titanium.Web.Proxy
                 }
                 else
                 {
-                  //  var isChunked = args.ProxySession.ResponseHeaders.Any(x => x.Name.ToLower() == "transfer-encoding" && x.Value.ToLower().Contains("chunked"));
+                    var isChunked = args.ProxySession.Response.ResponseHeaders.Any(x => x.Name.ToLower() == "transfer-encoding" && x.Value.ToLower().Contains("chunked"));
 
                     WriteResponseStatus(args.ProxySession.Response.ResponseProtocolVersion, args.ProxySession.Response.ResponseStatusCode,
                          args.ProxySession.Response.ResponseStatusDescription, args.ClientStreamWriter);
                     WriteResponseHeaders(args.ClientStreamWriter, args.ResponseHeaders);
-                    WriteResponseBody(args.ResponseStream, args.ClientStream, false, args.ProxySession.Response.ContentLength);
+
+                    if (isChunked || args.ProxySession.Response.ContentLength > 0)
+                        WriteResponseBody(args.ResponseStream, args.ClientStream, isChunked, args.ProxySession.Response.ContentLength);
                 }
 
                 args.ClientStream.Flush();
@@ -90,6 +93,10 @@ namespace Titanium.Web.Proxy
             {
                 switch (response.Response.ResponseHeaders[i].Name.ToLower())
                 {
+                    case "content-length":
+                        response.Response.ContentLength = int.Parse(response.Response.ResponseHeaders[i].Value);
+                        break;
+
                     case "content-encoding":
                         response.Response.ResponseContentEncoding = response.Response.ResponseHeaders[i].Value;
                         break;
@@ -105,14 +112,10 @@ namespace Titanium.Web.Proxy
 
                         break;
 
-                    case "connection":
-                        
-                         break;
                     default:
                         break;
                 }
             }
-           //  response.ResponseHeaders.RemoveAll(x => x.Name.ToLower() == "connection");
 
             return response.Response.ResponseHeaders;
         }
@@ -128,7 +131,7 @@ namespace Titanium.Web.Proxy
         {
             if (headers != null)
             {
-                //FixProxyHeaders(headers);
+                FixResponseProxyHeaders(headers);
 
                 foreach (var header in headers)
                 {
@@ -139,23 +142,29 @@ namespace Titanium.Web.Proxy
             responseWriter.WriteLine();
             responseWriter.Flush();
         }
-        private static void FixProxyHeaders(List<HttpHeader> headers)
+        private static void FixResponseProxyHeaders(List<HttpHeader> headers)
         {
             //If proxy-connection close was returned inform to close the connection
-            if (headers.Any(x => x.Name.ToLower() == "proxy-connection" && x.Value.ToLower() == "close"))
-                if (headers.Any(x => x.Name.ToLower() == "connection") == false)
+            var proxyHeader = headers.FirstOrDefault(x => x.Name.ToLower() == "proxy-connection");
+            var connectionHeader = headers.FirstOrDefault(x => x.Name.ToLower() == "connection");
+
+            if (proxyHeader != null)
+                if (connectionHeader == null)
                 {
-                    headers.Add(new HttpHeader("connection", "close"));
-                    headers.RemoveAll(x => x.Name.ToLower() == "proxy-connection");
+                    headers.Add(new HttpHeader("connection", proxyHeader.Value));
                 }
                 else
-                    headers.Find(x => x.Name.ToLower() == "connection").Value = "close";
+                {
+                    connectionHeader.Value = "close";
+                }
+
+            headers.RemoveAll(x => x.Name.ToLower() == "proxy-connection");
         }
 
         private static void WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers, int length,
             bool isChunked)
         {
-            FixProxyHeaders(headers);
+            FixResponseProxyHeaders(headers);
 
             if (!isChunked)
             {
@@ -194,12 +203,27 @@ namespace Titanium.Web.Proxy
         {
             if (!isChunked)
             {
+                int bytesToRead = BUFFER_SIZE;
+
+                if (BodyLength < BUFFER_SIZE)
+                    bytesToRead = BodyLength;
+
                 var buffer = new byte[BUFFER_SIZE];
 
-                int bytesRead;
-                while ((bytesRead = inStream.Read(buffer, 0, buffer.Length)) > 0)
+                var bytesRead = 0;
+                var totalBytesRead = 0;
+
+                while ((bytesRead += inStream.Read(buffer, 0, bytesToRead)) > 0)
                 {
                     outStream.Write(buffer, 0, bytesRead);
+                    totalBytesRead += bytesRead;
+
+                    if (totalBytesRead == BodyLength)
+                        break;
+
+                    bytesRead = 0;
+                    var remainingBytes = (BodyLength - totalBytesRead);
+                    bytesToRead = remainingBytes > BUFFER_SIZE ? BUFFER_SIZE : remainingBytes;
                 }
             }
             else
@@ -209,20 +233,35 @@ namespace Titanium.Web.Proxy
         //Send chunked response
         private static void WriteResponseBodyChunked(Stream inStream, Stream outStream)
         {
-            var buffer = new byte[BUFFER_SIZE];
-
-            int bytesRead;
-            while ((bytesRead = inStream.Read(buffer, 0, buffer.Length)) > 0)
+            var inStreamReader = new CustomBinaryReader(inStream, Encoding.ASCII);
+            while (true)
             {
-                var chunkHead = Encoding.ASCII.GetBytes(bytesRead.ToString("x2"));
+                var chuchkHead = inStreamReader.ReadLine();
+                var chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
 
-                outStream.Write(chunkHead, 0, chunkHead.Length);
-                outStream.Write(ChunkTrail, 0, ChunkTrail.Length);
-                outStream.Write(buffer, 0, bytesRead);
-                outStream.Write(ChunkTrail, 0, ChunkTrail.Length);
+                if (chunkSize != 0)
+                {
+                    var buffer = inStreamReader.ReadBytes(chunkSize);
+
+                    var chunkHead = Encoding.ASCII.GetBytes(chunkSize.ToString("x2"));
+
+                    outStream.Write(chunkHead, 0, chunkHead.Length);
+                    outStream.Write(NewLineBytes, 0, NewLineBytes.Length);
+
+                    outStream.Write(buffer, 0, chunkSize);
+                    outStream.Write(NewLineBytes, 0, NewLineBytes.Length);
+
+                    inStreamReader.ReadLine();
+                }
+                else
+                {
+                    inStreamReader.ReadLine();
+                    outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
+                    break;
+                }
             }
 
-            outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
+
         }
 
         private static void WriteResponseBodyChunked(byte[] data, Stream outStream)
@@ -230,9 +269,9 @@ namespace Titanium.Web.Proxy
             var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
 
             outStream.Write(chunkHead, 0, chunkHead.Length);
-            outStream.Write(ChunkTrail, 0, ChunkTrail.Length);
+            outStream.Write(NewLineBytes, 0, NewLineBytes.Length);
             outStream.Write(data, 0, data.Length);
-            outStream.Write(ChunkTrail, 0, ChunkTrail.Length);
+            outStream.Write(NewLineBytes, 0, NewLineBytes.Length);
 
             outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
         }

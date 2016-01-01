@@ -81,36 +81,42 @@ namespace Titanium.Web.Proxy.Http
 
         public Request Request { get; set; }
         public Response Response { get; set; }
-        public TcpClient Client { get; set; }
+        public TcpConnection Client { get; set; }
 
-       
+        public void SetConnection(TcpConnection Connection)
+        {
+            Client = Connection;
+            ServerStreamReader = Client.ServerStreamReader;
+        }
+
         public HttpWebSession()
         {
             this.Request = new Request();
             this.Response = new Response();
-          
+            
+      
         }
 
         public CustomBinaryReader ServerStreamReader { get; set; }
 
         public async Task SendRequest()
         {
-            Stream stream = Client.GetStream();
+            Stream stream = Client.Stream;
 
             StringBuilder requestLines = new StringBuilder();
 
             requestLines.AppendLine(string.Join(" ", new string[3]
               {
                 this.Request.Method,
-                this.Request.RequestUri.AbsolutePath,
+                this.Request.RequestUri.PathAndQuery,
                 this.Request.Version
               }));
 
             foreach (HttpHeader httpHeader in this.Request.RequestHeaders)
             {
                 requestLines.AppendLine(httpHeader.Name + ':' + httpHeader.Value);
-
             }
+
             requestLines.AppendLine();
             requestLines.AppendLine();
 
@@ -121,10 +127,8 @@ namespace Titanium.Web.Proxy.Http
         }
 
         public void ReceiveResponse()
-        {
-            Stream stream = Client.GetStream();
-            ServerStreamReader = new CustomBinaryReader(stream, Encoding.ASCII);
-            var httpResult = ServerStreamReader.ReadLine().Split(' ');
+        {         
+            var httpResult = ServerStreamReader.ReadLine().Split(new char[] { ' ' }, 3);
 
             var httpVersion = httpResult[0];
 
@@ -141,17 +145,14 @@ namespace Titanium.Web.Proxy.Http
             this.Response.ResponseProtocolVersion = version;
             this.Response.ResponseStatusCode = httpResult[1];
             string status = httpResult[2];
-            for (int i = 3; i < httpResult.Length; i++)
-            {
-                status = status + Space + httpResult[i];
-            }
+
             this.Response.ResponseStatusDescription = status;
 
             List<string> responseLines = ServerStreamReader.ReadAllLines();
-         
+
             for (int index = 0; index < responseLines.Count; ++index)
             {
-                string[] strArray = responseLines[index].Split(':');
+                string[] strArray = responseLines[index].Split(new char[] { ':' }, 2);
                 this.Response.ResponseHeaders.Add(new HttpHeader(strArray[0], strArray[1]));
             }
         }

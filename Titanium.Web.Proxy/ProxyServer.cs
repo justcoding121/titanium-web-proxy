@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy
 
         private static readonly Regex CookieSplitRegEx = new Regex(@",(?! )");
 
-        private static readonly byte[] ChunkTrail = Encoding.ASCII.GetBytes(Environment.NewLine);
+        private static readonly byte[] NewLineBytes = Encoding.ASCII.GetBytes(Environment.NewLine);
 
         private static readonly byte[] ChunkEnd =
             Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
