@@ -121,7 +121,7 @@ namespace Titanium.Web.Proxy.Http
             }
 
             requestLines.AppendLine();
-            requestLines.AppendLine();
+            //requestLines.AppendLine();
 
             string request = requestLines.ToString();
             byte[] requestBytes = Encoding.ASCII.GetBytes(request);

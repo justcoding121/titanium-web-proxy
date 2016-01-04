@@ -382,7 +382,7 @@ namespace Titanium.Web.Proxy
         private static void SendClientRequestBody(SessionEventArgs args)
         {
             // End the operation
-            var postStream = args.ProxySession.ProxyClient.ServerStreamReader;
+            var postStream = args.ProxySession.ProxyClient.Stream;
 
 
             if (args.ProxySession.Request.RequestContentLength > 0)
@@ -411,7 +411,7 @@ namespace Titanium.Web.Proxy
                         {
                             bytesToRead = remainingBytes;
                         }
-                        postStream.BaseStream.Write(buffer, 0, buffer.Length);
+                        postStream.Write(buffer, 0, buffer.Length);
                     }
 
                     //postStream.Close();
@@ -438,7 +438,7 @@ namespace Titanium.Web.Proxy
                         if (chunkSize != 0)
                         {
                             var buffer = args.Client.ClientStreamReader.ReadBytes(chunkSize);
-                            postStream.BaseStream.Write(buffer, 0, buffer.Length);
+                            postStream.Write(buffer, 0, buffer.Length);
                             //chunk trail
                             args.Client.ClientStreamReader.ReadLine();
                         }
