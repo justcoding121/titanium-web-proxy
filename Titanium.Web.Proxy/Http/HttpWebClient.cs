@@ -15,24 +15,28 @@ namespace Titanium.Web.Proxy.Http
     public class Request
     {
         public string Method { get; set; }
-
         public Uri RequestUri { get; set; }
-
         public string Version { get; set; }
 
-        public List<HttpHeader> RequestHeaders { get; set; }
-
         public string RequestStatus { get; set; }
-
         public int RequestContentLength { get; set; }
-
         public bool RequestSendChunked { get; set; }
-
         public string RequestContentType { get; set; }
-
         public bool RequestKeepAlive { get; set; }
-
         public string RequestHost { get; set; }
+
+        public string RequestUrl { get; internal set; }
+        public string RequestHostname { get; internal set; }
+
+        internal Encoding RequestEncoding { get; set; }
+        internal Version RequestHttpVersion { get; set; }
+        internal bool RequestIsAlive { get; set; }
+        internal bool CancelRequest { get; set; }
+        internal byte[] RequestBody { get; set; }
+        internal string RequestBodyString { get; set; }
+        internal bool RequestBodyRead { get; set; }
+        public List<HttpHeader> RequestHeaders { get; internal set; }
+        internal bool RequestLocked { get; set; }
 
         public Request()
         {
@@ -43,28 +47,28 @@ namespace Titanium.Web.Proxy.Http
     public class Response
     {
 
-        public List<HttpHeader> ResponseHeaders { get; set; }
-
+        internal Encoding ResponseEncoding { get; set; }
+        internal Stream ResponseStream { get; set; }
+        internal byte[] ResponseBody { get; set; }
+        internal string ResponseBodyString { get; set; }
+        internal bool ResponseBodyRead { get; set; }
+        internal bool ResponseLocked { get; set; }
+        public List<HttpHeader> ResponseHeaders { get; internal set; }
         public string ResponseCharacterSet { get; set; }
-
         public string ResponseContentEncoding { get; set; }
-
         public System.Version ResponseProtocolVersion { get; set; }
-
         public string ResponseStatusCode { get; set; }
-
         public string ResponseStatusDescription { get; set; }
-
         public bool ResponseKeepAlive { get; set; }
-
         public string ResponseContentType { get; set; }
+        public int ContentLength { get; set; }
 
         public Response()
         {
             this.ResponseHeaders = new List<HttpHeader>();
         }
 
-        public int ContentLength { get; set; }
+
     }
 
     public class HttpWebSession
@@ -81,27 +85,26 @@ namespace Titanium.Web.Proxy.Http
 
         public Request Request { get; set; }
         public Response Response { get; set; }
-        public TcpConnection Client { get; set; }
+        public TcpConnection ProxyClient { get; set; }
 
         public void SetConnection(TcpConnection Connection)
         {
-            Client = Connection;
-            ServerStreamReader = Client.ServerStreamReader;
+            ProxyClient = Connection;
         }
 
         public HttpWebSession()
         {
             this.Request = new Request();
             this.Response = new Response();
-            
-      
+
+
         }
 
-        public CustomBinaryReader ServerStreamReader { get; set; }
 
-        public async Task SendRequest()
+
+        public void SendRequest()
         {
-            Stream stream = Client.Stream;
+            Stream stream = ProxyClient.Stream;
 
             StringBuilder requestLines = new StringBuilder();
 
@@ -122,13 +125,13 @@ namespace Titanium.Web.Proxy.Http
 
             string request = requestLines.ToString();
             byte[] requestBytes = Encoding.ASCII.GetBytes(request);
-            await AsyncExtensions.WriteAsync((Stream)stream, requestBytes, 0, requestBytes.Length);
-            await AsyncExtensions.FlushAsync((Stream)stream);
+            stream.Write(requestBytes, 0, requestBytes.Length);
+            stream.Flush();
         }
 
         public void ReceiveResponse()
-        {         
-            var httpResult = ServerStreamReader.ReadLine().Split(new char[] { ' ' }, 3);
+        {
+            var httpResult = ProxyClient.ServerStreamReader.ReadLine().Split(new char[] { ' ' }, 3);
 
             var httpVersion = httpResult[0];
 
@@ -148,7 +151,7 @@ namespace Titanium.Web.Proxy.Http
 
             this.Response.ResponseStatusDescription = status;
 
-            List<string> responseLines = ServerStreamReader.ReadAllLines();
+            List<string> responseLines = ProxyClient.ServerStreamReader.ReadAllLines();
 
             for (int index = 0; index < responseLines.Count; ++index)
             {

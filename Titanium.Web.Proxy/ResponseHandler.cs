@@ -26,19 +26,19 @@ namespace Titanium.Web.Proxy
             try
             {
 
-                args.ResponseHeaders = ReadResponseHeaders(args.ProxySession);
-                args.ResponseStream = args.ProxySession.ServerStreamReader.BaseStream;
+                args.ProxySession.Response.ResponseHeaders = ReadResponseHeaders(args.ProxySession);
+                args.ProxySession.Response.ResponseStream = args.ProxySession.ProxyClient.ServerStreamReader.BaseStream;
 
 
                 if (BeforeResponse != null)
                 {
-                    args.ResponseEncoding = args.ProxySession.GetResponseEncoding();
+                    args.ProxySession.Response.ResponseEncoding = args.ProxySession.GetResponseEncoding();
                     BeforeResponse(null, args);
                 }
 
-                args.ResponseLocked = true;
+                args.ProxySession.Response.ResponseLocked = true;
 
-                if (args.ResponseBodyRead)
+                if (args.ProxySession.Response.ResponseBodyRead)
                 {
                     var isChunked = args.ProxySession.Response.ResponseHeaders.Any(x => x.Name.ToLower() == "transfer-encoding" && x.Value.ToLower().Contains("chunked"));
                     var contentEncoding = args.ProxySession.Response.ResponseContentEncoding;
@@ -46,40 +46,40 @@ namespace Titanium.Web.Proxy
                     switch (contentEncoding.ToLower())
                     {
                         case "gzip":
-                            args.ResponseBody = CompressionHelper.CompressGzip(args.ResponseBody);
+                            args.ProxySession.Response.ResponseBody = CompressionHelper.CompressGzip(args.ProxySession.Response.ResponseBody);
                             break;
                         case "deflate":
-                            args.ResponseBody = CompressionHelper.CompressDeflate(args.ResponseBody);
+                            args.ProxySession.Response.ResponseBody = CompressionHelper.CompressDeflate(args.ProxySession.Response.ResponseBody);
                             break;
                         case "zlib":
-                            args.ResponseBody = CompressionHelper.CompressZlib(args.ResponseBody);
+                            args.ProxySession.Response.ResponseBody = CompressionHelper.CompressZlib(args.ProxySession.Response.ResponseBody);
                             break;
                     }
 
                     WriteResponseStatus(args.ProxySession.Response.ResponseProtocolVersion, args.ProxySession.Response.ResponseStatusCode,
-                        args.ProxySession.Response.ResponseStatusDescription, args.ClientStreamWriter);
-                    WriteResponseHeaders(args.ClientStreamWriter, args.ResponseHeaders, args.ResponseBody.Length,
+                        args.ProxySession.Response.ResponseStatusDescription, args.Client.ClientStreamWriter);
+                    WriteResponseHeaders(args.Client.ClientStreamWriter, args.ProxySession.Response.ResponseHeaders, args.ProxySession.Response.ResponseBody.Length,
                         isChunked);
-                    WriteResponseBody(args.ClientStream, args.ResponseBody, isChunked);
+                    WriteResponseBody(args.Client.ClientStream, args.ProxySession.Response.ResponseBody, isChunked);
                 }
                 else
                 {
                     var isChunked = args.ProxySession.Response.ResponseHeaders.Any(x => x.Name.ToLower() == "transfer-encoding" && x.Value.ToLower().Contains("chunked"));
 
                     WriteResponseStatus(args.ProxySession.Response.ResponseProtocolVersion, args.ProxySession.Response.ResponseStatusCode,
-                         args.ProxySession.Response.ResponseStatusDescription, args.ClientStreamWriter);
-                    WriteResponseHeaders(args.ClientStreamWriter, args.ResponseHeaders);
+                         args.ProxySession.Response.ResponseStatusDescription, args.Client.ClientStreamWriter);
+                    WriteResponseHeaders(args.Client.ClientStreamWriter, args.ProxySession.Response.ResponseHeaders);
 
                     if (isChunked || args.ProxySession.Response.ContentLength > 0)
-                        WriteResponseBody(args.ResponseStream, args.ClientStream, isChunked, args.ProxySession.Response.ContentLength);
+                        WriteResponseBody(args.ProxySession.ProxyClient.ServerStreamReader, args.Client.ClientStream, isChunked, args.ProxySession.Response.ContentLength);
                 }
 
-                args.ClientStream.Flush();
+                args.Client.ClientStream.Flush();
 
             }
             catch
             {
-                Dispose(args.Client, args.ClientStream, args.ClientStreamReader, args.ClientStreamWriter, args);
+                Dispose(args.Client.TcpClient, args.Client.ClientStream, args.Client.ClientStreamReader, args.Client.ClientStreamWriter, args);
             }
             finally
             {
@@ -199,7 +199,7 @@ namespace Titanium.Web.Proxy
                 WriteResponseBodyChunked(data, clientStream);
         }
 
-        private static void WriteResponseBody(Stream inStream, Stream outStream, bool isChunked, int BodyLength)
+        private static void WriteResponseBody(CustomBinaryReader inStreamReader, Stream outStream, bool isChunked, int BodyLength)
         {
             if (!isChunked)
             {
@@ -213,7 +213,7 @@ namespace Titanium.Web.Proxy
                 var bytesRead = 0;
                 var totalBytesRead = 0;
 
-                while ((bytesRead += inStream.Read(buffer, 0, bytesToRead)) > 0)
+                while ((bytesRead += inStreamReader.BaseStream.Read(buffer, 0, bytesToRead)) > 0)
                 {
                     outStream.Write(buffer, 0, bytesRead);
                     totalBytesRead += bytesRead;
@@ -227,13 +227,12 @@ namespace Titanium.Web.Proxy
                 }
             }
             else
-                WriteResponseBodyChunked(inStream, outStream);
+                WriteResponseBodyChunked(inStreamReader, outStream);
         }
 
         //Send chunked response
-        private static void WriteResponseBodyChunked(Stream inStream, Stream outStream)
+        private static void WriteResponseBodyChunked(CustomBinaryReader inStreamReader, Stream outStream)
         {
-            var inStreamReader = new CustomBinaryReader(inStream, Encoding.ASCII);
             while (true)
             {
                 var chuchkHead = inStreamReader.ReadLine();

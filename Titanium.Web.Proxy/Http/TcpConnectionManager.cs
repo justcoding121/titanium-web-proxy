@@ -22,25 +22,28 @@ namespace Titanium.Web.Proxy.Http
     {
         static ConcurrentDictionary<string, ConcurrentStack<TcpConnection>> ConnectionCache = new ConcurrentDictionary<string, ConcurrentStack<TcpConnection>>();
 
-        public static async Task<TcpConnection> GetClient(string Hostname, int port, bool IsSecure)
+        public static TcpConnection GetClient(string Hostname, int port, bool IsSecure)
         {
             var key = string.Concat(Hostname, ":", port, ":", IsSecure);
-
-            ConcurrentStack<TcpConnection> connections;
-            if (!ConnectionCache.TryGetValue(key, out connections))
-            {
-                return await CreateClient(Hostname, port, IsSecure);
-            }
-
             TcpConnection client;
-            if (!connections.TryPop(out client))
+            lock (ConnectionCache)
             {
-                return await CreateClient(Hostname, port, IsSecure);
+                ConcurrentStack<TcpConnection> connections;
+                if (!ConnectionCache.TryGetValue(key, out connections))
+                {
+                    return CreateClient(Hostname, port, IsSecure);
+                }
+
+
+                if (!connections.TryPop(out client))
+                {
+                    return CreateClient(Hostname, port, IsSecure);
+                }
             }
             return client;
         }
 
-        private static async Task<TcpConnection> CreateClient(string Hostname, int port, bool IsSecure)
+        private static TcpConnection CreateClient(string Hostname, int port, bool IsSecure)
         {
             var client = new TcpClient(Hostname, port);
             var stream = (Stream)client.GetStream();
@@ -51,7 +54,7 @@ namespace Titanium.Web.Proxy.Http
                 try
                 {
                     sslStream = new SslStream(stream);
-                    await AsyncPlatformExtensions.AuthenticateAsClientAsync(sslStream, Hostname);
+                    sslStream.AuthenticateAsClient(Hostname);
                     stream = (Stream)sslStream;
                 }
                 catch
@@ -68,16 +71,19 @@ namespace Titanium.Web.Proxy.Http
         public static void AddClient(string Hostname, int port, bool IsSecure, TcpConnection Client)
         {
             var key = string.Concat(Hostname, ":", port, ":", IsSecure);
-
-            ConcurrentStack<TcpConnection> connections;
-            if (!ConnectionCache.TryGetValue(key, out connections))
+            lock (ConnectionCache)
             {
-                connections = new ConcurrentStack<TcpConnection>();
-                connections.Push(Client);
-                ConnectionCache.TryAdd(key, connections);
-            }
+ 
+                ConcurrentStack<TcpConnection> connections;
+                if (!ConnectionCache.TryGetValue(key, out connections))
+                {
+                    connections = new ConcurrentStack<TcpConnection>();
+                    connections.Push(Client);
+                    ConnectionCache.TryAdd(key, connections);
+                }
 
-            connections.Push(Client);
+                connections.Push(Client);
+            }
 
         }
 
