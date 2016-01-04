@@ -24,24 +24,24 @@ namespace Titanium.Web.Proxy.Http
 
         public static TcpConnection GetClient(string Hostname, int port, bool IsSecure)
         {
-            var key = string.Concat(Hostname, ":", port, ":", IsSecure);
-            TcpConnection client;
-            lock (ConnectionCache)
-            {
-                Stack<TcpConnection> connections;
-                if (!ConnectionCache.TryGetValue(key, out connections))
-                {
-                    return CreateClient(Hostname, port, IsSecure);
-                }
+            //var key = string.Concat(Hostname, ":", port, ":", IsSecure);
+            //TcpConnection client;
+            //lock (ConnectionCache)
+            //{
+            //    Stack<TcpConnection> connections;
+            //    if (!ConnectionCache.TryGetValue(key, out connections))
+            //    {
+            //        return CreateClient(Hostname, port, IsSecure);
+            //    }
 
-                if (connections.Count > 0)
-                {
-                    client = connections.Pop();
-                }
-                else
+            //    if (connections.Count > 0)
+            //    {
+            //        client = connections.Pop();
+            //    }
+            //    else
                     return CreateClient(Hostname, port, IsSecure);
-            }
-            return client;
+            //}
+            //return client;
         }
 
         private static TcpConnection CreateClient(string Hostname, int port, bool IsSecure)
