@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy.Http
 
     internal class TcpConnectionManager
     {
-        static ConcurrentDictionary<string, ConcurrentStack<TcpConnection>> ConnectionCache = new ConcurrentDictionary<string, ConcurrentStack<TcpConnection>>();
+        static Dictionary<string, Stack<TcpConnection>> ConnectionCache = new Dictionary<string, Stack<TcpConnection>>();
 
         public static TcpConnection GetClient(string Hostname, int port, bool IsSecure)
         {
@@ -28,17 +28,18 @@ namespace Titanium.Web.Proxy.Http
             TcpConnection client;
             lock (ConnectionCache)
             {
-                ConcurrentStack<TcpConnection> connections;
+                Stack<TcpConnection> connections;
                 if (!ConnectionCache.TryGetValue(key, out connections))
                 {
                     return CreateClient(Hostname, port, IsSecure);
                 }
 
-
-                if (!connections.TryPop(out client))
+                if (connections.Count > 0)
                 {
-                    return CreateClient(Hostname, port, IsSecure);
+                    client = connections.Pop();
                 }
+                else
+                    return CreateClient(Hostname, port, IsSecure);
             }
             return client;
         }
@@ -73,13 +74,13 @@ namespace Titanium.Web.Proxy.Http
             var key = string.Concat(Hostname, ":", port, ":", IsSecure);
             lock (ConnectionCache)
             {
- 
-                ConcurrentStack<TcpConnection> connections;
+
+                Stack<TcpConnection> connections;
                 if (!ConnectionCache.TryGetValue(key, out connections))
                 {
-                    connections = new ConcurrentStack<TcpConnection>();
+                    connections = new Stack<TcpConnection>();
                     connections.Push(Client);
-                    ConnectionCache.TryAdd(key, connections);
+                    ConnectionCache.Add(key, connections);
                 }
 
                 connections.Push(Client);

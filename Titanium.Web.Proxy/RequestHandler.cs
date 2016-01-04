@@ -247,9 +247,10 @@ namespace Titanium.Web.Proxy
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
                         return;
                     }
-
-                    //if (args.ProxySession.ProxyClient.Client.Connected)
-                    // TcpConnectionManager.AddClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps, args.ProxySession.ProxyClient);
+                    args.ProxySession.ProxyClient.Client.Close();
+                   // if (args.ProxySession.ProxyClient.Client.Connected)
+                      //  TcpConnectionManager.AddClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps, args.ProxySession.ProxyClient);
+                   
                     // // read the next request 
                     httpCmd = clientStreamReader.ReadLine();
 
