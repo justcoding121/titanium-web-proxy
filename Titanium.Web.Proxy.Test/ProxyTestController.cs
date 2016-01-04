@@ -43,7 +43,7 @@ namespace Titanium.Web.Proxy.Test
         //Read browser URL send back to proxy by the injection script in OnResponse event
         public void OnRequest(object sender, SessionEventArgs e)
         {
-            Console.WriteLine(e.RequestUrl);
+            Console.WriteLine(e.ProxySession.Request.RequestUrl);
 
             ////read request headers
             //var requestHeaders = e.RequestHeaders;
