@@ -115,6 +115,7 @@ namespace Titanium.Web.Proxy
         private static void HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
             CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string secureTunnelHostName)
         {
+            TcpConnection connection = null;
             while (true)
             {
                 if (string.IsNullOrEmpty(httpCmd))
@@ -219,7 +220,7 @@ namespace Titanium.Web.Proxy
 
                     SetRequestHeaders(args.ProxySession.Request.RequestHeaders, args.ProxySession);
                     //construct the web request that we are going to issue on behalf of the client.
-                    var connection = TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps);
+                    connection = connection == null ? TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps): connection;
                     args.ProxySession.SetConnection(connection);
                     args.ProxySession.SendRequest();
 
@@ -247,7 +248,7 @@ namespace Titanium.Web.Proxy
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
                         return;
                     }
-                    args.ProxySession.ProxyClient.Client.Close();
+                  //  args.ProxySession.ProxyClient.Client.Close();
                    // if (args.ProxySession.ProxyClient.Client.Connected)
                       //  TcpConnectionManager.AddClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps, args.ProxySession.ProxyClient);
                    
@@ -258,9 +259,12 @@ namespace Titanium.Web.Proxy
                 catch
                 {
                     Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
-                    return;
+                    break;
                 }
             }
+
+            if(connection != null)
+                connection.Client.Close();
         }
 
         private static void WriteConnectResponse(StreamWriter clientStreamWriter, string httpVersion)
