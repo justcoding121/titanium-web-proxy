@@ -35,6 +35,7 @@ namespace Titanium.Web.Proxy.Http
         internal byte[] RequestBody { get; set; }
         internal string RequestBodyString { get; set; }
         internal bool RequestBodyRead { get; set; }
+        public bool UpgradeToWebSocket { get; set; }
         public List<HttpHeader> RequestHeaders { get; internal set; }
         internal bool RequestLocked { get; set; }
 
@@ -42,6 +43,7 @@ namespace Titanium.Web.Proxy.Http
         {
             this.RequestHeaders = new List<HttpHeader>();
         }
+
     }
 
     public class Response
@@ -62,15 +64,17 @@ namespace Titanium.Web.Proxy.Http
         public bool ResponseKeepAlive { get; set; }
         public string ResponseContentType { get; set; }
         public int ContentLength { get; set; }
+        public bool IsChunked { get; set; }
 
         public Response()
         {
             this.ResponseHeaders = new List<HttpHeader>();
+            this.ResponseKeepAlive = true;
         }
 
 
 
-        public bool IsChunked { get; set; }
+        
     }
 
     public class HttpWebSession

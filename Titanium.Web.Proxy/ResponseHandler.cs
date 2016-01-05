@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy
 
                 if (args.ProxySession.Response.ResponseBodyRead)
                 {
-                    var isChunked = args.ProxySession.Response.ResponseHeaders.Any(x => x.Name.ToLower() == "transfer-encoding" && x.Value.ToLower().Contains("chunked"));
+                    var isChunked =args.ProxySession.Response.IsChunked;
                     var contentEncoding = args.ProxySession.Response.ResponseContentEncoding;
 
                     switch (contentEncoding.ToLower())
@@ -105,14 +105,17 @@ namespace Titanium.Web.Proxy
                             response.Response.ResponseCharacterSet = response.Response.ResponseHeaders[i].Value.Split(';')[1].ToLower().Replace("charset=", string.Empty).Trim();
                         }
                         else
-                            response.Response.ResponseContentType = response.Response.ResponseHeaders[i].Value.Trim();
+                            response.Response.ResponseContentType = response.Response.ResponseHeaders[i].Value.ToLower().Trim();
                         break;
 
                     case "transfer-encoding":
-                        if (response.Response.ResponseHeaders[i].Value.Contains("chunked"))
+                        if (response.Response.ResponseHeaders[i].Value.ToLower().Contains("chunked"))
                             response.Response.IsChunked = true;
                         break;
-
+                    case "connection":
+                        if (response.Response.ResponseHeaders[i].Value.ToLower().Contains("close"))
+                            response.Response.ResponseKeepAlive = false;
+                        break;
                     default:
                         break;
                 }
