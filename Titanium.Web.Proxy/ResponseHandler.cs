@@ -20,7 +20,6 @@ namespace Titanium.Web.Proxy
         //Called asynchronously when a request was successfully and we received the response
         private static void HandleHttpSessionResponse(SessionEventArgs args)
         {
-
             args.ProxySession.ReceiveResponse();
 
             try
@@ -64,14 +63,12 @@ namespace Titanium.Web.Proxy
                 }
                 else
                 {
-                    var isChunked = args.ProxySession.Response.ResponseHeaders.Any(x => x.Name.ToLower() == "transfer-encoding" && x.Value.ToLower().Contains("chunked"));
-
                     WriteResponseStatus(args.ProxySession.Response.ResponseProtocolVersion, args.ProxySession.Response.ResponseStatusCode,
                          args.ProxySession.Response.ResponseStatusDescription, args.Client.ClientStreamWriter);
                     WriteResponseHeaders(args.Client.ClientStreamWriter, args.ProxySession.Response.ResponseHeaders);
 
-                    if (isChunked || args.ProxySession.Response.ContentLength > 0)
-                        WriteResponseBody(args.ProxySession.ProxyClient.ServerStreamReader, args.Client.ClientStream, isChunked, args.ProxySession.Response.ContentLength);
+                    if (args.ProxySession.Response.IsChunked || args.ProxySession.Response.ContentLength > 0)
+                        WriteResponseBody(args.ProxySession.ProxyClient.ServerStreamReader, args.Client.ClientStream, args.ProxySession.Response.IsChunked, args.ProxySession.Response.ContentLength);
                 }
 
                 args.Client.ClientStream.Flush();
@@ -105,11 +102,15 @@ namespace Titanium.Web.Proxy
                         if (response.Response.ResponseHeaders[i].Value.Contains(";"))
                         {
                             response.Response.ResponseContentType = response.Response.ResponseHeaders[i].Value.Split(';')[0].Trim();
-                            response.Response.ResponseCharacterSet = response.Response.ResponseHeaders[i].Value.Split(';')[1].Replace("charset=", string.Empty).Trim();
+                            response.Response.ResponseCharacterSet = response.Response.ResponseHeaders[i].Value.Split(';')[1].ToLower().Replace("charset=", string.Empty).Trim();
                         }
                         else
                             response.Response.ResponseContentType = response.Response.ResponseHeaders[i].Value.Trim();
+                        break;
 
+                    case "transfer-encoding":
+                        if (response.Response.ResponseHeaders[i].Value.Contains("chunked"))
+                            response.Response.IsChunked = true;
                         break;
 
                     default:
