@@ -79,14 +79,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public void Dispose()
         {
-            //if (ProxyRequest != null)
-            //    ProxyRequest.Abort();
-
-            //if (ResponseStream != null)
-            //    ResponseStream.Dispose();
-
-            //if (ServerResponse != null)
-            //    ServerResponse.Close();
+   
         }
 
         private void ReadRequestBody()

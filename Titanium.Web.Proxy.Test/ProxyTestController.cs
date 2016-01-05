@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.RegularExpressions;
 using Titanium.Web.Proxy.EventArguments;
 
 namespace Titanium.Web.Proxy.Test
@@ -46,27 +47,27 @@ namespace Titanium.Web.Proxy.Test
             Console.WriteLine(e.ProxySession.Request.RequestUrl);
 
             ////read request headers
-            //var requestHeaders = e.RequestHeaders;
+            var requestHeaders = e.ProxySession.Request.RequestHeaders;
 
-            //if ((e.RequestMethod.ToUpper() == "POST" || e.RequestMethod.ToUpper() == "PUT"))
-            //{
-            //    //Get/Set request body bytes
-            //    byte[] bodyBytes = e.GetRequestBody();
-            //    e.SetRequestBody(bodyBytes);
+            if ((e.RequestMethod.ToUpper() == "POST" || e.RequestMethod.ToUpper() == "PUT"))
+            {
+                //Get/Set request body bytes
+                byte[] bodyBytes = e.GetRequestBody();
+                e.SetRequestBody(bodyBytes);
 
-            //    //Get/Set request body as string
-            //    string bodyString = e.GetRequestBodyAsString();
-            //    e.SetRequestBodyString(bodyString);
+                //Get/Set request body as string
+                string bodyString = e.GetRequestBodyAsString();
+                e.SetRequestBodyString(bodyString);
 
-            //}
+            }
 
-            ////To cancel a request with a custom HTML content
-            ////Filter URL
+            //To cancel a request with a custom HTML content
+            //Filter URL
 
-            //if (e.RequestURL.Contains("google.com"))
-            //{
-            //    e.Ok("<!DOCTYPE html><html><body><h1>Website Blocked</h1><p>Blocked by titanium web proxy.</p></body></html>");
-            //}
+            if (e.ProxySession.Request.RequestUrl.Contains("google.com"))
+            {
+                e.Ok("<!DOCTYPE html><html><body><h1>Website Blocked</h1><p>Blocked by titanium web proxy.</p></body></html>");
+            }
         }
 
         //Test script injection
@@ -74,10 +75,10 @@ namespace Titanium.Web.Proxy.Test
         public void OnResponse(object sender, SessionEventArgs e)
         {
             ////read response headers
-            //var responseHeaders = e.ResponseHeaders;
+            var responseHeaders = e.ProxySession.Response.ResponseHeaders;
 
 
-            //if (e.ResponseStatusCode == HttpStatusCode.OK)
+            //if (e.ResponseStatusCode == "200")
             //{
             //    if (e.ResponseContentType.Trim().ToLower().Contains("text/html"))
             //    {

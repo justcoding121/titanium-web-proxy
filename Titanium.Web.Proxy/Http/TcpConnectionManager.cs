@@ -20,28 +20,10 @@ namespace Titanium.Web.Proxy.Http
 
     internal class TcpConnectionManager
     {
-        static Dictionary<string, Stack<TcpConnection>> ConnectionCache = new Dictionary<string, Stack<TcpConnection>>();
 
         public static TcpConnection GetClient(string Hostname, int port, bool IsSecure)
         {
-            //var key = string.Concat(Hostname, ":", port, ":", IsSecure);
-            //TcpConnection client;
-            //lock (ConnectionCache)
-            //{
-            //    Stack<TcpConnection> connections;
-            //    if (!ConnectionCache.TryGetValue(key, out connections))
-            //    {
-            //        return CreateClient(Hostname, port, IsSecure);
-            //    }
-
-            //    if (connections.Count > 0)
-            //    {
-            //        client = connections.Pop();
-            //    }
-            //    else
-                    return CreateClient(Hostname, port, IsSecure);
-            //}
-            //return client;
+            return CreateClient(Hostname, port, IsSecure);
         }
 
         private static TcpConnection CreateClient(string Hostname, int port, bool IsSecure)
@@ -68,26 +50,6 @@ namespace Titanium.Web.Proxy.Http
 
             return new TcpConnection() { Client = client, ServerStreamReader = new CustomBinaryReader(stream, Encoding.ASCII), Stream = stream };
         }
-
-        public static void AddClient(string Hostname, int port, bool IsSecure, TcpConnection Client)
-        {
-            var key = string.Concat(Hostname, ":", port, ":", IsSecure);
-            lock (ConnectionCache)
-            {
-
-                Stack<TcpConnection> connections;
-                if (!ConnectionCache.TryGetValue(key, out connections))
-                {
-                    connections = new Stack<TcpConnection>();
-                    connections.Push(Client);
-                    ConnectionCache.Add(key, connections);
-                }
-
-                connections.Push(Client);
-            }
-
-        }
-
 
     }
 }
