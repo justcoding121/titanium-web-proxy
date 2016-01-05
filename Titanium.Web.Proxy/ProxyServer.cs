@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy
 {
@@ -79,6 +80,7 @@ namespace Titanium.Web.Proxy
             //useUnsafeHeaderParsing 
 #endif
             NetFrameworkHelper.ToggleAllowUnsafeHeaderParsing(true);
+            Task.Factory.StartNew(()=>TcpConnectionManager.ClearIdleConnections());
         }
 
 

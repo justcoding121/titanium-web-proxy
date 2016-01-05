@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy

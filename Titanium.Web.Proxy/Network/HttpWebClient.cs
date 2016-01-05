@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
-namespace Titanium.Web.Proxy.Http
+namespace Titanium.Web.Proxy.Network
 {
     public class Request
     {
@@ -127,7 +127,6 @@ namespace Titanium.Web.Proxy.Http
             }
 
             requestLines.AppendLine();
-            //requestLines.AppendLine();
 
             string request = requestLines.ToString();
             byte[] requestBytes = Encoding.ASCII.GetBytes(request);
@@ -139,6 +138,10 @@ namespace Titanium.Web.Proxy.Http
         {
             var httpResult = ProxyClient.ServerStreamReader.ReadLine().Split(new char[] { ' ' }, 3);
 
+            if(string.IsNullOrEmpty(httpResult[0]))
+            {
+                var s = ProxyClient.ServerStreamReader.ReadLine();
+            }
             var httpVersion = httpResult[0];
 
             Version version;

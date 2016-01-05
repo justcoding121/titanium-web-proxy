@@ -8,8 +8,9 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Net.Security;
 using Titanium.Web.Proxy.Helpers;
+using System.Threading;
 
-namespace Titanium.Web.Proxy.Http
+namespace Titanium.Web.Proxy.Network
 {
     public class TcpConnection
     {
@@ -17,9 +18,16 @@ namespace Titanium.Web.Proxy.Http
         public int port { get; set; }
         public bool IsSecure { get; set; }
 
-        public TcpClient Client { get; set; }
+        public TcpClient TcpClient { get; set; }
         public CustomBinaryReader ServerStreamReader { get; set; }
         public Stream Stream { get; set; }
+
+        public DateTime LastAccess { get; set; }
+
+        public TcpConnection()
+        {
+            LastAccess = DateTime.Now;
+        }
     }
 
     internal class TcpConnectionManager
@@ -28,15 +36,23 @@ namespace Titanium.Web.Proxy.Http
 
         public static TcpConnection GetClient(string Hostname, int port, bool IsSecure)
         {
-            lock (ConnectionCache)
-            {
-                var cached = ConnectionCache.FirstOrDefault(x => x.HostName == Hostname && x.port == port && x.IsSecure == IsSecure && x.Client.Connected);
 
-                if (cached != null)
+            while (true)
+            {
+                TcpConnection cached = null;
+                lock (ConnectionCache)
                 {
-                    ConnectionCache.Remove(cached);
-                    return cached;
+                    cached = ConnectionCache.FirstOrDefault(x => x.HostName == Hostname && x.port == port && x.IsSecure == IsSecure && x.TcpClient.Connected);
+
+                    if (cached != null)
+                        ConnectionCache.Remove(cached);
                 }
+
+                if (cached != null && !cached.TcpClient.Client.IsConnected())
+                    continue;
+
+                if (cached == null)
+                    break;
             }
 
             return CreateClient(Hostname, port, IsSecure);
@@ -69,7 +85,7 @@ namespace Titanium.Web.Proxy.Http
                 HostName = Hostname,
                 port = port,
                 IsSecure = IsSecure,
-                Client = client,
+                TcpClient = client,
                 ServerStreamReader = new CustomBinaryReader(stream, Encoding.ASCII),
                 Stream = stream
             };
@@ -77,8 +93,31 @@ namespace Titanium.Web.Proxy.Http
 
         public static void ReleaseClient(TcpConnection Connection)
         {
+            Connection.LastAccess = DateTime.Now;
             ConnectionCache.Add(Connection);
         }
+
+        public static void ClearIdleConnections()
+        {
+            while (true)
+            {
+                lock (ConnectionCache)
+                {
+                    var cutOff = DateTime.Now.AddSeconds(-60);
+
+                    ConnectionCache
+                       .Where(x => x.LastAccess < cutOff)
+                       .ToList()
+                       .ForEach(x => x.TcpClient.Close());
+
+                    ConnectionCache.RemoveAll(x => x.LastAccess < cutOff);
+                }
+
+                Thread.Sleep(1000 * 60 * 3);
+            }
+
+        }
+
 
     }
 }
