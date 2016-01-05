@@ -26,7 +26,6 @@ namespace Titanium.Web.Proxy.Network
         public string RequestHost { get; set; }
 
         public string RequestUrl { get; internal set; }
-        public string RequestHostname { get; internal set; }
 
         internal Encoding RequestEncoding { get; set; }
         internal Version RequestHttpVersion { get; set; }
@@ -95,6 +94,7 @@ namespace Titanium.Web.Proxy.Network
 
         public void SetConnection(TcpConnection Connection)
         {
+            Connection.LastAccess = DateTime.Now;
             ProxyClient = Connection;
         }
 

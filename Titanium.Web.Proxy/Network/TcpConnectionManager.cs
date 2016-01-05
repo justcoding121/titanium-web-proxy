@@ -36,10 +36,9 @@ namespace Titanium.Web.Proxy.Network
 
         public static TcpConnection GetClient(string Hostname, int port, bool IsSecure)
         {
-
+            TcpConnection cached = null;
             while (true)
             {
-                TcpConnection cached = null;
                 lock (ConnectionCache)
                 {
                     cached = ConnectionCache.FirstOrDefault(x => x.HostName == Hostname && x.port == port && x.IsSecure == IsSecure && x.TcpClient.Connected);
@@ -55,7 +54,15 @@ namespace Titanium.Web.Proxy.Network
                     break;
             }
 
-            return CreateClient(Hostname, port, IsSecure);
+            if (cached == null)
+                cached = CreateClient(Hostname, port, IsSecure);
+
+            if (ConnectionCache.Where(x => x.HostName == Hostname && x.port == port && x.IsSecure == IsSecure && x.TcpClient.Connected).Count() < 2)
+            {
+                Task.Factory.StartNew(() => ReleaseClient(CreateClient(Hostname, port, IsSecure)));
+            }
+
+            return cached;
         }
 
         private static TcpConnection CreateClient(string Hostname, int port, bool IsSecure)

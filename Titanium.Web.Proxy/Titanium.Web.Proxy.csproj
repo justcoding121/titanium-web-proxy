@@ -93,7 +93,6 @@
     <Compile Include="RequestHandler.cs" />
     <Compile Include="ResponseHandler.cs" />
     <Compile Include="Helpers\CustomBinaryReader.cs" />
-    <Compile Include="Helpers\NetFramework.cs" />
     <Compile Include="Helpers\Compression.cs" />
     <Compile Include="ProxyServer.cs" />
     <Compile Include="EventArguments\SessionEventArgs.cs" />
