@@ -115,13 +115,15 @@ namespace Titanium.Web.Proxy
         private static void HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
             CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string secureTunnelHostName)
         {
+            TcpConnection connection = null;
+            string lastRequestHostName = null;
 
             while (true)
             {
                 if (string.IsNullOrEmpty(httpCmd))
                 {
                     Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
-                    return;
+                    break;
                 }
 
                 var args = new SessionEventArgs(BUFFER_SIZE);
@@ -156,7 +158,6 @@ namespace Titanium.Web.Proxy
                     args.ProxySession.Request.RequestHeaders = new List<HttpHeader>();
 
                     string tmpLine;
-
                     while (!string.IsNullOrEmpty(tmpLine = clientStreamReader.ReadLine()))
                     {
                         var header = tmpLine.Split(new char[] { ':' }, 2);
@@ -164,6 +165,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     SetRequestHeaders(args.ProxySession.Request.RequestHeaders, args.ProxySession);
+
                     if (args.ProxySession.Request.UpgradeToWebSocket)
                     {
                         TcpHelper.SendRaw(clientStreamReader.BaseStream, httpCmd, args.ProxySession.Request.RequestHeaders,
@@ -179,7 +181,7 @@ namespace Titanium.Web.Proxy
                     args.Client.ClientStream = clientStream;
                     args.Client.ClientStreamReader = clientStreamReader;
                     args.Client.ClientStreamWriter = clientStreamWriter;
-                    args.ProxySession.Request.RequestHostname = args.ProxySession.Request.RequestUri.Host;
+                    args.ProxySession.Request.RequestHost = args.ProxySession.Request.RequestUri.Host;
                     args.ProxySession.Request.RequestUrl = args.ProxySession.Request.RequestUri.OriginalString;
                     args.Client.ClientPort = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
                     args.Client.ClientIpAddress = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
@@ -198,14 +200,19 @@ namespace Titanium.Web.Proxy
                     if (args.ProxySession.Request.CancelRequest)
                     {
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
-                        return;
+                        break;
                     }
 
 
                     //construct the web request that we are going to issue on behalf of the client.
-                    var connection = TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps);
-                    args.ProxySession.SetConnection(connection);
+                    connection = connection == null ?
+                        TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps)
+                        : lastRequestHostName != args.ProxySession.Request.RequestHost ? TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps)
+                            : connection;
 
+                    lastRequestHostName = args.ProxySession.Request.RequestHost;
+
+                    args.ProxySession.SetConnection(connection);
                     args.ProxySession.SendRequest();
 
                     //If request was modified by user
@@ -233,8 +240,6 @@ namespace Titanium.Web.Proxy
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
                         return;
                     }
-                    else
-                        TcpConnectionManager.ReleaseClient(connection);
 
                     // read the next request 
                     httpCmd = clientStreamReader.ReadLine();
@@ -245,8 +250,11 @@ namespace Titanium.Web.Proxy
                     Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
                     break;
                 }
+
             }
 
+            if (connection != null)
+                TcpConnectionManager.ReleaseClient(connection);
         }
 
         private static void WriteConnectResponse(StreamWriter clientStreamWriter, string httpVersion)

@@ -59,27 +59,7 @@ namespace Titanium.Web.Proxy
         public static event EventHandler<SessionEventArgs> BeforeResponse;
 
         public static void Initialize()
-        {
-            ServicePointManager.Expect100Continue = false;
-            WebRequest.DefaultWebProxy = null;
-            ServicePointManager.DefaultConnectionLimit = int.MaxValue;
-            ServicePointManager.DnsRefreshTimeout = 3 * 60 * 1000; //3 minutes
-            ServicePointManager.MaxServicePointIdleTime = 3 * 60 * 1000;
-
-            //HttpWebRequest certificate validation callback
-            ServicePointManager.ServerCertificateValidationCallback =
-                delegate(object s, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-                {
-                    if (sslPolicyErrors == SslPolicyErrors.None) return true;
-                    return false;
-                };
-
-#if NET40
-            //Fix a bug in .NET 4.0
-            NetFrameworkHelper.UrlPeriodFix();
-            //useUnsafeHeaderParsing 
-#endif
-            NetFrameworkHelper.ToggleAllowUnsafeHeaderParsing(true);
+        {         
             Task.Factory.StartNew(()=>TcpConnectionManager.ClearIdleConnections());
         }
 
