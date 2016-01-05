@@ -8,7 +8,7 @@ using System.Net.Sockets;
 using System.Text;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.EventArguments
@@ -32,7 +32,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             _bufferSize = bufferSize;
             Client = new Client();
-            ProxySession =  new Http.HttpWebSession(); 
+            ProxySession =  new HttpWebSession(); 
         }
 
         public Client Client { get; set; }

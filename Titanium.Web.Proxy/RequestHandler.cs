@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy
@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy
         private static void HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
             CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string secureTunnelHostName)
         {
-           
+
             while (true)
             {
                 if (string.IsNullOrEmpty(httpCmd))
@@ -201,10 +201,11 @@ namespace Titanium.Web.Proxy
                         return;
                     }
 
-                   
+
                     //construct the web request that we are going to issue on behalf of the client.
                     var connection = TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps);
                     args.ProxySession.SetConnection(connection);
+
                     args.ProxySession.SendRequest();
 
                     //If request was modified by user
@@ -228,7 +229,7 @@ namespace Titanium.Web.Proxy
                     //if connection is closing exit
                     if (args.ProxySession.Response.ResponseKeepAlive == false)
                     {
-                        connection.Client.Close();
+                        connection.TcpClient.Close();
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
                         return;
                     }
