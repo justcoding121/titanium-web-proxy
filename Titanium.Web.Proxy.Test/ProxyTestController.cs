@@ -47,27 +47,27 @@ namespace Titanium.Web.Proxy.Test
             Console.WriteLine(e.ProxySession.Request.RequestUrl);
 
             ////read request headers
-            var requestHeaders = e.ProxySession.Request.RequestHeaders;
+            //var requestHeaders = e.ProxySession.Request.RequestHeaders;
 
-            if ((e.RequestMethod.ToUpper() == "POST" || e.RequestMethod.ToUpper() == "PUT"))
-            {
-                //Get/Set request body bytes
-                byte[] bodyBytes = e.GetRequestBody();
-                e.SetRequestBody(bodyBytes);
+            //if ((e.RequestMethod.ToUpper() == "POST" || e.RequestMethod.ToUpper() == "PUT"))
+            //{
+            //    //Get/Set request body bytes
+            //    byte[] bodyBytes = e.GetRequestBody();
+            //    e.SetRequestBody(bodyBytes);
 
-                //Get/Set request body as string
-                string bodyString = e.GetRequestBodyAsString();
-                e.SetRequestBodyString(bodyString);
+            //    //Get/Set request body as string
+            //    string bodyString = e.GetRequestBodyAsString();
+            //    e.SetRequestBodyString(bodyString);
 
-            }
+            //}
 
-            //To cancel a request with a custom HTML content
-            //Filter URL
+            ////To cancel a request with a custom HTML content
+            ////Filter URL
 
-            if (e.ProxySession.Request.RequestUrl.Contains("google.com"))
-            {
-                e.Ok("<!DOCTYPE html><html><body><h1>Website Blocked</h1><p>Blocked by titanium web proxy.</p></body></html>");
-            }
+            //if (e.ProxySession.Request.RequestUrl.Contains("google.com"))
+            //{
+            //    e.Ok("<!DOCTYPE html><html><body><h1>Website Blocked</h1><p>Blocked by titanium web proxy.</p></body></html>");
+            //}
         }
 
         //Test script injection
