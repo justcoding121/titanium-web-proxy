@@ -13,6 +13,10 @@ namespace Titanium.Web.Proxy.Http
 {
     public class TcpConnection
     {
+        public string HostName { get; set; }
+        public int port { get; set; }
+        public bool IsSecure { get; set; }
+
         public TcpClient Client { get; set; }
         public CustomBinaryReader ServerStreamReader { get; set; }
         public Stream Stream { get; set; }
@@ -20,9 +24,21 @@ namespace Titanium.Web.Proxy.Http
 
     internal class TcpConnectionManager
     {
+        static List<TcpConnection> ConnectionCache = new List<TcpConnection>();
 
         public static TcpConnection GetClient(string Hostname, int port, bool IsSecure)
         {
+            lock (ConnectionCache)
+            {
+                var cached = ConnectionCache.FirstOrDefault(x => x.HostName == Hostname && x.port == port && x.IsSecure == IsSecure && x.Client.Connected);
+
+                if (cached != null)
+                {
+                    ConnectionCache.Remove(cached);
+                    return cached;
+                }
+            }
+
             return CreateClient(Hostname, port, IsSecure);
         }
 
@@ -48,7 +64,20 @@ namespace Titanium.Web.Proxy.Http
                 }
             }
 
-            return new TcpConnection() { Client = client, ServerStreamReader = new CustomBinaryReader(stream, Encoding.ASCII), Stream = stream };
+            return new TcpConnection()
+            {
+                HostName = Hostname,
+                port = port,
+                IsSecure = IsSecure,
+                Client = client,
+                ServerStreamReader = new CustomBinaryReader(stream, Encoding.ASCII),
+                Stream = stream
+            };
+        }
+
+        public static void ReleaseClient(TcpConnection Connection)
+        {
+            ConnectionCache.Add(Connection);
         }
 
     }
