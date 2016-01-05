@@ -69,6 +69,8 @@ namespace Titanium.Web.Proxy.Http
         }
 
 
+
+        public bool IsChunked { get; set; }
     }
 
     public class HttpWebSession
