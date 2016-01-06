@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    internal class CustomBinaryReader : BinaryReader
+    public class CustomBinaryReader : BinaryReader
     {
         internal CustomBinaryReader(Stream stream, Encoding encoding)
             : base(stream, encoding)
