@@ -124,8 +124,9 @@ namespace Titanium.Web.Proxy
                 }
             }
 
-            return response.Response.ResponseHeaders;
+             return response.Response.ResponseHeaders;
         }
+
 
         private static void WriteResponseStatus(Version version, string code, string description,
             StreamWriter responseWriter)
