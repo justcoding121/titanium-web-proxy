@@ -177,21 +177,20 @@ namespace Titanium.Web.Proxy
                     args.ProxySession.Request.RequestUri = httpRemoteUri;
 
                     args.ProxySession.Request.Method = httpMethod;
-                    args.ProxySession.Request.Version = httpVersion;
+                    args.ProxySession.Request.HttpVersion = httpVersion;
                     args.Client.ClientStream = clientStream;
                     args.Client.ClientStreamReader = clientStreamReader;
                     args.Client.ClientStreamWriter = clientStreamWriter;
-                    args.ProxySession.Request.RequestHost = args.ProxySession.Request.RequestUri.Host;
-                    args.ProxySession.Request.RequestUrl = args.ProxySession.Request.RequestUri.OriginalString;
+                    args.ProxySession.Request.Hostname = args.ProxySession.Request.RequestUri.Host;
+                    args.ProxySession.Request.Url = args.ProxySession.Request.RequestUri.OriginalString;
                     args.Client.ClientPort = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
                     args.Client.ClientIpAddress = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
-                    args.ProxySession.Request.RequestHttpVersion = version;
 
 
                     //If requested interception
                     if (BeforeRequest != null)
                     {
-                        args.ProxySession.Request.RequestEncoding = args.ProxySession.GetEncoding();
+                        args.ProxySession.Request.Encoding = args.ProxySession.GetEncoding();
                         BeforeRequest(null, args);
                     }
 
@@ -207,10 +206,10 @@ namespace Titanium.Web.Proxy
                     //construct the web request that we are going to issue on behalf of the client.
                     connection = connection == null ?
                         TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps)
-                        : lastRequestHostName != args.ProxySession.Request.RequestHost ? TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps)
+                        : lastRequestHostName != args.ProxySession.Request.Hostname ? TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps)
                             : connection;
 
-                    lastRequestHostName = args.ProxySession.Request.RequestHost;
+                    lastRequestHostName = args.ProxySession.Request.Hostname;
 
                     args.ProxySession.SetConnection(connection);
                     args.ProxySession.SendRequest();
@@ -218,7 +217,7 @@ namespace Titanium.Web.Proxy
                     //If request was modified by user
                     if (args.ProxySession.Request.RequestBodyRead)
                     {
-                        args.ProxySession.Request.RequestContentLength = args.ProxySession.Request.RequestBody.Length;
+                        args.ProxySession.Request.ContentLength = args.ProxySession.Request.RequestBody.Length;
                         var newStream = args.ProxySession.ProxyClient.ServerStreamReader.BaseStream;
                         newStream.Write(args.ProxySession.Request.RequestBody, 0, args.ProxySession.Request.RequestBody.Length);
                     }
@@ -276,25 +275,25 @@ namespace Titanium.Web.Proxy
                         break;
                     case "connection":
                         if (requestHeaders[i].Value.ToLower() == "keep-alive")
-                            webRequest.Request.RequestKeepAlive = true;
+                            webRequest.Request.KeepAlive = true;
                         break;
                     case "content-length":
                         int contentLen;
                         int.TryParse(requestHeaders[i].Value, out contentLen);
                         if (contentLen != 0)
-                            webRequest.Request.RequestContentLength = contentLen;
+                            webRequest.Request.ContentLength = contentLen;
                         break;
                     case "content-type":
-                        webRequest.Request.RequestContentType = requestHeaders[i].Value;
+                        webRequest.Request.ContentType = requestHeaders[i].Value;
                         break;
                     case "host":
-                        webRequest.Request.RequestHost = requestHeaders[i].Value;
+                        webRequest.Request.Hostname = requestHeaders[i].Value;
                         break;
                     case "proxy-connection":
                         if (requestHeaders[i].Value.ToLower() == "keep-alive")
-                            webRequest.Request.RequestKeepAlive = true;
+                            webRequest.Request.KeepAlive = true;
                         else if (requestHeaders[i].Value.ToLower() == "close")
-                            webRequest.Request.RequestKeepAlive = false;
+                            webRequest.Request.KeepAlive = false;
                         break;
 
                     case "upgrade":
@@ -306,9 +305,9 @@ namespace Titanium.Web.Proxy
                     //But how to identify if client is sending chunked body for PUT/POST?
                     case "transfer-encoding":
                         if (requestHeaders[i].Value.ToLower().Contains("chunked"))
-                            webRequest.Request.RequestSendChunked = true;
+                            webRequest.Request.SendChunked = true;
                         else
-                            webRequest.Request.RequestSendChunked = false;
+                            webRequest.Request.SendChunked = false;
                         break;
 
                     default:
@@ -343,7 +342,7 @@ namespace Titanium.Web.Proxy
             var postStream = args.ProxySession.ProxyClient.Stream;
 
 
-            if (args.ProxySession.Request.RequestContentLength > 0)
+            if (args.ProxySession.Request.ContentLength > 0)
             {
                 //args.ProxyRequest.AllowWriteStreamBuffering = true;
                 try
@@ -351,20 +350,20 @@ namespace Titanium.Web.Proxy
                     var totalbytesRead = 0;
 
                     int bytesToRead;
-                    if (args.ProxySession.Request.RequestContentLength < BUFFER_SIZE)
+                    if (args.ProxySession.Request.ContentLength < BUFFER_SIZE)
                     {
-                        bytesToRead = (int)args.ProxySession.Request.RequestContentLength;
+                        bytesToRead = (int)args.ProxySession.Request.ContentLength;
                     }
                     else
                         bytesToRead = BUFFER_SIZE;
 
 
-                    while (totalbytesRead < (int)args.ProxySession.Request.RequestContentLength)
+                    while (totalbytesRead < (int)args.ProxySession.Request.ContentLength)
                     {
                         var buffer = args.Client.ClientStreamReader.ReadBytes(bytesToRead);
                         totalbytesRead += buffer.Length;
 
-                        var remainingBytes = (int)args.ProxySession.Request.RequestContentLength - totalbytesRead;
+                        var remainingBytes = (int)args.ProxySession.Request.ContentLength - totalbytesRead;
                         if (remainingBytes < bytesToRead)
                         {
                             bytesToRead = remainingBytes;
@@ -378,7 +377,7 @@ namespace Titanium.Web.Proxy
                 }
             }
             //Need to revist, find any potential bugs
-            else if (args.ProxySession.Request.RequestSendChunked)
+            else if (args.ProxySession.Request.SendChunked)
             {
                 try
                 {

@@ -31,7 +31,7 @@ namespace Titanium.Web.Proxy
 
                 if (BeforeResponse != null)
                 {
-                    args.ProxySession.Response.ResponseEncoding = args.ProxySession.GetResponseEncoding();
+                    args.ProxySession.Response.Encoding = args.ProxySession.GetResponseEncoding();
                     BeforeResponse(null, args);
                 }
 
@@ -40,7 +40,7 @@ namespace Titanium.Web.Proxy
                 if (args.ProxySession.Response.ResponseBodyRead)
                 {
                     var isChunked = args.ProxySession.Response.IsChunked;
-                    var contentEncoding = args.ProxySession.Response.ResponseContentEncoding;
+                    var contentEncoding = args.ProxySession.Response.ContentEncoding;
 
                     if(contentEncoding!=null)
                     switch (contentEncoding)
@@ -56,7 +56,7 @@ namespace Titanium.Web.Proxy
                             break;
                     }
 
-                    WriteResponseStatus(args.ProxySession.Response.ResponseProtocolVersion, args.ProxySession.Response.ResponseStatusCode,
+                    WriteResponseStatus(args.ProxySession.Response.HttpVersion, args.ProxySession.Response.ResponseStatusCode,
                         args.ProxySession.Response.ResponseStatusDescription, args.Client.ClientStreamWriter);
                     WriteResponseHeaders(args.Client.ClientStreamWriter, args.ProxySession.Response.ResponseHeaders, args.ProxySession.Response.ResponseBody.Length,
                         isChunked);
@@ -64,7 +64,7 @@ namespace Titanium.Web.Proxy
                 }
                 else
                 {
-                    WriteResponseStatus(args.ProxySession.Response.ResponseProtocolVersion, args.ProxySession.Response.ResponseStatusCode,
+                    WriteResponseStatus(args.ProxySession.Response.HttpVersion, args.ProxySession.Response.ResponseStatusCode,
                          args.ProxySession.Response.ResponseStatusDescription, args.Client.ClientStreamWriter);
                     WriteResponseHeaders(args.Client.ClientStreamWriter, args.ProxySession.Response.ResponseHeaders);
 
@@ -96,17 +96,17 @@ namespace Titanium.Web.Proxy
                         break;
 
                     case "content-encoding":
-                        response.Response.ResponseContentEncoding = response.Response.ResponseHeaders[i].Value.Trim().ToLower();
+                        response.Response.ContentEncoding = response.Response.ResponseHeaders[i].Value.Trim().ToLower();
                         break;
 
                     case "content-type":
                         if (response.Response.ResponseHeaders[i].Value.Contains(";"))
                         {
-                            response.Response.ResponseContentType = response.Response.ResponseHeaders[i].Value.Split(';')[0].Trim();
-                            response.Response.ResponseCharacterSet = response.Response.ResponseHeaders[i].Value.Split(';')[1].ToLower().Replace("charset=", string.Empty).Trim();
+                            response.Response.ContentType = response.Response.ResponseHeaders[i].Value.Split(';')[0].Trim();
+                            response.Response.CharacterSet = response.Response.ResponseHeaders[i].Value.Split(';')[1].ToLower().Replace("charset=", string.Empty).Trim();
                         }
                         else
-                            response.Response.ResponseContentType = response.Response.ResponseHeaders[i].Value.ToLower().Trim();
+                            response.Response.ContentType = response.Response.ResponseHeaders[i].Value.ToLower().Trim();
                         break;
 
                     case "transfer-encoding":
@@ -128,11 +128,10 @@ namespace Titanium.Web.Proxy
         }
 
 
-        private static void WriteResponseStatus(Version version, string code, string description,
+        private static void WriteResponseStatus(string version, string code, string description,
             StreamWriter responseWriter)
         {
-            var s = string.Format("HTTP/{0}.{1} {2} {3}", version.Major, version.Minor, code, description);
-            responseWriter.WriteLine(s);
+            responseWriter.WriteLine(string.Format("{0} {1} {2}", version, code, description));
         }
 
         private static void WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers)

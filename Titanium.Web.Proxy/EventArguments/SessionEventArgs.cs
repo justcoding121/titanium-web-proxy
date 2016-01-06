@@ -35,24 +35,18 @@ namespace Titanium.Web.Proxy.EventArguments
             ProxySession = new HttpWebSession();
         }
 
-        public Client Client { get; set; }
+        internal Client Client { get; set; }
 
         public bool IsHttps { get; internal set; }
 
         public HttpWebSession ProxySession { get; set; }
 
 
-
         public int RequestContentLength
         {
             get
             {
-                if (ProxySession.Request.RequestHeaders.All(x => x.Name.ToLower() != "content-length")) return -1;
-                int contentLen;
-                int.TryParse(ProxySession.Request.RequestHeaders.First(x => x.Name.ToLower() == "content-length").Value, out contentLen);
-                if (contentLen != 0)
-                    return contentLen;
-                return -1;
+                return ProxySession.Request.ContentLength;
             }
         }
 
@@ -71,9 +65,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             get
             {
-                return ProxySession.Response.ResponseHeaders.Any(x => x.Name.ToLower() == "content-type")
-                    ? ProxySession.Response.ResponseHeaders.First(x => x.Name.ToLower() == "content-type").Value
-                    : null;
+                return ProxySession.Response.ContentType;
             }
         }
 
@@ -201,7 +193,7 @@ namespace Titanium.Web.Proxy.EventArguments
                         responseBodyStream.Write(buffer, 0, buffer.Length);
                     }
 
-                    switch (ProxySession.Response.ResponseContentEncoding)
+                    switch (ProxySession.Response.ContentEncoding)
                     {
                         case "gzip":
                             ProxySession.Response.ResponseBody = CompressionHelper.DecompressGzip(responseBodyStream.ToArray());
@@ -223,12 +215,11 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
 
-
         public Encoding GetRequestBodyEncoding()
         {
             if (ProxySession.Request.RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
 
-            return ProxySession.Request.RequestEncoding;
+            return ProxySession.Request.Encoding;
         }
 
         public byte[] GetRequestBody()
@@ -246,7 +237,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             ReadRequestBody();
 
-            return ProxySession.Request.RequestBodyString ?? (ProxySession.Request.RequestBodyString = ProxySession.Request.RequestEncoding.GetString(ProxySession.Request.RequestBody));
+            return ProxySession.Request.RequestBodyString ?? (ProxySession.Request.RequestBodyString = ProxySession.Request.Encoding.GetString(ProxySession.Request.RequestBody));
         }
 
         public void SetRequestBody(byte[] body)
@@ -271,7 +262,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 ReadRequestBody();
             }
 
-            ProxySession.Request.RequestBody = ProxySession.Request.RequestEncoding.GetBytes(body);
+            ProxySession.Request.RequestBody = ProxySession.Request.Encoding.GetBytes(body);
             ProxySession.Request.RequestBodyRead = true;
         }
 
@@ -279,7 +270,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (!ProxySession.Request.RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
 
-            return ProxySession.Response.ResponseEncoding;
+            return ProxySession.Response.Encoding;
         }
 
         public byte[] GetResponseBody()
@@ -296,7 +287,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             GetResponseBody();
 
-            return ProxySession.Response.ResponseBodyString ?? (ProxySession.Response.ResponseBodyString = ProxySession.Response.ResponseEncoding.GetString(ProxySession.Response.ResponseBody));
+            return ProxySession.Response.ResponseBodyString ?? (ProxySession.Response.ResponseBodyString = ProxySession.Response.Encoding.GetString(ProxySession.Response.ResponseBody));
         }
 
         public void SetResponseBody(byte[] body)
@@ -320,7 +311,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 GetResponseBody();
             }
 
-            var bodyBytes = ProxySession.Response.ResponseEncoding.GetBytes(body);
+            var bodyBytes = ProxySession.Response.Encoding.GetBytes(body);
             SetResponseBody(bodyBytes);
         }
 
@@ -335,21 +326,19 @@ namespace Titanium.Web.Proxy.EventArguments
             var result = Encoding.Default.GetBytes(html);
 
             var connectStreamWriter = new StreamWriter(this.Client.ClientStream);
-            var s = string.Format("HTTP/{0}.{1} {2} {3}", ProxySession.Request.RequestHttpVersion.Major, ProxySession.Request.RequestHttpVersion.Minor, 200, "Ok");
-            connectStreamWriter.WriteLine(s);
+            connectStreamWriter.WriteLine(string.Format("{0} {2} {3}", ProxySession.Request.HttpVersion, 200, "Ok"));
             connectStreamWriter.WriteLine("Timestamp: {0}", DateTime.Now);
             connectStreamWriter.WriteLine("content-length: " + result.Length);
             connectStreamWriter.WriteLine("Cache-Control: no-cache, no-store, must-revalidate");
             connectStreamWriter.WriteLine("Pragma: no-cache");
             connectStreamWriter.WriteLine("Expires: 0");
 
-            connectStreamWriter.WriteLine(ProxySession.Request.RequestIsAlive ? "Connection: Keep-Alive" : "Connection: close");
+            connectStreamWriter.WriteLine(ProxySession.Request.IsAlive ? "Connection: Keep-Alive" : "Connection: close");
 
             connectStreamWriter.WriteLine();
             connectStreamWriter.Flush();
 
             this.Client.ClientStream.Write(result, 0, result.Length);
-
 
             ProxySession.Request.CancelRequest = true;
         }

@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy.Test
         //Read browser URL send back to proxy by the injection script in OnResponse event
         public void OnRequest(object sender, SessionEventArgs e)
         {
-            Console.WriteLine(e.ProxySession.Request.RequestUrl);
+            Console.WriteLine(e.ProxySession.Request.Url);
 
             ////read request headers
             //var requestHeaders = e.ProxySession.Request.RequestHeaders;
@@ -74,29 +74,23 @@ namespace Titanium.Web.Proxy.Test
         //Insert script to read the Browser URL and send it back to proxy
         public void OnResponse(object sender, SessionEventArgs e)
         {
+            
             ////read response headers
             var responseHeaders = e.ProxySession.Response.ResponseHeaders;
 
 
-            //if (e.ResponseStatusCode == "200")
-            //{
-            //    if (e.ResponseContentType.Trim().ToLower().Contains("text/html"))
-            //    {
-            //        //Get/Set response body bytes
-            //        byte[] responseBodyBytes = e.GetResponseBody();
-            //        e.SetResponseBody(responseBodyBytes);
-
-            //        //Get response body as string
-            //        string responseBody = e.GetResponseBodyAsString();
-
-            //        //Modify e.ServerResponse
-            //        Regex rex = new Regex("</body>", RegexOptions.RightToLeft | RegexOptions.IgnoreCase | RegexOptions.Multiline);
-            //        string modified = rex.Replace(responseBody, "<script type =\"text/javascript\">alert('Response was modified by this script!');</script></body>", 1);
-
-            //        //Set modifed response Html Body
-            //        e.SetResponseBodyString(modified);
-            //    }
-            //}
+            
+            //if (!e.ProxySession.Request.Hostname.Equals("medeczane.sgk.gov.tr")) return;
+            if (e.RequestMethod == "GET" || e.RequestMethod == "POST")
+            {
+                if (e.ProxySession.Response.ResponseStatusCode == "200")
+                {
+                    if (e.ProxySession.Response.ContentType.Trim().ToLower().Contains("text/html"))
+                    {
+                        string body = e.GetResponseBodyAsString(); //This line crashes
+                    }
+                }
+            }
         }
     }
 }
