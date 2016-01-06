@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy
 {
@@ -25,7 +26,7 @@ namespace Titanium.Web.Proxy
 
         private static readonly Regex CookieSplitRegEx = new Regex(@",(?! )");
 
-        private static readonly byte[] ChunkTrail = Encoding.ASCII.GetBytes(Environment.NewLine);
+        private static readonly byte[] NewLineBytes = Encoding.ASCII.GetBytes(Environment.NewLine);
 
         private static readonly byte[] ChunkEnd =
             Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
@@ -58,27 +59,8 @@ namespace Titanium.Web.Proxy
         public static event EventHandler<SessionEventArgs> BeforeResponse;
 
         public static void Initialize()
-        {
-            ServicePointManager.Expect100Continue = false;
-            WebRequest.DefaultWebProxy = null;
-            ServicePointManager.DefaultConnectionLimit = int.MaxValue;
-            ServicePointManager.DnsRefreshTimeout = 3 * 60 * 1000; //3 minutes
-            ServicePointManager.MaxServicePointIdleTime = 3 * 60 * 1000;
-
-            //HttpWebRequest certificate validation callback
-            ServicePointManager.ServerCertificateValidationCallback =
-                delegate(object s, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-                {
-                    if (sslPolicyErrors == SslPolicyErrors.None) return true;
-                    return false;
-                };
-
-#if NET40
-            //Fix a bug in .NET 4.0
-            NetFrameworkHelper.UrlPeriodFix();
-            //useUnsafeHeaderParsing 
-#endif
-            NetFrameworkHelper.ToggleAllowUnsafeHeaderParsing(true);
+        {         
+            Task.Factory.StartNew(()=>TcpConnectionManager.ClearIdleConnections());
         }
 
 
@@ -100,7 +82,10 @@ namespace Titanium.Web.Proxy
             {
                 SystemProxyHelper.EnableProxyHttp(
                     Equals(ListeningIpAddress, IPAddress.Any) ? "127.0.0.1" : ListeningIpAddress.ToString(), ListeningPort);
+
+#if !DEBUG
                 FireFoxHelper.AddFirefox();
+#endif
 
 
                 if (EnableSsl)
@@ -142,7 +127,9 @@ namespace Titanium.Web.Proxy
             if (SetAsSystemProxy)
             {
                 SystemProxyHelper.DisableAllProxy();
+#if !DEBUG
                 FireFoxHelper.RemoveFirefox();
+#endif
             }
 
             _listener.Stop();
