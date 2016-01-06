@@ -250,7 +250,7 @@ namespace Titanium.Web.Proxy
                     Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
                     break;
                 }
-
+   
             }
 
             if (connection != null)
