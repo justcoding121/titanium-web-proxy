@@ -39,10 +39,11 @@ namespace Titanium.Web.Proxy
 
                 if (args.ProxySession.Response.ResponseBodyRead)
                 {
-                    var isChunked =args.ProxySession.Response.IsChunked;
+                    var isChunked = args.ProxySession.Response.IsChunked;
                     var contentEncoding = args.ProxySession.Response.ResponseContentEncoding;
 
-                    switch (contentEncoding.ToLower())
+                    if(contentEncoding!=null)
+                    switch (contentEncoding)
                     {
                         case "gzip":
                             args.ProxySession.Response.ResponseBody = CompressionHelper.CompressGzip(args.ProxySession.Response.ResponseBody);
@@ -91,11 +92,11 @@ namespace Titanium.Web.Proxy
                 switch (response.Response.ResponseHeaders[i].Name.ToLower())
                 {
                     case "content-length":
-                        response.Response.ContentLength = int.Parse(response.Response.ResponseHeaders[i].Value);
+                        response.Response.ContentLength = int.Parse(response.Response.ResponseHeaders[i].Value.Trim());
                         break;
 
                     case "content-encoding":
-                        response.Response.ResponseContentEncoding = response.Response.ResponseHeaders[i].Value;
+                        response.Response.ResponseContentEncoding = response.Response.ResponseHeaders[i].Value.Trim().ToLower();
                         break;
 
                     case "content-type":
@@ -112,10 +113,12 @@ namespace Titanium.Web.Proxy
                         if (response.Response.ResponseHeaders[i].Value.ToLower().Contains("chunked"))
                             response.Response.IsChunked = true;
                         break;
+
                     case "connection":
                         if (response.Response.ResponseHeaders[i].Value.ToLower().Contains("close"))
                             response.Response.ResponseKeepAlive = false;
                         break;
+
                     default:
                         break;
                 }

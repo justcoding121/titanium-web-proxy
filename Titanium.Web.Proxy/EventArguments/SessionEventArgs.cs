@@ -32,7 +32,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             _bufferSize = bufferSize;
             Client = new Client();
-            ProxySession =  new HttpWebSession(); 
+            ProxySession = new HttpWebSession();
         }
 
         public Client Client { get; set; }
@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public void Dispose()
         {
-   
+
         }
 
         private void ReadRequestBody()
@@ -139,12 +139,13 @@ namespace Titanium.Web.Proxy.EventArguments
                                 }
                             }
                         }
+
                         try
                         {
                             switch (requestContentEncoding)
                             {
                                 case "gzip":
-                                    ProxySession.Request.RequestBody = CompressionHelper.DecompressGzip(requestBodyStream);
+                                    ProxySession.Request.RequestBody = CompressionHelper.DecompressGzip(requestBodyStream.ToArray());
                                     break;
                                 case "deflate":
                                     ProxySession.Request.RequestBody = CompressionHelper.DecompressDeflate(requestBodyStream);
@@ -171,20 +172,50 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (ProxySession.Response.ResponseBody == null)
             {
-                switch (ProxySession.Response.ResponseContentEncoding)
+                using (var responseBodyStream = new MemoryStream())
                 {
-                    case "gzip":
-                        ProxySession.Response.ResponseBody = CompressionHelper.DecompressGzip(ProxySession.Response.ResponseStream);
-                        break;
-                    case "deflate":
-                        ProxySession.Response.ResponseBody = CompressionHelper.DecompressDeflate(ProxySession.Response.ResponseStream);
-                        break;
-                    case "zlib":
-                        ProxySession.Response.ResponseBody = CompressionHelper.DecompressZlib(ProxySession.Response.ResponseStream);
-                        break;
-                    default:
-                        ProxySession.Response.ResponseBody = DecodeData(ProxySession.Response.ResponseStream);
-                        break;
+                    if (ProxySession.Response.IsChunked)
+                    {
+                        while (true)
+                        {
+                            var chuchkHead = ProxySession.ProxyClient.ServerStreamReader.ReadLine();
+                            var chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
+
+                            if (chunkSize != 0)
+                            {
+                                var buffer = ProxySession.ProxyClient.ServerStreamReader.ReadBytes(chunkSize);
+                                responseBodyStream.Write(buffer, 0, buffer.Length);
+                                //chunk trail
+                                ProxySession.ProxyClient.ServerStreamReader.ReadLine();
+                            }
+                            else
+                            {
+                                ProxySession.ProxyClient.ServerStreamReader.ReadLine();
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var buffer = ProxySession.ProxyClient.ServerStreamReader.ReadBytes(ProxySession.Response.ContentLength);
+                        responseBodyStream.Write(buffer, 0, buffer.Length);
+                    }
+
+                    switch (ProxySession.Response.ResponseContentEncoding)
+                    {
+                        case "gzip":
+                            ProxySession.Response.ResponseBody = CompressionHelper.DecompressGzip(responseBodyStream.ToArray());
+                            break;
+                        case "deflate":
+                            ProxySession.Response.ResponseBody = CompressionHelper.DecompressDeflate(responseBodyStream);
+                            break;
+                        case "zlib":
+                            ProxySession.Response.ResponseBody = CompressionHelper.DecompressZlib(responseBodyStream);
+                            break;
+                        default:
+                            ProxySession.Response.ResponseBody = responseBodyStream.ToArray();
+                            break;
+                    }
                 }
 
                 ProxySession.Response.ResponseBodyRead = true;
@@ -192,20 +223,6 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
 
-        //stream reader not recomended for images
-        private byte[] DecodeData(Stream responseStream)
-        {
-            var buffer = new byte[_bufferSize];
-            using (var ms = new MemoryStream())
-            {
-                int read;
-                while ((read = responseStream.Read(buffer, 0, buffer.Length)) > 0)
-                {
-                    ms.Write(buffer, 0, read);
-                }
-                return ms.ToArray();
-            }
-        }
 
         public Encoding GetRequestBodyEncoding()
         {

@@ -50,11 +50,10 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        public static byte[] DecompressGzip(Stream input)
+        //identify why passing stream instead of bytes returns empty result
+        public static byte[] DecompressGzip(byte[] gzip)
         {
-            using (
-                var decompressor = new System.IO.Compression.GZipStream(input,
-                    System.IO.Compression.CompressionMode.Decompress))
+            using (var decompressor = new System.IO.Compression.GZipStream(new MemoryStream(gzip), System.IO.Compression.CompressionMode.Decompress))
             {
                 var buffer = new byte[BufferSize];
 

@@ -14,16 +14,16 @@ namespace Titanium.Web.Proxy.Network
 {
     public class Request
     {
-        public string Method { get; set; }
-        public Uri RequestUri { get; set; }
-        public string Version { get; set; }
+        public string Method { get; internal set; }
+        public Uri RequestUri { get; internal set; }
+        public string Version { get; internal set; }
 
-        public string RequestStatus { get; set; }
-        public int RequestContentLength { get; set; }
-        public bool RequestSendChunked { get; set; }
-        public string RequestContentType { get; set; }
-        public bool RequestKeepAlive { get; set; }
-        public string RequestHost { get; set; }
+        public string RequestStatus { get; internal set; }
+        public int RequestContentLength { get; internal set; }
+        public bool RequestSendChunked { get; internal set; }
+        public string RequestContentType { get; internal set; }
+        public bool RequestKeepAlive { get; internal set; }
+        public string RequestHost { get; internal set; }
 
         public string RequestUrl { get; internal set; }
 
@@ -34,7 +34,7 @@ namespace Titanium.Web.Proxy.Network
         internal byte[] RequestBody { get; set; }
         internal string RequestBodyString { get; set; }
         internal bool RequestBodyRead { get; set; }
-        public bool UpgradeToWebSocket { get; set; }
+        internal bool UpgradeToWebSocket { get; set; }
         public List<HttpHeader> RequestHeaders { get; internal set; }
         internal bool RequestLocked { get; set; }
 
@@ -55,25 +55,21 @@ namespace Titanium.Web.Proxy.Network
         internal bool ResponseBodyRead { get; set; }
         internal bool ResponseLocked { get; set; }
         public List<HttpHeader> ResponseHeaders { get; internal set; }
-        public string ResponseCharacterSet { get; set; }
-        public string ResponseContentEncoding { get; set; }
-        public System.Version ResponseProtocolVersion { get; set; }
-        public string ResponseStatusCode { get; set; }
-        public string ResponseStatusDescription { get; set; }
-        public bool ResponseKeepAlive { get; set; }
-        public string ResponseContentType { get; set; }
-        public int ContentLength { get; set; }
-        public bool IsChunked { get; set; }
+        internal string ResponseCharacterSet { get; set; }
+        internal string ResponseContentEncoding { get; set; }
+        internal System.Version ResponseProtocolVersion { get; set; }
+        internal string ResponseStatusCode { get; set; }
+        internal string ResponseStatusDescription { get; set; }
+        internal bool ResponseKeepAlive { get; set; }
+        internal string ResponseContentType { get; set; }
+        internal int ContentLength { get; set; }
+        internal bool IsChunked { get; set; }
 
         public Response()
         {
             this.ResponseHeaders = new List<HttpHeader>();
             this.ResponseKeepAlive = true;
-        }
-
-
-
-        
+        }  
     }
 
     public class HttpWebSession
@@ -90,7 +86,7 @@ namespace Titanium.Web.Proxy.Network
 
         public Request Request { get; set; }
         public Response Response { get; set; }
-        public TcpConnection ProxyClient { get; set; }
+        internal TcpConnection ProxyClient { get; set; }
 
         public void SetConnection(TcpConnection Connection)
         {
@@ -102,11 +98,7 @@ namespace Titanium.Web.Proxy.Network
         {
             this.Request = new Request();
             this.Response = new Response();
-
-
         }
-
-
 
         public void SendRequest()
         {
@@ -168,8 +160,6 @@ namespace Titanium.Web.Proxy.Network
                 this.Response.ResponseHeaders.Add(new HttpHeader(strArray[0], strArray[1]));
             }
         }
-
-
 
     }
 
