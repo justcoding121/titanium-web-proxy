@@ -10,9 +10,9 @@ namespace Titanium.Web.Proxy.Extensions
         {
             try
             {
-                if (request.Request.RequestContentType == null) return Encoding.GetEncoding("ISO-8859-1");
+                if (request.Request.ContentType == null) return Encoding.GetEncoding("ISO-8859-1");
 
-                var contentTypes = request.Request.RequestContentType.Split(';');
+                var contentTypes = request.Request.ContentType.Split(';');
                 foreach (var contentType in contentTypes)
                 {
                     var encodingSplit = contentType.Split('=');

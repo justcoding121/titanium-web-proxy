@@ -16,20 +16,19 @@ namespace Titanium.Web.Proxy.Network
     {
         public string Method { get; internal set; }
         public Uri RequestUri { get; internal set; }
-        public string Version { get; internal set; }
+        public string HttpVersion { get; internal set; }
 
-        public string RequestStatus { get; internal set; }
-        public int RequestContentLength { get; internal set; }
-        public bool RequestSendChunked { get; internal set; }
-        public string RequestContentType { get; internal set; }
-        public bool RequestKeepAlive { get; internal set; }
-        public string RequestHost { get; internal set; }
+        public string Status { get; internal set; }
+        public int ContentLength { get; internal set; }
+        public bool SendChunked { get; internal set; }
+        public string ContentType { get; internal set; }
+        public bool KeepAlive { get; internal set; }
+        public string Hostname { get; internal set; }
 
-        public string RequestUrl { get; internal set; }
+        public string Url { get; internal set; }
 
-        internal Encoding RequestEncoding { get; set; }
-        internal Version RequestHttpVersion { get; set; }
-        internal bool RequestIsAlive { get; set; }
+        internal Encoding Encoding { get; set; }
+        internal bool IsAlive { get; set; }
         internal bool CancelRequest { get; set; }
         internal byte[] RequestBody { get; set; }
         internal string RequestBodyString { get; set; }
@@ -48,20 +47,20 @@ namespace Titanium.Web.Proxy.Network
     public class Response
     {
 
-        internal Encoding ResponseEncoding { get; set; }
+        internal Encoding Encoding { get; set; }
         internal Stream ResponseStream { get; set; }
         internal byte[] ResponseBody { get; set; }
         internal string ResponseBodyString { get; set; }
         internal bool ResponseBodyRead { get; set; }
         internal bool ResponseLocked { get; set; }
         public List<HttpHeader> ResponseHeaders { get; internal set; }
-        internal string ResponseCharacterSet { get; set; }
-        internal string ResponseContentEncoding { get; set; }
-        internal System.Version ResponseProtocolVersion { get; set; }
-        internal string ResponseStatusCode { get; set; }
-        internal string ResponseStatusDescription { get; set; }
+        internal string CharacterSet { get; set; }
+        internal string ContentEncoding { get; set; }
+        internal string HttpVersion { get; set; }
+        public string ResponseStatusCode { get; internal set; }
+        public string ResponseStatusDescription { get; internal set; }
         internal bool ResponseKeepAlive { get; set; }
-        internal string ResponseContentType { get; set; }
+        public string ContentType { get; internal set; }
         internal int ContentLength { get; set; }
         internal bool IsChunked { get; set; }
 
@@ -110,7 +109,7 @@ namespace Titanium.Web.Proxy.Network
               {
                 this.Request.Method,
                 this.Request.RequestUri.PathAndQuery,
-                this.Request.Version
+                this.Request.HttpVersion
               }));
 
             foreach (HttpHeader httpHeader in this.Request.RequestHeaders)
@@ -134,19 +133,8 @@ namespace Titanium.Web.Proxy.Network
             {
                 var s = ProxyClient.ServerStreamReader.ReadLine();
             }
-            var httpVersion = httpResult[0];
 
-            Version version;
-            if (httpVersion == "HTTP/1.1")
-            {
-                version = new Version(1, 1);
-            }
-            else
-            {
-                version = new Version(1, 0);
-            }
-
-            this.Response.ResponseProtocolVersion = version;
+            this.Response.HttpVersion = httpResult[0];
             this.Response.ResponseStatusCode = httpResult[1];
             string status = httpResult[2];
 
