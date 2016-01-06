@@ -76,21 +76,19 @@ namespace Titanium.Web.Proxy.Test
         {
             
             ////read response headers
-            var responseHeaders = e.ProxySession.Response.ResponseHeaders;
-
-
-            
+           // var responseHeaders = e.ProxySession.Response.ResponseHeaders;
+          
             //if (!e.ProxySession.Request.Hostname.Equals("medeczane.sgk.gov.tr")) return;
-            if (e.RequestMethod == "GET" || e.RequestMethod == "POST")
-            {
-                if (e.ProxySession.Response.ResponseStatusCode == "200")
-                {
-                    if (e.ProxySession.Response.ContentType.Trim().ToLower().Contains("text/html"))
-                    {
-                        string body = e.GetResponseBodyAsString(); //This line crashes
-                    }
-                }
-            }
+            //if (e.RequestMethod == "GET" || e.RequestMethod == "POST")
+            //{
+            //    if (e.ProxySession.Response.ResponseStatusCode == "200")
+            //    {
+            //        if (e.ProxySession.Response.ContentType.Trim().ToLower().Contains("text/html"))
+            //        {
+            //            string body = e.GetResponseBodyAsString(); 
+            //        }
+            //    }
+            //}
         }
     }
 }
