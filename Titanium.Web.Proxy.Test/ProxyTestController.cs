@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.RegularExpressions;
 using Titanium.Web.Proxy.EventArguments;
 
 namespace Titanium.Web.Proxy.Test
@@ -43,10 +44,10 @@ namespace Titanium.Web.Proxy.Test
         //Read browser URL send back to proxy by the injection script in OnResponse event
         public void OnRequest(object sender, SessionEventArgs e)
         {
-            Console.WriteLine(e.RequestUrl);
+            Console.WriteLine(e.ProxySession.Request.Url);
 
             ////read request headers
-            //var requestHeaders = e.RequestHeaders;
+            //var requestHeaders = e.ProxySession.Request.RequestHeaders;
 
             //if ((e.RequestMethod.ToUpper() == "POST" || e.RequestMethod.ToUpper() == "PUT"))
             //{
@@ -63,7 +64,7 @@ namespace Titanium.Web.Proxy.Test
             ////To cancel a request with a custom HTML content
             ////Filter URL
 
-            //if (e.RequestURL.Contains("google.com"))
+            //if (e.ProxySession.Request.RequestUrl.Contains("google.com"))
             //{
             //    e.Ok("<!DOCTYPE html><html><body><h1>Website Blocked</h1><p>Blocked by titanium web proxy.</p></body></html>");
             //}
@@ -73,27 +74,19 @@ namespace Titanium.Web.Proxy.Test
         //Insert script to read the Browser URL and send it back to proxy
         public void OnResponse(object sender, SessionEventArgs e)
         {
+            
             ////read response headers
-            //var responseHeaders = e.ResponseHeaders;
-
-
-            //if (e.ResponseStatusCode == HttpStatusCode.OK)
+           // var responseHeaders = e.ProxySession.Response.ResponseHeaders;
+          
+            //if (!e.ProxySession.Request.Hostname.Equals("medeczane.sgk.gov.tr")) return;
+            //if (e.RequestMethod == "GET" || e.RequestMethod == "POST")
             //{
-            //    if (e.ResponseContentType.Trim().ToLower().Contains("text/html"))
+            //    if (e.ProxySession.Response.ResponseStatusCode == "200")
             //    {
-            //        //Get/Set response body bytes
-            //        byte[] responseBodyBytes = e.GetResponseBody();
-            //        e.SetResponseBody(responseBodyBytes);
-
-            //        //Get response body as string
-            //        string responseBody = e.GetResponseBodyAsString();
-
-            //        //Modify e.ServerResponse
-            //        Regex rex = new Regex("</body>", RegexOptions.RightToLeft | RegexOptions.IgnoreCase | RegexOptions.Multiline);
-            //        string modified = rex.Replace(responseBody, "<script type =\"text/javascript\">alert('Response was modified by this script!');</script></body>", 1);
-
-            //        //Set modifed response Html Body
-            //        e.SetResponseBodyString(modified);
+            //        if (e.ProxySession.Response.ContentType.Trim().ToLower().Contains("text/html"))
+            //        {
+            //            string body = e.GetResponseBodyAsString(); 
+            //        }
             //    }
             //}
         }

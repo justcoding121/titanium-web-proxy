@@ -58,12 +58,12 @@ Sample request and response event handlers
 		//Test On Request, intercept requests
         public void OnRequest(object sender, SessionEventArgs e)
         {
-           Console.WriteLine(e.RequestURL);
-		   
-            //read request headers
-            var requestHeaders = e.RequestHeaders;
+            Console.WriteLine(e.ProxySession.Request.RequestUrl);
 
-            if ((e.RequestMethod.ToUpper() == "POST" || e.RequestMethod.ToUpper() == "PUT") && e.RequestContentLength > 0)
+            //read request headers
+            var requestHeaders = e.ProxySession.Request.RequestHeaders;
+
+            if ((e.RequestMethod.ToUpper() == "POST" || e.RequestMethod.ToUpper() == "PUT"))
             {
                 //Get/Set request body bytes
                 byte[] bodyBytes = e.GetRequestBody();
@@ -78,7 +78,7 @@ Sample request and response event handlers
             //To cancel a request with a custom HTML content
             //Filter URL
 
-            if (e.RequestURL.Contains("google.com"))
+            if (e.ProxySession.Request.RequestUrl.Contains("google.com"))
             {
                 e.Ok("<!DOCTYPE html><html><body><h1>Website Blocked</h1><p>Blocked by titanium web proxy.</p></body></html>");
             }
@@ -86,10 +86,11 @@ Sample request and response event handlers
 	
 	 public void OnResponse(object sender, SessionEventArgs e)
 	{
-            //read response headers
-            var responseHeaders = e.ResponseHeaders;
+            ////read response headers
+            var responseHeaders = e.ProxySession.Response.ResponseHeaders;
 
-            if (e.ResponseStatusCode == HttpStatusCode.OK)
+
+            if (e.ResponseStatusCode == "200")
             {
                 if (e.ResponseContentType.Trim().ToLower().Contains("text/html"))
                 {
