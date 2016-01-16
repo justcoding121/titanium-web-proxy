@@ -3,6 +3,7 @@ using System.IO;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
+using System.Reflection;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -112,14 +113,16 @@ namespace Titanium.Web.Proxy.Helpers
         {
             using (var process = new Process())
             {
-                if (!File.Exists("makecert.exe"))
+                string file = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "makecert.exe");
+
+                if (!File.Exists(file))
                     throw new Exception("Unable to locate 'makecert.exe'.");
 
                 process.StartInfo.Verb = "runas";
                 process.StartInfo.Arguments = args != null ? args[0] : string.Empty;
                 process.StartInfo.CreateNoWindow = true;
                 process.StartInfo.UseShellExecute = false;
-                process.StartInfo.FileName = "makecert.exe";
+                process.StartInfo.FileName = file;
 
                 process.Start();
                 process.WaitForExit();
