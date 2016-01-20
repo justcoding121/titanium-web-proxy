@@ -326,7 +326,7 @@ namespace Titanium.Web.Proxy.EventArguments
             var result = Encoding.Default.GetBytes(html);
 
             var connectStreamWriter = new StreamWriter(this.Client.ClientStream);
-            connectStreamWriter.WriteLine(string.Format("{0} {2} {3}", ProxySession.Request.HttpVersion, 200, "Ok"));
+            connectStreamWriter.WriteLine(string.Format("{0} {1} {2}", ProxySession.Request.HttpVersion, 200, "Ok"));
             connectStreamWriter.WriteLine("Timestamp: {0}", DateTime.Now);
             connectStreamWriter.WriteLine("content-length: " + result.Length);
             connectStreamWriter.WriteLine("Cache-Control: no-cache, no-store, must-revalidate");
