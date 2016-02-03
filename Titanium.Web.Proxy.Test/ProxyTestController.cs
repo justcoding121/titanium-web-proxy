@@ -9,13 +9,21 @@ namespace Titanium.Web.Proxy.Test
         public int ListeningPort { get; set; }
         public bool EnableSsl { get; set; }
         public bool SetAsSystemProxy { get; set; }
+        public string[] AdditionalSSLPorts { get; set; }
 
         public void StartProxy()
         {
             ProxyServer.BeforeRequest += OnRequest;
             ProxyServer.BeforeResponse += OnResponse;
-
+            
             ProxyServer.EnableSsl = EnableSsl;
+            if (EnableSsl && AdditionalSSLPorts != null)
+            {
+                foreach (string port in AdditionalSSLPorts)
+                {
+                    ProxyServer.SSLPorts.Add(Convert.ToInt32(port));
+                }
+            }
 
             ProxyServer.SetAsSystemProxy = SetAsSystemProxy;
 

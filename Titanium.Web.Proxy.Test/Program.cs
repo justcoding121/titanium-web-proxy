@@ -30,6 +30,16 @@ namespace Titanium.Web.Proxy.Test
                 Controller.SetAsSystemProxy = true;
             }
 
+            if (Controller.EnableSsl)
+            {
+                Console.Write("Enter additional SSL ports (comma separated):");
+                line = Console.ReadLine();
+                if (line != null && line.Trim().Length > 0)
+                {
+                    Controller.AdditionalSSLPorts = line.Split(',');
+                }
+            }
+
             //Start proxy controller
             Controller.StartProxy();
 

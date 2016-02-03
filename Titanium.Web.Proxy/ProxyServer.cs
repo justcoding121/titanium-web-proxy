@@ -55,6 +55,10 @@ namespace Titanium.Web.Proxy
         public static int ListeningPort { get; set; }
         public static IPAddress ListeningIpAddress { get; set; }
 
+        public static List<int> SSLPorts = new List<int>(new int[] { 443 });
+
+        public static bool CheckCertificateRevocation { get; set; }
+
         public static event EventHandler<SessionEventArgs> BeforeRequest;
         public static event EventHandler<SessionEventArgs> BeforeResponse;
 
