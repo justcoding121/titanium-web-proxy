@@ -20,6 +20,11 @@ namespace Titanium.Web.Proxy
 {
     partial class ProxyServer
     {
+#if NET45
+        private const SslProtocols SupportedProtocols = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3 | SslProtocols.Ssl2;
+#else
+        private const SslProtocols SupportedProtocols = SslProtocols.Tls | SslProtocols.Ssl3 | SslProtocols.Ssl2;
+#endif
         private static void HandleClient(TcpClient client)
         {
             Stream clientStream = client.GetStream();
@@ -54,7 +59,7 @@ namespace Titanium.Web.Proxy
                 var excluded = ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
 
                 //Client wants to create a secure tcp tunnel (its a HTTPS request)
-                if (httpVerb.ToUpper() == "CONNECT" && !excluded && httpRemoteUri.Port == 443)
+                if (httpVerb.ToUpper() == "CONNECT" && !excluded && ProxyServer.SSLPorts.Contains(httpRemoteUri.Port))
                 {
                     httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
                     clientStreamReader.ReadAllLines();
@@ -69,8 +74,7 @@ namespace Titanium.Web.Proxy
                     {
                         sslStream = new SslStream(clientStream, true);
                         //Successfully managed to authenticate the client using the fake certificate
-                        sslStream.AuthenticateAsServer(certificate, false,
-                            SslProtocols.Tls | SslProtocols.Ssl3 | SslProtocols.Ssl2, false);
+                        sslStream.AuthenticateAsServer(certificate, false, SupportedProtocols, false);
 
                         clientStreamReader = new CustomBinaryReader(sslStream, Encoding.ASCII);
                         clientStreamWriter = new StreamWriter(sslStream);
@@ -78,8 +82,9 @@ namespace Titanium.Web.Proxy
                         clientStream = sslStream;
                     }
 
-                    catch
+                    catch(Exception exception)
                     {
+                        Console.WriteLine(exception.Message);
                         if (sslStream != null)
                             sslStream.Dispose();
 
@@ -205,8 +210,8 @@ namespace Titanium.Web.Proxy
 
                     //construct the web request that we are going to issue on behalf of the client.
                     connection = connection == null ?
-                        TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps)
-                        : lastRequestHostName != args.ProxySession.Request.Hostname ? TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps)
+                        TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps, clientStream)
+                        : lastRequestHostName != args.ProxySession.Request.Hostname ? TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps, clientStream)
                             : connection;
 
                     lastRequestHostName = args.ProxySession.Request.Hostname;
@@ -244,8 +249,9 @@ namespace Titanium.Web.Proxy
                     httpCmd = clientStreamReader.ReadLine();
 
                 }
-                catch
+                catch(Exception exception)
                 {
+                    Console.WriteLine(exception.Message);
                     Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
                     break;
                 }

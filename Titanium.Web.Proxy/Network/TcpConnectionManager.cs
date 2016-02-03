@@ -9,6 +9,8 @@ using System.IO;
 using System.Net.Security;
 using Titanium.Web.Proxy.Helpers;
 using System.Threading;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Titanium.Web.Proxy.Network
 {
@@ -34,9 +36,11 @@ namespace Titanium.Web.Proxy.Network
     {
         static List<TcpConnection> ConnectionCache = new List<TcpConnection>();
 
-        public static TcpConnection GetClient(string Hostname, int port, bool IsSecure)
+        public static TcpConnection GetClient(string Hostname, int port, bool IsSecure, Stream clientStream)
         {
             TcpConnection cached = null;
+            SslProtocols protocol = SslProtocols.None;
+
             while (true)
             {
                 lock (ConnectionCache)
@@ -54,36 +58,51 @@ namespace Titanium.Web.Proxy.Network
                     break;
             }
 
+            if (IsSecure && clientStream is SslStream)
+            {
+                protocol = ((SslStream)clientStream).SslProtocol;
+            }
+
             if (cached == null)
-                cached = CreateClient(Hostname, port, IsSecure);
+            {
+                cached = CreateClient(Hostname, port, IsSecure, protocol);
+            }
 
             if (ConnectionCache.Where(x => x.HostName == Hostname && x.port == port && x.IsSecure == IsSecure && x.TcpClient.Connected).Count() < 2)
             {
-                Task.Factory.StartNew(() => ReleaseClient(CreateClient(Hostname, port, IsSecure)));
+                Task.Factory.StartNew(() => ReleaseClient(CreateClient(Hostname, port, IsSecure, protocol)));
             }
 
             return cached;
         }
 
-        private static TcpConnection CreateClient(string Hostname, int port, bool IsSecure)
+        private static TcpConnection CreateClient(string Hostname, int port, bool IsSecure, SslProtocols protocol)
         {
-            var client = new TcpClient(Hostname, port);
-            var stream = (Stream)client.GetStream();
+            TcpClient client = new TcpClient(Hostname, port);
+            Stream stream = client.GetStream();
 
             if (IsSecure)
             {
-                var sslStream = (SslStream)null;
+                SslStream sslStream = null;
                 try
                 {
-                    sslStream = new SslStream(stream);
-                    sslStream.AuthenticateAsClient(Hostname);
+                    if (!ProxyServer.CheckCertificateRevocation)
+                    {
+                        sslStream = new SslStream(stream, false, TrustAllCertificatesCallback);
+                    }
+                    else
+                    {
+                        sslStream = new SslStream(stream);
+                    }
+                    sslStream.AuthenticateAsClient(Hostname, null, protocol, ProxyServer.CheckCertificateRevocation);
                     stream = (Stream)sslStream;
                 }
-                catch
+                catch (Exception exception)
                 {
+                    Console.WriteLine(exception.Message);
                     if (sslStream != null)
                         sslStream.Dispose();
-                    throw;
+                    throw exception;
                 }
             }
 
@@ -96,6 +115,11 @@ namespace Titanium.Web.Proxy.Network
                 ServerStreamReader = new CustomBinaryReader(stream, Encoding.ASCII),
                 Stream = stream
             };
+        }
+
+        private static bool TrustAllCertificatesCallback(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        {
+            return true;
         }
 
         public static void ReleaseClient(TcpConnection Connection)
