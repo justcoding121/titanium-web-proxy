@@ -85,6 +85,7 @@
     <Compile Include="Helpers\CertificateManager.cs" />
     <Compile Include="Helpers\Firefox.cs" />
     <Compile Include="Helpers\SystemProxy.cs" />
+    <Compile Include="Models\EndPoint.cs" />
     <Compile Include="Network\TcpExtensions.cs" />
     <Compile Include="Network\TcpConnectionManager.cs" />
     <Compile Include="Models\HttpHeader.cs" />

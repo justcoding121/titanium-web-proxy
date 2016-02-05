@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Net;
 using System.Text.RegularExpressions;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Test
 {
@@ -15,20 +17,20 @@ namespace Titanium.Web.Proxy.Test
             ProxyServer.BeforeRequest += OnRequest;
             ProxyServer.BeforeResponse += OnResponse;
 
-            ProxyServer.EnableSsl = EnableSsl;
-
-            ProxyServer.SetAsSystemProxy = SetAsSystemProxy;
 
             //Exclude Https addresses you don't want to proxy
             //Usefull for clients that use certificate pinning
             //for example dropbox.com
-            ProxyServer.ExcludedHttpsHostNameRegex.Add(".dropbox.com");
-
+            // ProxyServer.ExcludedHttpsHostNameRegex.Add(".dropbox.com");
+            var explicitEndPoint = new ExplicitProxyEndPoint { EnableSsl = true, IpAddress = IPAddress.Any, Port = 8000 };
+            var transparentEndPoint = new TransparentProxyEndPoint { EnableSsl = true, IpAddress = IPAddress.Loopback, Port = 443 };
+            ProxyServer.AddEndPoint(explicitEndPoint);
+            ProxyServer.AddEndPoint(transparentEndPoint);
             ProxyServer.Start();
+            ProxyServer.SetAsSystemProxy(explicitEndPoint);
 
-            ProxyServer.ListeningPort = ProxyServer.ListeningPort;
 
-            Console.WriteLine("Proxy listening on local machine port: {0} ", ProxyServer.ListeningPort);
+           // Console.WriteLine("Proxy listening on local machine port: {0} ", ProxyServer.ListeningPort);
         }
 
         public void Stop()
