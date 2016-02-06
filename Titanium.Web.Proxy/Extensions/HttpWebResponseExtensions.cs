@@ -8,8 +8,14 @@ namespace Titanium.Web.Proxy.Extensions
     {
         public static Encoding GetResponseEncoding(this HttpWebSession response)
         {
-            if (string.IsNullOrEmpty(response.Response.CharacterSet)) return Encoding.GetEncoding("ISO-8859-1");
-            return Encoding.GetEncoding(response.Response.CharacterSet.Replace(@"""", string.Empty));
+            if (string.IsNullOrEmpty(response.Response.CharacterSet))
+                return Encoding.GetEncoding("ISO-8859-1");
+
+            try
+            {
+                return Encoding.GetEncoding(response.Response.CharacterSet.Replace(@"""", string.Empty));
+            }
+            catch { return Encoding.GetEncoding("ISO-8859-1"); }
         }
     }
 }

@@ -14,22 +14,6 @@ namespace Titanium.Web.Proxy.Test
             NativeMethods.SetConsoleCtrlHandler(NativeMethods.Handler, true);
 
 
-            Console.Write("Do you want to monitor HTTPS? (Y/N):");
-
-            var readLine = Console.ReadLine();
-            if (readLine != null && readLine.Trim().ToLower() == "y")
-            {
-                Controller.EnableSsl = true;
-            }
-
-            Console.Write("Do you want to set this as a System Proxy? (Y/N):");
-
-            var line = Console.ReadLine();
-            if (line != null && line.Trim().ToLower() == "y")
-            {
-                Controller.SetAsSystemProxy = true;
-            }
-
             //Start proxy controller
             Controller.StartProxy();
 
