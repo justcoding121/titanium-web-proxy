@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy
             Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
 
 #if NET45
-        internal static SslProtocols SupportedProtocols = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3 ;
+        internal static SslProtocols SupportedProtocols = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 #else
        public static SslProtocols SupportedProtocols  = SslProtocols.Tls | SslProtocols.Ssl3;
 #endif
@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy
         private static CertificateManager CertManager { get; set; }
         private static bool EnableSsl { get; set; }
         private static bool certTrusted { get; set; }
-        private static bool proxyStarted { get; set; }
+        private static bool proxyRunning { get; set; }
 
         public static string RootCertificateName { get; set; }
 
@@ -69,52 +69,78 @@ namespace Titanium.Web.Proxy
 
         public static void AddEndPoint(ProxyEndPoint endPoint)
         {
-            if (proxyStarted)
-                throw new Exception("Cannot add end points after proxy started.");
-
             ProxyEndPoints.Add(endPoint);
+
+            if (proxyRunning)
+                Listen(endPoint);
         }
-  
 
-        public static void SetAsSystemProxy(ExplicitProxyEndPoint endPoint)
+        public static void RemoveEndPoint(ProxyEndPoint endPoint)
         {
-            if (ProxyEndPoints.Contains(endPoint) == false)
-                throw new Exception("Cannot set endPoints not added to proxy as system proxy");
 
-            if (!proxyStarted)
-                throw new Exception("Cannot set system proxy settings before proxy has been started.");
+            if (ProxyEndPoints.Contains(endPoint) == false)
+                throw new Exception("Cannot remove endPoints not added to proxy");
+
+            ProxyEndPoints.Remove(endPoint);
+
+            if (proxyRunning)
+                QuitListen(endPoint);
+        }
+
+
+        public static void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint)
+        {
+            VerifyProxy(endPoint);
 
             //clear any settings previously added
-            ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemProxy = false);
-
-            endPoint.IsSystemProxy = true;
+            ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpProxy = false);
 
             SystemProxyHelper.EnableProxyHttp(
                 Equals(endPoint.IpAddress, IPAddress.Any) | Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(), endPoint.Port);
 
+            endPoint.IsSystemHttpProxy = true;
 #if !DEBUG
             FireFoxHelper.AddFirefox();
 #endif
+            Console.WriteLine("Set endpoint at Ip {1} and port: {2} as System HTTPS Proxy", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
-            if (endPoint.EnableSsl)
+        }
+
+        public static void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint)
+        {
+            VerifyProxy(endPoint);
+
+            if (!endPoint.EnableSsl)
             {
-                RootCertificateName = RootCertificateName ?? "Titanium_Proxy_Test_Root";
-
-                //If certificate was trusted by the machine
-                if (certTrusted)
-                {
-                    SystemProxyHelper.EnableProxyHttps(
-                       Equals(endPoint.IpAddress, IPAddress.Any) | Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(),
-                        endPoint.Port);
-                }
+                throw new Exception("Endpoint do not support Https connections");
             }
 
-            Console.WriteLine("Set endpoint at Ip {1} and port: {2} as System Proxy", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
+            //clear any settings previously added
+            ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpsProxy = false);
 
+            RootCertificateName = RootCertificateName ?? "Titanium_Proxy_Test_Root";
+
+            //If certificate was trusted by the machine
+            if (certTrusted)
+            {
+                SystemProxyHelper.EnableProxyHttps(
+                   Equals(endPoint.IpAddress, IPAddress.Any) | Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(),
+                    endPoint.Port);
+            }
+
+            endPoint.IsSystemHttpsProxy = true;
+
+#if !DEBUG
+            FireFoxHelper.AddFirefox();
+#endif
+            Console.WriteLine("Set endpoint at Ip {1} and port: {2} as System HTTPS Proxy", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
         }
 
         public static void Start()
         {
+            if (proxyRunning)
+                throw new Exception("Proxy is already running.");
+
             EnableSsl = ProxyEndPoints.Any(x => x.EnableSsl);
 
             if (EnableSsl)
@@ -122,44 +148,18 @@ namespace Titanium.Web.Proxy
 
             foreach (var endPoint in ProxyEndPoints)
             {
-
-                endPoint.listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
-                endPoint.listener.Start();
-
-                endPoint.Port = ((IPEndPoint)endPoint.listener.LocalEndpoint).Port;
-                // accept clients asynchronously
-                endPoint.listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
+                Listen(endPoint);
             }
 
-            proxyStarted = true;
+            proxyRunning = true;
         }
-
-        private static void OnAcceptConnection(IAsyncResult asyn)
-        {
-            var endPoint = (ProxyEndPoint)asyn.AsyncState;
-    
-            var client = endPoint.listener.EndAcceptTcpClient(asyn);
-
-            try
-            {
-                if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
-                    Task.Factory.StartNew(() => HandleClient(endPoint as TransparentProxyEndPoint, client));
-                else
-                    Task.Factory.StartNew(() => HandleClient(endPoint as ExplicitProxyEndPoint, client));
-            }
-            catch
-            {
-                // ignored
-            }
-            // Get the listener that handles the client request.
-            endPoint.listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
-
-        }
-
 
         public static void Stop()
         {
-            var SetAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.IsSystemProxy);
+            if (!proxyRunning)
+                throw new Exception("Proxy is not running.");
+
+            var SetAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
 
             if (SetAsSystemProxy)
             {
@@ -175,6 +175,55 @@ namespace Titanium.Web.Proxy
             }
 
             CertManager.Dispose();
+
+            proxyRunning = false;
         }
+
+        private static void Listen(ProxyEndPoint endPoint)
+        {
+            endPoint.listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
+            endPoint.listener.Start();
+
+            endPoint.Port = ((IPEndPoint)endPoint.listener.LocalEndpoint).Port;
+            // accept clients asynchronously
+            endPoint.listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
+        }
+
+        private static void QuitListen(ProxyEndPoint endPoint)
+        {
+            endPoint.listener.Stop();
+        }
+
+
+        private static void VerifyProxy(ExplicitProxyEndPoint endPoint)
+        {
+            if (ProxyEndPoints.Contains(endPoint) == false)
+                throw new Exception("Cannot set endPoints not added to proxy as system proxy");
+
+            if (!proxyRunning)
+                throw new Exception("Cannot set system proxy settings before proxy has been started.");
+        }
+
+        private static void OnAcceptConnection(IAsyncResult asyn)
+        {
+            var endPoint = (ProxyEndPoint)asyn.AsyncState;
+            var client = endPoint.listener.EndAcceptTcpClient(asyn);
+
+            try
+            {
+                if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
+                    Task.Factory.StartNew(() => HandleClient(endPoint as TransparentProxyEndPoint, client));
+                else
+                    Task.Factory.StartNew(() => HandleClient(endPoint as ExplicitProxyEndPoint, client));
+            }
+            catch
+            {
+                // ignored
+            }
+
+            // Get the listener that handles the client request.
+            endPoint.listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
+        }
+     
     }
 }

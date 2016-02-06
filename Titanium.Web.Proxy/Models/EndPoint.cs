@@ -25,8 +25,10 @@ namespace Titanium.Web.Proxy.Models
 
     public class ExplicitProxyEndPoint : ProxyEndPoint
     {
-        internal bool IsSystemProxy { get; set; }
-        public  List<string> ExcludedHostNameRegex { get; set; }
+        internal bool IsSystemHttpProxy { get; set; }
+        internal bool IsSystemHttpsProxy { get; set; }
+
+        public  List<string> ExcludedHttpsHostNameRegex { get; set; }
 
         public ExplicitProxyEndPoint(IPAddress IpAddress, int Port, bool EnableSsl)
             : base(IpAddress, Port, EnableSsl)
