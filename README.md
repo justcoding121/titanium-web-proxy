@@ -44,7 +44,14 @@ Setup HTTP proxy:
 		ExcludedHttpsHostNameRegex = new List<string>() { "dropbox.com" }
 	};
 
-	//An explicit endpoint is where the client knows about the existance of proxy
+	//Exclude Https addresses you don't want to proxy
+	//Usefull for clients that use certificate pinning
+	//for example dropbox.com
+	var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true){
+		ExcludedHttpsHostNameRegex = new List<string>() { "dropbox.com" }
+	};
+
+	//An explicit endpoint is where the client knows about the existance of a proxy
 	//So client sends request in a proxy friendly manner
 	ProxyServer.AddEndPoint(explicitEndPoint);
 	ProxyServer.Start();
@@ -57,12 +64,15 @@ Setup HTTP proxy:
 	//In this example only google.com will work for HTTPS requests
 	//Other sites will receive a certificate mismatch warning on browser
 	//Please read about it before asking questions!
-	var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 8001, true) {  GenericCertificateName = "google.com"};         
+	var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 8001, true) { 
+		GenericCertificateName = "google.com"
+	};         
 	ProxyServer.AddEndPoint(transparentEndPoint);
   
 
 	foreach (var endPoint in ProxyServer.ProxyEndPoints)
-		Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
+		Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", 
+			endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
 	//You can also add/remove end points after proxy has been started
 	ProxyServer.RemoveEndPoint(transparentEndPoint);
