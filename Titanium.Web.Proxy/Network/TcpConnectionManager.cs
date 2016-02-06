@@ -9,6 +9,7 @@ using System.IO;
 using System.Net.Security;
 using Titanium.Web.Proxy.Helpers;
 using System.Threading;
+using System.Security.Authentication;
 
 namespace Titanium.Web.Proxy.Network
 {
@@ -76,7 +77,7 @@ namespace Titanium.Web.Proxy.Network
                 try
                 {
                     sslStream = new SslStream(stream);
-                    sslStream.AuthenticateAsClient(Hostname);
+                    sslStream.AuthenticateAsClient(Hostname, null, ProxyServer.SupportedProtocols , false);
                     stream = (Stream)sslStream;
                 }
                 catch
