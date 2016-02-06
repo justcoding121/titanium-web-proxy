@@ -36,11 +36,22 @@ Setup HTTP proxy:
 	// listen to client request & server response events
     ProxyServer.BeforeRequest += OnRequest;
     ProxyServer.BeforeResponse += OnResponse;
+
+    //Exclude Https addresses you don't want to proxy
+    //Usefull for clients that use certificate pinning
+    //for example dropbox.com
+    var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, true){
+    ExcludedHostNameRegex = new List<string>() { "dropbox.com" }
+    };
 	
-	ProxyServer.EnableSSL = true;
-	ProxyServer.SetAsSystemProxy = true;
-	ProxyServer.Start();
-	
+    var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 8001, true);
+
+    ProxyServer.AddEndPoint(explicitEndPoint);
+    ProxyServer.AddEndPoint(transparentEndPoint);
+    ProxyServer.Start();
+
+	ProxyServer.SetAsSystemProxy(explicitEndPoint);
+
 	//wait here (You can use something else as a wait function, I am using this as a demo)
 	Console.Read();
 	
