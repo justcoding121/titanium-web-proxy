@@ -103,7 +103,7 @@ namespace Titanium.Web.Proxy
                         if (response.Response.ResponseHeaders[i].Value.Contains(";"))
                         {
                             response.Response.ContentType = response.Response.ResponseHeaders[i].Value.Split(';')[0].Trim();
-                            response.Response.CharacterSet = response.Response.ResponseHeaders[i].Value.Split(';')[1].ToLower().Replace("charset=", string.Empty).Trim();
+                            response.Response.CharacterSet = response.Response.ResponseHeaders[i].Value.Split(';')[1].Substring(9).Trim();
                         }
                         else
                             response.Response.ContentType = response.Response.ResponseHeaders[i].Value.ToLower().Trim();

@@ -1,34 +1,39 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Net;
 using System.Text.RegularExpressions;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Test
 {
     public class ProxyTestController
     {
-        public int ListeningPort { get; set; }
-        public bool EnableSsl { get; set; }
-        public bool SetAsSystemProxy { get; set; }
+
 
         public void StartProxy()
         {
             ProxyServer.BeforeRequest += OnRequest;
             ProxyServer.BeforeResponse += OnResponse;
 
-            ProxyServer.EnableSsl = EnableSsl;
-
-            ProxyServer.SetAsSystemProxy = SetAsSystemProxy;
-
             //Exclude Https addresses you don't want to proxy
             //Usefull for clients that use certificate pinning
             //for example dropbox.com
-            ProxyServer.ExcludedHttpsHostNameRegex.Add(".dropbox.com");
+            var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, true){
+                ExcludedHostNameRegex = new List<string>() { "dropbox.com" }
+            };
 
+            var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 8001, true);
+
+            ProxyServer.AddEndPoint(explicitEndPoint);
+            ProxyServer.AddEndPoint(transparentEndPoint);
             ProxyServer.Start();
 
-            ProxyServer.ListeningPort = ProxyServer.ListeningPort;
+            foreach (var endPoint in ProxyServer.ProxyEndPoints)
+                Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
-            Console.WriteLine("Proxy listening on local machine port: {0} ", ProxyServer.ListeningPort);
+            ProxyServer.SetAsSystemProxy(explicitEndPoint);
+
         }
 
         public void Stop()
