@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.Test
             ProxyServer.AddEndPoint(explicitEndPoint);
             ProxyServer.Start();
 
-            //You can also add/remove end points after proxy has been started
+          
             //Transparent endpoint is usefull for reverse proxying (client is not aware of the existance of proxy)
             //A transparent endpoint usually requires a network router port forwarding HTTP(S) packets to this endpoint
             //Currently do not support Server Name Indication (It is not currently supported by SslStream class)
@@ -38,10 +38,13 @@ namespace Titanium.Web.Proxy.Test
             //Please read about it before asking questions!
             var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 8001, true) {  GenericCertificateName = "google.com"};         
             ProxyServer.AddEndPoint(transparentEndPoint);
-            ProxyServer.RemoveEndPoint(transparentEndPoint);
+          
 
             foreach (var endPoint in ProxyServer.ProxyEndPoints)
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
+
+            //You can also add/remove end points after proxy has been started
+            ProxyServer.RemoveEndPoint(transparentEndPoint);
 
             //Only explicit proxies can be set as system proxy!
             ProxyServer.SetAsSystemHttpProxy(explicitEndPoint);
