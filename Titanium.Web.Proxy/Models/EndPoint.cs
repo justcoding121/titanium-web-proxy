@@ -37,10 +37,18 @@ namespace Titanium.Web.Proxy.Models
 
     public class TransparentProxyEndPoint : ProxyEndPoint
     {
+        //Name of the Certificate need to be sent (same as the hostname we want to proxy)
+        //This is valid only when UseServerNameIndication is set to false
+        public string GenericCertificateName { get; set; }
+
+        
+       // public bool UseServerNameIndication { get; set; } 
+
         public TransparentProxyEndPoint(IPAddress IpAddress, int Port, bool EnableSsl)
             : base(IpAddress, Port, EnableSsl)
         {
-        
+            this.GenericCertificateName = "localhost";
         }
     }
+
 }
