@@ -36,12 +36,15 @@ namespace Titanium.Web.Proxy.Test
             //In this example only google.com will work for HTTPS requests
             //Other sites will receive a certificate mismatch warning on browser
             //Please read about it before asking questions!
-            var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 8001, true) {  GenericCertificateName = "google.com"};         
+            var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 8001, true) { 
+                GenericCertificateName = "google.com"
+            };         
             ProxyServer.AddEndPoint(transparentEndPoint);
           
 
             foreach (var endPoint in ProxyServer.ProxyEndPoints)
-                Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
+                Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", 
+                    endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
             //You can also add/remove end points after proxy has been started
             ProxyServer.RemoveEndPoint(transparentEndPoint);
@@ -58,7 +61,6 @@ namespace Titanium.Web.Proxy.Test
 
             ProxyServer.Stop();
         }
-
 
         //Test On Request, intecept requests
         //Read browser URL send back to proxy by the injection script in OnResponse event
