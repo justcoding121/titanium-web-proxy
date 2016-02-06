@@ -20,20 +20,22 @@ namespace Titanium.Web.Proxy.Test
             //Usefull for clients that use certificate pinning
             //for example dropbox.com
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, true){
-                ExcludedHostNameRegex = new List<string>() { "dropbox.com" }
+                ExcludedHttpsHostNameRegex = new List<string>() { "dropbox.com" }
             };
 
             var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 8001, true);
 
             ProxyServer.AddEndPoint(explicitEndPoint);
-            ProxyServer.AddEndPoint(transparentEndPoint);
             ProxyServer.Start();
+           
+            //You can also add/remove end points after proxy has been started
+            ProxyServer.AddEndPoint(transparentEndPoint);
 
             foreach (var endPoint in ProxyServer.ProxyEndPoints)
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
-            ProxyServer.SetAsSystemProxy(explicitEndPoint);
-
+            ProxyServer.SetAsSystemHttpProxy(explicitEndPoint);
+            ProxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
         }
 
         public void Stop()

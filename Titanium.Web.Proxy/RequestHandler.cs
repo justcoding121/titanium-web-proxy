@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy
 
                 var httpVersion = httpCmdSplit[2];
 
-                var excluded = endPoint.ExcludedHostNameRegex != null ? endPoint.ExcludedHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x)) : false;
+                var excluded = endPoint.ExcludedHttpsHostNameRegex != null ? endPoint.ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x)) : false;
 
                 //Client wants to create a secure tcp tunnel (its a HTTPS request)
                 if (httpVerb.ToUpper() == "CONNECT" && !excluded && httpRemoteUri.Port != 80)
