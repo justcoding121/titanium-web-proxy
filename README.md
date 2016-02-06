@@ -146,6 +146,8 @@ Sample request and response event handlers
 ```
 Future updates
 ============
+* Add callbacks for client/server certificate validation/selection
 * Support mutual authentication
+* Add Server Name Indication (SNI) for transparent endpoints
 * Support HTTP 2.0 
-* Support modification of web socket requests
+
