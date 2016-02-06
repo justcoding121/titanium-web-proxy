@@ -118,45 +118,55 @@ namespace Titanium.Web.Proxy
         }
 
         //This is called when requests are routed through router to this endpoint
+        //For ssl requests
         private static void HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
-            var sslStream = new SslStream(tcpClient.GetStream(), true);
+            Stream clientStream = tcpClient.GetStream();
             CustomBinaryReader clientStreamReader = null;
             StreamWriter clientStreamWriter = null;
             X509Certificate2 certificate = null;
 
-            //if(endPoint.UseServerNameIndication)
-            //{
-            //   //implement in future once SNI supported by SSL stream
-            //    certificate = CertManager.CreateCertificate(endPoint.GenericCertificateName);
-            //}
-            //else
-            certificate = CertManager.CreateCertificate(endPoint.GenericCertificateName);
-
-            try
+            if (endPoint.EnableSsl)
             {
-                //Successfully managed to authenticate the client using the fake certificate
-                sslStream.AuthenticateAsServer(certificate, false,
-                   SslProtocols.Tls, false);
+                var sslStream = new SslStream(clientStream, true);
+                //if(endPoint.UseServerNameIndication)
+                //{
+                //   //implement in future once SNI supported by SSL stream
+                //    certificate = CertManager.CreateCertificate(endPoint.GenericCertificateName);
+                //}
+                //else
+                certificate = CertManager.CreateCertificate(endPoint.GenericCertificateName);
 
-                clientStreamReader = new CustomBinaryReader(sslStream, Encoding.ASCII);
-                clientStreamWriter = new StreamWriter(sslStream);
-                //HTTPS server created - we can now decrypt the client's traffic
+                try
+                {
+                    //Successfully managed to authenticate the client using the fake certificate
+                    sslStream.AuthenticateAsServer(certificate, false,
+                       SslProtocols.Tls, false);
 
+                    clientStreamReader = new CustomBinaryReader(sslStream, Encoding.ASCII);
+                    clientStreamWriter = new StreamWriter(sslStream);
+                    //HTTPS server created - we can now decrypt the client's traffic
+
+                }
+                catch (Exception)
+                {
+                    if (sslStream != null)
+                        sslStream.Dispose();
+
+                    Dispose(tcpClient, sslStream, clientStreamReader, clientStreamWriter, null);
+                    return;
+                }
+                clientStream = sslStream;
             }
-            catch (Exception)
+            else
             {
-                if (sslStream != null)
-                    sslStream.Dispose();
-
-                Dispose(tcpClient, sslStream, clientStreamReader, clientStreamWriter, null);
-                return;
+                clientStreamReader = new CustomBinaryReader(clientStream, Encoding.ASCII);
             }
 
             var httpCmd = clientStreamReader.ReadLine();
 
             //Now create the request
-            HandleHttpSessionRequest(tcpClient, httpCmd, sslStream, clientStreamReader, clientStreamWriter,
+            HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
                 true);
         }
 
