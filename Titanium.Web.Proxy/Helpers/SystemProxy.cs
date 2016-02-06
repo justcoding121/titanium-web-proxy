@@ -186,7 +186,7 @@ namespace Titanium.Web.Proxy.Helpers
                 {
                     HostName = endPoint.Split(':')[0],
                     Port = int.Parse(endPoint.Split(':')[1]),
-                    IsSecure = false
+                    IsSecure = true
                 };
             }
             return null;
