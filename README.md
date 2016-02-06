@@ -44,13 +44,6 @@ Setup HTTP proxy:
 		ExcludedHttpsHostNameRegex = new List<string>() { "dropbox.com" }
 	};
 
-	//Exclude Https addresses you don't want to proxy
-	//Usefull for clients that use certificate pinning
-	//for example dropbox.com
-	var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true){
-		ExcludedHttpsHostNameRegex = new List<string>() { "dropbox.com" }
-	};
-
 	//An explicit endpoint is where the client knows about the existance of a proxy
 	//So client sends request in a proxy friendly manner
 	ProxyServer.AddEndPoint(explicitEndPoint);
