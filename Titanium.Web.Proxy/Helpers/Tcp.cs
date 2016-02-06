@@ -51,7 +51,7 @@ namespace Titanium.Web.Proxy.Helpers
                     try
                     {
                         sslStream = new SslStream(tunnelStream);
-                        sslStream.AuthenticateAsClient(hostName);
+                        sslStream.AuthenticateAsClient(hostName, null, ProxyServer.SupportedProtocols, false);
                         tunnelStream = sslStream;
                     }
                     catch
@@ -69,10 +69,10 @@ namespace Titanium.Web.Proxy.Helpers
                     if (sb != null)
                         clientStream.CopyToAsync(sb.ToString(), tunnelStream, BUFFER_SIZE);
                     else
-                        clientStream.CopyToAsync(tunnelStream, BUFFER_SIZE);
+                        clientStream.CopyToAsync(string.Empty, tunnelStream, BUFFER_SIZE);
                 });
 
-                var receiveRelay = Task.Factory.StartNew(() => tunnelStream.CopyToAsync(clientStream, BUFFER_SIZE));
+                var receiveRelay = Task.Factory.StartNew(() => tunnelStream.CopyToAsync(string.Empty, clientStream, BUFFER_SIZE));
 
                 Task.WaitAll(sendRelay, receiveRelay);
             }
