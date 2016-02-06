@@ -23,9 +23,7 @@ namespace Titanium.Web.Proxy.Test
                 ExcludedHostNameRegex = new List<string>() { "dropbox.com" }
             };
 
-            var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 8001, true)
-            { 
-            };
+            var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 8001, true);
 
             ProxyServer.AddEndPoint(explicitEndPoint);
             ProxyServer.AddEndPoint(transparentEndPoint);
