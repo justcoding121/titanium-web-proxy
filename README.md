@@ -44,7 +44,7 @@ Setup HTTP proxy:
 		ExcludedHttpsHostNameRegex = new List<string>() { "dropbox.com" }
 	};
 
-	//An explicit endpoint is where the client knows about the exististance of a proxy
+	//An explicit endpoint is where the client knows about the existance of proxy
 	//So client sends request in a proxy friendly manner
 	ProxyServer.AddEndPoint(explicitEndPoint);
 	ProxyServer.Start();
