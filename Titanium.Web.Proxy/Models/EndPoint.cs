@@ -9,9 +9,16 @@ namespace Titanium.Web.Proxy.Models
 {
     public abstract class ProxyEndPoint
     {
-        public IPAddress IpAddress { get; set; }
-        public int Port { get; set; }
-        public bool EnableSsl { get; set; }
+        public ProxyEndPoint(IPAddress IpAddress, int Port, bool EnableSsl)
+        {
+            this.IpAddress = IpAddress;
+            this.Port = Port;
+            this.EnableSsl = EnableSsl;
+        }
+
+        public IPAddress IpAddress { get; internal set; }
+        public int Port { get; internal set; }
+        public bool EnableSsl { get; internal set; }
 
         internal TcpListener listener { get; set; }
     }
@@ -20,11 +27,20 @@ namespace Titanium.Web.Proxy.Models
     {
         internal bool IsSystemProxy { get; set; }
         public  List<string> ExcludedHostNameRegex { get; set; }
-    
+
+        public ExplicitProxyEndPoint(IPAddress IpAddress, int Port, bool EnableSsl)
+            : base(IpAddress, Port, EnableSsl)
+        {
+        
+        }
     }
 
     public class TransparentProxyEndPoint : ProxyEndPoint
     {
-
+        public TransparentProxyEndPoint(IPAddress IpAddress, int Port, bool EnableSsl)
+            : base(IpAddress, Port, EnableSsl)
+        {
+        
+        }
     }
 }
