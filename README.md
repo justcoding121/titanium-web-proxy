@@ -34,23 +34,29 @@ Setup HTTP proxy:
 
 ```csharp
 	// listen to client request & server response events
-    ProxyServer.BeforeRequest += OnRequest;
-    ProxyServer.BeforeResponse += OnResponse;
+	ProxyServer.BeforeRequest += OnRequest;
+	ProxyServer.BeforeResponse += OnResponse;
 
-    //Exclude Https addresses you don't want to proxy
-    //Usefull for clients that use certificate pinning
-    //for example dropbox.com
-    var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, true){
-    ExcludedHostNameRegex = new List<string>() { "dropbox.com" }
-    };
-	
-    var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 8001, true);
+	//Exclude Https addresses you don't want to proxy
+	//Usefull for clients that use certificate pinning
+	//for example dropbox.com
+	var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, true){
+		ExcludedHttpsHostNameRegex = new List<string>() { "dropbox.com" }
+	};
 
-    ProxyServer.AddEndPoint(explicitEndPoint);
-    ProxyServer.AddEndPoint(transparentEndPoint);
-    ProxyServer.Start();
+	var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 8001, true);
 
-	ProxyServer.SetAsSystemProxy(explicitEndPoint);
+	ProxyServer.AddEndPoint(explicitEndPoint);
+	ProxyServer.Start();
+   
+	//You can also add/remove end points after proxy has been started
+	ProxyServer.AddEndPoint(transparentEndPoint);
+
+	foreach (var endPoint in ProxyServer.ProxyEndPoints)
+		Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
+
+	ProxyServer.SetAsSystemHttpProxy(explicitEndPoint);
+	ProxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
 
 	//wait here (You can use something else as a wait function, I am using this as a demo)
 	Console.Read();
