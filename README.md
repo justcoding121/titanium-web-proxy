@@ -22,7 +22,7 @@ Refer the HTTP Proxy Server library in your project, look up Test project to lea
 
 Install by nuget:
 
-    Install-Package Titanium.Web.Proxy
+    Install-Package Titanium.Web.Proxy -Pre
 
 After installing nuget package mark following files to be copied to app directory
 
