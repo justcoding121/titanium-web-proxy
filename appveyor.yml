@@ -7,7 +7,7 @@
 #   - Section names should be unique on each level.
 
 # version format
-version: 1.1.{build}
+version: 2.1.{build}
 
 shallow_clone: true
 
