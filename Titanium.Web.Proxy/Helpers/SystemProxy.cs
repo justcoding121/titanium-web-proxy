@@ -66,14 +66,24 @@ namespace Titanium.Web.Proxy.Helpers
                     "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
             if (reg != null)
             {
-                var exisitingContent = reg.GetValue("ProxyServer") as string;
+                if (reg.GetValue("ProxyServer")!=null)
+                {
+                    var exisitingContent = reg.GetValue("ProxyServer") as string;
 
-                var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                existingSystemProxyValues.RemoveAll(x => !x.IsSecure);
+                    var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
+                    existingSystemProxyValues.RemoveAll(x => !x.IsSecure);
 
-
-                reg.SetValue("ProxyEnable", 1);
-                reg.SetValue("ProxyServer", String.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+                    if (!(existingSystemProxyValues.Count() == 0))
+                    {
+                        reg.SetValue("ProxyEnable", 1);
+                        reg.SetValue("ProxyServer", String.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+                    }
+                    else
+                    {
+                        reg.SetValue("ProxyEnable", 0);
+                        reg.SetValue("ProxyServer", string.Empty);
+                    }
+                }
             }
 
             Refresh();
@@ -112,14 +122,25 @@ namespace Titanium.Web.Proxy.Helpers
                     "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
             if (reg != null)
             {
-                var exisitingContent = reg.GetValue("ProxyServer") as string;
+                if (reg.GetValue("ProxyServer") != null)
+                {
+                    var exisitingContent = reg.GetValue("ProxyServer") as string;
 
-                var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                existingSystemProxyValues.RemoveAll(x => x.IsSecure);
+                    var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
+                    existingSystemProxyValues.RemoveAll(x => x.IsSecure);
 
-
-                reg.SetValue("ProxyEnable", 1);
-                reg.SetValue("ProxyServer", String.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+                    if (!(existingSystemProxyValues.Count() == 0))
+                    {
+                        reg.SetValue("ProxyEnable", 1);
+                        reg.SetValue("ProxyServer", String.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+                    }
+                    else
+                    {
+                        reg.SetValue("ProxyEnable", 0);
+                        reg.SetValue("ProxyServer", string.Empty);
+                    }
+                  
+                }
             }
 
             Refresh();
