@@ -125,10 +125,10 @@ Sample request and response event handlers
             }
 	}
 ```
-Future updates
+Future roadmap
 ============
 * Add callbacks for client/server certificate validation/selection
 * Support mutual authentication
-* Add Server Name Indication (SNI) for transparent endpoints
+* Support Server Name Indication (SNI) for transparent endpoints
 * Support HTTP 2.0 
 
