@@ -3,6 +3,9 @@ using System.IO;
 
 namespace Titanium.Web.Proxy.Helpers
 {
+    /// <summary>
+    /// A helper class to set proxy settings for firefox
+    /// </summary>
     public class FireFoxHelper
     {
         public static void AddFirefox()
