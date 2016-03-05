@@ -388,7 +388,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Marking as obsolete, need to comeup with a generic responder method in future
         /// </summary>
         /// <param name="html"></param>
-        [Obsolete]
+       // [Obsolete]
         public void Ok(string html)
         {
             if (ProxySession.Request.RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
