@@ -21,7 +21,7 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer
     {
-        private static readonly int BUFFER_SIZE = 8192;
+       
         private static readonly char[] SemiSplit = { ';' };
 
         private static readonly string[] ColonSpaceSplit = { ": " };
@@ -34,17 +34,16 @@ namespace Titanium.Web.Proxy
         private static readonly byte[] ChunkEnd =
             Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
 
+        public static readonly int BUFFER_SIZE = 8192;
 #if NET45
         internal static SslProtocols SupportedProtocols = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 #else
-       public static SslProtocols SupportedProtocols  = SslProtocols.Tls | SslProtocols.Ssl3;
+        internal static SslProtocols SupportedProtocols  = SslProtocols.Tls | SslProtocols.Ssl3;
 #endif
 
         static ProxyServer()
         {
-            CertManager = new CertificateManager("Titanium",
-                "Titanium Root Certificate Authority");
-
+            
             ProxyEndPoints = new List<ProxyEndPoint>();
 
             Initialize();
@@ -55,6 +54,7 @@ namespace Titanium.Web.Proxy
         private static bool certTrusted { get; set; }
         private static bool proxyRunning { get; set; }
 
+        public static string RootCertificateIssuerName { get; set; }
         public static string RootCertificateName { get; set; }
 
         public static event EventHandler<SessionEventArgs> BeforeRequest;
@@ -123,7 +123,6 @@ namespace Titanium.Web.Proxy
             //clear any settings previously added
             ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpsProxy = false);
 
-            RootCertificateName = RootCertificateName ?? "Titanium_Proxy_Test_Root";
 
             //If certificate was trusted by the machine
             if (certTrusted)
@@ -155,6 +154,12 @@ namespace Titanium.Web.Proxy
         {
             if (proxyRunning)
                 throw new Exception("Proxy is already running.");
+
+            RootCertificateName = RootCertificateName ?? "Titanium Root Certificate Authority";
+            RootCertificateIssuerName = RootCertificateIssuerName ?? "Titanium";
+
+            CertManager = new CertificateManager(RootCertificateIssuerName,
+                RootCertificateName);
 
             EnableSsl = ProxyEndPoints.Any(x => x.EnableSsl);
 

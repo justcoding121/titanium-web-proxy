@@ -80,6 +80,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="EventArguments\ProxyClient.cs" />
     <Compile Include="Exceptions\BodyNotFoundException.cs" />
     <Compile Include="Extensions\HttpWebResponseExtensions.cs" />
     <Compile Include="Extensions\HttpWebRequestExtensions.cs" />
@@ -105,9 +106,6 @@
   <ItemGroup>
     <None Include="app.config" />
     <None Include="packages.config" />
-    <None Include="Titanium_Proxy_Test_Root.cer">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <None Include="makecert.exe">

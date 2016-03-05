@@ -5,6 +5,11 @@ using System.Text;
 
 namespace Titanium.Web.Proxy.Helpers
 {
+    /// <summary>
+    /// A custom binary reader that would allo us to read string line by line
+    /// using the specified encoding
+    /// as well as to read bytes as required
+    /// </summary>
     public class CustomBinaryReader : BinaryReader
     {
         internal CustomBinaryReader(Stream stream, Encoding encoding)
@@ -12,6 +17,10 @@ namespace Titanium.Web.Proxy.Helpers
         {
         }
 
+        /// <summary>
+        /// Read a line from the byte stream
+        /// </summary>
+        /// <returns></returns>
         internal string ReadLine()
         {
             var readBuffer = new StringBuilder();
@@ -43,6 +52,10 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
+        /// <summary>
+        /// Read until the last new line
+        /// </summary>
+        /// <returns></returns>
         internal List<string> ReadAllLines()
         {
             string tmpLine;

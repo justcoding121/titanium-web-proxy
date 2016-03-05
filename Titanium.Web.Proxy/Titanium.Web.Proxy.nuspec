@@ -21,6 +21,5 @@
 	<file src="bin\$configuration$\Titanium.Web.Proxy.dll" target="lib\net40"  />
 	<file src="bin\$configuration$-Net45\Titanium.Web.Proxy.dll" target="lib\net45"  />
 	<file src="bin\$configuration$\makecert.exe"  target="content" />
-	<file src="bin\$configuration$\Titanium_Proxy_Test_Root.cer" target="content" />
   </files>
 </package>
