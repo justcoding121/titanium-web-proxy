@@ -239,8 +239,6 @@ namespace Titanium.Web.Proxy
                     args.Client.ClientStreamWriter = clientStreamWriter;
                     args.ProxySession.Request.Hostname = args.ProxySession.Request.RequestUri.Host;
                     args.ProxySession.Request.Url = args.ProxySession.Request.RequestUri.OriginalString;
-                    args.Client.ClientPort = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
-                    args.Client.ClientIpAddress = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
 
 
                     //If requested interception
