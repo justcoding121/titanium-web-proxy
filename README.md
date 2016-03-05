@@ -27,7 +27,6 @@ Install by nuget:
 After installing nuget package mark following files to be copied to app directory
 
 * makecert.exe
-* Titanium_Proxy_Test_Root.cer
 
 
 Setup HTTP proxy:
