@@ -22,14 +22,13 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public class SessionEventArgs : EventArgs, IDisposable
     {
-        readonly int _bufferSize;
 
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgs(int bufferSize)
+        internal SessionEventArgs()
         {
-            _bufferSize = bufferSize;
+
             Client = new ProxyClient();
             ProxySession = new HttpWebSession();
         }
@@ -406,7 +405,7 @@ namespace Titanium.Web.Proxy.EventArguments
             connectStreamWriter.WriteLine("Pragma: no-cache");
             connectStreamWriter.WriteLine("Expires: 0");
 
-            connectStreamWriter.WriteLine(ProxySession.Request.IsAlive ? "Connection: Keep-Alive" : "Connection: close");
+            //connectStreamWriter.WriteLine(ProxySession.Request.IsAlive ? "Connection: Keep-Alive" : "Connection: close");
 
             connectStreamWriter.WriteLine();
             connectStreamWriter.Flush();
