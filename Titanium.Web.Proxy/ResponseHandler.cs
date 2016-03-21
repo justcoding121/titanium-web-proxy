@@ -18,20 +18,18 @@ namespace Titanium.Web.Proxy
     partial class ProxyServer
     {
         //Called asynchronously when a request was successfully and we received the response
-        private static void HandleHttpSessionResponse(SessionEventArgs args)
+        public static void HandleHttpSessionResponse(SessionEventArgs args)
         {
             args.ProxySession.ReceiveResponse();
 
             try
             {
+                if (!args.ProxySession.Response.ResponseBodyRead)
+                    args.ProxySession.Response.ResponseStream = args.ProxySession.ProxyClient.ServerStreamReader.BaseStream;
 
-                args.ProxySession.Response.ResponseHeaders = ReadResponseHeaders(args.ProxySession);
-                args.ProxySession.Response.ResponseStream = args.ProxySession.ProxyClient.ServerStreamReader.BaseStream;
 
-
-                if (BeforeResponse != null)
-                {
-                    args.ProxySession.Response.Encoding = args.ProxySession.GetResponseEncoding();
+                if (BeforeResponse != null && !args.ProxySession.Response.ResponseLocked)
+                { 
                     BeforeResponse(null, args);
                 }
 
@@ -85,47 +83,7 @@ namespace Titanium.Web.Proxy
             }
         }
 
-        private static List<HttpHeader> ReadResponseHeaders(HttpWebSession response)
-        {
-            for (var i = 0; i < response.Response.ResponseHeaders.Count; i++)
-            {
-                switch (response.Response.ResponseHeaders[i].Name.ToLower())
-                {
-                    case "content-length":
-                        response.Response.ContentLength = int.Parse(response.Response.ResponseHeaders[i].Value.Trim());
-                        break;
 
-                    case "content-encoding":
-                        response.Response.ContentEncoding = response.Response.ResponseHeaders[i].Value.Trim().ToLower();
-                        break;
-
-                    case "content-type":
-                        if (response.Response.ResponseHeaders[i].Value.Contains(";"))
-                        {
-                            response.Response.ContentType = response.Response.ResponseHeaders[i].Value.Split(';')[0].Trim();
-                            response.Response.CharacterSet = response.Response.ResponseHeaders[i].Value.Split(';')[1].Substring(9).Trim();
-                        }
-                        else
-                            response.Response.ContentType = response.Response.ResponseHeaders[i].Value.ToLower().Trim();
-                        break;
-
-                    case "transfer-encoding":
-                        if (response.Response.ResponseHeaders[i].Value.ToLower().Contains("chunked"))
-                            response.Response.IsChunked = true;
-                        break;
-
-                    case "connection":
-                        if (response.Response.ResponseHeaders[i].Value.ToLower().Contains("close"))
-                            response.Response.ResponseKeepAlive = false;
-                        break;
-
-                    default:
-                        break;
-                }
-            }
-
-             return response.Response.ResponseHeaders;
-        }
 
 
         private static void WriteResponseStatus(string version, string code, string description,
