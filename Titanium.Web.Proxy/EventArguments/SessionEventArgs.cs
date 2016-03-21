@@ -22,14 +22,13 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public class SessionEventArgs : EventArgs, IDisposable
     {
-        readonly int _bufferSize;
 
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgs(int bufferSize)
+        internal SessionEventArgs()
         {
-            _bufferSize = bufferSize;
+
             Client = new ProxyClient();
             ProxySession = new HttpWebSession();
         }
@@ -385,10 +384,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Before request is made to server 
         /// Respond with the specified HTML string to client
         /// and ignore the request 
-        /// Marking as obsolete, need to comeup with a generic responder method in future
         /// </summary>
         /// <param name="html"></param>
-       // [Obsolete]
         public void Ok(string html)
         {
             if (ProxySession.Request.RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
@@ -398,22 +395,47 @@ namespace Titanium.Web.Proxy.EventArguments
 
             var result = Encoding.Default.GetBytes(html);
 
-            var connectStreamWriter = new StreamWriter(this.Client.ClientStream);
-            connectStreamWriter.WriteLine(string.Format("{0} {1} {2}", ProxySession.Request.HttpVersion, 200, "Ok"));
-            connectStreamWriter.WriteLine("Timestamp: {0}", DateTime.Now);
-            connectStreamWriter.WriteLine("content-length: " + result.Length);
-            connectStreamWriter.WriteLine("Cache-Control: no-cache, no-store, must-revalidate");
-            connectStreamWriter.WriteLine("Pragma: no-cache");
-            connectStreamWriter.WriteLine("Expires: 0");
+            Ok(result);
+        }
 
-            connectStreamWriter.WriteLine(ProxySession.Request.IsAlive ? "Connection: Keep-Alive" : "Connection: close");
+        /// <summary>
+        /// Before request is made to server 
+        /// Respond with the specified byte[] to client
+        /// and ignore the request 
+        /// </summary>
+        /// <param name="body"></param>
+        public void Ok(byte[] result)
+        {
+            var response = new Response();
 
-            connectStreamWriter.WriteLine();
-            connectStreamWriter.Flush();
+            response.HttpVersion = ProxySession.Request.HttpVersion;
+            response.ResponseStatusCode = "200";
+            response.ResponseStatusDescription = "Ok";
 
-            this.Client.ClientStream.Write(result, 0, result.Length);
+            response.ResponseHeaders.Add(new HttpHeader("Timestamp", DateTime.Now.ToString()));
+
+            response.ResponseHeaders.Add(new HttpHeader("content-length", DateTime.Now.ToString()));
+            response.ResponseHeaders.Add(new HttpHeader("Cache-Control", "no-cache, no-store, must-revalidate"));
+            response.ResponseHeaders.Add(new HttpHeader("Pragma", "no-cache"));
+            response.ResponseHeaders.Add(new HttpHeader("Expires", "0"));
+
+            response.ResponseBody = result;
+
+            Respond(response);
 
             ProxySession.Request.CancelRequest = true;
+        }
+
+        /// a generic responder method 
+        public void Respond(Response response)
+        {
+            ProxySession.Request.RequestLocked = true;
+
+            response.ResponseLocked = true;
+            response.ResponseBodyRead = true;
+
+            ProxySession.Response = response;
+            ProxyServer.HandleHttpSessionResponse(this);
         }
     }
 }
