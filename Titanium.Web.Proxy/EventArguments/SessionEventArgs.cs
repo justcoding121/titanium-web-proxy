@@ -419,10 +419,7 @@ namespace Titanium.Web.Proxy.EventArguments
             response.ResponseHeaders.Add(new HttpHeader("Pragma", "no-cache"));
             response.ResponseHeaders.Add(new HttpHeader("Expires", "0"));
 
-            ProxySession.Request.RequestLocked = true;
             response.ResponseBody = result;
-            response.ResponseLocked = true;
-            response.ResponseBodyRead = true;
 
             Respond(response);
 
@@ -431,7 +428,12 @@ namespace Titanium.Web.Proxy.EventArguments
 
         /// a generic responder method 
         public void Respond(Response response)
-        {          
+        {
+            ProxySession.Request.RequestLocked = true;
+
+            response.ResponseLocked = true;
+            response.ResponseBodyRead = true;
+
             ProxySession.Response = response;
             ProxyServer.HandleHttpSessionResponse(this);
         }
