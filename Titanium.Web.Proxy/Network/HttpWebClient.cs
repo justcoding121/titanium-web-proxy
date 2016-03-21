@@ -312,6 +312,9 @@ namespace Titanium.Web.Proxy.Network
 
         public void ReceiveResponse()
         {
+            //return if this is already read
+            if (this.Response.ResponseStatusCode != null) return;
+
             var httpResult = ProxyClient.ServerStreamReader.ReadLine().Split(new char[] { ' ' }, 3);
 
             if (string.IsNullOrEmpty(httpResult[0]))

@@ -18,17 +18,17 @@ namespace Titanium.Web.Proxy
     partial class ProxyServer
     {
         //Called asynchronously when a request was successfully and we received the response
-        private static void HandleHttpSessionResponse(SessionEventArgs args)
+        public static void HandleHttpSessionResponse(SessionEventArgs args)
         {
             args.ProxySession.ReceiveResponse();
 
             try
             {
+                if (!args.ProxySession.Response.ResponseBodyRead)
+                    args.ProxySession.Response.ResponseStream = args.ProxySession.ProxyClient.ServerStreamReader.BaseStream;
 
-                args.ProxySession.Response.ResponseStream = args.ProxySession.ProxyClient.ServerStreamReader.BaseStream;
 
-
-                if (BeforeResponse != null)
+                if (BeforeResponse != null && !args.ProxySession.Response.ResponseLocked)
                 { 
                     BeforeResponse(null, args);
                 }
