@@ -237,7 +237,6 @@ namespace Titanium.Web.Proxy
                     args.Client.ClientStream = clientStream;
                     args.Client.ClientStreamReader = clientStreamReader;
                     args.Client.ClientStreamWriter = clientStreamWriter;
-                    args.ProxySession.Request.Host = args.ProxySession.Request.RequestUri.Host;
 
                     //If requested interception
                     if (BeforeRequest != null)
@@ -257,11 +256,11 @@ namespace Titanium.Web.Proxy
                     //construct the web request that we are going to issue on behalf of the client.
                     connection = connection == null ?
                         TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps)
-                        : lastRequestHostName != args.ProxySession.Request.Host ? TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps)
+                        : lastRequestHostName != args.ProxySession.Request.RequestUri.Host ? TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps)
                             : connection;
 
-                    lastRequestHostName = args.ProxySession.Request.Host;
-
+                    lastRequestHostName = args.ProxySession.Request.RequestUri.Host;
+                    args.ProxySession.Request.Host = args.ProxySession.Request.RequestUri.Host;
                     args.ProxySession.SetConnection(connection);
                     args.ProxySession.SendRequest();
 
