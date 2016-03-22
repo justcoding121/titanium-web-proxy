@@ -217,18 +217,12 @@ namespace Titanium.Web.Proxy
                         args.ProxySession.Request.RequestHeaders.Add(new HttpHeader(header[0], header[1]));
                     }
 
-                    SetRequestHeaders(args.ProxySession.Request.RequestHeaders, args.ProxySession);
+
 
                     var httpRemoteUri = new Uri(!IsHttps ? httpCmdSplit[1] : (string.Concat("https://", args.ProxySession.Request.Host, httpCmdSplit[1])));
                     args.IsHttps = IsHttps;
 
-                    if (args.ProxySession.Request.UpgradeToWebSocket)
-                    {
-                        TcpHelper.SendRaw(clientStream, httpCmd, args.ProxySession.Request.RequestHeaders,
-                                httpRemoteUri.Host, httpRemoteUri.Port, args.IsHttps);
-                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
-                        return;
-                    }
+
 
                     args.ProxySession.Request.RequestUri = httpRemoteUri;
 
@@ -252,7 +246,15 @@ namespace Titanium.Web.Proxy
                         break;
                     }
 
+                    if (args.ProxySession.Request.UpgradeToWebSocket)
+                    {
+                        TcpHelper.SendRaw(clientStream, httpCmd, args.ProxySession.Request.RequestHeaders,
+                                httpRemoteUri.Host, httpRemoteUri.Port, args.IsHttps);
+                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
+                        return;
+                    }
 
+                    PrepareRequestHeaders(args.ProxySession.Request.RequestHeaders, args.ProxySession);
                     //construct the web request that we are going to issue on behalf of the client.
                     connection = connection == null ?
                         TcpConnectionManager.GetClient(args.ProxySession.Request.RequestUri.Host, args.ProxySession.Request.RequestUri.Port, args.IsHttps)
@@ -314,7 +316,7 @@ namespace Titanium.Web.Proxy
             clientStreamWriter.Flush();
         }
 
-        private static void SetRequestHeaders(List<HttpHeader> requestHeaders, HttpWebSession webRequest)
+        private static void PrepareRequestHeaders(List<HttpHeader> requestHeaders, HttpWebSession webRequest)
         {
             for (var i = 0; i < requestHeaders.Count; i++)
             {
@@ -322,12 +324,13 @@ namespace Titanium.Web.Proxy
                 {
                     case "accept-encoding":
                         requestHeaders[i].Value = "gzip,deflate,zlib";
-                        break; 
-          
+                        break;
+
                     default:
                         break;
                 }
             }
+
             FixRequestProxyHeaders(requestHeaders);
             webRequest.Request.RequestHeaders = requestHeaders;
         }
