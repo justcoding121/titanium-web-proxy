@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy.Network
         public Uri RequestUri { get; set; }
         public string HttpVersion { get; set; }
 
-        public string Host
+        internal string Host
         {
             get
             {

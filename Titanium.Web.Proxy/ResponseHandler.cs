@@ -84,8 +84,6 @@ namespace Titanium.Web.Proxy
         }
 
 
-
-
         private static void WriteResponseStatus(string version, string code, string description,
             StreamWriter responseWriter)
         {
