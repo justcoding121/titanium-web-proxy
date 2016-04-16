@@ -80,6 +80,17 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Compression\CompressionFactory.cs" />
+    <Compile Include="Compression\DeflateCompression.cs" />
+    <Compile Include="Compression\GZipCompression.cs" />
+    <Compile Include="Compression\ICompression.cs" />
+    <Compile Include="Compression\ZlibCompression.cs" />
+    <Compile Include="Decompression\DecompressionFactory.cs" />
+    <Compile Include="Decompression\DefaultDecompression.cs" />
+    <Compile Include="Decompression\DeflateDecompression.cs" />
+    <Compile Include="Decompression\GZipDecompression.cs" />
+    <Compile Include="Decompression\IDecompression.cs" />
+    <Compile Include="Decompression\ZlibDecompression.cs" />
     <Compile Include="EventArguments\ProxyClient.cs" />
     <Compile Include="Exceptions\BodyNotFoundException.cs" />
     <Compile Include="Extensions\HttpWebResponseExtensions.cs" />
@@ -101,6 +112,8 @@
     <Compile Include="EventArguments\SessionEventArgs.cs" />
     <Compile Include="Helpers\Tcp.cs" />
     <Compile Include="Extensions\StreamExtensions.cs" />
+    <Compile Include="Responses\OkResponse.cs" />
+    <Compile Include="Responses\RedirectResponse.cs" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

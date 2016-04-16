@@ -1,19 +1,15 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Net.Sockets;
 using System.Text;
 using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network;
-using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Responses;
+using Titanium.Web.Proxy.Decompression;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
-
     /// <summary>
     /// Holds info related to a single proxy session (single request/response sequence)
     /// A proxy session is bounded to a single connection from client
@@ -22,13 +18,11 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public class SessionEventArgs : EventArgs, IDisposable
     {
-
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
         internal SessionEventArgs()
         {
-
             Client = new ProxyClient();
             ProxySession = new HttpWebSession();
         }
@@ -37,7 +31,6 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Holds a reference to server connection
         /// </summary>
         internal ProxyClient Client { get; set; }
-
 
         /// <summary>
         /// Does this session uses SSL
@@ -49,7 +42,6 @@ namespace Titanium.Web.Proxy.EventArguments
         /// within a proxy connection
         /// </summary>
         public HttpWebSession ProxySession { get; set; }
-
 
         /// <summary>
         /// A shortcut to get the request content length
@@ -165,22 +157,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
                         try
                         {
-                            //decompress
-                            switch (requestContentEncoding)
-                            {
-                                case "gzip":
-                                    ProxySession.Request.RequestBody = CompressionHelper.DecompressGzip(requestBodyStream.ToArray());
-                                    break;
-                                case "deflate":
-                                    ProxySession.Request.RequestBody = CompressionHelper.DecompressDeflate(requestBodyStream);
-                                    break;
-                                case "zlib":
-                                    ProxySession.Request.RequestBody = CompressionHelper.DecompressZlib(requestBodyStream);
-                                    break;
-                                default:
-                                    ProxySession.Request.RequestBody = requestBodyStream.ToArray();
-                                    break;
-                            }
+                            ProxySession.Request.RequestBody = GetDecompressedResponseBody(requestContentEncoding, requestBodyStream.ToArray());
                         }
                         catch
                         {
@@ -235,22 +212,9 @@ namespace Titanium.Web.Proxy.EventArguments
                         var buffer = ProxySession.ProxyClient.ServerStreamReader.ReadBytes(ProxySession.Response.ContentLength);
                         responseBodyStream.Write(buffer, 0, buffer.Length);
                     }
-                    //decompress
-                    switch (ProxySession.Response.ContentEncoding)
-                    {
-                        case "gzip":
-                            ProxySession.Response.ResponseBody = CompressionHelper.DecompressGzip(responseBodyStream.ToArray());
-                            break;
-                        case "deflate":
-                            ProxySession.Response.ResponseBody = CompressionHelper.DecompressDeflate(responseBodyStream);
-                            break;
-                        case "zlib":
-                            ProxySession.Response.ResponseBody = CompressionHelper.DecompressZlib(responseBodyStream);
-                            break;
-                        default:
-                            ProxySession.Response.ResponseBody = responseBodyStream.ToArray();
-                            break;
-                    }
+
+                    ProxySession.Response.ResponseBody = GetDecompressedResponseBody(ProxySession.Response.ContentEncoding, responseBodyStream.ToArray());
+
                 }
                 //set this to true for caching
                 ProxySession.Response.ResponseBodyRead = true;
@@ -379,6 +343,14 @@ namespace Titanium.Web.Proxy.EventArguments
             SetResponseBody(bodyBytes);
         }
 
+        private byte[] GetDecompressedResponseBody(string encodingType, byte[] responseBodyStream)
+        {
+            var decompressionFactory = new DecompressionFactory();
+            var decompressor = decompressionFactory.Create(encodingType);
+
+            return decompressor.Decompress(responseBodyStream);
+        }
+
 
         /// <summary>
         /// Before request is made to server 
@@ -406,20 +378,22 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="body"></param>
         public void Ok(byte[] result)
         {
-            var response = new Response();
+            var response = new OkResponse();
 
             response.HttpVersion = ProxySession.Request.HttpVersion;
-            response.ResponseStatusCode = "200";
-            response.ResponseStatusDescription = "Ok";
-
-            response.ResponseHeaders.Add(new HttpHeader("Timestamp", DateTime.Now.ToString()));
-
-            response.ResponseHeaders.Add(new HttpHeader("content-length", DateTime.Now.ToString()));
-            response.ResponseHeaders.Add(new HttpHeader("Cache-Control", "no-cache, no-store, must-revalidate"));
-            response.ResponseHeaders.Add(new HttpHeader("Pragma", "no-cache"));
-            response.ResponseHeaders.Add(new HttpHeader("Expires", "0"));
-
             response.ResponseBody = result;
+
+            Respond(response);
+
+            ProxySession.Request.CancelRequest = true;
+        }
+
+        public void Redirect(string url)
+        {
+            var response = new RedirectResponse();
+
+            response.HttpVersion = ProxySession.Request.HttpVersion;
+            response.ResponseBody = Encoding.ASCII.GetBytes(string.Empty);
 
             Respond(response);
 
@@ -430,6 +404,7 @@ namespace Titanium.Web.Proxy.EventArguments
         public void Respond(Response response)
         {
             ProxySession.Request.RequestLocked = true;
+            ProxySession.Response.ResponseLocked = true;
 
             response.ResponseLocked = true;
             response.ResponseBodyRead = true;

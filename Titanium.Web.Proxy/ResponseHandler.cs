@@ -12,6 +12,7 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Compression;
 
 namespace Titanium.Web.Proxy
 {
@@ -40,18 +41,9 @@ namespace Titanium.Web.Proxy
                     var isChunked = args.ProxySession.Response.IsChunked;
                     var contentEncoding = args.ProxySession.Response.ContentEncoding;
 
-                    if(contentEncoding!=null)
-                    switch (contentEncoding)
+                    if (contentEncoding != null)
                     {
-                        case "gzip":
-                            args.ProxySession.Response.ResponseBody = CompressionHelper.CompressGzip(args.ProxySession.Response.ResponseBody);
-                            break;
-                        case "deflate":
-                            args.ProxySession.Response.ResponseBody = CompressionHelper.CompressDeflate(args.ProxySession.Response.ResponseBody);
-                            break;
-                        case "zlib":
-                            args.ProxySession.Response.ResponseBody = CompressionHelper.CompressZlib(args.ProxySession.Response.ResponseBody);
-                            break;
+                        args.ProxySession.Response.ResponseBody = GetCompressedResponseBody(contentEncoding, args.ProxySession.Response.ResponseBody);
                     }
 
                     WriteResponseStatus(args.ProxySession.Response.HttpVersion, args.ProxySession.Response.ResponseStatusCode,
@@ -81,6 +73,13 @@ namespace Titanium.Web.Proxy
             {
                 args.Dispose();
             }
+        }
+
+        private static byte[] GetCompressedResponseBody(string encodingType, byte[] responseBodyStream)
+        {
+            var compressionFactory = new CompressionFactory();
+            var compressor = compressionFactory.Create(encodingType);
+            return compressor.Compress(responseBodyStream);
         }
 
 
