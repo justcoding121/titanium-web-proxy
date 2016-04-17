@@ -46,11 +46,7 @@
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <DefineConstants>NET45</DefineConstants>
   </PropertyGroup>
-  <ItemGroup>
-    <Reference Include="Ionic.Zip, Version=1.9.7.0, Culture=neutral, PublicKeyToken=6583c7c814667745, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\DotNetZip.1.9.7\lib\net20\Ionic.Zip.dll</HintPath>
-    </Reference>
+  <ItemGroup Condition="'$(Configuration)' == 'Debug' Or '$(Configuration)' == 'Release'">
     <Reference Include="Microsoft.Threading.Tasks">
       <HintPath>..\packages\Microsoft.Bcl.Async.1.0.168\lib\net40\Microsoft.Threading.Tasks.dll</HintPath>
     </Reference>
@@ -60,19 +56,25 @@
     <Reference Include="Microsoft.Threading.Tasks.Extensions.Desktop">
       <HintPath>..\packages\Microsoft.Bcl.Async.1.0.168\lib\net40\Microsoft.Threading.Tasks.Extensions.Desktop.dll</HintPath>
     </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.configuration" />
-    <Reference Include="System.Core" />
     <Reference Include="System.IO">
       <HintPath>..\packages\Microsoft.Bcl.1.1.10\lib\net40\System.IO.dll</HintPath>
     </Reference>
-    <Reference Include="System.Net" />
     <Reference Include="System.Runtime">
       <HintPath>..\packages\Microsoft.Bcl.1.1.10\lib\net40\System.Runtime.dll</HintPath>
     </Reference>
     <Reference Include="System.Threading.Tasks">
       <HintPath>..\packages\Microsoft.Bcl.1.1.10\lib\net40\System.Threading.Tasks.dll</HintPath>
     </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Ionic.Zip, Version=1.9.8.0, Culture=neutral, PublicKeyToken=6583c7c814667745, processorArchitecture=MSIL">
+      <HintPath>..\packages\DotNetZip.1.9.8\lib\net20\Ionic.Zip.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Net" />
+    <Reference Include="System.configuration" />
+    <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -80,6 +82,17 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Compression\CompressionFactory.cs" />
+    <Compile Include="Compression\DeflateCompression.cs" />
+    <Compile Include="Compression\GZipCompression.cs" />
+    <Compile Include="Compression\ICompression.cs" />
+    <Compile Include="Compression\ZlibCompression.cs" />
+    <Compile Include="Decompression\DecompressionFactory.cs" />
+    <Compile Include="Decompression\DefaultDecompression.cs" />
+    <Compile Include="Decompression\DeflateDecompression.cs" />
+    <Compile Include="Decompression\GZipDecompression.cs" />
+    <Compile Include="Decompression\IDecompression.cs" />
+    <Compile Include="Decompression\ZlibDecompression.cs" />
     <Compile Include="EventArguments\ProxyClient.cs" />
     <Compile Include="Exceptions\BodyNotFoundException.cs" />
     <Compile Include="Extensions\HttpWebResponseExtensions.cs" />
@@ -88,7 +101,7 @@
     <Compile Include="Helpers\Firefox.cs" />
     <Compile Include="Helpers\SystemProxy.cs" />
     <Compile Include="Models\EndPoint.cs" />
-    <Compile Include="Network\TcpExtensions.cs" />
+    <Compile Include="Extensions\TcpExtensions.cs" />
     <Compile Include="Network\TcpConnectionManager.cs" />
     <Compile Include="Models\HttpHeader.cs" />
     <Compile Include="Network\HttpWebClient.cs" />
@@ -96,16 +109,24 @@
     <Compile Include="RequestHandler.cs" />
     <Compile Include="ResponseHandler.cs" />
     <Compile Include="Helpers\CustomBinaryReader.cs" />
-    <Compile Include="Helpers\Compression.cs" />
     <Compile Include="ProxyServer.cs" />
     <Compile Include="EventArguments\SessionEventArgs.cs" />
     <Compile Include="Helpers\Tcp.cs" />
     <Compile Include="Extensions\StreamExtensions.cs" />
+    <Compile Include="Responses\OkResponse.cs" />
+    <Compile Include="Responses\RedirectResponse.cs" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>
     <None Include="app.config" />
-    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Debug' Or '$(Configuration)' == 'Release'">
+    <None Include="packages.config">
+      <SubType>Designer</SubType>
+    </None>
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Debug-Net45' Or '$(Configuration)' == 'Release-Net45'">
+    <None Include="packages-Net45.config" />
   </ItemGroup>
   <ItemGroup>
     <None Include="makecert.exe">
