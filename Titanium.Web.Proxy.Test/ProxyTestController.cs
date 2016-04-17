@@ -46,12 +46,9 @@ namespace Titanium.Web.Proxy.Test
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", 
                     endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
-            //You can also add/remove end points after proxy has been started
-            ProxyServer.RemoveEndPoint(transparentEndPoint);
-
             //Only explicit proxies can be set as system proxy!
-            ProxyServer.SetAsSystemHttpProxy(explicitEndPoint);
-            ProxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
+           // ProxyServer.SetAsSystemHttpProxy(explicitEndPoint);
+           // ProxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
         }
 
         public void Stop()
@@ -79,16 +76,26 @@ namespace Titanium.Web.Proxy.Test
 
                 //Get/Set request body as string
                 string bodyString = e.GetRequestBodyAsString();
-                e.SetRequestBodyString(bodyString);
+                e.SetRequestBodyString(bodyString);      
 
             }
-
+           
             //To cancel a request with a custom HTML content
             //Filter URL
-
             if (e.ProxySession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
             {
-                e.Ok("<!DOCTYPE html><html><body><h1>Website Blocked</h1><p>Blocked by titanium web proxy.</p></body></html>");
+                e.Ok("<!DOCTYPE html>" +
+                     "<html><body><h1>" +
+                     "Website Blocked" +
+                     "</h1>" +
+                     "<p>Blocked by titanium web proxy.</p>" +
+                     "</body>" +
+                     "</html>");
+            }
+            //Redirect example
+            if (e.ProxySession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
+            {
+                e.Redirect("https://www.paypal.com");
             }
         }
 
@@ -107,7 +114,11 @@ namespace Titanium.Web.Proxy.Test
                 {
                     if (e.ProxySession.Response.ContentType.Trim().ToLower().Contains("text/html"))
                     {
+                        byte[] bodyBytes = e.GetResponseBody();
+                        e.SetResponseBody(bodyBytes);
+
                         string body = e.GetResponseBodyAsString();
+                        e.SetResponseBodyString(body);
                     }
                 }
             }
