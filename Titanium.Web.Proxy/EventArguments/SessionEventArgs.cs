@@ -393,6 +393,7 @@ namespace Titanium.Web.Proxy.EventArguments
             var response = new RedirectResponse();
 
             response.HttpVersion = ProxySession.Request.HttpVersion;
+            response.ResponseHeaders.Add(new Models.HttpHeader("Location", url));
             response.ResponseBody = Encoding.ASCII.GetBytes(string.Empty);
 
             Respond(response);
@@ -404,13 +405,14 @@ namespace Titanium.Web.Proxy.EventArguments
         public void Respond(Response response)
         {
             ProxySession.Request.RequestLocked = true;
-            ProxySession.Response.ResponseLocked = true;
 
             response.ResponseLocked = true;
             response.ResponseBodyRead = true;
 
             ProxySession.Response = response;
+
             ProxyServer.HandleHttpSessionResponse(this);
         }
+     
     }
 }
