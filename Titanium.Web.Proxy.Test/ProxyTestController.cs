@@ -47,8 +47,8 @@ namespace Titanium.Web.Proxy.Test
                     endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
             //Only explicit proxies can be set as system proxy!
-           // ProxyServer.SetAsSystemHttpProxy(explicitEndPoint);
-           // ProxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
+            ProxyServer.SetAsSystemHttpProxy(explicitEndPoint);
+            ProxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
         }
 
         public void Stop()
