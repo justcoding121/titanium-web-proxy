@@ -100,7 +100,9 @@ namespace Titanium.Web.Proxy.Network
         public string Url { get { return RequestUri.OriginalString; } }
 
         internal Encoding Encoding { get { return this.GetEncoding(); } }
-
+        /// <summary>
+        /// Terminates the underlying Tcp Connection to client after current request
+        /// </summary>
         internal bool CancelRequest { get; set; }
 
         internal byte[] RequestBody { get; set; }
@@ -248,7 +250,7 @@ namespace Titanium.Web.Proxy.Network
         internal string ResponseBodyString { get; set; }
         internal bool ResponseBodyRead { get; set; }
         internal bool ResponseLocked { get; set; }
-
+        public bool Is100Continue { get; internal set; }
 
         public Response()
         {
@@ -271,6 +273,7 @@ namespace Titanium.Web.Proxy.Network
         public Request Request { get; set; }
         public Response Response { get; set; }
         internal TcpConnection ProxyClient { get; set; }
+
 
         public void SetConnection(TcpConnection Connection)
         {
@@ -322,11 +325,19 @@ namespace Titanium.Web.Proxy.Network
                 var s = ProxyClient.ServerStreamReader.ReadLine();
             }
 
-            this.Response.HttpVersion = httpResult[0];
-            this.Response.ResponseStatusCode = httpResult[1];
-            string status = httpResult[2];
+            this.Response.HttpVersion = httpResult[0].Trim();
+            this.Response.ResponseStatusCode = httpResult[1].Trim();
+            this.Response.ResponseStatusDescription = httpResult[2].Trim();
 
-            this.Response.ResponseStatusDescription = status;
+            if (this.Response.ResponseStatusCode.Equals("100") 
+                && this.Response.ResponseStatusDescription.ToLower().Equals("continue"))
+            {
+                this.Response.Is100Continue = true;
+                this.Response.ResponseStatusCode = null;
+                ProxyClient.ServerStreamReader.ReadLine();
+                ReceiveResponse();
+                return;
+            }
 
             List<string> responseLines = ProxyClient.ServerStreamReader.ReadAllLines();
 

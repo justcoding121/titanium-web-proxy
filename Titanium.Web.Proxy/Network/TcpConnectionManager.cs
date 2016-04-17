@@ -10,6 +10,7 @@ using System.Net.Security;
 using Titanium.Web.Proxy.Helpers;
 using System.Threading;
 using System.Security.Authentication;
+using Titanium.Web.Proxy.Extensions;
 
 namespace Titanium.Web.Proxy.Network
 {
