@@ -31,7 +31,7 @@ Import-Module "$Here\Common" -DisableNameChecking
 
 $NuGet = Join-Path $SolutionRoot ".nuget\nuget.exe"
 
-$MSBuild ="${env:ProgramFiles(x86)}\MSBuild\12.0\Bin\msbuild.exe"
+$MSBuild ="${env:ProgramFiles(x86)}\MSBuild\14.0\Bin\msbuild.exe"
 
 FormatTaskName (("-"*25) + "[{0}]" + ("-"*25))
 
