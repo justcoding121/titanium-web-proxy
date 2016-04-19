@@ -324,6 +324,27 @@ namespace Titanium.Web.Proxy.Network
             stream.Write(requestBytes, 0, requestBytes.Length);
             stream.Flush();
 
+            if (ProxyServer.Enable100ContinueBehaviour)
+                if (this.Request.ExpectContinue)
+                {
+                    var httpResult = ProxyClient.ServerStreamReader.ReadLine().Split(new char[] { ' ' }, 3);
+                    var responseStatusCode = httpResult[1].Trim();
+                    var responseStatusDescription = httpResult[2].Trim();
+
+                    //find if server is willing for expect continue
+                    if (responseStatusCode.Equals("100")
+                    && responseStatusDescription.ToLower().Equals("continue"))
+                    {
+                        this.Request.Is100Continue = true;
+                        ProxyClient.ServerStreamReader.ReadLine();
+                    }
+                    else if (responseStatusCode.Equals("417")
+                         && responseStatusDescription.ToLower().Equals("expectation failed"))
+                    {
+                        this.Request.ExpectationFailed = true;
+                        ProxyClient.ServerStreamReader.ReadLine();
+                    }
+                }
         }
 
         public void ReceiveResponse()
@@ -342,6 +363,7 @@ namespace Titanium.Web.Proxy.Network
             this.Response.ResponseStatusCode = httpResult[1].Trim();
             this.Response.ResponseStatusDescription = httpResult[2].Trim();
 
+            //For HTTP 1.1 comptibility server may send expect-continue even if not asked for it in request
             if (this.Response.ResponseStatusCode.Equals("100")
                 && this.Response.ResponseStatusDescription.ToLower().Equals("continue"))
             {
@@ -351,6 +373,8 @@ namespace Titanium.Web.Proxy.Network
                 ReceiveResponse();
                 return;
             }
+            else if (this.Response.ResponseStatusCode.Equals("417")
+                 && this.Response.ResponseStatusDescription.ToLower().Equals("expectation failed"))
             {
                 this.Response.ExpectationFailed = true;
                 this.Response.ResponseStatusCode = null;
