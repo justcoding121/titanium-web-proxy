@@ -266,6 +266,21 @@ namespace Titanium.Web.Proxy
                     args.ProxySession.SetConnection(connection);
                     args.ProxySession.SendRequest();
 
+                    if(Enable100ContinueBehaviour)
+                    if (args.ProxySession.Request.Is100Continue)
+                    {
+                        WriteResponseStatus(args.ProxySession.Response.HttpVersion, "100",
+                                "Continue", args.Client.ClientStreamWriter);
+                        args.Client.ClientStreamWriter.WriteLine();
+                    }
+                    else if (args.ProxySession.Request.ExpectationFailed)
+                    {
+                        WriteResponseStatus(args.ProxySession.Response.HttpVersion, "417",
+                                "Expectation Failed", args.Client.ClientStreamWriter);
+                        args.Client.ClientStreamWriter.WriteLine();
+                    }
+
+
                     //If request was modified by user
                     if (args.ProxySession.Request.RequestBodyRead)
                     {
@@ -275,14 +290,20 @@ namespace Titanium.Web.Proxy
                     }
                     else
                     {
-                        //If its a post/put request, then read the client html body and send it to server
-                        if (httpMethod.ToUpper() == "POST" || httpMethod.ToUpper() == "PUT")
+                        if (!args.ProxySession.Request.ExpectationFailed)
                         {
-                            SendClientRequestBody(args);
+                            //If its a post/put request, then read the client html body and send it to server
+                            if (httpMethod.ToUpper() == "POST" || httpMethod.ToUpper() == "PUT")
+                            {
+                                SendClientRequestBody(args);
+                            }
                         }
                     }
 
-                    HandleHttpSessionResponse(args);
+                    if (!args.ProxySession.Request.ExpectationFailed)
+                    {
+                        HandleHttpSessionResponse(args);
+                    }
 
                     //if connection is closing exit
                     if (args.ProxySession.Response.ResponseKeepAlive == false)
