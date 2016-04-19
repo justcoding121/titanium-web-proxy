@@ -97,6 +97,16 @@ namespace Titanium.Web.Proxy.Network
             }
         }
 
+        public bool ExpectContinue
+        {
+            get
+            {
+                var header = RequestHeaders.FirstOrDefault(x => x.Name.ToLower() == "expect");
+                if (header != null) return header.Value.Equals("100-continue");
+                return false;
+            }
+        }
+
         public string Url { get { return RequestUri.OriginalString; } }
 
         internal Encoding Encoding { get { return this.GetEncoding(); } }
@@ -127,7 +137,8 @@ namespace Titanium.Web.Proxy.Network
         }
 
         public List<HttpHeader> RequestHeaders { get; set; }
-
+        public bool Is100Continue { get; internal set; }
+        public bool ExpectationFailed { get; internal set; }
 
         public Request()
         {
@@ -251,6 +262,7 @@ namespace Titanium.Web.Proxy.Network
         internal bool ResponseBodyRead { get; set; }
         internal bool ResponseLocked { get; set; }
         public bool Is100Continue { get; internal set; }
+        public bool ExpectationFailed { get; internal set; }
 
         public Response()
         {
@@ -311,6 +323,7 @@ namespace Titanium.Web.Proxy.Network
             byte[] requestBytes = Encoding.ASCII.GetBytes(request);
             stream.Write(requestBytes, 0, requestBytes.Length);
             stream.Flush();
+
         }
 
         public void ReceiveResponse()
@@ -329,10 +342,17 @@ namespace Titanium.Web.Proxy.Network
             this.Response.ResponseStatusCode = httpResult[1].Trim();
             this.Response.ResponseStatusDescription = httpResult[2].Trim();
 
-            if (this.Response.ResponseStatusCode.Equals("100") 
+            if (this.Response.ResponseStatusCode.Equals("100")
                 && this.Response.ResponseStatusDescription.ToLower().Equals("continue"))
             {
                 this.Response.Is100Continue = true;
+                this.Response.ResponseStatusCode = null;
+                ProxyClient.ServerStreamReader.ReadLine();
+                ReceiveResponse();
+                return;
+            }
+            {
+                this.Response.ExpectationFailed = true;
                 this.Response.ResponseStatusCode = null;
                 ProxyClient.ServerStreamReader.ReadLine();
                 ReceiveResponse();

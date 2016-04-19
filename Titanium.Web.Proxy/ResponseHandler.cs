@@ -42,6 +42,12 @@ namespace Titanium.Web.Proxy
                             "Continue", args.Client.ClientStreamWriter);
                     args.Client.ClientStreamWriter.WriteLine();
                 }
+                else if (args.ProxySession.Response.ExpectationFailed)
+                {
+                    WriteResponseStatus(args.ProxySession.Response.HttpVersion, "417",
+                            "Expectation Failed", args.Client.ClientStreamWriter);
+                    args.Client.ClientStreamWriter.WriteLine();
+                }
 
                 WriteResponseStatus(args.ProxySession.Response.HttpVersion, args.ProxySession.Response.ResponseStatusCode,
                              args.ProxySession.Response.ResponseStatusDescription, args.Client.ClientStreamWriter);
