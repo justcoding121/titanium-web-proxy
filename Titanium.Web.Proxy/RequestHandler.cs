@@ -232,20 +232,6 @@ namespace Titanium.Web.Proxy
                     args.Client.ClientStreamReader = clientStreamReader;
                     args.Client.ClientStreamWriter = clientStreamWriter;
 
-                    //If requested interception
-                    if (BeforeRequest != null)
-                    {
-                        BeforeRequest(null, args);
-                    }
-
-                    args.ProxySession.Request.RequestLocked = true;
-
-                    if (args.ProxySession.Request.CancelRequest)
-                    {
-                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
-                        break;
-                    }
-
                     if (args.ProxySession.Request.UpgradeToWebSocket)
                     {
                         TcpHelper.SendRaw(clientStream, httpCmd, args.ProxySession.Request.RequestHeaders,
@@ -266,7 +252,7 @@ namespace Titanium.Web.Proxy
                     args.ProxySession.SetConnection(connection);
                     args.ProxySession.SendRequest();
 
-                    if(Enable100ContinueBehaviour)
+                    if (Enable100ContinueBehaviour)
                     if (args.ProxySession.Request.Is100Continue)
                     {
                         WriteResponseStatus(args.ProxySession.Response.HttpVersion, "100",
@@ -278,6 +264,21 @@ namespace Titanium.Web.Proxy
                         WriteResponseStatus(args.ProxySession.Response.HttpVersion, "417",
                                 "Expectation Failed", args.Client.ClientStreamWriter);
                         args.Client.ClientStreamWriter.WriteLine();
+                    }
+
+
+                    //If requested interception
+                    if (BeforeRequest != null)
+                    {
+                        BeforeRequest(null, args);
+                    }
+
+                    args.ProxySession.Request.RequestLocked = true;
+
+                    if (args.ProxySession.Request.CancelRequest)
+                    {
+                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
+                        break;
                     }
 
 
