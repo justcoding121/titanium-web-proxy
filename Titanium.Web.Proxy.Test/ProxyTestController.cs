@@ -9,8 +9,6 @@ namespace Titanium.Web.Proxy.Test
 {
     public class ProxyTestController
     {
-
-
         public void StartProxy()
         {
             ProxyServer.BeforeRequest += OnRequest;
@@ -19,8 +17,9 @@ namespace Titanium.Web.Proxy.Test
             //Exclude Https addresses you don't want to proxy
             //Usefull for clients that use certificate pinning
             //for example dropbox.com
-            var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true){
-               // ExcludedHttpsHostNameRegex = new List<string>() { "google.com", "dropbox.com" }
+            var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
+            {
+                // ExcludedHttpsHostNameRegex = new List<string>() { "google.com", "dropbox.com" }
             };
 
             //An explicit endpoint is where the client knows about the existance of a proxy
@@ -28,7 +27,7 @@ namespace Titanium.Web.Proxy.Test
             ProxyServer.AddEndPoint(explicitEndPoint);
             ProxyServer.Start();
 
-          
+
             //Transparent endpoint is usefull for reverse proxying (client is not aware of the existance of proxy)
             //A transparent endpoint usually requires a network router port forwarding HTTP(S) packets to this endpoint
             //Currently do not support Server Name Indication (It is not currently supported by SslStream class)
@@ -36,18 +35,16 @@ namespace Titanium.Web.Proxy.Test
             //In this example only google.com will work for HTTPS requests
             //Other sites will receive a certificate mismatch warning on browser
             //Please read about it before asking questions!
-            var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 8001, true) { 
+            var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 8001, true)
+            {
                 GenericCertificateName = "google.com"
-            };         
+            };
             ProxyServer.AddEndPoint(transparentEndPoint);
-          
+
 
             foreach (var endPoint in ProxyServer.ProxyEndPoints)
-                Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", 
+                Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ",
                     endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
-
-            //You can also add/remove end points after proxy has been started
-            ProxyServer.RemoveEndPoint(transparentEndPoint);
 
             //Only explicit proxies can be set as system proxy!
             ProxyServer.SetAsSystemHttpProxy(explicitEndPoint);
@@ -85,10 +82,20 @@ namespace Titanium.Web.Proxy.Test
 
             //To cancel a request with a custom HTML content
             //Filter URL
-
             if (e.ProxySession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
             {
-                e.Ok("<!DOCTYPE html><html><body><h1>Website Blocked</h1><p>Blocked by titanium web proxy.</p></body></html>");
+                e.Ok("<!DOCTYPE html>" +
+                     "<html><body><h1>" +
+                     "Website Blocked" +
+                     "</h1>" +
+                     "<p>Blocked by titanium web proxy.</p>" +
+                     "</body>" +
+                     "</html>");
+            }
+            //Redirect example
+            if (e.ProxySession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
+            {
+                e.Redirect("https://www.paypal.com");
             }
         }
 
@@ -107,7 +114,11 @@ namespace Titanium.Web.Proxy.Test
                 {
                     if (e.ProxySession.Response.ContentType.Trim().ToLower().Contains("text/html"))
                     {
+                        byte[] bodyBytes = e.GetResponseBody();
+                        e.SetResponseBody(bodyBytes);
+
                         string body = e.GetResponseBodyAsString();
+                        e.SetResponseBodyString(body);
                     }
                 }
             }

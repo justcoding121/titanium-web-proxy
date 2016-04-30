@@ -7,7 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 
-namespace Titanium.Web.Proxy.Network
+namespace Titanium.Web.Proxy.Extensions
 {
 
     internal static class TcpExtensions

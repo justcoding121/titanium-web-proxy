@@ -40,7 +40,7 @@ namespace Titanium.Web.Proxy
 #else
         internal static SslProtocols SupportedProtocols  = SslProtocols.Tls | SslProtocols.Ssl3;
 #endif
-
+        
         static ProxyServer()
         {
             
@@ -56,6 +56,7 @@ namespace Titanium.Web.Proxy
 
         public static string RootCertificateIssuerName { get; set; }
         public static string RootCertificateName { get; set; }
+        public static bool Enable100ContinueBehaviour { get; set; }
 
         public static event EventHandler<SessionEventArgs> BeforeRequest;
         public static event EventHandler<SessionEventArgs> BeforeResponse;
