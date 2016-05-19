@@ -3,16 +3,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Compression;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy
 {
@@ -21,57 +18,57 @@ namespace Titanium.Web.Proxy
         //Called asynchronously when a request was successfully and we received the response
         public static void HandleHttpSessionResponse(SessionEventArgs args)
         {
-            args.ProxySession.ReceiveResponse();
+            args.WebSession.ReceiveResponse();
 
             try
             {
-                if (!args.ProxySession.Response.ResponseBodyRead)
-                    args.ProxySession.Response.ResponseStream = args.ProxySession.ProxyClient.ServerStreamReader.BaseStream;
+                if (!args.WebSession.Response.ResponseBodyRead)
+                    args.WebSession.Response.ResponseStream = args.WebSession.ProxyClient.ServerStreamReader.BaseStream;
 
 
-                if (BeforeResponse != null && !args.ProxySession.Response.ResponseLocked)
+                if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
                 { 
                     BeforeResponse(null, args);
                 }
 
-                args.ProxySession.Response.ResponseLocked = true;
+                args.WebSession.Response.ResponseLocked = true;
 
-                if (args.ProxySession.Response.Is100Continue)
+                if (args.WebSession.Response.Is100Continue)
                 {
-                    WriteResponseStatus(args.ProxySession.Response.HttpVersion, "100",
+                    WriteResponseStatus(args.WebSession.Response.HttpVersion, "100",
                             "Continue", args.Client.ClientStreamWriter);
                     args.Client.ClientStreamWriter.WriteLine();
                 }
-                else if (args.ProxySession.Response.ExpectationFailed)
+                else if (args.WebSession.Response.ExpectationFailed)
                 {
-                    WriteResponseStatus(args.ProxySession.Response.HttpVersion, "417",
+                    WriteResponseStatus(args.WebSession.Response.HttpVersion, "417",
                             "Expectation Failed", args.Client.ClientStreamWriter);
                     args.Client.ClientStreamWriter.WriteLine();
                 }
 
-                WriteResponseStatus(args.ProxySession.Response.HttpVersion, args.ProxySession.Response.ResponseStatusCode,
-                             args.ProxySession.Response.ResponseStatusDescription, args.Client.ClientStreamWriter);
+                WriteResponseStatus(args.WebSession.Response.HttpVersion, args.WebSession.Response.ResponseStatusCode,
+                             args.WebSession.Response.ResponseStatusDescription, args.Client.ClientStreamWriter);
 
-                if (args.ProxySession.Response.ResponseBodyRead)
+                if (args.WebSession.Response.ResponseBodyRead)
                 {
-                    var isChunked = args.ProxySession.Response.IsChunked;
-                    var contentEncoding = args.ProxySession.Response.ContentEncoding;
+                    var isChunked = args.WebSession.Response.IsChunked;
+                    var contentEncoding = args.WebSession.Response.ContentEncoding;
 
                     if (contentEncoding != null)
                     {
-                        args.ProxySession.Response.ResponseBody = GetCompressedResponseBody(contentEncoding, args.ProxySession.Response.ResponseBody);
+                        args.WebSession.Response.ResponseBody = GetCompressedResponseBody(contentEncoding, args.WebSession.Response.ResponseBody);
                     }
 
-                    WriteResponseHeaders(args.Client.ClientStreamWriter, args.ProxySession.Response.ResponseHeaders, args.ProxySession.Response.ResponseBody.Length,
+                    WriteResponseHeaders(args.Client.ClientStreamWriter, args.WebSession.Response.ResponseHeaders, args.WebSession.Response.ResponseBody.Length,
                         isChunked);
-                    WriteResponseBody(args.Client.ClientStream, args.ProxySession.Response.ResponseBody, isChunked);
+                    WriteResponseBody(args.Client.ClientStream, args.WebSession.Response.ResponseBody, isChunked);
                 }
                 else
                 {
-                    WriteResponseHeaders(args.Client.ClientStreamWriter, args.ProxySession.Response.ResponseHeaders);
+                    WriteResponseHeaders(args.Client.ClientStreamWriter, args.WebSession.Response.ResponseHeaders);
 
-                    if (args.ProxySession.Response.IsChunked || args.ProxySession.Response.ContentLength > 0)
-                        WriteResponseBody(args.ProxySession.ProxyClient.ServerStreamReader, args.Client.ClientStream, args.ProxySession.Response.IsChunked, args.ProxySession.Response.ContentLength);
+                    if (args.WebSession.Response.IsChunked || args.WebSession.Response.ContentLength > 0)
+                        WriteResponseBody(args.WebSession.ProxyClient.ServerStreamReader, args.Client.ClientStream, args.WebSession.Response.IsChunked, args.WebSession.Response.ContentLength);
                 }
 
                 args.Client.ClientStream.Flush();
@@ -173,16 +170,16 @@ namespace Titanium.Web.Proxy
                 WriteResponseBodyChunked(data, clientStream);
         }
 
-        private static void WriteResponseBody(CustomBinaryReader inStreamReader, Stream outStream, bool isChunked, int BodyLength)
+        private static void WriteResponseBody(CustomBinaryReader inStreamReader, Stream outStream, bool isChunked, long ContentLength)
         {
             if (!isChunked)
             {
-                int bytesToRead = BUFFER_SIZE;
+                int bytesToRead = Constants.BUFFER_SIZE;
 
-                if (BodyLength < BUFFER_SIZE)
-                    bytesToRead = BodyLength;
+                if (ContentLength < Constants.BUFFER_SIZE)
+                    bytesToRead = (int)ContentLength;
 
-                var buffer = new byte[BUFFER_SIZE];
+                var buffer = new byte[Constants.BUFFER_SIZE];
 
                 var bytesRead = 0;
                 var totalBytesRead = 0;
@@ -192,12 +189,12 @@ namespace Titanium.Web.Proxy
                     outStream.Write(buffer, 0, bytesRead);
                     totalBytesRead += bytesRead;
 
-                    if (totalBytesRead == BodyLength)
+                    if (totalBytesRead == ContentLength)
                         break;
 
                     bytesRead = 0;
-                    var remainingBytes = (BodyLength - totalBytesRead);
-                    bytesToRead = remainingBytes > BUFFER_SIZE ? BUFFER_SIZE : remainingBytes;
+                    var remainingBytes = (ContentLength - totalBytesRead);
+                    bytesToRead = remainingBytes > (long)Constants.BUFFER_SIZE ? Constants.BUFFER_SIZE : (int)remainingBytes;
                 }
             }
             else
@@ -219,22 +216,20 @@ namespace Titanium.Web.Proxy
                     var chunkHead = Encoding.ASCII.GetBytes(chunkSize.ToString("x2"));
 
                     outStream.Write(chunkHead, 0, chunkHead.Length);
-                    outStream.Write(NewLineBytes, 0, NewLineBytes.Length);
+                    outStream.Write(Constants.NewLineBytes, 0, Constants.NewLineBytes.Length);
 
                     outStream.Write(buffer, 0, chunkSize);
-                    outStream.Write(NewLineBytes, 0, NewLineBytes.Length);
+                    outStream.Write(Constants.NewLineBytes, 0, Constants.NewLineBytes.Length);
 
                     inStreamReader.ReadLine();
                 }
                 else
                 {
                     inStreamReader.ReadLine();
-                    outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
+                    outStream.Write(Constants.ChunkEnd, 0, Constants.ChunkEnd.Length);
                     break;
                 }
             }
-
-
         }
 
         private static void WriteResponseBodyChunked(byte[] data, Stream outStream)
@@ -242,11 +237,11 @@ namespace Titanium.Web.Proxy
             var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
 
             outStream.Write(chunkHead, 0, chunkHead.Length);
-            outStream.Write(NewLineBytes, 0, NewLineBytes.Length);
+            outStream.Write(Constants.NewLineBytes, 0, Constants.NewLineBytes.Length);
             outStream.Write(data, 0, data.Length);
-            outStream.Write(NewLineBytes, 0, NewLineBytes.Length);
+            outStream.Write(Constants.NewLineBytes, 0, Constants.NewLineBytes.Length);
 
-            outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
+            outStream.Write(Constants.ChunkEnd, 0, Constants.ChunkEnd.Length);
         }
 
 

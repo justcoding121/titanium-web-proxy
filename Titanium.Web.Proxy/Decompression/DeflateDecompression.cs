@@ -1,5 +1,6 @@
 ﻿using Ionic.Zlib;
 using System.IO;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Decompression
 {
@@ -11,7 +12,7 @@ namespace Titanium.Web.Proxy.Decompression
 
             using (var decompressor = new DeflateStream(stream, CompressionMode.Decompress))
             {
-                var buffer = new byte[ProxyServer.BUFFER_SIZE];
+                var buffer = new byte[Constants.BUFFER_SIZE];
 
                 using (var output = new MemoryStream())
                 {
