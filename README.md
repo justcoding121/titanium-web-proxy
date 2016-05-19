@@ -32,7 +32,7 @@ After installing nuget package mark following files to be copied to app director
 Setup HTTP proxy:
 
 ```csharp
-ProxyServer.BeforeRequest += OnRequest;
+	    	ProxyServer.BeforeRequest += OnRequest;
             ProxyServer.BeforeResponse += OnResponse;
             ProxyServer.RemoteCertificateValidationCallback += OnCertificateValidation;
 
