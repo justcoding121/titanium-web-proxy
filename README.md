@@ -6,7 +6,7 @@ A light weight http(s) proxy server written in C#
 
 Kindly report only issues/bugs here . For programming help or questions use [StackOverflow](http://stackoverflow.com/questions/tagged/titanium-web-proxy) with the tag Titanium-Web-Proxy.
 
-![alt tag](https://raw.githubusercontent.com/titanium007/Titanium/master/Titanium-Web-Proxy/Examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
+![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/release/Examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
 
 Features
 ========
