@@ -1,6 +1,5 @@
-﻿using System.Net;
-using System.Text;
-using Titanium.Web.Proxy.Network;
+﻿using System.Text;
+using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Extensions
 {

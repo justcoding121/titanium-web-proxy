@@ -1,18 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Net.Security;
 using System.Net.Sockets;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using System.Linq;
-using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
+using System.Net.Security;
 
 namespace Titanium.Web.Proxy
 {
@@ -21,36 +18,15 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer
     {
-       
-        private static readonly char[] SemiSplit = { ';' };
 
-        private static readonly string[] ColonSpaceSplit = { ": " };
-        private static readonly char[] SpaceSplit = { ' ' };
-
-        private static readonly Regex CookieSplitRegEx = new Regex(@",(?! )");
-
-        private static readonly byte[] NewLineBytes = Encoding.ASCII.GetBytes(Environment.NewLine);
-
-        private static readonly byte[] ChunkEnd =
-            Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
-
-        public static readonly int BUFFER_SIZE = 8192;
-#if NET45
-        internal static SslProtocols SupportedProtocols = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
-#else
-        internal static SslProtocols SupportedProtocols  = SslProtocols.Tls | SslProtocols.Ssl3;
-#endif
-        
         static ProxyServer()
         {
-            
             ProxyEndPoints = new List<ProxyEndPoint>();
-
             Initialize();
         }
 
         private static CertificateManager CertManager { get; set; }
-        private static bool EnableSsl { get; set; }
+   
         private static bool certTrusted { get; set; }
         private static bool proxyRunning { get; set; }
 
@@ -60,6 +36,22 @@ namespace Titanium.Web.Proxy
 
         public static event EventHandler<SessionEventArgs> BeforeRequest;
         public static event EventHandler<SessionEventArgs> BeforeResponse;
+
+        /// <summary>
+        /// External proxy for Http
+        /// </summary>
+        public static ExternalProxy UpStreamHttpProxy { get; set; }
+
+        /// <summary>
+        /// External proxy for Http
+        /// </summary>
+        public static ExternalProxy UpStreamHttpsProxy { get; set; }
+
+        /// <summary>
+        /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
+        /// </summary>
+        public static event EventHandler<CertificateValidationEventArgs> RemoteCertificateValidationCallback;
+
 
         public static List<ProxyEndPoint> ProxyEndPoints { get; set; }
 
@@ -162,10 +154,7 @@ namespace Titanium.Web.Proxy
             CertManager = new CertificateManager(RootCertificateIssuerName,
                 RootCertificateName);
 
-            EnableSsl = ProxyEndPoints.Any(x => x.EnableSsl);
-
-            if (EnableSsl)
-                certTrusted = CertManager.CreateTrustedRootCertificate();
+            certTrusted = CertManager.CreateTrustedRootCertificate();
 
             foreach (var endPoint in ProxyEndPoints)
             {
@@ -228,7 +217,7 @@ namespace Titanium.Web.Proxy
         private static void OnAcceptConnection(IAsyncResult asyn)
         {
             var endPoint = (ProxyEndPoint)asyn.AsyncState;
-         
+
             try
             {
                 var client = endPoint.listener.EndAcceptTcpClient(asyn);
@@ -245,8 +234,52 @@ namespace Titanium.Web.Proxy
                 // ignored
             }
 
-            
         }
-     
+
+        /// <summary>
+        /// Call back to override server certificate validation
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="certificate"></param>
+        /// <param name="chain"></param>
+        /// <param name="sslPolicyErrors"></param>
+        /// <returns></returns>
+        public static bool ValidateServerCertificate(
+          object sender,
+          X509Certificate certificate,
+          X509Chain chain,
+          SslPolicyErrors sslPolicyErrors)
+        {
+            var param = sender as CustomSslStream;
+
+            if (RemoteCertificateValidationCallback != null)
+            {
+                var args = new CertificateValidationEventArgs();
+
+                args.Session = param.Session;
+                args.Certificate = certificate;
+                args.Chain = chain;
+                args.SslPolicyErrors = sslPolicyErrors;
+
+                RemoteCertificateValidationCallback.Invoke(null, args);
+
+                if(!args.IsValid)
+                {
+                    param.Session.WebSession.Request.CancelRequest = true;
+                }
+
+                return args.IsValid;
+            }
+
+            if (sslPolicyErrors == SslPolicyErrors.None)
+                return true;
+
+            Console.WriteLine("Certificate error: {0}", sslPolicyErrors);
+            
+            //By default
+            //do not allow this client to communicate with unauthenticated servers.
+            return false;
+        }
+
     }
 }

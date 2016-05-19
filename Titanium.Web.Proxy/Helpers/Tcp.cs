@@ -8,13 +8,12 @@ using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
     public class TcpHelper
     {
-        private static readonly int BUFFER_SIZE = 8192;
-
         public static void SendRaw(Stream clientStream, string httpCmd, List<HttpHeader> requestHeaders, string hostName,
             int tunnelPort, bool isHttps)
         {
@@ -51,7 +50,7 @@ namespace Titanium.Web.Proxy.Helpers
                     try
                     {
                         sslStream = new SslStream(tunnelStream);
-                        sslStream.AuthenticateAsClient(hostName, null, ProxyServer.SupportedProtocols, false);
+                        sslStream.AuthenticateAsClient(hostName, null, Constants.SupportedProtocols, false);
                         tunnelStream = sslStream;
                     }
                     catch
@@ -63,16 +62,15 @@ namespace Titanium.Web.Proxy.Helpers
                     }
                 }
 
-
                 var sendRelay = Task.Factory.StartNew(() =>
                 {
                     if (sb != null)
-                        clientStream.CopyToAsync(sb.ToString(), tunnelStream, BUFFER_SIZE);
+                       clientStream.CopyToAsync(sb.ToString(), tunnelStream).Wait();
                     else
-                        clientStream.CopyToAsync(string.Empty, tunnelStream, BUFFER_SIZE);
+                        clientStream.CopyToAsync(string.Empty, tunnelStream).Wait();
                 });
 
-                var receiveRelay = Task.Factory.StartNew(() => tunnelStream.CopyToAsync(string.Empty, clientStream, BUFFER_SIZE));
+                var receiveRelay = Task.Factory.StartNew(() =>tunnelStream.CopyToAsync(string.Empty, clientStream).Wait());
 
                 Task.WaitAll(sendRelay, receiveRelay);
             }
