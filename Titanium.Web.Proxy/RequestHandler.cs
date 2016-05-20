@@ -34,7 +34,7 @@ namespace Titanium.Web.Proxy
             {
                 //read the first line HTTP command
 
-                var httpCmd = await clientStreamReader.ReadLineAsync();
+                var httpCmd = await clientStreamReader.ReadLineAsync().ConfigureAwait(false);
 
                 if (string.IsNullOrEmpty(httpCmd))
                 {
