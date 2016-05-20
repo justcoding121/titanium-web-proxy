@@ -244,7 +244,7 @@ namespace Titanium.Web.Proxy
         /// <param name="chain"></param>
         /// <param name="sslPolicyErrors"></param>
         /// <returns></returns>
-        public static bool ValidateServerCertificate(
+        internal static bool ValidateServerCertificate(
           object sender,
           X509Certificate certificate,
           X509Chain chain,
