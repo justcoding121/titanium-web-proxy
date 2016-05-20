@@ -2,7 +2,7 @@
 using System.Net.Sockets;
 using Titanium.Web.Proxy.Helpers;
 
-namespace Titanium.Web.Proxy.EventArguments
+namespace Titanium.Web.Proxy.Network
 {
     /// <summary>
     /// This class wraps Tcp connection to Server

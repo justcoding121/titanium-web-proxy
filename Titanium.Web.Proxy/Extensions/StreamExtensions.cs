@@ -20,25 +20,29 @@ namespace Titanium.Web.Proxy.Extensions
             await input.CopyToAsync(output);
         }
 
-        internal static async Task CopyBytesToStream(this CustomBinaryReader clientStreamReader, Stream stream, long totalBytesToRead)
+        internal static async Task CopyBytesToStream(this CustomBinaryReader streamReader, Stream stream, long totalBytesToRead)
         {
             var totalbytesRead = 0;
 
-            int bytesToRead;
+            long bytesToRead;
             if (totalBytesToRead < Constants.BUFFER_SIZE)
             {
-                bytesToRead = (int)totalBytesToRead;
+                bytesToRead = totalBytesToRead;
             }
             else
                 bytesToRead = Constants.BUFFER_SIZE;
 
 
-            while (totalbytesRead < (int)totalBytesToRead)
+            while (totalbytesRead < totalBytesToRead)
             {
-                var buffer = await clientStreamReader.ReadBytesAsync(bytesToRead);
+                var buffer = await streamReader.ReadBytesAsync(bytesToRead);
+
+                if (buffer.Length == 0)
+                    break;
+
                 totalbytesRead += buffer.Length;
 
-                var remainingBytes = (int)totalBytesToRead - totalbytesRead;
+                var remainingBytes = totalBytesToRead - totalbytesRead;
                 if (remainingBytes < bytesToRead)
                 {
                     bytesToRead = remainingBytes;

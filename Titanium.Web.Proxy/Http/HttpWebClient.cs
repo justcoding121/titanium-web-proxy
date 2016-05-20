@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.Http
 {
     public class HttpWebSession
     {
-        internal TcpConnection ProxyClient { get; set; }
+        internal TcpConnection ServerConnection { get; set; }
 
         public Request Request { get; set; }
         public Response Response { get; set; }
@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy.Http
         internal void SetConnection(TcpConnection Connection)
         {
             Connection.LastAccess = DateTime.Now;
-            ProxyClient = Connection;
+            ServerConnection = Connection;
         }
 
         internal HttpWebSession()
@@ -38,7 +38,7 @@ namespace Titanium.Web.Proxy.Http
 
         internal async Task SendRequest()
         {
-            Stream stream = ProxyClient.Stream;
+            Stream stream = ServerConnection.Stream;
 
             StringBuilder requestLines = new StringBuilder();
 
@@ -59,12 +59,12 @@ namespace Titanium.Web.Proxy.Http
             string request = requestLines.ToString();
             byte[] requestBytes = Encoding.ASCII.GetBytes(request);
             await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
-            stream.Flush();
+            await stream.FlushAsync();
 
             if (ProxyServer.Enable100ContinueBehaviour)
                 if (this.Request.ExpectContinue)
                 {
-                    var httpResult = (await ProxyClient.ServerStreamReader.ReadLineAsync()).Split(Constants.SpaceSplit, 3);
+                    var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(Constants.SpaceSplit, 3);
                     var responseStatusCode = httpResult[1].Trim();
                     var responseStatusDescription = httpResult[2].Trim();
 
@@ -73,13 +73,13 @@ namespace Titanium.Web.Proxy.Http
                     && responseStatusDescription.ToLower().Equals("continue"))
                     {
                         this.Request.Is100Continue = true;
-                        await ProxyClient.ServerStreamReader.ReadLineAsync().ConfigureAwait(false);
+                        await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
                     }
                     else if (responseStatusCode.Equals("417")
                          && responseStatusDescription.ToLower().Equals("expectation failed"))
                     {
                         this.Request.ExpectationFailed = true;
-                        await ProxyClient.ServerStreamReader.ReadLineAsync().ConfigureAwait(false);
+                        await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
                     }
                 }
         }
@@ -89,11 +89,11 @@ namespace Titanium.Web.Proxy.Http
             //return if this is already read
             if (this.Response.ResponseStatusCode != null) return;
 
-            var httpResult = (await ProxyClient.ServerStreamReader.ReadLineAsync()).Split(Constants.SpaceSplit, 3);
+            var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(Constants.SpaceSplit, 3);
 
             if (string.IsNullOrEmpty(httpResult[0]))
             {
-                await ProxyClient.ServerStreamReader.ReadLineAsync().ConfigureAwait(false);
+                await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
             }
 
             this.Response.HttpVersion = httpResult[0].Trim();
@@ -106,7 +106,7 @@ namespace Titanium.Web.Proxy.Http
             {
                 this.Response.Is100Continue = true;
                 this.Response.ResponseStatusCode = null;
-                await ProxyClient.ServerStreamReader.ReadLineAsync().ConfigureAwait(false);
+                await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
                 await ReceiveResponse();
                 return;
             }
@@ -115,12 +115,12 @@ namespace Titanium.Web.Proxy.Http
             {
                 this.Response.ExpectationFailed = true;
                 this.Response.ResponseStatusCode = null;
-                await ProxyClient.ServerStreamReader.ReadLineAsync().ConfigureAwait(false);
+                await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
                 await ReceiveResponse();
                 return;
             }
 
-            List<string> responseLines = await ProxyClient.ServerStreamReader.ReadAllLinesAsync().ConfigureAwait(false);
+            List<string> responseLines = await ServerConnection.StreamReader.ReadAllLinesAsync().ConfigureAwait(false);
 
             for (int index = 0; index < responseLines.Count; ++index)
             {

@@ -136,7 +136,7 @@ Sample request and response event handlers
             {
                 if (e.WebSession.Response.ResponseStatusCode == "200")
                 {
-                    if (e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
+                    if (e.WebSession.Response.ContentType!=null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
                     {
                         byte[] bodyBytes = await e.GetResponseBody();
                         await e.SetResponseBody(bodyBytes);
@@ -148,11 +148,8 @@ Sample request and response event handlers
             }
         }
 
-        /// <summary>
-        /// Allows overriding default certificate validation logic
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
+       
+        /// Allows overriding default certificate validation logic  
         public async Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
         {
             //set IsValid to true/false based on Certificate Errors
