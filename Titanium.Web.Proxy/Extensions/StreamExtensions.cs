@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy.Extensions
         {
             while (true)
             {
-                var chuchkHead = await clientStreamReader.ReadLineAsync();
+                var chuchkHead = await clientStreamReader.ReadLineAsync().ConfigureAwait(false);
                 var chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
 
                 if (chunkSize != 0)
@@ -58,11 +58,11 @@ namespace Titanium.Web.Proxy.Extensions
                     var buffer = await clientStreamReader.ReadBytesAsync(chunkSize);
                     await stream.WriteAsync(buffer, 0, buffer.Length);
                     //chunk trail
-                   await clientStreamReader.ReadLineAsync();
+                   await clientStreamReader.ReadLineAsync().ConfigureAwait(false);
                 }
                 else
                 {
-                   await clientStreamReader.ReadLineAsync();
+                   await clientStreamReader.ReadLineAsync().ConfigureAwait(false);
                     break;
                 }
             }

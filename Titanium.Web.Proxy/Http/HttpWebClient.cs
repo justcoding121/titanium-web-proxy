@@ -73,13 +73,13 @@ namespace Titanium.Web.Proxy.Http
                     && responseStatusDescription.ToLower().Equals("continue"))
                     {
                         this.Request.Is100Continue = true;
-                        await ProxyClient.ServerStreamReader.ReadLineAsync();
+                        await ProxyClient.ServerStreamReader.ReadLineAsync().ConfigureAwait(false);
                     }
                     else if (responseStatusCode.Equals("417")
                          && responseStatusDescription.ToLower().Equals("expectation failed"))
                     {
                         this.Request.ExpectationFailed = true;
-                        await ProxyClient.ServerStreamReader.ReadLineAsync();
+                        await ProxyClient.ServerStreamReader.ReadLineAsync().ConfigureAwait(false);
                     }
                 }
         }
@@ -93,7 +93,7 @@ namespace Titanium.Web.Proxy.Http
 
             if (string.IsNullOrEmpty(httpResult[0]))
             {
-                await ProxyClient.ServerStreamReader.ReadLineAsync();
+                await ProxyClient.ServerStreamReader.ReadLineAsync().ConfigureAwait(false);
             }
 
             this.Response.HttpVersion = httpResult[0].Trim();
@@ -106,7 +106,7 @@ namespace Titanium.Web.Proxy.Http
             {
                 this.Response.Is100Continue = true;
                 this.Response.ResponseStatusCode = null;
-                await ProxyClient.ServerStreamReader.ReadLineAsync();
+                await ProxyClient.ServerStreamReader.ReadLineAsync().ConfigureAwait(false);
                 await ReceiveResponse();
                 return;
             }
@@ -115,12 +115,12 @@ namespace Titanium.Web.Proxy.Http
             {
                 this.Response.ExpectationFailed = true;
                 this.Response.ResponseStatusCode = null;
-                await ProxyClient.ServerStreamReader.ReadLineAsync();
+                await ProxyClient.ServerStreamReader.ReadLineAsync().ConfigureAwait(false);
                 await ReceiveResponse();
                 return;
             }
 
-            List<string> responseLines = await ProxyClient.ServerStreamReader.ReadAllLinesAsync();
+            List<string> responseLines = await ProxyClient.ServerStreamReader.ReadAllLinesAsync().ConfigureAwait(false);
 
             for (int index = 0; index < responseLines.Count; ++index)
             {
