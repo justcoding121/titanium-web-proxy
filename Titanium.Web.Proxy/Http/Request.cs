@@ -74,6 +74,8 @@ namespace Titanium.Web.Proxy.Http
                         header.Value = value.ToString();
                     else
                         RequestHeaders.Add(new HttpHeader("content-length", value.ToString()));
+
+                    IsChunked = false;
                 }
                 else
                 {

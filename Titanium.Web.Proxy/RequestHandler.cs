@@ -303,7 +303,7 @@ namespace Titanium.Web.Proxy
                         {
                             args.WebSession.Request.RequestBody = await GetCompressedResponseBody(args.WebSession.Request.ContentEncoding, args.WebSession.Request.RequestBody);
                         }
-
+                        //chunked send is not supported as of now
                         args.WebSession.Request.ContentLength = args.WebSession.Request.RequestBody.Length;
 
                         var newStream = args.WebSession.ServerConnection.Stream;
