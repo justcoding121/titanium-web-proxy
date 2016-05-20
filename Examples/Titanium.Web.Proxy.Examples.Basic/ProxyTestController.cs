@@ -12,9 +12,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
     {
         public void StartProxy()
         {
-           // ProxyServer.BeforeRequest += OnRequest;
-           // ProxyServer.BeforeResponse += OnResponse;
-           // ProxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
+            ProxyServer.BeforeRequest += OnRequest;
+            ProxyServer.BeforeResponse += OnResponse;
+            ProxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
 
             //Exclude Https addresses you don't want to proxy
             //Usefull for clients that use certificate pinning
