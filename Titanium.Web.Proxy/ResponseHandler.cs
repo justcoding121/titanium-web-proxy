@@ -24,7 +24,7 @@ namespace Titanium.Web.Proxy
             try
             {
                 if (!args.WebSession.Response.ResponseBodyRead)
-                    args.WebSession.Response.ResponseStream = args.WebSession.ProxyClient.Stream;
+                    args.WebSession.Response.ResponseStream = args.WebSession.ServerConnection.Stream;
 
 
                 if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
@@ -46,13 +46,13 @@ namespace Titanium.Web.Proxy
                 {
                     WriteResponseStatus(args.WebSession.Response.HttpVersion, "100",
                             "Continue", args.Client.ClientStreamWriter);
-                    args.Client.ClientStreamWriter.WriteLine();
+                    await args.Client.ClientStreamWriter.WriteLineAsync();
                 }
                 else if (args.WebSession.Response.ExpectationFailed)
                 {
                     WriteResponseStatus(args.WebSession.Response.HttpVersion, "417",
                             "Expectation Failed", args.Client.ClientStreamWriter);
-                    args.Client.ClientStreamWriter.WriteLine();
+                    await args.Client.ClientStreamWriter.WriteLineAsync();
                 }
 
                 WriteResponseStatus(args.WebSession.Response.HttpVersion, args.WebSession.Response.ResponseStatusCode,
@@ -68,19 +68,20 @@ namespace Titanium.Web.Proxy
                         args.WebSession.Response.ResponseBody = await GetCompressedResponseBody(contentEncoding, args.WebSession.Response.ResponseBody).ConfigureAwait(false);
                     }
 
-                   await WriteResponseHeaders(args.Client.ClientStreamWriter, args.WebSession.Response.ResponseHeaders, args.WebSession.Response.ResponseBody.Length,
-                        isChunked).ConfigureAwait(false);
-                   await WriteResponseBody(args.Client.ClientStream, args.WebSession.Response.ResponseBody, isChunked).ConfigureAwait(false);
+                    args.WebSession.Response.ContentLength = args.WebSession.Response.ResponseBody.Length;
+
+                    await WriteResponseHeaders(args.Client.ClientStreamWriter, args.WebSession.Response.ResponseHeaders).ConfigureAwait(false);
+                    await WriteResponseBody(args.Client.ClientStream, args.WebSession.Response.ResponseBody, isChunked).ConfigureAwait(false);
                 }
                 else
                 {
-                    WriteResponseHeaders(args.Client.ClientStreamWriter, args.WebSession.Response.ResponseHeaders);
+                    await WriteResponseHeaders(args.Client.ClientStreamWriter, args.WebSession.Response.ResponseHeaders);
 
-                    if (args.WebSession.Response.IsChunked || args.WebSession.Response.ContentLength > 0)
-                        await WriteResponseBody(args.WebSession.ProxyClient.ServerStreamReader, args.Client.ClientStream, args.WebSession.Response.IsChunked, args.WebSession.Response.ContentLength).ConfigureAwait(false);
+                    if (args.WebSession.Response.IsChunked || args.WebSession.Response.ContentLength > 0 || args.WebSession.Response.HttpVersion.ToLower().Trim() == "http/1.0")
+                        await WriteResponseBody(args.WebSession.ServerConnection.StreamReader, args.Client.ClientStream, args.WebSession.Response.IsChunked, args.WebSession.Response.ContentLength).ConfigureAwait(false);
                 }
 
-                args.Client.ClientStream.Flush();
+                await args.Client.ClientStream.FlushAsync();
 
             }
             catch
@@ -104,10 +105,10 @@ namespace Titanium.Web.Proxy
         private static void WriteResponseStatus(string version, string code, string description,
             StreamWriter responseWriter)
         {
-            responseWriter.WriteLine(string.Format("{0} {1} {2}", version, code, description));
+            responseWriter.WriteLineAsync(string.Format("{0} {1} {2}", version, code, description));
         }
 
-        private static void WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers)
+        private static async Task WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers)
         {
             if (headers != null)
             {
@@ -115,12 +116,12 @@ namespace Titanium.Web.Proxy
 
                 foreach (var header in headers)
                 {
-                    responseWriter.WriteLine(header.ToString());
+                    await responseWriter.WriteLineAsync(header.ToString());
                 }
             }
 
-            responseWriter.WriteLine();
-            responseWriter.Flush();
+            await responseWriter.WriteLineAsync();
+            await responseWriter.FlushAsync();
         }
         private static void FixResponseProxyHeaders(List<HttpHeader> headers)
         {
@@ -141,34 +142,6 @@ namespace Titanium.Web.Proxy
             headers.RemoveAll(x => x.Name.ToLower() == "proxy-connection");
         }
 
-        private static async Task WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers, int length,
-            bool isChunked)
-        {
-            FixResponseProxyHeaders(headers);
-
-            if (!isChunked)
-            {
-                if (headers.Any(x => x.Name.ToLower() == "content-length") == false)
-                {
-                    headers.Add(new HttpHeader("Content-Length", length.ToString()));
-                }
-            }
-
-            if (headers != null)
-            {
-                foreach (var header in headers)
-                {
-                    if (!isChunked && header.Name.ToLower() == "content-length")
-                        header.Value = length.ToString();
-
-                    await responseWriter.WriteLineAsync(header.ToString()).ConfigureAwait(false);
-                }
-            }
-
-            await responseWriter.WriteLineAsync().ConfigureAwait(false);
-            await responseWriter.FlushAsync().ConfigureAwait(false);
-        }
-
         private static async Task WriteResponseBody(Stream clientStream, byte[] data, bool isChunked)
         {
             if (!isChunked)
@@ -183,6 +156,10 @@ namespace Titanium.Web.Proxy
         {
             if (!isChunked)
             {
+                //http 1.0
+                if (ContentLength == -1)
+                    ContentLength = long.MaxValue;
+
                 int bytesToRead = Constants.BUFFER_SIZE;
 
                 if (ContentLength < Constants.BUFFER_SIZE)

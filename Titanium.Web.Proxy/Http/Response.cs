@@ -13,22 +13,9 @@ namespace Titanium.Web.Proxy.Http
         public string ResponseStatusCode { get; set; }
         public string ResponseStatusDescription { get; set; }
 
-        internal Encoding Encoding { get { return this.GetResponseEncoding(); } }
+        internal Encoding Encoding { get { return this.GetResponseCharacterEncoding(); } }
 
-        internal string CharacterSet
-        {
-            get
-            {
-
-                if (this.ContentType.Contains(";"))
-                {
-
-                    return this.ContentType.Split(';')[1].Substring(9).Trim();
-                }
-                return null;
-
-            }
-        }
+        
         internal string ContentEncoding
         {
             get
@@ -69,13 +56,7 @@ namespace Titanium.Web.Proxy.Http
 
                 if (header != null)
                 {
-                    if (header.Value.Contains(";"))
-                    {
-
-                        return header.Value.Split(';')[0].Trim();
-                    }
-                    else
-                        return header.Value.ToLower().Trim();
+                    return header.Value;
                 }
 
                 return null;

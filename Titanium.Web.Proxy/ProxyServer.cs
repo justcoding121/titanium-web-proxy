@@ -154,7 +154,7 @@ namespace Titanium.Web.Proxy
             CertManager = new CertificateManager(RootCertificateIssuerName,
                 RootCertificateName);
 
-            certTrusted = CertManager.CreateTrustedRootCertificate();
+            certTrusted = CertManager.CreateTrustedRootCertificate().Result;
 
             foreach (var endPoint in ProxyEndPoints)
             {
@@ -222,18 +222,21 @@ namespace Titanium.Web.Proxy
             {
                 var client = endPoint.listener.EndAcceptTcpClient(asyn);
                 if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
-                    Task.Factory.StartNew(() => HandleClient(endPoint as TransparentProxyEndPoint, client));
+                    HandleClient(endPoint as TransparentProxyEndPoint, client);
                 else
-                    Task.Factory.StartNew(() => HandleClient(endPoint as ExplicitProxyEndPoint, client));
+                    HandleClient(endPoint as ExplicitProxyEndPoint, client);
 
                 // Get the listener that handles the client request.
                 endPoint.listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
             }
-            catch
+            catch (ObjectDisposedException)
             {
-                // ignored
+                // The listener was Stop()'d, disposing the underlying socket and
+                // triggering the completion of the callback. We're already exiting,
+                // so just return.
+                return;
             }
-
+           
         }
       
     }

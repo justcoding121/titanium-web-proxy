@@ -12,9 +12,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
     {
         public void StartProxy()
         {
-            ProxyServer.BeforeRequest += OnRequest;
-            ProxyServer.BeforeResponse += OnResponse;
-            ProxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
+           // ProxyServer.BeforeRequest += OnRequest;
+           // ProxyServer.BeforeResponse += OnResponse;
+           // ProxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
 
             //Exclude Https addresses you don't want to proxy
             //Usefull for clients that use certificate pinning
@@ -112,7 +112,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             {
                 if (e.WebSession.Response.ResponseStatusCode == "200")
                 {
-                    if (e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
+                    if (e.WebSession.Response.ContentType!=null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
                     {
                         byte[] bodyBytes = await e.GetResponseBody();
                         await e.SetResponseBody(bodyBytes);

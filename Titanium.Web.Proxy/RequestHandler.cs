@@ -67,7 +67,7 @@ namespace Titanium.Web.Proxy
 
                     await WriteConnectResponse(clientStreamWriter, httpVersion).ConfigureAwait(false);
 
-                    var certificate = CertManager.CreateCertificate(httpRemoteUri.Host);
+                    var certificate = await CertManager.CreateCertificate(httpRemoteUri.Host);
 
                     SslStream sslStream = null;
 
@@ -139,7 +139,7 @@ namespace Titanium.Web.Proxy
                 //    certificate = CertManager.CreateCertificate(hostName);
                 //}
                 //else
-                certificate = CertManager.CreateCertificate(endPoint.GenericCertificateName);
+                certificate = await CertManager.CreateCertificate(endPoint.GenericCertificateName);
 
                 try
                 {
@@ -281,13 +281,13 @@ namespace Titanium.Web.Proxy
                         {
                             WriteResponseStatus(args.WebSession.Response.HttpVersion, "100",
                                     "Continue", args.Client.ClientStreamWriter);
-                            args.Client.ClientStreamWriter.WriteLine();
+                            await args.Client.ClientStreamWriter.WriteLineAsync();
                         }
                         else if (args.WebSession.Request.ExpectationFailed)
                         {
                             WriteResponseStatus(args.WebSession.Response.HttpVersion, "417",
                                     "Expectation Failed", args.Client.ClientStreamWriter);
-                            args.Client.ClientStreamWriter.WriteLine();
+                           await args.Client.ClientStreamWriter.WriteLineAsync();
                         }
 
                     if (!args.WebSession.Request.ExpectContinue)
@@ -299,8 +299,14 @@ namespace Titanium.Web.Proxy
                     //If request was modified by user
                     if (args.WebSession.Request.RequestBodyRead)
                     {
+                        if(args.WebSession.Request.ContentEncoding!=null)
+                        {
+                            args.WebSession.Request.RequestBody = await GetCompressedResponseBody(args.WebSession.Request.ContentEncoding, args.WebSession.Request.RequestBody);
+                        }
+
                         args.WebSession.Request.ContentLength = args.WebSession.Request.RequestBody.Length;
-                        var newStream = args.WebSession.ProxyClient.Stream;
+
+                        var newStream = args.WebSession.ServerConnection.Stream;
                         await newStream.WriteAsync(args.WebSession.Request.RequestBody, 0, args.WebSession.Request.RequestBody.Length).ConfigureAwait(false);
                     }
                     else
@@ -392,7 +398,7 @@ namespace Titanium.Web.Proxy
         private static async Task SendClientRequestBody(SessionEventArgs args)
         {
             // End the operation
-            var postStream = args.WebSession.ProxyClient.Stream;
+            var postStream = args.WebSession.ServerConnection.Stream;
 
             if (args.WebSession.Request.ContentLength > 0)
             {
@@ -465,8 +471,6 @@ namespace Titanium.Web.Proxy
 
             if (sslPolicyErrors == SslPolicyErrors.None)
                 return true;
-
-            Console.WriteLine("Certificate error: {0}", sslPolicyErrors);
 
             //By default
             //do not allow this client to communicate with unauthenticated servers.

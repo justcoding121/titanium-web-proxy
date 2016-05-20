@@ -7,6 +7,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Extensions;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -86,14 +87,17 @@ namespace Titanium.Web.Proxy.EventArguments
                             await this.Client.ClientStreamReader.CopyBytesToStream(requestBodyStream, WebSession.Request.ContentLength).ConfigureAwait(false);
 
                         }
+                        else if (WebSession.Request.HttpVersion.ToLower().Trim().Equals("http/1.0"))
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(requestBodyStream, long.MaxValue).ConfigureAwait(false);
                     }
                     WebSession.Request.RequestBody = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding, requestBodyStream.ToArray()).ConfigureAwait(false);
                 }
-            }
 
-            //Now set the flag to true
-            //So that next time we can deliver body from cache
-            WebSession.Request.RequestBodyRead = true;
+                //Now set the flag to true
+                //So that next time we can deliver body from cache
+                WebSession.Request.RequestBodyRead = true;
+            }
+      
         }
 
         /// <summary>
@@ -109,16 +113,18 @@ namespace Titanium.Web.Proxy.EventArguments
                     //If chuncked the read chunk by chunk until we hit chunk end symbol
                     if (WebSession.Response.IsChunked)
                     {
-                        await WebSession.ProxyClient.ServerStreamReader.CopyBytesToStreamChunked(responseBodyStream).ConfigureAwait(false);
+                        await WebSession.ServerConnection.StreamReader.CopyBytesToStreamChunked(responseBodyStream).ConfigureAwait(false);
                     }
                     else
                     {
                         if (WebSession.Response.ContentLength > 0)
                         {
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await WebSession.ProxyClient.ServerStreamReader.CopyBytesToStream(responseBodyStream, WebSession.Response.ContentLength).ConfigureAwait(false);
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, WebSession.Response.ContentLength).ConfigureAwait(false);
 
                         }
+                        else if(WebSession.Response.HttpVersion.ToLower().Trim().Equals("http/1.0"))
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, long.MaxValue).ConfigureAwait(false);
                     }
 
                     WebSession.Response.ResponseBody = await GetDecompressedResponseBody(WebSession.Response.ContentEncoding, responseBodyStream.ToArray()).ConfigureAwait(false);
@@ -173,7 +179,11 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             WebSession.Request.RequestBody = body;
-            WebSession.Request.RequestBodyRead = true;
+
+            if (WebSession.Request.IsChunked == false)
+                WebSession.Request.ContentLength = body.Length;
+            else
+                WebSession.Request.ContentLength = -1;
         }
 
         /// <summary>
@@ -191,13 +201,8 @@ namespace Titanium.Web.Proxy.EventArguments
                 await ReadRequestBody().ConfigureAwait(false);
             }
 
-            WebSession.Request.RequestBody = WebSession.Request.Encoding.GetBytes(body);
+            await SetRequestBody(WebSession.Request.Encoding.GetBytes(body));
 
-            //If there is a content length header update it
-            if (!WebSession.Request.IsChunked)
-                WebSession.Request.ContentLength = body.Length;
-
-            WebSession.Request.RequestBodyRead = true;
         }
 
         /// <summary>
@@ -245,9 +250,10 @@ namespace Titanium.Web.Proxy.EventArguments
             WebSession.Response.ResponseBody = body;
 
             //If there is a content length header update it
-            if (!WebSession.Response.IsChunked)
+            if (WebSession.Response.IsChunked == false)
                 WebSession.Response.ContentLength = body.Length;
-
+            else
+                WebSession.Response.ContentLength = -1;
         }
 
         /// <summary>
@@ -266,8 +272,9 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             var bodyBytes = WebSession.Response.Encoding.GetBytes(body);
+
             await SetResponseBody(bodyBytes).ConfigureAwait(false);
-        }
+        } 
 
         private async Task<byte[]> GetDecompressedResponseBody(string encodingType, byte[] responseBodyStream)
         {

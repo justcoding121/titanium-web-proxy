@@ -61,7 +61,7 @@
     <Compile Include="Decompression\IDecompression.cs" />
     <Compile Include="Decompression\ZlibDecompression.cs" />
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
-    <Compile Include="EventArguments\ProxyClient.cs" />
+    <Compile Include="Network\ProxyClient.cs" />
     <Compile Include="Exceptions\BodyNotFoundException.cs" />
     <Compile Include="Extensions\HttpWebResponseExtensions.cs" />
     <Compile Include="Extensions\HttpWebRequestExtensions.cs" />

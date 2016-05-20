@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.Network
         internal Version Version { get; set; }
 
         internal TcpClient TcpClient { get; set; }
-        internal CustomBinaryReader ServerStreamReader { get; set; }
+        internal CustomBinaryReader StreamReader { get; set; }
         internal Stream Stream { get; set; }
 
         internal DateTime LastAccess { get; set; }
@@ -88,21 +88,25 @@ namespace Titanium.Web.Proxy.Network
                     client = new TcpClient(ProxyServer.UpStreamHttpsProxy.HostName, ProxyServer.UpStreamHttpsProxy.Port);
                     stream = (Stream)client.GetStream();
 
-                    var writer = new StreamWriter(stream, Encoding.ASCII, Constants.BUFFER_SIZE, true);
+                    using (var writer = new StreamWriter(stream, Encoding.ASCII, Constants.BUFFER_SIZE, true))
+                    {
+                        await writer.WriteLineAsync(string.Format("CONNECT {0}:{1} {2}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port, sessionArgs.WebSession.Request.HttpVersion));
+                        await writer.WriteLineAsync(string.Format("Host: {0}:{1}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port));
+                        await writer.WriteLineAsync("Connection: Keep-Alive");
+                        await writer.WriteLineAsync();
+                        await writer.FlushAsync();
+                        writer.Close();
+                    }
 
-                    writer.WriteLine(string.Format("CONNECT {0}:{1} {2}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port, sessionArgs.WebSession.Request.HttpVersion));
-                    writer.WriteLine(string.Format("Host: {0}:{1}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port));
-                    writer.WriteLine("Connection: Keep-Alive");
-                    writer.WriteLine();
-                    writer.Flush();
+                    using (var reader = new CustomBinaryReader(stream))
+                    {
+                        var result = await reader.ReadLineAsync().ConfigureAwait(false);
 
-                    var reader = new CustomBinaryReader(stream);
-                    var result = await reader.ReadLineAsync().ConfigureAwait(false);
+                        if (!result.ToLower().Contains("200 connection established"))
+                            throw new Exception("Upstream proxy failed to create a secure tunnel");
 
-                    if (!result.ToLower().Contains("200 connection established"))
-                        throw new Exception("Upstream proxy failed to create a secure tunnel");
-
-                    await reader.ReadAllLinesAsync().ConfigureAwait(false);
+                        await reader.ReadAllLinesAsync().ConfigureAwait(false);
+                    }
                 }
                 else
                 {
@@ -144,7 +148,7 @@ namespace Titanium.Web.Proxy.Network
                 port = port,
                 IsSecure = isSecure,
                 TcpClient = client,
-                ServerStreamReader = new CustomBinaryReader(stream),
+                StreamReader = new CustomBinaryReader(stream),
                 Stream = stream,
                 Version = version
             };
@@ -177,7 +181,6 @@ namespace Titanium.Web.Proxy.Network
             }
 
         }
-
 
     }
 }
