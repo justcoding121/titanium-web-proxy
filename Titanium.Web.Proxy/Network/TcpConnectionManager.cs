@@ -61,13 +61,15 @@ namespace Titanium.Web.Proxy.Network
             }
 
             if (cached == null)
-                cached = await CreateClient(sessionArgs,hostname, port, isSecure, version);
+                cached = await CreateClient(sessionArgs, hostname, port, isSecure, version).ConfigureAwait(false);
 
-            //if (ConnectionCache.Where(x => x.HostName == hostname && x.port == port &&
-            //x.IsSecure == isSecure && x.TcpClient.Connected && x.Version.Equals(version)).Count() < 2)
-            //{
-            //    Task.Factory.StartNew(() => CreateClient(sessionArgs, hostname, port, isSecure, version));
-            //}
+            //just create one more preemptively
+            if (ConnectionCache.Where(x => x.HostName == hostname && x.port == port &&
+            x.IsSecure == isSecure && x.TcpClient.Connected && x.Version.Equals(version)).Count() < 2)
+            {
+                var task = CreateClient(sessionArgs, hostname, port, isSecure, version)
+                            .ContinueWith(x => ReleaseClient(x.Result));
+            }
 
             return cached;
         }
@@ -81,26 +83,26 @@ namespace Titanium.Web.Proxy.Network
             {
                 CustomSslStream sslStream = null;
 
-                if(ProxyServer.UpStreamHttpsProxy!=null)
+                if (ProxyServer.UpStreamHttpsProxy != null)
                 {
                     client = new TcpClient(ProxyServer.UpStreamHttpsProxy.HostName, ProxyServer.UpStreamHttpsProxy.Port);
                     stream = (Stream)client.GetStream();
 
-                    var writer = new StreamWriter(stream,Encoding.ASCII, Constants.BUFFER_SIZE, true);
-                   
+                    var writer = new StreamWriter(stream, Encoding.ASCII, Constants.BUFFER_SIZE, true);
+
                     writer.WriteLine(string.Format("CONNECT {0}:{1} {2}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port, sessionArgs.WebSession.Request.HttpVersion));
                     writer.WriteLine(string.Format("Host: {0}:{1}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port));
                     writer.WriteLine("Connection: Keep-Alive");
                     writer.WriteLine();
                     writer.Flush();
-             
+
                     var reader = new CustomBinaryReader(stream);
-                    var result = reader.ReadLine();
+                    var result = await reader.ReadLineAsync().ConfigureAwait(false);
 
                     if (!result.ToLower().Contains("200 connection established"))
                         throw new Exception("Upstream proxy failed to create a secure tunnel");
 
-                    reader.ReadAllLines();
+                    await reader.ReadAllLinesAsync().ConfigureAwait(false);
                 }
                 else
                 {
@@ -110,9 +112,9 @@ namespace Titanium.Web.Proxy.Network
 
                 try
                 {
-                    sslStream = new CustomSslStream(stream, true, ProxyServer.ValidateServerCertificate);
+                    sslStream = new CustomSslStream(stream, true, new RemoteCertificateValidationCallback(ProxyServer.ValidateServerCertificate));
                     sslStream.Session = sessionArgs;
-                    await sslStream.AuthenticateAsClientAsync(hostname, null, Constants.SupportedProtocols, false);
+                    await sslStream.AuthenticateAsClientAsync(hostname, null, Constants.SupportedProtocols, false).ConfigureAwait(false);
                     stream = (Stream)sslStream;
                 }
                 catch
@@ -155,7 +157,7 @@ namespace Titanium.Web.Proxy.Network
             ConnectionCache.Add(Connection);
         }
 
-        internal static void ClearIdleConnections()
+        internal async static void ClearIdleConnections()
         {
             while (true)
             {
@@ -171,7 +173,7 @@ namespace Titanium.Web.Proxy.Network
                     ConnectionCache.RemoveAll(x => x.LastAccess < cutOff);
                 }
 
-                Thread.Sleep(1000 * 60 * 3);
+                await Task.Delay(1000 * 60 * 3).ConfigureAwait(false);
             }
 
         }

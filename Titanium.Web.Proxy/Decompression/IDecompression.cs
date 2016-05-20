@@ -1,9 +1,10 @@
 ﻿using System.IO;
+using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Decompression
 {
     interface IDecompression
     {
-        byte[] Decompress(byte[] compressedArray);
+        Task<byte[]> Decompress(byte[] compressedArray);
     }
 }

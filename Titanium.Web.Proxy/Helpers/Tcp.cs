@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy.Helpers
 {
     public class TcpHelper
     {
-        public static void SendRaw(Stream clientStream, string httpCmd, List<HttpHeader> requestHeaders, string hostName,
+        public async static Task SendRaw(Stream clientStream, string httpCmd, List<HttpHeader> requestHeaders, string hostName,
             int tunnelPort, bool isHttps)
         {
             StringBuilder sb = null;
@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy.Helpers
                     try
                     {
                         sslStream = new SslStream(tunnelStream);
-                        sslStream.AuthenticateAsClient(hostName, null, Constants.SupportedProtocols, false);
+                        await sslStream.AuthenticateAsClientAsync(hostName, null, Constants.SupportedProtocols, false);
                         tunnelStream = sslStream;
                     }
                     catch
@@ -62,17 +62,17 @@ namespace Titanium.Web.Proxy.Helpers
                     }
                 }
 
-                var sendRelay = Task.Factory.StartNew(() =>
-                {
-                    if (sb != null)
-                       clientStream.CopyToAsync(sb.ToString(), tunnelStream).Wait();
-                    else
-                        clientStream.CopyToAsync(string.Empty, tunnelStream).Wait();
-                });
+                Task sendRelay;
 
-                var receiveRelay = Task.Factory.StartNew(() =>tunnelStream.CopyToAsync(string.Empty, clientStream).Wait());
+                if (sb != null)
+                    sendRelay = clientStream.CopyToAsync(sb.ToString(), tunnelStream);
+                else
+                    sendRelay = clientStream.CopyToAsync(string.Empty, tunnelStream);
 
-                Task.WaitAll(sendRelay, receiveRelay);
+
+                var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
+
+                await Task.WhenAll(sendRelay, receiveRelay).ConfigureAwait(false);
             }
             catch
             {

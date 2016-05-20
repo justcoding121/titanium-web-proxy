@@ -34,7 +34,7 @@ Setup HTTP proxy:
 ```csharp
 	    	ProxyServer.BeforeRequest += OnRequest;
             ProxyServer.BeforeResponse += OnResponse;
-            ProxyServer.RemoteCertificateValidationCallback += OnCertificateValidation;
+            ProxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
 
             //Exclude Https addresses you don't want to proxy
             //Usefull for clients that use certificate pinning
@@ -61,8 +61,7 @@ Setup HTTP proxy:
                 GenericCertificateName = "google.com"
             };
             ProxyServer.AddEndPoint(transparentEndPoint);
-			
-	
+
             //ProxyServer.UpStreamHttpProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
             //ProxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
 
@@ -87,7 +86,8 @@ Sample request and response event handlers
 
 ```csharp
 		
-        public void OnRequest(object sender, SessionEventArgs e)
+        //intecept & cancel, redirect or update requests
+        public async Task OnRequest(object sender, SessionEventArgs e)
         {
             Console.WriteLine(e.WebSession.Request.Url);
 
@@ -97,12 +97,12 @@ Sample request and response event handlers
             if ((e.WebSession.Request.Method.ToUpper() == "POST" || e.WebSession.Request.Method.ToUpper() == "PUT"))
             {
                 //Get/Set request body bytes
-                byte[] bodyBytes = e.GetRequestBody();
-                e.SetRequestBody(bodyBytes);
+                byte[] bodyBytes = await e.GetRequestBody();
+                await e.SetRequestBody(bodyBytes);
 
                 //Get/Set request body as string
-                string bodyString = e.GetRequestBodyAsString();
-                e.SetRequestBodyString(bodyString);
+                string bodyString = await e.GetRequestBodyAsString();
+                await e.SetRequestBodyString(bodyString);
 
             }
 
@@ -110,24 +110,24 @@ Sample request and response event handlers
             //Filter URL
             if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
             {
-                e.Ok("<!DOCTYPE html>" +
-                     "<html><body><h1>" +
-                     "Website Blocked" +
-                     "</h1>" +
-                     "<p>Blocked by titanium web proxy.</p>" +
-                     "</body>" +
-                     "</html>");
+                await e.Ok("<!DOCTYPE html>" +
+                      "<html><body><h1>" +
+                      "Website Blocked" +
+                      "</h1>" +
+                      "<p>Blocked by titanium web proxy.</p>" +
+                      "</body>" +
+                      "</html>");
             }
             //Redirect example
             if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
             {
-                e.Redirect("https://www.paypal.com");
+                await e.Redirect("https://www.paypal.com");
             }
         }
-	 
-        public void OnResponse(object sender, SessionEventArgs e)
-        {
 
+        //Modify response
+        public async Task OnResponse(object sender, SessionEventArgs e)
+        {
             //read response headers
             var responseHeaders = e.WebSession.Response.ResponseHeaders;
 
@@ -138,24 +138,28 @@ Sample request and response event handlers
                 {
                     if (e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
                     {
-                        byte[] bodyBytes = e.GetResponseBody();
-                        e.SetResponseBody(bodyBytes);
+                        byte[] bodyBytes = await e.GetResponseBody();
+                        await e.SetResponseBody(bodyBytes);
 
-                        string body = e.GetResponseBodyAsString();
-                        e.SetResponseBodyString(body);
+                        string body = await e.GetResponseBodyAsString();
+                        await e.SetResponseBodyString(body);
                     }
                 }
             }
         }
 
-        // Allows overriding default certificate validation logic
-        public void OnCertificateValidation(object sender, CertificateValidationEventArgs e)
+        /// <summary>
+        /// Allows overriding default certificate validation logic
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        public async Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
         {
             //set IsValid to true/false based on Certificate Errors
             if (e.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
                 e.IsValid = true;
             else
-                e.Session.Ok("Cannot validate server certificate! Not safe to proceed.");
+                await e.Session.Ok("Cannot validate server certificate! Not safe to proceed.");
         }
 ```
 Future roadmap

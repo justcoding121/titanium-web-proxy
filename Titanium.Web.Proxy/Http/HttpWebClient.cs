@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Shared;
@@ -35,7 +36,7 @@ namespace Titanium.Web.Proxy.Http
             this.Response = new Response();
         }
 
-        internal void SendRequest()
+        internal async Task SendRequest()
         {
             Stream stream = ProxyClient.Stream;
 
@@ -57,13 +58,13 @@ namespace Titanium.Web.Proxy.Http
 
             string request = requestLines.ToString();
             byte[] requestBytes = Encoding.ASCII.GetBytes(request);
-            stream.Write(requestBytes, 0, requestBytes.Length);
+            await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
             stream.Flush();
 
             if (ProxyServer.Enable100ContinueBehaviour)
                 if (this.Request.ExpectContinue)
                 {
-                    var httpResult = ProxyClient.ServerStreamReader.ReadLine().Split(Constants.SpaceSplit, 3);
+                    var httpResult = (await ProxyClient.ServerStreamReader.ReadLineAsync()).Split(Constants.SpaceSplit, 3);
                     var responseStatusCode = httpResult[1].Trim();
                     var responseStatusDescription = httpResult[2].Trim();
 
@@ -72,27 +73,27 @@ namespace Titanium.Web.Proxy.Http
                     && responseStatusDescription.ToLower().Equals("continue"))
                     {
                         this.Request.Is100Continue = true;
-                        ProxyClient.ServerStreamReader.ReadLine();
+                        await ProxyClient.ServerStreamReader.ReadLineAsync();
                     }
                     else if (responseStatusCode.Equals("417")
                          && responseStatusDescription.ToLower().Equals("expectation failed"))
                     {
                         this.Request.ExpectationFailed = true;
-                        ProxyClient.ServerStreamReader.ReadLine();
+                        await ProxyClient.ServerStreamReader.ReadLineAsync();
                     }
                 }
         }
 
-        internal void ReceiveResponse()
+        internal async Task ReceiveResponse()
         {
             //return if this is already read
             if (this.Response.ResponseStatusCode != null) return;
 
-            var httpResult = ProxyClient.ServerStreamReader.ReadLine().Split(Constants.SpaceSplit, 3);
+            var httpResult = (await ProxyClient.ServerStreamReader.ReadLineAsync()).Split(Constants.SpaceSplit, 3);
 
             if (string.IsNullOrEmpty(httpResult[0]))
             {
-                var s = ProxyClient.ServerStreamReader.ReadLine();
+                await ProxyClient.ServerStreamReader.ReadLineAsync();
             }
 
             this.Response.HttpVersion = httpResult[0].Trim();
@@ -105,8 +106,8 @@ namespace Titanium.Web.Proxy.Http
             {
                 this.Response.Is100Continue = true;
                 this.Response.ResponseStatusCode = null;
-                ProxyClient.ServerStreamReader.ReadLine();
-                ReceiveResponse();
+                await ProxyClient.ServerStreamReader.ReadLineAsync();
+                await ReceiveResponse();
                 return;
             }
             else if (this.Response.ResponseStatusCode.Equals("417")
@@ -114,12 +115,12 @@ namespace Titanium.Web.Proxy.Http
             {
                 this.Response.ExpectationFailed = true;
                 this.Response.ResponseStatusCode = null;
-                ProxyClient.ServerStreamReader.ReadLine();
-                ReceiveResponse();
+                await ProxyClient.ServerStreamReader.ReadLineAsync();
+                await ReceiveResponse();
                 return;
             }
 
-            List<string> responseLines = ProxyClient.ServerStreamReader.ReadAllLines();
+            List<string> responseLines = await ProxyClient.ServerStreamReader.ReadAllLinesAsync();
 
             for (int index = 0; index < responseLines.Count; ++index)
             {

@@ -1,10 +1,12 @@
-﻿namespace Titanium.Web.Proxy.Decompression
+﻿using System.Threading.Tasks;
+
+namespace Titanium.Web.Proxy.Decompression
 {
     class DefaultDecompression : IDecompression
     {
-        public byte[] Decompress(byte[] compressedArray)
+        public Task<byte[]> Decompress(byte[] compressedArray)
         {
-            return compressedArray;
+            return Task.FromResult(compressedArray);
         }
     }
 }
