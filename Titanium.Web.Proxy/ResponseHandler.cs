@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy
             try
             {
                 if (!args.WebSession.Response.ResponseBodyRead)
-                    args.WebSession.Response.ResponseStream = args.WebSession.ProxyClient.ServerStreamReader.BaseStream;
+                    args.WebSession.Response.ResponseStream = args.WebSession.ProxyClient.Stream;
 
 
                 if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)

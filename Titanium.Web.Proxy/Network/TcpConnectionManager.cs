@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Network
     {
         static List<TcpConnection> ConnectionCache = new List<TcpConnection>();
 
-        internal static TcpConnection GetClient(SessionEventArgs sessionArgs, string hostname, int port, bool isSecure, Version version)
+        internal static async Task<TcpConnection> GetClient(SessionEventArgs sessionArgs, string hostname, int port, bool isSecure, Version version)
         {
             TcpConnection cached = null;
             while (true)
@@ -61,18 +61,18 @@ namespace Titanium.Web.Proxy.Network
             }
 
             if (cached == null)
-                cached = CreateClient(sessionArgs,hostname, port, isSecure, version);
+                cached = await CreateClient(sessionArgs,hostname, port, isSecure, version);
 
-            if (ConnectionCache.Where(x => x.HostName == hostname && x.port == port &&
-            x.IsSecure == isSecure && x.TcpClient.Connected && x.Version.Equals(version)).Count() < 2)
-            {
-                Task.Factory.StartNew(() => CreateClient(sessionArgs, hostname, port, isSecure, version));
-            }
+            //if (ConnectionCache.Where(x => x.HostName == hostname && x.port == port &&
+            //x.IsSecure == isSecure && x.TcpClient.Connected && x.Version.Equals(version)).Count() < 2)
+            //{
+            //    Task.Factory.StartNew(() => CreateClient(sessionArgs, hostname, port, isSecure, version));
+            //}
 
             return cached;
         }
 
-        private static TcpConnection CreateClient(SessionEventArgs sessionArgs, string hostname, int port, bool isSecure, Version version)
+        private static async Task<TcpConnection> CreateClient(SessionEventArgs sessionArgs, string hostname, int port, bool isSecure, Version version)
         {
             TcpClient client;
             Stream stream;
@@ -86,7 +86,7 @@ namespace Titanium.Web.Proxy.Network
                     client = new TcpClient(ProxyServer.UpStreamHttpsProxy.HostName, ProxyServer.UpStreamHttpsProxy.Port);
                     stream = (Stream)client.GetStream();
 
-                    var writer = new StreamWriter(stream);
+                    var writer = new StreamWriter(stream,Encoding.ASCII, Constants.BUFFER_SIZE, true);
                    
                     writer.WriteLine(string.Format("CONNECT {0}:{1} {2}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port, sessionArgs.WebSession.Request.HttpVersion));
                     writer.WriteLine(string.Format("Host: {0}:{1}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port));
@@ -94,7 +94,7 @@ namespace Titanium.Web.Proxy.Network
                     writer.WriteLine();
                     writer.Flush();
              
-                    var reader = new CustomBinaryReader(stream, Encoding.ASCII);
+                    var reader = new CustomBinaryReader(stream);
                     var result = reader.ReadLine();
 
                     if (!result.ToLower().Contains("200 connection established"))
@@ -112,7 +112,7 @@ namespace Titanium.Web.Proxy.Network
                 {
                     sslStream = new CustomSslStream(stream, true, ProxyServer.ValidateServerCertificate);
                     sslStream.Session = sessionArgs;
-                    sslStream.AuthenticateAsClient(hostname, null, Constants.SupportedProtocols, false);
+                    await sslStream.AuthenticateAsClientAsync(hostname, null, Constants.SupportedProtocols, false);
                     stream = (Stream)sslStream;
                 }
                 catch
@@ -142,7 +142,7 @@ namespace Titanium.Web.Proxy.Network
                 port = port,
                 IsSecure = isSecure,
                 TcpClient = client,
-                ServerStreamReader = new CustomBinaryReader(stream, Encoding.ASCII),
+                ServerStreamReader = new CustomBinaryReader(stream),
                 Stream = stream,
                 Version = version
             };
