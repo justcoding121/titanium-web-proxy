@@ -34,8 +34,8 @@ namespace Titanium.Web.Proxy
         public static string RootCertificateName { get; set; }
         public static bool Enable100ContinueBehaviour { get; set; }
 
-        public static event EventHandler<SessionEventArgs> BeforeRequest;
-        public static event EventHandler<SessionEventArgs> BeforeResponse;
+        public static event Func<object, SessionEventArgs, Task> BeforeRequest;
+        public static event Func<object, SessionEventArgs, Task> BeforeResponse;
 
         /// <summary>
         /// External proxy for Http
@@ -50,14 +50,14 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
         /// </summary>
-        public static event EventHandler<CertificateValidationEventArgs> RemoteCertificateValidationCallback;
+        public static event Func<object, CertificateValidationEventArgs, Task> ServerCertificateValidationCallback;
 
 
         public static List<ProxyEndPoint> ProxyEndPoints { get; set; }
 
         public static void Initialize()
         {
-            Task.Factory.StartNew(() => TcpConnectionManager.ClearIdleConnections());
+            TcpConnectionManager.ClearIdleConnections();
         }
 
         public static void AddEndPoint(ProxyEndPoint endPoint)
@@ -235,51 +235,6 @@ namespace Titanium.Web.Proxy
             }
 
         }
-
-        /// <summary>
-        /// Call back to override server certificate validation
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="certificate"></param>
-        /// <param name="chain"></param>
-        /// <param name="sslPolicyErrors"></param>
-        /// <returns></returns>
-        internal static bool ValidateServerCertificate(
-          object sender,
-          X509Certificate certificate,
-          X509Chain chain,
-          SslPolicyErrors sslPolicyErrors)
-        {
-            var param = sender as CustomSslStream;
-
-            if (RemoteCertificateValidationCallback != null)
-            {
-                var args = new CertificateValidationEventArgs();
-
-                args.Session = param.Session;
-                args.Certificate = certificate;
-                args.Chain = chain;
-                args.SslPolicyErrors = sslPolicyErrors;
-
-                RemoteCertificateValidationCallback.Invoke(null, args);
-
-                if(!args.IsValid)
-                {
-                    param.Session.WebSession.Request.CancelRequest = true;
-                }
-
-                return args.IsValid;
-            }
-
-            if (sslPolicyErrors == SslPolicyErrors.None)
-                return true;
-
-            Console.WriteLine("Certificate error: {0}", sslPolicyErrors);
-            
-            //By default
-            //do not allow this client to communicate with unauthenticated servers.
-            return false;
-        }
-
+      
     }
 }

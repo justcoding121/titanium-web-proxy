@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
 
@@ -13,7 +14,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             ProxyServer.BeforeRequest += OnRequest;
             ProxyServer.BeforeResponse += OnResponse;
-            ProxyServer.RemoteCertificateValidationCallback += OnCertificateValidation;
+            ProxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
 
             //Exclude Https addresses you don't want to proxy
             //Usefull for clients that use certificate pinning
@@ -61,9 +62,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             ProxyServer.Stop();
         }
 
-        //Test On Request, intecept requests
-        //Read browser URL send back to proxy by the injection script in OnResponse event
-        public void OnRequest(object sender, SessionEventArgs e)
+        //intecept & cancel, redirect or update requests
+        public async Task OnRequest(object sender, SessionEventArgs e)
         {
             Console.WriteLine(e.WebSession.Request.Url);
 
@@ -73,12 +73,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
             if ((e.WebSession.Request.Method.ToUpper() == "POST" || e.WebSession.Request.Method.ToUpper() == "PUT"))
             {
                 //Get/Set request body bytes
-                byte[] bodyBytes = e.GetRequestBody();
-                e.SetRequestBody(bodyBytes);
+                byte[] bodyBytes = await e.GetRequestBody();
+                await e.SetRequestBody(bodyBytes);
 
                 //Get/Set request body as string
-                string bodyString = e.GetRequestBodyAsString();
-                e.SetRequestBodyString(bodyString);
+                string bodyString = await e.GetRequestBodyAsString();
+                await e.SetRequestBodyString(bodyString);
 
             }
 
@@ -86,26 +86,24 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //Filter URL
             if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
             {
-                e.Ok("<!DOCTYPE html>" +
-                     "<html><body><h1>" +
-                     "Website Blocked" +
-                     "</h1>" +
-                     "<p>Blocked by titanium web proxy.</p>" +
-                     "</body>" +
-                     "</html>");
+                await e.Ok("<!DOCTYPE html>" +
+                      "<html><body><h1>" +
+                      "Website Blocked" +
+                      "</h1>" +
+                      "<p>Blocked by titanium web proxy.</p>" +
+                      "</body>" +
+                      "</html>");
             }
             //Redirect example
             if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
             {
-                e.Redirect("https://www.paypal.com");
+                await e.Redirect("https://www.paypal.com");
             }
         }
 
-        //Test script injection
-        //Insert script to read the Browser URL and send it back to proxy
-        public void OnResponse(object sender, SessionEventArgs e)
+        //Modify response
+        public async Task OnResponse(object sender, SessionEventArgs e)
         {
-
             //read response headers
             var responseHeaders = e.WebSession.Response.ResponseHeaders;
 
@@ -116,11 +114,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 {
                     if (e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
                     {
-                        byte[] bodyBytes = e.GetResponseBody();
-                        e.SetResponseBody(bodyBytes);
+                        byte[] bodyBytes = await e.GetResponseBody();
+                        await e.SetResponseBody(bodyBytes);
 
-                        string body = e.GetResponseBodyAsString();
-                        e.SetResponseBodyString(body);
+                        string body = await e.GetResponseBodyAsString();
+                        await e.SetResponseBodyString(body);
                     }
                 }
             }
@@ -131,13 +129,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        public void OnCertificateValidation(object sender, CertificateValidationEventArgs e)
+        public async Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
         {
             //set IsValid to true/false based on Certificate Errors
             if (e.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
                 e.IsValid = true;
             else
-                e.Session.Ok("Cannot validate server certificate! Not safe to proceed.");
+                await e.Session.Ok("Cannot validate server certificate! Not safe to proceed.");
         }
     }
 }

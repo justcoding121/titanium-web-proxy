@@ -15,12 +15,12 @@ namespace Titanium.Web.Proxy.Extensions
             if (!string.IsNullOrEmpty(initialData))
             {
                 var bytes = Encoding.ASCII.GetBytes(initialData);
-                output.Write(bytes, 0, bytes.Length);
+                await output.WriteAsync(bytes, 0, bytes.Length);
             }
             await input.CopyToAsync(output);
         }
 
-        internal static void CopyBytesToStream(this CustomBinaryReader clientStreamReader, Stream stream, long totalBytesToRead)
+        internal static async Task CopyBytesToStream(this CustomBinaryReader clientStreamReader, Stream stream, long totalBytesToRead)
         {
             var totalbytesRead = 0;
 
@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy.Extensions
 
             while (totalbytesRead < (int)totalBytesToRead)
             {
-                var buffer = clientStreamReader.ReadBytes(bytesToRead);
+                var buffer = await clientStreamReader.ReadBytesAsync(bytesToRead);
                 totalbytesRead += buffer.Length;
 
                 var remainingBytes = (int)totalBytesToRead - totalbytesRead;
@@ -43,26 +43,26 @@ namespace Titanium.Web.Proxy.Extensions
                 {
                     bytesToRead = remainingBytes;
                 }
-                stream.Write(buffer, 0, buffer.Length);
+                await stream.WriteAsync(buffer, 0, buffer.Length);
             }
         }
-        internal static void CopyBytesToStreamChunked(this CustomBinaryReader clientStreamReader, Stream stream)
+        internal static async Task CopyBytesToStreamChunked(this CustomBinaryReader clientStreamReader, Stream stream)
         {
             while (true)
             {
-                var chuchkHead = clientStreamReader.ReadLine();
+                var chuchkHead = await clientStreamReader.ReadLineAsync();
                 var chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
 
                 if (chunkSize != 0)
                 {
-                    var buffer = clientStreamReader.ReadBytes(chunkSize);
-                    stream.Write(buffer, 0, buffer.Length);
+                    var buffer = await clientStreamReader.ReadBytesAsync(chunkSize);
+                    await stream.WriteAsync(buffer, 0, buffer.Length);
                     //chunk trail
-                    clientStreamReader.ReadLine();
+                   await clientStreamReader.ReadLineAsync();
                 }
                 else
                 {
-                    clientStreamReader.ReadLine();
+                   await clientStreamReader.ReadLineAsync();
                     break;
                 }
             }

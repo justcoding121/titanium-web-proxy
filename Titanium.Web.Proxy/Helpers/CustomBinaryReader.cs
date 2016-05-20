@@ -4,6 +4,7 @@ using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Shared;
 
@@ -31,7 +32,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        internal string ReadLine()
+        internal async Task<string> ReadLineAsync()
         {
             var readBuffer = new StringBuilder();
 
@@ -40,7 +41,7 @@ namespace Titanium.Web.Proxy.Helpers
                 var lastChar = default(char);
                 var buffer = new byte[1];
 
-                while (this.stream.Read(buffer, 0, 1) > 0)
+                while (await this.stream.ReadAsync(buffer, 0, 1).ConfigureAwait(false) > 0)
                 {
                     if (lastChar == '\r' && buffer[0] == '\n')
                     {
@@ -66,18 +67,18 @@ namespace Titanium.Web.Proxy.Helpers
         /// Read until the last new line
         /// </summary>
         /// <returns></returns>
-        internal List<string> ReadAllLines()
+        internal async Task<List<string>> ReadAllLinesAsync()
         {
             string tmpLine;
             var requestLines = new List<string>();
-            while (!string.IsNullOrEmpty(tmpLine = ReadLine()))
+            while (!string.IsNullOrEmpty(tmpLine = await ReadLineAsync().ConfigureAwait(false)))
             {
                 requestLines.Add(tmpLine);
             }
             return requestLines;
         }
 
-        internal byte[] ReadBytes(long totalBytesToRead)
+        internal async Task<byte[]> ReadBytesAsync(long totalBytesToRead)
         {
             int bytesToRead = Constants.BUFFER_SIZE;
 
@@ -91,9 +92,9 @@ namespace Titanium.Web.Proxy.Helpers
 
             using (var outStream = new MemoryStream())
             {
-                while ((bytesRead += this.stream.Read(buffer, 0, bytesToRead)) > 0)
+                while ((bytesRead += await this.stream.ReadAsync(buffer, 0, bytesToRead).ConfigureAwait(false)) > 0)
                 {
-                    outStream.Write(buffer, 0, bytesRead);
+                    await outStream.WriteAsync(buffer, 0, bytesRead).ConfigureAwait(false);
                     totalBytesRead += bytesRead;
 
                     if (totalBytesRead == totalBytesToRead)
