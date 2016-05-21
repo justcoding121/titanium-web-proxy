@@ -1,18 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Net.Security;
 using System.Net.Sockets;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using System.Linq;
-using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
+using System.Net.Security;
 
 namespace Titanium.Web.Proxy
 {
@@ -21,36 +18,15 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer
     {
-       
-        private static readonly char[] SemiSplit = { ';' };
 
-        private static readonly string[] ColonSpaceSplit = { ": " };
-        private static readonly char[] SpaceSplit = { ' ' };
-
-        private static readonly Regex CookieSplitRegEx = new Regex(@",(?! )");
-
-        private static readonly byte[] NewLineBytes = Encoding.ASCII.GetBytes(Environment.NewLine);
-
-        private static readonly byte[] ChunkEnd =
-            Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
-
-        public static readonly int BUFFER_SIZE = 8192;
-#if NET45
-        internal static SslProtocols SupportedProtocols = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
-#else
-        internal static SslProtocols SupportedProtocols  = SslProtocols.Tls | SslProtocols.Ssl3;
-#endif
-        
         static ProxyServer()
         {
-            
             ProxyEndPoints = new List<ProxyEndPoint>();
-
             Initialize();
         }
 
         private static CertificateManager CertManager { get; set; }
-        private static bool EnableSsl { get; set; }
+   
         private static bool certTrusted { get; set; }
         private static bool proxyRunning { get; set; }
 
@@ -58,14 +34,30 @@ namespace Titanium.Web.Proxy
         public static string RootCertificateName { get; set; }
         public static bool Enable100ContinueBehaviour { get; set; }
 
-        public static event EventHandler<SessionEventArgs> BeforeRequest;
-        public static event EventHandler<SessionEventArgs> BeforeResponse;
+        public static event Func<object, SessionEventArgs, Task> BeforeRequest;
+        public static event Func<object, SessionEventArgs, Task> BeforeResponse;
+
+        /// <summary>
+        /// External proxy for Http
+        /// </summary>
+        public static ExternalProxy UpStreamHttpProxy { get; set; }
+
+        /// <summary>
+        /// External proxy for Http
+        /// </summary>
+        public static ExternalProxy UpStreamHttpsProxy { get; set; }
+
+        /// <summary>
+        /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
+        /// </summary>
+        public static event Func<object, CertificateValidationEventArgs, Task> ServerCertificateValidationCallback;
+
 
         public static List<ProxyEndPoint> ProxyEndPoints { get; set; }
 
         public static void Initialize()
         {
-            Task.Factory.StartNew(() => TcpConnectionManager.ClearIdleConnections());
+            TcpConnectionManager.ClearIdleConnections();
         }
 
         public static void AddEndPoint(ProxyEndPoint endPoint)
@@ -162,10 +154,7 @@ namespace Titanium.Web.Proxy
             CertManager = new CertificateManager(RootCertificateIssuerName,
                 RootCertificateName);
 
-            EnableSsl = ProxyEndPoints.Any(x => x.EnableSsl);
-
-            if (EnableSsl)
-                certTrusted = CertManager.CreateTrustedRootCertificate();
+            certTrusted = CertManager.CreateTrustedRootCertificate().Result;
 
             foreach (var endPoint in ProxyEndPoints)
             {
@@ -228,25 +217,27 @@ namespace Titanium.Web.Proxy
         private static void OnAcceptConnection(IAsyncResult asyn)
         {
             var endPoint = (ProxyEndPoint)asyn.AsyncState;
-         
+
             try
             {
                 var client = endPoint.listener.EndAcceptTcpClient(asyn);
                 if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
-                    Task.Factory.StartNew(() => HandleClient(endPoint as TransparentProxyEndPoint, client));
+                    HandleClient(endPoint as TransparentProxyEndPoint, client);
                 else
-                    Task.Factory.StartNew(() => HandleClient(endPoint as ExplicitProxyEndPoint, client));
+                    HandleClient(endPoint as ExplicitProxyEndPoint, client);
 
                 // Get the listener that handles the client request.
                 endPoint.listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
             }
-            catch
+            catch (ObjectDisposedException)
             {
-                // ignored
+                // The listener was Stop()'d, disposing the underlying socket and
+                // triggering the completion of the callback. We're already exiting,
+                // so just return.
+                return;
             }
-
-            
+           
         }
-     
+      
     }
 }

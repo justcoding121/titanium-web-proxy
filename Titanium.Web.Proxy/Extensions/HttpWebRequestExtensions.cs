@@ -1,6 +1,6 @@
-﻿using System.Net;
-using System.Text;
-using Titanium.Web.Proxy.Network;
+﻿using System.Text;
+using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Extensions
 {
@@ -15,10 +15,11 @@ namespace Titanium.Web.Proxy.Extensions
             try
             {
                 //return default if not specified
-                if (request.ContentType == null) return Encoding.GetEncoding("ISO-8859-1");
+                if (request.ContentType == null)
+                    return Encoding.GetEncoding("ISO-8859-1");
 
                 //extract the encoding by finding the charset
-                var contentTypes = request.ContentType.Split(';');
+                var contentTypes = request.ContentType.Split(Constants.SemiColonSplit);
                 foreach (var contentType in contentTypes)
                 {
                     var encodingSplit = contentType.Split('=');

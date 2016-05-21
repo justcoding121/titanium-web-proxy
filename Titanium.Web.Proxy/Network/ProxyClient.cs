@@ -1,12 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+﻿using System.IO;
 using System.Net.Sockets;
-using System.Text;
 using Titanium.Web.Proxy.Helpers;
 
-namespace Titanium.Web.Proxy.EventArguments
+namespace Titanium.Web.Proxy.Network
 {
     /// <summary>
     /// This class wraps Tcp connection to Server

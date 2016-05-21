@@ -3,9 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.25123.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{B6DBABDC-C985-4872-9C38-B4E5079CBC4B}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Proxy.Test", "Titanium.Web.Proxy.Test\Titanium.Web.Proxy.Test.csproj", "{F3B7E553-1904-4E80-BDC7-212342B5C952}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Examples", "Examples", "{B6DBABDC-C985-4872-9C38-B4E5079CBC4B}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Proxy", "Titanium.Web.Proxy\Titanium.Web.Proxy.csproj", "{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}"
 EndProject
@@ -16,20 +14,35 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{6FD3B8
 		.nuget\NuGet.targets = .nuget\NuGet.targets
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Proxy.Examples.Basic", "Examples\Titanium.Web.Proxy.Examples.Basic\Titanium.Web.Proxy.Examples.Basic.csproj", "{F3B7E553-1904-4E80-BDC7-212342B5C952}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentation", "{38EA62D0-D2CB-465D-AF4F-407C5B4D4A1E}"
+	ProjectSection(SolutionItems) = preProject
+		LICENSE = LICENSE
+		README.md = README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{AC9AE37A-3059-4FDB-9A5C-363AD86F2EEF}"
+	ProjectSection(SolutionItems) = preProject
+		.build\Bootstrap.ps1 = .build\Bootstrap.ps1
+		.build\Common.psm1 = .build\Common.psm1
+		.build\default.ps1 = .build\default.ps1
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release|Any CPU.Build.0 = Release|Any CPU
 		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8D73A1BE-868C-42D2-9ECE-F32CC1A02906}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

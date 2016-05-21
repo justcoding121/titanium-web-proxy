@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 
-namespace Titanium.Web.Proxy.Test
+namespace Titanium.Web.Proxy.Examples.Basic
 {
     public class Program
     {

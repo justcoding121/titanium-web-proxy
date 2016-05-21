@@ -1,8 +1,6 @@
-﻿using System;
-using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
+﻿using Titanium.Web.Proxy.Network;
 
-namespace Titanium.Web.Proxy.Responses
+namespace Titanium.Web.Proxy.Http.Responses
 {
     public class OkResponse : Response
     {
