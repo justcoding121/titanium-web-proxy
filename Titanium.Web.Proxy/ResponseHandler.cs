@@ -3,78 +3,88 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Compression;
+using Titanium.Web.Proxy.Shared;
+using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy
 {
     partial class ProxyServer
     {
         //Called asynchronously when a request was successfully and we received the response
-        public static void HandleHttpSessionResponse(SessionEventArgs args)
+        public static async Task HandleHttpSessionResponse(SessionEventArgs args)
         {
-            args.ProxySession.ReceiveResponse();
+            await args.WebSession.ReceiveResponse().ConfigureAwait(false);
 
             try
             {
-                if (!args.ProxySession.Response.ResponseBodyRead)
-                    args.ProxySession.Response.ResponseStream = args.ProxySession.ProxyClient.ServerStreamReader.BaseStream;
+                if (!args.WebSession.Response.ResponseBodyRead)
+                    args.WebSession.Response.ResponseStream = args.WebSession.ServerConnection.Stream;
 
 
-                if (BeforeResponse != null && !args.ProxySession.Response.ResponseLocked)
-                { 
-                    BeforeResponse(null, args);
+                if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
+                {
+                    Delegate[] invocationList = BeforeResponse.GetInvocationList();
+                    Task[] handlerTasks = new Task[invocationList.Length];
+
+                    for (int i = 0; i < invocationList.Length; i++)
+                    {
+                        handlerTasks[i] = ((Func<object, SessionEventArgs, Task>)invocationList[i])(null, args);
+                    }
+
+                    await Task.WhenAll(handlerTasks).ConfigureAwait(false);
                 }
 
-                args.ProxySession.Response.ResponseLocked = true;
+                args.WebSession.Response.ResponseLocked = true;
 
-                if (args.ProxySession.Response.Is100Continue)
+                if (args.WebSession.Response.Is100Continue)
                 {
-                    WriteResponseStatus(args.ProxySession.Response.HttpVersion, "100",
+                    WriteResponseStatus(args.WebSession.Response.HttpVersion, "100",
                             "Continue", args.Client.ClientStreamWriter);
-                    args.Client.ClientStreamWriter.WriteLine();
+                    await args.Client.ClientStreamWriter.WriteLineAsync();
                 }
-                else if (args.ProxySession.Response.ExpectationFailed)
+                else if (args.WebSession.Response.ExpectationFailed)
                 {
-                    WriteResponseStatus(args.ProxySession.Response.HttpVersion, "417",
+                    WriteResponseStatus(args.WebSession.Response.HttpVersion, "417",
                             "Expectation Failed", args.Client.ClientStreamWriter);
-                    args.Client.ClientStreamWriter.WriteLine();
+                    await args.Client.ClientStreamWriter.WriteLineAsync();
                 }
 
-                WriteResponseStatus(args.ProxySession.Response.HttpVersion, args.ProxySession.Response.ResponseStatusCode,
-                             args.ProxySession.Response.ResponseStatusDescription, args.Client.ClientStreamWriter);
+                WriteResponseStatus(args.WebSession.Response.HttpVersion, args.WebSession.Response.ResponseStatusCode,
+                             args.WebSession.Response.ResponseStatusDescription, args.Client.ClientStreamWriter);
 
-                if (args.ProxySession.Response.ResponseBodyRead)
+                if (args.WebSession.Response.ResponseBodyRead)
                 {
-                    var isChunked = args.ProxySession.Response.IsChunked;
-                    var contentEncoding = args.ProxySession.Response.ContentEncoding;
+                    var isChunked = args.WebSession.Response.IsChunked;
+                    var contentEncoding = args.WebSession.Response.ContentEncoding;
 
                     if (contentEncoding != null)
                     {
-                        args.ProxySession.Response.ResponseBody = GetCompressedResponseBody(contentEncoding, args.ProxySession.Response.ResponseBody);
+                        args.WebSession.Response.ResponseBody = await GetCompressedResponseBody(contentEncoding, args.WebSession.Response.ResponseBody).ConfigureAwait(false);
+
+                        if (isChunked == false)
+                            args.WebSession.Response.ContentLength = args.WebSession.Response.ResponseBody.Length;
+                        else
+                            args.WebSession.Response.ContentLength = -1;
                     }
 
-                    WriteResponseHeaders(args.Client.ClientStreamWriter, args.ProxySession.Response.ResponseHeaders, args.ProxySession.Response.ResponseBody.Length,
-                        isChunked);
-                    WriteResponseBody(args.Client.ClientStream, args.ProxySession.Response.ResponseBody, isChunked);
+                    await WriteResponseHeaders(args.Client.ClientStreamWriter, args.WebSession.Response.ResponseHeaders).ConfigureAwait(false);
+                    await WriteResponseBody(args.Client.ClientStream, args.WebSession.Response.ResponseBody, isChunked).ConfigureAwait(false);
                 }
                 else
                 {
-                    WriteResponseHeaders(args.Client.ClientStreamWriter, args.ProxySession.Response.ResponseHeaders);
+                    await WriteResponseHeaders(args.Client.ClientStreamWriter, args.WebSession.Response.ResponseHeaders);
 
-                    if (args.ProxySession.Response.IsChunked || args.ProxySession.Response.ContentLength > 0)
-                        WriteResponseBody(args.ProxySession.ProxyClient.ServerStreamReader, args.Client.ClientStream, args.ProxySession.Response.IsChunked, args.ProxySession.Response.ContentLength);
+                    if (args.WebSession.Response.IsChunked || args.WebSession.Response.ContentLength > 0 || args.WebSession.Response.HttpVersion.ToLower().Trim() == "http/1.0")
+                        await WriteResponseBody(args.WebSession.ServerConnection.StreamReader, args.Client.ClientStream, args.WebSession.Response.IsChunked, args.WebSession.Response.ContentLength).ConfigureAwait(false);
                 }
 
-                args.Client.ClientStream.Flush();
+                await args.Client.ClientStream.FlushAsync();
 
             }
             catch
@@ -87,21 +97,21 @@ namespace Titanium.Web.Proxy
             }
         }
 
-        private static byte[] GetCompressedResponseBody(string encodingType, byte[] responseBodyStream)
+        private static async Task<byte[]> GetCompressedResponseBody(string encodingType, byte[] responseBodyStream)
         {
             var compressionFactory = new CompressionFactory();
             var compressor = compressionFactory.Create(encodingType);
-            return compressor.Compress(responseBodyStream);
+            return await compressor.Compress(responseBodyStream).ConfigureAwait(false);
         }
 
 
         private static void WriteResponseStatus(string version, string code, string description,
             StreamWriter responseWriter)
         {
-            responseWriter.WriteLine(string.Format("{0} {1} {2}", version, code, description));
+            responseWriter.WriteLineAsync(string.Format("{0} {1} {2}", version, code, description));
         }
 
-        private static void WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers)
+        private static async Task WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers)
         {
             if (headers != null)
             {
@@ -109,12 +119,12 @@ namespace Titanium.Web.Proxy
 
                 foreach (var header in headers)
                 {
-                    responseWriter.WriteLine(header.ToString());
+                    await responseWriter.WriteLineAsync(header.ToString());
                 }
             }
 
-            responseWriter.WriteLine();
-            responseWriter.Flush();
+            await responseWriter.WriteLineAsync();
+            await responseWriter.FlushAsync();
         }
         private static void FixResponseProxyHeaders(List<HttpHeader> headers)
         {
@@ -135,118 +145,92 @@ namespace Titanium.Web.Proxy
             headers.RemoveAll(x => x.Name.ToLower() == "proxy-connection");
         }
 
-        private static void WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers, int length,
-            bool isChunked)
-        {
-            FixResponseProxyHeaders(headers);
-
-            if (!isChunked)
-            {
-                if (headers.Any(x => x.Name.ToLower() == "content-length") == false)
-                {
-                    headers.Add(new HttpHeader("Content-Length", length.ToString()));
-                }
-            }
-
-            if (headers != null)
-            {
-                foreach (var header in headers)
-                {
-                    if (!isChunked && header.Name.ToLower() == "content-length")
-                        header.Value = length.ToString();
-
-                    responseWriter.WriteLine(header.ToString());
-                }
-            }
-
-            responseWriter.WriteLine();
-            responseWriter.Flush();
-        }
-
-        private static void WriteResponseBody(Stream clientStream, byte[] data, bool isChunked)
+        private static async Task WriteResponseBody(Stream clientStream, byte[] data, bool isChunked)
         {
             if (!isChunked)
             {
-                clientStream.Write(data, 0, data.Length);
+                await clientStream.WriteAsync(data, 0, data.Length).ConfigureAwait(false);
             }
             else
-                WriteResponseBodyChunked(data, clientStream);
+                await WriteResponseBodyChunked(data, clientStream).ConfigureAwait(false);
         }
 
-        private static void WriteResponseBody(CustomBinaryReader inStreamReader, Stream outStream, bool isChunked, int BodyLength)
+        private static async Task WriteResponseBody(CustomBinaryReader inStreamReader, Stream outStream, bool isChunked, long ContentLength)
         {
             if (!isChunked)
             {
-                int bytesToRead = BUFFER_SIZE;
+                //http 1.0
+                if (ContentLength == -1)
+                    ContentLength = long.MaxValue;
 
-                if (BodyLength < BUFFER_SIZE)
-                    bytesToRead = BodyLength;
+                int bytesToRead = Constants.BUFFER_SIZE;
 
-                var buffer = new byte[BUFFER_SIZE];
+                if (ContentLength < Constants.BUFFER_SIZE)
+                    bytesToRead = (int)ContentLength;
+
+                var buffer = new byte[Constants.BUFFER_SIZE];
 
                 var bytesRead = 0;
                 var totalBytesRead = 0;
 
-                while ((bytesRead += inStreamReader.BaseStream.Read(buffer, 0, bytesToRead)) > 0)
+                while ((bytesRead += await inStreamReader.BaseStream.ReadAsync(buffer, 0, bytesToRead).ConfigureAwait(false)) > 0)
                 {
-                    outStream.Write(buffer, 0, bytesRead);
+                    await outStream.WriteAsync(buffer, 0, bytesRead).ConfigureAwait(false);
                     totalBytesRead += bytesRead;
 
-                    if (totalBytesRead == BodyLength)
+                    if (totalBytesRead == ContentLength)
                         break;
 
                     bytesRead = 0;
-                    var remainingBytes = (BodyLength - totalBytesRead);
-                    bytesToRead = remainingBytes > BUFFER_SIZE ? BUFFER_SIZE : remainingBytes;
+                    var remainingBytes = (ContentLength - totalBytesRead);
+                    bytesToRead = remainingBytes > (long)Constants.BUFFER_SIZE ? Constants.BUFFER_SIZE : (int)remainingBytes;
                 }
             }
             else
-                WriteResponseBodyChunked(inStreamReader, outStream);
+                await WriteResponseBodyChunked(inStreamReader, outStream).ConfigureAwait(false);
         }
 
         //Send chunked response
-        private static void WriteResponseBodyChunked(CustomBinaryReader inStreamReader, Stream outStream)
+        private static async Task WriteResponseBodyChunked(CustomBinaryReader inStreamReader, Stream outStream)
         {
             while (true)
             {
-                var chuchkHead = inStreamReader.ReadLine();
-                var chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
+                var chunkHead = await inStreamReader.ReadLineAsync().ConfigureAwait(false);
+                var chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
 
                 if (chunkSize != 0)
                 {
-                    var buffer = inStreamReader.ReadBytes(chunkSize);
+                    var buffer = await inStreamReader.ReadBytesAsync(chunkSize).ConfigureAwait(false);
 
-                    var chunkHead = Encoding.ASCII.GetBytes(chunkSize.ToString("x2"));
+                    var chunkHeadBytes = Encoding.ASCII.GetBytes(chunkSize.ToString("x2"));
 
-                    outStream.Write(chunkHead, 0, chunkHead.Length);
-                    outStream.Write(NewLineBytes, 0, NewLineBytes.Length);
+                    await outStream.WriteAsync(chunkHeadBytes, 0, chunkHeadBytes.Length).ConfigureAwait(false);
+                    await outStream.WriteAsync(Constants.NewLineBytes, 0, Constants.NewLineBytes.Length).ConfigureAwait(false);
 
-                    outStream.Write(buffer, 0, chunkSize);
-                    outStream.Write(NewLineBytes, 0, NewLineBytes.Length);
+                    await outStream.WriteAsync(buffer, 0, chunkSize).ConfigureAwait(false);
+                    await outStream.WriteAsync(Constants.NewLineBytes, 0, Constants.NewLineBytes.Length).ConfigureAwait(false);
 
-                    inStreamReader.ReadLine();
+                    await inStreamReader.ReadLineAsync().ConfigureAwait(false);
                 }
                 else
                 {
-                    inStreamReader.ReadLine();
-                    outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
+                    await inStreamReader.ReadLineAsync().ConfigureAwait(false);
+                    await outStream.WriteAsync(Constants.ChunkEnd, 0, Constants.ChunkEnd.Length).ConfigureAwait(false);
                     break;
                 }
             }
-
-
         }
 
-        private static void WriteResponseBodyChunked(byte[] data, Stream outStream)
+        private static async Task WriteResponseBodyChunked(byte[] data, Stream outStream)
         {
             var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
 
-            outStream.Write(chunkHead, 0, chunkHead.Length);
-            outStream.Write(NewLineBytes, 0, NewLineBytes.Length);
-            outStream.Write(data, 0, data.Length);
-            outStream.Write(NewLineBytes, 0, NewLineBytes.Length);
+            await outStream.WriteAsync(chunkHead, 0, chunkHead.Length).ConfigureAwait(false);
+            await outStream.WriteAsync(Constants.NewLineBytes, 0, Constants.NewLineBytes.Length).ConfigureAwait(false);
+            await outStream.WriteAsync(data, 0, data.Length).ConfigureAwait(false);
+            await outStream.WriteAsync(Constants.NewLineBytes, 0, Constants.NewLineBytes.Length).ConfigureAwait(false);
 
-            outStream.Write(ChunkEnd, 0, ChunkEnd.Length);
+            await outStream.WriteAsync(Constants.ChunkEnd, 0, Constants.ChunkEnd.Length).ConfigureAwait(false);
         }
 
 

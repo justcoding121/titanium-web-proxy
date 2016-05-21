@@ -8,8 +8,8 @@
     <ProjectGuid>{F3B7E553-1904-4E80-BDC7-212342B5C952}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Titanium.Web.Proxy.Test</RootNamespace>
-    <AssemblyName>Titanium.Web.Proxy.Test</AssemblyName>
+    <RootNamespace>Titanium.Web.Proxy.Examples.Basic</RootNamespace>
+    <AssemblyName>Titanium.Web.Proxy.Examples.Basic</AssemblyName>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
   </PropertyGroup>
@@ -65,7 +65,7 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj">
+    <ProjectReference Include="..\..\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj">
       <Project>{8d73a1be-868c-42d2-9ece-f32cc1a02906}</Project>
       <Name>Titanium.Web.Proxy</Name>
     </ProjectReference>

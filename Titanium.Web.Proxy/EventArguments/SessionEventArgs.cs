@@ -1,12 +1,13 @@
 ﻿using System;
-using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Network;
-using Titanium.Web.Proxy.Responses;
 using Titanium.Web.Proxy.Decompression;
+using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Http.Responses;
+using Titanium.Web.Proxy.Extensions;
+using System.Threading.Tasks;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -24,7 +25,7 @@ namespace Titanium.Web.Proxy.EventArguments
         internal SessionEventArgs()
         {
             Client = new ProxyClient();
-            ProxySession = new HttpWebSession();
+            WebSession = new HttpWebSession();
         }
 
         /// <summary>
@@ -41,45 +42,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// A web session corresponding to a single request/response sequence
         /// within a proxy connection
         /// </summary>
-        public HttpWebSession ProxySession { get; set; }
+        public HttpWebSession WebSession { get; set; }
 
-        /// <summary>
-        /// A shortcut to get the request content length
-        /// </summary>
-        public int RequestContentLength
-        {
-            get
-            {
-                return ProxySession.Request.ContentLength;
-            }
-        }
-
-        /// <summary>
-        /// A shortcut to get the request Method (GET/POST/PUT etc)
-        /// </summary>
-        public string RequestMethod
-        {
-            get { return ProxySession.Request.Method; }
-        }
-
-        /// <summary>
-        /// A shortcut to get the response status code (200 OK, 404 etc)
-        /// </summary>
-        public string ResponseStatusCode
-        {
-            get { return ProxySession.Response.ResponseStatusCode; }
-        }
-
-        /// <summary>
-        /// A shortcut to get the response content type
-        /// </summary>
-        public string ResponseContentType
-        {
-            get
-            {
-                return ProxySession.Response.ContentType;
-            }
-        }
 
         /// <summary>
         /// implement any cleanup here
@@ -92,132 +56,82 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Read request body content as bytes[] for current session
         /// </summary>
-        private void ReadRequestBody()
+        private async Task ReadRequestBody()
         {
             //GET request don't have a request body to read
-            if ((ProxySession.Request.Method.ToUpper() != "POST" && ProxySession.Request.Method.ToUpper() != "PUT"))
+            if ((WebSession.Request.Method.ToUpper() != "POST" && WebSession.Request.Method.ToUpper() != "PUT"))
             {
                 throw new BodyNotFoundException("Request don't have a body." +
                                                 "Please verify that this request is a Http POST/PUT and request content length is greater than zero before accessing the body.");
             }
 
             //Caching check
-            if (ProxySession.Request.RequestBody == null)
+            if (WebSession.Request.RequestBody == null)
             {
-                var isChunked = false;
-                string requestContentEncoding = null;
 
-                //get compression method (gzip, zlib etc)
-                if (ProxySession.Request.RequestHeaders.Any(x => x.Name.ToLower() == "content-encoding"))
-                {
-                    requestContentEncoding = ProxySession.Request.RequestHeaders.First(x => x.Name.ToLower() == "content-encoding").Value;
-                }
+                //If chunked then its easy just read the whole body with the content length mentioned in the request header
 
-                //check if the request have chunked body (body send chunck by chunck without a fixed length)
-                if (ProxySession.Request.RequestHeaders.Any(x => x.Name.ToLower() == "transfer-encoding"))
+                using (var requestBodyStream = new MemoryStream())
                 {
-                    var transferEncoding =
-                        ProxySession.Request.RequestHeaders.First(x => x.Name.ToLower() == "transfer-encoding").Value.ToLower();
-                    if (transferEncoding.Contains("chunked"))
+                    //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
+                    if (WebSession.Request.IsChunked)
                     {
-                        isChunked = true;
+                        await this.Client.ClientStreamReader.CopyBytesToStreamChunked(requestBodyStream).ConfigureAwait(false);
                     }
-                }
-
-                //If not chunked then its easy just read the whole body with the content length mentioned in the request header
-                if (requestContentEncoding == null && !isChunked)
-                    ProxySession.Request.RequestBody = this.Client.ClientStreamReader.ReadBytes(RequestContentLength);
-                else
-                {
-                    using (var requestBodyStream = new MemoryStream())
+                    else
                     {
-                        //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
-                        if (isChunked)
+                        //If not chunked then its easy just read the whole body with the content length mentioned in the request header
+                        if (WebSession.Request.ContentLength > 0)
                         {
-                            while (true)
-                            {
-                                var chuchkHead = this.Client.ClientStreamReader.ReadLine();
-                                var chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
+                            //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
+                            await this.Client.ClientStreamReader.CopyBytesToStream(requestBodyStream, WebSession.Request.ContentLength).ConfigureAwait(false);
 
-                                if (chunkSize != 0)
-                                {
-                                    var buffer = this.Client.ClientStreamReader.ReadBytes(chunkSize);
-                                    requestBodyStream.Write(buffer, 0, buffer.Length);
-                                    //chunk trail
-                                    this.Client.ClientStreamReader.ReadLine();
-                                }
-                                else
-                                {
-                                    //chunk end
-                                    this.Client.ClientStreamReader.ReadLine();
-                                    break;
-                                }
-                            }
                         }
-
-                        try
-                        {
-                            ProxySession.Request.RequestBody = GetDecompressedResponseBody(requestContentEncoding, requestBodyStream.ToArray());
-                        }
-                        catch
-                        {
-                            //if decompression fails, just assign the body stream as it it
-                            //Not a safe option
-                            ProxySession.Request.RequestBody = requestBodyStream.ToArray();
-                        }
+                        else if (WebSession.Request.HttpVersion.ToLower().Trim().Equals("http/1.0"))
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(requestBodyStream, long.MaxValue).ConfigureAwait(false);
                     }
+                    WebSession.Request.RequestBody = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding, requestBodyStream.ToArray()).ConfigureAwait(false);
                 }
+
+                //Now set the flag to true
+                //So that next time we can deliver body from cache
+                WebSession.Request.RequestBodyRead = true;
             }
-            //Now set the flag to true
-            //So that next time we can deliver body from cache
-            ProxySession.Request.RequestBodyRead = true;
+      
         }
 
         /// <summary>
         /// Read response body as byte[] for current response
         /// </summary>
-        private void ReadResponseBody()
+        private async Task ReadResponseBody()
         {
             //If not already read (not cached yet)
-            if (ProxySession.Response.ResponseBody == null)
+            if (WebSession.Response.ResponseBody == null)
             {
                 using (var responseBodyStream = new MemoryStream())
                 {
                     //If chuncked the read chunk by chunk until we hit chunk end symbol
-                    if (ProxySession.Response.IsChunked)
+                    if (WebSession.Response.IsChunked)
                     {
-                        while (true)
-                        {
-                            var chuchkHead = ProxySession.ProxyClient.ServerStreamReader.ReadLine();
-                            var chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
-
-                            if (chunkSize != 0)
-                            {
-                                var buffer = ProxySession.ProxyClient.ServerStreamReader.ReadBytes(chunkSize);
-                                responseBodyStream.Write(buffer, 0, buffer.Length);
-                                //chunk trail
-                                ProxySession.ProxyClient.ServerStreamReader.ReadLine();
-                            }
-                            else
-                            {
-                                //chuck end
-                                ProxySession.ProxyClient.ServerStreamReader.ReadLine();
-                                break;
-                            }
-                        }
+                        await WebSession.ServerConnection.StreamReader.CopyBytesToStreamChunked(responseBodyStream).ConfigureAwait(false);
                     }
                     else
                     {
-                        //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                        var buffer = ProxySession.ProxyClient.ServerStreamReader.ReadBytes(ProxySession.Response.ContentLength);
-                        responseBodyStream.Write(buffer, 0, buffer.Length);
+                        if (WebSession.Response.ContentLength > 0)
+                        {
+                            //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, WebSession.Response.ContentLength).ConfigureAwait(false);
+
+                        }
+                        else if(WebSession.Response.HttpVersion.ToLower().Trim().Equals("http/1.0"))
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, long.MaxValue).ConfigureAwait(false);
                     }
 
-                    ProxySession.Response.ResponseBody = GetDecompressedResponseBody(ProxySession.Response.ContentEncoding, responseBodyStream.ToArray());
+                    WebSession.Response.ResponseBody = await GetDecompressedResponseBody(WebSession.Response.ContentEncoding, responseBodyStream.ToArray()).ConfigureAwait(false);
 
                 }
                 //set this to true for caching
-                ProxySession.Response.ResponseBodyRead = true;
+                WebSession.Response.ResponseBodyRead = true;
             }
         }
 
@@ -225,130 +139,149 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Gets the request body as bytes
         /// </summary>
         /// <returns></returns>
-        public byte[] GetRequestBody()
+        public async Task<byte[]> GetRequestBody()
         {
-            if (ProxySession.Request.RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
+            if (WebSession.Request.RequestLocked)
+                throw new Exception("You cannot call this function after request is made to server.");
 
-            ReadRequestBody();
-            return ProxySession.Request.RequestBody;
+            await ReadRequestBody().ConfigureAwait(false);
+            return WebSession.Request.RequestBody;
         }
         /// <summary>
         /// Gets the request body as string
         /// </summary>
         /// <returns></returns>
-        public string GetRequestBodyAsString()
+        public async Task<string> GetRequestBodyAsString()
         {
-            if (ProxySession.Request.RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
+            if (WebSession.Request.RequestLocked)
+                throw new Exception("You cannot call this function after request is made to server.");
 
 
-            ReadRequestBody();
+            await ReadRequestBody().ConfigureAwait(false);
 
             //Use the encoding specified in request to decode the byte[] data to string
-            return ProxySession.Request.RequestBodyString ?? (ProxySession.Request.RequestBodyString = ProxySession.Request.Encoding.GetString(ProxySession.Request.RequestBody));
+            return WebSession.Request.RequestBodyString ?? (WebSession.Request.RequestBodyString = WebSession.Request.Encoding.GetString(WebSession.Request.RequestBody));
         }
 
         /// <summary>
         /// Sets the request body
         /// </summary>
         /// <param name="body"></param>
-        public void SetRequestBody(byte[] body)
+        public async Task SetRequestBody(byte[] body)
         {
-            if (ProxySession.Request.RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
+            if (WebSession.Request.RequestLocked)
+                throw new Exception("You cannot call this function after request is made to server.");
 
             //syphon out the request body from client before setting the new body
-            if (!ProxySession.Request.RequestBodyRead)
+            if (!WebSession.Request.RequestBodyRead)
             {
-                ReadRequestBody();
+                await ReadRequestBody().ConfigureAwait(false);
             }
 
-            ProxySession.Request.RequestBody = body;
-            ProxySession.Request.RequestBodyRead = true;
+            WebSession.Request.RequestBody = body;
+
+            if (WebSession.Request.IsChunked == false)
+                WebSession.Request.ContentLength = body.Length;
+            else
+                WebSession.Request.ContentLength = -1;
         }
 
         /// <summary>
         /// Sets the body with the specified string
         /// </summary>
         /// <param name="body"></param>
-        public void SetRequestBodyString(string body)
+        public async Task SetRequestBodyString(string body)
         {
-            if (ProxySession.Request.RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
+            if (WebSession.Request.RequestLocked)
+                throw new Exception("You cannot call this function after request is made to server.");
 
             //syphon out the request body from client before setting the new body
-            if (!ProxySession.Request.RequestBodyRead)
+            if (!WebSession.Request.RequestBodyRead)
             {
-                ReadRequestBody();
+                await ReadRequestBody().ConfigureAwait(false);
             }
 
-            ProxySession.Request.RequestBody = ProxySession.Request.Encoding.GetBytes(body);
-            ProxySession.Request.RequestBodyRead = true;
+            await SetRequestBody(WebSession.Request.Encoding.GetBytes(body));
+
         }
 
         /// <summary>
         /// Gets the response body as byte array
         /// </summary>
         /// <returns></returns>
-        public byte[] GetResponseBody()
+        public async Task<byte[]> GetResponseBody()
         {
-            if (!ProxySession.Request.RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
+            if (!WebSession.Request.RequestLocked)
+                throw new Exception("You cannot call this function before request is made to server.");
 
-            ReadResponseBody();
-            return ProxySession.Response.ResponseBody;
+            await ReadResponseBody().ConfigureAwait(false);
+            return WebSession.Response.ResponseBody;
         }
 
         /// <summary>
         /// Gets the response body as string
         /// </summary>
         /// <returns></returns>
-        public string GetResponseBodyAsString()
+        public async Task<string> GetResponseBodyAsString()
         {
-            if (!ProxySession.Request.RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
+            if (!WebSession.Request.RequestLocked)
+                throw new Exception("You cannot call this function before request is made to server.");
 
-            GetResponseBody();
+            await GetResponseBody().ConfigureAwait(false);
 
-            return ProxySession.Response.ResponseBodyString ?? (ProxySession.Response.ResponseBodyString = ProxySession.Response.Encoding.GetString(ProxySession.Response.ResponseBody));
+            return WebSession.Response.ResponseBodyString ?? (WebSession.Response.ResponseBodyString = WebSession.Response.Encoding.GetString(WebSession.Response.ResponseBody));
         }
 
         /// <summary>
         /// Set the response body bytes
         /// </summary>
         /// <param name="body"></param>
-        public void SetResponseBody(byte[] body)
+        public async Task SetResponseBody(byte[] body)
         {
-            if (!ProxySession.Request.RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
+            if (!WebSession.Request.RequestLocked)
+                throw new Exception("You cannot call this function before request is made to server.");
 
             //syphon out the response body from server before setting the new body
-            if (ProxySession.Response.ResponseBody == null)
+            if (WebSession.Response.ResponseBody == null)
             {
-                GetResponseBody();
+                await GetResponseBody().ConfigureAwait(false);
             }
 
-            ProxySession.Response.ResponseBody = body;
+            WebSession.Response.ResponseBody = body;
+
+            //If there is a content length header update it
+            if (WebSession.Response.IsChunked == false)
+                WebSession.Response.ContentLength = body.Length;
+            else
+                WebSession.Response.ContentLength = -1;
         }
 
         /// <summary>
         /// Replace the response body with the specified string
         /// </summary>
         /// <param name="body"></param>
-        public void SetResponseBodyString(string body)
+        public async Task SetResponseBodyString(string body)
         {
-            if (!ProxySession.Request.RequestLocked) throw new Exception("You cannot call this function before request is made to server.");
+            if (!WebSession.Request.RequestLocked)
+                throw new Exception("You cannot call this function before request is made to server.");
 
             //syphon out the response body from server before setting the new body
-            if (ProxySession.Response.ResponseBody == null)
+            if (WebSession.Response.ResponseBody == null)
             {
-                GetResponseBody();
+                await GetResponseBody().ConfigureAwait(false);
             }
 
-            var bodyBytes = ProxySession.Response.Encoding.GetBytes(body);
-            SetResponseBody(bodyBytes);
-        }
+            var bodyBytes = WebSession.Response.Encoding.GetBytes(body);
 
-        private byte[] GetDecompressedResponseBody(string encodingType, byte[] responseBodyStream)
+            await SetResponseBody(bodyBytes).ConfigureAwait(false);
+        } 
+
+        private async Task<byte[]> GetDecompressedResponseBody(string encodingType, byte[] responseBodyStream)
         {
             var decompressionFactory = new DecompressionFactory();
             var decompressor = decompressionFactory.Create(encodingType);
 
-            return decompressor.Decompress(responseBodyStream);
+            return await decompressor.Decompress(responseBodyStream).ConfigureAwait(false);
         }
 
 
@@ -358,16 +291,17 @@ namespace Titanium.Web.Proxy.EventArguments
         /// and ignore the request 
         /// </summary>
         /// <param name="html"></param>
-        public void Ok(string html)
+        public async Task Ok(string html)
         {
-            if (ProxySession.Request.RequestLocked) throw new Exception("You cannot call this function after request is made to server.");
+            if (WebSession.Request.RequestLocked)
+                throw new Exception("You cannot call this function after request is made to server.");
 
             if (html == null)
                 html = string.Empty;
 
             var result = Encoding.Default.GetBytes(html);
 
-            Ok(result);
+            await Ok(result).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -376,43 +310,43 @@ namespace Titanium.Web.Proxy.EventArguments
         /// and ignore the request 
         /// </summary>
         /// <param name="body"></param>
-        public void Ok(byte[] result)
+        public async Task Ok(byte[] result)
         {
             var response = new OkResponse();
 
-            response.HttpVersion = ProxySession.Request.HttpVersion;
+            response.HttpVersion = WebSession.Request.HttpVersion;
             response.ResponseBody = result;
 
-            Respond(response);
+            await Respond(response).ConfigureAwait(false);
 
-            ProxySession.Request.CancelRequest = true;
+            WebSession.Request.CancelRequest = true;
         }
 
-        public void Redirect(string url)
+        public async Task Redirect(string url)
         {
             var response = new RedirectResponse();
 
-            response.HttpVersion = ProxySession.Request.HttpVersion;
+            response.HttpVersion = WebSession.Request.HttpVersion;
             response.ResponseHeaders.Add(new Models.HttpHeader("Location", url));
             response.ResponseBody = Encoding.ASCII.GetBytes(string.Empty);
 
-            Respond(response);
+            await Respond(response).ConfigureAwait(false);
 
-            ProxySession.Request.CancelRequest = true;
+            WebSession.Request.CancelRequest = true;
         }
 
         /// a generic responder method 
-        public void Respond(Response response)
+        public async Task Respond(Response response)
         {
-            ProxySession.Request.RequestLocked = true;
+            WebSession.Request.RequestLocked = true;
 
             response.ResponseLocked = true;
             response.ResponseBodyRead = true;
 
-            ProxySession.Response = response;
+            WebSession.Response = response;
 
-            ProxyServer.HandleHttpSessionResponse(this);
+            await ProxyServer.HandleHttpSessionResponse(this).ConfigureAwait(false);
         }
-     
+
     }
 }

@@ -1,7 +1,9 @@
-﻿namespace Titanium.Web.Proxy.Compression
+﻿using System.Threading.Tasks;
+
+namespace Titanium.Web.Proxy.Compression
 {
     interface ICompression
     {
-        byte[] Compress(byte[] responseBody);
+        Task<byte[]> Compress(byte[] responseBody);
     }
 }

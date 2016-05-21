@@ -8,14 +8,13 @@ using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
     public class TcpHelper
     {
-        private static readonly int BUFFER_SIZE = 8192;
-
-        public static void SendRaw(Stream clientStream, string httpCmd, List<HttpHeader> requestHeaders, string hostName,
+        public async static Task SendRaw(Stream clientStream, string httpCmd, List<HttpHeader> requestHeaders, string hostName,
             int tunnelPort, bool isHttps)
         {
             StringBuilder sb = null;
@@ -51,7 +50,7 @@ namespace Titanium.Web.Proxy.Helpers
                     try
                     {
                         sslStream = new SslStream(tunnelStream);
-                        sslStream.AuthenticateAsClient(hostName, null, ProxyServer.SupportedProtocols, false);
+                        await sslStream.AuthenticateAsClientAsync(hostName, null, Constants.SupportedProtocols, false);
                         tunnelStream = sslStream;
                     }
                     catch
@@ -63,18 +62,17 @@ namespace Titanium.Web.Proxy.Helpers
                     }
                 }
 
+                Task sendRelay;
 
-                var sendRelay = Task.Factory.StartNew(() =>
-                {
-                    if (sb != null)
-                        clientStream.CopyToAsync(sb.ToString(), tunnelStream, BUFFER_SIZE);
-                    else
-                        clientStream.CopyToAsync(string.Empty, tunnelStream, BUFFER_SIZE);
-                });
+                if (sb != null)
+                    sendRelay = clientStream.CopyToAsync(sb.ToString(), tunnelStream);
+                else
+                    sendRelay = clientStream.CopyToAsync(string.Empty, tunnelStream);
 
-                var receiveRelay = Task.Factory.StartNew(() => tunnelStream.CopyToAsync(string.Empty, clientStream, BUFFER_SIZE));
 
-                Task.WaitAll(sendRelay, receiveRelay);
+                var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
+
+                await Task.WhenAll(sendRelay, receiveRelay).ConfigureAwait(false);
             }
             catch
             {

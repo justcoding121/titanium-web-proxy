@@ -1,83 +1,75 @@
 ﻿using System;
+using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
+using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Extensions
 {
     public static class StreamHelper
     {
-        public static void CopyToAsync(this Stream input, string initialData, Stream output, int bufferSize)
+        public static async Task CopyToAsync(this Stream input, string initialData, Stream output)
         {
-            if(!string.IsNullOrEmpty(initialData))
+            if (!string.IsNullOrEmpty(initialData))
             {
                 var bytes = Encoding.ASCII.GetBytes(initialData);
-                output.Write(bytes, 0, bytes.Length);
+                await output.WriteAsync(bytes, 0, bytes.Length);
             }
-        
-            CopyToAsync(input, output, bufferSize);
+            await input.CopyToAsync(output);
         }
 
-        //http://stackoverflow.com/questions/1540658/net-asynchronous-stream-read-write
-        private static void CopyToAsync(this Stream input, Stream output, int bufferSize)
+        internal static async Task CopyBytesToStream(this CustomBinaryReader streamReader, Stream stream, long totalBytesToRead)
         {
-            try
+            var totalbytesRead = 0;
+
+            long bytesToRead;
+            if (totalBytesToRead < Constants.BUFFER_SIZE)
             {
-                if (!input.CanRead) throw new InvalidOperationException("input must be open for reading");
-                if (!output.CanWrite) throw new InvalidOperationException("output must be open for writing");
-
-                byte[][] buf = {new byte[bufferSize], new byte[bufferSize]};
-                int[] bufl = {0, 0};
-                var bufno = 0;
-                var read = input.BeginRead(buf[bufno], 0, buf[bufno].Length, null, null);
-                IAsyncResult write = null;
-
-                while (true)
-                {
-                    // wait for the read operation to complete
-                    read.AsyncWaitHandle.WaitOne();
-                    bufl[bufno] = input.EndRead(read);
-
-                    // if zero bytes read, the copy is complete
-                    if (bufl[bufno] == 0)
-                    {
-                        break;
-                    }
-
-                    // wait for the in-flight write operation, if one exists, to complete
-                    // the only time one won't exist is after the very first read operation completes
-                    if (write != null)
-                    {
-                        write.AsyncWaitHandle.WaitOne();
-                        output.EndWrite(write);
-                    }
-
-                    // start the new write operation
-                    write = output.BeginWrite(buf[bufno], 0, bufl[bufno], null, null);
-
-                    // toggle the current, in-use buffer
-                    // and start the read operation on the new buffer.
-                    //
-                    // Changed to use XOR to toggle between 0 and 1.
-                    // A little speedier than using a ternary expression.
-                    bufno ^= 1; // bufno = ( bufno == 0 ? 1 : 0 ) ;
-                    read = input.BeginRead(buf[bufno], 0, buf[bufno].Length, null, null);
-                }
-
-                // wait for the final in-flight write operation, if one exists, to complete
-                // the only time one won't exist is if the input stream is empty.
-                if (write != null)
-                {
-                    write.AsyncWaitHandle.WaitOne();
-                    output.EndWrite(write);
-                }
-
-                output.Flush();
+                bytesToRead = totalBytesToRead;
             }
-            catch
+            else
+                bytesToRead = Constants.BUFFER_SIZE;
+
+
+            while (totalbytesRead < totalBytesToRead)
             {
-                // ignored
+                var buffer = await streamReader.ReadBytesAsync(bytesToRead);
+
+                if (buffer.Length == 0)
+                    break;
+
+                totalbytesRead += buffer.Length;
+
+                var remainingBytes = totalBytesToRead - totalbytesRead;
+                if (remainingBytes < bytesToRead)
+                {
+                    bytesToRead = remainingBytes;
+                }
+                await stream.WriteAsync(buffer, 0, buffer.Length);
             }
-            // return to the caller ;
+        }
+        internal static async Task CopyBytesToStreamChunked(this CustomBinaryReader clientStreamReader, Stream stream)
+        {
+            while (true)
+            {
+                var chuchkHead = await clientStreamReader.ReadLineAsync().ConfigureAwait(false);
+                var chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
+
+                if (chunkSize != 0)
+                {
+                    var buffer = await clientStreamReader.ReadBytesAsync(chunkSize);
+                    await stream.WriteAsync(buffer, 0, buffer.Length);
+                    //chunk trail
+                   await clientStreamReader.ReadLineAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                   await clientStreamReader.ReadLineAsync().ConfigureAwait(false);
+                    break;
+                }
+            }
         }
     }
 }
