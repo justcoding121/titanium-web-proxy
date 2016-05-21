@@ -68,7 +68,7 @@ namespace Titanium.Web.Proxy.Network
             x.IsSecure == isSecure && x.TcpClient.Connected && x.Version.Equals(version)).Count() < 2)
             {
                 var task = CreateClient(sessionArgs, hostname, port, isSecure, version)
-                            .ContinueWith(x => ReleaseClient(x.Result));
+                            .ContinueWith(x => { if (x.Status == TaskStatus.RanToCompletion) ReleaseClient(x.Result); });
             }
 
             return cached;
