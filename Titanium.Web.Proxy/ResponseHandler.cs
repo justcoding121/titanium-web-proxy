@@ -67,8 +67,10 @@ namespace Titanium.Web.Proxy
                     {
                         args.WebSession.Response.ResponseBody = await GetCompressedResponseBody(contentEncoding, args.WebSession.Response.ResponseBody).ConfigureAwait(false);
 
-                        if (isChunked==false)
-                         args.WebSession.Response.ContentLength = args.WebSession.Response.ResponseBody.Length;
+                        if (isChunked == false)
+                            args.WebSession.Response.ContentLength = args.WebSession.Response.ResponseBody.Length;
+                        else
+                            args.WebSession.Response.ContentLength = -1;
                     }
 
                     await WriteResponseHeaders(args.Client.ClientStreamWriter, args.WebSession.Response.ResponseHeaders).ConfigureAwait(false);
