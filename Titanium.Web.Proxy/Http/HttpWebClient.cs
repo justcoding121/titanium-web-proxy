@@ -46,7 +46,7 @@ namespace Titanium.Web.Proxy.Http
               {
                 this.Request.Method,
                 this.Request.RequestUri.PathAndQuery,
-                this.Request.HttpVersion
+                string.Format("HTTP/{0}.{1}",this.Request.HttpVersion.Major, this.Request.HttpVersion.Minor)
               }));
 
             foreach (HttpHeader httpHeader in this.Request.RequestHeaders)
@@ -95,8 +95,18 @@ namespace Titanium.Web.Proxy.Http
             {
                 await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
             }
+            var httpVersion = httpResult[0].Trim().ToLower();
+            Version version;
+            if (httpVersion == "http/1.1")
+            {
+                version = new Version(1, 1);
+            }
+            else
+            {
+                version = new Version(1, 0);
+            }
 
-            this.Response.HttpVersion = httpResult[0].Trim();
+            this.Response.HttpVersion = version;
             this.Response.ResponseStatusCode = httpResult[1].Trim();
             this.Response.ResponseStatusDescription = httpResult[2].Trim();
 

@@ -36,7 +36,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Does this session uses SSL
         /// </summary>
-        public bool IsHttps { get; internal set; }
+        public bool IsHttps => WebSession.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
 
         /// <summary>
         /// A web session corresponding to a single request/response sequence
@@ -87,7 +87,7 @@ namespace Titanium.Web.Proxy.EventArguments
                             await this.Client.ClientStreamReader.CopyBytesToStream(requestBodyStream, WebSession.Request.ContentLength).ConfigureAwait(false);
 
                         }
-                        else if (WebSession.Request.HttpVersion.ToLower().Trim().Equals("http/1.0"))
+                        else if(WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0)
                             await WebSession.ServerConnection.StreamReader.CopyBytesToStream(requestBodyStream, long.MaxValue).ConfigureAwait(false);
                     }
                     WebSession.Request.RequestBody = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding, requestBodyStream.ToArray()).ConfigureAwait(false);
@@ -123,7 +123,7 @@ namespace Titanium.Web.Proxy.EventArguments
                             await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, WebSession.Response.ContentLength).ConfigureAwait(false);
 
                         }
-                        else if(WebSession.Response.HttpVersion.ToLower().Trim().Equals("http/1.0"))
+                        else if(WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0)
                             await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, long.MaxValue).ConfigureAwait(false);
                     }
 
