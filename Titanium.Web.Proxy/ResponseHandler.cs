@@ -80,7 +80,8 @@ namespace Titanium.Web.Proxy
                 {
                     await WriteResponseHeaders(args.Client.ClientStreamWriter, args.WebSession.Response.ResponseHeaders);
 
-                    if (args.WebSession.Response.IsChunked || args.WebSession.Response.ContentLength > 0 || args.WebSession.Response.HttpVersion.ToLower().Trim() == "http/1.0")
+                    if (args.WebSession.Response.IsChunked || args.WebSession.Response.ContentLength > 0 ||
+                       (args.WebSession.Response.HttpVersion.Major == 1 && args.WebSession.Response.HttpVersion.Minor == 0))
                         await WriteResponseBody(args.WebSession.ServerConnection.StreamReader, args.Client.ClientStream, args.WebSession.Response.IsChunked, args.WebSession.Response.ContentLength).ConfigureAwait(false);
                 }
 
@@ -105,10 +106,10 @@ namespace Titanium.Web.Proxy
         }
 
 
-        private static void WriteResponseStatus(string version, string code, string description,
+        private static void WriteResponseStatus(Version version, string code, string description,
             StreamWriter responseWriter)
         {
-            responseWriter.WriteLineAsync(string.Format("{0} {1} {2}", version, code, description));
+            responseWriter.WriteLineAsync(string.Format("HTTP/{0}.{1} {2} {3}", version.Major, version.Minor, code, description));
         }
 
         private static async Task WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers)

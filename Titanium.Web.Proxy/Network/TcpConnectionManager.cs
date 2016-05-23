@@ -37,21 +37,31 @@ namespace Titanium.Web.Proxy.Network
 
     internal class TcpConnectionManager
     {
-        static List<TcpConnection> ConnectionCache = new List<TcpConnection>();
-
+        static List<TcpConnection> connectionCache = new List<TcpConnection>();
+        static SemaphoreSlim connectionAccessLock = new SemaphoreSlim(1);
         internal static async Task<TcpConnection> GetClient(SessionEventArgs sessionArgs, string hostname, int port, bool isSecure, Version version)
         {
             TcpConnection cached = null;
             while (true)
             {
-                lock (ConnectionCache)
+                await connectionAccessLock.WaitAsync();
+                try
                 {
-                    cached = ConnectionCache.FirstOrDefault(x => x.HostName == hostname && x.port == port &&
+                    cached = connectionCache.FirstOrDefault(x => x.HostName == hostname && x.port == port &&
                     x.IsSecure == isSecure && x.TcpClient.Connected && x.Version.Equals(version));
 
+                    //just create one more preemptively
+                    if (connectionCache.Where(x => x.HostName == hostname && x.port == port &&
+                    x.IsSecure == isSecure && x.TcpClient.Connected && x.Version.Equals(version)).Count() < 2)
+                    {
+                        var task = CreateClient(sessionArgs, hostname, port, isSecure, version)
+                                    .ContinueWith(async (x) => { if (x.Status == TaskStatus.RanToCompletion) await ReleaseClient(x.Result); });
+                    }
+
                     if (cached != null)
-                        ConnectionCache.Remove(cached);
+                        connectionCache.Remove(cached);
                 }
+                finally { connectionAccessLock.Release(); }
 
                 if (cached != null && !cached.TcpClient.Client.IsConnected())
                     continue;
@@ -62,15 +72,7 @@ namespace Titanium.Web.Proxy.Network
 
             if (cached == null)
                 cached = await CreateClient(sessionArgs, hostname, port, isSecure, version).ConfigureAwait(false);
-
-            //just create one more preemptively
-            if (ConnectionCache.Where(x => x.HostName == hostname && x.port == port &&
-            x.IsSecure == isSecure && x.TcpClient.Connected && x.Version.Equals(version)).Count() < 2)
-            {
-                var task = CreateClient(sessionArgs, hostname, port, isSecure, version)
-                            .ContinueWith(x => { if (x.Status == TaskStatus.RanToCompletion) ReleaseClient(x.Result); });
-            }
-
+       
             return cached;
         }
 
@@ -155,27 +157,34 @@ namespace Titanium.Web.Proxy.Network
         }
 
 
-        internal static void ReleaseClient(TcpConnection Connection)
+        internal static async Task ReleaseClient(TcpConnection Connection)
         {
             Connection.LastAccess = DateTime.Now;
-            ConnectionCache.Add(Connection);
+            await connectionAccessLock.WaitAsync();
+            try
+            {
+                connectionCache.Add(Connection);
+            }
+            finally { connectionAccessLock.Release(); }
         }
 
         internal async static void ClearIdleConnections()
         {
             while (true)
             {
-                lock (ConnectionCache)
+                await connectionAccessLock.WaitAsync();
+                try
                 {
                     var cutOff = DateTime.Now.AddSeconds(-60);
 
-                    ConnectionCache
+                    connectionCache
                        .Where(x => x.LastAccess < cutOff)
                        .ToList()
                        .ForEach(x => x.TcpClient.Close());
 
-                    ConnectionCache.RemoveAll(x => x.LastAccess < cutOff);
+                    connectionCache.RemoveAll(x => x.LastAccess < cutOff);
                 }
+                finally { connectionAccessLock.Release(); }
 
                 await Task.Delay(1000 * 60 * 3).ConfigureAwait(false);
             }

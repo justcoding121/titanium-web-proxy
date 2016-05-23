@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.Http
     {
         public string Method { get; set; }
         public Uri RequestUri { get; set; }
-        public string HttpVersion { get; set; }
+        public Version HttpVersion { get; set; }
 
         internal string Host
         {

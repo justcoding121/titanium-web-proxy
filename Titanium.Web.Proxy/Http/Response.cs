@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Extensions;
+using System;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -31,7 +32,7 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal string HttpVersion { get; set; }
+        internal Version HttpVersion { get; set; }
         internal bool ResponseKeepAlive
         {
             get
