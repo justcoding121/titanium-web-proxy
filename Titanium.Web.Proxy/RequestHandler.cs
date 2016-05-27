@@ -55,7 +55,7 @@ namespace Titanium.Web.Proxy
                 Version version = new Version(1, 1);
                 if (httpCmdSplit.Length == 3)
                 {
-                    string httpVersion = httpCmdSplit[1].Trim();
+                    string httpVersion = httpCmdSplit[2].Trim();
                    
                     if (httpVersion == "http/1.0")
                     {
@@ -204,16 +204,16 @@ namespace Titanium.Web.Proxy
                     var httpCmdSplit = httpCmd.Split(Constants.SpaceSplit, 3);
 
                     var httpMethod = httpCmdSplit[0];
-                    var httpVersion = httpCmdSplit[2].ToLower().Trim();
 
-                    Version version;
-                    if (httpVersion == "http/1.1")
+                    Version version = new Version(1, 1);
+                    if (httpCmdSplit.Length == 3)
                     {
-                        version = new Version(1, 1);
-                    }
-                    else
-                    {
-                        version = new Version(1, 0);
+                        var httpVersion = httpCmdSplit[2].ToLower().Trim();
+
+                        if (httpVersion == "http/1.0")
+                        {
+                            version = new Version(1, 0);
+                        }
                     }
 
                     args.WebSession.Request.RequestHeaders = new List<HttpHeader>();
@@ -221,7 +221,7 @@ namespace Titanium.Web.Proxy
                     string tmpLine;
                     while (!string.IsNullOrEmpty(tmpLine = await clientStreamReader.ReadLineAsync().ConfigureAwait(false)))
                     {
-                        var header = tmpLine.Split(new char[] { ':' }, 2);
+                        var header = tmpLine.Split(Constants.ColonSplit, 2);
                         args.WebSession.Request.RequestHeaders.Add(new HttpHeader(header[0], header[1]));
                     }
 
