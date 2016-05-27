@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.Http
         public Request Request { get; set; }
         public Response Response { get; set; }
 
-        public bool IsSecure
+        public bool IsHttps
         {
             get
             {
@@ -96,12 +96,9 @@ namespace Titanium.Web.Proxy.Http
                 await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
             }
             var httpVersion = httpResult[0].Trim().ToLower();
-            Version version;
-            if (httpVersion == "http/1.1")
-            {
-                version = new Version(1, 1);
-            }
-            else
+
+            var version = new Version(1,1);
+            if (httpVersion == "http/1.0")
             {
                 version = new Version(1, 0);
             }

@@ -44,19 +44,19 @@ namespace Titanium.Web.Proxy
 
                 if (args.WebSession.Response.Is100Continue)
                 {
-                    WriteResponseStatus(args.WebSession.Response.HttpVersion, "100",
+                    await WriteResponseStatus(args.WebSession.Response.HttpVersion, "100",
                             "Continue", args.Client.ClientStreamWriter);
                     await args.Client.ClientStreamWriter.WriteLineAsync();
                 }
                 else if (args.WebSession.Response.ExpectationFailed)
                 {
-                    WriteResponseStatus(args.WebSession.Response.HttpVersion, "417",
+                    await WriteResponseStatus(args.WebSession.Response.HttpVersion, "417",
                             "Expectation Failed", args.Client.ClientStreamWriter);
                     await args.Client.ClientStreamWriter.WriteLineAsync();
                 }
 
-                WriteResponseStatus(args.WebSession.Response.HttpVersion, args.WebSession.Response.ResponseStatusCode,
-                             args.WebSession.Response.ResponseStatusDescription, args.Client.ClientStreamWriter);
+                await WriteResponseStatus(args.WebSession.Response.HttpVersion, args.WebSession.Response.ResponseStatusCode,
+                              args.WebSession.Response.ResponseStatusDescription, args.Client.ClientStreamWriter);
 
                 if (args.WebSession.Response.ResponseBodyRead)
                 {
@@ -106,10 +106,10 @@ namespace Titanium.Web.Proxy
         }
 
 
-        private static void WriteResponseStatus(Version version, string code, string description,
+        private static async Task WriteResponseStatus(Version version, string code, string description,
             StreamWriter responseWriter)
         {
-            responseWriter.WriteLineAsync(string.Format("HTTP/{0}.{1} {2} {3}", version.Major, version.Minor, code, description));
+            await responseWriter.WriteLineAsync(string.Format("HTTP/{0}.{1} {2} {3}", version.Major, version.Minor, code, description));
         }
 
         private static async Task WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers)

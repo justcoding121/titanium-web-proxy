@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.Network
     {
         internal string HostName { get; set; }
         internal int port { get; set; }
-        internal bool IsSecure { get; set; }
+        internal bool IsHttps { get; set; }
         internal Version Version { get; set; }
 
         internal TcpClient TcpClient { get; set; }
@@ -37,29 +37,31 @@ namespace Titanium.Web.Proxy.Network
 
     internal class TcpConnectionManager
     {
-        static List<TcpConnection> connectionCache = new List<TcpConnection>();
+        static Dictionary<string, List<TcpConnection>> connectionCache = new Dictionary<string, List<TcpConnection>>();
         static SemaphoreSlim connectionAccessLock = new SemaphoreSlim(1);
-        internal static async Task<TcpConnection> GetClient(SessionEventArgs sessionArgs, string hostname, int port, bool isSecure, Version version)
+        internal static async Task<TcpConnection> GetClient(SessionEventArgs sessionArgs, string hostname, int port, bool isHttps, Version version)
         {
+            List<TcpConnection> cachedConnections = null;
             TcpConnection cached = null;
+
+            var key = GetConnectionKey(hostname, port, isHttps, version);
+
             while (true)
             {
                 await connectionAccessLock.WaitAsync();
                 try
                 {
-                    cached = connectionCache.FirstOrDefault(x => x.HostName == hostname && x.port == port &&
-                    x.IsSecure == isSecure && x.TcpClient.Connected && x.Version.Equals(version));
+                    connectionCache.TryGetValue(key, out cachedConnections);
 
-                    //just create one more preemptively
-                    if (connectionCache.Where(x => x.HostName == hostname && x.port == port &&
-                    x.IsSecure == isSecure && x.TcpClient.Connected && x.Version.Equals(version)).Count() < 2)
+                    if (cachedConnections != null && cachedConnections.Count > 0)
                     {
-                        var task = CreateClient(sessionArgs, hostname, port, isSecure, version)
-                                    .ContinueWith(async (x) => { if (x.Status == TaskStatus.RanToCompletion) await ReleaseClient(x.Result); });
+                        cached = cachedConnections.First();
+                        cachedConnections.Remove(cached);
                     }
-
-                    if (cached != null)
-                        connectionCache.Remove(cached);
+                    else
+                    {
+                        cached = null;
+                    }
                 }
                 finally { connectionAccessLock.Release(); }
 
@@ -71,17 +73,30 @@ namespace Titanium.Web.Proxy.Network
             }
 
             if (cached == null)
-                cached = await CreateClient(sessionArgs, hostname, port, isSecure, version).ConfigureAwait(false);
-       
+                cached = await CreateClient(sessionArgs, hostname, port, isHttps, version).ConfigureAwait(false);
+
+
+            //just create one more preemptively
+            if (cachedConnections == null || cachedConnections.Count() < 2)
+            {
+                var task = CreateClient(sessionArgs, hostname, port, isHttps, version)
+                            .ContinueWith(async (x) => { if (x.Status == TaskStatus.RanToCompletion) await ReleaseClient(x.Result); });
+            }
+
             return cached;
         }
 
-        private static async Task<TcpConnection> CreateClient(SessionEventArgs sessionArgs, string hostname, int port, bool isSecure, Version version)
+        internal static string GetConnectionKey(string hostname, int port, bool isHttps, Version version)
+        {
+            return string.Format("{0}:{1}:{2}:{3}:{4}", hostname.ToLower(), port, isHttps, version.Major, version.Minor);
+        }
+
+        private static async Task<TcpConnection> CreateClient(SessionEventArgs sessionArgs, string hostname, int port, bool isHttps, Version version)
         {
             TcpClient client;
             Stream stream;
 
-            if (isSecure)
+            if (isHttps)
             {
                 CustomSslStream sslStream = null;
 
@@ -148,7 +163,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 HostName = hostname,
                 port = port,
-                IsSecure = isSecure,
+                IsHttps = isHttps,
                 TcpClient = client,
                 StreamReader = new CustomBinaryReader(stream),
                 Stream = stream,
@@ -157,14 +172,23 @@ namespace Titanium.Web.Proxy.Network
         }
 
 
-        internal static async Task ReleaseClient(TcpConnection Connection)
+        internal static async Task ReleaseClient(TcpConnection connection)
         {
-            Connection.LastAccess = DateTime.Now;
+            connection.LastAccess = DateTime.Now;
+            var key = GetConnectionKey(connection.HostName, connection.port, connection.IsHttps, connection.Version);
             await connectionAccessLock.WaitAsync();
             try
             {
-                connectionCache.Add(Connection);
+                List<TcpConnection> cachedConnections;
+                connectionCache.TryGetValue(key, out cachedConnections);
+
+                if (cachedConnections != null)
+                    cachedConnections.Add(connection);
+                else
+
+                    connectionCache.Add(key, new List<TcpConnection>() { connection });
             }
+
             finally { connectionAccessLock.Release(); }
         }
 
@@ -178,11 +202,12 @@ namespace Titanium.Web.Proxy.Network
                     var cutOff = DateTime.Now.AddSeconds(-60);
 
                     connectionCache
+                       .SelectMany(x => x.Value)
                        .Where(x => x.LastAccess < cutOff)
                        .ToList()
                        .ForEach(x => x.TcpClient.Close());
 
-                    connectionCache.RemoveAll(x => x.LastAccess < cutOff);
+                    connectionCache.ToList().ForEach(x => x.Value.RemoveAll(y => y.LastAccess < cutOff));
                 }
                 finally { connectionAccessLock.Release(); }
 
