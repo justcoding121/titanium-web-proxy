@@ -57,11 +57,7 @@ namespace Titanium.Web.Proxy
                 {
                     string httpVersion = httpCmdSplit[1].Trim();
                    
-                    if (httpVersion == "http/1.1")
-                    {
-                        version = new Version(1, 1);
-                    }
-                    else
+                    if (httpVersion == "http/1.0")
                     {
                         version = new Version(1, 0);
                     }
@@ -186,7 +182,7 @@ namespace Titanium.Web.Proxy
         }
 
         private static async Task HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
-            CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, bool IsHttps)
+            CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, bool isHttps)
         {
             TcpConnection connection = null;
             string lastRequest = null;
@@ -229,7 +225,7 @@ namespace Titanium.Web.Proxy
                         args.WebSession.Request.RequestHeaders.Add(new HttpHeader(header[0], header[1]));
                     }
 
-                    var httpRemoteUri = new Uri(!IsHttps ? httpCmdSplit[1] : (string.Concat("https://", args.WebSession.Request.Host, httpCmdSplit[1])));
+                    var httpRemoteUri = new Uri(!isHttps ? httpCmdSplit[1] : (string.Concat("https://", args.WebSession.Request.Host, httpCmdSplit[1])));
 
                     args.WebSession.Request.RequestUri = httpRemoteUri;
 
@@ -271,9 +267,7 @@ namespace Titanium.Web.Proxy
                         : lastRequest != args.WebSession.Request.RequestUri.Host ? await TcpConnectionManager.GetClient(args, args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version).ConfigureAwait(false)
                             : connection;
 
-                    lastRequest = string.Concat(args.WebSession.Request.RequestUri.Host,":",
-                        args.WebSession.Request.RequestUri.Port,":",
-                        args.IsHttps,":", version.ToString());
+                    lastRequest = TcpConnectionManager.GetConnectionKey(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version);
 
                     args.WebSession.Request.RequestLocked = true;
 
@@ -292,13 +286,13 @@ namespace Titanium.Web.Proxy
                     if (Enable100ContinueBehaviour)
                         if (args.WebSession.Request.Is100Continue)
                         {
-                            WriteResponseStatus(args.WebSession.Response.HttpVersion, "100",
+                            await WriteResponseStatus(args.WebSession.Response.HttpVersion, "100",
                                     "Continue", args.Client.ClientStreamWriter);
                             await args.Client.ClientStreamWriter.WriteLineAsync();
                         }
                         else if (args.WebSession.Request.ExpectationFailed)
                         {
-                            WriteResponseStatus(args.WebSession.Response.HttpVersion, "417",
+                            await WriteResponseStatus(args.WebSession.Response.HttpVersion, "417",
                                     "Expectation Failed", args.Client.ClientStreamWriter);
                            await args.Client.ClientStreamWriter.WriteLineAsync();
                         }

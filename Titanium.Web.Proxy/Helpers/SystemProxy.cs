@@ -18,11 +18,11 @@ namespace Titanium.Web.Proxy.Helpers
     {
         public string HostName { get; set; }
         public int Port { get; set; }
-        public bool IsSecure { get; set; }
+        public bool IsHttps { get; set; }
 
         public override string ToString()
         {
-            if (!IsSecure)
+            if (!IsHttps)
                 return "http=" + HostName + ":" + Port;
             else
                 return "https=" + HostName + ":" + Port;
@@ -44,11 +44,11 @@ namespace Titanium.Web.Proxy.Helpers
 
                 var exisitingContent = reg.GetValue("ProxyServer") as string;
                 var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                existingSystemProxyValues.RemoveAll(x => !x.IsSecure);
+                existingSystemProxyValues.RemoveAll(x => !x.IsHttps);
                 existingSystemProxyValues.Add(new HttpSystemProxyValue()
                 {
                     HostName = hostname,
-                    IsSecure = false,
+                    IsHttps = false,
                     Port = port
                 });
 
@@ -71,7 +71,7 @@ namespace Titanium.Web.Proxy.Helpers
                     var exisitingContent = reg.GetValue("ProxyServer") as string;
 
                     var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                    existingSystemProxyValues.RemoveAll(x => !x.IsSecure);
+                    existingSystemProxyValues.RemoveAll(x => !x.IsHttps);
 
                     if (!(existingSystemProxyValues.Count() == 0))
                     {
@@ -101,11 +101,11 @@ namespace Titanium.Web.Proxy.Helpers
                 var exisitingContent = reg.GetValue("ProxyServer") as string;
 
                 var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                existingSystemProxyValues.RemoveAll(x => x.IsSecure);
+                existingSystemProxyValues.RemoveAll(x => x.IsHttps);
                 existingSystemProxyValues.Add(new HttpSystemProxyValue()
                 {
                     HostName = hostname,
-                    IsSecure = true,
+                    IsHttps = true,
                     Port = port
                 });
 
@@ -127,7 +127,7 @@ namespace Titanium.Web.Proxy.Helpers
                     var exisitingContent = reg.GetValue("ProxyServer") as string;
 
                     var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                    existingSystemProxyValues.RemoveAll(x => x.IsSecure);
+                    existingSystemProxyValues.RemoveAll(x => x.IsHttps);
 
                     if (!(existingSystemProxyValues.Count() == 0))
                     {
@@ -197,7 +197,7 @@ namespace Titanium.Web.Proxy.Helpers
                 {
                     HostName = endPoint.Split(':')[0],
                     Port = int.Parse(endPoint.Split(':')[1]),
-                    IsSecure = false
+                    IsHttps = false
                 };
             }
             else if (tmp.StartsWith("https="))
@@ -207,7 +207,7 @@ namespace Titanium.Web.Proxy.Helpers
                 {
                     HostName = endPoint.Split(':')[0],
                     Port = int.Parse(endPoint.Split(':')[1]),
-                    IsSecure = true
+                    IsHttps = true
                 };
             }
             return null;
