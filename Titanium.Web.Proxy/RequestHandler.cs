@@ -365,7 +365,7 @@ namespace Titanium.Web.Proxy
             await clientStreamWriter.FlushAsync().ConfigureAwait(false);
         }
 
-        private static void PrepareRequestHeaders(List<HttpHeader> requestHeaders, HttpWebSession webRequest)
+        private static void PrepareRequestHeaders(List<HttpHeader> requestHeaders, HttpWebClient webRequest)
         {
             for (var i = 0; i < requestHeaders.Count; i++)
             {

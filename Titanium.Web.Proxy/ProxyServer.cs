@@ -236,6 +236,10 @@ namespace Titanium.Web.Proxy
                 // so just return.
                 return;
             }
+            catch
+            {
+
+            }
            
         }
       
