@@ -9,7 +9,7 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
 {
-    public class HttpWebSession
+    public class HttpWebClient
     {
         internal TcpConnection ServerConnection { get; set; }
 
@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.Http
             ServerConnection = Connection;
         }
 
-        internal HttpWebSession()
+        internal HttpWebClient()
         {
             this.Request = new Request();
             this.Response = new Response();

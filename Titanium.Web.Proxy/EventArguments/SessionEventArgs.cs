@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy.EventArguments
         internal SessionEventArgs()
         {
             Client = new ProxyClient();
-            WebSession = new HttpWebSession();
+            WebSession = new HttpWebClient();
         }
 
         /// <summary>
@@ -42,7 +42,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// A web session corresponding to a single request/response sequence
         /// within a proxy connection
         /// </summary>
-        public HttpWebSession WebSession { get; set; }
+        public HttpWebClient WebSession { get; set; }
 
 
         /// <summary>
@@ -87,7 +87,7 @@ namespace Titanium.Web.Proxy.EventArguments
                             await this.Client.ClientStreamReader.CopyBytesToStream(requestBodyStream, WebSession.Request.ContentLength).ConfigureAwait(false);
 
                         }
-                        else if(WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0)
+                        else if(WebSession.Request.HttpVersion.Major == 1 && WebSession.Request.HttpVersion.Minor == 0)
                             await WebSession.ServerConnection.StreamReader.CopyBytesToStream(requestBodyStream, long.MaxValue).ConfigureAwait(false);
                     }
                     WebSession.Request.RequestBody = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding, requestBodyStream.ToArray()).ConfigureAwait(false);
