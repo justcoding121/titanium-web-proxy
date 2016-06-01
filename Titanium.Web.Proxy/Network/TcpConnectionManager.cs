@@ -107,11 +107,11 @@ namespace Titanium.Web.Proxy.Network
 
                     using (var writer = new StreamWriter(stream, Encoding.ASCII, Constants.BUFFER_SIZE, true))
                     {
-                        await writer.WriteLineAsync(string.Format("CONNECT {0}:{1} {2}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port, sessionArgs.WebSession.Request.HttpVersion));
-                        await writer.WriteLineAsync(string.Format("Host: {0}:{1}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port));
-                        await writer.WriteLineAsync("Connection: Keep-Alive");
-                        await writer.WriteLineAsync();
-                        await writer.FlushAsync();
+                        await writer.WriteLineAsync(string.Format("CONNECT {0}:{1} {2}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port, sessionArgs.WebSession.Request.HttpVersion)).ConfigureAwait(false);
+                        await writer.WriteLineAsync(string.Format("Host: {0}:{1}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port)).ConfigureAwait(false);
+                        await writer.WriteLineAsync("Connection: Keep-Alive").ConfigureAwait(false);
+                        await writer.WriteLineAsync().ConfigureAwait(false);
+                        await writer.FlushAsync().ConfigureAwait(false);
                         writer.Close();
                     }
 
