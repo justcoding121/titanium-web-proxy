@@ -21,7 +21,9 @@ namespace Titanium.Web.Proxy
 
         static ProxyServer()
         {
-            ProxyEndPoints = new List<ProxyEndPoint>(); 
+            ProxyEndPoints = new List<ProxyEndPoint>();
+            ConnectionCacheTimeOutMinutes = 3;
+            CertificateCacheTimeOutMinutes = 60;
         }
 
         private static CertificateManager CertManager { get; set; }
@@ -32,6 +34,16 @@ namespace Titanium.Web.Proxy
         public static string RootCertificateIssuerName { get; set; }
         public static string RootCertificateName { get; set; }
         public static bool Enable100ContinueBehaviour { get; set; }
+       
+        /// <summary>
+        /// Minutes TCP connection cache to servers to be kept alive when in idle state
+        /// </summary>
+        public static int ConnectionCacheTimeOutMinutes { get; set; }
+       
+        /// <summary>
+        /// Minutes certificates should be kept in cache when not used
+        /// </summary>
+        public static int CertificateCacheTimeOutMinutes { get; set; }
 
         public static event Func<object, SessionEventArgs, Task> BeforeRequest;
         public static event Func<object, SessionEventArgs, Task> BeforeResponse;

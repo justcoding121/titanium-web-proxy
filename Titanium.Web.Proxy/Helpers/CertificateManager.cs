@@ -235,7 +235,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 try
                 {
-                    var cutOff = DateTime.Now.AddSeconds(-60);
+                    var cutOff = DateTime.Now.AddMinutes(-1 * ProxyServer.CertificateCacheTimeOutMinutes);
 
                     var outdated = certificateCache
                        .Where(x => x.Value.LastAccess < cutOff)

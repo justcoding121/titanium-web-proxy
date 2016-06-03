@@ -206,7 +206,7 @@ namespace Titanium.Web.Proxy.Network
                 await connectionAccessLock.WaitAsync();
                 try
                 {
-                    var cutOff = DateTime.Now.AddSeconds(-60);
+                    var cutOff = DateTime.Now.AddMinutes(-1 * ProxyServer.ConnectionCacheTimeOutMinutes);
 
                     connectionCache
                        .SelectMany(x => x.Value)
