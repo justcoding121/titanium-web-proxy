@@ -74,7 +74,7 @@ namespace Titanium.Web.Proxy
 
                     await WriteConnectResponse(clientStreamWriter, version).ConfigureAwait(false);
 
-                    var certificate = await CertManager.CreateCertificate(httpRemoteUri.Host);
+                    var certificate = await CertManager.CreateCertificate(httpRemoteUri.Host, false);
 
                     SslStream sslStream = null;
 
@@ -146,7 +146,7 @@ namespace Titanium.Web.Proxy
                 //    certificate = CertManager.CreateCertificate(hostName);
                 //}
                 //else
-                certificate = await CertManager.CreateCertificate(endPoint.GenericCertificateName);
+                certificate = await CertManager.CreateCertificate(endPoint.GenericCertificateName, false);
 
                 try
                 {

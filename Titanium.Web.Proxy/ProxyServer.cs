@@ -21,8 +21,7 @@ namespace Titanium.Web.Proxy
 
         static ProxyServer()
         {
-            ProxyEndPoints = new List<ProxyEndPoint>();
-            Initialize();
+            ProxyEndPoints = new List<ProxyEndPoint>(); 
         }
 
         private static CertificateManager CertManager { get; set; }
@@ -58,6 +57,13 @@ namespace Titanium.Web.Proxy
         public static void Initialize()
         {
             TcpConnectionManager.ClearIdleConnections();
+            CertManager.ClearIdleCertificates();
+        }
+
+        public static void Quit()
+        {
+            TcpConnectionManager.StopClearIdleConnections();
+            CertManager.StopClearIdleCertificates();
         }
 
         public static void AddEndPoint(ProxyEndPoint endPoint)
@@ -153,13 +159,15 @@ namespace Titanium.Web.Proxy
 
             CertManager = new CertificateManager(RootCertificateIssuerName,
                 RootCertificateName);
-
+            
             certTrusted = CertManager.CreateTrustedRootCertificate().Result;
 
             foreach (var endPoint in ProxyEndPoints)
             {
                 Listen(endPoint);
             }
+
+            Initialize();
 
             proxyRunning = true;
         }
@@ -185,6 +193,8 @@ namespace Titanium.Web.Proxy
             }
 
             CertManager.Dispose();
+
+            Quit();
 
             proxyRunning = false;
         }

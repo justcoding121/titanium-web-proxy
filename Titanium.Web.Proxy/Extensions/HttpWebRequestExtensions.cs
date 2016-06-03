@@ -7,10 +7,10 @@ namespace Titanium.Web.Proxy.Extensions
     /// <summary>
     /// Extensions on HttpWebSession object
     /// </summary>
-    public static class HttpWebRequestExtensions
+    internal static class HttpWebRequestExtensions
     {
         //Get encoding of the HTTP request
-        public static Encoding GetEncoding(this Request request)
+        internal static Encoding GetEncoding(this Request request)
         {
             try
             {

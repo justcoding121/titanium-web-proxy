@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         internal SessionEventArgs Session { get; set; }
 
-        public CustomSslStream(Stream innerStream, bool leaveInnerStreamOpen, RemoteCertificateValidationCallback userCertificateValidationCallback) 
+        internal CustomSslStream(Stream innerStream, bool leaveInnerStreamOpen, RemoteCertificateValidationCallback userCertificateValidationCallback) 
             :base(innerStream, leaveInnerStreamOpen, userCertificateValidationCallback)
         {
 

@@ -4,9 +4,9 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Extensions
 {
-    public static class HttpWebResponseExtensions
+    internal static class HttpWebResponseExtensions
     {
-        public static Encoding GetResponseCharacterEncoding(this Response response)
+        internal static Encoding GetResponseCharacterEncoding(this Response response)
         {
             try
             {

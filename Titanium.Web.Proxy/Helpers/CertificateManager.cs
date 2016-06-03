@@ -6,24 +6,37 @@ using System.Security.Cryptography.X509Certificates;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Linq;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    public class CertificateManager : IDisposable
+    internal class CachedCertificate
+    {
+        internal X509Certificate2 Certificate { get; set; }
+
+        internal DateTime LastAccess { get; set; }
+
+        internal CachedCertificate()
+        {
+            LastAccess = DateTime.Now;
+        }
+
+    }
+    internal class CertificateManager : IDisposable
     {
         private const string CertCreateFormat =
             "-ss {0} -n \"CN={1}, O={2}\" -sky {3} -cy {4} -m 120 -a sha256 -eku 1.3.6.1.5.5.7.3.1 {5}";
 
-        private readonly IDictionary<string, X509Certificate2> _certificateCache;
+        private readonly IDictionary<string, CachedCertificate> certificateCache;
         private static SemaphoreSlim semaphoreLock = new SemaphoreSlim(1);
 
-        public string Issuer { get; private set; }
-        public string RootCertificateName { get; private set; }
+        internal string Issuer { get; private set; }
+        internal string RootCertificateName { get; private set; }
 
-        public X509Store MyStore { get; private set; }
-        public X509Store RootStore { get; private set; }
+        internal X509Store MyStore { get; private set; }
+        internal X509Store RootStore { get; private set; }
 
-        public CertificateManager(string issuer, string rootCertificateName)
+        internal CertificateManager(string issuer, string rootCertificateName)
         {
             Issuer = issuer;
             RootCertificateName = rootCertificateName;
@@ -31,17 +44,17 @@ namespace Titanium.Web.Proxy.Helpers
             MyStore = new X509Store(StoreName.My, StoreLocation.CurrentUser);
             RootStore = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
 
-            _certificateCache = new Dictionary<string, X509Certificate2>();
+            certificateCache = new Dictionary<string, CachedCertificate>();
         }
 
         /// <summary>
         /// Attempts to move a self-signed certificate to the root store.
         /// </summary>
         /// <returns>true if succeeded, else false</returns>
-        public async Task<bool> CreateTrustedRootCertificate()
+        internal async Task<bool> CreateTrustedRootCertificate()
         {
             X509Certificate2 rootCertificate =
-              await CreateCertificate(RootStore, RootCertificateName);
+              await CreateCertificate(RootStore, RootCertificateName, true);
 
             return rootCertificate != null;
         }
@@ -49,12 +62,12 @@ namespace Titanium.Web.Proxy.Helpers
         /// Attempts to remove the self-signed certificate from the root store.
         /// </summary>
         /// <returns>true if succeeded, else false</returns>
-        public async Task<bool> DestroyTrustedRootCertificate()
+        internal bool DestroyTrustedRootCertificate()
         {
-            return await DestroyCertificate(RootStore, RootCertificateName);
+            return DestroyCertificate(RootStore, RootCertificateName, false);
         }
 
-        public X509Certificate2Collection FindCertificates(string certificateSubject)
+        internal X509Certificate2Collection FindCertificates(string certificateSubject)
         {
             return FindCertificates(MyStore, certificateSubject);
         }
@@ -67,29 +80,36 @@ namespace Titanium.Web.Proxy.Helpers
                 discoveredCertificates : null;
         }
 
-        public async Task<X509Certificate2> CreateCertificate(string certificateName)
+        internal async Task<X509Certificate2> CreateCertificate(string certificateName, bool isRootCertificate)
         {
-            return await CreateCertificate(MyStore, certificateName);
+            return await CreateCertificate(MyStore, certificateName, isRootCertificate);
         }
-        protected async virtual Task<X509Certificate2> CreateCertificate(X509Store store, string certificateName)
+
+        protected async virtual Task<X509Certificate2> CreateCertificate(X509Store store, string certificateName, bool isRootCertificate)
         {
-
-            if (_certificateCache.ContainsKey(certificateName))
-                return _certificateCache[certificateName];
-
             await semaphoreLock.WaitAsync();
 
-            X509Certificate2 certificate = null;
             try
             {
+                if (certificateCache.ContainsKey(certificateName))
+                {
+                    var cached = certificateCache[certificateName];
+                    cached.LastAccess = DateTime.Now;
+                    return cached.Certificate;
+                }
+                X509Certificate2 certificate = null;
                 store.Open(OpenFlags.ReadWrite);
                 string certificateSubject = string.Format("CN={0}, O={1}", certificateName, Issuer);
 
-                var certificates =
-                    FindCertificates(store, certificateSubject);
+                X509Certificate2Collection certificates;
 
-                if (certificates != null)
-                    certificate = certificates[0];
+                if (isRootCertificate)
+                {
+                    certificates = FindCertificates(store, certificateSubject);
+
+                    if (certificates != null)
+                        certificate = certificates[0];
+                }
 
                 if (certificate == null)
                 {
@@ -99,22 +119,26 @@ namespace Titanium.Web.Proxy.Helpers
                     await CreateCertificate(args);
                     certificates = FindCertificates(store, certificateSubject);
 
-                    return certificates != null ?
-                        certificates[0] : null;
+                    //remove it from store
+                    if (!isRootCertificate)
+                        DestroyCertificate(certificateName);
+
+                    if (certificates != null)
+                        certificate = certificates[0];
                 }
 
                 store.Close();
-                if (certificate != null && !_certificateCache.ContainsKey(certificateName))
-                    _certificateCache.Add(certificateName, certificate);
+                if (certificate != null && !certificateCache.ContainsKey(certificateName))
+                    certificateCache.Add(certificateName, new CachedCertificate() { Certificate = certificate });
 
                 return certificate;
             }
             finally
             {
-                semaphoreLock.Release();  
+                semaphoreLock.Release();
             }
-
         }
+
         protected virtual Task<int> CreateCertificate(string[] args)
         {
 
@@ -153,40 +177,32 @@ namespace Titanium.Web.Proxy.Helpers
 
         }
 
-        public async Task<bool> DestroyCertificate(string certificateName)
+        internal bool DestroyCertificate(string certificateName)
         {
-            return await DestroyCertificate(MyStore, certificateName);
+            return DestroyCertificate(MyStore, certificateName, false);
         }
-        protected virtual async Task<bool> DestroyCertificate(X509Store store, string certificateName)
+
+        protected virtual bool DestroyCertificate(X509Store store, string certificateName, bool removeFromCache)
         {
-            await semaphoreLock.WaitAsync();
-
             X509Certificate2Collection certificates = null;
-            try
-            {
-                store.Open(OpenFlags.ReadWrite);
-                string certificateSubject = string.Format("CN={0}, O={1}", certificateName, Issuer);
 
+            store.Open(OpenFlags.ReadWrite);
+            string certificateSubject = string.Format("CN={0}, O={1}", certificateName, Issuer);
+
+            certificates = FindCertificates(store, certificateSubject);
+            if (certificates != null)
+            {
+                store.RemoveRange(certificates);
                 certificates = FindCertificates(store, certificateSubject);
-                if (certificates != null)
-                {
-                    store.RemoveRange(certificates);
-                    certificates = FindCertificates(store, certificateSubject);
-                }
-               
-                store.Close();
-                if (certificates == null &&
-                    _certificateCache.ContainsKey(certificateName))
-                {
-                    _certificateCache.Remove(certificateName);
-                }
-                return certificates == null;
-            }
-            finally
-            {
-                semaphoreLock.Release();    
             }
 
+            store.Close();
+            if (removeFromCache &&
+                certificateCache.ContainsKey(certificateName))
+            {
+                certificateCache.Remove(certificateName);
+            }
+            return certificates == null;
         }
 
         protected virtual string GetCertificateCreateArgs(X509Store store, string certificateName)
@@ -201,6 +217,37 @@ namespace Titanium.Web.Proxy.Helpers
                 isRootCertificate ? "-h 1 -r" : string.Format("-pe -in \"{0}\" -is Root", RootCertificateName));
 
             return certCreatArgs;
+        }
+
+        private static bool clearCertificates { get; set; }
+
+        internal void StopClearIdleCertificates()
+        {
+            clearCertificates = false;
+        }
+
+        internal async void ClearIdleCertificates()
+        {
+            clearCertificates = true;
+            while (clearCertificates)
+            {
+                await semaphoreLock.WaitAsync();
+
+                try
+                {
+                    var cutOff = DateTime.Now.AddSeconds(-60);
+
+                    var outdated = certificateCache
+                       .Where(x => x.Value.LastAccess < cutOff)
+                       .ToList();
+
+                    foreach (var cache in outdated)
+                        certificateCache.Remove(cache.Key);
+                }
+                finally { semaphoreLock.Release(); }
+
+                await Task.Delay(1000 * 60 * 3).ConfigureAwait(false);
+            }
         }
 
         public void Dispose()

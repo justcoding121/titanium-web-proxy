@@ -16,9 +16,9 @@ namespace Titanium.Web.Proxy.Helpers
 
    internal class HttpSystemProxyValue
     {
-        public string HostName { get; set; }
-        public int Port { get; set; }
-        public bool IsHttps { get; set; }
+        internal string HostName { get; set; }
+        internal int Port { get; set; }
+        internal bool IsHttps { get; set; }
 
         public override string ToString()
         {
@@ -29,12 +29,12 @@ namespace Titanium.Web.Proxy.Helpers
         }
     }
 
-    public static class SystemProxyHelper
+    internal static class SystemProxyHelper
     {
-        public const int InternetOptionSettingsChanged = 39;
-        public const int InternetOptionRefresh = 37;
+        internal const int InternetOptionSettingsChanged = 39;
+        internal const int InternetOptionRefresh = 37;
 
-        public static void SetHttpProxy(string hostname, int port)
+        internal static void SetHttpProxy(string hostname, int port)
         {
             var reg = Registry.CurrentUser.OpenSubKey(
                 "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
@@ -60,7 +60,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
      
-        public static void RemoveHttpProxy()
+        internal static void RemoveHttpProxy()
         {
             var reg = Registry.CurrentUser.OpenSubKey(
                     "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
@@ -89,7 +89,7 @@ namespace Titanium.Web.Proxy.Helpers
             Refresh();
         }
 
-        public static void SetHttpsProxy(string hostname, int port)
+        internal static void SetHttpsProxy(string hostname, int port)
         {
             var reg = Registry.CurrentUser.OpenSubKey(
                 "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
@@ -116,7 +116,7 @@ namespace Titanium.Web.Proxy.Helpers
             Refresh();
         }
 
-        public static void RemoveHttpsProxy()
+        internal static void RemoveHttpsProxy()
         {
             var reg = Registry.CurrentUser.OpenSubKey(
                     "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
@@ -146,7 +146,7 @@ namespace Titanium.Web.Proxy.Helpers
             Refresh();
         }
 
-        public static void DisableAllProxy()
+        internal static void DisableAllProxy()
         {
             var reg = Registry.CurrentUser.OpenSubKey(
                 "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);

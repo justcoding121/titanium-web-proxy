@@ -1,12 +1,10 @@
 ﻿using System.Net.Sockets;
 
-
 namespace Titanium.Web.Proxy.Extensions
 {
-
     internal static class TcpExtensions
     {
-        public static bool IsConnected(this Socket client)
+        internal static bool IsConnected(this Socket client)
         {
             // This is how you can determine whether a socket is still connected.
             bool blockingState = client.Blocking;
