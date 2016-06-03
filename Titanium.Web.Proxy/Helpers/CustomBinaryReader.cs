@@ -15,18 +15,16 @@ namespace Titanium.Web.Proxy.Helpers
     /// using the specified encoding
     /// as well as to read bytes as required
     /// </summary>
-    public class CustomBinaryReader : IDisposable
+    internal class CustomBinaryReader : IDisposable
     {
         private Stream stream;
-
 
         internal CustomBinaryReader(Stream stream)
         {
             this.stream = stream;
         }
 
-
-        public Stream BaseStream => stream;
+        internal Stream BaseStream => stream;
 
         /// <summary>
         /// Read a line from the byte stream
@@ -41,25 +39,25 @@ namespace Titanium.Web.Proxy.Helpers
                 var lastChar = default(char);
                 var buffer = new byte[1];
 
-                while (await this.stream.ReadAsync(buffer, 0, 1).ConfigureAwait(false) > 0)
+                while (this.stream.Read(buffer, 0, 1) > 0)
                 {
                     if (lastChar == '\r' && buffer[0] == '\n')
                     {
-                        return readBuffer.Remove(readBuffer.Length - 1, 1).ToString();
+                        return await Task.FromResult(readBuffer.Remove(readBuffer.Length - 1, 1).ToString());
                     }
                     if (buffer[0] == '\0')
                     {
-                        return readBuffer.ToString();
+                        return await  Task.FromResult(readBuffer.ToString());
                     }
                     readBuffer.Append((char)buffer[0]);
                     lastChar = (char)buffer[0];
                 }
 
-                return readBuffer.ToString();
+                return await Task.FromResult(readBuffer.ToString());
             }
             catch (IOException)
             {
-                return readBuffer.ToString();
+                return await Task.FromResult(readBuffer.ToString());
             }
         }
 

@@ -12,9 +12,9 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    public class TcpHelper
+    internal class TcpHelper
     {
-        public async static Task SendRaw(Stream clientStream, string httpCmd, List<HttpHeader> requestHeaders, string hostName,
+        internal async static Task SendRaw(Stream clientStream, string httpCmd, List<HttpHeader> requestHeaders, string hostName,
             int tunnelPort, bool isHttps)
         {
             StringBuilder sb = null;

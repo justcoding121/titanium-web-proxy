@@ -2,7 +2,7 @@
 
 namespace Titanium.Web.Proxy.Decompression
 {
-    class DefaultDecompression : IDecompression
+    internal class DefaultDecompression : IDecompression
     {
         public Task<byte[]> Decompress(byte[] compressedArray)
         {

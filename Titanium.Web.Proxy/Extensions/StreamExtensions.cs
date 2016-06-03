@@ -8,9 +8,9 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Extensions
 {
-    public static class StreamHelper
+    internal static class StreamHelper
     {
-        public static async Task CopyToAsync(this Stream input, string initialData, Stream output)
+        internal static async Task CopyToAsync(this Stream input, string initialData, Stream output)
         {
             if (!string.IsNullOrEmpty(initialData))
             {

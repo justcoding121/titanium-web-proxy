@@ -10,7 +10,7 @@ namespace Titanium.Web.Proxy.Shared
     /// </summary>
     internal class Constants
     {
-        public static readonly int BUFFER_SIZE = 8192;
+        internal static readonly int BUFFER_SIZE = 8192;
 
         internal static readonly char[] SpaceSplit = { ' ' };
         internal static readonly char[] ColonSplit = { ':' };

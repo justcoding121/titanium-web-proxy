@@ -28,7 +28,6 @@ namespace Titanium.Web.Proxy.Network
 
         internal DateTime LastAccess { get; set; }
 
-
         internal TcpConnection()
         {
             LastAccess = DateTime.Now;
@@ -192,9 +191,17 @@ namespace Titanium.Web.Proxy.Network
             finally { connectionAccessLock.Release(); }
         }
 
+        private static bool clearConenctions { get; set; }
+
+        internal static void StopClearIdleConnections()
+        {
+            clearConenctions = false;
+        }
+
         internal async static void ClearIdleConnections()
         {
-            while (true)
+            clearConenctions = true;
+            while (clearConenctions)
             {
                 await connectionAccessLock.WaitAsync();
                 try

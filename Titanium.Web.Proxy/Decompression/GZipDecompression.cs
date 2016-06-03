@@ -5,7 +5,7 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Decompression
 {
-    class GZipDecompression : IDecompression
+    internal class GZipDecompression : IDecompression
     {
         public async Task<byte[]> Decompress(byte[] compressedArray)
         {
