@@ -12,6 +12,7 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Shared;
 using System.Security.Cryptography.X509Certificates;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Network
 {
@@ -38,7 +39,12 @@ namespace Titanium.Web.Proxy.Network
     {
         static Dictionary<string, List<TcpConnection>> connectionCache = new Dictionary<string, List<TcpConnection>>();
         static SemaphoreSlim connectionAccessLock = new SemaphoreSlim(1);
-        internal static async Task<TcpConnection> GetClient(SessionEventArgs sessionArgs, string hostname, int port, bool isHttps, Version version)
+
+        internal static async Task<TcpConnection> GetClient(string hostname, int port, bool isHttps, Version version)
+        {
+            return await GetClient(null, hostname, port, isHttps, version);
+        }
+        internal static async Task<TcpConnection> GetClient(ConnectRequest connectRequest, string hostname, int port, bool isHttps, Version version)
         {
             List<TcpConnection> cachedConnections = null;
             TcpConnection cached = null;
@@ -72,14 +78,14 @@ namespace Titanium.Web.Proxy.Network
             }
 
             if (cached == null)
-                cached = await CreateClient(sessionArgs, hostname, port, isHttps, version).ConfigureAwait(false);
+                cached = await CreateClient(connectRequest, hostname, port, isHttps, version).ConfigureAwait(false);
 
 
             //just create one more preemptively
             if (cachedConnections == null || cachedConnections.Count() < 2)
             {
-                var task = CreateClient(sessionArgs, hostname, port, isHttps, version)
-                            .ContinueWith(async (x) => { if (x.Status == TaskStatus.RanToCompletion) await ReleaseClient(x.Result); });
+                    var task = CreateClient(connectRequest, hostname, port, isHttps, version)
+                                .ContinueWith(async (x) => { if (x.Status == TaskStatus.RanToCompletion) await ReleaseClient(x.Result); });
             }
 
             return cached;
@@ -90,7 +96,7 @@ namespace Titanium.Web.Proxy.Network
             return string.Format("{0}:{1}:{2}:{3}:{4}", hostname.ToLower(), port, isHttps, version.Major, version.Minor);
         }
 
-        private static async Task<TcpConnection> CreateClient(SessionEventArgs sessionArgs, string hostname, int port, bool isHttps, Version version)
+        private static async Task<TcpConnection> CreateClient(ConnectRequest connectRequest, string hostname, int port, bool isHttps, Version version)
         {
             TcpClient client;
             Stream stream;
@@ -106,8 +112,8 @@ namespace Titanium.Web.Proxy.Network
 
                     using (var writer = new StreamWriter(stream, Encoding.ASCII, Constants.BUFFER_SIZE, true))
                     {
-                        await writer.WriteLineAsync(string.Format("CONNECT {0}:{1} {2}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port, sessionArgs.WebSession.Request.HttpVersion)).ConfigureAwait(false);
-                        await writer.WriteLineAsync(string.Format("Host: {0}:{1}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port)).ConfigureAwait(false);
+                        await writer.WriteLineAsync(string.Format("CONNECT {0}:{1} {2}", hostname, port, version)).ConfigureAwait(false);
+                        await writer.WriteLineAsync(string.Format("Host: {0}:{1}", hostname, port)).ConfigureAwait(false);
                         await writer.WriteLineAsync("Connection: Keep-Alive").ConfigureAwait(false);
                         await writer.WriteLineAsync().ConfigureAwait(false);
                         await writer.FlushAsync().ConfigureAwait(false);
@@ -132,8 +138,9 @@ namespace Titanium.Web.Proxy.Network
 
                 try
                 {
-                    sslStream = new CustomSslStream(stream, true, new RemoteCertificateValidationCallback(ProxyServer.ValidateServerCertificate));
-                    sslStream.Session = sessionArgs;
+                    sslStream = new CustomSslStream(stream, true, new RemoteCertificateValidationCallback(ProxyServer.ValidateServerCertificate),
+                        new LocalCertificateSelectionCallback(ProxyServer.SelectClientCertificate));
+                    sslStream.Param  = connectRequest;
                     await sslStream.AuthenticateAsClientAsync(hostname, null, Constants.SupportedProtocols, false).ConfigureAwait(false);
                     stream = (Stream)sslStream;
                 }
