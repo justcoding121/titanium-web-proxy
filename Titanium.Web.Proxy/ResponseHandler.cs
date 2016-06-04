@@ -140,7 +140,7 @@ namespace Titanium.Web.Proxy
                 }
                 else
                 {
-                    connectionHeader.Value = "close";
+                    connectionHeader.Value = proxyHeader.Value;
                 }
 
             headers.RemoveAll(x => x.Name.ToLower() == "proxy-connection");
