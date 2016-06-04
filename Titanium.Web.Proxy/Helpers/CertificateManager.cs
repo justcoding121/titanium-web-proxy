@@ -129,6 +129,7 @@ namespace Titanium.Web.Proxy.Helpers
                 }
 
                 store.Close();
+
                 if (certificate != null && !certificateCache.ContainsKey(certificateName))
                     certificateCache.Add(certificateName, new CachedCertificate() { Certificate = certificate });
 
