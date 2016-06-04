@@ -40,11 +40,8 @@ namespace Titanium.Web.Proxy.Network
         static Dictionary<string, List<TcpConnection>> connectionCache = new Dictionary<string, List<TcpConnection>>();
         static SemaphoreSlim connectionAccessLock = new SemaphoreSlim(1);
 
+
         internal static async Task<TcpConnection> GetClient(string hostname, int port, bool isHttps, Version version)
-        {
-            return await GetClient(null, hostname, port, isHttps, version);
-        }
-        internal static async Task<TcpConnection> GetClient(ConnectRequest connectRequest, string hostname, int port, bool isHttps, Version version)
         {
             List<TcpConnection> cachedConnections = null;
             TcpConnection cached = null;
@@ -71,14 +68,24 @@ namespace Titanium.Web.Proxy.Network
                 finally { connectionAccessLock.Release(); }
 
                 if (cached != null && !cached.TcpClient.Client.IsConnected())
+                {
+                    cached.TcpClient.Client.Dispose();
+                    cached.TcpClient.Close();
                     continue;
+                }
 
                 if (cached == null)
                     break;
             }
 
             if (cached == null)
-                cached = await CreateClient(connectRequest, hostname, port, isHttps, version).ConfigureAwait(false);
+                cached = await CreateClient(hostname, port, isHttps, version).ConfigureAwait(false);
+
+            if (cachedConnections == null || cachedConnections.Count() <= 2)
+            {
+                await CreateClient(hostname, port, isHttps, version)
+                              .ContinueWith(async (x) => { if (x.Status == TaskStatus.RanToCompletion) await ReleaseClient(x.Result); });
+            }
 
             return cached;
         }
@@ -88,7 +95,7 @@ namespace Titanium.Web.Proxy.Network
             return string.Format("{0}:{1}:{2}:{3}:{4}", hostname.ToLower(), port, isHttps, version.Major, version.Minor);
         }
 
-        private static async Task<TcpConnection> CreateClient(ConnectRequest connectRequest, string hostname, int port, bool isHttps, Version version)
+        private static async Task<TcpConnection> CreateClient(string hostname, int port, bool isHttps, Version version)
         {
             TcpClient client;
             Stream stream;
@@ -132,7 +139,6 @@ namespace Titanium.Web.Proxy.Network
                 {
                     sslStream = new CustomSslStream(stream, true, new RemoteCertificateValidationCallback(ProxyServer.ValidateServerCertificate),
                         new LocalCertificateSelectionCallback(ProxyServer.SelectClientCertificate));
-                    sslStream.Param  = connectRequest;
                     await sslStream.AuthenticateAsClientAsync(hostname, null, Constants.SupportedProtocols, false).ConfigureAwait(false);
                     stream = (Stream)sslStream;
                 }
@@ -172,6 +178,7 @@ namespace Titanium.Web.Proxy.Network
 
         internal static async Task ReleaseClient(TcpConnection connection)
         {
+
             connection.LastAccess = DateTime.Now;
             var key = GetConnectionKey(connection.HostName, connection.port, connection.IsHttps, connection.Version);
             await connectionAccessLock.WaitAsync();
