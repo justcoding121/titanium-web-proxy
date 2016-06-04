@@ -97,6 +97,7 @@ namespace Titanium.Web.Proxy.Helpers
                     cached.LastAccess = DateTime.Now;
                     return cached.Certificate;
                 }
+
                 X509Certificate2 certificate = null;
                 store.Open(OpenFlags.ReadWrite);
                 string certificateSubject = string.Format("CN={0}, O={1}", certificateName, Issuer);

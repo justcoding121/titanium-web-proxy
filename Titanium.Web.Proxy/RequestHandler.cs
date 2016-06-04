@@ -1,12 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
-using System.Text;
 using System.Text.RegularExpressions;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
@@ -20,6 +18,7 @@ using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy
 {
+
     partial class ProxyServer
     {
         //This is called when client is aware of proxy
@@ -33,7 +32,6 @@ namespace Titanium.Web.Proxy
             try
             {
                 //read the first line HTTP command
-
                 var httpCmd = await clientStreamReader.ReadLineAsync().ConfigureAwait(false);
 
                 if (string.IsNullOrEmpty(httpCmd))
@@ -56,7 +54,7 @@ namespace Titanium.Web.Proxy
                 if (httpCmdSplit.Length == 3)
                 {
                     string httpVersion = httpCmdSplit[2].Trim();
-                   
+
                     if (httpVersion == "http/1.0")
                     {
                         version = new Version(1, 0);
@@ -80,18 +78,28 @@ namespace Titanium.Web.Proxy
 
                     try
                     {
-                        sslStream = new SslStream(clientStream, true);
+                        var connectRequest = new ConnectRequest() { Stream = clientStream, Uri = httpRemoteUri };
 
-                        //Successfully managed to authenticate the client using the fake certificate
-                        await sslStream.AuthenticateAsServerAsync(certificate, false,
-                           Constants.SupportedProtocols, false).ConfigureAwait(false);
+                        await TcpConnectionManager.GetClient(connectRequest, httpRemoteUri.Host, httpRemoteUri.Port, true, version).ConfigureAwait(false);
+
+                        if (clientStream is SslStream)
+                        {
+                            sslStream = clientStream as SslStream;
+                        }
+                        else
+                        {
+                            sslStream = new SslStream(clientStream, true);
+                            //Successfully managed to authenticate the client using the fake certificate
+                            await sslStream.AuthenticateAsServerAsync(certificate, false,
+                                Constants.SupportedProtocols, false).ConfigureAwait(false);
+                            //HTTPS server created - we can now decrypt the client's traffic
+                            clientStream = sslStream;
+                        }
 
                         clientStreamReader = new CustomBinaryReader(sslStream);
                         clientStreamWriter = new StreamWriter(sslStream);
-                        //HTTPS server created - we can now decrypt the client's traffic
-                        clientStream = sslStream;
-                    }
 
+                    }
                     catch
                     {
                         if (sslStream != null)
@@ -226,7 +234,13 @@ namespace Titanium.Web.Proxy
                     }
 
                     var httpRemoteUri = new Uri(!isHttps ? httpCmdSplit[1] : (string.Concat("https://", args.WebSession.Request.Host, httpCmdSplit[1])));
-
+#if DEBUG
+                    if (httpRemoteUri.Host.Contains("localhost"))
+                    {
+                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
+                        break;
+                    }
+#endif
                     args.WebSession.Request.RequestUri = httpRemoteUri;
 
                     args.WebSession.Request.Method = httpMethod;
@@ -235,7 +249,7 @@ namespace Titanium.Web.Proxy
                     args.Client.ClientStreamReader = clientStreamReader;
                     args.Client.ClientStreamWriter = clientStreamWriter;
 
-                    
+
                     PrepareRequestHeaders(args.WebSession.Request.RequestHeaders, args.WebSession);
                     args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
 
@@ -250,7 +264,7 @@ namespace Titanium.Web.Proxy
                             handlerTasks[i] = ((Func<object, SessionEventArgs, Task>)invocationList[i])(null, args);
                         }
 
-                        await Task.WhenAll(handlerTasks).ConfigureAwait(false);     
+                        await Task.WhenAll(handlerTasks).ConfigureAwait(false);
                     }
 
                     if (args.WebSession.Request.UpgradeToWebSocket)
@@ -263,8 +277,8 @@ namespace Titanium.Web.Proxy
 
                     //construct the web request that we are going to issue on behalf of the client.
                     connection = connection == null ?
-                       await TcpConnectionManager.GetClient(args, args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version).ConfigureAwait(false)
-                        : lastRequest != args.WebSession.Request.RequestUri.Host ? await TcpConnectionManager.GetClient(args, args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version).ConfigureAwait(false)
+                       await TcpConnectionManager.GetClient(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version).ConfigureAwait(false)
+                        : lastRequest != args.WebSession.Request.RequestUri.Host ? await TcpConnectionManager.GetClient(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version).ConfigureAwait(false)
                             : connection;
 
                     lastRequest = TcpConnectionManager.GetConnectionKey(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version);
@@ -294,7 +308,7 @@ namespace Titanium.Web.Proxy
                         {
                             await WriteResponseStatus(args.WebSession.Response.HttpVersion, "417",
                                     "Expectation Failed", args.Client.ClientStreamWriter);
-                           await args.Client.ClientStreamWriter.WriteLineAsync();
+                            await args.Client.ClientStreamWriter.WriteLineAsync();
                         }
 
                     if (!args.WebSession.Request.ExpectContinue)
@@ -306,7 +320,7 @@ namespace Titanium.Web.Proxy
                     //If request was modified by user
                     if (args.WebSession.Request.RequestBodyRead)
                     {
-                        if(args.WebSession.Request.ContentEncoding!=null)
+                        if (args.WebSession.Request.ContentEncoding != null)
                         {
                             args.WebSession.Request.RequestBody = await GetCompressedResponseBody(args.WebSession.Request.ContentEncoding, args.WebSession.Request.RequestBody);
                         }
@@ -354,12 +368,12 @@ namespace Titanium.Web.Proxy
             }
 
             if (connection != null)
-               await TcpConnectionManager.ReleaseClient(connection);
+                await TcpConnectionManager.ReleaseClient(connection);
         }
 
         private static async Task WriteConnectResponse(StreamWriter clientStreamWriter, Version httpVersion)
         {
-            await clientStreamWriter.WriteLineAsync(string.Format("HTTP/{0}.{1} {2}", httpVersion.Major, httpVersion.Minor,"200 Connection established")).ConfigureAwait(false);
+            await clientStreamWriter.WriteLineAsync(string.Format("HTTP/{0}.{1} {2}", httpVersion.Major, httpVersion.Minor, "200 Connection established")).ConfigureAwait(false);
             await clientStreamWriter.WriteLineAsync(string.Format("Timestamp: {0}", DateTime.Now)).ConfigureAwait(false);
             await clientStreamWriter.WriteLineAsync().ConfigureAwait(false);
             await clientStreamWriter.FlushAsync().ConfigureAwait(false);
@@ -446,13 +460,12 @@ namespace Titanium.Web.Proxy
           X509Chain chain,
           SslPolicyErrors sslPolicyErrors)
         {
-            var param = sender as CustomSslStream;
+            var customSslStream = sender as CustomSslStream;
 
             if (ServerCertificateValidationCallback != null)
             {
                 var args = new CertificateValidationEventArgs();
 
-                args.Session = param.Session;
                 args.Certificate = certificate;
                 args.Chain = chain;
                 args.SslPolicyErrors = sslPolicyErrors;
@@ -468,11 +481,6 @@ namespace Titanium.Web.Proxy
 
                 Task.WhenAll(handlerTasks).Wait();
 
-                if (!args.IsValid)
-                {
-                    param.Session.WebSession.Request.CancelRequest = true;
-                }
-
                 return args.IsValid;
             }
 
@@ -484,6 +492,87 @@ namespace Titanium.Web.Proxy
             return false;
         }
 
+        /// <summary>
+        /// Call back to select client certificate used for mutual authentication
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="certificate"></param>
+        /// <param name="chain"></param>
+        /// <param name="sslPolicyErrors"></param>
+        /// <returns></returns>
+        internal static X509Certificate SelectClientCertificate(
+            object sender,
+            string targetHost,
+            X509CertificateCollection localCertificates,
+            X509Certificate remoteCertificate,
+            string[] acceptableIssuers)
+        {
+            X509Certificate clientCertificate = null;
+            var customSslStream = sender as CustomSslStream;
+
+            if (customSslStream.Param is ConnectRequest && remoteCertificate != null)
+            {
+                var connectRequest = customSslStream.Param as ConnectRequest;
+
+                var sslStream = new SslStream(connectRequest.Stream, true);
+
+                var certificate = CertManager.CreateCertificate(connectRequest.Uri.Host, false).Result;
+                //Successfully managed to authenticate the client using the fake certificate
+                sslStream.AuthenticateAsServerAsync(certificate, true,
+                   Constants.SupportedProtocols, false).Wait();
+
+                connectRequest.Stream = sslStream;
+
+                clientCertificate = sslStream.RemoteCertificate;
+               
+            }
+            else if (customSslStream.Param is ConnectRequest)
+            {
+                if (acceptableIssuers != null &&
+                    acceptableIssuers.Length > 0 &&
+                    localCertificates != null &&
+                    localCertificates.Count > 0)
+                {
+                    // Use the first certificate that is from an acceptable issuer.
+                    foreach (X509Certificate certificate in localCertificates)
+                    {
+                        string issuer = certificate.Issuer;
+                        if (Array.IndexOf(acceptableIssuers, issuer) != -1)
+                            clientCertificate = certificate;
+                    }
+                }
+
+                if (localCertificates != null &&
+                    localCertificates.Count > 0)
+                    clientCertificate = localCertificates[0];
+            }
+
+            if (ClientCertificateSelectionCallback != null)
+            {
+                var args = new CertificateSelectionEventArgs();
+
+                args.targetHost = targetHost;
+                args.localCertificates = localCertificates;
+                args.remoteCertificate = remoteCertificate;
+                args.acceptableIssuers = acceptableIssuers;
+                args.clientCertificate = clientCertificate;
+
+                Delegate[] invocationList = ClientCertificateSelectionCallback.GetInvocationList();
+                Task[] handlerTasks = new Task[invocationList.Length];
+
+                for (int i = 0; i < invocationList.Length; i++)
+                {
+                    handlerTasks[i] = ((Func<object, CertificateSelectionEventArgs, Task>)invocationList[i])(null, args);
+                }
+
+                Task.WhenAll(handlerTasks).Wait();
+
+                return args.clientCertificate;
+            }
+
+            return clientCertificate;
+
+        }
 
     }
 }

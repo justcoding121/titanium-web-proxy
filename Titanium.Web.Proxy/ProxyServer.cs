@@ -45,7 +45,16 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public static int CertificateCacheTimeOutMinutes { get; set; }
 
+
+        /// <summary>
+        /// Intercept request to server
+        /// </summary>
         public static event Func<object, SessionEventArgs, Task> BeforeRequest;
+
+
+        /// <summary>
+        /// Intercept response from server
+        /// </summary>
         public static event Func<object, SessionEventArgs, Task> BeforeResponse;
 
         /// <summary>
@@ -62,7 +71,11 @@ namespace Titanium.Web.Proxy
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
         /// </summary>
         public static event Func<object, CertificateValidationEventArgs, Task> ServerCertificateValidationCallback;
-
+       
+        /// <summary>
+        /// Callback tooverride client certificate during SSL mutual authentication
+        /// </summary>
+        public static event Func<object, CertificateSelectionEventArgs, Task> ClientCertificateSelectionCallback;
 
         public static List<ProxyEndPoint> ProxyEndPoints { get; set; }
 
