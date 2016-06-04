@@ -83,7 +83,7 @@ namespace Titanium.Web.Proxy.Network
 
             if (cachedConnections == null || cachedConnections.Count() <= 2)
             {
-                await CreateClient(hostname, port, isHttps, version)
+                var task = CreateClient(hostname, port, isHttps, version)
                               .ContinueWith(async (x) => { if (x.Status == TaskStatus.RanToCompletion) await ReleaseClient(x.Result); });
             }
 
