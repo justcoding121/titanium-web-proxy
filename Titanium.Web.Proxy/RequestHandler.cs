@@ -233,6 +233,7 @@ namespace Titanium.Web.Proxy
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
                         break;
                     }
+
 #endif
                     args.WebSession.Request.RequestUri = httpRemoteUri;
 
@@ -269,7 +270,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     //construct the web request that we are going to issue on behalf of the client.
-                   connection = await TcpConnectionManager.GetClient(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version).ConfigureAwait(false);
+                    connection = await TcpConnectionManager.GetClient(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version).ConfigureAwait(false);
 
 
                     args.WebSession.Request.RequestLocked = true;
@@ -343,6 +344,8 @@ namespace Titanium.Web.Proxy
                         return;
                     }
 
+                    await TcpConnectionManager.ReleaseClient(connection);
+
                     // read the next request 
                     httpCmd = await clientStreamReader.ReadLineAsync().ConfigureAwait(false);
 
@@ -355,8 +358,6 @@ namespace Titanium.Web.Proxy
 
             }
 
-            if (connection!=null)
-                await TcpConnectionManager.ReleaseClient(connection);
         }
 
         private static async Task WriteConnectResponse(StreamWriter clientStreamWriter, Version httpVersion)

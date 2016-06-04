@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Helpers
                 var lastChar = default(char);
                 var buffer = new byte[1];
 
-                while (this.stream.Read(buffer, 0, 1) > 0)
+                while ((await this.stream.ReadAsync(buffer, 0, 1)) > 0)
                 {
                     if (lastChar == '\r' && buffer[0] == '\n')
                     {
