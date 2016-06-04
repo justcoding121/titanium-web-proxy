@@ -72,29 +72,23 @@ namespace Titanium.Web.Proxy
 
                     await WriteConnectResponse(clientStreamWriter, version).ConfigureAwait(false);
 
-                    var certificate = await CertManager.CreateCertificate(httpRemoteUri.Host, false);
+
 
                     SslStream sslStream = null;
 
                     try
                     {
-                        var connectRequest = new ConnectRequest() { Stream = clientStream, Uri = httpRemoteUri };
 
-                        await TcpConnectionManager.GetClient(connectRequest, httpRemoteUri.Host, httpRemoteUri.Port, true, version).ConfigureAwait(false);
+                        await TcpConnectionManager.GetClient(httpRemoteUri.Host, httpRemoteUri.Port, true, version).ConfigureAwait(false);
 
-                        if (clientStream is SslStream)
-                        {
-                            sslStream = clientStream as SslStream;
-                        }
-                        else
-                        {
-                            sslStream = new SslStream(clientStream, true);
-                            //Successfully managed to authenticate the client using the fake certificate
-                            await sslStream.AuthenticateAsServerAsync(certificate, false,
-                                Constants.SupportedProtocols, false).ConfigureAwait(false);
-                            //HTTPS server created - we can now decrypt the client's traffic
-                            clientStream = sslStream;
-                        }
+                        sslStream = new SslStream(clientStream, true);
+                        var certificate = await CertManager.CreateCertificate(httpRemoteUri.Host, false);
+                        //Successfully managed to authenticate the client using the fake certificate
+                        await sslStream.AuthenticateAsServerAsync(certificate, false,
+                            Constants.SupportedProtocols, false).ConfigureAwait(false);
+                        //HTTPS server created - we can now decrypt the client's traffic
+                        clientStream = sslStream;
+
 
                         clientStreamReader = new CustomBinaryReader(sslStream);
                         clientStreamWriter = new StreamWriter(sslStream);
@@ -192,8 +186,6 @@ namespace Titanium.Web.Proxy
         private static async Task HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
             CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, bool isHttps)
         {
-            TcpConnection connection = null;
-            string lastRequest = null;
 
             while (true)
             {
@@ -276,12 +268,8 @@ namespace Titanium.Web.Proxy
                     }
 
                     //construct the web request that we are going to issue on behalf of the client.
-                    connection = connection == null ?
-                       await TcpConnectionManager.GetClient(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version).ConfigureAwait(false)
-                        : lastRequest != args.WebSession.Request.RequestUri.Host ? await TcpConnectionManager.GetClient(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version).ConfigureAwait(false)
-                            : connection;
+                    var connection = await TcpConnectionManager.GetClient(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version).ConfigureAwait(false);
 
-                    lastRequest = TcpConnectionManager.GetConnectionKey(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version);
 
                     args.WebSession.Request.RequestLocked = true;
 
@@ -350,10 +338,11 @@ namespace Titanium.Web.Proxy
                     //if connection is closing exit
                     if (args.WebSession.Response.ResponseKeepAlive == false)
                     {
-                        connection.TcpClient.Close();
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
                         return;
                     }
+
+                   await TcpConnectionManager.ReleaseClient(connection);
 
                     // read the next request 
                     httpCmd = await clientStreamReader.ReadLineAsync().ConfigureAwait(false);
@@ -367,8 +356,6 @@ namespace Titanium.Web.Proxy
 
             }
 
-            if (connection != null)
-                await TcpConnectionManager.ReleaseClient(connection);
         }
 
         private static async Task WriteConnectResponse(StreamWriter clientStreamWriter, Version httpVersion)
@@ -460,8 +447,6 @@ namespace Titanium.Web.Proxy
           X509Chain chain,
           SslPolicyErrors sslPolicyErrors)
         {
-            var customSslStream = sender as CustomSslStream;
-
             if (ServerCertificateValidationCallback != null)
             {
                 var args = new CertificateValidationEventArgs();
@@ -510,42 +495,24 @@ namespace Titanium.Web.Proxy
             X509Certificate clientCertificate = null;
             var customSslStream = sender as CustomSslStream;
 
-            if (customSslStream.Param is ConnectRequest && remoteCertificate != null)
+            if (acceptableIssuers != null &&
+                acceptableIssuers.Length > 0 &&
+                localCertificates != null &&
+                localCertificates.Count > 0)
             {
-                var connectRequest = customSslStream.Param as ConnectRequest;
-
-                var sslStream = new SslStream(connectRequest.Stream, true);
-
-                var certificate = CertManager.CreateCertificate(connectRequest.Uri.Host, false).Result;
-                //Successfully managed to authenticate the client using the fake certificate
-                sslStream.AuthenticateAsServerAsync(certificate, true,
-                   Constants.SupportedProtocols, false).Wait();
-
-                connectRequest.Stream = sslStream;
-
-                clientCertificate = sslStream.RemoteCertificate;
-               
-            }
-            else if (customSslStream.Param is ConnectRequest)
-            {
-                if (acceptableIssuers != null &&
-                    acceptableIssuers.Length > 0 &&
-                    localCertificates != null &&
-                    localCertificates.Count > 0)
+                // Use the first certificate that is from an acceptable issuer.
+                foreach (X509Certificate certificate in localCertificates)
                 {
-                    // Use the first certificate that is from an acceptable issuer.
-                    foreach (X509Certificate certificate in localCertificates)
-                    {
-                        string issuer = certificate.Issuer;
-                        if (Array.IndexOf(acceptableIssuers, issuer) != -1)
-                            clientCertificate = certificate;
-                    }
+                    string issuer = certificate.Issuer;
+                    if (Array.IndexOf(acceptableIssuers, issuer) != -1)
+                        clientCertificate = certificate;
                 }
-
-                if (localCertificates != null &&
-                    localCertificates.Count > 0)
-                    clientCertificate = localCertificates[0];
             }
+
+            if (localCertificates != null &&
+                localCertificates.Count > 0)
+                clientCertificate = localCertificates[0];
+
 
             if (ClientCertificateSelectionCallback != null)
             {
