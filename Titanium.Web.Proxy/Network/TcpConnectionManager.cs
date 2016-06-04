@@ -80,14 +80,6 @@ namespace Titanium.Web.Proxy.Network
             if (cached == null)
                 cached = await CreateClient(connectRequest, hostname, port, isHttps, version).ConfigureAwait(false);
 
-
-            //just create one more preemptively
-            if (cachedConnections == null || cachedConnections.Count() < 2)
-            {
-                    var task = CreateClient(connectRequest, hostname, port, isHttps, version)
-                                .ContinueWith(async (x) => { if (x.Status == TaskStatus.RanToCompletion) await ReleaseClient(x.Result); });
-            }
-
             return cached;
         }
 
