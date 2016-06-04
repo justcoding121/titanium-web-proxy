@@ -79,7 +79,8 @@ namespace Titanium.Web.Proxy
                     try
                     {
 
-                        await TcpConnectionManager.GetClient(httpRemoteUri.Host, httpRemoteUri.Port, true, version).ConfigureAwait(false);
+                         var tunnelClient = await TcpConnectionManager.GetClient(httpRemoteUri.Host, httpRemoteUri.Port, true, version).ConfigureAwait(false);
+                         await TcpConnectionManager.ReleaseClient(tunnelClient);
 
                         sslStream = new SslStream(clientStream, true);
                         var certificate = await CertManager.CreateCertificate(httpRemoteUri.Host, false);
