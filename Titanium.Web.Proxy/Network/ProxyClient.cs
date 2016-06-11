@@ -5,7 +5,7 @@ using Titanium.Web.Proxy.Helpers;
 namespace Titanium.Web.Proxy.Network
 {
     /// <summary>
-    /// This class wraps Tcp connection to Server
+    /// This class wraps Tcp connection to client
     /// </summary>
     public class ProxyClient
     {
