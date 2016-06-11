@@ -25,12 +25,12 @@ namespace Titanium.Web.Proxy.Extensions
             var totalbytesRead = 0;
 
             long bytesToRead;
-            if (totalBytesToRead < Constants.BUFFER_SIZE)
+            if (totalBytesToRead < ProxyConstants.BUFFER_SIZE)
             {
                 bytesToRead = totalBytesToRead;
             }
             else
-                bytesToRead = Constants.BUFFER_SIZE;
+                bytesToRead = ProxyConstants.BUFFER_SIZE;
 
 
             while (totalbytesRead < totalBytesToRead)

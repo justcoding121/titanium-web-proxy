@@ -102,14 +102,14 @@ namespace Titanium.Web.Proxy.Network
 
             if (isHttps)
             {
-                CustomSslStream sslStream = null;
+                SslStream sslStream = null;
 
                 if (ProxyServer.UpStreamHttpsProxy != null)
                 {
                     client = new TcpClient(ProxyServer.UpStreamHttpsProxy.HostName, ProxyServer.UpStreamHttpsProxy.Port);
                     stream = (Stream)client.GetStream();
 
-                    using (var writer = new StreamWriter(stream, Encoding.ASCII, Constants.BUFFER_SIZE, true))
+                    using (var writer = new StreamWriter(stream, Encoding.ASCII, ProxyConstants.BUFFER_SIZE, true))
                     {
                         await writer.WriteLineAsync(string.Format("CONNECT {0}:{1} {2}", hostname, port, version)).ConfigureAwait(false);
                         await writer.WriteLineAsync(string.Format("Host: {0}:{1}", hostname, port)).ConfigureAwait(false);
@@ -137,9 +137,9 @@ namespace Titanium.Web.Proxy.Network
 
                 try
                 {
-                    sslStream = new CustomSslStream(stream, true, new RemoteCertificateValidationCallback(ProxyServer.ValidateServerCertificate),
+                    sslStream = new SslStream(stream, true, new RemoteCertificateValidationCallback(ProxyServer.ValidateServerCertificate),
                         new LocalCertificateSelectionCallback(ProxyServer.SelectClientCertificate));
-                    await sslStream.AuthenticateAsClientAsync(hostname, null, Constants.SupportedProtocols, false).ConfigureAwait(false);
+                    await sslStream.AuthenticateAsClientAsync(hostname, null, ProxyConstants.SupportedSslProtocols, false).ConfigureAwait(false);
                     stream = (Stream)sslStream;
                 }
                 catch

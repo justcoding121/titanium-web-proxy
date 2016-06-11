@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy.Helpers
                     try
                     {
                         sslStream = new SslStream(tunnelStream);
-                        await sslStream.AuthenticateAsClientAsync(hostName, null, Constants.SupportedProtocols, false);
+                        await sslStream.AuthenticateAsClientAsync(hostName, null, ProxyConstants.SupportedSslProtocols, false);
                         tunnelStream = sslStream;
                     }
                     catch

@@ -74,7 +74,6 @@
     <Compile Include="Http\Request.cs" />
     <Compile Include="Http\Response.cs" />
     <Compile Include="Models\ExternalProxy.cs" />
-    <Compile Include="Network\CustomSslStream.cs" />
     <Compile Include="Network\TcpConnectionManager.cs" />
     <Compile Include="Models\HttpHeader.cs" />
     <Compile Include="Http\HttpWebClient.cs" />
@@ -88,7 +87,7 @@
     <Compile Include="Extensions\StreamExtensions.cs" />
     <Compile Include="Http\Responses\OkResponse.cs" />
     <Compile Include="Http\Responses\RedirectResponse.cs" />
-    <Compile Include="Shared\Constants.cs" />
+    <Compile Include="Shared\ProxyConstants.cs" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

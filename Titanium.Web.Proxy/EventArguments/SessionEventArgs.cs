@@ -8,6 +8,8 @@ using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Extensions;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Network;
+using System.Net;
+using System.Net.Sockets;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -24,25 +26,33 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         internal SessionEventArgs()
         {
-            Client = new ProxyClient();
+            ProxyClient = new ProxyClient();
             WebSession = new HttpWebClient();
         }
 
         /// <summary>
         /// Holds a reference to server connection
         /// </summary>
-        internal ProxyClient Client { get; set; }
+        internal ProxyClient ProxyClient { get; set; }
 
         /// <summary>
         /// Does this session uses SSL
         /// </summary>
         public bool IsHttps => WebSession.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
 
+
+        public IPAddress ClientIpAddress => ((IPEndPoint)Client.Client.RemoteEndPoint).Address;
+
         /// <summary>
         /// A web session corresponding to a single request/response sequence
         /// within a proxy connection
         /// </summary>
         public HttpWebClient WebSession { get; set; }
+
+        /// <summary>
+        /// Reference to client connection
+        /// </summary>
+        internal TcpClient Client { get; set; }
 
 
         /// <summary>
@@ -76,7 +86,7 @@ namespace Titanium.Web.Proxy.EventArguments
                     //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
                     if (WebSession.Request.IsChunked)
                     {
-                        await this.Client.ClientStreamReader.CopyBytesToStreamChunked(requestBodyStream).ConfigureAwait(false);
+                        await this.ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(requestBodyStream).ConfigureAwait(false);
                     }
                     else
                     {
@@ -84,7 +94,7 @@ namespace Titanium.Web.Proxy.EventArguments
                         if (WebSession.Request.ContentLength > 0)
                         {
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await this.Client.ClientStreamReader.CopyBytesToStream(requestBodyStream, WebSession.Request.ContentLength).ConfigureAwait(false);
+                            await this.ProxyClient.ClientStreamReader.CopyBytesToStream(requestBodyStream, WebSession.Request.ContentLength).ConfigureAwait(false);
 
                         }
                         else if(WebSession.Request.HttpVersion.Major == 1 && WebSession.Request.HttpVersion.Minor == 0)
