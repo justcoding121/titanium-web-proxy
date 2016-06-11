@@ -31,7 +31,7 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Holds a reference to server connection
+        /// Holds a reference to client
         /// </summary>
         internal ProxyClient ProxyClient { get; set; }
 
@@ -41,18 +41,13 @@ namespace Titanium.Web.Proxy.EventArguments
         public bool IsHttps => WebSession.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
 
 
-        public IPEndPoint ClientEndPoint => (IPEndPoint)TcpClient.Client.RemoteEndPoint;
+        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
 
         /// <summary>
         /// A web session corresponding to a single request/response sequence
         /// within a proxy connection
         /// </summary>
         public HttpWebClient WebSession { get; set; }
-
-        /// <summary>
-        /// Reference to client connection
-        /// </summary>
-        internal TcpClient TcpClient { get; set; }
 
 
         /// <summary>
