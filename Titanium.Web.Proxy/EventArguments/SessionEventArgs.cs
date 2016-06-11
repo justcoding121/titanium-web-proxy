@@ -41,7 +41,7 @@ namespace Titanium.Web.Proxy.EventArguments
         public bool IsHttps => WebSession.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
 
 
-        public IPAddress ClientIpAddress => ((IPEndPoint)Client.Client.RemoteEndPoint).Address;
+        public EndPoint ClientEndPoint => (IPEndPoint)TcpClient.Client.RemoteEndPoint;
 
         /// <summary>
         /// A web session corresponding to a single request/response sequence
@@ -52,7 +52,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Reference to client connection
         /// </summary>
-        internal TcpClient Client { get; set; }
+        internal TcpClient TcpClient { get; set; }
 
 
         /// <summary>

@@ -198,7 +198,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 var args = new SessionEventArgs();
-                args.Client = client;
+                args.TcpClient = client;
 
                 try
                 {
