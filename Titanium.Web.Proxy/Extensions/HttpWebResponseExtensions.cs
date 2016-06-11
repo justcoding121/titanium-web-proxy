@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy.Extensions
                     return Encoding.GetEncoding("ISO-8859-1");
 
                 //extract the encoding by finding the charset
-                var contentTypes = response.ContentType.Split(Constants.SemiColonSplit);
+                var contentTypes = response.ContentType.Split(ProxyConstants.SemiColonSplit);
                 foreach (var contentType in contentTypes)
                 {
                     var encodingSplit = contentType.Split('=');

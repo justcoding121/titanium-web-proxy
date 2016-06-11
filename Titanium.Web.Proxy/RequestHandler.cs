@@ -41,7 +41,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 //break up the line into three components (method, remote URL & Http Version)
-                var httpCmdSplit = httpCmd.Split(Constants.SpaceSplit, 3);
+                var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
 
                 var httpVerb = httpCmdSplit[0];
 
@@ -86,7 +86,7 @@ namespace Titanium.Web.Proxy
                         var certificate = await CertManager.CreateCertificate(httpRemoteUri.Host, false);
                         //Successfully managed to authenticate the client using the fake certificate
                         await sslStream.AuthenticateAsServerAsync(certificate, false,
-                            Constants.SupportedProtocols, false).ConfigureAwait(false);
+                            ProxyConstants.SupportedSslProtocols, false).ConfigureAwait(false);
                         //HTTPS server created - we can now decrypt the client's traffic
                         clientStream = sslStream;
 
@@ -198,12 +198,12 @@ namespace Titanium.Web.Proxy
                 }
 
                 var args = new SessionEventArgs();
-                args.Client.TcpClient = client;
+                args.Client = client;
 
                 try
                 {
                     //break up the line into three components (method, remote URL & Http Version)
-                    var httpCmdSplit = httpCmd.Split(Constants.SpaceSplit, 3);
+                    var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
 
                     var httpMethod = httpCmdSplit[0];
 
@@ -223,7 +223,7 @@ namespace Titanium.Web.Proxy
                     string tmpLine;
                     while (!string.IsNullOrEmpty(tmpLine = await clientStreamReader.ReadLineAsync().ConfigureAwait(false)))
                     {
-                        var header = tmpLine.Split(Constants.ColonSplit, 2);
+                        var header = tmpLine.Split(ProxyConstants.ColonSplit, 2);
                         args.WebSession.Request.RequestHeaders.Add(new HttpHeader(header[0], header[1]));
                     }
 
@@ -240,9 +240,9 @@ namespace Titanium.Web.Proxy
 
                     args.WebSession.Request.Method = httpMethod;
                     args.WebSession.Request.HttpVersion = version;
-                    args.Client.ClientStream = clientStream;
-                    args.Client.ClientStreamReader = clientStreamReader;
-                    args.Client.ClientStreamWriter = clientStreamWriter;
+                    args.ProxyClient.ClientStream = clientStream;
+                    args.ProxyClient.ClientStreamReader = clientStreamReader;
+                    args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
 
                     PrepareRequestHeaders(args.WebSession.Request.RequestHeaders, args.WebSession);
@@ -292,14 +292,14 @@ namespace Titanium.Web.Proxy
                         if (args.WebSession.Request.Is100Continue)
                         {
                             await WriteResponseStatus(args.WebSession.Response.HttpVersion, "100",
-                                    "Continue", args.Client.ClientStreamWriter);
-                            await args.Client.ClientStreamWriter.WriteLineAsync();
+                                    "Continue", args.ProxyClient.ClientStreamWriter);
+                            await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                         }
                         else if (args.WebSession.Request.ExpectationFailed)
                         {
                             await WriteResponseStatus(args.WebSession.Response.HttpVersion, "417",
-                                    "Expectation Failed", args.Client.ClientStreamWriter);
-                            await args.Client.ClientStreamWriter.WriteLineAsync();
+                                    "Expectation Failed", args.ProxyClient.ClientStreamWriter);
+                            await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                         }
 
                     if (!args.WebSession.Request.ExpectContinue)
@@ -415,7 +415,7 @@ namespace Titanium.Web.Proxy
             {
                 try
                 {
-                    await args.Client.ClientStreamReader.CopyBytesToStream(postStream, args.WebSession.Request.ContentLength).ConfigureAwait(false);
+                    await args.ProxyClient.ClientStreamReader.CopyBytesToStream(postStream, args.WebSession.Request.ContentLength).ConfigureAwait(false);
                 }
                 catch
                 {
@@ -427,7 +427,7 @@ namespace Titanium.Web.Proxy
             {
                 try
                 {
-                    await args.Client.ClientStreamReader.CopyBytesToStreamChunked(postStream).ConfigureAwait(false);
+                    await args.ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(postStream).ConfigureAwait(false);
                 }
                 catch
                 {
@@ -496,7 +496,7 @@ namespace Titanium.Web.Proxy
             string[] acceptableIssuers)
         {
             X509Certificate clientCertificate = null;
-            var customSslStream = sender as CustomSslStream;
+            var customSslStream = sender as SslStream;
 
             if (acceptableIssuers != null &&
                 acceptableIssuers.Length > 0 &&

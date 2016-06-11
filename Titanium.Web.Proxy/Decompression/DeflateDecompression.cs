@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Decompression
 
             using (var decompressor = new DeflateStream(stream, CompressionMode.Decompress))
             {
-                var buffer = new byte[Constants.BUFFER_SIZE];
+                var buffer = new byte[ProxyConstants.BUFFER_SIZE];
 
                 using (var output = new MemoryStream())
                 {

@@ -64,7 +64,7 @@ namespace Titanium.Web.Proxy.Http
             if (ProxyServer.Enable100ContinueBehaviour)
                 if (this.Request.ExpectContinue)
                 {
-                    var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(Constants.SpaceSplit, 3);
+                    var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
                     var responseStatusCode = httpResult[1].Trim();
                     var responseStatusDescription = httpResult[2].Trim();
 
@@ -89,7 +89,7 @@ namespace Titanium.Web.Proxy.Http
             //return if this is already read
             if (this.Response.ResponseStatusCode != null) return;
 
-            var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(Constants.SpaceSplit, 3);
+            var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
 
             if (string.IsNullOrEmpty(httpResult[0]))
             {
@@ -131,7 +131,7 @@ namespace Titanium.Web.Proxy.Http
 
             for (int index = 0; index < responseLines.Count; ++index)
             {
-                string[] strArray = responseLines[index].Split(Constants.ColonSplit, 2);
+                string[] strArray = responseLines[index].Split(ProxyConstants.ColonSplit, 2);
                 this.Response.ResponseHeaders.Add(new HttpHeader(strArray[0], strArray[1]));
             }
         }

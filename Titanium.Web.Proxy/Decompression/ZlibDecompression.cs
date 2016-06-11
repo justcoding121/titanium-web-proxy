@@ -12,7 +12,7 @@ namespace Titanium.Web.Proxy.Decompression
             var memoryStream = new MemoryStream(compressedArray);
             using (var decompressor = new ZlibStream(memoryStream, CompressionMode.Decompress))
             {
-                var buffer = new byte[Constants.BUFFER_SIZE];
+                var buffer = new byte[ProxyConstants.BUFFER_SIZE];
 
                 using (var output = new MemoryStream())
                 {
