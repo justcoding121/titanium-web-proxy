@@ -41,7 +41,7 @@ namespace Titanium.Web.Proxy.EventArguments
         public bool IsHttps => WebSession.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
 
 
-        public EndPoint ClientEndPoint => (IPEndPoint)TcpClient.Client.RemoteEndPoint;
+        public IPEndPoint ClientEndPoint => (IPEndPoint)TcpClient.Client.RemoteEndPoint;
 
         /// <summary>
         /// A web session corresponding to a single request/response sequence
