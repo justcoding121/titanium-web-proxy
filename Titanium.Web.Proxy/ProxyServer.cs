@@ -351,7 +351,7 @@ namespace Titanium.Web.Proxy
             }
             catch
             {
-                //Other errors are discarded to keep the proxy running
+                //Other errors are discarded to keep proxy running
             }
            
         }

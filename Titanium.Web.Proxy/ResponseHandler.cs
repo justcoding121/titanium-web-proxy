@@ -11,11 +11,15 @@ using Titanium.Web.Proxy.Extensions;
 
 namespace Titanium.Web.Proxy
 {
+    /// <summary>
+    /// Handle the response from server
+    /// </summary>
     partial class ProxyServer
     {
         //Called asynchronously when a request was successfully and we received the response
         public static async Task HandleHttpSessionResponse(SessionEventArgs args)
         {
+            //read response & headers from server
             await args.WebSession.ReceiveResponse();
 
             try
@@ -23,7 +27,7 @@ namespace Titanium.Web.Proxy
                 if (!args.WebSession.Response.ResponseBodyRead)
                     args.WebSession.Response.ResponseStream = args.WebSession.ServerConnection.Stream;
 
-
+                //If client request call back then do it
                 if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
                 {
                     Delegate[] invocationList = BeforeResponse.GetInvocationList();
@@ -39,6 +43,7 @@ namespace Titanium.Web.Proxy
 
                 args.WebSession.Response.ResponseLocked = true;
 
+                //Write back to client 100-conitinue response if that's what server returned
                 if (args.WebSession.Response.Is100Continue)
                 {
                     await WriteResponseStatus(args.WebSession.Response.HttpVersion, "100",
@@ -52,6 +57,7 @@ namespace Titanium.Web.Proxy
                     await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                 }
 
+                //Write back response status
                 await WriteResponseStatus(args.WebSession.Response.HttpVersion, args.WebSession.Response.ResponseStatusCode,
                               args.WebSession.Response.ResponseStatusDescription, args.ProxyClient.ClientStreamWriter);
 
@@ -95,6 +101,12 @@ namespace Titanium.Web.Proxy
             }
         }
 
+        /// <summary>
+        /// get the compressed response body from give response bytes
+        /// </summary>
+        /// <param name="encodingType"></param>
+        /// <param name="responseBodyStream"></param>
+        /// <returns></returns>
         private static async Task<byte[]> GetCompressedResponseBody(string encodingType, byte[] responseBodyStream)
         {
             var compressionFactory = new CompressionFactory();
@@ -102,13 +114,26 @@ namespace Titanium.Web.Proxy
             return await compressor.Compress(responseBodyStream);
         }
 
-
+        /// <summary>
+        /// Write response status
+        /// </summary>
+        /// <param name="version"></param>
+        /// <param name="code"></param>
+        /// <param name="description"></param>
+        /// <param name="responseWriter"></param>
+        /// <returns></returns>
         private static async Task WriteResponseStatus(Version version, string code, string description,
             StreamWriter responseWriter)
         {
             await responseWriter.WriteLineAsync(string.Format("HTTP/{0}.{1} {2} {3}", version.Major, version.Minor, code, description));
         }
 
+        /// <summary>
+        /// Write response headers to client
+        /// </summary>
+        /// <param name="responseWriter"></param>
+        /// <param name="headers"></param>
+        /// <returns></returns>
         private static async Task WriteResponseHeaders(StreamWriter responseWriter, List<HttpHeader> headers)
         {
             if (headers != null)
@@ -124,6 +149,11 @@ namespace Titanium.Web.Proxy
             await responseWriter.WriteLineAsync();
             await responseWriter.FlushAsync();
         }
+
+        /// <summary>
+        /// Fix the proxy specific headers before sending response headers to client
+        /// </summary>
+        /// <param name="headers"></param>
         private static void FixResponseProxyHeaders(List<HttpHeader> headers)
         {
             //If proxy-connection close was returned inform to close the connection
@@ -143,7 +173,14 @@ namespace Titanium.Web.Proxy
             headers.RemoveAll(x => x.Name.ToLower() == "proxy-connection");
         }
    
-
+        /// <summary>
+        /// Handle dispose of a client/server session
+        /// </summary>
+        /// <param name="client"></param>
+        /// <param name="clientStream"></param>
+        /// <param name="clientStreamReader"></param>
+        /// <param name="clientStreamWriter"></param>
+        /// <param name="args"></param>
         private static void Dispose(TcpClient client, IDisposable clientStream, IDisposable clientStreamReader,
             IDisposable clientStreamWriter, IDisposable args)
         {
