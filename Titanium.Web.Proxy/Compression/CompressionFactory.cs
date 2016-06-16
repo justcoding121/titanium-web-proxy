@@ -1,6 +1,9 @@
 ﻿namespace Titanium.Web.Proxy.Compression
 {
-    class CompressionFactory
+    /// <summary>
+    ///  A factory to generate the compression methods based on the type of compression
+    /// </summary>
+    internal class CompressionFactory
     {
         public ICompression Create(string type)
         {

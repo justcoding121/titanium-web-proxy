@@ -4,6 +4,9 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
+    /// <summary>
+    /// An argument passed on to the user for validating the server certificate during SSL authentication
+    /// </summary>
     public class CertificateValidationEventArgs : EventArgs, IDisposable
     {
         public X509Certificate Certificate { get; internal set; }
