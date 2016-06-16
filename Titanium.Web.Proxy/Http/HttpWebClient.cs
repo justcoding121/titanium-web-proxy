@@ -9,6 +9,9 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
 {
+    /// <summary>
+    /// Used to communicate with the server over HTTP(S)
+    /// </summary>
     public class HttpWebClient
     {
         /// <summary>
@@ -19,6 +22,9 @@ namespace Titanium.Web.Proxy.Http
         public Request Request { get; set; }
         public Response Response { get; set; }
 
+        /// <summary>
+        /// Is Https?
+        /// </summary>
         public bool IsHttps
         {
             get
@@ -27,6 +33,10 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Set the tcp connection to server used by this webclient
+        /// </summary>
+        /// <param name="Connection"></param>
         internal void SetConnection(TcpConnection Connection)
         {
             Connection.LastAccess = DateTime.Now;
@@ -39,19 +49,24 @@ namespace Titanium.Web.Proxy.Http
             this.Response = new Response();
         }
 
+        /// <summary>
+        /// Prepare & send the http(s) request
+        /// </summary>
+        /// <returns></returns>
         internal async Task SendRequest()
         {
             Stream stream = ServerConnection.Stream;
 
             StringBuilder requestLines = new StringBuilder();
-
+           
+            //prepare the request & headers
             requestLines.AppendLine(string.Join(" ", new string[3]
               {
                 this.Request.Method,
                 this.Request.RequestUri.PathAndQuery,
                 string.Format("HTTP/{0}.{1}",this.Request.HttpVersion.Major, this.Request.HttpVersion.Minor)
               }));
-
+            //write request headers
             foreach (HttpHeader httpHeader in this.Request.RequestHeaders)
             {
                 requestLines.AppendLine(httpHeader.Name + ':' + httpHeader.Value);
@@ -87,6 +102,10 @@ namespace Titanium.Web.Proxy.Http
                 }
         }
 
+        /// <summary>
+        /// Receive & parse the http response from server
+        /// </summary>
+        /// <returns></returns>
         internal async Task ReceiveResponse()
         {
             //return if this is already read
@@ -130,6 +149,7 @@ namespace Titanium.Web.Proxy.Http
                 return;
             }
 
+            //read response headers
             List<string> responseLines = await ServerConnection.StreamReader.ReadAllLinesAsync();
 
             for (int index = 0; index < responseLines.Count; ++index)

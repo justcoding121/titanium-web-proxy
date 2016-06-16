@@ -18,9 +18,12 @@ namespace Titanium.Web.Proxy.Helpers
     {
         private Stream stream;
         private Encoding encoding;
+
         internal CustomBinaryReader(Stream stream)
         {
             this.stream = stream;
+
+            //default to UTF-8
             this.encoding = Encoding.UTF8;
         }
 
@@ -41,16 +44,21 @@ namespace Titanium.Web.Proxy.Helpers
 
                     while ((await this.stream.ReadAsync(buffer, 0, 1)) > 0)
                     {
+                        //if new line
                         if (lastChar == '\r' && buffer[0] == '\n')
                         {
                             var result = readBuffer.ToArray();
                             return  encoding.GetString(result.SubArray(0, result.Length - 1));
                         }
+                        //end of stream
                         if (buffer[0] == '\0')
                         {
                             return encoding.GetString(readBuffer.ToArray());
                         }
+
                         await readBuffer.WriteAsync(buffer,0,1);
+
+                        //store last char for new line comparison
                         lastChar = (char)buffer[0];
                     }
 
@@ -58,7 +66,7 @@ namespace Titanium.Web.Proxy.Helpers
                 }
                 catch (IOException)
                 {
-                    return encoding.GetString(readBuffer.ToArray());
+                    throw;
                 }
             }
         }
@@ -71,13 +79,18 @@ namespace Titanium.Web.Proxy.Helpers
         {
             string tmpLine;
             var requestLines = new List<string>();
-            while (!string.IsNullOrEmpty(tmpLine = await ReadLineAsync().ConfigureAwait(false)))
+            while (!string.IsNullOrEmpty(tmpLine = await ReadLineAsync()))
             {
                 requestLines.Add(tmpLine);
             }
             return requestLines;
         }
 
+        /// <summary>
+        /// Read the specified number of raw bytes from the base stream
+        /// </summary>
+        /// <param name="totalBytesToRead"></param>
+        /// <returns></returns>
         internal async Task<byte[]> ReadBytesAsync(long totalBytesToRead)
         {
             int bytesToRead = ProxyConstants.BUFFER_SIZE;
@@ -92,7 +105,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             using (var outStream = new MemoryStream())
             {
-                while ((bytesRead += await this.stream.ReadAsync(buffer, 0, bytesToRead).ConfigureAwait(false)) > 0)
+                while ((bytesRead += await this.stream.ReadAsync(buffer, 0, bytesToRead)) > 0)
                 {
                     await outStream.WriteAsync(buffer, 0, bytesRead);
                     totalBytesRead += bytesRead;

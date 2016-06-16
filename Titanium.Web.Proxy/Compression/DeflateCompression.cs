@@ -4,7 +4,10 @@ using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Compression
 {
-    class DeflateCompression : ICompression
+    /// <summary>
+    /// Concrete implementation of deflate compression
+    /// </summary>
+    internal class DeflateCompression : ICompression
     {
         public async Task<byte[]> Compress(byte[] responseBody)
         {

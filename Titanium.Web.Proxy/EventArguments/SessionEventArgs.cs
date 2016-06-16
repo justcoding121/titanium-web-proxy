@@ -9,7 +9,6 @@ using Titanium.Web.Proxy.Extensions;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Network;
 using System.Net;
-using System.Net.Sockets;
 
 namespace Titanium.Web.Proxy.EventArguments
 {

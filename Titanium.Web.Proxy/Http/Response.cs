@@ -8,7 +8,9 @@ using System;
 
 namespace Titanium.Web.Proxy.Http
 {
-
+    /// <summary>
+    /// Http(s) response object
+    /// </summary>
     public class Response
     {
         public string ResponseStatusCode { get; set; }
