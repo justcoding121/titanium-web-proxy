@@ -9,7 +9,11 @@ namespace Titanium.Web.Proxy.Extensions
     /// </summary>
     internal static class HttpWebRequestExtensions
     {
-        //Get encoding of the HTTP request
+        /// <summary>
+        /// parse the character encoding of request from request headers
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         internal static Encoding GetEncoding(this Request request)
         {
             try

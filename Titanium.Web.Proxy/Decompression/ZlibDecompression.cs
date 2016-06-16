@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.Decompression
                     int read;
                     while ((read = await decompressor.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
                     {
-                       await output.WriteAsync(buffer, 0, read).ConfigureAwait(false);
+                       await output.WriteAsync(buffer, 0, read);
                     }
                     return output.ToArray();
                 }

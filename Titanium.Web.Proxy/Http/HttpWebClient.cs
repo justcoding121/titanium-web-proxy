@@ -76,13 +76,13 @@ namespace Titanium.Web.Proxy.Http
                     && responseStatusDescription.ToLower().Equals("continue"))
                     {
                         this.Request.Is100Continue = true;
-                        await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
+                        await ServerConnection.StreamReader.ReadLineAsync();
                     }
                     else if (responseStatusCode.Equals("417")
                          && responseStatusDescription.ToLower().Equals("expectation failed"))
                     {
                         this.Request.ExpectationFailed = true;
-                        await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
+                        await ServerConnection.StreamReader.ReadLineAsync();
                     }
                 }
         }
@@ -96,7 +96,7 @@ namespace Titanium.Web.Proxy.Http
 
             if (string.IsNullOrEmpty(httpResult[0]))
             {
-                await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
+                await ServerConnection.StreamReader.ReadLineAsync();
             }
             var httpVersion = httpResult[0].Trim().ToLower();
 
@@ -116,7 +116,7 @@ namespace Titanium.Web.Proxy.Http
             {
                 this.Response.Is100Continue = true;
                 this.Response.ResponseStatusCode = null;
-                await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
+                await ServerConnection.StreamReader.ReadLineAsync();
                 await ReceiveResponse();
                 return;
             }
@@ -125,12 +125,12 @@ namespace Titanium.Web.Proxy.Http
             {
                 this.Response.ExpectationFailed = true;
                 this.Response.ResponseStatusCode = null;
-                await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
+                await ServerConnection.StreamReader.ReadLineAsync();
                 await ReceiveResponse();
                 return;
             }
 
-            List<string> responseLines = await ServerConnection.StreamReader.ReadAllLinesAsync().ConfigureAwait(false);
+            List<string> responseLines = await ServerConnection.StreamReader.ReadAllLinesAsync();
 
             for (int index = 0; index < responseLines.Count; ++index)
             {
