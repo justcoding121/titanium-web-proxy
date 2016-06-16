@@ -44,7 +44,6 @@ namespace Titanium.Web.Proxy.Network
             //Get a unique string to identify this connection
             var key = GetConnectionKey(hostname, port, isHttps, version);
 
-
             while (true)
             {
                 await connectionAccessLock.WaitAsync();
@@ -75,6 +74,7 @@ namespace Titanium.Web.Proxy.Network
                     break;
 
             }
+
 
             if (cached == null)
                 cached = await CreateClient(hostname, port, isHttps, version);

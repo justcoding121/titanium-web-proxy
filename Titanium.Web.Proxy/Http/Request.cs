@@ -12,10 +12,24 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class Request
     {
+        /// <summary>
+        /// Request Method
+        /// </summary>
         public string Method { get; set; }
+
+        /// <summary>
+        /// Request HTTP Uri
+        /// </summary>
         public Uri RequestUri { get; set; }
+
+        /// <summary>
+        /// Request Http Version
+        /// </summary>
         public Version HttpVersion { get; set; }
 
+        /// <summary>
+        /// Request Http hostanem
+        /// </summary>
         internal string Host
         {
             get
@@ -35,6 +49,9 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Request content encoding
+        /// </summary>
         internal string ContentEncoding
         {
             get
@@ -50,6 +67,9 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Request content-length
+        /// </summary>
         public long ContentLength
         {
             get
@@ -68,7 +88,6 @@ namespace Titanium.Web.Proxy.Http
             }
             set
             {
-
                 var header = RequestHeaders.FirstOrDefault(x => x.Name.ToLower() == "content-length");
 
                 if (value >= 0)
@@ -88,6 +107,9 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Request content-type
+        /// </summary>
         public string ContentType
         {
             get
@@ -109,6 +131,9 @@ namespace Titanium.Web.Proxy.Http
 
         }
 
+        /// <summary>
+        /// Is request body send as chunked bytes
+        /// </summary>
         public bool IsChunked
         {
             get
@@ -140,6 +165,9 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Does this request has a 100-continue header?
+        /// </summary>
         public bool ExpectContinue
         {
             get
@@ -150,19 +178,37 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Request Url
+        /// </summary>
         public string Url { get { return RequestUri.OriginalString; } }
 
+        /// <summary>
+        /// Encoding for this request
+        /// </summary>
         internal Encoding Encoding { get { return this.GetEncoding(); } }
         /// <summary>
         /// Terminates the underlying Tcp Connection to client after current request
         /// </summary>
         internal bool CancelRequest { get; set; }
 
+        /// <summary>
+        /// Request body as byte array
+        /// </summary>
         internal byte[] RequestBody { get; set; }
+
+        /// <summary>
+        /// request body as string
+        /// </summary>
         internal string RequestBodyString { get; set; }
+
+
         internal bool RequestBodyRead { get; set; }
         internal bool RequestLocked { get; set; }
 
+        /// <summary>
+        /// Does this request has an upgrade to websocket header?
+        /// </summary>
         internal bool UpgradeToWebSocket
         {
             get
@@ -179,8 +225,19 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Request heade collection
+        /// </summary>
         public List<HttpHeader> RequestHeaders { get; set; }
+
+        /// <summary>
+        /// Does server responsed positively for 100 continue request
+        /// </summary>
         public bool Is100Continue { get; internal set; }
+
+        /// <summary>
+        /// Server responsed negatively for the request for 100 continue
+        /// </summary>
         public bool ExpectationFailed { get; internal set; }
 
         public Request()
