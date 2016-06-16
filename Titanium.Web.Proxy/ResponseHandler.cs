@@ -57,7 +57,7 @@ namespace Titanium.Web.Proxy
                     await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                 }
 
-                //Write back response status
+                //Write back response status to client
                 await WriteResponseStatus(args.WebSession.Response.HttpVersion, args.WebSession.Response.ResponseStatusCode,
                               args.WebSession.Response.ResponseStatusDescription, args.ProxyClient.ClientStreamWriter);
 
