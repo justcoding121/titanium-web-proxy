@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy.Network
             }
 
             if (cached == null)
-                cached = await CreateClient(hostname, port, isHttps, version).ConfigureAwait(false);
+                cached = await CreateClient(hostname, port, isHttps, version);
 
             if (cachedConnections == null || cachedConnections.Count() <= 2)
             {
@@ -111,22 +111,22 @@ namespace Titanium.Web.Proxy.Network
 
                     using (var writer = new StreamWriter(stream, Encoding.ASCII, ProxyConstants.BUFFER_SIZE, true))
                     {
-                        await writer.WriteLineAsync(string.Format("CONNECT {0}:{1} {2}", hostname, port, version)).ConfigureAwait(false);
-                        await writer.WriteLineAsync(string.Format("Host: {0}:{1}", hostname, port)).ConfigureAwait(false);
-                        await writer.WriteLineAsync("Connection: Keep-Alive").ConfigureAwait(false);
-                        await writer.WriteLineAsync().ConfigureAwait(false);
-                        await writer.FlushAsync().ConfigureAwait(false);
+                        await writer.WriteLineAsync(string.Format("CONNECT {0}:{1} {2}", hostname, port, version));
+                        await writer.WriteLineAsync(string.Format("Host: {0}:{1}", hostname, port));
+                        await writer.WriteLineAsync("Connection: Keep-Alive");
+                        await writer.WriteLineAsync();
+                        await writer.FlushAsync();
                         writer.Close();
                     }
 
                     using (var reader = new CustomBinaryReader(stream))
                     {
-                        var result = await reader.ReadLineAsync().ConfigureAwait(false);
+                        var result = await reader.ReadLineAsync();
 
                         if (!result.ToLower().Contains("200 connection established"))
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
 
-                        await reader.ReadAllLinesAsync().ConfigureAwait(false);
+                        await reader.ReadAllLinesAsync();
                     }
                 }
                 else
@@ -139,7 +139,7 @@ namespace Titanium.Web.Proxy.Network
                 {
                     sslStream = new SslStream(stream, true, new RemoteCertificateValidationCallback(ProxyServer.ValidateServerCertificate),
                         new LocalCertificateSelectionCallback(ProxyServer.SelectClientCertificate));
-                    await sslStream.AuthenticateAsClientAsync(hostname, null, ProxyConstants.SupportedSslProtocols, false).ConfigureAwait(false);
+                    await sslStream.AuthenticateAsClientAsync(hostname, null, ProxyConstants.SupportedSslProtocols, false);
                     stream = (Stream)sslStream;
                 }
                 catch
@@ -224,7 +224,7 @@ namespace Titanium.Web.Proxy.Network
                 }
                 finally { connectionAccessLock.Release(); }
 
-                await Task.Delay(1000 * 60 * 3).ConfigureAwait(false);
+                await Task.Delay(1000 * 60);
             }
 
         }

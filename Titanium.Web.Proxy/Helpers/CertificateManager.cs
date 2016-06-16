@@ -248,7 +248,7 @@ namespace Titanium.Web.Proxy.Helpers
                 }
                 finally { semaphoreLock.Release(); }
 
-                await Task.Delay(1000 * 60 * 3).ConfigureAwait(false);
+                await Task.Delay(1000 * 60 * 3);
             }
         }
 

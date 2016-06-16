@@ -72,7 +72,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
 
-                await Task.WhenAll(sendRelay, receiveRelay).ConfigureAwait(false);
+                await Task.WhenAll(sendRelay, receiveRelay);
             }
             catch
             {

@@ -12,7 +12,7 @@ namespace Titanium.Web.Proxy.Compression
             {
                 using (var zip = new ZlibStream(ms, CompressionMode.Compress, true))
                 {
-                   await zip.WriteAsync(responseBody, 0, responseBody.Length).ConfigureAwait(false);
+                   await zip.WriteAsync(responseBody, 0, responseBody.Length);
                 }
 
                 return ms.ToArray();
