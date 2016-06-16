@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy
                 if (!args.WebSession.Response.ResponseBodyRead)
                     args.WebSession.Response.ResponseStream = args.WebSession.ServerConnection.Stream;
 
-                //If client request call back then do it
+                //If user requested call back then do it
                 if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
                 {
                     Delegate[] invocationList = BeforeResponse.GetInvocationList();
