@@ -49,6 +49,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CertificateHandler.cs" />
     <Compile Include="Compression\CompressionFactory.cs" />
     <Compile Include="Compression\DeflateCompression.cs" />
     <Compile Include="Compression\GZipCompression.cs" />
