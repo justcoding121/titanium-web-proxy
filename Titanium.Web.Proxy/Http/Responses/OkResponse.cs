@@ -1,7 +1,8 @@
-﻿using Titanium.Web.Proxy.Network;
-
-namespace Titanium.Web.Proxy.Http.Responses
+﻿namespace Titanium.Web.Proxy.Http.Responses
 {
+    /// <summary>
+    /// 200 Ok response
+    /// </summary>
     public class OkResponse : Response
     {
         public OkResponse()

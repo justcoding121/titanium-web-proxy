@@ -5,6 +5,9 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Decompression
 {
+    /// <summary>
+    /// concrete implementation of deflate de-compression
+    /// </summary>
     internal class DeflateDecompression : IDecompression
     {
         public async Task<byte[]> Decompress(byte[] compressedArray)
@@ -18,9 +21,9 @@ namespace Titanium.Web.Proxy.Decompression
                 using (var output = new MemoryStream())
                 {
                     int read;
-                    while ((read = await decompressor.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
+                    while ((read = await decompressor.ReadAsync(buffer, 0, buffer.Length)) > 0)
                     {
-                       await output.WriteAsync(buffer, 0, read).ConfigureAwait(false);
+                       await output.WriteAsync(buffer, 0, read);
                     }
 
                     return output.ToArray();

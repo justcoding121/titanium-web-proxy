@@ -49,6 +49,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CertificateHandler.cs" />
     <Compile Include="Compression\CompressionFactory.cs" />
     <Compile Include="Compression\DeflateCompression.cs" />
     <Compile Include="Compression\GZipCompression.cs" />
@@ -62,11 +63,13 @@
     <Compile Include="Decompression\ZlibDecompression.cs" />
     <Compile Include="EventArguments\CertificateSelectionEventArgs.cs" />
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
+    <Compile Include="Extensions\ByteArrayExtensions.cs" />
+    <Compile Include="Network\CachedCertificate.cs" />
     <Compile Include="Network\ProxyClient.cs" />
     <Compile Include="Exceptions\BodyNotFoundException.cs" />
     <Compile Include="Extensions\HttpWebResponseExtensions.cs" />
     <Compile Include="Extensions\HttpWebRequestExtensions.cs" />
-    <Compile Include="Helpers\CertificateManager.cs" />
+    <Compile Include="Network\CertificateManager.cs" />
     <Compile Include="Helpers\Firefox.cs" />
     <Compile Include="Helpers\SystemProxy.cs" />
     <Compile Include="Models\EndPoint.cs" />
@@ -74,6 +77,7 @@
     <Compile Include="Http\Request.cs" />
     <Compile Include="Http\Response.cs" />
     <Compile Include="Models\ExternalProxy.cs" />
+    <Compile Include="Network\TcpConnection.cs" />
     <Compile Include="Network\TcpConnectionManager.cs" />
     <Compile Include="Models\HttpHeader.cs" />
     <Compile Include="Http\HttpWebClient.cs" />

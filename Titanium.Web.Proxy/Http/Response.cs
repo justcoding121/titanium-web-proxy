@@ -8,7 +8,9 @@ using System;
 
 namespace Titanium.Web.Proxy.Http
 {
-
+    /// <summary>
+    /// Http(s) response object
+    /// </summary>
     public class Response
     {
         public string ResponseStatusCode { get; set; }
@@ -16,7 +18,9 @@ namespace Titanium.Web.Proxy.Http
 
         internal Encoding Encoding { get { return this.GetResponseCharacterEncoding(); } }
 
-        
+        /// <summary>
+        /// Content encoding for this response
+        /// </summary>
         internal string ContentEncoding
         {
             get
@@ -33,6 +37,10 @@ namespace Titanium.Web.Proxy.Http
         }
 
         internal Version HttpVersion { get; set; }
+
+        /// <summary>
+        /// Keep the connection alive?
+        /// </summary>
         internal bool ResponseKeepAlive
         {
             get
@@ -49,6 +57,9 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Content type of this response
+        /// </summary>
         public string ContentType
         {
             get
@@ -65,6 +76,9 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Length of response body
+        /// </summary>
         internal long ContentLength
         {
             get
@@ -103,6 +117,9 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Response transfer-encoding is chunked?
+        /// </summary>
         internal bool IsChunked
         {
             get
@@ -141,14 +158,37 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Collection of all response headers
+        /// </summary>
         public List<HttpHeader> ResponseHeaders { get; set; }
 
+        /// <summary>
+        /// Response network stream
+        /// </summary>
         internal Stream ResponseStream { get; set; }
+
+        /// <summary>
+        /// response body contenst as byte array
+        /// </summary>
         internal byte[] ResponseBody { get; set; }
+
+        /// <summary>
+        /// response body as string
+        /// </summary>
         internal string ResponseBodyString { get; set; }
+
         internal bool ResponseBodyRead { get; set; }
         internal bool ResponseLocked { get; set; }
+
+        /// <summary>
+        /// Is response 100-continue
+        /// </summary>
         public bool Is100Continue { get; internal set; }
+
+        /// <summary>
+        /// expectation failed returned by server?
+        /// </summary>
         public bool ExpectationFailed { get; internal set; }
 
         public Response()

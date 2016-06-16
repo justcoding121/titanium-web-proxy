@@ -1,12 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Titanium.Web.Proxy.Models
+﻿namespace Titanium.Web.Proxy.Models
 {
+    /// <summary>
+    /// An upstream proxy this proxy uses if any
+    /// </summary>
     public class ExternalProxy
     {
         public string HostName { get; set; }
