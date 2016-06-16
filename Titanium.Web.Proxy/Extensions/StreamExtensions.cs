@@ -1,5 +1,4 @@
-﻿using System;
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -8,6 +7,9 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Extensions
 {
+    /// <summary>
+    /// Extensions used for Stream and CustomBinaryReader objects
+    /// </summary>
     internal static class StreamExtensions
     {
         /// <summary>
@@ -134,7 +136,7 @@ namespace Titanium.Web.Proxy.Extensions
                 var bytesRead = 0;
                 var totalBytesRead = 0;
 
-                while ((bytesRead += await inStreamReader.BaseStream.ReadAsync(buffer, 0, bytesToRead).ConfigureAwait(false)) > 0)
+                while ((bytesRead += await inStreamReader.BaseStream.ReadAsync(buffer, 0, bytesToRead)) > 0)
                 {
                     await outStream.WriteAsync(buffer, 0, bytesRead);
                     totalBytesRead += bytesRead;

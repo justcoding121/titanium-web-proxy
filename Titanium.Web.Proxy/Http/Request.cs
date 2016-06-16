@@ -7,6 +7,9 @@ using Titanium.Web.Proxy.Extensions;
 
 namespace Titanium.Web.Proxy.Http
 {
+    /// <summary>
+    /// A HTTP(S) request object
+    /// </summary>
     public class Request
     {
         public string Method { get; set; }

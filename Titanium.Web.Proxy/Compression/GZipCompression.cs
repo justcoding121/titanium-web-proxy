@@ -4,7 +4,10 @@ using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Compression
 {
-    class GZipCompression : ICompression
+    /// <summary>
+    /// concreate implementation of gzip compression
+    /// </summary>
+    internal class GZipCompression : ICompression
     {
         public async Task<byte[]> Compress(byte[] responseBody)
         {

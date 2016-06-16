@@ -59,10 +59,10 @@ namespace Titanium.Web.Proxy
                     {
                         version = new Version(1, 0);
                     }
-
                 }
 
-                var excluded = endPoint.ExcludedHttpsHostNameRegex != null ? endPoint.ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x)) : false;
+                var excluded = endPoint.ExcludedHttpsHostNameRegex != null ? 
+                    endPoint.ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x)) : false;
 
                 //Client wants to create a secure tcp tunnel (its a HTTPS request)
                 if (httpVerb.ToUpper() == "CONNECT" && !excluded && httpRemoteUri.Port != 80)
@@ -217,7 +217,7 @@ namespace Titanium.Web.Proxy
                     args.WebSession.Request.RequestHeaders = new List<HttpHeader>();
 
                     string tmpLine;
-                    while (!string.IsNullOrEmpty(tmpLine = await clientStreamReader.ReadLineAsync().ConfigureAwait(false)))
+                    while (!string.IsNullOrEmpty(tmpLine = await clientStreamReader.ReadLineAsync()))
                     {
                         var header = tmpLine.Split(ProxyConstants.ColonSplit, 2);
                         args.WebSession.Request.RequestHeaders.Add(new HttpHeader(header[0], header[1]));

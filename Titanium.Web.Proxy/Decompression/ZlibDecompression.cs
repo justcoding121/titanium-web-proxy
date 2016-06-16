@@ -5,6 +5,9 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Decompression
 {
+    /// <summary>
+    /// concrete implemetation of zlib de-compression
+    /// </summary>
     internal class ZlibDecompression : IDecompression
     {
         public async Task<byte[]> Decompress(byte[] compressedArray)
@@ -17,7 +20,7 @@ namespace Titanium.Web.Proxy.Decompression
                 using (var output = new MemoryStream())
                 {
                     int read;
-                    while ((read = await decompressor.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
+                    while ((read = await decompressor.ReadAsync(buffer, 0, buffer.Length)) > 0)
                     {
                        await output.WriteAsync(buffer, 0, read);
                     }
