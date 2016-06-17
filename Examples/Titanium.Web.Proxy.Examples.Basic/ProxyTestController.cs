@@ -15,6 +15,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             ProxyServer.BeforeRequest += OnRequest;
             ProxyServer.BeforeResponse += OnResponse;
             ProxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
+            ProxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
             //Exclude Https addresses you don't want to proxy
             //Usefull for clients that use certificate pinning
@@ -129,13 +130,25 @@ namespace Titanium.Web.Proxy.Examples.Basic
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        public async Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
+        public Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
         {
             //set IsValid to true/false based on Certificate Errors
             if (e.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
                 e.IsValid = true;
-            else
-                await e.Session.Ok("Cannot validate server certificate! Not safe to proceed.");
+
+            return Task.FromResult(0);
+        }
+
+        /// <summary>
+        /// Allows overriding default client certificate selection logic during mutual authentication
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs e)
+        {
+            //set e.clientCertificate to override
+
+            return Task.FromResult(0);
         }
     }
 }

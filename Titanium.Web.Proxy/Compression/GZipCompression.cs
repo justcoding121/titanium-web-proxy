@@ -4,7 +4,10 @@ using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Compression
 {
-    class GZipCompression : ICompression
+    /// <summary>
+    /// concreate implementation of gzip compression
+    /// </summary>
+    internal class GZipCompression : ICompression
     {
         public async Task<byte[]> Compress(byte[] responseBody)
         {
@@ -12,7 +15,7 @@ namespace Titanium.Web.Proxy.Compression
             {
                 using (var zip = new GZipStream(ms, CompressionMode.Compress, true))
                 {
-                   await zip.WriteAsync(responseBody, 0, responseBody.Length).ConfigureAwait(false);
+                   await zip.WriteAsync(responseBody, 0, responseBody.Length);
                 }
 
                 return ms.ToArray();

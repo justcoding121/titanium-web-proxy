@@ -12,11 +12,24 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    public class TcpHelper
+    
+    internal class TcpHelper
     {
-        public async static Task SendRaw(Stream clientStream, string httpCmd, List<HttpHeader> requestHeaders, string hostName,
+        /// <summary>
+        /// relays the input clientStream to the server at the specified host name & port with the given httpCmd & headers as prefix
+        /// Usefull for websocket requests
+        /// </summary>
+        /// <param name="clientStream"></param>
+        /// <param name="httpCmd"></param>
+        /// <param name="requestHeaders"></param>
+        /// <param name="hostName"></param>
+        /// <param name="tunnelPort"></param>
+        /// <param name="isHttps"></param>
+        /// <returns></returns>
+        internal async static Task SendRaw(Stream clientStream, string httpCmd, List<HttpHeader> requestHeaders, string hostName,
             int tunnelPort, bool isHttps)
         {
+            //prepare the prefix content
             StringBuilder sb = null;
             if (httpCmd != null || requestHeaders != null)
             {
@@ -38,7 +51,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             TcpClient tunnelClient = null;
             Stream tunnelStream = null;
-
+            //create the TcpClient to the server
             try
             {
                 tunnelClient = new TcpClient(hostName, tunnelPort);
@@ -50,7 +63,7 @@ namespace Titanium.Web.Proxy.Helpers
                     try
                     {
                         sslStream = new SslStream(tunnelStream);
-                        await sslStream.AuthenticateAsClientAsync(hostName, null, Constants.SupportedProtocols, false);
+                        await sslStream.AuthenticateAsClientAsync(hostName, null, ProxyConstants.SupportedSslProtocols, false);
                         tunnelStream = sslStream;
                     }
                     catch
@@ -64,6 +77,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 Task sendRelay;
 
+                //Now async relay all server=>client & client=>server data
                 if (sb != null)
                     sendRelay = clientStream.CopyToAsync(sb.ToString(), tunnelStream);
                 else
@@ -72,7 +86,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
 
-                await Task.WhenAll(sendRelay, receiveRelay).ConfigureAwait(false);
+                await Task.WhenAll(sendRelay, receiveRelay);
             }
             catch
             {

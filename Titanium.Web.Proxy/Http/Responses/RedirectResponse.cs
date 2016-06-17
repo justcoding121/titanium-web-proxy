@@ -2,6 +2,9 @@
 
 namespace Titanium.Web.Proxy.Http.Responses
 {
+    /// <summary>
+    /// Redirect response
+    /// </summary>
     public class RedirectResponse : Response
     {
         public RedirectResponse()

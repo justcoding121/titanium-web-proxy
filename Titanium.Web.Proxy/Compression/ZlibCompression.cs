@@ -4,7 +4,10 @@ using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Compression
 {
-    class ZlibCompression : ICompression
+    /// <summary>
+    /// concrete implementation of zlib compression
+    /// </summary>
+   internal class ZlibCompression : ICompression
     {
         public async Task<byte[]> Compress(byte[] responseBody)
         {
@@ -12,7 +15,7 @@ namespace Titanium.Web.Proxy.Compression
             {
                 using (var zip = new ZlibStream(ms, CompressionMode.Compress, true))
                 {
-                   await zip.WriteAsync(responseBody, 0, responseBody.Length).ConfigureAwait(false);
+                   await zip.WriteAsync(responseBody, 0, responseBody.Length);
                 }
 
                 return ms.ToArray();
