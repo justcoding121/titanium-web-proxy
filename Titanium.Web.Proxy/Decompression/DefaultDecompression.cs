@@ -8,7 +8,7 @@ namespace Titanium.Web.Proxy.Decompression
     /// </summary>
     internal class DefaultDecompression : IDecompression
     {
-        public Task<byte[]> Decompress(byte[] compressedArray)
+        public Task<byte[]> Decompress(byte[] compressedArray, int bufferSize)
         {
             return Task.FromResult(compressedArray);
         }

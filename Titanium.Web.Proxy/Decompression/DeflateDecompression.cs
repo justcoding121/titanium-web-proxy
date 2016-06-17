@@ -10,13 +10,13 @@ namespace Titanium.Web.Proxy.Decompression
     /// </summary>
     internal class DeflateDecompression : IDecompression
     {
-        public async Task<byte[]> Decompress(byte[] compressedArray)
+        public async Task<byte[]> Decompress(byte[] compressedArray, int bufferSize)
         {
             var stream = new MemoryStream(compressedArray);
 
             using (var decompressor = new DeflateStream(stream, CompressionMode.Decompress))
             {
-                var buffer = new byte[ProxyConstants.BUFFER_SIZE];
+                var buffer = new byte[bufferSize];
 
                 using (var output = new MemoryStream())
                 {

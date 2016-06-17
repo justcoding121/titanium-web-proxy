@@ -91,14 +91,14 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="totalBytesToRead"></param>
         /// <returns></returns>
-        internal async Task<byte[]> ReadBytesAsync(long totalBytesToRead)
+        internal async Task<byte[]> ReadBytesAsync(int bufferSize, long totalBytesToRead)
         {
-            int bytesToRead = ProxyConstants.BUFFER_SIZE;
+            int bytesToRead = bufferSize;
 
-            if (totalBytesToRead < ProxyConstants.BUFFER_SIZE)
+            if (totalBytesToRead < bufferSize)
                 bytesToRead = (int)totalBytesToRead;
 
-            var buffer = new byte[ProxyConstants.BUFFER_SIZE];
+            var buffer = new byte[bufferSize];
 
             var bytesRead = 0;
             var totalBytesRead = 0;
@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                     bytesRead = 0;
                     var remainingBytes = (totalBytesToRead - totalBytesRead);
-                    bytesToRead = remainingBytes > (long)ProxyConstants.BUFFER_SIZE ? ProxyConstants.BUFFER_SIZE : (int)remainingBytes;
+                    bytesToRead = remainingBytes > (long)bufferSize ? bufferSize : (int)remainingBytes;
                 }
 
                 return outStream.ToArray();

@@ -10,12 +10,12 @@ namespace Titanium.Web.Proxy.Decompression
     /// </summary>
     internal class ZlibDecompression : IDecompression
     {
-        public async Task<byte[]> Decompress(byte[] compressedArray)
+        public async Task<byte[]> Decompress(byte[] compressedArray, int bufferSize)
         {
             var memoryStream = new MemoryStream(compressedArray);
             using (var decompressor = new ZlibStream(memoryStream, CompressionMode.Decompress))
             {
-                var buffer = new byte[ProxyConstants.BUFFER_SIZE];
+                var buffer = new byte[bufferSize];
 
                 using (var output = new MemoryStream())
                 {
