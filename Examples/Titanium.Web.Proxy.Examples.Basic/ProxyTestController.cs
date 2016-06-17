@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
@@ -10,12 +8,19 @@ namespace Titanium.Web.Proxy.Examples.Basic
 {
     public class ProxyTestController
     {
+        private ProxyServer proxyServer;
+
+        public ProxyTestController()
+        {
+            proxyServer = new ProxyServer();
+        }
+
         public void StartProxy()
         {
-            ProxyServer.BeforeRequest += OnRequest;
-            ProxyServer.BeforeResponse += OnResponse;
-            ProxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
-            ProxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
+            proxyServer.BeforeRequest += OnRequest;
+            proxyServer.BeforeResponse += OnResponse;
+            proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
+            proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
             //Exclude Https addresses you don't want to proxy
             //Usefull for clients that use certificate pinning
@@ -27,8 +32,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             //An explicit endpoint is where the client knows about the existance of a proxy
             //So client sends request in a proxy friendly manner
-            ProxyServer.AddEndPoint(explicitEndPoint);
-            ProxyServer.Start();
+            proxyServer.AddEndPoint(explicitEndPoint);
+            proxyServer.Start();
 
 
             //Transparent endpoint is usefull for reverse proxying (client is not aware of the existance of proxy)
@@ -41,26 +46,26 @@ namespace Titanium.Web.Proxy.Examples.Basic
             {
                 GenericCertificateName = "google.com"
             };
-            ProxyServer.AddEndPoint(transparentEndPoint);
+            proxyServer.AddEndPoint(transparentEndPoint);
 
             //ProxyServer.UpStreamHttpProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
             //ProxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
 
-            foreach (var endPoint in ProxyServer.ProxyEndPoints)
+            foreach (var endPoint in proxyServer.ProxyEndPoints)
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ",
                     endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
             //Only explicit proxies can be set as system proxy!
-            ProxyServer.SetAsSystemHttpProxy(explicitEndPoint);
-            ProxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
+            proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
+            proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
         }
 
         public void Stop()
         {
-            ProxyServer.BeforeRequest -= OnRequest;
-            ProxyServer.BeforeResponse -= OnResponse;
+            proxyServer.BeforeRequest -= OnRequest;
+            proxyServer.BeforeResponse -= OnResponse;
 
-            ProxyServer.Stop();
+            proxyServer.Stop();
         }
 
         //intecept & cancel, redirect or update requests

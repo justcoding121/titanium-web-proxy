@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Connection to server
         /// </summary>
-        internal TcpConnection ServerConnection { get; set; }
+        internal TcpConnectionCache ServerConnection { get; set; }
 
         public Request Request { get; set; }
         public Response Response { get; set; }
@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy.Http
         /// Set the tcp connection to server used by this webclient
         /// </summary>
         /// <param name="Connection"></param>
-        internal void SetConnection(TcpConnection Connection)
+        internal void SetConnection(TcpConnectionCache Connection)
         {
             Connection.LastAccess = DateTime.Now;
             ServerConnection = Connection;
@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy.Http
         /// Prepare & send the http(s) request
         /// </summary>
         /// <returns></returns>
-        internal async Task SendRequest()
+        internal async Task SendRequest(bool enable100ContinueBehaviour)
         {
             Stream stream = ServerConnection.Stream;
 
@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy.Http
             await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
             await stream.FlushAsync();
 
-            if (ProxyServer.Enable100ContinueBehaviour)
+            if (enable100ContinueBehaviour)
                 if (this.Request.ExpectContinue)
                 {
                     var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);

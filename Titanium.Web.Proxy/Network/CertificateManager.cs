@@ -18,8 +18,15 @@ namespace Titanium.Web.Proxy.Network
         private const string CertCreateFormat =
             "-ss {0} -n \"CN={1}, O={2}\" -sky {3} -cy {4} -m 120 -a sha256 -eku 1.3.6.1.5.5.7.3.1 {5}";
 
+        /// <summary>
+        /// Cache dictionary
+        /// </summary>
         private readonly IDictionary<string, CachedCertificate> certificateCache;
-        private static SemaphoreSlim semaphoreLock = new SemaphoreSlim(1);
+
+        /// <summary>
+        /// A lock to manage concurrency
+        /// </summary>
+        private SemaphoreSlim semaphoreLock = new SemaphoreSlim(1);
 
         internal string Issuer { get; private set; }
         internal string RootCertificateName { get; private set; }
@@ -241,7 +248,7 @@ namespace Titanium.Web.Proxy.Network
             return certCreatArgs;
         }
 
-        private static bool clearCertificates { get; set; }
+        private  bool clearCertificates { get; set; }
 
         /// <summary>
         /// Stops the certificate cache clear process
@@ -254,7 +261,7 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// A method to clear outdated certificates
         /// </summary>
-        internal async void ClearIdleCertificates()
+        internal async void ClearIdleCertificates(int certificateCacheTimeOutMinutes)
         {
             clearCertificates = true;
             while (clearCertificates)
@@ -263,7 +270,7 @@ namespace Titanium.Web.Proxy.Network
 
                 try
                 {
-                    var cutOff = DateTime.Now.AddMinutes(-1 * ProxyServer.CertificateCacheTimeOutMinutes);
+                    var cutOff = DateTime.Now.AddMinutes(-1 * certificateCacheTimeOutMinutes);
 
                     var outdated = certificateCache
                        .Where(x => x.Value.LastAccess < cutOff)
