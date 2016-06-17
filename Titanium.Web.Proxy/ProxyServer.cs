@@ -8,125 +8,150 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using System.Linq;
-using System.Security.Cryptography.X509Certificates;
-using System.Net.Security;
+using System.Security.Authentication;
 
 namespace Titanium.Web.Proxy
 {
     /// <summary>
     ///     Proxy Server Main class
     /// </summary>
-    public partial class ProxyServer
+    public partial class ProxyServer: IDisposable 
     {
-
-        static ProxyServer()
-        {
-            ProxyEndPoints = new List<ProxyEndPoint>();
-
-            //default values
-            ConnectionCacheTimeOutMinutes = 3;
-            CertificateCacheTimeOutMinutes = 60;
-        }
-
+       
         /// <summary>
         /// Manages certificates used by this proxy
         /// </summary>
-        private static CertificateManager CertManager { get; set; }
-   
+        private CertificateManager certificateCacheManager { get; set; }
+
+        /// <summary>
+        /// A object that manages tcp connection cache to server
+        /// </summary>
+        private TcpConnectionCacheManager tcpConnectionCacheManager { get; set; }
+
+        /// <summary>
+        /// Manage system proxy settings
+        /// </summary>
+        private SystemProxyManager systemProxySettingsManager { get; set; }
+
+        private FireFoxProxySettingsManager firefoxProxySettingsManager { get; set; }
+
         /// <summary>
         /// Does the root certificate used by this proxy is trusted by the machine?
         /// </summary>
-        private static bool certTrusted { get; set; }
+        private bool certTrusted { get; set; }
 
         /// <summary>
         /// Is the proxy currently running
         /// </summary>
-        private static bool proxyRunning { get; set; }
+        private bool proxyRunning { get; set; }
+
+        /// <summary>
+        /// Buffer size used throughout this proxy
+        /// </summary>
+        public int BUFFER_SIZE { get; set; } = 8192;
 
         /// <summary>
         /// Name of the root certificate issuer
         /// </summary>
-        public static string RootCertificateIssuerName { get; set; }
+        public string RootCertificateIssuerName { get; set; }
 
         /// <summary>
         /// Name of the root certificate
         /// </summary>
-        public static string RootCertificateName { get; set; }
+        public string RootCertificateName { get; set; }
 
         /// <summary>
         /// Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
         /// Broken 100 contunue implementations on server/client may cause problems if enabled
         /// </summary>
-        public static bool Enable100ContinueBehaviour { get; set; }
-       
+        public bool Enable100ContinueBehaviour { get; set; }
+
         /// <summary>
         /// Minutes TCP connection cache to servers to be kept alive when in idle state
         /// </summary>
-        public static int ConnectionCacheTimeOutMinutes { get; set; }
-       
+        public int ConnectionCacheTimeOutMinutes { get; set; }
+
         /// <summary>
         /// Minutes certificates should be kept in cache when not used
         /// </summary>
-        public static int CertificateCacheTimeOutMinutes { get; set; }
+        public int CertificateCacheTimeOutMinutes { get; set; }
 
         /// <summary>
         /// Intercept request to server
         /// </summary>
-        public static event Func<object, SessionEventArgs, Task> BeforeRequest;
+        public event Func<object, SessionEventArgs, Task> BeforeRequest;
 
         /// <summary>
         /// Intercept response from server
         /// </summary>
-        public static event Func<object, SessionEventArgs, Task> BeforeResponse;
+        public event Func<object, SessionEventArgs, Task> BeforeResponse;
 
         /// <summary>
         /// External proxy for Http
         /// </summary>
-        public static ExternalProxy UpStreamHttpProxy { get; set; }
+        public ExternalProxy UpStreamHttpProxy { get; set; }
 
         /// <summary>
         /// External proxy for Http
         /// </summary>
-        public static ExternalProxy UpStreamHttpsProxy { get; set; }
+        public ExternalProxy UpStreamHttpsProxy { get; set; }
 
         /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
         /// </summary>
-        public static event Func<object, CertificateValidationEventArgs, Task> ServerCertificateValidationCallback;
-       
+        public event Func<object, CertificateValidationEventArgs, Task> ServerCertificateValidationCallback;
+
         /// <summary>
         /// Callback tooverride client certificate during SSL mutual authentication
         /// </summary>
-        public static event Func<object, CertificateSelectionEventArgs, Task> ClientCertificateSelectionCallback;
+        public event Func<object, CertificateSelectionEventArgs, Task> ClientCertificateSelectionCallback;
 
         /// <summary>
         /// A list of IpAddress & port this proxy is listening to
         /// </summary>
-        public static List<ProxyEndPoint> ProxyEndPoints { get; set; }
+        public List<ProxyEndPoint> ProxyEndPoints { get; set; }
+
+        /// <summary>
+        /// List of supported Ssl versions
+        /// </summary>
+        public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
+
+        /// <summary>
+        /// Constructor
+        /// </summary>
+        public ProxyServer()
+        {
+            //default values
+            ConnectionCacheTimeOutMinutes = 3;
+            CertificateCacheTimeOutMinutes = 60;
+
+            ProxyEndPoints = new List<ProxyEndPoint>();
+            tcpConnectionCacheManager = new TcpConnectionCacheManager();
+            systemProxySettingsManager = new SystemProxyManager();
+            firefoxProxySettingsManager = new FireFoxProxySettingsManager();
+
+            RootCertificateName = RootCertificateName ?? "Titanium Root Certificate Authority";
+            RootCertificateIssuerName = RootCertificateIssuerName ?? "Titanium";
+
+            certificateCacheManager = new CertificateManager(RootCertificateIssuerName,
+                RootCertificateName);
+        }
+
 
         /// <summary>
         /// Initialize the proxy
         /// </summary>
-        public static void Initialize()
+        public void Initialize()
         {
-            TcpConnectionManager.ClearIdleConnections();
-            CertManager.ClearIdleCertificates();
-        }
-
-        /// <summary>
-        /// Quit the proxy
-        /// </summary>
-        public static void Quit()
-        {
-            TcpConnectionManager.StopClearIdleConnections();
-            CertManager.StopClearIdleCertificates();
+            tcpConnectionCacheManager.ClearIdleConnections(ConnectionCacheTimeOutMinutes);
+            certificateCacheManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
         }
 
         /// <summary>
         /// Add a proxy end point
         /// </summary>
         /// <param name="endPoint"></param>
-        public static void AddEndPoint(ProxyEndPoint endPoint)
+        public void AddEndPoint(ProxyEndPoint endPoint)
         {
             ProxyEndPoints.Add(endPoint);
 
@@ -139,7 +164,7 @@ namespace Titanium.Web.Proxy
         /// Will throw error if the end point does'nt exist 
         /// </summary>
         /// <param name="endPoint"></param>
-        public static void RemoveEndPoint(ProxyEndPoint endPoint)
+        public void RemoveEndPoint(ProxyEndPoint endPoint)
         {
 
             if (ProxyEndPoints.Contains(endPoint) == false)
@@ -155,19 +180,19 @@ namespace Titanium.Web.Proxy
         /// Set the given explicit end point as the default proxy server for current machine
         /// </summary>
         /// <param name="endPoint"></param>
-        public static void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint)
+        public void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint)
         {
             ValidateEndPointAsSystemProxy(endPoint);
 
             //clear any settings previously added
             ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpProxy = false);
 
-            SystemProxyHelper.SetHttpProxy(
+            systemProxySettingsManager.SetHttpProxy(
                 Equals(endPoint.IpAddress, IPAddress.Any) | Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(), endPoint.Port);
 
             endPoint.IsSystemHttpProxy = true;
 #if !DEBUG
-            FireFoxHelper.AddFirefox();
+            firefoxProxySettingsManager.AddFirefox();
 #endif
             Console.WriteLine("Set endpoint at Ip {1} and port: {2} as System HTTPS Proxy", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
@@ -176,16 +201,16 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Remove any HTTP proxy setting of current machien
         /// </summary>
-        public static void DisableSystemHttpProxy()
+        public void DisableSystemHttpProxy()
         {
-            SystemProxyHelper.RemoveHttpProxy();
+            systemProxySettingsManager.RemoveHttpProxy();
         }
 
         /// <summary>
         /// Set the given explicit end point as the default proxy server for current machine
         /// </summary>
         /// <param name="endPoint"></param>
-        public static void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint)
+        public void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint)
         {
             ValidateEndPointAsSystemProxy(endPoint);
 
@@ -201,7 +226,7 @@ namespace Titanium.Web.Proxy
             //If certificate was trusted by the machine
             if (certTrusted)
             {
-                SystemProxyHelper.SetHttpsProxy(
+                systemProxySettingsManager.SetHttpsProxy(
                    Equals(endPoint.IpAddress, IPAddress.Any) | Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(),
                     endPoint.Port);
             }
@@ -209,7 +234,7 @@ namespace Titanium.Web.Proxy
             endPoint.IsSystemHttpsProxy = true;
 
 #if !DEBUG
-            FireFoxHelper.AddFirefox();
+            firefoxProxySettingsManager.AddFirefox();
 #endif
             Console.WriteLine("Set endpoint at Ip {1} and port: {2} as System HTTPS Proxy", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
         }
@@ -217,34 +242,28 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Remove any HTTPS proxy setting for current machine
         /// </summary>
-        public static void DisableSystemHttpsProxy()
+        public void DisableSystemHttpsProxy()
         {
-            SystemProxyHelper.RemoveHttpsProxy();
+            systemProxySettingsManager.RemoveHttpsProxy();
         }
 
         /// <summary>
         /// Clear all proxy settings for current machine
         /// </summary>
-        public static void DisableAllSystemProxies()
+        public void DisableAllSystemProxies()
         {
-            SystemProxyHelper.DisableAllProxy();
+            systemProxySettingsManager.DisableAllProxy();
         }
 
         /// <summary>
         /// Start this proxy server
         /// </summary>
-        public static void Start()
+        public void Start()
         {
             if (proxyRunning)
                 throw new Exception("Proxy is already running.");
 
-            RootCertificateName = RootCertificateName ?? "Titanium Root Certificate Authority";
-            RootCertificateIssuerName = RootCertificateIssuerName ?? "Titanium";
-
-            CertManager = new CertificateManager(RootCertificateIssuerName,
-                RootCertificateName);
-            
-            certTrusted = CertManager.CreateTrustedRootCertificate().Result;
+            certTrusted = certificateCacheManager.CreateTrustedRootCertificate().Result;
 
             foreach (var endPoint in ProxyEndPoints)
             {
@@ -259,7 +278,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Stop this proxy server
         /// </summary>
-        public static void Stop()
+        public void Stop()
         {
             if (!proxyRunning)
                 throw new Exception("Proxy is not running.");
@@ -268,9 +287,9 @@ namespace Titanium.Web.Proxy
 
             if (setAsSystemProxy)
             {
-                SystemProxyHelper.DisableAllProxy();
+                systemProxySettingsManager.DisableAllProxy();
 #if !DEBUG
-                FireFoxHelper.RemoveFirefox();
+                firefoxProxySettingsManager.RemoveFirefox();
 #endif
             }
 
@@ -279,9 +298,8 @@ namespace Titanium.Web.Proxy
                 endPoint.listener.Stop();
             }
 
-            CertManager.Dispose();
-
-            Quit();
+            tcpConnectionCacheManager.StopClearIdleConnections();
+            certificateCacheManager.StopClearIdleCertificates();
 
             proxyRunning = false;
         }
@@ -290,7 +308,7 @@ namespace Titanium.Web.Proxy
         /// Listen on the given end point on local machine
         /// </summary>
         /// <param name="endPoint"></param>
-        private static void Listen(ProxyEndPoint endPoint)
+        private void Listen(ProxyEndPoint endPoint)
         {
             endPoint.listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
             endPoint.listener.Start();
@@ -304,7 +322,7 @@ namespace Titanium.Web.Proxy
         /// Quit listening on the given end point
         /// </summary>
         /// <param name="endPoint"></param>
-        private static void QuitListen(ProxyEndPoint endPoint)
+        private void QuitListen(ProxyEndPoint endPoint)
         {
             endPoint.listener.Stop();
         }
@@ -313,7 +331,7 @@ namespace Titanium.Web.Proxy
         /// Verifiy if its safe to set this end point as System proxy
         /// </summary>
         /// <param name="endPoint"></param>
-        private static void ValidateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
+        private void ValidateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
         {
             if (ProxyEndPoints.Contains(endPoint) == false)
                 throw new Exception("Cannot set endPoints not added to proxy as system proxy");
@@ -326,7 +344,7 @@ namespace Titanium.Web.Proxy
         /// When a connection is received from client act
         /// </summary>
         /// <param name="asyn"></param>
-        private static void OnAcceptConnection(IAsyncResult asyn)
+        private void OnAcceptConnection(IAsyncResult asyn)
         {
             var endPoint = (ProxyEndPoint)asyn.AsyncState;
 
@@ -353,8 +371,15 @@ namespace Titanium.Web.Proxy
             {
                 //Other errors are discarded to keep proxy running
             }
-           
+
         }
-      
+
+        public void Dispose()
+        {
+            if (proxyRunning)
+                Stop();
+
+            certificateCacheManager.Dispose();
+        }
     }
 }

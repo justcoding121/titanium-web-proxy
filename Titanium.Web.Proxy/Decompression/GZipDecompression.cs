@@ -10,11 +10,11 @@ namespace Titanium.Web.Proxy.Decompression
     /// </summary>
     internal class GZipDecompression : IDecompression
     {
-        public async Task<byte[]> Decompress(byte[] compressedArray)
+        public async Task<byte[]> Decompress(byte[] compressedArray, int bufferSize)
         {
             using (var decompressor = new GZipStream(new MemoryStream(compressedArray), CompressionMode.Decompress))
             {
-                var buffer = new byte[ProxyConstants.BUFFER_SIZE];
+                var buffer = new byte[bufferSize];
                 using (var output = new MemoryStream())
                 {
                     int read;
