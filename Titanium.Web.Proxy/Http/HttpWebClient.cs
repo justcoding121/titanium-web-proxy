@@ -133,18 +133,22 @@ namespace Titanium.Web.Proxy.Http
             if (this.Response.ResponseStatusCode.Equals("100")
                 && this.Response.ResponseStatusDescription.ToLower().Equals("continue"))
             {
+                //Read the next line after 100-continue 
                 this.Response.Is100Continue = true;
                 this.Response.ResponseStatusCode = null;
                 await ServerConnection.StreamReader.ReadLineAsync();
+                //now receive response
                 await ReceiveResponse();
                 return;
             }
             else if (this.Response.ResponseStatusCode.Equals("417")
                  && this.Response.ResponseStatusDescription.ToLower().Equals("expectation failed"))
             {
+                //read next line after expectation failed response
                 this.Response.ExpectationFailed = true;
                 this.Response.ResponseStatusCode = null;
                 await ServerConnection.StreamReader.ReadLineAsync();
+                //now receive response 
                 await ReceiveResponse();
                 return;
             }
