@@ -64,6 +64,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             proxyServer.BeforeRequest -= OnRequest;
             proxyServer.BeforeResponse -= OnResponse;
+            proxyServer.ServerCertificateValidationCallback -= OnCertificateValidation;
+            proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;
 
             proxyServer.Stop();
         }
