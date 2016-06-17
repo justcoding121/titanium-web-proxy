@@ -137,22 +137,15 @@ namespace Titanium.Web.Proxy
                 RootCertificateName);
         }
 
-
-        /// <summary>
-        /// Initialize the proxy
-        /// </summary>
-        public void Initialize()
-        {
-            tcpConnectionCacheManager.ClearIdleConnections(ConnectionCacheTimeOutMinutes);
-            certificateCacheManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
-        }
-
         /// <summary>
         /// Add a proxy end point
         /// </summary>
         /// <param name="endPoint"></param>
         public void AddEndPoint(ProxyEndPoint endPoint)
         {
+            if (ProxyEndPoints.Any(x=>x.IpAddress == endPoint.IpAddress && x.Port == endPoint.Port))
+                throw new Exception("Cannot add another endpoint to same port & ip address");
+
             ProxyEndPoints.Add(endPoint);
 
             if (proxyRunning)
@@ -166,7 +159,6 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void RemoveEndPoint(ProxyEndPoint endPoint)
         {
-
             if (ProxyEndPoints.Contains(endPoint) == false)
                 throw new Exception("Cannot remove endPoints not added to proxy");
 
@@ -197,14 +189,7 @@ namespace Titanium.Web.Proxy
             Console.WriteLine("Set endpoint at Ip {1} and port: {2} as System HTTPS Proxy", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
         }
-
-        /// <summary>
-        /// Remove any HTTP proxy setting of current machien
-        /// </summary>
-        public void DisableSystemHttpProxy()
-        {
-            systemProxySettingsManager.RemoveHttpProxy();
-        }
+     
 
         /// <summary>
         /// Set the given explicit end point as the default proxy server for current machine
@@ -240,6 +225,14 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
+        /// Remove any HTTP proxy setting of current machien
+        /// </summary>
+        public void DisableSystemHttpProxy()
+        {
+            systemProxySettingsManager.RemoveHttpProxy();
+        }
+
+        /// <summary>
         /// Remove any HTTPS proxy setting for current machine
         /// </summary>
         public void DisableSystemHttpsProxy()
@@ -270,7 +263,8 @@ namespace Titanium.Web.Proxy
                 Listen(endPoint);
             }
 
-            Initialize();
+            tcpConnectionCacheManager.ClearIdleConnections(ConnectionCacheTimeOutMinutes);
+            certificateCacheManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
             proxyRunning = true;
         }
@@ -295,8 +289,10 @@ namespace Titanium.Web.Proxy
 
             foreach (var endPoint in ProxyEndPoints)
             {
-                endPoint.listener.Stop();
+                QuitListen(endPoint);
             }
+
+            ProxyEndPoints.Clear();
 
             tcpConnectionCacheManager.StopClearIdleConnections();
             certificateCacheManager.StopClearIdleCertificates();
@@ -325,6 +321,8 @@ namespace Titanium.Web.Proxy
         private void QuitListen(ProxyEndPoint endPoint)
         {
             endPoint.listener.Stop();
+            endPoint.listener.Server.Close();
+            endPoint.listener.Server.Dispose();
         }
 
         /// <summary>
