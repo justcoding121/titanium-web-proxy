@@ -83,8 +83,13 @@ namespace Titanium.Web.Proxy
                 {
                     await WriteResponseHeaders(args.ProxyClient.ClientStreamWriter, args.WebSession.Response.ResponseHeaders);
 
-                    if (args.WebSession.Response.IsChunked || args.WebSession.Response.ContentLength > 0 ||
-                       (args.WebSession.Response.HttpVersion.Major == 1 && args.WebSession.Response.HttpVersion.Minor == 0))
+                    //Write body only if response is chunked or content length >0
+                    //Is none are true then check if connection:close header exist, if so write response until server or client terminates the connection
+                    if (args.WebSession.Response.IsChunked || args.WebSession.Response.ContentLength > 0 || !args.WebSession.Response.ResponseKeepAlive)
+                        await args.WebSession.ServerConnection.StreamReader.WriteResponseBody(args.ProxyClient.ClientStream, args.WebSession.Response.IsChunked, args.WebSession.Response.ContentLength);
+                    //write response if connection:keep-alive header exist and when version is http/1.0
+                    //Because in Http 1.0 server can return a response without content-length (expectation being client would read until end of stream)
+                    else if (args.WebSession.Response.ResponseKeepAlive && args.WebSession.Response.HttpVersion.Minor == 0)
                         await args.WebSession.ServerConnection.StreamReader.WriteResponseBody(args.ProxyClient.ClientStream, args.WebSession.Response.IsChunked, args.WebSession.Response.ContentLength);
                 }
 
@@ -172,7 +177,7 @@ namespace Titanium.Web.Proxy
 
             headers.RemoveAll(x => x.Name.ToLower() == "proxy-connection");
         }
-   
+
         /// <summary>
         /// Handle dispose of a client/server session
         /// </summary>

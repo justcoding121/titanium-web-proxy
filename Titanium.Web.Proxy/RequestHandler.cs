@@ -64,8 +64,8 @@ namespace Titanium.Web.Proxy
                         version = new Version(1, 0);
                     }
                 }
-
-                var excluded = endPoint.ExcludedHttpsHostNameRegex != null ? 
+                //filter out excluded host names
+                var excluded = endPoint.ExcludedHttpsHostNameRegex != null ?
                     endPoint.ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x)) : false;
 
                 //Client wants to create a secure tcp tunnel (its a HTTPS request)
@@ -82,8 +82,8 @@ namespace Titanium.Web.Proxy
                     {
                         //create the Tcp Connection to server and then release it to connection cache 
                         //Just doing what CONNECT request is asking as to do
-                         var tunnelClient = await TcpConnectionManager.GetClient(httpRemoteUri.Host, httpRemoteUri.Port, true, version);
-                         await TcpConnectionManager.ReleaseClient(tunnelClient);
+                        var tunnelClient = await TcpConnectionManager.GetClient(httpRemoteUri.Host, httpRemoteUri.Port, true, version);
+                        await TcpConnectionManager.ReleaseClient(tunnelClient);
 
                         sslStream = new SslStream(clientStream, true);
                         var certificate = await CertManager.CreateCertificate(httpRemoteUri.Host, false);
@@ -148,12 +148,8 @@ namespace Titanium.Web.Proxy
             if (endPoint.EnableSsl)
             {
                 var sslStream = new SslStream(clientStream, true);
-                //if(endPoint.UseServerNameIndication)
-                //{
-                //   //implement in future once SNI supported by SSL stream
-                //    certificate = CertManager.CreateCertificate(hostName);
-                //}
-                //else
+
+                //implement in future once SNI supported by SSL stream, for now use the same certificate
                 certificate = await CertManager.CreateCertificate(endPoint.GenericCertificateName, false);
 
                 try
@@ -182,6 +178,7 @@ namespace Titanium.Web.Proxy
                 clientStreamReader = new CustomBinaryReader(clientStream);
             }
 
+            //now read the request line
             var httpCmd = await clientStreamReader.ReadLineAsync();
 
             //Now create the request
@@ -411,6 +408,7 @@ namespace Titanium.Web.Proxy
             {
                 switch (requestHeaders[i].Name.ToLower())
                 {
+                    //these are the only encoding this proxy can read
                     case "accept-encoding":
                         requestHeaders[i].Value = "gzip,deflate,zlib";
                         break;
@@ -457,28 +455,18 @@ namespace Titanium.Web.Proxy
             // End the operation
             var postStream = args.WebSession.ServerConnection.Stream;
 
+            //send the request body bytes to server
             if (args.WebSession.Request.ContentLength > 0)
             {
-                try
-                {
-                    await args.ProxyClient.ClientStreamReader.CopyBytesToStream(postStream, args.WebSession.Request.ContentLength);
-                }
-                catch
-                {
-                    throw;
-                }
+                await args.ProxyClient.ClientStreamReader.CopyBytesToStream(postStream, args.WebSession.Request.ContentLength);
+
             }
             //Need to revist, find any potential bugs
+            //send the request body bytes to server in chunks
             else if (args.WebSession.Request.IsChunked)
             {
-                try
-                {
-                    await args.ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(postStream);
-                }
-                catch
-                {
-                    throw;
-                }
+                await args.ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(postStream);
+
             }
         }
 
