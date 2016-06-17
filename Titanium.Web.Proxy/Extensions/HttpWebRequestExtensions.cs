@@ -7,10 +7,14 @@ namespace Titanium.Web.Proxy.Extensions
     /// <summary>
     /// Extensions on HttpWebSession object
     /// </summary>
-    public static class HttpWebRequestExtensions
+    internal static class HttpWebRequestExtensions
     {
-        //Get encoding of the HTTP request
-        public static Encoding GetEncoding(this Request request)
+        /// <summary>
+        /// parse the character encoding of request from request headers
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
+        internal static Encoding GetEncoding(this Request request)
         {
             try
             {
@@ -19,7 +23,7 @@ namespace Titanium.Web.Proxy.Extensions
                     return Encoding.GetEncoding("ISO-8859-1");
 
                 //extract the encoding by finding the charset
-                var contentTypes = request.ContentType.Split(Constants.SemiColonSplit);
+                var contentTypes = request.ContentType.Split(ProxyConstants.SemiColonSplit);
                 foreach (var contentType in contentTypes)
                 {
                     var encodingSplit = contentType.Split('=');

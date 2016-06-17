@@ -1,10 +1,12 @@
-﻿using System.IO;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Decompression
 {
-    interface IDecompression
+    /// <summary>
+    /// An interface for decompression
+    /// </summary>
+    internal interface IDecompression
     {
-        Task<byte[]> Decompress(byte[] compressedArray);
+       Task<byte[]> Decompress(byte[] compressedArray);
     }
 }

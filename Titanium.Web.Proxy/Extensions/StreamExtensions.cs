@@ -1,5 +1,4 @@
-﻿using System;
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -8,9 +7,19 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Extensions
 {
-    public static class StreamHelper
+    /// <summary>
+    /// Extensions used for Stream and CustomBinaryReader objects
+    /// </summary>
+    internal static class StreamExtensions
     {
-        public static async Task CopyToAsync(this Stream input, string initialData, Stream output)
+        /// <summary>
+        /// Copy streams asynchronously with an initial data inserted to the beginning of stream
+        /// </summary>
+        /// <param name="input"></param>
+        /// <param name="initialData"></param>
+        /// <param name="output"></param>
+        /// <returns></returns>
+        internal static async Task CopyToAsync(this Stream input, string initialData, Stream output)
         {
             if (!string.IsNullOrEmpty(initialData))
             {
@@ -19,18 +28,24 @@ namespace Titanium.Web.Proxy.Extensions
             }
             await input.CopyToAsync(output);
         }
-
+        /// <summary>
+        /// copies the specified bytes to the stream from the input stream
+        /// </summary>
+        /// <param name="streamReader"></param>
+        /// <param name="stream"></param>
+        /// <param name="totalBytesToRead"></param>
+        /// <returns></returns>
         internal static async Task CopyBytesToStream(this CustomBinaryReader streamReader, Stream stream, long totalBytesToRead)
         {
             var totalbytesRead = 0;
 
             long bytesToRead;
-            if (totalBytesToRead < Constants.BUFFER_SIZE)
+            if (totalBytesToRead < ProxyConstants.BUFFER_SIZE)
             {
                 bytesToRead = totalBytesToRead;
             }
             else
-                bytesToRead = Constants.BUFFER_SIZE;
+                bytesToRead = ProxyConstants.BUFFER_SIZE;
 
 
             while (totalbytesRead < totalBytesToRead)
@@ -50,11 +65,18 @@ namespace Titanium.Web.Proxy.Extensions
                 await stream.WriteAsync(buffer, 0, buffer.Length);
             }
         }
+
+        /// <summary>
+        /// Copies the stream chunked
+        /// </summary>
+        /// <param name="clientStreamReader"></param>
+        /// <param name="stream"></param>
+        /// <returns></returns>
         internal static async Task CopyBytesToStreamChunked(this CustomBinaryReader clientStreamReader, Stream stream)
         {
             while (true)
             {
-                var chuchkHead = await clientStreamReader.ReadLineAsync().ConfigureAwait(false);
+                var chuchkHead = await clientStreamReader.ReadLineAsync();
                 var chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
 
                 if (chunkSize != 0)
@@ -62,14 +84,127 @@ namespace Titanium.Web.Proxy.Extensions
                     var buffer = await clientStreamReader.ReadBytesAsync(chunkSize);
                     await stream.WriteAsync(buffer, 0, buffer.Length);
                     //chunk trail
-                   await clientStreamReader.ReadLineAsync().ConfigureAwait(false);
+                    await clientStreamReader.ReadLineAsync();
                 }
                 else
                 {
-                   await clientStreamReader.ReadLineAsync().ConfigureAwait(false);
+                    await clientStreamReader.ReadLineAsync();
                     break;
                 }
             }
         }
+        /// <summary>
+        /// Writes the byte array body to the given stream; optionally chunked
+        /// </summary>
+        /// <param name="clientStream"></param>
+        /// <param name="data"></param>
+        /// <param name="isChunked"></param>
+        /// <returns></returns>
+        internal static async Task WriteResponseBody(this Stream clientStream, byte[] data, bool isChunked)
+        {
+            if (!isChunked)
+            {
+                await clientStream.WriteAsync(data, 0, data.Length);
+            }
+            else
+                await WriteResponseBodyChunked(data, clientStream);
+        }
+        /// <summary>
+        /// Copies the specified content length number of bytes to the output stream from the given inputs stream
+        /// optionally chunked
+        /// </summary>
+        /// <param name="inStreamReader"></param>
+        /// <param name="outStream"></param>
+        /// <param name="isChunked"></param>
+        /// <param name="ContentLength"></param>
+        /// <returns></returns>
+        internal static async Task WriteResponseBody(this CustomBinaryReader inStreamReader, Stream outStream, bool isChunked, long ContentLength)
+        {
+            if (!isChunked)
+            {
+                //http 1.0
+                if (ContentLength == -1)
+                    ContentLength = long.MaxValue;
+
+                int bytesToRead = ProxyConstants.BUFFER_SIZE;
+
+                if (ContentLength < ProxyConstants.BUFFER_SIZE)
+                    bytesToRead = (int)ContentLength;
+
+                var buffer = new byte[ProxyConstants.BUFFER_SIZE];
+
+                var bytesRead = 0;
+                var totalBytesRead = 0;
+
+                while ((bytesRead += await inStreamReader.BaseStream.ReadAsync(buffer, 0, bytesToRead)) > 0)
+                {
+                    await outStream.WriteAsync(buffer, 0, bytesRead);
+                    totalBytesRead += bytesRead;
+
+                    if (totalBytesRead == ContentLength)
+                        break;
+
+                    bytesRead = 0;
+                    var remainingBytes = (ContentLength - totalBytesRead);
+                    bytesToRead = remainingBytes > (long)ProxyConstants.BUFFER_SIZE ? ProxyConstants.BUFFER_SIZE : (int)remainingBytes;
+                }
+            }
+            else
+                await WriteResponseBodyChunked(inStreamReader, outStream);
+        }
+
+        /// <summary>
+        /// Copies the streams chunked
+        /// </summary>
+        /// <param name="inStreamReader"></param>
+        /// <param name="outStream"></param>
+        /// <returns></returns>
+        internal static async Task WriteResponseBodyChunked(this CustomBinaryReader inStreamReader, Stream outStream)
+        {
+            while (true)
+            {
+                var chunkHead = await inStreamReader.ReadLineAsync();
+                var chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
+
+                if (chunkSize != 0)
+                {
+                    var buffer = await inStreamReader.ReadBytesAsync(chunkSize);
+
+                    var chunkHeadBytes = Encoding.ASCII.GetBytes(chunkSize.ToString("x2"));
+
+                    await outStream.WriteAsync(chunkHeadBytes, 0, chunkHeadBytes.Length);
+                    await outStream.WriteAsync(ProxyConstants.NewLineBytes, 0, ProxyConstants.NewLineBytes.Length);
+
+                    await outStream.WriteAsync(buffer, 0, chunkSize);
+                    await outStream.WriteAsync(ProxyConstants.NewLineBytes, 0, ProxyConstants.NewLineBytes.Length);
+
+                    await inStreamReader.ReadLineAsync();
+                }
+                else
+                {
+                    await inStreamReader.ReadLineAsync();
+                    await outStream.WriteAsync(ProxyConstants.ChunkEnd, 0, ProxyConstants.ChunkEnd.Length);
+                    break;
+                }
+            }
+        }
+        /// <summary>
+        /// Copies the given input bytes to output stream chunked
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="outStream"></param>
+        /// <returns></returns>
+        internal static async Task WriteResponseBodyChunked(this byte[] data, Stream outStream)
+        {
+            var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
+
+            await outStream.WriteAsync(chunkHead, 0, chunkHead.Length);
+            await outStream.WriteAsync(ProxyConstants.NewLineBytes, 0, ProxyConstants.NewLineBytes.Length);
+            await outStream.WriteAsync(data, 0, data.Length);
+            await outStream.WriteAsync(ProxyConstants.NewLineBytes, 0, ProxyConstants.NewLineBytes.Length);
+
+            await outStream.WriteAsync(ProxyConstants.ChunkEnd, 0, ProxyConstants.ChunkEnd.Length);
+        }
+
     }
 }

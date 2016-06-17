@@ -1,8 +1,11 @@
 ﻿namespace Titanium.Web.Proxy.Decompression
 {
-    class DecompressionFactory
+    /// <summary>
+    /// A factory to generate the de-compression methods based on the type of compression
+    /// </summary>
+    internal class DecompressionFactory
     {
-        public IDecompression Create(string type)
+        internal IDecompression Create(string type)
         {
             switch(type)
             {

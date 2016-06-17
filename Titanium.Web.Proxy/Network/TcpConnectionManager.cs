@@ -10,88 +10,124 @@ using Titanium.Web.Proxy.Helpers;
 using System.Threading;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Shared;
-using System.Security.Cryptography.X509Certificates;
-using Titanium.Web.Proxy.EventArguments;
 
 namespace Titanium.Web.Proxy.Network
 {
-    public class TcpConnection
-    {
-        internal string HostName { get; set; }
-        internal int port { get; set; }
-        internal bool IsSecure { get; set; }
-        internal Version Version { get; set; }
-
-        internal TcpClient TcpClient { get; set; }
-        internal CustomBinaryReader StreamReader { get; set; }
-        internal Stream Stream { get; set; }
-
-        internal DateTime LastAccess { get; set; }
-
-
-        internal TcpConnection()
-        {
-            LastAccess = DateTime.Now;
-        }
-    }
-
+    /// <summary>
+    /// A class that manages Tcp Connection to server used by this proxy server
+    /// </summary>
     internal class TcpConnectionManager
     {
-        static List<TcpConnection> ConnectionCache = new List<TcpConnection>();
+        /// <summary>
+        /// Connection cache
+        /// </summary>
+        static Dictionary<string, List<TcpConnection>> connectionCache = new Dictionary<string, List<TcpConnection>>();
 
-        internal static async Task<TcpConnection> GetClient(SessionEventArgs sessionArgs, string hostname, int port, bool isSecure, Version version)
+        /// <summary>
+        /// A lock to manage concurrency
+        /// </summary>
+        static SemaphoreSlim connectionAccessLock = new SemaphoreSlim(1);
+
+        /// <summary>
+        /// Get a TcpConnection to the specified host, port optionally HTTPS and a particular HTTP version
+        /// </summary>
+        /// <param name="hostname"></param>
+        /// <param name="port"></param>
+        /// <param name="isHttps"></param>
+        /// <param name="version"></param>
+        /// <returns></returns>
+        internal static async Task<TcpConnection> GetClient(string hostname, int port, bool isHttps, Version version)
         {
+            List<TcpConnection> cachedConnections = null;
             TcpConnection cached = null;
+
+            //Get a unique string to identify this connection
+            var key = GetConnectionKey(hostname, port, isHttps, version);
+
             while (true)
             {
-                lock (ConnectionCache)
+                await connectionAccessLock.WaitAsync();
+                try
                 {
-                    cached = ConnectionCache.FirstOrDefault(x => x.HostName == hostname && x.port == port &&
-                    x.IsSecure == isSecure && x.TcpClient.Connected && x.Version.Equals(version));
+                    connectionCache.TryGetValue(key, out cachedConnections);
 
-                    if (cached != null)
-                        ConnectionCache.Remove(cached);
+                    if (cachedConnections != null && cachedConnections.Count > 0)
+                    {
+                        cached = cachedConnections.First();
+                        cachedConnections.Remove(cached);
+                    }
+                    else
+                    {
+                        cached = null;
+                    }
                 }
+                finally { connectionAccessLock.Release(); }
 
                 if (cached != null && !cached.TcpClient.Client.IsConnected())
+                {
+                    cached.TcpClient.Client.Dispose();
+                    cached.TcpClient.Close();
                     continue;
+                }
 
                 if (cached == null)
                     break;
+
             }
 
-            if (cached == null)
-                cached = await CreateClient(sessionArgs, hostname, port, isSecure, version).ConfigureAwait(false);
 
-            //just create one more preemptively
-            if (ConnectionCache.Where(x => x.HostName == hostname && x.port == port &&
-            x.IsSecure == isSecure && x.TcpClient.Connected && x.Version.Equals(version)).Count() < 2)
+            if (cached == null)
+                cached = await CreateClient(hostname, port, isHttps, version);
+
+            if (cachedConnections == null || cachedConnections.Count() <= 2)
             {
-                var task = CreateClient(sessionArgs, hostname, port, isSecure, version)
-                            .ContinueWith(x => { if (x.Status == TaskStatus.RanToCompletion) ReleaseClient(x.Result); });
+                var task = CreateClient(hostname, port, isHttps, version)
+                              .ContinueWith(async (x) => { if (x.Status == TaskStatus.RanToCompletion) await ReleaseClient(x.Result); });
             }
 
             return cached;
         }
 
-        private static async Task<TcpConnection> CreateClient(SessionEventArgs sessionArgs, string hostname, int port, bool isSecure, Version version)
+        /// <summary>
+        /// Get a string to identfiy the connection to a particular host, port
+        /// </summary>
+        /// <param name="hostname"></param>
+        /// <param name="port"></param>
+        /// <param name="isHttps"></param>
+        /// <param name="version"></param>
+        /// <returns></returns>
+        internal static string GetConnectionKey(string hostname, int port, bool isHttps, Version version)
+        {
+            return string.Format("{0}:{1}:{2}:{3}:{4}", hostname.ToLower(), port, isHttps, version.Major, version.Minor);
+        }
+
+        /// <summary>
+        /// Create connection to a particular host/port optionally with SSL and a particular HTTP version
+        /// </summary>
+        /// <param name="hostname"></param>
+        /// <param name="port"></param>
+        /// <param name="isHttps"></param>
+        /// <param name="version"></param>
+        /// <returns></returns>
+        private static async Task<TcpConnection> CreateClient(string hostname, int port, bool isHttps, Version version)
         {
             TcpClient client;
             Stream stream;
 
-            if (isSecure)
+            if (isHttps)
             {
-                CustomSslStream sslStream = null;
+                SslStream sslStream = null;
 
+                //If this proxy uses another external proxy then create a tunnel request for HTTPS connections
                 if (ProxyServer.UpStreamHttpsProxy != null)
                 {
                     client = new TcpClient(ProxyServer.UpStreamHttpsProxy.HostName, ProxyServer.UpStreamHttpsProxy.Port);
                     stream = (Stream)client.GetStream();
 
-                    using (var writer = new StreamWriter(stream, Encoding.ASCII, Constants.BUFFER_SIZE, true))
+                    using (var writer = new StreamWriter(stream, Encoding.ASCII, ProxyConstants.BUFFER_SIZE, true))
                     {
-                        await writer.WriteLineAsync(string.Format("CONNECT {0}:{1} {2}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port, sessionArgs.WebSession.Request.HttpVersion));
-                        await writer.WriteLineAsync(string.Format("Host: {0}:{1}", sessionArgs.WebSession.Request.RequestUri.Host, sessionArgs.WebSession.Request.RequestUri.Port));
+                        await writer.WriteLineAsync(string.Format("CONNECT {0}:{1} {2}", hostname, port, version));
+                        await writer.WriteLineAsync(string.Format("Host: {0}:{1}", hostname, port));
                         await writer.WriteLineAsync("Connection: Keep-Alive");
                         await writer.WriteLineAsync();
                         await writer.FlushAsync();
@@ -100,12 +136,12 @@ namespace Titanium.Web.Proxy.Network
 
                     using (var reader = new CustomBinaryReader(stream))
                     {
-                        var result = await reader.ReadLineAsync().ConfigureAwait(false);
+                        var result = await reader.ReadLineAsync();
 
                         if (!result.ToLower().Contains("200 connection established"))
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
 
-                        await reader.ReadAllLinesAsync().ConfigureAwait(false);
+                        await reader.ReadAllLinesAsync();
                     }
                 }
                 else
@@ -116,9 +152,9 @@ namespace Titanium.Web.Proxy.Network
 
                 try
                 {
-                    sslStream = new CustomSslStream(stream, true, new RemoteCertificateValidationCallback(ProxyServer.ValidateServerCertificate));
-                    sslStream.Session = sessionArgs;
-                    await sslStream.AuthenticateAsClientAsync(hostname, null, Constants.SupportedProtocols, false).ConfigureAwait(false);
+                    sslStream = new SslStream(stream, true, new RemoteCertificateValidationCallback(ProxyServer.ValidateServerCertificate),
+                        new LocalCertificateSelectionCallback(ProxyServer.SelectClientCertificate));
+                    await sslStream.AuthenticateAsClientAsync(hostname, null, ProxyConstants.SupportedSslProtocols, false);
                     stream = (Stream)sslStream;
                 }
                 catch
@@ -146,7 +182,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 HostName = hostname,
                 port = port,
-                IsSecure = isSecure,
+                IsHttps = isHttps,
                 TcpClient = client,
                 StreamReader = new CustomBinaryReader(stream),
                 Stream = stream,
@@ -154,30 +190,67 @@ namespace Titanium.Web.Proxy.Network
             };
         }
 
-
-        internal static void ReleaseClient(TcpConnection Connection)
+        /// <summary>
+        /// Returns a Tcp Connection back to cache for reuse by other requests
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <returns></returns>
+        internal static async Task ReleaseClient(TcpConnection connection)
         {
-            Connection.LastAccess = DateTime.Now;
-            ConnectionCache.Add(Connection);
+
+            connection.LastAccess = DateTime.Now;
+            var key = GetConnectionKey(connection.HostName, connection.port, connection.IsHttps, connection.Version);
+            await connectionAccessLock.WaitAsync();
+            try
+            {
+                List<TcpConnection> cachedConnections;
+                connectionCache.TryGetValue(key, out cachedConnections);
+
+                if (cachedConnections != null)
+                    cachedConnections.Add(connection);
+                else
+
+                    connectionCache.Add(key, new List<TcpConnection>() { connection });
+            }
+
+            finally { connectionAccessLock.Release(); }
         }
 
+        private static bool clearConenctions { get; set; }
+
+        /// <summary>
+        /// Stop clearing idle connections
+        /// </summary>
+        internal static void StopClearIdleConnections()
+        {
+            clearConenctions = false;
+        }
+
+        /// <summary>
+        /// A method to clear idle connections
+        /// </summary>
         internal async static void ClearIdleConnections()
         {
-            while (true)
+            clearConenctions = true;
+            while (clearConenctions)
             {
-                lock (ConnectionCache)
+                await connectionAccessLock.WaitAsync();
+                try
                 {
-                    var cutOff = DateTime.Now.AddSeconds(-60);
+                    var cutOff = DateTime.Now.AddMinutes(-1 * ProxyServer.ConnectionCacheTimeOutMinutes);
 
-                    ConnectionCache
+                    connectionCache
+                       .SelectMany(x => x.Value)
                        .Where(x => x.LastAccess < cutOff)
                        .ToList()
                        .ForEach(x => x.TcpClient.Close());
 
-                    ConnectionCache.RemoveAll(x => x.LastAccess < cutOff);
+                    connectionCache.ToList().ForEach(x => x.Value.RemoveAll(y => y.LastAccess < cutOff));
                 }
+                finally { connectionAccessLock.Release(); }
 
-                await Task.Delay(1000 * 60 * 3).ConfigureAwait(false);
+                //every minute run this 
+                await Task.Delay(1000 * 60);
             }
 
         }

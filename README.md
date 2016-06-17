@@ -12,8 +12,11 @@ Features
 ========
 
 * Supports Http(s) and most features of HTTP 1.1 
-* Supports relaying of WebSockets
-* Supports script injection
+* Support redirect/block/update requests
+* Supports updating response
+* Safely relays WebSocket requests over Http
+* Support mutual SSL authentication
+* Fully asynchronous proxy
 
 Usage
 =====
@@ -35,6 +38,8 @@ Setup HTTP proxy:
 	    	ProxyServer.BeforeRequest += OnRequest;
             ProxyServer.BeforeResponse += OnResponse;
             ProxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
+            ProxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
+
 
             //Exclude Https addresses you don't want to proxy
             //Usefull for clients that use certificate pinning
@@ -84,9 +89,7 @@ Setup HTTP proxy:
 ```
 Sample request and response event handlers
 
-```csharp
-		
-        //intecept & cancel, redirect or update requests
+```csharp		
         public async Task OnRequest(object sender, SessionEventArgs e)
         {
             Console.WriteLine(e.WebSession.Request.Url);
@@ -148,20 +151,27 @@ Sample request and response event handlers
             }
         }
 
-       
-        /// Allows overriding default certificate validation logic  
-        public async Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
+        /// Allows overriding default certificate validation logic
+        public Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
         {
             //set IsValid to true/false based on Certificate Errors
             if (e.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
                 e.IsValid = true;
-            else
-                await e.Session.Ok("Cannot validate server certificate! Not safe to proceed.");
+
+            return Task.FromResult(0);
+        }
+
+        /// Allows overriding default client certificate selection logic during mutual authentication
+        public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs e)
+        {
+            //set e.clientCertificate to override
+
+            return Task.FromResult(0);
         }
 ```
 Future roadmap
 ============
-* Support mutual authentication
+* Implement Kerberos/NTLM authentication over HTTP protocols for windows domain
 * Support Server Name Indication (SNI) for transparent endpoints
 * Support HTTP 2.0 
 

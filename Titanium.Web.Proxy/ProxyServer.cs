@@ -22,19 +22,61 @@ namespace Titanium.Web.Proxy
         static ProxyServer()
         {
             ProxyEndPoints = new List<ProxyEndPoint>();
-            Initialize();
+
+            //default values
+            ConnectionCacheTimeOutMinutes = 3;
+            CertificateCacheTimeOutMinutes = 60;
         }
 
+        /// <summary>
+        /// Manages certificates used by this proxy
+        /// </summary>
         private static CertificateManager CertManager { get; set; }
    
+        /// <summary>
+        /// Does the root certificate used by this proxy is trusted by the machine?
+        /// </summary>
         private static bool certTrusted { get; set; }
+
+        /// <summary>
+        /// Is the proxy currently running
+        /// </summary>
         private static bool proxyRunning { get; set; }
 
+        /// <summary>
+        /// Name of the root certificate issuer
+        /// </summary>
         public static string RootCertificateIssuerName { get; set; }
-        public static string RootCertificateName { get; set; }
-        public static bool Enable100ContinueBehaviour { get; set; }
 
+        /// <summary>
+        /// Name of the root certificate
+        /// </summary>
+        public static string RootCertificateName { get; set; }
+
+        /// <summary>
+        /// Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
+        /// Broken 100 contunue implementations on server/client may cause problems if enabled
+        /// </summary>
+        public static bool Enable100ContinueBehaviour { get; set; }
+       
+        /// <summary>
+        /// Minutes TCP connection cache to servers to be kept alive when in idle state
+        /// </summary>
+        public static int ConnectionCacheTimeOutMinutes { get; set; }
+       
+        /// <summary>
+        /// Minutes certificates should be kept in cache when not used
+        /// </summary>
+        public static int CertificateCacheTimeOutMinutes { get; set; }
+
+        /// <summary>
+        /// Intercept request to server
+        /// </summary>
         public static event Func<object, SessionEventArgs, Task> BeforeRequest;
+
+        /// <summary>
+        /// Intercept response from server
+        /// </summary>
         public static event Func<object, SessionEventArgs, Task> BeforeResponse;
 
         /// <summary>
@@ -51,15 +93,39 @@ namespace Titanium.Web.Proxy
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
         /// </summary>
         public static event Func<object, CertificateValidationEventArgs, Task> ServerCertificateValidationCallback;
+       
+        /// <summary>
+        /// Callback tooverride client certificate during SSL mutual authentication
+        /// </summary>
+        public static event Func<object, CertificateSelectionEventArgs, Task> ClientCertificateSelectionCallback;
 
-
+        /// <summary>
+        /// A list of IpAddress & port this proxy is listening to
+        /// </summary>
         public static List<ProxyEndPoint> ProxyEndPoints { get; set; }
 
+        /// <summary>
+        /// Initialize the proxy
+        /// </summary>
         public static void Initialize()
         {
             TcpConnectionManager.ClearIdleConnections();
+            CertManager.ClearIdleCertificates();
         }
 
+        /// <summary>
+        /// Quit the proxy
+        /// </summary>
+        public static void Quit()
+        {
+            TcpConnectionManager.StopClearIdleConnections();
+            CertManager.StopClearIdleCertificates();
+        }
+
+        /// <summary>
+        /// Add a proxy end point
+        /// </summary>
+        /// <param name="endPoint"></param>
         public static void AddEndPoint(ProxyEndPoint endPoint)
         {
             ProxyEndPoints.Add(endPoint);
@@ -68,6 +134,11 @@ namespace Titanium.Web.Proxy
                 Listen(endPoint);
         }
 
+        /// <summary>
+        /// Remove a proxy end point
+        /// Will throw error if the end point does'nt exist 
+        /// </summary>
+        /// <param name="endPoint"></param>
         public static void RemoveEndPoint(ProxyEndPoint endPoint)
         {
 
@@ -80,10 +151,13 @@ namespace Titanium.Web.Proxy
                 QuitListen(endPoint);
         }
 
-
+        /// <summary>
+        /// Set the given explicit end point as the default proxy server for current machine
+        /// </summary>
+        /// <param name="endPoint"></param>
         public static void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint)
         {
-            VerifyProxy(endPoint);
+            ValidateEndPointAsSystemProxy(endPoint);
 
             //clear any settings previously added
             ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpProxy = false);
@@ -99,14 +173,21 @@ namespace Titanium.Web.Proxy
 
         }
 
+        /// <summary>
+        /// Remove any HTTP proxy setting of current machien
+        /// </summary>
         public static void DisableSystemHttpProxy()
         {
             SystemProxyHelper.RemoveHttpProxy();
         }
 
+        /// <summary>
+        /// Set the given explicit end point as the default proxy server for current machine
+        /// </summary>
+        /// <param name="endPoint"></param>
         public static void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint)
         {
-            VerifyProxy(endPoint);
+            ValidateEndPointAsSystemProxy(endPoint);
 
             if (!endPoint.EnableSsl)
             {
@@ -133,16 +214,25 @@ namespace Titanium.Web.Proxy
             Console.WriteLine("Set endpoint at Ip {1} and port: {2} as System HTTPS Proxy", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
         }
 
+        /// <summary>
+        /// Remove any HTTPS proxy setting for current machine
+        /// </summary>
         public static void DisableSystemHttpsProxy()
         {
             SystemProxyHelper.RemoveHttpsProxy();
         }
 
+        /// <summary>
+        /// Clear all proxy settings for current machine
+        /// </summary>
         public static void DisableAllSystemProxies()
         {
             SystemProxyHelper.DisableAllProxy();
         }
 
+        /// <summary>
+        /// Start this proxy server
+        /// </summary>
         public static void Start()
         {
             if (proxyRunning)
@@ -153,7 +243,7 @@ namespace Titanium.Web.Proxy
 
             CertManager = new CertificateManager(RootCertificateIssuerName,
                 RootCertificateName);
-
+            
             certTrusted = CertManager.CreateTrustedRootCertificate().Result;
 
             foreach (var endPoint in ProxyEndPoints)
@@ -161,9 +251,14 @@ namespace Titanium.Web.Proxy
                 Listen(endPoint);
             }
 
+            Initialize();
+
             proxyRunning = true;
         }
 
+        /// <summary>
+        /// Stop this proxy server
+        /// </summary>
         public static void Stop()
         {
             if (!proxyRunning)
@@ -186,9 +281,15 @@ namespace Titanium.Web.Proxy
 
             CertManager.Dispose();
 
+            Quit();
+
             proxyRunning = false;
         }
 
+        /// <summary>
+        /// Listen on the given end point on local machine
+        /// </summary>
+        /// <param name="endPoint"></param>
         private static void Listen(ProxyEndPoint endPoint)
         {
             endPoint.listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
@@ -199,13 +300,20 @@ namespace Titanium.Web.Proxy
             endPoint.listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
         }
 
+        /// <summary>
+        /// Quit listening on the given end point
+        /// </summary>
+        /// <param name="endPoint"></param>
         private static void QuitListen(ProxyEndPoint endPoint)
         {
             endPoint.listener.Stop();
         }
 
-
-        private static void VerifyProxy(ExplicitProxyEndPoint endPoint)
+        /// <summary>
+        /// Verifiy if its safe to set this end point as System proxy
+        /// </summary>
+        /// <param name="endPoint"></param>
+        private static void ValidateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
         {
             if (ProxyEndPoints.Contains(endPoint) == false)
                 throw new Exception("Cannot set endPoints not added to proxy as system proxy");
@@ -214,12 +322,17 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Cannot set system proxy settings before proxy has been started.");
         }
 
+        /// <summary>
+        /// When a connection is received from client act
+        /// </summary>
+        /// <param name="asyn"></param>
         private static void OnAcceptConnection(IAsyncResult asyn)
         {
             var endPoint = (ProxyEndPoint)asyn.AsyncState;
 
             try
             {
+                //based on end point type call appropriate request handlers
                 var client = endPoint.listener.EndAcceptTcpClient(asyn);
                 if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
                     HandleClient(endPoint as TransparentProxyEndPoint, client);
@@ -235,6 +348,10 @@ namespace Titanium.Web.Proxy
                 // triggering the completion of the callback. We're already exiting,
                 // so just return.
                 return;
+            }
+            catch
+            {
+                //Other errors are discarded to keep proxy running
             }
            
         }

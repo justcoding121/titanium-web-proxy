@@ -5,8 +5,12 @@ using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.Linq;
 
+/// <summary>
+/// Helper classes for setting system proxy settings
+/// </summary>
 namespace Titanium.Web.Proxy.Helpers
 {
+  
     internal static class NativeMethods
     {
         [DllImport("wininet.dll")]
@@ -14,27 +18,27 @@ namespace Titanium.Web.Proxy.Helpers
             int dwBufferLength);
     }
 
-   internal class HttpSystemProxyValue
+    internal class HttpSystemProxyValue
     {
-        public string HostName { get; set; }
-        public int Port { get; set; }
-        public bool IsSecure { get; set; }
+        internal string HostName { get; set; }
+        internal int Port { get; set; }
+        internal bool IsHttps { get; set; }
 
         public override string ToString()
         {
-            if (!IsSecure)
+            if (!IsHttps)
                 return "http=" + HostName + ":" + Port;
             else
                 return "https=" + HostName + ":" + Port;
         }
     }
 
-    public static class SystemProxyHelper
+    internal static class SystemProxyHelper
     {
-        public const int InternetOptionSettingsChanged = 39;
-        public const int InternetOptionRefresh = 37;
+        internal const int InternetOptionSettingsChanged = 39;
+        internal const int InternetOptionRefresh = 37;
 
-        public static void SetHttpProxy(string hostname, int port)
+        internal static void SetHttpProxy(string hostname, int port)
         {
             var reg = Registry.CurrentUser.OpenSubKey(
                 "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
@@ -44,11 +48,11 @@ namespace Titanium.Web.Proxy.Helpers
 
                 var exisitingContent = reg.GetValue("ProxyServer") as string;
                 var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                existingSystemProxyValues.RemoveAll(x => !x.IsSecure);
+                existingSystemProxyValues.RemoveAll(x => !x.IsHttps);
                 existingSystemProxyValues.Add(new HttpSystemProxyValue()
                 {
                     HostName = hostname,
-                    IsSecure = false,
+                    IsHttps = false,
                     Port = port
                 });
 
@@ -59,64 +63,10 @@ namespace Titanium.Web.Proxy.Helpers
             Refresh();
         }
 
-     
-        public static void RemoveHttpProxy()
-        {
-            var reg = Registry.CurrentUser.OpenSubKey(
-                    "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
-            if (reg != null)
-            {
-                if (reg.GetValue("ProxyServer")!=null)
-                {
-                    var exisitingContent = reg.GetValue("ProxyServer") as string;
-
-                    var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                    existingSystemProxyValues.RemoveAll(x => !x.IsSecure);
-
-                    if (!(existingSystemProxyValues.Count() == 0))
-                    {
-                        reg.SetValue("ProxyEnable", 1);
-                        reg.SetValue("ProxyServer", String.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
-                    }
-                    else
-                    {
-                        reg.SetValue("ProxyEnable", 0);
-                        reg.SetValue("ProxyServer", string.Empty);
-                    }
-                }
-            }
-
-            Refresh();
-        }
-
-        public static void SetHttpsProxy(string hostname, int port)
-        {
-            var reg = Registry.CurrentUser.OpenSubKey(
-                "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
-            
-            if (reg != null)
-            {
-                prepareRegistry(reg);
-
-                var exisitingContent = reg.GetValue("ProxyServer") as string;
-
-                var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                existingSystemProxyValues.RemoveAll(x => x.IsSecure);
-                existingSystemProxyValues.Add(new HttpSystemProxyValue()
-                {
-                    HostName = hostname,
-                    IsSecure = true,
-                    Port = port
-                });
-
-                reg.SetValue("ProxyEnable", 1);
-                reg.SetValue("ProxyServer", String.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
-            }
-
-            Refresh();
-        }
-
-        public static void RemoveHttpsProxy()
+        /// <summary>
+        /// Remove the http proxy setting from current machine
+        /// </summary>
+        internal static void RemoveHttpProxy()
         {
             var reg = Registry.CurrentUser.OpenSubKey(
                     "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
@@ -127,7 +77,7 @@ namespace Titanium.Web.Proxy.Helpers
                     var exisitingContent = reg.GetValue("ProxyServer") as string;
 
                     var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                    existingSystemProxyValues.RemoveAll(x => x.IsSecure);
+                    existingSystemProxyValues.RemoveAll(x => !x.IsHttps);
 
                     if (!(existingSystemProxyValues.Count() == 0))
                     {
@@ -139,14 +89,81 @@ namespace Titanium.Web.Proxy.Helpers
                         reg.SetValue("ProxyEnable", 0);
                         reg.SetValue("ProxyServer", string.Empty);
                     }
-                  
                 }
             }
 
             Refresh();
         }
 
-        public static void DisableAllProxy()
+        /// <summary>
+        /// Set the HTTPS proxy server for current machine
+        /// </summary>
+        /// <param name="hostname"></param>
+        /// <param name="port"></param>
+        internal static void SetHttpsProxy(string hostname, int port)
+        {
+            var reg = Registry.CurrentUser.OpenSubKey(
+                "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
+
+            if (reg != null)
+            {
+                prepareRegistry(reg);
+
+                var exisitingContent = reg.GetValue("ProxyServer") as string;
+
+                var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
+                existingSystemProxyValues.RemoveAll(x => x.IsHttps);
+                existingSystemProxyValues.Add(new HttpSystemProxyValue()
+                {
+                    HostName = hostname,
+                    IsHttps = true,
+                    Port = port
+                });
+
+                reg.SetValue("ProxyEnable", 1);
+                reg.SetValue("ProxyServer", String.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+            }
+
+            Refresh();
+        }
+
+        /// <summary>
+        /// Removes the https proxy setting to nothing
+        /// </summary>
+        internal static void RemoveHttpsProxy()
+        {
+            var reg = Registry.CurrentUser.OpenSubKey(
+                    "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
+            if (reg != null)
+            {
+                if (reg.GetValue("ProxyServer") != null)
+                {
+                    var exisitingContent = reg.GetValue("ProxyServer") as string;
+
+                    var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
+                    existingSystemProxyValues.RemoveAll(x => x.IsHttps);
+
+                    if (!(existingSystemProxyValues.Count() == 0))
+                    {
+                        reg.SetValue("ProxyEnable", 1);
+                        reg.SetValue("ProxyServer", String.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+                    }
+                    else
+                    {
+                        reg.SetValue("ProxyEnable", 0);
+                        reg.SetValue("ProxyServer", string.Empty);
+                    }
+
+                }
+            }
+
+            Refresh();
+        }
+
+        /// <summary>
+        /// Removes all types of proxy settings (both http & https)
+        /// </summary>
+        internal static void DisableAllProxy()
         {
             var reg = Registry.CurrentUser.OpenSubKey(
                 "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
@@ -159,6 +176,12 @@ namespace Titanium.Web.Proxy.Helpers
 
             Refresh();
         }
+
+        /// <summary>
+        /// Get the current system proxy setting values
+        /// </summary>
+        /// <param name="prevServerValue"></param>
+        /// <returns></returns>
         private static List<HttpSystemProxyValue> GetSystemProxyValues(string prevServerValue)
         {
             var result = new List<HttpSystemProxyValue>();
@@ -187,6 +210,11 @@ namespace Titanium.Web.Proxy.Helpers
             return result;
         }
 
+        /// <summary>
+        /// Parses the system proxy setting string
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
         private static HttpSystemProxyValue parseProxyValue(string value)
         {
             var tmp = Regex.Replace(value, @"\s+", " ").Trim().ToLower();
@@ -197,7 +225,7 @@ namespace Titanium.Web.Proxy.Helpers
                 {
                     HostName = endPoint.Split(':')[0],
                     Port = int.Parse(endPoint.Split(':')[1]),
-                    IsSecure = false
+                    IsHttps = false
                 };
             }
             else if (tmp.StartsWith("https="))
@@ -207,13 +235,16 @@ namespace Titanium.Web.Proxy.Helpers
                 {
                     HostName = endPoint.Split(':')[0],
                     Port = int.Parse(endPoint.Split(':')[1]),
-                    IsSecure = true
+                    IsHttps = true
                 };
             }
             return null;
 
         }
-
+        /// <summary>
+        /// Prepares the proxy server registry (create empty values if they don't exist) 
+        /// </summary>
+        /// <param name="reg"></param>
         private static void prepareRegistry(RegistryKey reg)
         {
             if (reg.GetValue("ProxyEnable") == null)
@@ -227,8 +258,10 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
         }
-       
 
+        /// <summary>
+        /// Refresh the settings so that the system know about a change in proxy setting
+        /// </summary>
         private static void Refresh()
         {
             NativeMethods.InternetSetOption(IntPtr.Zero, InternetOptionSettingsChanged, IntPtr.Zero, 0);

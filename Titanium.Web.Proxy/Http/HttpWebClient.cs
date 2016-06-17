@@ -9,14 +9,23 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
 {
-    public class HttpWebSession
+    /// <summary>
+    /// Used to communicate with the server over HTTP(S)
+    /// </summary>
+    public class HttpWebClient
     {
+        /// <summary>
+        /// Connection to server
+        /// </summary>
         internal TcpConnection ServerConnection { get; set; }
 
         public Request Request { get; set; }
         public Response Response { get; set; }
 
-        public bool IsSecure
+        /// <summary>
+        /// Is Https?
+        /// </summary>
+        public bool IsHttps
         {
             get
             {
@@ -24,31 +33,40 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Set the tcp connection to server used by this webclient
+        /// </summary>
+        /// <param name="Connection"></param>
         internal void SetConnection(TcpConnection Connection)
         {
             Connection.LastAccess = DateTime.Now;
             ServerConnection = Connection;
         }
 
-        internal HttpWebSession()
+        internal HttpWebClient()
         {
             this.Request = new Request();
             this.Response = new Response();
         }
 
+        /// <summary>
+        /// Prepare & send the http(s) request
+        /// </summary>
+        /// <returns></returns>
         internal async Task SendRequest()
         {
             Stream stream = ServerConnection.Stream;
 
             StringBuilder requestLines = new StringBuilder();
-
+           
+            //prepare the request & headers
             requestLines.AppendLine(string.Join(" ", new string[3]
               {
                 this.Request.Method,
                 this.Request.RequestUri.PathAndQuery,
-                this.Request.HttpVersion
+                string.Format("HTTP/{0}.{1}",this.Request.HttpVersion.Major, this.Request.HttpVersion.Minor)
               }));
-
+            //write request headers
             foreach (HttpHeader httpHeader in this.Request.RequestHeaders)
             {
                 requestLines.AppendLine(httpHeader.Name + ':' + httpHeader.Value);
@@ -64,7 +82,7 @@ namespace Titanium.Web.Proxy.Http
             if (ProxyServer.Enable100ContinueBehaviour)
                 if (this.Request.ExpectContinue)
                 {
-                    var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(Constants.SpaceSplit, 3);
+                    var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
                     var responseStatusCode = httpResult[1].Trim();
                     var responseStatusDescription = httpResult[2].Trim();
 
@@ -73,30 +91,41 @@ namespace Titanium.Web.Proxy.Http
                     && responseStatusDescription.ToLower().Equals("continue"))
                     {
                         this.Request.Is100Continue = true;
-                        await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
+                        await ServerConnection.StreamReader.ReadLineAsync();
                     }
                     else if (responseStatusCode.Equals("417")
                          && responseStatusDescription.ToLower().Equals("expectation failed"))
                     {
                         this.Request.ExpectationFailed = true;
-                        await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
+                        await ServerConnection.StreamReader.ReadLineAsync();
                     }
                 }
         }
 
+        /// <summary>
+        /// Receive & parse the http response from server
+        /// </summary>
+        /// <returns></returns>
         internal async Task ReceiveResponse()
         {
             //return if this is already read
             if (this.Response.ResponseStatusCode != null) return;
 
-            var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(Constants.SpaceSplit, 3);
+            var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
 
             if (string.IsNullOrEmpty(httpResult[0]))
             {
-                await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
+                await ServerConnection.StreamReader.ReadLineAsync();
+            }
+            var httpVersion = httpResult[0].Trim().ToLower();
+
+            var version = new Version(1,1);
+            if (httpVersion == "http/1.0")
+            {
+                version = new Version(1, 0);
             }
 
-            this.Response.HttpVersion = httpResult[0].Trim();
+            this.Response.HttpVersion = version;
             this.Response.ResponseStatusCode = httpResult[1].Trim();
             this.Response.ResponseStatusDescription = httpResult[2].Trim();
 
@@ -106,7 +135,7 @@ namespace Titanium.Web.Proxy.Http
             {
                 this.Response.Is100Continue = true;
                 this.Response.ResponseStatusCode = null;
-                await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
+                await ServerConnection.StreamReader.ReadLineAsync();
                 await ReceiveResponse();
                 return;
             }
@@ -115,16 +144,17 @@ namespace Titanium.Web.Proxy.Http
             {
                 this.Response.ExpectationFailed = true;
                 this.Response.ResponseStatusCode = null;
-                await ServerConnection.StreamReader.ReadLineAsync().ConfigureAwait(false);
+                await ServerConnection.StreamReader.ReadLineAsync();
                 await ReceiveResponse();
                 return;
             }
 
-            List<string> responseLines = await ServerConnection.StreamReader.ReadAllLinesAsync().ConfigureAwait(false);
+            //read response headers
+            List<string> responseLines = await ServerConnection.StreamReader.ReadAllLinesAsync();
 
             for (int index = 0; index < responseLines.Count; ++index)
             {
-                string[] strArray = responseLines[index].Split(Constants.ColonSplit, 2);
+                string[] strArray = responseLines[index].Split(ProxyConstants.ColonSplit, 2);
                 this.Response.ResponseHeaders.Add(new HttpHeader(strArray[0], strArray[1]));
             }
         }

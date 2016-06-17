@@ -4,9 +4,14 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Extensions
 {
-    public static class HttpWebResponseExtensions
+    internal static class HttpWebResponseExtensions
     {
-        public static Encoding GetResponseCharacterEncoding(this Response response)
+        /// <summary>
+        /// Gets the character encoding of response from response headers
+        /// </summary>
+        /// <param name="response"></param>
+        /// <returns></returns>
+        internal static Encoding GetResponseCharacterEncoding(this Response response)
         {
             try
             {
@@ -15,7 +20,7 @@ namespace Titanium.Web.Proxy.Extensions
                     return Encoding.GetEncoding("ISO-8859-1");
 
                 //extract the encoding by finding the charset
-                var contentTypes = response.ContentType.Split(Constants.SemiColonSplit);
+                var contentTypes = response.ContentType.Split(ProxyConstants.SemiColonSplit);
                 foreach (var contentType in contentTypes)
                 {
                     var encodingSplit = contentType.Split('=');
