@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Connection to server
         /// </summary>
-        internal TcpConnection ServerConnection { get; set; }
+        internal TcpConnectionCache ServerConnection { get; set; }
 
         public Request Request { get; set; }
         public Response Response { get; set; }
@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy.Http
         /// Set the tcp connection to server used by this webclient
         /// </summary>
         /// <param name="Connection"></param>
-        internal void SetConnection(TcpConnection Connection)
+        internal void SetConnection(TcpConnectionCache Connection)
         {
             Connection.LastAccess = DateTime.Now;
             ServerConnection = Connection;
@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy.Http
         /// Prepare & send the http(s) request
         /// </summary>
         /// <returns></returns>
-        internal async Task SendRequest()
+        internal async Task SendRequest(bool enable100ContinueBehaviour)
         {
             Stream stream = ServerConnection.Stream;
 
@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy.Http
             await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
             await stream.FlushAsync();
 
-            if (ProxyServer.Enable100ContinueBehaviour)
+            if (enable100ContinueBehaviour)
                 if (this.Request.ExpectContinue)
                 {
                     var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
@@ -133,18 +133,22 @@ namespace Titanium.Web.Proxy.Http
             if (this.Response.ResponseStatusCode.Equals("100")
                 && this.Response.ResponseStatusDescription.ToLower().Equals("continue"))
             {
+                //Read the next line after 100-continue 
                 this.Response.Is100Continue = true;
                 this.Response.ResponseStatusCode = null;
                 await ServerConnection.StreamReader.ReadLineAsync();
+                //now receive response
                 await ReceiveResponse();
                 return;
             }
             else if (this.Response.ResponseStatusCode.Equals("417")
                  && this.Response.ResponseStatusDescription.ToLower().Equals("expectation failed"))
             {
+                //read next line after expectation failed response
                 this.Response.ExpectationFailed = true;
                 this.Response.ResponseStatusCode = null;
                 await ServerConnection.StreamReader.ReadLineAsync();
+                //now receive response 
                 await ReceiveResponse();
                 return;
             }

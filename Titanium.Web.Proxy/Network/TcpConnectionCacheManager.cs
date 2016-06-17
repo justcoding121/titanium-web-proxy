@@ -10,23 +10,25 @@ using Titanium.Web.Proxy.Helpers;
 using System.Threading;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Shared;
+using Titanium.Web.Proxy.Models;
+using System.Security.Authentication;
 
 namespace Titanium.Web.Proxy.Network
 {
     /// <summary>
     /// A class that manages Tcp Connection to server used by this proxy server
     /// </summary>
-    internal class TcpConnectionManager
+    internal class TcpConnectionCacheManager
     {
         /// <summary>
         /// Connection cache
         /// </summary>
-        static Dictionary<string, List<TcpConnection>> connectionCache = new Dictionary<string, List<TcpConnection>>();
+        Dictionary<string, List<TcpConnectionCache>> connectionCache = new Dictionary<string, List<TcpConnectionCache>>();
 
         /// <summary>
         /// A lock to manage concurrency
         /// </summary>
-        static SemaphoreSlim connectionAccessLock = new SemaphoreSlim(1);
+        SemaphoreSlim connectionAccessLock = new SemaphoreSlim(1);
 
         /// <summary>
         /// Get a TcpConnection to the specified host, port optionally HTTPS and a particular HTTP version
@@ -36,10 +38,12 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="isHttps"></param>
         /// <param name="version"></param>
         /// <returns></returns>
-        internal static async Task<TcpConnection> GetClient(string hostname, int port, bool isHttps, Version version)
+        internal async Task<TcpConnectionCache> GetClient(string hostname, int port, bool isHttps, Version version,
+            ExternalProxy upStreamHttpProxy, ExternalProxy upStreamHttpsProxy, int bufferSize, SslProtocols supportedSslProtocols,
+            RemoteCertificateValidationCallback remoteCertificateValidationCallBack, LocalCertificateSelectionCallback localCertificateSelectionCallback)
         {
-            List<TcpConnection> cachedConnections = null;
-            TcpConnection cached = null;
+            List<TcpConnectionCache> cachedConnections = null;
+            TcpConnectionCache cached = null;
 
             //Get a unique string to identify this connection
             var key = GetConnectionKey(hostname, port, isHttps, version);
@@ -77,12 +81,14 @@ namespace Titanium.Web.Proxy.Network
 
 
             if (cached == null)
-                cached = await CreateClient(hostname, port, isHttps, version);
+                cached = await CreateClient(hostname, port, isHttps, version, upStreamHttpProxy, upStreamHttpsProxy, bufferSize, supportedSslProtocols,
+                                remoteCertificateValidationCallBack, localCertificateSelectionCallback);
 
             if (cachedConnections == null || cachedConnections.Count() <= 2)
             {
-                var task = CreateClient(hostname, port, isHttps, version)
-                              .ContinueWith(async (x) => { if (x.Status == TaskStatus.RanToCompletion) await ReleaseClient(x.Result); });
+                var task = CreateClient(hostname, port, isHttps, version, upStreamHttpProxy, upStreamHttpsProxy, bufferSize, supportedSslProtocols,
+                           remoteCertificateValidationCallBack, localCertificateSelectionCallback)
+                           .ContinueWith(async (x) => { if (x.Status == TaskStatus.RanToCompletion) await ReleaseClient(x.Result); });
             }
 
             return cached;
@@ -96,7 +102,7 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="isHttps"></param>
         /// <param name="version"></param>
         /// <returns></returns>
-        internal static string GetConnectionKey(string hostname, int port, bool isHttps, Version version)
+        internal string GetConnectionKey(string hostname, int port, bool isHttps, Version version)
         {
             return string.Format("{0}:{1}:{2}:{3}:{4}", hostname.ToLower(), port, isHttps, version.Major, version.Minor);
         }
@@ -109,7 +115,9 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="isHttps"></param>
         /// <param name="version"></param>
         /// <returns></returns>
-        private static async Task<TcpConnection> CreateClient(string hostname, int port, bool isHttps, Version version)
+        private async Task<TcpConnectionCache> CreateClient(string hostname, int port, bool isHttps, Version version,
+           ExternalProxy upStreamHttpProxy, ExternalProxy upStreamHttpsProxy, int bufferSize, SslProtocols supportedSslProtocols,
+           RemoteCertificateValidationCallback remoteCertificateValidationCallBack, LocalCertificateSelectionCallback localCertificateSelectionCallback)
         {
             TcpClient client;
             Stream stream;
@@ -119,12 +127,12 @@ namespace Titanium.Web.Proxy.Network
                 SslStream sslStream = null;
 
                 //If this proxy uses another external proxy then create a tunnel request for HTTPS connections
-                if (ProxyServer.UpStreamHttpsProxy != null)
+                if (upStreamHttpsProxy != null)
                 {
-                    client = new TcpClient(ProxyServer.UpStreamHttpsProxy.HostName, ProxyServer.UpStreamHttpsProxy.Port);
+                    client = new TcpClient(upStreamHttpsProxy.HostName, upStreamHttpsProxy.Port);
                     stream = (Stream)client.GetStream();
 
-                    using (var writer = new StreamWriter(stream, Encoding.ASCII, ProxyConstants.BUFFER_SIZE, true))
+                    using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true))
                     {
                         await writer.WriteLineAsync(string.Format("CONNECT {0}:{1} {2}", hostname, port, version));
                         await writer.WriteLineAsync(string.Format("Host: {0}:{1}", hostname, port));
@@ -152,9 +160,9 @@ namespace Titanium.Web.Proxy.Network
 
                 try
                 {
-                    sslStream = new SslStream(stream, true, new RemoteCertificateValidationCallback(ProxyServer.ValidateServerCertificate),
-                        new LocalCertificateSelectionCallback(ProxyServer.SelectClientCertificate));
-                    await sslStream.AuthenticateAsClientAsync(hostname, null, ProxyConstants.SupportedSslProtocols, false);
+                    sslStream = new SslStream(stream, true, remoteCertificateValidationCallBack,
+                        localCertificateSelectionCallback);
+                    await sslStream.AuthenticateAsClientAsync(hostname, null, supportedSslProtocols, false);
                     stream = (Stream)sslStream;
                 }
                 catch
@@ -166,9 +174,9 @@ namespace Titanium.Web.Proxy.Network
             }
             else
             {
-                if (ProxyServer.UpStreamHttpProxy != null)
+                if (upStreamHttpProxy != null)
                 {
-                    client = new TcpClient(ProxyServer.UpStreamHttpProxy.HostName, ProxyServer.UpStreamHttpProxy.Port);
+                    client = new TcpClient(upStreamHttpProxy.HostName, upStreamHttpProxy.Port);
                     stream = (Stream)client.GetStream();
                 }
                 else
@@ -178,7 +186,7 @@ namespace Titanium.Web.Proxy.Network
                 }
             }
 
-            return new TcpConnection()
+            return new TcpConnectionCache()
             {
                 HostName = hostname,
                 port = port,
@@ -195,7 +203,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="connection"></param>
         /// <returns></returns>
-        internal static async Task ReleaseClient(TcpConnection connection)
+        internal async Task ReleaseClient(TcpConnectionCache connection)
         {
 
             connection.LastAccess = DateTime.Now;
@@ -203,25 +211,25 @@ namespace Titanium.Web.Proxy.Network
             await connectionAccessLock.WaitAsync();
             try
             {
-                List<TcpConnection> cachedConnections;
+                List<TcpConnectionCache> cachedConnections;
                 connectionCache.TryGetValue(key, out cachedConnections);
 
                 if (cachedConnections != null)
                     cachedConnections.Add(connection);
                 else
 
-                    connectionCache.Add(key, new List<TcpConnection>() { connection });
+                    connectionCache.Add(key, new List<TcpConnectionCache>() { connection });
             }
 
             finally { connectionAccessLock.Release(); }
         }
 
-        private static bool clearConenctions { get; set; }
+        private bool clearConenctions { get; set; }
 
         /// <summary>
         /// Stop clearing idle connections
         /// </summary>
-        internal static void StopClearIdleConnections()
+        internal void StopClearIdleConnections()
         {
             clearConenctions = false;
         }
@@ -229,7 +237,7 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// A method to clear idle connections
         /// </summary>
-        internal async static void ClearIdleConnections()
+        internal async void ClearIdleConnections(int connectionCacheTimeOutMinutes)
         {
             clearConenctions = true;
             while (clearConenctions)
@@ -237,7 +245,7 @@ namespace Titanium.Web.Proxy.Network
                 await connectionAccessLock.WaitAsync();
                 try
                 {
-                    var cutOff = DateTime.Now.AddMinutes(-1 * ProxyServer.ConnectionCacheTimeOutMinutes);
+                    var cutOff = DateTime.Now.AddMinutes(-1 * connectionCacheTimeOutMinutes);
 
                     connectionCache
                        .SelectMany(x => x.Value)
