@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Security.Authentication;
 using System.Text;
 
 namespace Titanium.Web.Proxy.Shared
@@ -9,7 +8,7 @@ namespace Titanium.Web.Proxy.Shared
     /// </summary>
     internal class ProxyConstants
     { 
-        internal static readonly char[] SpaceSplit = { ' ' };
+        internal static  readonly char[] SpaceSplit = { ' ' };
         internal static readonly char[] ColonSplit = { ':' };
         internal static readonly char[] SemiColonSplit = { ';' };
 
@@ -18,8 +17,5 @@ namespace Titanium.Web.Proxy.Shared
         internal static readonly byte[] ChunkEnd =
             Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
 
-        public static SslProtocols SupportedSslProtocols = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
-
-        public static readonly int BUFFER_SIZE = 8192;
     }
 }

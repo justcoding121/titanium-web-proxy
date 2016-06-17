@@ -20,14 +20,16 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public class SessionEventArgs : EventArgs, IDisposable
     {
+
         /// <summary>
-        /// Constructor to initialize the proxy
+        /// Size of Buffers used by this object
         /// </summary>
-        internal SessionEventArgs()
-        {
-            ProxyClient = new ProxyClient();
-            WebSession = new HttpWebClient();
-        }
+        private readonly int bufferSize;
+
+        /// <summary>
+        /// Holds a reference to proxy response handler method
+        /// </summary>
+        private readonly Func<SessionEventArgs, Task> httpResponseHandler;
 
         /// <summary>
         /// Holds a reference to client
@@ -50,12 +52,17 @@ namespace Titanium.Web.Proxy.EventArguments
 
 
         /// <summary>
-        /// implement any cleanup here
+        /// Constructor to initialize the proxy
         /// </summary>
-        public void Dispose()
+        internal SessionEventArgs(int bufferSize, Func<SessionEventArgs, Task> httpResponseHandler)
         {
+            this.bufferSize = bufferSize;
+            this.httpResponseHandler = httpResponseHandler;
 
+            ProxyClient = new ProxyClient();
+            WebSession = new HttpWebClient();
         }
+
 
         /// <summary>
         /// Read request body content as bytes[] for current session
@@ -80,7 +87,7 @@ namespace Titanium.Web.Proxy.EventArguments
                     //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
                     if (WebSession.Request.IsChunked)
                     {
-                        await this.ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(requestBodyStream);
+                        await this.ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(bufferSize, requestBodyStream);
                     }
                     else
                     {
@@ -88,11 +95,11 @@ namespace Titanium.Web.Proxy.EventArguments
                         if (WebSession.Request.ContentLength > 0)
                         {
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await this.ProxyClient.ClientStreamReader.CopyBytesToStream(requestBodyStream, WebSession.Request.ContentLength);
+                            await this.ProxyClient.ClientStreamReader.CopyBytesToStream(bufferSize, requestBodyStream, WebSession.Request.ContentLength);
 
                         }
                         else if(WebSession.Request.HttpVersion.Major == 1 && WebSession.Request.HttpVersion.Minor == 0)
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(requestBodyStream, long.MaxValue);
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, requestBodyStream, long.MaxValue);
                     }
                     WebSession.Request.RequestBody = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding, requestBodyStream.ToArray());
                 }
@@ -117,18 +124,18 @@ namespace Titanium.Web.Proxy.EventArguments
                     //If chuncked the read chunk by chunk until we hit chunk end symbol
                     if (WebSession.Response.IsChunked)
                     {
-                        await WebSession.ServerConnection.StreamReader.CopyBytesToStreamChunked(responseBodyStream);
+                        await WebSession.ServerConnection.StreamReader.CopyBytesToStreamChunked(bufferSize, responseBodyStream);
                     }
                     else
                     {
                         if (WebSession.Response.ContentLength > 0)
                         {
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, WebSession.Response.ContentLength);
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, responseBodyStream, WebSession.Response.ContentLength);
 
                         }
                         else if(WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0)
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, long.MaxValue);
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, responseBodyStream, long.MaxValue);
                     }
 
                     WebSession.Response.ResponseBody = await GetDecompressedResponseBody(WebSession.Response.ContentEncoding, responseBodyStream.ToArray());
@@ -285,7 +292,7 @@ namespace Titanium.Web.Proxy.EventArguments
             var decompressionFactory = new DecompressionFactory();
             var decompressor = decompressionFactory.Create(encodingType);
 
-            return await decompressor.Decompress(responseBodyStream);
+            return await decompressor.Decompress(responseBodyStream, bufferSize);
         }
 
 
@@ -338,7 +345,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             WebSession.Request.CancelRequest = true;
         }
-
+      
         /// a generic responder method 
         public async Task Respond(Response response)
         {
@@ -349,8 +356,15 @@ namespace Titanium.Web.Proxy.EventArguments
 
             WebSession.Response = response;
 
-            await ProxyServer.HandleHttpSessionResponse(this);
+            await httpResponseHandler(this);
         }
 
+        /// <summary>
+        /// implement any cleanup here
+        /// </summary>
+        public void Dispose()
+        {
+
+        }
     }
 }

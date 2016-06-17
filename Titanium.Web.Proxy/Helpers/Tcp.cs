@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
@@ -12,7 +13,7 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    
+
     internal class TcpHelper
     {
         /// <summary>
@@ -26,8 +27,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="tunnelPort"></param>
         /// <param name="isHttps"></param>
         /// <returns></returns>
-        internal async static Task SendRaw(Stream clientStream, string httpCmd, List<HttpHeader> requestHeaders, string hostName,
-            int tunnelPort, bool isHttps)
+        internal static async Task SendRaw(Stream clientStream, string httpCmd, List<HttpHeader> requestHeaders, string hostName,
+            int tunnelPort, bool isHttps, SslProtocols supportedProtocols)
         {
             //prepare the prefix content
             StringBuilder sb = null;
@@ -63,7 +64,7 @@ namespace Titanium.Web.Proxy.Helpers
                     try
                     {
                         sslStream = new SslStream(tunnelStream);
-                        await sslStream.AuthenticateAsClientAsync(hostName, null, ProxyConstants.SupportedSslProtocols, false);
+                        await sslStream.AuthenticateAsClientAsync(hostName, null, supportedProtocols, false);
                         tunnelStream = sslStream;
                     }
                     catch
