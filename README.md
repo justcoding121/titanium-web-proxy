@@ -87,7 +87,7 @@ Setup HTTP proxy:
 			proxyServer.BeforeRequest -= OnRequest;
 			proxyServer.BeforeResponse -= OnResponse;
 			proxyServer.ServerCertificateValidationCallback -= OnCertificateValidation;
-            		proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;
+			proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;
             		
 			proxyServer.Stop();
 	
