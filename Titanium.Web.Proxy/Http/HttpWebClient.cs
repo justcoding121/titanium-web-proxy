@@ -115,8 +115,10 @@ namespace Titanium.Web.Proxy.Http
 
             if (string.IsNullOrEmpty(httpResult[0]))
             {
-                await ServerConnection.StreamReader.ReadLineAsync();
+                //Empty content in first-line, try again
+                httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
             }
+
             var httpVersion = httpResult[0].Trim().ToLower();
 
             var version = new Version(1,1);
