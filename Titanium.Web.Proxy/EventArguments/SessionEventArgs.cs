@@ -62,8 +62,7 @@ namespace Titanium.Web.Proxy.EventArguments
             ProxyClient = new ProxyClient();
             WebSession = new HttpWebClient();
         }
-
-
+        
         /// <summary>
         /// Read request body content as bytes[] for current session
         /// </summary>
@@ -98,7 +97,7 @@ namespace Titanium.Web.Proxy.EventArguments
                             await this.ProxyClient.ClientStreamReader.CopyBytesToStream(bufferSize, requestBodyStream, WebSession.Request.ContentLength);
 
                         }
-                        else if(WebSession.Request.HttpVersion.Major == 1 && WebSession.Request.HttpVersion.Minor == 0)
+                        else if (WebSession.Request.HttpVersion.Major == 1 && WebSession.Request.HttpVersion.Minor == 0)
                             await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, requestBodyStream, long.MaxValue);
                     }
                     WebSession.Request.RequestBody = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding, requestBodyStream.ToArray());
@@ -108,7 +107,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 //So that next time we can deliver body from cache
                 WebSession.Request.RequestBodyRead = true;
             }
-      
+
         }
 
         /// <summary>
@@ -134,7 +133,7 @@ namespace Titanium.Web.Proxy.EventArguments
                             await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, responseBodyStream, WebSession.Response.ContentLength);
 
                         }
-                        else if(WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0)
+                        else if (WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0)
                             await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, responseBodyStream, long.MaxValue);
                     }
 
@@ -152,10 +151,13 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <returns></returns>
         public async Task<byte[]> GetRequestBody()
         {
-            if (WebSession.Request.RequestLocked)
-                throw new Exception("You cannot call this function after request is made to server.");
+            if (!WebSession.Request.RequestBodyRead)
+            {
+                if (WebSession.Request.RequestLocked)
+                    throw new Exception("You cannot call this function after request is made to server.");
 
-            await ReadRequestBody();
+                await ReadRequestBody();
+            }
             return WebSession.Request.RequestBody;
         }
         /// <summary>
@@ -164,12 +166,13 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <returns></returns>
         public async Task<string> GetRequestBodyAsString()
         {
-            if (WebSession.Request.RequestLocked)
-                throw new Exception("You cannot call this function after request is made to server.");
+            if (!WebSession.Request.RequestBodyRead)
+            {
+                if (WebSession.Request.RequestLocked)
+                    throw new Exception("You cannot call this function after request is made to server.");
 
-
-            await ReadRequestBody();
-
+                await ReadRequestBody();
+            }
             //Use the encoding specified in request to decode the byte[] data to string
             return WebSession.Request.RequestBodyString ?? (WebSession.Request.RequestBodyString = WebSession.Request.Encoding.GetString(WebSession.Request.RequestBody));
         }
@@ -285,7 +288,7 @@ namespace Titanium.Web.Proxy.EventArguments
             var bodyBytes = WebSession.Response.Encoding.GetBytes(body);
 
             await SetResponseBody(bodyBytes);
-        } 
+        }
 
         private async Task<byte[]> GetDecompressedResponseBody(string encodingType, byte[] responseBodyStream)
         {
@@ -345,7 +348,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             WebSession.Request.CancelRequest = true;
         }
-      
+
         /// a generic responder method 
         public async Task Respond(Response response)
         {
