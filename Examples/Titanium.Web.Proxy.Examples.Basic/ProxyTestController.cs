@@ -17,10 +17,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public void StartProxy()
         {
-            proxyServer.BeforeRequest += OnRequest;
-            proxyServer.BeforeResponse += OnResponse;
-            proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
-            proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
+            //proxyServer.BeforeRequest += OnRequest;
+            //proxyServer.BeforeResponse += OnResponse;
+            //proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
+            //proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
             //Exclude Https addresses you don't want to proxy
             //Usefull for clients that use certificate pinning
@@ -141,7 +141,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             //set IsValid to true/false based on Certificate Errors
             if (e.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
+            {
                 e.IsValid = true;
+            }
 
             return Task.FromResult(0);
         }
