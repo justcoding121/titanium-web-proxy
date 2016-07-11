@@ -181,14 +181,28 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Handle dispose of a client/server session
         /// </summary>
-        /// <param name="client"></param>
+        /// <param name="tcpClient"></param>
         /// <param name="clientStream"></param>
         /// <param name="clientStreamReader"></param>
         /// <param name="clientStreamWriter"></param>
         /// <param name="args"></param>
-        private  void Dispose(TcpClient client, IDisposable clientStream, IDisposable clientStreamReader,
+        private void Dispose(TcpClient tcpClient, IDisposable clientStream, IDisposable clientStreamReader,
             IDisposable clientStreamWriter, IDisposable args)
         {
+
+            if (clientStream != null)
+            {
+                (clientStream as Stream).Close();
+                (clientStream as Stream).Dispose();
+            }
+
+            if (tcpClient != null)
+            {
+                tcpClient.Client.Close();
+                tcpClient.Close();
+                tcpClient.Client.Dispose();
+            }
+
             if (args != null)
                 args.Dispose();
 
@@ -198,11 +212,7 @@ namespace Titanium.Web.Proxy
             if (clientStreamWriter != null)
                 clientStreamWriter.Dispose();
 
-            if (clientStream != null)
-                clientStream.Dispose();
 
-            if (client != null)
-                client.Close();
         }
     }
 }

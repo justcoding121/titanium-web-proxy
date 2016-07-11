@@ -35,12 +35,12 @@ After installing nuget package mark following files to be copied to app director
 Setup HTTP proxy:
 
 ```csharp
-			var ProxyServer = new ProxyServer();
+			var proxyServer = new ProxyServer();
 
-	    	ProxyServer.BeforeRequest += OnRequest;
-            ProxyServer.BeforeResponse += OnResponse;
-            ProxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
-            ProxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
+	    	proxyServer.BeforeRequest += OnRequest;
+            proxyServer.BeforeResponse += OnResponse;
+            proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
+            proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
 
             //Exclude Https addresses you don't want to proxy
@@ -53,8 +53,8 @@ Setup HTTP proxy:
 
             //An explicit endpoint is where the client knows about the existance of a proxy
             //So client sends request in a proxy friendly manner
-            ProxyServer.AddEndPoint(explicitEndPoint);
-            ProxyServer.Start();
+            proxyServer.AddEndPoint(explicitEndPoint);
+            proxyServer.Start();
 
 
             //Transparent endpoint is usefull for reverse proxying (client is not aware of the existance of proxy)
@@ -67,26 +67,29 @@ Setup HTTP proxy:
             {
                 GenericCertificateName = "google.com"
             };
-            ProxyServer.AddEndPoint(transparentEndPoint);
+            proxyServer.AddEndPoint(transparentEndPoint);
 
-            //ProxyServer.UpStreamHttpProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
-            //ProxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
+            //proxyServer.UpStreamHttpProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
+            //proxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
 
-            foreach (var endPoint in ProxyServer.ProxyEndPoints)
+            foreach (var endPoint in proxyServer.ProxyEndPoints)
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ",
                     endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
             //Only explicit proxies can be set as system proxy!
-            ProxyServer.SetAsSystemHttpProxy(explicitEndPoint);
-            ProxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
+            proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
+            proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
 
 			//wait here (You can use something else as a wait function, I am using this as a demo)
 			Console.Read();
 	
 			//Unsubscribe & Quit
-			ProxyServer.BeforeRequest -= OnRequest;
-			ProxyServer.BeforeResponse -= OnResponse;
-			ProxyServer.Stop();
+			proxyServer.BeforeRequest -= OnRequest;
+			proxyServer.BeforeResponse -= OnResponse;
+			proxyServer.ServerCertificateValidationCallback -= OnCertificateValidation;
+			proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;
+            		
+			proxyServer.Stop();
 	
 ```
 Sample request and response event handlers
