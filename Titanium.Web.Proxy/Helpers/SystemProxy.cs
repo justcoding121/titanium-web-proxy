@@ -27,9 +27,13 @@ namespace Titanium.Web.Proxy.Helpers
         public override string ToString()
         {
             if (!IsHttps)
+            {
                 return "http=" + HostName + ":" + Port;
+            }
             else
+            {
                 return "https=" + HostName + ":" + Port;
+            }
         }
     }
     /// <summary>
@@ -44,6 +48,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             var reg = Registry.CurrentUser.OpenSubKey(
                 "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
+
             if (reg != null)
             {
                 prepareRegistry(reg);

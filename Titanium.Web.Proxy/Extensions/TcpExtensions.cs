@@ -13,6 +13,7 @@ namespace Titanium.Web.Proxy.Extensions
         {
             // This is how you can determine whether a socket is still connected.
             bool blockingState = client.Blocking;
+
             try
             {
                 byte[] tmp = new byte[1];
@@ -25,7 +26,9 @@ namespace Titanium.Web.Proxy.Extensions
             {
                 // 10035 == WSAEWOULDBLOCK
                 if (e.NativeErrorCode.Equals(10035))
+                {
                     return true;
+                }
                 else
                 {
                     return false;
