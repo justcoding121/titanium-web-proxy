@@ -9,7 +9,10 @@ namespace Titanium.Web.Proxy.Models
     {
         public HttpHeader(string name, string value)
         {
-            if (string.IsNullOrEmpty(name)) throw new Exception("Name cannot be null");
+            if (string.IsNullOrEmpty(name))
+            {
+                throw new Exception("Name cannot be null");
+            }
 
             Name = name.Trim();
             Value = value.Trim();

@@ -47,7 +47,9 @@ namespace Titanium.Web.Proxy
             }
 
             if (sslPolicyErrors == SslPolicyErrors.None)
+            {
                 return true;
+            }
 
             //By default
             //do not allow this client to communicate with unauthenticated servers.
@@ -82,13 +84,17 @@ namespace Titanium.Web.Proxy
                 {
                     string issuer = certificate.Issuer;
                     if (Array.IndexOf(acceptableIssuers, issuer) != -1)
+                    {
                         clientCertificate = certificate;
+                    }
                 }
             }
 
             if (localCertificates != null &&
                 localCertificates.Count > 0)
+            {
                 clientCertificate = localCertificates[0];
+            }
 
             //If user call back is registered
             if (ClientCertificateSelectionCallback != null)
@@ -115,7 +121,6 @@ namespace Titanium.Web.Proxy
             }
 
             return clientCertificate;
-
         }
     }
 }

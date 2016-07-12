@@ -26,6 +26,7 @@ namespace Titanium.Web.Proxy.Extensions
                 var bytes = Encoding.ASCII.GetBytes(initialData);
                 await output.WriteAsync(bytes, 0, bytes.Length);
             }
+
             await input.CopyToAsync(output);
         }
         /// <summary>
@@ -45,7 +46,9 @@ namespace Titanium.Web.Proxy.Extensions
                 bytesToRead = totalBytesToRead;
             }
             else
+            {
                 bytesToRead = bufferSize;
+            }
 
 
             while (totalbytesRead < totalBytesToRead)
@@ -53,7 +56,9 @@ namespace Titanium.Web.Proxy.Extensions
                 var buffer = await streamReader.ReadBytesAsync(bufferSize, bytesToRead);
 
                 if (buffer.Length == 0)
+                {
                     break;
+                }
 
                 totalbytesRead += buffer.Length;
 
@@ -62,6 +67,7 @@ namespace Titanium.Web.Proxy.Extensions
                 {
                     bytesToRead = remainingBytes;
                 }
+
                 await stream.WriteAsync(buffer, 0, buffer.Length);
             }
         }
@@ -107,7 +113,9 @@ namespace Titanium.Web.Proxy.Extensions
                 await clientStream.WriteAsync(data, 0, data.Length);
             }
             else
+            {
                 await WriteResponseBodyChunked(data, clientStream);
+            }
         }
         /// <summary>
         /// Copies the specified content length number of bytes to the output stream from the given inputs stream
@@ -124,12 +132,16 @@ namespace Titanium.Web.Proxy.Extensions
             {
                 //http 1.0
                 if (ContentLength == -1)
+                {
                     ContentLength = long.MaxValue;
+                }
 
                 int bytesToRead = bufferSize;
 
                 if (ContentLength < bufferSize)
+                {
                     bytesToRead = (int)ContentLength;
+                }
 
                 var buffer = new byte[bufferSize];
 
@@ -150,7 +162,9 @@ namespace Titanium.Web.Proxy.Extensions
                 }
             }
             else
+            {
                 await WriteResponseBodyChunked(inStreamReader, bufferSize, outStream);
+            }
         }
 
         /// <summary>
