@@ -141,7 +141,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             //set IsValid to true/false based on Certificate Errors
             if (e.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
+            {
                 e.IsValid = true;
+            }
 
             return Task.FromResult(0);
         }

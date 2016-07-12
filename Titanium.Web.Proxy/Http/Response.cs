@@ -25,10 +25,12 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var header = this.ResponseHeaders.FirstOrDefault(x => x.Name.ToLower().Equals("content-encoding"));
+                var hasHeader = ResponseHeaders.ContainsKey("content-encoding");
 
-                if (header != null)
+                if (hasHeader)
                 {
+                    var header = ResponseHeaders["content-encoding"];
+
                     return header.Value.Trim();
                 }
 
@@ -45,11 +47,16 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var header = this.ResponseHeaders.FirstOrDefault(x => x.Name.ToLower().Equals("connection"));
+                var hasHeader = ResponseHeaders.ContainsKey("connection");
 
-                if (header != null && header.Value.ToLower().Contains("close"))
+                if (hasHeader)
                 {
-                    return false;
+                    var header = ResponseHeaders["connection"];
+
+                    if (header.Value.ToLower().Contains("close"))
+                    {
+                        return false;
+                    }
                 }
 
                 return true;
@@ -64,10 +71,12 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var header = this.ResponseHeaders.FirstOrDefault(x => x.Name.ToLower().Equals("content-type"));
+                var hasHeader = ResponseHeaders.ContainsKey("content-type");
 
-                if (header != null)
+                if (hasHeader)
                 {
+                    var header = ResponseHeaders["content-type"];
+
                     return header.Value;
                 }
 
@@ -83,36 +92,49 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var header = this.ResponseHeaders.FirstOrDefault(x => x.Name.ToLower().Equals("content-length"));
+                var hasHeader = ResponseHeaders.ContainsKey("content-length");
 
-                if (header == null)
+                if (hasHeader == false)
+                {
                     return -1;
+                }
+
+                var header = ResponseHeaders["content-length"];
 
                 long contentLen;
                 long.TryParse(header.Value, out contentLen);
                 if (contentLen >= 0)
+                {
                     return contentLen;
+                }
 
                 return -1;
 
             }
             set
             {
-                var header = this.ResponseHeaders.FirstOrDefault(x => x.Name.ToLower().Equals("content-length"));
+                var hasHeader = ResponseHeaders.ContainsKey("content-length");
 
                 if (value >= 0)
                 {
-                    if (header != null)
+                    if (hasHeader)
+                    {
+                        var header = ResponseHeaders["content-length"];
                         header.Value = value.ToString();
+                    }
                     else
-                        ResponseHeaders.Add(new HttpHeader("content-length", value.ToString()));
+                    {
+                        ResponseHeaders.Add("content-length", new HttpHeader("content-length", value.ToString()));
+                    }
 
                     IsChunked = false;
                 }
                 else
                 {
-                    if (header != null)
-                        this.ResponseHeaders.Remove(header);
+                    if (hasHeader)
+                    {
+                        ResponseHeaders.Remove("content-length");
+                    }
                 }
             }
         }
@@ -124,11 +146,16 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var header = this.ResponseHeaders.FirstOrDefault(x => x.Name.ToLower().Equals("transfer-encoding"));
+                var hasHeader = ResponseHeaders.ContainsKey("transfer-encoding");
 
-                if (header != null && header.Value.ToLower().Contains("chunked"))
+                if (hasHeader)
                 {
-                    return true;
+                    var header = ResponseHeaders["transfer-encoding"];
+
+                    if (header.Value.ToLower().Contains("chunked"))
+                    {
+                        return true;
+                    }         
                 }
 
                 return false;
@@ -136,23 +163,29 @@ namespace Titanium.Web.Proxy.Http
             }
             set
             {
-                var header = this.ResponseHeaders.FirstOrDefault(x => x.Name.ToLower().Equals("transfer-encoding"));
+                var hasHeader = ResponseHeaders.ContainsKey("transfer-encoding");
 
                 if (value)
                 {
-                    if (header != null)
+                    if (hasHeader)
                     {
+                        var header = ResponseHeaders["transfer-encoding"];
                         header.Value = "chunked";
                     }
                     else
-                        ResponseHeaders.Add(new HttpHeader("transfer-encoding", "chunked"));
+                    {
+                        ResponseHeaders.Add("transfer-encoding", new HttpHeader("transfer-encoding", "chunked"));
+                    }
 
-                    this.ContentLength = -1;
+                    ContentLength = -1;
                 }
                 else
                 {
-                    if (header != null)
-                        ResponseHeaders.Remove(header);
+                    if (hasHeader)
+                    {
+                        ResponseHeaders.Remove("transfer-encoding");
+                    }
+                       
                 }
 
             }
@@ -161,7 +194,13 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Collection of all response headers
         /// </summary>
-        public List<HttpHeader> ResponseHeaders { get; set; }
+        public Dictionary<string, HttpHeader> ResponseHeaders { get; set; }
+
+        /// <summary>
+        /// Non Unique headers
+        /// </summary>
+        public Dictionary<string, List<HttpHeader>> NonUniqueResponseHeaders { get; set; }
+
 
         /// <summary>
         /// Response network stream
@@ -193,7 +232,8 @@ namespace Titanium.Web.Proxy.Http
 
         public Response()
         {
-            this.ResponseHeaders = new List<HttpHeader>();
+            this.ResponseHeaders = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
+            this.NonUniqueResponseHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
         }
     }
 

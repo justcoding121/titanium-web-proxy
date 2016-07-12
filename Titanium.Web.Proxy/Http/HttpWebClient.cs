@@ -58,7 +58,7 @@ namespace Titanium.Web.Proxy.Http
             Stream stream = ServerConnection.Stream;
 
             StringBuilder requestLines = new StringBuilder();
-           
+
             //prepare the request & headers
             requestLines.AppendLine(string.Join(" ", new string[3]
               {
@@ -66,10 +66,22 @@ namespace Titanium.Web.Proxy.Http
                 this.Request.RequestUri.PathAndQuery,
                 string.Format("HTTP/{0}.{1}",this.Request.HttpVersion.Major, this.Request.HttpVersion.Minor)
               }));
+
             //write request headers
-            foreach (HttpHeader httpHeader in this.Request.RequestHeaders)
+            foreach (var headerItem in this.Request.RequestHeaders)
             {
-                requestLines.AppendLine(httpHeader.Name + ':' + httpHeader.Value);
+                var header = headerItem.Value;
+                requestLines.AppendLine(header.Name + ':' + header.Value);
+            }
+
+            //write non unique request headers
+            foreach (var headerItem in this.Request.NonUniqueRequestHeaders)
+            {
+                var headers = headerItem.Value;
+                foreach (var header in headers)
+                {
+                    requestLines.AppendLine(header.Name + ':' + header.Value);
+                }
             }
 
             requestLines.AppendLine();
@@ -80,6 +92,7 @@ namespace Titanium.Web.Proxy.Http
             await stream.FlushAsync();
 
             if (enable100ContinueBehaviour)
+            {
                 if (this.Request.ExpectContinue)
                 {
                     var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
@@ -100,6 +113,7 @@ namespace Titanium.Web.Proxy.Http
                         await ServerConnection.StreamReader.ReadLineAsync();
                     }
                 }
+            }
         }
 
         /// <summary>
@@ -121,7 +135,7 @@ namespace Titanium.Web.Proxy.Http
 
             var httpVersion = httpResult[0].Trim().ToLower();
 
-            var version = new Version(1,1);
+            var version = new Version(1, 1);
             if (httpVersion == "http/1.0")
             {
                 version = new Version(1, 0);
@@ -155,13 +169,34 @@ namespace Titanium.Web.Proxy.Http
                 return;
             }
 
-            //read response headers
-            List<string> responseLines = await ServerConnection.StreamReader.ReadAllLinesAsync();
-
-            for (int index = 0; index < responseLines.Count; ++index)
+            //Read the Response headers
+            string tmpLine;
+            while (!string.IsNullOrEmpty(tmpLine = await ServerConnection.StreamReader.ReadLineAsync()))
             {
-                string[] strArray = responseLines[index].Split(ProxyConstants.ColonSplit, 2);
-                this.Response.ResponseHeaders.Add(new HttpHeader(strArray[0], strArray[1]));
+                var header = tmpLine.Split(ProxyConstants.ColonSplit, 2);
+
+                var newHeader = new HttpHeader(header[0], header[1]);
+
+                if (Response.NonUniqueResponseHeaders.ContainsKey(newHeader.Name))
+                {
+                    Response.NonUniqueResponseHeaders[newHeader.Name].Add(newHeader);
+                }
+                else if (Response.ResponseHeaders.ContainsKey(newHeader.Name))
+                {
+                    var existing = Response.ResponseHeaders[newHeader.Name];
+
+                    var nonUniqueHeaders = new List<HttpHeader>();
+
+                    nonUniqueHeaders.Add(existing);
+                    nonUniqueHeaders.Add(newHeader);
+
+                    Response.NonUniqueResponseHeaders.Add(newHeader.Name, nonUniqueHeaders);
+                    Response.ResponseHeaders.Remove(newHeader.Name);
+                }
+                else
+                {
+                    Response.ResponseHeaders.Add(newHeader.Name, newHeader);
+                }
             }
         }
     }
