@@ -114,7 +114,9 @@ namespace Titanium.Web.Proxy.Network
                     certificates = FindCertificates(store, certificateSubject);
 
                     if (certificates != null)
+                    {
                         certificate = certificates[0];
+                    }
                 }
 
                 if (certificate == null)
@@ -127,16 +129,22 @@ namespace Titanium.Web.Proxy.Network
 
                     //remove it from store
                     if (!isRootCertificate)
+                    {
                         DestroyCertificate(certificateName);
+                    }
 
                     if (certificates != null)
+                    {
                         certificate = certificates[0];
+                    }
                 }
 
                 store.Close();
 
                 if (certificate != null && !certificateCache.ContainsKey(certificateName))
+                {
                     certificateCache.Add(certificateName, new CachedCertificate() { Certificate = certificate });
+                }
 
                 return certificate;
             }
@@ -162,7 +170,9 @@ namespace Titanium.Web.Proxy.Network
             string file = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "makecert.exe");
 
             if (!File.Exists(file))
+            {
                 throw new Exception("Unable to locate 'makecert.exe'.");
+            }
 
             process.StartInfo.Verb = "runas";
             process.StartInfo.Arguments = args != null ? args[0] : string.Empty;
@@ -178,6 +188,7 @@ namespace Titanium.Web.Proxy.Network
             };
 
             bool started = process.Start();
+
             if (!started)
             {
                 //you may allow for the process to be re-used (started = false) 
@@ -214,6 +225,7 @@ namespace Titanium.Web.Proxy.Network
             string certificateSubject = string.Format("CN={0}, O={1}", certificateName, Issuer);
 
             certificates = FindCertificates(store, certificateSubject);
+
             if (certificates != null)
             {
                 store.RemoveRange(certificates);
@@ -226,6 +238,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 certificateCache.Remove(certificateName);
             }
+
             return certificates == null;
         }
         /// <summary>
@@ -279,7 +292,9 @@ namespace Titanium.Web.Proxy.Network
                     foreach (var cache in outdated)
                         certificateCache.Remove(cache.Key);
                 }
-                finally { semaphoreLock.Release(); }
+                finally {
+                    semaphoreLock.Release();
+                }
 
                 //after a minute come back to check for outdated certificates in cache
                 await Task.Delay(1000 * 60);
@@ -289,10 +304,14 @@ namespace Titanium.Web.Proxy.Network
         public void Dispose()
         {
             if (MyStore != null)
+            {
                 MyStore.Close();
+            }
 
             if (RootStore != null)
+            {
                 RootStore.Close();
+            }
         }
     }
 }
