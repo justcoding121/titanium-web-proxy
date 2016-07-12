@@ -143,13 +143,17 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void AddEndPoint(ProxyEndPoint endPoint)
         {
-            if (ProxyEndPoints.Any(x=>x.IpAddress == endPoint.IpAddress && x.Port == endPoint.Port))
+            if (ProxyEndPoints.Any(x => x.IpAddress == endPoint.IpAddress && x.Port == endPoint.Port))
+            {
                 throw new Exception("Cannot add another endpoint to same port & ip address");
+            }
 
             ProxyEndPoints.Add(endPoint);
 
             if (proxyRunning)
+            {
                 Listen(endPoint);
+            }
         }
 
         /// <summary>
@@ -160,12 +164,16 @@ namespace Titanium.Web.Proxy
         public void RemoveEndPoint(ProxyEndPoint endPoint)
         {
             if (ProxyEndPoints.Contains(endPoint) == false)
+            {
                 throw new Exception("Cannot remove endPoints not added to proxy");
+            }
 
             ProxyEndPoints.Remove(endPoint);
 
             if (proxyRunning)
+            {
                 QuitListen(endPoint);
+            }
         }
 
         /// <summary>
@@ -254,7 +262,9 @@ namespace Titanium.Web.Proxy
         public void Start()
         {
             if (proxyRunning)
+            {
                 throw new Exception("Proxy is already running.");
+            }
 
             certTrusted = certificateCacheManager.CreateTrustedRootCertificate().Result;
 
@@ -275,7 +285,9 @@ namespace Titanium.Web.Proxy
         public void Stop()
         {
             if (!proxyRunning)
+            {
                 throw new Exception("Proxy is not running.");
+            }
 
             var setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
 
@@ -332,10 +344,14 @@ namespace Titanium.Web.Proxy
         private void ValidateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
         {
             if (ProxyEndPoints.Contains(endPoint) == false)
+            {
                 throw new Exception("Cannot set endPoints not added to proxy as system proxy");
+            }
 
             if (!proxyRunning)
+            {
                 throw new Exception("Cannot set system proxy settings before proxy has been started.");
+            }
         }
 
         /// <summary>
@@ -375,7 +391,9 @@ namespace Titanium.Web.Proxy
         public void Dispose()
         {
             if (proxyRunning)
+            {
                 Stop();
+            }
 
             certificateCacheManager.Dispose();
         }

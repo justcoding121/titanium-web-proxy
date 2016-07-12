@@ -51,6 +51,7 @@ namespace Titanium.Web.Proxy.Network
             while (true)
             {
                 await connectionAccessLock.WaitAsync();
+
                 try
                 {
                     connectionCache.TryGetValue(key, out cachedConnections);
@@ -65,7 +66,9 @@ namespace Titanium.Web.Proxy.Network
                         cached = null;
                     }
                 }
-                finally { connectionAccessLock.Release(); }
+                finally {
+                    connectionAccessLock.Release();
+                }
 
                 if (cached != null && !cached.TcpClient.Client.IsConnected())
                 {
@@ -75,14 +78,18 @@ namespace Titanium.Web.Proxy.Network
                 }
 
                 if (cached == null)
+                {
                     break;
+                }
 
             }
 
 
             if (cached == null)
+            {
                 cached = await CreateClient(hostname, port, isHttps, version, upStreamHttpProxy, upStreamHttpsProxy, bufferSize, supportedSslProtocols,
                                 remoteCertificateValidationCallBack, localCertificateSelectionCallback);
+            }
 
             if (cachedConnections == null || cachedConnections.Count() <= 2)
             {
@@ -147,7 +154,9 @@ namespace Titanium.Web.Proxy.Network
                         var result = await reader.ReadLineAsync();
 
                         if (!result.ToLower().Contains("200 connection established"))
+                        {
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
+                        }
 
                         await reader.ReadAllLinesAsync();
                     }
@@ -162,13 +171,18 @@ namespace Titanium.Web.Proxy.Network
                 {
                     sslStream = new SslStream(stream, true, remoteCertificateValidationCallBack,
                         localCertificateSelectionCallback);
+
                     await sslStream.AuthenticateAsClientAsync(hostname, null, supportedSslProtocols, false);
+
                     stream = (Stream)sslStream;
                 }
                 catch
                 {
                     if (sslStream != null)
+                    {
                         sslStream.Dispose();
+                    }
+
                     throw;
                 }
             }
@@ -209,19 +223,25 @@ namespace Titanium.Web.Proxy.Network
             connection.LastAccess = DateTime.Now;
             var key = GetConnectionKey(connection.HostName, connection.port, connection.IsHttps, connection.Version);
             await connectionAccessLock.WaitAsync();
+
             try
             {
                 List<TcpConnectionCache> cachedConnections;
                 connectionCache.TryGetValue(key, out cachedConnections);
 
                 if (cachedConnections != null)
+                {
                     cachedConnections.Add(connection);
+                }
                 else
-
+                {
                     connectionCache.Add(key, new List<TcpConnectionCache>() { connection });
+                }
             }
 
-            finally { connectionAccessLock.Release(); }
+            finally {
+                connectionAccessLock.Release();
+            }
         }
 
         private bool clearConenctions { get; set; }
@@ -240,9 +260,11 @@ namespace Titanium.Web.Proxy.Network
         internal async void ClearIdleConnections(int connectionCacheTimeOutMinutes)
         {
             clearConenctions = true;
+
             while (clearConenctions)
             {
                 await connectionAccessLock.WaitAsync();
+
                 try
                 {
                     var cutOff = DateTime.Now.AddMinutes(-1 * connectionCacheTimeOutMinutes);
@@ -255,7 +277,9 @@ namespace Titanium.Web.Proxy.Network
 
                     connectionCache.ToList().ForEach(x => x.Value.RemoveAll(y => y.LastAccess < cutOff));
                 }
-                finally { connectionAccessLock.Release(); }
+                finally {
+                    connectionAccessLock.Release();
+                }
 
                 //every minute run this 
                 await Task.Delay(1000 * 60);

@@ -20,7 +20,9 @@ namespace Titanium.Web.Proxy.Extensions
             {
                 //return default if not specified
                 if (request.ContentType == null)
+                {
                     return Encoding.GetEncoding("ISO-8859-1");
+                }
 
                 //extract the encoding by finding the charset
                 var contentTypes = request.ContentType.Split(ProxyConstants.SemiColonSplit);
