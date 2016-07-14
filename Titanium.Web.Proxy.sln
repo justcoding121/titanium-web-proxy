@@ -29,6 +29,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{AC9AE37A
 		.build\default.ps1 = .build\default.ps1
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{BC1E0789-D348-49CF-8B67-5E99D50EDF64}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Proxy.UnitTests", "Tests\Titanium.Web.Proxy.UnitTests\Titanium.Web.Proxy.UnitTests.csproj", "{B517E3D0-D03B-436F-AB03-34BA0D5321AF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -43,12 +47,17 @@ Global
 		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F3B7E553-1904-4E80-BDC7-212342B5C952}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B517E3D0-D03B-436F-AB03-34BA0D5321AF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B517E3D0-D03B-436F-AB03-34BA0D5321AF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B517E3D0-D03B-436F-AB03-34BA0D5321AF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B517E3D0-D03B-436F-AB03-34BA0D5321AF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{F3B7E553-1904-4E80-BDC7-212342B5C952} = {B6DBABDC-C985-4872-9C38-B4E5079CBC4B}
+		{B517E3D0-D03B-436F-AB03-34BA0D5321AF} = {BC1E0789-D348-49CF-8B67-5E99D50EDF64}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		EnterpriseLibraryConfigurationToolBinariesPath = .1.505.2\lib\NET35

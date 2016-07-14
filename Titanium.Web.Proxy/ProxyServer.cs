@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// A object that manages tcp connection cache to server
         /// </summary>
-        private TcpConnectionCacheManager tcpConnectionCacheManager { get; set; }
+        private TcpConnectionManager tcpConnectionCacheManager { get; set; }
 
         /// <summary>
         /// Manage system proxy settings
@@ -67,14 +67,19 @@ namespace Titanium.Web.Proxy
         public bool Enable100ContinueBehaviour { get; set; }
 
         /// <summary>
-        /// Minutes TCP connection cache to servers to be kept alive when in idle state
+        /// Minutes TCP connection cache to servers to be kept alive from last time it was used
         /// </summary>
-        public int ConnectionCacheTimeOutMinutes { get; set; }
+        public int ServerConnectionCacheTimeOutMinutes { get; set; }
 
         /// <summary>
         /// Minutes certificates should be kept in cache when not used
         /// </summary>
         public int CertificateCacheTimeOutMinutes { get; set; }
+
+        /// <summary>
+        /// Seconds client/server connection are to be kept alive when waiting for read/write to complete
+        /// </summary>
+        public int ConnectionTimeOutSeconds { get; set; }
 
         /// <summary>
         /// Intercept request to server
@@ -122,11 +127,12 @@ namespace Titanium.Web.Proxy
         public ProxyServer()
         {
             //default values
-            ConnectionCacheTimeOutMinutes = 3;
+            ConnectionTimeOutSeconds = 120;
+            ServerConnectionCacheTimeOutMinutes = 3;
             CertificateCacheTimeOutMinutes = 60;
 
             ProxyEndPoints = new List<ProxyEndPoint>();
-            tcpConnectionCacheManager = new TcpConnectionCacheManager();
+            tcpConnectionCacheManager = new TcpConnectionManager();
             systemProxySettingsManager = new SystemProxyManager();
             firefoxProxySettingsManager = new FireFoxProxySettingsManager();
 
@@ -273,7 +279,7 @@ namespace Titanium.Web.Proxy
                 Listen(endPoint);
             }
 
-            tcpConnectionCacheManager.ClearIdleConnections(ConnectionCacheTimeOutMinutes);
+            tcpConnectionCacheManager.ClearIdleConnections(ServerConnectionCacheTimeOutMinutes);
             certificateCacheManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
             proxyRunning = true;
