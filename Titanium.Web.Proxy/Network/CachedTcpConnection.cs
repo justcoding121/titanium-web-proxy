@@ -8,7 +8,7 @@ namespace Titanium.Web.Proxy.Network
     /// <summary>
     /// An object that holds TcpConnection to a particular server & port
     /// </summary>
-    public class TcpConnectionCache
+    public class CachedTcpConnection
     {
         internal string HostName { get; set; }
         internal int port { get; set; }
@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         internal DateTime LastAccess { get; set; }
 
-        internal TcpConnectionCache()
+        internal CachedTcpConnection()
         {
             LastAccess = DateTime.Now;
         }

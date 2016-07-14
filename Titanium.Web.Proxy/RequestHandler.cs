@@ -27,6 +27,10 @@ namespace Titanium.Web.Proxy
         private async void HandleClient(ExplicitProxyEndPoint endPoint, TcpClient client)
         {
             Stream clientStream = client.GetStream();
+
+            clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
+            clientStream.WriteTimeout = ConnectionTimeOutSeconds * 1000;
+
             var clientStreamReader = new CustomBinaryReader(clientStream);
             var clientStreamWriter = new StreamWriter(clientStream);
 
@@ -87,7 +91,8 @@ namespace Titanium.Web.Proxy
                         //create the Tcp Connection to server and then release it to connection cache 
                         //Just doing what CONNECT request is asking as to do
                         var tunnelClient = await tcpConnectionCacheManager.GetClient(httpRemoteUri.Host, httpRemoteUri.Port, true, version,
-                                            UpStreamHttpProxy, UpStreamHttpsProxy, BUFFER_SIZE, SupportedSslProtocols, new RemoteCertificateValidationCallback(ValidateServerCertificate),
+                                            UpStreamHttpProxy, UpStreamHttpsProxy, BUFFER_SIZE, SupportedSslProtocols, ConnectionTimeOutSeconds,
+                                            new RemoteCertificateValidationCallback(ValidateServerCertificate),
                                             new LocalCertificateSelectionCallback(SelectClientCertificate));
 
                         await tcpConnectionCacheManager.ReleaseClient(tunnelClient);
@@ -150,6 +155,10 @@ namespace Titanium.Web.Proxy
         private async void HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
             Stream clientStream = tcpClient.GetStream();
+
+            clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
+            clientStream.WriteTimeout = ConnectionTimeOutSeconds * 1000;
+
             CustomBinaryReader clientStreamReader = null;
             StreamWriter clientStreamWriter = null;
             X509Certificate2 certificate = null;
@@ -209,7 +218,7 @@ namespace Titanium.Web.Proxy
         private async Task HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
             CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName)
         {
-            TcpConnectionCache connection = null;
+            CachedTcpConnection connection = null;
 
             //Loop through each subsequest request on this particular client connection
             //(assuming HTTP connection is kept alive by client)
@@ -323,7 +332,7 @@ namespace Titanium.Web.Proxy
 
                     //construct the web request that we are going to issue on behalf of the client.
                     connection = await tcpConnectionCacheManager.GetClient(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version,
-                         UpStreamHttpProxy, UpStreamHttpsProxy, BUFFER_SIZE, SupportedSslProtocols, new RemoteCertificateValidationCallback(ValidateServerCertificate),
+                         UpStreamHttpProxy, UpStreamHttpsProxy, BUFFER_SIZE, SupportedSslProtocols, ConnectionTimeOutSeconds, new RemoteCertificateValidationCallback(ValidateServerCertificate),
                          new LocalCertificateSelectionCallback(SelectClientCertificate));
 
                     args.WebSession.Request.RequestLocked = true;
