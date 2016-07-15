@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// A object that manages tcp connection cache to server
         /// </summary>
-        private TcpConnectionManager tcpConnectionCacheManager { get; set; }
+        private TcpConnectionFactory tcpConnectionCacheManager { get; set; }
 
         /// <summary>
         /// Manage system proxy settings
@@ -65,11 +65,6 @@ namespace Titanium.Web.Proxy
         /// Broken 100 contunue implementations on server/client may cause problems if enabled
         /// </summary>
         public bool Enable100ContinueBehaviour { get; set; }
-
-        /// <summary>
-        /// Minutes TCP connection cache to servers to be kept alive from last time it was used
-        /// </summary>
-        public int ServerConnectionCacheTimeOutMinutes { get; set; }
 
         /// <summary>
         /// Minutes certificates should be kept in cache when not used
@@ -128,11 +123,10 @@ namespace Titanium.Web.Proxy
         {
             //default values
             ConnectionTimeOutSeconds = 120;
-            ServerConnectionCacheTimeOutMinutes = 3;
             CertificateCacheTimeOutMinutes = 60;
 
             ProxyEndPoints = new List<ProxyEndPoint>();
-            tcpConnectionCacheManager = new TcpConnectionManager();
+            tcpConnectionCacheManager = new TcpConnectionFactory();
             systemProxySettingsManager = new SystemProxyManager();
             firefoxProxySettingsManager = new FireFoxProxySettingsManager();
 
@@ -279,7 +273,6 @@ namespace Titanium.Web.Proxy
                 Listen(endPoint);
             }
 
-            tcpConnectionCacheManager.ClearIdleConnections(ServerConnectionCacheTimeOutMinutes);
             certificateCacheManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
             proxyRunning = true;
@@ -312,7 +305,6 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints.Clear();
 
-            tcpConnectionCacheManager.StopClearIdleConnections();
             certificateCacheManager.StopClearIdleCertificates();
 
             proxyRunning = false;

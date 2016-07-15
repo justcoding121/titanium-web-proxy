@@ -8,7 +8,7 @@ namespace Titanium.Web.Proxy.Network
     /// <summary>
     /// An object that holds TcpConnection to a particular server & port
     /// </summary>
-    public class CachedTcpConnection
+    public class TcpConnection: IDisposable
     {
         internal string HostName { get; set; }
         internal int port { get; set; }
@@ -37,9 +37,15 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         internal DateTime LastAccess { get; set; }
 
-        internal CachedTcpConnection()
+        internal TcpConnection()
         {
             LastAccess = DateTime.Now;
+        }
+
+        public void Dispose()
+        {
+            Stream.Dispose();
+            TcpClient.Client.Dispose();
         }
     }
 }
