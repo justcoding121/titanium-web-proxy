@@ -24,9 +24,9 @@ namespace Titanium.Web.Proxy
         private CertificateManager certificateCacheManager { get; set; }
 
         /// <summary>
-        /// A object that manages tcp connection cache to server
+        /// A object that creates tcp connection to server
         /// </summary>
-        private TcpConnectionFactory tcpConnectionCacheManager { get; set; }
+        private TcpConnectionFactory tcpConnectionFactory { get; set; }
 
         /// <summary>
         /// Manage system proxy settings
@@ -126,7 +126,7 @@ namespace Titanium.Web.Proxy
             CertificateCacheTimeOutMinutes = 60;
 
             ProxyEndPoints = new List<ProxyEndPoint>();
-            tcpConnectionCacheManager = new TcpConnectionFactory();
+            tcpConnectionFactory = new TcpConnectionFactory();
             systemProxySettingsManager = new SystemProxyManager();
             firefoxProxySettingsManager = new FireFoxProxySettingsManager();
 
