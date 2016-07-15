@@ -19,11 +19,12 @@ using Titanium.Web.Proxy.Extensions;
 namespace Titanium.Web.Proxy
 {
     /// <summary>
-    /// Handle the requesr
+    /// Handle the request
     /// </summary>
     partial class ProxyServer
     {
         //This is called when client is aware of proxy
+        //So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
         private async void HandleClient(ExplicitProxyEndPoint endPoint, TcpClient client)
         {
             Stream clientStream = client.GetStream();
@@ -142,8 +143,8 @@ namespace Titanium.Web.Proxy
             }
         }
 
-        //This is called when requests are routed through router to this endpoint
-        //For ssl requests
+        //This is called when this proxy acts as a reverse proxy (like a real http server)
+        //So for HTTPS requests we would start SSL negotiation right away without expecting a CONNECT request from client
         private async void HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
             Stream clientStream = tcpClient.GetStream();
@@ -244,17 +245,7 @@ namespace Titanium.Web.Proxy
                         }
                     }
 
-#if DEBUG
-                    //Just ignore local requests while Debugging
-                    //Its annoying 
-                    if (httpCmd.Contains("localhost"))
-                    {
-                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
-                        break;
-                    }
-#endif
-
-                    //Read the request headers
+                    //Read the request headers in to unique and non-unique header collections
                     string tmpLine;
                     while (!string.IsNullOrEmpty(tmpLine = await clientStreamReader.ReadLineAsync()))
                     {
@@ -262,10 +253,12 @@ namespace Titanium.Web.Proxy
 
                         var newHeader = new HttpHeader(header[0], header[1]);
 
+                        //if header exist in non-unique header collection add it there
                         if (args.WebSession.Request.NonUniqueRequestHeaders.ContainsKey(newHeader.Name))
                         {
                             args.WebSession.Request.NonUniqueRequestHeaders[newHeader.Name].Add(newHeader);
                         }
+                        //if header is alread in unique header collection then move both to non-unique collection
                         else if (args.WebSession.Request.RequestHeaders.ContainsKey(newHeader.Name))
                         {
                             var existing = args.WebSession.Request.RequestHeaders[newHeader.Name];
@@ -278,6 +271,7 @@ namespace Titanium.Web.Proxy
                             args.WebSession.Request.NonUniqueRequestHeaders.Add(newHeader.Name, nonUniqueHeaders);
                             args.WebSession.Request.RequestHeaders.Remove(newHeader.Name);
                         }
+                        //add to unique header collection
                         else
                         {
                             args.WebSession.Request.RequestHeaders.Add(newHeader.Name, newHeader);
@@ -405,8 +399,6 @@ namespace Titanium.Web.Proxy
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
                         break;
                     }
-
-                 
 
                     // read the next request
                     httpCmd = await clientStreamReader.ReadLineAsync();
