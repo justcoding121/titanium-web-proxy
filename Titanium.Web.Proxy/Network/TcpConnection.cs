@@ -44,7 +44,10 @@ namespace Titanium.Web.Proxy.Network
 
         public void Dispose()
         {
+            Stream.Close();
             Stream.Dispose();
+            TcpClient.Client.Close();
+            TcpClient.Close();
             TcpClient.Client.Dispose();
         }
     }
