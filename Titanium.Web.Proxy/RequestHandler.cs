@@ -127,7 +127,7 @@ namespace Titanium.Web.Proxy
 
                     //Just relay the request/response without decrypting it
                     await TcpHelper.SendRaw(clientStream, null, null, httpRemoteUri.Host, httpRemoteUri.Port,
-                        false, SupportedSslProtocols);
+                        false, SupportedSslProtocols, ConnectionTimeOutSeconds);
 
                     Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
                     return;
@@ -311,7 +311,8 @@ namespace Titanium.Web.Proxy
                     if (args.WebSession.Request.UpgradeToWebSocket)
                     {
                         await TcpHelper.SendRaw(clientStream, httpCmd, args.WebSession.Request.RequestHeaders,
-                                 httpRemoteUri.Host, httpRemoteUri.Port, args.IsHttps, SupportedSslProtocols);
+                                 httpRemoteUri.Host, httpRemoteUri.Port, args.IsHttps, SupportedSslProtocols, ConnectionTimeOutSeconds);
+
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
                         break;
                     }
