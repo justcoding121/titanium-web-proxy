@@ -170,6 +170,7 @@ namespace Titanium.Web.Proxy.Http
             }
 
             //Read the Response headers
+            //Read the response headers in to unique and non-unique header collections
             string tmpLine;
             while (!string.IsNullOrEmpty(tmpLine = await ServerConnection.StreamReader.ReadLineAsync()))
             {
@@ -177,10 +178,12 @@ namespace Titanium.Web.Proxy.Http
 
                 var newHeader = new HttpHeader(header[0], header[1]);
 
+                //if header exist in non-unique header collection add it there
                 if (Response.NonUniqueResponseHeaders.ContainsKey(newHeader.Name))
                 {
                     Response.NonUniqueResponseHeaders[newHeader.Name].Add(newHeader);
                 }
+                //if header is alread in unique header collection then move both to non-unique collection
                 else if (Response.ResponseHeaders.ContainsKey(newHeader.Name))
                 {
                     var existing = Response.ResponseHeaders[newHeader.Name];
@@ -193,6 +196,7 @@ namespace Titanium.Web.Proxy.Http
                     Response.NonUniqueResponseHeaders.Add(newHeader.Name, nonUniqueHeaders);
                     Response.ResponseHeaders.Remove(newHeader.Name);
                 }
+                //add to unique header collection
                 else
                 {
                     Response.ResponseHeaders.Add(newHeader.Name, newHeader);
