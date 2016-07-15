@@ -323,7 +323,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     //construct the web request that we are going to issue on behalf of the client.
-                    connection = connection!=null? connection : await tcpConnectionCacheManager.GetClient(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version,
+                    connection = connection!=null? connection : await tcpConnectionFactory.GetClient(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version,
                          UpStreamHttpProxy, UpStreamHttpsProxy, BUFFER_SIZE, SupportedSslProtocols, ConnectionTimeOutSeconds, new RemoteCertificateValidationCallback(ValidateServerCertificate),
                          new LocalCertificateSelectionCallback(SelectClientCertificate));
 
