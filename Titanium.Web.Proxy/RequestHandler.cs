@@ -88,14 +88,6 @@ namespace Titanium.Web.Proxy
 
                     try
                     {
-                        //create the Tcp Connection to server and then release it to connection cache 
-                        //Just doing what CONNECT request is asking as to do
-                        var tunnelClient = await tcpConnectionCacheManager.GetClient(httpRemoteUri.Host, httpRemoteUri.Port, true, version,
-                                            UpStreamHttpProxy, UpStreamHttpsProxy, BUFFER_SIZE, SupportedSslProtocols, ConnectionTimeOutSeconds,
-                                            new RemoteCertificateValidationCallback(ValidateServerCertificate),
-                                            new LocalCertificateSelectionCallback(SelectClientCertificate));
-
-                        await tcpConnectionCacheManager.ReleaseClient(tunnelClient);
 
                         sslStream = new SslStream(clientStream, true);
                         var certificate = await certificateCacheManager.CreateCertificate(httpRemoteUri.Host, false);
@@ -218,7 +210,7 @@ namespace Titanium.Web.Proxy
         private async Task HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
             CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName)
         {
-            CachedTcpConnection connection = null;
+            TcpConnection connection = null;
 
             //Loop through each subsequest request on this particular client connection
             //(assuming HTTP connection is kept alive by client)
@@ -327,11 +319,11 @@ namespace Titanium.Web.Proxy
                         await TcpHelper.SendRaw(clientStream, httpCmd, args.WebSession.Request.RequestHeaders,
                                  httpRemoteUri.Host, httpRemoteUri.Port, args.IsHttps, SupportedSslProtocols);
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
-                        return;
+                        break;
                     }
 
                     //construct the web request that we are going to issue on behalf of the client.
-                    connection = await tcpConnectionCacheManager.GetClient(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version,
+                    connection = connection!=null? connection : await tcpConnectionCacheManager.GetClient(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version,
                          UpStreamHttpProxy, UpStreamHttpsProxy, BUFFER_SIZE, SupportedSslProtocols, ConnectionTimeOutSeconds, new RemoteCertificateValidationCallback(ValidateServerCertificate),
                          new LocalCertificateSelectionCallback(SelectClientCertificate));
 
@@ -411,11 +403,10 @@ namespace Titanium.Web.Proxy
                     if (args.WebSession.Response.ResponseKeepAlive == false)
                     {
                         Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
-                        return;
+                        break;
                     }
 
-                    //send the tcp connection to server back to connection cache for reuse
-                    await tcpConnectionCacheManager.ReleaseClient(connection);
+                 
 
                     // read the next request
                     httpCmd = await clientStreamReader.ReadLineAsync();
@@ -427,6 +418,12 @@ namespace Titanium.Web.Proxy
                     break;
                 }
 
+            }
+
+            if (connection != null)
+            {
+                //dispose
+                connection.Dispose();
             }
 
         }

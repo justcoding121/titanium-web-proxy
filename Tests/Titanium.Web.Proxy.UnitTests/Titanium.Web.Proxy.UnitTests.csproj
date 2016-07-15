@@ -51,7 +51,6 @@
   </Choose>
   <ItemGroup>
     <Compile Include="CertificateManagerTests.cs" />
-    <Compile Include="ConnectionManagerTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
