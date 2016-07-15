@@ -129,6 +129,9 @@ namespace Titanium.Web.Proxy.Network
             client.ReceiveTimeout = connectionTimeOutSeconds * 1000;
             client.SendTimeout = connectionTimeOutSeconds * 1000;
 
+            stream.ReadTimeout = connectionTimeOutSeconds * 1000;
+            stream.WriteTimeout = connectionTimeOutSeconds * 1000;
+
             return new TcpConnection()
             {
                 HostName = hostname,
