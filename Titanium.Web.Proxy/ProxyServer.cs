@@ -24,9 +24,9 @@ namespace Titanium.Web.Proxy
         private CertificateManager certificateCacheManager { get; set; }
 
         /// <summary>
-        /// A object that manages tcp connection cache to server
+        /// A object that creates tcp connection to server
         /// </summary>
-        private TcpConnectionCacheManager tcpConnectionCacheManager { get; set; }
+        private TcpConnectionFactory tcpConnectionFactory { get; set; }
 
         /// <summary>
         /// Manage system proxy settings
@@ -67,14 +67,14 @@ namespace Titanium.Web.Proxy
         public bool Enable100ContinueBehaviour { get; set; }
 
         /// <summary>
-        /// Minutes TCP connection cache to servers to be kept alive when in idle state
-        /// </summary>
-        public int ConnectionCacheTimeOutMinutes { get; set; }
-
-        /// <summary>
         /// Minutes certificates should be kept in cache when not used
         /// </summary>
         public int CertificateCacheTimeOutMinutes { get; set; }
+
+        /// <summary>
+        /// Seconds client/server connection are to be kept alive when waiting for read/write to complete
+        /// </summary>
+        public int ConnectionTimeOutSeconds { get; set; }
 
         /// <summary>
         /// Intercept request to server
@@ -122,11 +122,11 @@ namespace Titanium.Web.Proxy
         public ProxyServer()
         {
             //default values
-            ConnectionCacheTimeOutMinutes = 3;
+            ConnectionTimeOutSeconds = 120;
             CertificateCacheTimeOutMinutes = 60;
 
             ProxyEndPoints = new List<ProxyEndPoint>();
-            tcpConnectionCacheManager = new TcpConnectionCacheManager();
+            tcpConnectionFactory = new TcpConnectionFactory();
             systemProxySettingsManager = new SystemProxyManager();
             firefoxProxySettingsManager = new FireFoxProxySettingsManager();
 
@@ -273,7 +273,6 @@ namespace Titanium.Web.Proxy
                 Listen(endPoint);
             }
 
-            tcpConnectionCacheManager.ClearIdleConnections(ConnectionCacheTimeOutMinutes);
             certificateCacheManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
             proxyRunning = true;
@@ -306,7 +305,6 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints.Clear();
 
-            tcpConnectionCacheManager.StopClearIdleConnections();
             certificateCacheManager.StopClearIdleCertificates();
 
             proxyRunning = false;
