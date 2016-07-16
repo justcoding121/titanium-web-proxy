@@ -15,9 +15,9 @@ namespace Titanium.Web.Proxy
     /// <summary>
     ///     Proxy Server Main class
     /// </summary>
-    public partial class ProxyServer: IDisposable 
+    public partial class ProxyServer : IDisposable
     {
-       
+
         /// <summary>
         /// Manages certificates used by this proxy
         /// </summary>
@@ -197,7 +197,7 @@ namespace Titanium.Web.Proxy
             Console.WriteLine("Set endpoint at Ip {1} and port: {2} as System HTTP Proxy", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
         }
-     
+
 
         /// <summary>
         /// Set the given explicit end point as the default proxy server for current machine
@@ -360,17 +360,12 @@ namespace Titanium.Web.Proxy
         {
             var endPoint = (ProxyEndPoint)asyn.AsyncState;
 
+            TcpClient tcpClient = null;
+
             try
             {
                 //based on end point type call appropriate request handlers
-                var client = endPoint.listener.EndAcceptTcpClient(asyn);
-                if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
-                    HandleClient(endPoint as TransparentProxyEndPoint, client);
-                else
-                    HandleClient(endPoint as ExplicitProxyEndPoint, client);
-
-                // Get the listener that handles the client request.
-                endPoint.listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
+                tcpClient = endPoint.listener.EndAcceptTcpClient(asyn);
             }
             catch (ObjectDisposedException)
             {
@@ -384,6 +379,37 @@ namespace Titanium.Web.Proxy
                 //Other errors are discarded to keep proxy running
             }
 
+            if (tcpClient != null)
+            {
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
+                        {
+                            await HandleClient(endPoint as TransparentProxyEndPoint, tcpClient);
+                        }
+                        else
+                        {
+                            await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient);
+                        }
+
+                     
+                    }
+                    finally
+                    {
+                        if (tcpClient != null)
+                        {
+                            tcpClient.Client.Shutdown(SocketShutdown.Both);
+                            tcpClient.Client.Disconnect(true);
+                            tcpClient.Client.Dispose();
+                        }
+                    }
+                });
+            }
+
+            // Get the listener that handles the client request.
+            endPoint.listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
         }
 
         public void Dispose()

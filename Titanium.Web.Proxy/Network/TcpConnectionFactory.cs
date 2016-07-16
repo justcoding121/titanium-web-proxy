@@ -1,14 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO;
 using System.Net.Security;
 using Titanium.Web.Proxy.Helpers;
-using System.Threading;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 using System.Security.Authentication;
 
@@ -19,6 +15,7 @@ namespace Titanium.Web.Proxy.Network
     /// </summary>
     internal class TcpConnectionFactory
     {
+
         /// <summary>
         /// Get a TcpConnection to the specified host, port optionally HTTPS and a particular HTTP version
         /// </summary>
@@ -38,7 +35,6 @@ namespace Titanium.Web.Proxy.Network
                                remoteCertificateValidationCallBack, localCertificateSelectionCallback);
 
         }
-
 
         /// <summary>
         /// Create connection to a particular host/port optionally with SSL and a particular HTTP version
