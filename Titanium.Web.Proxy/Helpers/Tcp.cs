@@ -9,7 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Shared;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -27,8 +27,10 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="tunnelPort"></param>
         /// <param name="isHttps"></param>
         /// <returns></returns>
-        internal static async Task SendRaw(Stream clientStream, string httpCmd, Dictionary<string, HttpHeader> requestHeaders, string hostName,
-            int tunnelPort, bool isHttps, SslProtocols supportedProtocols, int connectionTimeOutSeconds)
+        internal static async Task SendRaw(TcpConnectionFactory tcpConnectionFactory, Stream clientStream, string httpCmd, Version version,
+            Dictionary<string, HttpHeader> requestHeaders, string hostName, int bufferSize,
+            int tunnelPort, bool isHttps, SslProtocols supportedProtocols, int connectionTimeOutSeconds,
+            RemoteCertificateValidationCallback remoteCertificateValidationCallback, LocalCertificateSelectionCallback localCertificateSelectionCallback)
         {
             //prepare the prefix content
             StringBuilder sb = null;
@@ -54,41 +56,14 @@ namespace Titanium.Web.Proxy.Helpers
                 sb.Append(Environment.NewLine);
             }
 
+            var tcpConnection = await tcpConnectionFactory.GetClient(hostName, tunnelPort, isHttps, version, null, null, bufferSize,
+                 supportedProtocols, connectionTimeOutSeconds, remoteCertificateValidationCallback, localCertificateSelectionCallback);
 
-            TcpClient tunnelClient = null;
-            Stream tunnelStream = null;
-            //create the TcpClient to the server
+            TcpClient tunnelClient = tcpConnection.TcpClient;
+            Stream tunnelStream = tcpConnection.Stream;
+
             try
             {
-                tunnelClient = new TcpClient(hostName, tunnelPort);
-                tunnelStream = tunnelClient.GetStream();
-
-                if (isHttps)
-                {
-                    SslStream sslStream = null;
-                    try
-                    {
-                        sslStream = new SslStream(tunnelStream);
-                        await sslStream.AuthenticateAsClientAsync(hostName, null, supportedProtocols, false);
-                        tunnelStream = sslStream;
-                    }
-                    catch
-                    {
-                        if (sslStream != null)
-                        {
-                            sslStream.Dispose();
-                        }
-
-                        throw;
-                    }
-                }
-
-                tunnelClient.SendTimeout = connectionTimeOutSeconds * 1000;
-                tunnelClient.ReceiveTimeout = connectionTimeOutSeconds * 1000;
-
-                tunnelStream.ReadTimeout = connectionTimeOutSeconds * 1000;
-                tunnelStream.WriteTimeout = connectionTimeOutSeconds * 1000;
-
                 Task sendRelay;
 
                 //Now async relay all server=>client & client=>server data
@@ -108,19 +83,13 @@ namespace Titanium.Web.Proxy.Helpers
             }
             catch
             {
-                if (tunnelStream != null)
-                {
-                    tunnelStream.Close();
-                    tunnelStream.Dispose();
-                }
-
-                if (tunnelClient != null)
-                {
-                    tunnelClient.Close();
-                }
-
                 throw;
             }
+            finally
+            {
+                tunnelStream.Dispose();
+            }
         }
+
     }
 }
