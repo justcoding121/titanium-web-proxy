@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="isHttps"></param>
         /// <returns></returns>
         internal static async Task SendRaw(Stream clientStream, string httpCmd, Dictionary<string, HttpHeader> requestHeaders, string hostName,
-            int tunnelPort, bool isHttps, SslProtocols supportedProtocols)
+            int tunnelPort, bool isHttps, SslProtocols supportedProtocols, int connectionTimeOutSeconds)
         {
             //prepare the prefix content
             StringBuilder sb = null;
@@ -82,6 +82,12 @@ namespace Titanium.Web.Proxy.Helpers
                         throw;
                     }
                 }
+
+                tunnelClient.SendTimeout = connectionTimeOutSeconds * 1000;
+                tunnelClient.ReceiveTimeout = connectionTimeOutSeconds * 1000;
+
+                tunnelStream.ReadTimeout = connectionTimeOutSeconds * 1000;
+                tunnelStream.WriteTimeout = connectionTimeOutSeconds * 1000;
 
                 Task sendRelay;
 

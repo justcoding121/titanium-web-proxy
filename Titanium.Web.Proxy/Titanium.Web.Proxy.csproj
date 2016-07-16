@@ -77,8 +77,8 @@
     <Compile Include="Http\Request.cs" />
     <Compile Include="Http\Response.cs" />
     <Compile Include="Models\ExternalProxy.cs" />
-    <Compile Include="Network\TcpConnectionCache.cs" />
-    <Compile Include="Network\TcpConnectionCacheManager.cs" />
+    <Compile Include="Network\TcpConnection.cs" />
+    <Compile Include="Network\TcpConnectionFactory.cs" />
     <Compile Include="Models\HttpHeader.cs" />
     <Compile Include="Http\HttpWebClient.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
