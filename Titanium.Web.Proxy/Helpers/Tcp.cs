@@ -65,19 +65,18 @@ namespace Titanium.Web.Proxy.Helpers
                 sb.Append(Environment.NewLine);
             }
 
-
             var tcpConnection = await tcpConnectionFactory.CreateClient(bufferSize, connectionTimeOutSeconds,
                                         remoteHostName, remotePort,
                                         httpVersion, isHttps, 
                                         supportedProtocols, remoteCertificateValidationCallback, localCertificateSelectionCallback, 
                                         null, null, clientStream);
                                                                 
-
-            TcpClient tunnelClient = tcpConnection.TcpClient;
-            Stream tunnelStream = tcpConnection.Stream;
-
             try
             {
+                TcpClient tunnelClient = tcpConnection.TcpClient;
+
+                Stream tunnelStream = tcpConnection.Stream;
+
                 Task sendRelay;
 
                 //Now async relay all server=>client & client=>server data
@@ -101,7 +100,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
             finally
             {
-                tunnelStream.Dispose();
+                tcpConnection.Dispose();
             }
         }
 

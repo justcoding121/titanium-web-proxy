@@ -381,10 +381,14 @@ namespace Titanium.Web.Proxy
 
             if (tcpClient != null)
             {
+               
                 Task.Run(async () =>
                 {
                     try
                     {
+                        tcpClient.NoDelay = true;
+                        
+
                         if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
                         {
                             await HandleClient(endPoint as TransparentProxyEndPoint, tcpClient);
@@ -393,16 +397,18 @@ namespace Titanium.Web.Proxy
                         {
                             await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient);
                         }
-
                      
                     }
                     finally
                     {
                         if (tcpClient != null)
                         {
+                            tcpClient.LingerState = new LingerOption(true, 0);
                             tcpClient.Client.Shutdown(SocketShutdown.Both);
-                            tcpClient.Client.Disconnect(true);
+                            tcpClient.Client.Close();
                             tcpClient.Client.Dispose();
+
+                            tcpClient.Close();
                         }
                     }
                 });
