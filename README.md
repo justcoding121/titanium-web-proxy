@@ -102,7 +102,7 @@ Sample request and response event handlers
             ////read request headers
             var requestHeaders = e.WebSession.Request.RequestHeaders;
 
-            if ((e.WebSession.Request.Method.ToUpper() == "POST" || e.WebSession.Request.Method.ToUpper() == "PUT"))
+            if ((e.WebSession.Request.Method == "POST" || e.WebSession.Request.Method == "PUT"))
             {
                 //Get/Set request body bytes
                 byte[] bodyBytes = await e.GetRequestBody();
