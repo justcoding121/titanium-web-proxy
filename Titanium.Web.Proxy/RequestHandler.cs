@@ -288,7 +288,7 @@ namespace Titanium.Web.Proxy
 
                     args.WebSession.Request.RequestUri = httpRemoteUri;
 
-                    args.WebSession.Request.Method = httpMethod;
+                    args.WebSession.Request.Method = httpMethod.Trim().ToUpper();
                     args.WebSession.Request.HttpVersion = httpVersion;
                     args.ProxyClient.ClientStream = clientStream;
                     args.ProxyClient.ClientStreamReader = clientStreamReader;
