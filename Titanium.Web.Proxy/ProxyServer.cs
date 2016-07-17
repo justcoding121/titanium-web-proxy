@@ -380,15 +380,11 @@ namespace Titanium.Web.Proxy
             }
 
             if (tcpClient != null)
-            {
-               
+            {               
                 Task.Run(async () =>
                 {
                     try
-                    {
-                        tcpClient.NoDelay = true;
-                        
-
+                    {      
                         if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
                         {
                             await HandleClient(endPoint as TransparentProxyEndPoint, tcpClient);
