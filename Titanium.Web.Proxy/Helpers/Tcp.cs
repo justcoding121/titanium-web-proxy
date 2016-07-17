@@ -9,26 +9,37 @@ using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Shared;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.Helpers
 {
 
     internal class TcpHelper
     {
+
         /// <summary>
         /// relays the input clientStream to the server at the specified host name & port with the given httpCmd & headers as prefix
         /// Usefull for websocket requests
         /// </summary>
-        /// <param name="clientStream"></param>
+        /// <param name="bufferSize"></param>
+        /// <param name="connectionTimeOutSeconds"></param>
+        /// <param name="remoteHostName"></param>
         /// <param name="httpCmd"></param>
+        /// <param name="httpVersion"></param>
         /// <param name="requestHeaders"></param>
-        /// <param name="hostName"></param>
-        /// <param name="tunnelPort"></param>
         /// <param name="isHttps"></param>
+        /// <param name="remotePort"></param>
+        /// <param name="supportedProtocols"></param>
+        /// <param name="remoteCertificateValidationCallback"></param>
+        /// <param name="localCertificateSelectionCallback"></param>
+        /// <param name="clientStream"></param>
+        /// <param name="tcpConnectionFactory"></param>
         /// <returns></returns>
-        internal static async Task SendRaw(Stream clientStream, string httpCmd, Dictionary<string, HttpHeader> requestHeaders, string hostName,
-            int tunnelPort, bool isHttps, SslProtocols supportedProtocols, int connectionTimeOutSeconds)
+        internal static async Task SendRaw(int bufferSize, int connectionTimeOutSeconds,
+            string remoteHostName, int remotePort, string httpCmd, Version httpVersion, Dictionary<string, HttpHeader> requestHeaders,
+            bool isHttps,  SslProtocols supportedProtocols,
+            RemoteCertificateValidationCallback remoteCertificateValidationCallback, LocalCertificateSelectionCallback localCertificateSelectionCallback,
+            Stream clientStream, TcpConnectionFactory tcpConnectionFactory)
         {
             //prepare the prefix content
             StringBuilder sb = null;
@@ -54,40 +65,17 @@ namespace Titanium.Web.Proxy.Helpers
                 sb.Append(Environment.NewLine);
             }
 
-
-            TcpClient tunnelClient = null;
-            Stream tunnelStream = null;
-            //create the TcpClient to the server
+            var tcpConnection = await tcpConnectionFactory.CreateClient(bufferSize, connectionTimeOutSeconds,
+                                        remoteHostName, remotePort,
+                                        httpVersion, isHttps, 
+                                        supportedProtocols, remoteCertificateValidationCallback, localCertificateSelectionCallback, 
+                                        null, null, clientStream);
+                                                                
             try
             {
-                tunnelClient = new TcpClient(hostName, tunnelPort);
-                tunnelStream = tunnelClient.GetStream();
+                TcpClient tunnelClient = tcpConnection.TcpClient;
 
-                if (isHttps)
-                {
-                    SslStream sslStream = null;
-                    try
-                    {
-                        sslStream = new SslStream(tunnelStream);
-                        await sslStream.AuthenticateAsClientAsync(hostName, null, supportedProtocols, false);
-                        tunnelStream = sslStream;
-                    }
-                    catch
-                    {
-                        if (sslStream != null)
-                        {
-                            sslStream.Dispose();
-                        }
-
-                        throw;
-                    }
-                }
-
-                tunnelClient.SendTimeout = connectionTimeOutSeconds * 1000;
-                tunnelClient.ReceiveTimeout = connectionTimeOutSeconds * 1000;
-
-                tunnelStream.ReadTimeout = connectionTimeOutSeconds * 1000;
-                tunnelStream.WriteTimeout = connectionTimeOutSeconds * 1000;
+                Stream tunnelStream = tcpConnection.Stream;
 
                 Task sendRelay;
 
@@ -108,19 +96,13 @@ namespace Titanium.Web.Proxy.Helpers
             }
             catch
             {
-                if (tunnelStream != null)
-                {
-                    tunnelStream.Close();
-                    tunnelStream.Dispose();
-                }
-
-                if (tunnelClient != null)
-                {
-                    tunnelClient.Close();
-                }
-
                 throw;
             }
+            finally
+            {
+                tcpConnection.Dispose();
+            }
         }
+
     }
 }
