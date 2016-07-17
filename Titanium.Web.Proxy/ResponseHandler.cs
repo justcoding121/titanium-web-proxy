@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Net.Sockets;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Compression;
@@ -114,7 +112,7 @@ namespace Titanium.Web.Proxy
             }
             catch
             {
-                Dispose(args.ProxyClient.TcpClient, args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader,
+                Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader,
                     args.ProxyClient.ClientStreamWriter, args);
             }
             finally
@@ -216,32 +214,30 @@ namespace Titanium.Web.Proxy
         /// <param name="clientStreamReader"></param>
         /// <param name="clientStreamWriter"></param>
         /// <param name="args"></param>
-        private void Dispose(TcpClient tcpClient, IDisposable clientStream, IDisposable clientStreamReader,
+        private void Dispose(Stream clientStream, IDisposable clientStreamReader,
             IDisposable clientStreamWriter, IDisposable args)
         {
 
             if (clientStream != null)
             {
-                (clientStream as Stream).Close();
-                (clientStream as Stream).Dispose();
-            }
-
-            if (tcpClient != null)
-            {
-                tcpClient.Client.Close();
-                tcpClient.Close();
-                tcpClient.Client.Dispose();
+                clientStream.Close();
+                clientStream.Dispose();
             }
 
             if (args != null)
+            {
                 args.Dispose();
+            }
 
             if (clientStreamReader != null)
+            {
                 clientStreamReader.Dispose();
+            }
 
             if (clientStreamWriter != null)
+            {
                 clientStreamWriter.Dispose();
-
+            }
         }
     }
 }

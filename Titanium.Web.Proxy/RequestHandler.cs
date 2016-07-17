@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy
     {
         //This is called when client is aware of proxy
         //So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
-        private async void HandleClient(ExplicitProxyEndPoint endPoint, TcpClient client)
+        private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient client)
         {
             Stream clientStream = client.GetStream();
 
@@ -43,7 +43,7 @@ namespace Titanium.Web.Proxy
 
                 if (string.IsNullOrEmpty(httpCmd))
                 {
-                    Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
+                    Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                     return;
                 }
 
@@ -109,7 +109,7 @@ namespace Titanium.Web.Proxy
                             sslStream.Dispose();
                         }
 
-                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
+                        Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                         return;
                     }
 
@@ -125,11 +125,15 @@ namespace Titanium.Web.Proxy
                     //write back successfull CONNECT response
                     await WriteConnectResponse(clientStreamWriter, version);
 
-                    //Just relay the request/response without decrypting it
-                    await TcpHelper.SendRaw(clientStream, null, null, httpRemoteUri.Host, httpRemoteUri.Port,
-                        false, SupportedSslProtocols, ConnectionTimeOutSeconds);
 
-                    Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
+                    await TcpHelper.SendRaw(BUFFER_SIZE, ConnectionTimeOutSeconds, httpRemoteUri.Host, httpRemoteUri.Port,
+                            httpCmd, version, null,
+                            false, SupportedSslProtocols,
+                            new RemoteCertificateValidationCallback(ValidateServerCertificate),
+                            new LocalCertificateSelectionCallback(SelectClientCertificate),
+                            clientStream, tcpConnectionFactory);
+
+                    Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                     return;
                 }
 
@@ -139,13 +143,13 @@ namespace Titanium.Web.Proxy
             }
             catch
             {
-                Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
+                Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
             }
         }
 
         //This is called when this proxy acts as a reverse proxy (like a real http server)
         //So for HTTPS requests we would start SSL negotiation right away without expecting a CONNECT request from client
-        private async void HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
+        private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
             Stream clientStream = tcpClient.GetStream();
 
@@ -181,7 +185,7 @@ namespace Titanium.Web.Proxy
                         sslStream.Dispose();
                     }
 
-                    Dispose(tcpClient, sslStream, clientStreamReader, clientStreamWriter, null);
+                    Dispose(sslStream, clientStreamReader, clientStreamWriter, null);
                     return;
                 }
                 clientStream = sslStream;
@@ -219,7 +223,7 @@ namespace Titanium.Web.Proxy
             {
                 if (string.IsNullOrEmpty(httpCmd))
                 {
-                    Dispose(client, clientStream, clientStreamReader, clientStreamWriter, null);
+                    Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                     break;
                 }
 
@@ -234,14 +238,14 @@ namespace Titanium.Web.Proxy
                     var httpMethod = httpCmdSplit[0];
 
                     //find the request HTTP version
-                    Version version = new Version(1, 1);
+                    Version httpVersion = new Version(1, 1);
                     if (httpCmdSplit.Length == 3)
                     {
-                        var httpVersion = httpCmdSplit[2].ToLower().Trim();
+                        var httpVersionString = httpCmdSplit[2].ToLower().Trim();
 
-                        if (httpVersion == "http/1.0")
+                        if (httpVersionString == "http/1.0")
                         {
-                            version = new Version(1, 0);
+                            httpVersion = new Version(1, 0);
                         }
                     }
 
@@ -285,7 +289,7 @@ namespace Titanium.Web.Proxy
                     args.WebSession.Request.RequestUri = httpRemoteUri;
 
                     args.WebSession.Request.Method = httpMethod;
-                    args.WebSession.Request.HttpVersion = version;
+                    args.WebSession.Request.HttpVersion = httpVersion;
                     args.ProxyClient.ClientStream = clientStream;
                     args.ProxyClient.ClientStreamReader = clientStreamReader;
                     args.ProxyClient.ClientStreamWriter = clientStreamWriter;
@@ -310,24 +314,33 @@ namespace Titanium.Web.Proxy
                     //if upgrading to websocket then relay the requet without reading the contents
                     if (args.WebSession.Request.UpgradeToWebSocket)
                     {
-                        await TcpHelper.SendRaw(clientStream, httpCmd, args.WebSession.Request.RequestHeaders,
-                                 httpRemoteUri.Host, httpRemoteUri.Port, args.IsHttps, SupportedSslProtocols, ConnectionTimeOutSeconds);
+                        await TcpHelper.SendRaw(BUFFER_SIZE, ConnectionTimeOutSeconds, httpRemoteUri.Host, httpRemoteUri.Port,
+                                                httpCmd, httpVersion, args.WebSession.Request.RequestHeaders, args.IsHttps,
+                                                SupportedSslProtocols, new RemoteCertificateValidationCallback(ValidateServerCertificate),
+                                                new LocalCertificateSelectionCallback(SelectClientCertificate),
+                                                clientStream, tcpConnectionFactory);
 
-                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
+                        Dispose(clientStream, clientStreamReader, clientStreamWriter, args);
                         break;
                     }
 
                     //construct the web request that we are going to issue on behalf of the client.
-                    connection = connection!=null? connection : await tcpConnectionFactory.GetClient(args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.IsHttps, version,
-                         UpStreamHttpProxy, UpStreamHttpsProxy, BUFFER_SIZE, SupportedSslProtocols, ConnectionTimeOutSeconds, new RemoteCertificateValidationCallback(ValidateServerCertificate),
-                         new LocalCertificateSelectionCallback(SelectClientCertificate));
-
+                    if (connection == null)
+                    {
+                        connection = await tcpConnectionFactory.CreateClient(BUFFER_SIZE, ConnectionTimeOutSeconds,
+                            args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, httpVersion,
+                            args.IsHttps, SupportedSslProtocols,
+                            new RemoteCertificateValidationCallback(ValidateServerCertificate),
+                            new LocalCertificateSelectionCallback(SelectClientCertificate),
+                            UpStreamHttpProxy, UpStreamHttpsProxy, clientStream);
+                    }
+                   
                     args.WebSession.Request.RequestLocked = true;
 
                     //If request was cancelled by user then dispose the client
                     if (args.WebSession.Request.CancelRequest)
                     {
-                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
+                        Dispose(clientStream, clientStreamReader, clientStreamWriter, args);
                         break;
                     }
 
@@ -397,7 +410,7 @@ namespace Titanium.Web.Proxy
                     //if connection is closing exit
                     if (args.WebSession.Response.ResponseKeepAlive == false)
                     {
-                        Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
+                        Dispose(clientStream, clientStreamReader, clientStreamWriter, args);
                         break;
                     }
 
@@ -407,7 +420,7 @@ namespace Titanium.Web.Proxy
                 }
                 catch
                 {
-                    Dispose(client, clientStream, clientStreamReader, clientStreamWriter, args);
+                    Dispose(clientStream, clientStreamReader, clientStreamWriter, args);
                     break;
                 }
 

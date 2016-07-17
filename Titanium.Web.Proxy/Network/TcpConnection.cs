@@ -8,7 +8,7 @@ namespace Titanium.Web.Proxy.Network
     /// <summary>
     /// An object that holds TcpConnection to a particular server & port
     /// </summary>
-    public class TcpConnection: IDisposable
+    public class TcpConnection : IDisposable
     {
         internal string HostName { get; set; }
         internal int port { get; set; }
@@ -44,11 +44,15 @@ namespace Titanium.Web.Proxy.Network
 
         public void Dispose()
         {
-            Stream.Close();
             Stream.Dispose();
+
+            TcpClient.LingerState = new LingerOption(true, 0);
+            TcpClient.Client.Shutdown(SocketShutdown.Both);
             TcpClient.Client.Close();
-            TcpClient.Close();
             TcpClient.Client.Dispose();
+
+            TcpClient.Close();
+            
         }
     }
 }
