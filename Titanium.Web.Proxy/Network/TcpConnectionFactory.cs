@@ -120,6 +120,8 @@ namespace Titanium.Web.Proxy.Network
             stream.ReadTimeout = connectionTimeOutSeconds * 1000;
             stream.WriteTimeout = connectionTimeOutSeconds * 1000;
 
+            client.NoDelay = true;
+           
             return new TcpConnection()
             {
                 HostName = remoteHostName,

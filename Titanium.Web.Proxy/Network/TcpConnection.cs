@@ -44,11 +44,15 @@ namespace Titanium.Web.Proxy.Network
 
         public void Dispose()
         {
+            Stream.Dispose();
+
+            TcpClient.LingerState = new LingerOption(true, 0);
             TcpClient.Client.Shutdown(SocketShutdown.Both);
-            TcpClient.Client.Disconnect(true);
+            TcpClient.Client.Close();
             TcpClient.Client.Dispose();
 
-            Stream.Dispose();
+            TcpClient.Close();
+            
         }
     }
 }
