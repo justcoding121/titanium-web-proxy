@@ -7,6 +7,7 @@ using Titanium.Web.Proxy.Compression;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy
 {
@@ -214,8 +215,8 @@ namespace Titanium.Web.Proxy
         /// <param name="clientStreamReader"></param>
         /// <param name="clientStreamWriter"></param>
         /// <param name="args"></param>
-        private void Dispose(Stream clientStream, IDisposable clientStreamReader,
-            IDisposable clientStreamWriter, IDisposable args)
+        private void Dispose(Stream clientStream, CustomBinaryReader clientStreamReader,
+            StreamWriter clientStreamWriter, IDisposable args)
         {
 
             if (clientStream != null)
@@ -236,6 +237,7 @@ namespace Titanium.Web.Proxy
 
             if (clientStreamWriter != null)
             {
+                clientStreamWriter.Close();
                 clientStreamWriter.Dispose();
             }
         }
