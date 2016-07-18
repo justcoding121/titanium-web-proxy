@@ -127,8 +127,7 @@ namespace Titanium.Web.Proxy.Network
                 IsHttps = isHttps,
                 TcpClient = client,
                 StreamReader = new CustomBinaryReader(stream),
-                Stream = stream,
-                Version = httpVersion
+                Stream = stream
             };
         }
     }
