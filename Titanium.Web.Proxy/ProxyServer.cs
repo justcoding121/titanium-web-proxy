@@ -89,12 +89,12 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// External proxy for Http
         /// </summary>
-        public ExternalProxy UpStreamHttpProxy { get; set; }
+        public ExternalProxy ExternalHttpProxy { get; set; }
 
         /// <summary>
         /// External proxy for Http
         /// </summary>
-        public ExternalProxy UpStreamHttpsProxy { get; set; }
+        public ExternalProxy ExternalHttpsProxy { get; set; }
 
         /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication

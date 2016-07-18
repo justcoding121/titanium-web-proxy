@@ -332,7 +332,7 @@ namespace Titanium.Web.Proxy
                             args.IsHttps, SupportedSslProtocols,
                             new RemoteCertificateValidationCallback(ValidateServerCertificate),
                             new LocalCertificateSelectionCallback(SelectClientCertificate),
-                            UpStreamHttpProxy, UpStreamHttpsProxy, clientStream);
+                            ExternalHttpProxy, ExternalHttpsProxy, clientStream);
                     }
                    
                     args.WebSession.Request.RequestLocked = true;
