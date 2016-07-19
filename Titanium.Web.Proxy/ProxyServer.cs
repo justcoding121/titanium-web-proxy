@@ -17,6 +17,15 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
+        /// <summary>
+        /// Does the root certificate used by this proxy is trusted by the machine?
+        /// </summary>
+        private bool certTrusted { get; set; }
+
+        /// <summary>
+        /// Is the proxy currently running
+        /// </summary>
+        private bool proxyRunning { get; set; }
 
         /// <summary>
         /// Manages certificates used by this proxy
@@ -34,16 +43,6 @@ namespace Titanium.Web.Proxy
         private SystemProxyManager systemProxySettingsManager { get; set; }
 
         private FireFoxProxySettingsManager firefoxProxySettingsManager { get; set; }
-
-        /// <summary>
-        /// Does the root certificate used by this proxy is trusted by the machine?
-        /// </summary>
-        private bool certTrusted { get; set; }
-
-        /// <summary>
-        /// Is the proxy currently running
-        /// </summary>
-        private bool proxyRunning { get; set; }
 
         /// <summary>
         /// Buffer size used throughout this proxy
