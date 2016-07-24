@@ -91,7 +91,7 @@ namespace Titanium.Web.Proxy
         public ExternalProxy ExternalHttpProxy { get; set; }
 
         /// <summary>
-        /// External proxy for Http
+        /// External proxy for Https
         /// </summary>
         public ExternalProxy ExternalHttpsProxy { get; set; }
 
