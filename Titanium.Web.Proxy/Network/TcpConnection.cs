@@ -15,11 +15,6 @@ namespace Titanium.Web.Proxy.Network
 
         internal bool IsHttps { get; set; }
 
-        /// <summary>
-        /// Http version
-        /// </summary>
-        internal Version Version { get; set; }
-
         internal TcpClient TcpClient { get; set; }
 
         /// <summary>
@@ -31,16 +26,6 @@ namespace Titanium.Web.Proxy.Network
         /// Server stream
         /// </summary>
         internal Stream Stream { get; set; }
-
-        /// <summary>
-        /// Last time this connection was used
-        /// </summary>
-        internal DateTime LastAccess { get; set; }
-
-        internal TcpConnection()
-        {
-            LastAccess = DateTime.Now;
-        }
 
         public void Dispose()
         {
