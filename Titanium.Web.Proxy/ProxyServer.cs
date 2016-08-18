@@ -118,7 +118,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Constructor
         /// </summary>
-        public ProxyServer()
+        public ProxyServer(string rootCertificateName = null, string rootCertificateIssuerName = null)
         {
             //default values
             ConnectionTimeOutSeconds = 120;
@@ -129,8 +129,8 @@ namespace Titanium.Web.Proxy
             systemProxySettingsManager = new SystemProxyManager();
             firefoxProxySettingsManager = new FireFoxProxySettingsManager();
 
-            RootCertificateName = RootCertificateName ?? "Titanium Root Certificate Authority";
-            RootCertificateIssuerName = RootCertificateIssuerName ?? "Titanium";
+            RootCertificateName = rootCertificateName ?? "Titanium Root Certificate Authority";
+            RootCertificateIssuerName = rootCertificateIssuerName ?? "Titanium";
 
             certificateCacheManager = new CertificateManager(RootCertificateIssuerName,
                 RootCertificateName);
