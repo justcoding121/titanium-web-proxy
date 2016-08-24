@@ -118,8 +118,12 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Constructor
         /// </summary>
-        public ProxyServer()
+        public ProxyServer() : this(null, null) { }
+
+        public ProxyServer(string rootCertificateName, string rootCertificateIssuerName)
         {
+            RootCertificateName = rootCertificateName;
+            RootCertificateIssuerName = rootCertificateIssuerName;
             //default values
             ConnectionTimeOutSeconds = 120;
             CertificateCacheTimeOutMinutes = 60;
@@ -379,11 +383,11 @@ namespace Titanium.Web.Proxy
             }
 
             if (tcpClient != null)
-            {               
+            {
                 Task.Run(async () =>
                 {
                     try
-                    {      
+                    {
                         if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
                         {
                             await HandleClient(endPoint as TransparentProxyEndPoint, tcpClient);
@@ -392,7 +396,7 @@ namespace Titanium.Web.Proxy
                         {
                             await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient);
                         }
-                     
+
                     }
                     finally
                     {
