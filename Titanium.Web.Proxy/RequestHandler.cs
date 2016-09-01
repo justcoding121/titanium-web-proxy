@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy
     {
         //This is called when client is aware of proxy
         //So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
-        private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient client)
+        private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient client, ExternalProxy customUpStreamHttpProxy = null, ExternalProxy customUpStreamHttpsProxy = null)
         {
             Stream clientStream = client.GetStream();
 
@@ -137,11 +137,12 @@ namespace Titanium.Web.Proxy
                     return;
                 }
 
+
                 //Now create the request
                 await HandleHttpSessionRequest(client, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                      httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null);
+                      httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null, customUpStreamHttpProxy,customUpStreamHttpsProxy);
             }
-            catch
+            catch(Exception ex)
             {
                 Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
             }
@@ -213,7 +214,7 @@ namespace Titanium.Web.Proxy
         /// <param name="httpsHostName"></param>
         /// <returns></returns>
         private async Task HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
-            CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName)
+            CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName, ExternalProxy customUpStreamHttpProxy = null, ExternalProxy customUpStreamHttpsProxy = null)
         {
             TcpConnection connection = null;
 
@@ -332,10 +333,11 @@ namespace Titanium.Web.Proxy
                             args.IsHttps, SupportedSslProtocols,
                             new RemoteCertificateValidationCallback(ValidateServerCertificate),
                             new LocalCertificateSelectionCallback(SelectClientCertificate),
-                            ExternalHttpProxy, ExternalHttpsProxy, clientStream);
+                            customUpStreamHttpProxy ?? UpStreamHttpProxy, customUpStreamHttpsProxy ?? UpStreamHttpsProxy, clientStream);
                     }
-                   
+
                     args.WebSession.Request.RequestLocked = true;
+
 
                     //If request was cancelled by user then dispose the client
                     if (args.WebSession.Request.CancelRequest)
@@ -343,6 +345,7 @@ namespace Titanium.Web.Proxy
                         Dispose(clientStream, clientStreamReader, clientStreamWriter, args);
                         break;
                     }
+
 
                     //if expect continue is enabled then send the headers first 
                     //and see if server would return 100 conitinue
@@ -418,7 +421,7 @@ namespace Titanium.Web.Proxy
                     httpCmd = await clientStreamReader.ReadLineAsync();
 
                 }
-                catch
+                catch(Exception e)
                 {
                     Dispose(clientStream, clientStreamReader, clientStreamWriter, args);
                     break;

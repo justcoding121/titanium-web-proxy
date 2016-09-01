@@ -9,6 +9,7 @@ using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using System.Linq;
 using System.Security.Authentication;
+using System.Collections.Concurrent;
 
 namespace Titanium.Web.Proxy
 {
@@ -17,15 +18,11 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
-        /// <summary>
-        /// Does the root certificate used by this proxy is trusted by the machine?
-        /// </summary>
-        private bool certTrusted { get; set; }
+        public ConcurrentQueue<ExternalProxy> CustomUpStreamHttpProxies{ get; set; }
+        public Func<ConcurrentQueue<ExternalProxy>, ExternalProxy> GetCustomUpStreamHttpProxyFunc = null;
+        public ConcurrentQueue<ExternalProxy> CustomUpStreamHttpsProxies { get; set; }
+        public Func<ConcurrentQueue<ExternalProxy>, ExternalProxy> GetCustomUpStreamHttpsProxyFunc = null;
 
-        /// <summary>
-        /// Is the proxy currently running
-        /// </summary>
-        private bool proxyRunning { get; set; }
 
         /// <summary>
         /// Manages certificates used by this proxy
@@ -43,6 +40,16 @@ namespace Titanium.Web.Proxy
         private SystemProxyManager systemProxySettingsManager { get; set; }
 
         private FireFoxProxySettingsManager firefoxProxySettingsManager { get; set; }
+
+        /// <summary>
+        /// Does the root certificate used by this proxy is trusted by the machine?
+        /// </summary>
+        private bool certTrusted { get; set; }
+
+        /// <summary>
+        /// Is the proxy currently running
+        /// </summary>
+        private bool proxyRunning { get; set; }
 
         /// <summary>
         /// Buffer size used throughout this proxy
@@ -88,12 +95,12 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// External proxy for Http
         /// </summary>
-        public ExternalProxy ExternalHttpProxy { get; set; }
+        public ExternalProxy UpStreamHttpProxy { get; set; }
 
         /// <summary>
-        /// External proxy for Https
+        /// External proxy for Http
         /// </summary>
-        public ExternalProxy ExternalHttpsProxy { get; set; }
+        public ExternalProxy UpStreamHttpsProxy { get; set; }
 
         /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
@@ -390,9 +397,16 @@ namespace Titanium.Web.Proxy
                         }
                         else
                         {
-                            await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient);
-                        }
-                     
+                            ExternalProxy externalHttpProxy = null;
+                            if (GetCustomUpStreamHttpProxyFunc != null)
+                                externalHttpProxy = GetCustomUpStreamHttpProxyFunc(CustomUpStreamHttpProxies);
+
+                            ExternalProxy externalHttpsProxy = null;
+                            if (GetCustomUpStreamHttpsProxyFunc != null)
+                                externalHttpsProxy = GetCustomUpStreamHttpsProxyFunc(CustomUpStreamHttpsProxies);
+
+                            await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient, externalHttpProxy, externalHttpsProxy);
+                        }                     
                     }
                     finally
                     {

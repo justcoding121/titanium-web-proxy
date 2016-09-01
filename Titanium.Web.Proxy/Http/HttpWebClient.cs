@@ -39,6 +39,7 @@ namespace Titanium.Web.Proxy.Http
         /// <param name="Connection"></param>
         internal void SetConnection(TcpConnection Connection)
         {
+            Connection.LastAccess = DateTime.Now;
             ServerConnection = Connection;
         }
 
@@ -59,13 +60,31 @@ namespace Titanium.Web.Proxy.Http
             StringBuilder requestLines = new StringBuilder();
 
             //prepare the request & headers
-            requestLines.AppendLine(string.Join(" ", new string[3]
-              {
+            if ((ServerConnection.UpStreamHttpProxy != null && ServerConnection.IsHttps == false) || (ServerConnection.UpStreamHttpsProxy != null && ServerConnection.IsHttps == true))
+            {
+                requestLines.AppendLine(string.Join(" ", new string[3]
+                {
+                this.Request.Method,
+                this.Request.RequestUri.AbsoluteUri,
+                string.Format("HTTP/{0}.{1}",this.Request.HttpVersion.Major, this.Request.HttpVersion.Minor)
+                }));
+            }
+            else
+            {
+                requestLines.AppendLine(string.Join(" ", new string[3]
+                  {
                 this.Request.Method,
                 this.Request.RequestUri.PathAndQuery,
                 string.Format("HTTP/{0}.{1}",this.Request.HttpVersion.Major, this.Request.HttpVersion.Minor)
-              }));
+                  }));
+            }
 
+            //Send Authentication to Upstream proxy if needed
+            if (ServerConnection.UpStreamHttpProxy != null && ServerConnection.IsHttps == false && ServerConnection.UpStreamHttpProxy.UserName != null && ServerConnection.UpStreamHttpProxy.UserName != "" && ServerConnection.UpStreamHttpProxy.Password != null)
+            {
+                requestLines.AppendLine("Proxy-Connection: keep-alive");
+                requestLines.AppendLine("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(ServerConnection.UpStreamHttpProxy.UserName + ":" + ServerConnection.UpStreamHttpProxy.Password)));
+            }
             //write request headers
             foreach (var headerItem in this.Request.RequestHeaders)
             {
@@ -87,6 +106,9 @@ namespace Titanium.Web.Proxy.Http
 
             string request = requestLines.ToString();
             byte[] requestBytes = Encoding.ASCII.GetBytes(request);
+
+            var test = Encoding.UTF8.GetString(requestBytes);
+
             await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
             await stream.FlushAsync();
 
