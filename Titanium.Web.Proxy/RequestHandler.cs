@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy
     partial class ProxyServer
     {
 
-        private async Task<bool> CheckAuthorization( StreamWriter clientStreamWriter, IEnumerable<HttpHeader> Headers)
+        private async Task<bool> CheckAuthorization(StreamWriter clientStreamWriter, IEnumerable<HttpHeader> Headers)
         {
             if (AuthenticateUserFunc == null)
             {
@@ -86,7 +86,7 @@ namespace Titanium.Web.Proxy
                     return await AuthenticateUserFunc(username, password).ConfigureAwait(false);
                 }
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 //Return not authorized
                 await WriteResponseStatus(new Version(1, 1), "407",
@@ -156,20 +156,23 @@ namespace Titanium.Web.Proxy
                 var excluded = endPoint.ExcludedHttpsHostNameRegex != null ?
                     endPoint.ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x)) : false;
 
+
+                List<HttpHeader> connectRequestHeaders = null;
+
                 //Client wants to create a secure tcp tunnel (its a HTTPS request)
                 if (httpVerb.ToUpper() == "CONNECT" && !excluded && httpRemoteUri.Port != 80)
                 {
                     httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
                     string tmpLine = null;
-                    List<HttpHeader> headers = new List<HttpHeader>();
+                    connectRequestHeaders = new List<HttpHeader>();
                     while (!string.IsNullOrEmpty(tmpLine = await clientStreamReader.ReadLineAsync()))
                     {
                         var header = tmpLine.Split(ProxyConstants.ColonSplit, 2);
 
                         var newHeader = new HttpHeader(header[0], header[1]);
-                        headers.Add(newHeader);
+                        connectRequestHeaders.Add(newHeader);
                     }
-                    if (await CheckAuthorization(clientStreamWriter,headers) == false)
+                    if (await CheckAuthorization(clientStreamWriter, connectRequestHeaders) == false)
                     {
                         Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                         return;
@@ -230,7 +233,7 @@ namespace Titanium.Web.Proxy
                 }
                 //Now create the request
                 await HandleHttpSessionRequest(client, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                      httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null, null, null);
+                      httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null, connectRequestHeaders, null, null);
             }
             catch (Exception ex)
             {
@@ -291,7 +294,7 @@ namespace Titanium.Web.Proxy
 
             //Now create the request
             await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                 endPoint.EnableSsl ? endPoint.GenericCertificateName : null);
+                 endPoint.EnableSsl ? endPoint.GenericCertificateName : null,null);
         }
         /// <summary>
         /// This is the core request handler method for a particular connection from client
@@ -304,7 +307,7 @@ namespace Titanium.Web.Proxy
         /// <param name="httpsHostName"></param>
         /// <returns></returns>
         private async Task HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
-            CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName, ExternalProxy customUpStreamHttpProxy = null, ExternalProxy customUpStreamHttpsProxy = null)
+            CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName, List<HttpHeader> connectHeaders, ExternalProxy customUpStreamHttpProxy = null, ExternalProxy customUpStreamHttpsProxy = null)
         {
             TcpConnection connection = null;
 
@@ -386,13 +389,13 @@ namespace Titanium.Web.Proxy
                     args.ProxyClient.ClientStreamReader = clientStreamReader;
                     args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
-                    if (httpsHostName == null && (await CheckAuthorization(clientStreamWriter,args.WebSession.Request.RequestHeaders.Values) == false))
+                    if (httpsHostName == null && (await CheckAuthorization(clientStreamWriter, args.WebSession.Request.RequestHeaders.Values) == false))
                     {
 
                         Dispose(clientStream, clientStreamReader, clientStreamWriter, args);
                         break;
                     }
-                  
+
 
 
                     PrepareRequestHeaders(args.WebSession.Request.RequestHeaders, args.WebSession);
@@ -428,12 +431,24 @@ namespace Titanium.Web.Proxy
                     //construct the web request that we are going to issue on behalf of the client.
                     if (connection == null)
                     {
-                        
-                        if (GetCustomUpStreamHttpProxyFunc != null)
-                            customUpStreamHttpProxy = GetCustomUpStreamHttpProxyFunc(args.WebSession.Request.RequestHeaders.Values);
-                        
-                        if (GetCustomUpStreamHttpsProxyFunc != null)
-                            customUpStreamHttpsProxy = GetCustomUpStreamHttpsProxyFunc(args.WebSession.Request.RequestHeaders.Values);
+                        if (httpsHostName == null)
+                        {
+                            if (GetCustomUpStreamHttpProxyFunc != null)
+                            {
+                                customUpStreamHttpProxy = GetCustomUpStreamHttpProxyFunc(args.WebSession.Request.RequestHeaders.Values);
+                            }
+                        }
+                        else
+                        {
+                            if (GetCustomUpStreamHttpsProxyFunc != null)
+                            {
+                                foreach (var header in args.WebSession.Request.RequestHeaders.Values)
+                                {
+                                    connectHeaders.Add(header);
+                                }
+                                customUpStreamHttpsProxy = GetCustomUpStreamHttpsProxyFunc(connectHeaders);
+                            }
+                        }
 
                         connection = await tcpConnectionFactory.CreateClient(BUFFER_SIZE, ConnectionTimeOutSeconds,
                             args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, httpVersion,
