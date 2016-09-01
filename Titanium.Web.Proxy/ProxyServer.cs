@@ -18,10 +18,10 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
-        public ConcurrentQueue<ExternalProxy> CustomUpStreamHttpProxies{ get; set; }
-        public Func<ConcurrentQueue<ExternalProxy>, ExternalProxy> GetCustomUpStreamHttpProxyFunc = null;
+        public ConcurrentQueue<ExternalProxy> CustomUpStreamHttpProxies { get; set; }
+        public Func<ExternalProxy> GetCustomUpStreamHttpProxyFunc = null;
         public ConcurrentQueue<ExternalProxy> CustomUpStreamHttpsProxies { get; set; }
-        public Func<ConcurrentQueue<ExternalProxy>, ExternalProxy> GetCustomUpStreamHttpsProxyFunc = null;
+        public Func<ExternalProxy> GetCustomUpStreamHttpsProxyFunc = null;
 
 
         /// <summary>
@@ -386,11 +386,11 @@ namespace Titanium.Web.Proxy
             }
 
             if (tcpClient != null)
-            {               
+            {
                 Task.Run(async () =>
                 {
                     try
-                    {      
+                    {
                         if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
                         {
                             await HandleClient(endPoint as TransparentProxyEndPoint, tcpClient);
@@ -399,14 +399,14 @@ namespace Titanium.Web.Proxy
                         {
                             ExternalProxy externalHttpProxy = null;
                             if (GetCustomUpStreamHttpProxyFunc != null)
-                                externalHttpProxy = GetCustomUpStreamHttpProxyFunc(CustomUpStreamHttpProxies);
+                                externalHttpProxy = GetCustomUpStreamHttpProxyFunc();
 
                             ExternalProxy externalHttpsProxy = null;
                             if (GetCustomUpStreamHttpsProxyFunc != null)
-                                externalHttpsProxy = GetCustomUpStreamHttpsProxyFunc(CustomUpStreamHttpsProxies);
+                                externalHttpsProxy = GetCustomUpStreamHttpsProxyFunc();
 
                             await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient, externalHttpProxy, externalHttpsProxy);
-                        }                     
+                        }
                     }
                     finally
                     {
