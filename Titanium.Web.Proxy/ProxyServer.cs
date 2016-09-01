@@ -18,8 +18,23 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
-        public Func<ExternalProxy> GetCustomUpStreamHttpProxyFunc = null;
-        public Func<ExternalProxy> GetCustomUpStreamHttpsProxyFunc = null;
+        public Func<string, string, Task<bool>> AuthenticateUserFunc
+        {
+            get;
+            set;
+        }
+        //parameter is list of headers
+        public Func<IEnumerable<HttpHeader>, ExternalProxy> GetCustomUpStreamHttpProxyFunc
+        {
+            get;
+            set;
+        }
+        //parameter is list of headers
+        public Func<IEnumerable<HttpHeader>, ExternalProxy> GetCustomUpStreamHttpsProxyFunc
+        {
+            get;
+            set;
+        }
 
 
         /// <summary>
@@ -383,6 +398,7 @@ namespace Titanium.Web.Proxy
                 //Other errors are discarded to keep proxy running
             }
 
+
             if (tcpClient != null)
             {
                 Task.Run(async () =>
@@ -395,15 +411,9 @@ namespace Titanium.Web.Proxy
                         }
                         else
                         {
-                            ExternalProxy externalHttpProxy = null;
-                            if (GetCustomUpStreamHttpProxyFunc != null)
-                                externalHttpProxy = GetCustomUpStreamHttpProxyFunc();
 
-                            ExternalProxy externalHttpsProxy = null;
-                            if (GetCustomUpStreamHttpsProxyFunc != null)
-                                externalHttpsProxy = GetCustomUpStreamHttpsProxyFunc();
 
-                            await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient, externalHttpProxy, externalHttpsProxy);
+                            await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient);
                         }
                     }
                     finally
