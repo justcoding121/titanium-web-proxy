@@ -18,9 +18,7 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
-        public ConcurrentQueue<ExternalProxy> CustomUpStreamHttpProxies { get; set; }
         public Func<ExternalProxy> GetCustomUpStreamHttpProxyFunc = null;
-        public ConcurrentQueue<ExternalProxy> CustomUpStreamHttpsProxies { get; set; }
         public Func<ExternalProxy> GetCustomUpStreamHttpsProxyFunc = null;
 
 
