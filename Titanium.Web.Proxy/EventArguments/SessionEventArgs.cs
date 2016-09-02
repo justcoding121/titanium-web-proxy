@@ -9,6 +9,7 @@ using Titanium.Web.Proxy.Extensions;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Network;
 using System.Net;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -50,6 +51,9 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public HttpWebClient WebSession { get; set; }
 
+        public ExternalProxy CustomUpStreamHttpProxyUsed { get; set; }
+
+        public ExternalProxy CustomUpStreamHttpsProxyUsed { get; set; }
 
         /// <summary>
         /// Constructor to initialize the proxy

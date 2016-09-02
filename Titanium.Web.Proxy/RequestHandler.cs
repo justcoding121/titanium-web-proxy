@@ -450,6 +450,9 @@ namespace Titanium.Web.Proxy
                             }
                         }
 
+                        args.CustomUpStreamHttpProxyUsed = customUpStreamHttpProxy;
+                        args.CustomUpStreamHttpsProxyUsed = customUpStreamHttpsProxy;
+
                         connection = await tcpConnectionFactory.CreateClient(BUFFER_SIZE, ConnectionTimeOutSeconds,
                             args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, httpVersion,
                             args.IsHttps, SupportedSslProtocols,
