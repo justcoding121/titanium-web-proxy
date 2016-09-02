@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Titanium.Web.Proxy.Exceptions;
@@ -335,7 +336,6 @@ namespace Titanium.Web.Proxy.EventArguments
             return await decompressor.Decompress(responseBodyStream, bufferSize);
         }
 
-
         /// <summary>
         /// Before request is made to server 
         /// Respond with the specified HTML string to client
@@ -343,6 +343,18 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         /// <param name="html"></param>
         public async Task Ok(string html)
+        {
+            await Ok(html, null);
+        }
+
+        /// <summary>
+        /// Before request is made to server 
+        /// Respond with the specified HTML string to client
+        /// and ignore the request 
+        /// </summary>
+        /// <param name="html"></param>
+        /// <param name="headers"></param>
+        public async Task Ok(string html, Dictionary<string, HttpHeader> headers)
         {
             if (WebSession.Request.RequestLocked)
             {
@@ -356,7 +368,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             var result = Encoding.Default.GetBytes(html);
 
-            await Ok(result);
+            await Ok(result, headers);
         }
 
         /// <summary>
@@ -364,11 +376,26 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Respond with the specified byte[] to client
         /// and ignore the request 
         /// </summary>
-        /// <param name="body"></param>
+        /// <param name="result"></param>
         public async Task Ok(byte[] result)
         {
-            var response = new OkResponse();
+            await Ok(result, null);
+        }
 
+        /// <summary>
+        /// Before request is made to server 
+        /// Respond with the specified byte[] to client
+        /// and ignore the request 
+        /// </summary>
+        /// <param name="result"></param>
+        /// <param name="headers"></param>
+        public async Task Ok(byte[] result, Dictionary<string, HttpHeader> headers)
+        {
+            var response = new OkResponse();
+            if (headers != null && headers.Count > 0)
+            {
+                response.ResponseHeaders = headers;
+            }
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.ResponseBody = result;
 
