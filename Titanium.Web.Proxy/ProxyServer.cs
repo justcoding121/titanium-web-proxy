@@ -24,13 +24,13 @@ namespace Titanium.Web.Proxy
             set;
         }
         //parameter is list of headers
-        public Func<IEnumerable<HttpHeader>, Task<ExternalProxy>> GetCustomUpStreamHttpProxyFunc
+        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpProxyFunc
         {
             get;
             set;
         }
         //parameter is list of headers
-        public Func<IEnumerable<HttpHeader>, Task<ExternalProxy>> GetCustomUpStreamHttpsProxyFunc
+        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpsProxyFunc
         {
             get;
             set;

@@ -435,7 +435,7 @@ namespace Titanium.Web.Proxy
                         {
                             if (GetCustomUpStreamHttpProxyFunc != null)
                             {
-                                customUpStreamHttpProxy = await GetCustomUpStreamHttpProxyFunc(args.WebSession.Request.RequestHeaders.Values).ConfigureAwait(false);
+                                customUpStreamHttpProxy = await GetCustomUpStreamHttpProxyFunc(args).ConfigureAwait(false);
                             }
                         }
                         else
@@ -446,7 +446,7 @@ namespace Titanium.Web.Proxy
                                 {
                                     connectHeaders.Add(header);
                                 }
-                                customUpStreamHttpsProxy = await GetCustomUpStreamHttpsProxyFunc(connectHeaders).ConfigureAwait(false);
+                                customUpStreamHttpsProxy = await GetCustomUpStreamHttpsProxyFunc(args).ConfigureAwait(false);
                             }
                         }
 
