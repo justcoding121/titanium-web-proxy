@@ -89,7 +89,10 @@ namespace Titanium.Web.Proxy.Http
             foreach (var headerItem in this.Request.RequestHeaders)
             {
                 var header = headerItem.Value;
-                requestLines.AppendLine(header.Name + ':' + header.Value);
+                if (headerItem.Key != "Proxy-Authorization")
+                {
+                    requestLines.AppendLine(header.Name + ':' + header.Value);
+                }
             }
 
             //write non unique request headers
@@ -98,7 +101,10 @@ namespace Titanium.Web.Proxy.Http
                 var headers = headerItem.Value;
                 foreach (var header in headers)
                 {
-                    requestLines.AppendLine(header.Name + ':' + header.Value);
+                    if (headerItem.Key != "Proxy-Authorization")
+                    {
+                        requestLines.AppendLine(header.Name + ':' + header.Value);
+                    }
                 }
             }
 
