@@ -425,7 +425,10 @@ namespace Titanium.Web.Proxy
                     {
                         if (tcpClient != null)
                         {
-                            tcpClient.LingerState = new LingerOption(true, 0);
+                            if (tcpClient.LingerState != null)
+                            {
+                                tcpClient.LingerState = new LingerOption(true, 0);
+                            }
                             tcpClient.Client.Shutdown(SocketShutdown.Both);
                             tcpClient.Client.Close();
                             tcpClient.Client.Dispose();
