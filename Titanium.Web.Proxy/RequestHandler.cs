@@ -460,6 +460,18 @@ namespace Titanium.Web.Proxy
                             new LocalCertificateSelectionCallback(SelectClientCertificate),
                             customUpStreamHttpProxy ?? UpStreamHttpProxy, customUpStreamHttpsProxy ?? UpStreamHttpsProxy, clientStream);
                     }
+                    else
+                    {
+                        if(connection.IsHttps)
+                        {
+
+                            args.CustomUpStreamHttpsProxyUsed = connection.UpStreamHttpsProxy;
+                        }
+                        else
+                        {
+                            args.CustomUpStreamHttpProxyUsed = connection.UpStreamHttpProxy;
+                        }
+                    }
 
                     args.WebSession.Request.RequestLocked = true;
 
