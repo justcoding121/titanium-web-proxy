@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Linq;
+using System.Collections.Concurrent;
 
 namespace Titanium.Web.Proxy.Network
 {
@@ -42,7 +43,7 @@ namespace Titanium.Web.Proxy.Network
             MyStore = new X509Store(StoreName.My, StoreLocation.CurrentUser);
             RootStore = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
 
-            certificateCache = new Dictionary<string, CachedCertificate>();
+            certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
         }
 
         /// <summary>
@@ -92,7 +93,6 @@ namespace Titanium.Web.Proxy.Network
         /// <returns></returns>
         protected async virtual Task<X509Certificate2> CreateCertificate(X509Store store, string certificateName, bool isRootCertificate)
         {
-            await semaphoreLock.WaitAsync();
 
             try
             {
@@ -102,6 +102,15 @@ namespace Titanium.Web.Proxy.Network
                     cached.LastAccess = DateTime.Now;
                     return cached.Certificate;
                 }
+            }
+            catch
+            {
+
+            }
+
+            await semaphoreLock.WaitAsync();
+            try
+            { 
 
                 X509Certificate2 certificate = null;
                 store.Open(OpenFlags.ReadWrite);
