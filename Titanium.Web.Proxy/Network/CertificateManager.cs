@@ -108,59 +108,62 @@ namespace Titanium.Web.Proxy.Network
 
             }
 
-            await semaphoreLock.WaitAsync();
-            try
-            { 
 
-                X509Certificate2 certificate = null;
-                store.Open(OpenFlags.ReadWrite);
-                string certificateSubject = string.Format("CN={0}, O={1}", certificateName, Issuer);
 
-                X509Certificate2Collection certificates;
+            X509Certificate2 certificate = null;
+            store.Open(OpenFlags.ReadWrite);
+            string certificateSubject = string.Format("CN={0}, O={1}", certificateName, Issuer);
 
-                if (isRootCertificate)
+            X509Certificate2Collection certificates;
+
+            if (isRootCertificate)
+            {
+                certificates = FindCertificates(store, certificateSubject);
+
+                if (certificates != null)
                 {
-                    certificates = FindCertificates(store, certificateSubject);
-
-                    if (certificates != null)
-                    {
-                        certificate = certificates[0];
-                    }
+                    certificate = certificates[0];
                 }
+            }
 
-                if (certificate == null)
-                {
-                    string[] args = new[] {
+            if (certificate == null)
+            {
+                string[] args = new[] {
                             GetCertificateCreateArgs(store, certificateName) };
 
-                    await CreateCertificate(args);
-                    certificates = FindCertificates(store, certificateSubject);
 
-                    //remove it from store
-                    if (!isRootCertificate)
-                    {
-                        DestroyCertificate(certificateName);
-                    }
-
-                    if (certificates != null)
-                    {
-                        certificate = certificates[0];
-                    }
-                }
-
-                store.Close();
-
-                if (certificate != null && !certificateCache.ContainsKey(certificateName))
+                await semaphoreLock.WaitAsync();
+                try
                 {
-                    certificateCache.Add(certificateName, new CachedCertificate() { Certificate = certificate });
+                    await CreateCertificate(args);
+                }
+                finally
+                {
+                    semaphoreLock.Release();
+                }
+                certificates = FindCertificates(store, certificateSubject);
+
+                //remove it from store
+                if (!isRootCertificate)
+                {
+                    DestroyCertificate(certificateName);
                 }
 
-                return certificate;
+                if (certificates != null)
+                {
+                    certificate = certificates[0];
+                }
             }
-            finally
+
+            store.Close();
+
+            if (certificate != null && !certificateCache.ContainsKey(certificateName))
             {
-                semaphoreLock.Release();
+                certificateCache.Add(certificateName, new CachedCertificate() { Certificate = certificate });
             }
+
+            return certificate;
+
         }
 
         /// <summary>
@@ -270,7 +273,7 @@ namespace Titanium.Web.Proxy.Network
             return certCreatArgs;
         }
 
-        private  bool clearCertificates { get; set; }
+        private bool clearCertificates { get; set; }
 
         /// <summary>
         /// Stops the certificate cache clear process
@@ -301,7 +304,8 @@ namespace Titanium.Web.Proxy.Network
                     foreach (var cache in outdated)
                         certificateCache.Remove(cache.Key);
                 }
-                finally {
+                finally
+                {
                     semaphoreLock.Release();
                 }
 
