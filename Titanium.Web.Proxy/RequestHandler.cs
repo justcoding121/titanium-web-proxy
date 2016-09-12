@@ -294,7 +294,7 @@ namespace Titanium.Web.Proxy
 
             //Now create the request
             await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                 endPoint.EnableSsl ? endPoint.GenericCertificateName : null,null);
+                 endPoint.EnableSsl ? endPoint.GenericCertificateName : null, null);
         }
         /// <summary>
         /// This is the core request handler method for a particular connection from client
@@ -442,10 +442,7 @@ namespace Titanium.Web.Proxy
                         {
                             if (GetCustomUpStreamHttpsProxyFunc != null)
                             {
-                                foreach (var header in args.WebSession.Request.RequestHeaders.Values)
-                                {
-                                    connectHeaders.Add(header);
-                                }
+                                args.WebSession.ConnectHeaders = connectHeaders;
                                 customUpStreamHttpsProxy = await GetCustomUpStreamHttpsProxyFunc(args).ConfigureAwait(false);
                             }
                         }
@@ -462,7 +459,7 @@ namespace Titanium.Web.Proxy
                     }
                     else
                     {
-                        if(connection.IsHttps)
+                        if (connection.IsHttps)
                         {
 
                             args.CustomUpStreamHttpsProxyUsed = connection.UpStreamHttpsProxy;

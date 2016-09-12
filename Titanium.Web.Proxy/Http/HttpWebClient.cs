@@ -19,6 +19,8 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         internal TcpConnection ServerConnection { get; set; }
 
+
+        public List<HttpHeader> ConnectHeaders { get; set; }
         public Request Request { get; set; }
         public Response Response { get; set; }
 
