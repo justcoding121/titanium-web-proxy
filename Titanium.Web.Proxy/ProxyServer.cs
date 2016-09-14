@@ -289,7 +289,7 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
-            certTrusted = certificateCacheManager.CreateTrustedRootCertificate().Result;
+            certTrusted = certificateCacheManager.CreateTrustedRootCertificate();
 
             foreach (var endPoint in ProxyEndPoints)
             {

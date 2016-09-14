@@ -186,7 +186,7 @@ namespace Titanium.Web.Proxy
                     {
 
                         sslStream = new SslStream(clientStream, true);
-                        var certificate = await certificateCacheManager.CreateCertificate(httpRemoteUri.Host, false);
+                        var certificate = certificateCacheManager.CreateCertificate(httpRemoteUri.Host, false);
                         //Successfully managed to authenticate the client using the fake certificate
                         await sslStream.AuthenticateAsServerAsync(certificate, false,
                             SupportedSslProtocols, false);
@@ -259,7 +259,7 @@ namespace Titanium.Web.Proxy
                 var sslStream = new SslStream(clientStream, true);
 
                 //implement in future once SNI supported by SSL stream, for now use the same certificate
-                certificate = await certificateCacheManager.CreateCertificate(endPoint.GenericCertificateName, false);
+                certificate = certificateCacheManager.CreateCertificate(endPoint.GenericCertificateName, false);
 
                 try
                 {
