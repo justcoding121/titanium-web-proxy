@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Linq;
 using System.Collections.Concurrent;
+using System.IO;
 
 namespace Titanium.Web.Proxy.Network
 {
@@ -43,8 +44,32 @@ namespace Titanium.Web.Proxy.Network
         /// <returns>true if succeeded, else false</returns>
         internal bool CreateTrustedRootCertificate()
         {
-            rootCertificate = CreateCertificate(RootCertificateName, true);
+            if(File.Exists("rootcert.pfx"))
+            {
+                try
+                {
+                    rootCertificate = new X509Certificate2("rootCert.pfx");
+                }
+                catch
+                {
 
+                }
+            }
+            if (rootCertificate == null)
+            {
+                rootCertificate = CreateCertificate(RootCertificateName, true);
+            }
+            if (rootCertificate != null)
+            {
+                try
+                {
+                    File.WriteAllBytes("rootCert.pfx", rootCertificate.Export(X509ContentType.Pkcs12));
+                }
+                catch
+                {
+                    
+                }
+            }
             return rootCertificate != null;
         }
         /// <summary>
