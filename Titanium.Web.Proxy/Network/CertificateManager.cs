@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy.Network
         /// <returns>true if succeeded, else false</returns>
         internal bool CreateTrustedRootCertificate()
         {
-            if(File.Exists("rootcert.pfx"))
+            if(File.Exists("rootCert.pfx"))
             {
                 try
                 {
