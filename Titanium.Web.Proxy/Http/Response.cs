@@ -205,7 +205,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Response network stream
         /// </summary>
-        internal Stream ResponseStream { get; set; }
+        public Stream ResponseStream { get; set; }
 
         /// <summary>
         /// response body contenst as byte array
