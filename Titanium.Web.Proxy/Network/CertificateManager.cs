@@ -102,7 +102,6 @@ namespace Titanium.Web.Proxy.Network
             {
                 if (certificateCache.ContainsKey(certificateName) == false)
                 {
-                    Debug.WriteLine(certificateName);
                     certificate = certEngine.CreateCert(certificateName, isRootCertificate, rootCertificate);
                     if (certificate != null && !certificateCache.ContainsKey(certificateName))
                     {
