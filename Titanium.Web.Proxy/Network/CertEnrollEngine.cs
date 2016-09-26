@@ -171,7 +171,7 @@ namespace Titanium.Web.Proxy.Network
             this.typeX509Enrollment.InvokeMember("InitializeFromRequest", BindingFlags.InvokeMethod, null, obj15, subject);
             if (IsRoot)
             {
-                subject[0] = "DO_NOT_TRUST_FiddlerRoot-CE";
+                subject[0] = "DO_NOT_TRUST_TitaniumProxy-CE";
                 this.typeX509Enrollment.InvokeMember("CertificateFriendlyName", BindingFlags.PutDispProperty, null, obj15, subject);
             }
             subject[0] = 0;
