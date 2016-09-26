@@ -18,6 +18,28 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
+        private static Action<Exception> _exceptionFunc=null;
+        public static Action<Exception> ExceptionFunc
+        {
+            get
+            {
+                if(_exceptionFunc!=null)
+                {
+                    return _exceptionFunc;
+                }
+                else
+                {
+                    return (e)=>
+                    {
+
+                    };
+                }
+            }
+            set
+            {
+                _exceptionFunc = value;
+            }
+        }
         public Func<string, string, Task<bool>> AuthenticateUserFunc
         {
             get;

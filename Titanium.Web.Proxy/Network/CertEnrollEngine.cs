@@ -195,7 +195,7 @@ namespace Titanium.Web.Proxy.Network
 
         private X509Certificate2 InternalCreateCert(string sSubjectCN, bool isRoot, bool switchToMTAIfNeeded,X509Certificate2 signingCert=null)
         {
-            X509Certificate2 rCert = null;
+            X509Certificate2 rCert=null;
             if (switchToMTAIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
             {
                 ManualResetEvent manualResetEvent = new ManualResetEvent(false);
@@ -229,7 +229,7 @@ namespace Titanium.Web.Proxy.Network
             }
             catch (Exception e)
             {
-                return null;
+                throw e;
             }
             return rCert;
         }
