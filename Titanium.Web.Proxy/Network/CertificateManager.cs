@@ -55,22 +55,28 @@ namespace Titanium.Web.Proxy.Network
                         return true;
                     }
                 }
-                catch
+                catch(Exception e)
                 {
-
+                    ProxyServer.ExceptionFunc(e);
                 }
             }
-            rootCertificate = CreateCertificate(RootCertificateName, true);
-
+            try
+            {
+                rootCertificate = CreateCertificate(RootCertificateName, true);
+            }
+            catch(Exception e)
+            {
+                ProxyServer.ExceptionFunc(e);
+            }
             if (rootCertificate != null)
             {
                 try
                 {
                     File.WriteAllBytes("rootCert.pfx", rootCertificate.Export(X509ContentType.Pkcs12));
                 }
-                catch
+                catch(Exception e)
                 {
-
+                    ProxyServer.ExceptionFunc(e);
                 }
             }
             return rootCertificate != null;
@@ -102,7 +108,14 @@ namespace Titanium.Web.Proxy.Network
             {
                 if (certificateCache.ContainsKey(certificateName) == false)
                 {
-                    certificate = certEngine.CreateCert(certificateName, isRootCertificate, rootCertificate);
+                    try
+                    {
+                        certificate = certEngine.CreateCert(certificateName, isRootCertificate, rootCertificate);
+                    }
+                    catch(Exception e)
+                    {
+                        ProxyServer.ExceptionFunc(e);
+                    }
                     if (certificate != null && !certificateCache.ContainsKey(certificateName))
                     {
                         certificateCache.Add(certificateName, new CachedCertificate() { Certificate = certificate });
