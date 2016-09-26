@@ -6,6 +6,7 @@ using System.Threading;
 using System.Linq;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Diagnostics;
 
 namespace Titanium.Web.Proxy.Network
 {
@@ -15,13 +16,13 @@ namespace Titanium.Web.Proxy.Network
     internal class CertificateManager : IDisposable
     {
         private CertEnrollEngine certEngine = null;
-   
+
 
         /// <summary>
         /// Cache dictionary
         /// </summary>
         private readonly IDictionary<string, CachedCertificate> certificateCache;
-        
+
 
         internal string Issuer { get; private set; }
         internal string RootCertificateName { get; private set; }
@@ -44,21 +45,23 @@ namespace Titanium.Web.Proxy.Network
         /// <returns>true if succeeded, else false</returns>
         internal bool CreateTrustedRootCertificate()
         {
-            if(File.Exists("rootCert.pfx"))
+            if (File.Exists("rootCert.pfx"))
             {
                 try
                 {
-                    rootCertificate = new X509Certificate2("rootCert.pfx");
+                    rootCertificate = new X509Certificate2("rootCert.pfx", string.Empty, X509KeyStorageFlags.Exportable);
+                    if (rootCertificate != null)
+                    {
+                        return true;
+                    }
                 }
                 catch
                 {
 
                 }
             }
-            if (rootCertificate == null)
-            {
-                rootCertificate = CreateCertificate(RootCertificateName, true);
-            }
+            rootCertificate = CreateCertificate(RootCertificateName, true);
+
             if (rootCertificate != null)
             {
                 try
@@ -67,7 +70,7 @@ namespace Titanium.Web.Proxy.Network
                 }
                 catch
                 {
-                    
+
                 }
             }
             return rootCertificate != null;
@@ -94,14 +97,30 @@ namespace Titanium.Web.Proxy.Network
             {
 
             }
-
-            X509Certificate2 certificate = certEngine.CreateCert(certificateName, isRootCertificate,rootCertificate);
-
-
-            if (certificate != null && !certificateCache.ContainsKey(certificateName))
+            X509Certificate2 certificate = null;
+            lock (string.Intern(certificateName))
             {
-                certificateCache.Add(certificateName, new CachedCertificate() { Certificate = certificate });
+                if (certificateCache.ContainsKey(certificateName) == false)
+                {
+                    Debug.WriteLine(certificateName);
+                    certificate = certEngine.CreateCert(certificateName, isRootCertificate, rootCertificate);
+                    if (certificate != null && !certificateCache.ContainsKey(certificateName))
+                    {
+                        certificateCache.Add(certificateName, new CachedCertificate() { Certificate = certificate });
+                    }
+                }
+                else
+                {
+                    if (certificateCache.ContainsKey(certificateName))
+                    {
+                        var cached = certificateCache[certificateName];
+                        cached.LastAccess = DateTime.Now;
+                        return cached.Certificate;
+                    }
+                }
             }
+
+
 
             return certificate;
 
