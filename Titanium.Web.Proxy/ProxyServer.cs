@@ -177,9 +177,6 @@ namespace Titanium.Web.Proxy
 
             RootCertificateName = RootCertificateName ?? "Titanium Root Certificate Authority";
             RootCertificateIssuerName = RootCertificateIssuerName ?? "Titanium";
-
-            certificateCacheManager = new CertificateManager(RootCertificateIssuerName,
-                RootCertificateName);
         }
 
         /// <summary>
@@ -311,6 +308,9 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
+            certificateCacheManager = new CertificateManager(RootCertificateIssuerName,
+                RootCertificateName);
+
             certTrusted = certificateCacheManager.CreateTrustedRootCertificate();
 
             foreach (var endPoint in ProxyEndPoints)
@@ -350,7 +350,7 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints.Clear();
 
-            certificateCacheManager.StopClearIdleCertificates();
+            certificateCacheManager?.StopClearIdleCertificates();
 
             proxyRunning = false;
         }
@@ -468,7 +468,7 @@ namespace Titanium.Web.Proxy
                 Stop();
             }
 
-            certificateCacheManager.Dispose();
+            certificateCacheManager?.Dispose();
         }
     }
 }
