@@ -45,11 +45,13 @@ namespace Titanium.Web.Proxy.Network
         /// <returns>true if succeeded, else false</returns>
         internal bool CreateTrustedRootCertificate()
         {
-            if (File.Exists("rootCert.pfx"))
+            var fileName = Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location),"rootCert.pfx");
+
+            if (File.Exists(fileName))
             {
                 try
                 {
-                    rootCertificate = new X509Certificate2("rootCert.pfx", string.Empty, X509KeyStorageFlags.Exportable);
+                    rootCertificate = new X509Certificate2(fileName, string.Empty, X509KeyStorageFlags.Exportable);
                     if (rootCertificate != null)
                     {
                         return true;
@@ -72,7 +74,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 try
                 {
-                    File.WriteAllBytes("rootCert.pfx", rootCertificate.Export(X509ContentType.Pkcs12));
+                    File.WriteAllBytes(fileName, rootCertificate.Export(X509ContentType.Pkcs12));
                 }
                 catch(Exception e)
                 {
