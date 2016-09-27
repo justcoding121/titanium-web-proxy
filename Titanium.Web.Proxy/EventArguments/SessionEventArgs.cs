@@ -38,6 +38,13 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         internal ProxyClient ProxyClient { get; set; }
 
+        //Should we send a rerequest
+        public bool ReRequest
+        {
+            get;
+            set;
+        }
+
         /// <summary>
         /// Does this session uses SSL
         /// </summary>
