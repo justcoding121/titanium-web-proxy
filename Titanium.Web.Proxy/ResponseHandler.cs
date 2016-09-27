@@ -29,6 +29,7 @@ namespace Titanium.Web.Proxy
                     args.WebSession.Response.ResponseStream = args.WebSession.ServerConnection.Stream;
                 }
 
+                args.ReRequest = false;
                 //If user requested call back then do it
                 if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
                 {
@@ -37,12 +38,16 @@ namespace Titanium.Web.Proxy
 
                     for (int i = 0; i < invocationList.Length; i++)
                     {
-                        handlerTasks[i] = ((Func<object, SessionEventArgs, Task>)invocationList[i])(null, args);
+                        handlerTasks[i] = ((Func<object, SessionEventArgs, Task>)invocationList[i])(this, args);
                     }
 
                     await Task.WhenAll(handlerTasks);
                 }
-
+                if(args.ReRequest)
+                {
+                    await HandleHttpSessionRequestInternal(null, args, null, null, true).ConfigureAwait(false);
+                    return;
+                }
                 args.WebSession.Response.ResponseLocked = true;
 
                 //Write back to client 100-conitinue response if that's what server returned

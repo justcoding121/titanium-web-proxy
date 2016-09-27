@@ -9,6 +9,7 @@ using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using System.Linq;
 using System.Security.Authentication;
+using System.Collections.Concurrent;
 
 namespace Titanium.Web.Proxy
 {
@@ -17,15 +18,46 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
-        /// <summary>
-        /// Does the root certificate used by this proxy is trusted by the machine?
-        /// </summary>
-        private bool certTrusted { get; set; }
+        private static Action<Exception> _exceptionFunc=null;
+        public static Action<Exception> ExceptionFunc
+        {
+            get
+            {
+                if(_exceptionFunc!=null)
+                {
+                    return _exceptionFunc;
+                }
+                else
+                {
+                    return (e)=>
+                    {
 
-        /// <summary>
-        /// Is the proxy currently running
-        /// </summary>
-        private bool proxyRunning { get; set; }
+                    };
+                }
+            }
+            set
+            {
+                _exceptionFunc = value;
+            }
+        }
+        public Func<string, string, Task<bool>> AuthenticateUserFunc
+        {
+            get;
+            set;
+        }
+        //parameter is list of headers
+        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpProxyFunc
+        {
+            get;
+            set;
+        }
+        //parameter is list of headers
+        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpsProxyFunc
+        {
+            get;
+            set;
+        }
+
 
         /// <summary>
         /// Manages certificates used by this proxy
@@ -43,6 +75,16 @@ namespace Titanium.Web.Proxy
         private SystemProxyManager systemProxySettingsManager { get; set; }
 
         private FireFoxProxySettingsManager firefoxProxySettingsManager { get; set; }
+
+        /// <summary>
+        /// Does the root certificate used by this proxy is trusted by the machine?
+        /// </summary>
+        private bool certTrusted { get; set; }
+
+        /// <summary>
+        /// Is the proxy currently running
+        /// </summary>
+        private bool proxyRunning { get; set; }
 
         /// <summary>
         /// Buffer size used throughout this proxy
@@ -88,12 +130,12 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// External proxy for Http
         /// </summary>
-        public ExternalProxy ExternalHttpProxy { get; set; }
+        public ExternalProxy UpStreamHttpProxy { get; set; }
 
         /// <summary>
-        /// External proxy for Https
+        /// External proxy for Http
         /// </summary>
-        public ExternalProxy ExternalHttpsProxy { get; set; }
+        public ExternalProxy UpStreamHttpsProxy { get; set; }
 
         /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
@@ -269,7 +311,7 @@ namespace Titanium.Web.Proxy
             certificateCacheManager = new CertificateManager(RootCertificateIssuerName,
                 RootCertificateName);
 
-            certTrusted = certificateCacheManager.CreateTrustedRootCertificate().Result;
+            certTrusted = certificateCacheManager.CreateTrustedRootCertificate();
 
             foreach (var endPoint in ProxyEndPoints)
             {
@@ -382,6 +424,7 @@ namespace Titanium.Web.Proxy
                 //Other errors are discarded to keep proxy running
             }
 
+
             if (tcpClient != null)
             {
                 Task.Run(async () =>
@@ -394,6 +437,8 @@ namespace Titanium.Web.Proxy
                         }
                         else
                         {
+
+
                             await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient);
                         }
 
@@ -402,12 +447,11 @@ namespace Titanium.Web.Proxy
                     {
                         if (tcpClient != null)
                         {
-                            tcpClient.LingerState = new LingerOption(true, 0);
                             tcpClient.Client.Shutdown(SocketShutdown.Both);
                             tcpClient.Client.Close();
                             tcpClient.Client.Dispose();
-
                             tcpClient.Close();
+
                         }
                     }
                 });
