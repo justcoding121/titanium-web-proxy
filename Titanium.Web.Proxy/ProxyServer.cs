@@ -9,7 +9,6 @@ using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using System.Linq;
 using System.Security.Authentication;
-using System.Collections.Concurrent;
 
 namespace Titanium.Web.Proxy
 {
