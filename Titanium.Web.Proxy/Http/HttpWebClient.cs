@@ -115,8 +115,6 @@ namespace Titanium.Web.Proxy.Http
             string request = requestLines.ToString();
             byte[] requestBytes = Encoding.ASCII.GetBytes(request);
 
-            var test = Encoding.UTF8.GetString(requestBytes);
-
             await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
             await stream.FlushAsync();
 
