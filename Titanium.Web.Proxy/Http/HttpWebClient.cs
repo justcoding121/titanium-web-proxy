@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Shared;
+using Titanium.Web.Proxy.Tcp;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -14,6 +17,8 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class HttpWebClient
     {
+        private int processId;
+
         /// <summary>
         /// Connection to server
         /// </summary>
@@ -23,6 +28,24 @@ namespace Titanium.Web.Proxy.Http
         public List<HttpHeader> ConnectHeaders { get; set; }
         public Request Request { get; set; }
         public Response Response { get; set; }
+
+        /// <summary>
+        /// PID of the process that is created the current session
+        /// </summary>
+        public int ProcessId
+        {
+            get
+            {
+                if (processId == 0)
+                {
+                    TcpRow tcpRow = TcpHelper.GetExtendedTcpTable().TcpRows.FirstOrDefault(row => row.LocalEndPoint.Port == ServerConnection.port);
+
+                    processId = tcpRow?.ProcessId ?? -1;
+                }
+
+                return processId;
+            }
+        }
 
         /// <summary>
         /// Is Https?
@@ -114,8 +137,6 @@ namespace Titanium.Web.Proxy.Http
 
             string request = requestLines.ToString();
             byte[] requestBytes = Encoding.ASCII.GetBytes(request);
-
-            var test = Encoding.UTF8.GetString(requestBytes);
 
             await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
             await stream.FlushAsync();
