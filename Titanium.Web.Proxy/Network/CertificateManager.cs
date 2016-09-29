@@ -167,7 +167,7 @@ namespace Titanium.Web.Proxy.Network
 
             var process = new Process();
 
-            string file = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "makecert.exe");
+            string file = Path.Combine(Path.GetDirectoryName(new Uri(Assembly.GetExecutingAssembly().CodeBase).LocalPath), "makecert.exe");
 
             if (!File.Exists(file))
             {
