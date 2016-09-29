@@ -115,6 +115,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //read response headers
             var responseHeaders = e.WebSession.Response.ResponseHeaders;
 
+            // print out process id of current session
+            Console.WriteLine($"PID: {e.WebSession.ProcessId}");
+
             //if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
             if (e.WebSession.Request.Method == "GET" || e.WebSession.Request.Method == "POST")
             {
