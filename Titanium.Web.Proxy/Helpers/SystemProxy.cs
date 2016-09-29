@@ -11,7 +11,7 @@ using System.Linq;
 namespace Titanium.Web.Proxy.Helpers
 {
   
-    internal partial class NativeMethods
+    internal  class NativeMethods
     {
         [DllImport("wininet.dll")]
         internal static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer,
