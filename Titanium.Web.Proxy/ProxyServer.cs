@@ -116,11 +116,6 @@ namespace Titanium.Web.Proxy
         public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 
         /// <summary>
-        /// Is the proxy currently running
-        /// </summary>
-        public bool ProxyRunning => proxyRunning;
-
-        /// <summary>
         /// Constructor
         /// </summary>
         public ProxyServer()
