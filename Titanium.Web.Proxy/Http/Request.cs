@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Extensions;
@@ -234,13 +233,14 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Request Url
         /// </summary>
-        public string Url { get { return RequestUri.OriginalString; } }
+        public string Url => RequestUri.OriginalString;
 
-        /// <summary>
+	    /// <summary>
         /// Encoding for this request
         /// </summary>
-        internal Encoding Encoding { get { return this.GetEncoding(); } }
-        /// <summary>
+        internal Encoding Encoding => this.GetEncoding();
+
+	    /// <summary>
         /// Terminates the underlying Tcp Connection to client after current request
         /// </summary>
         internal bool CancelRequest { get; set; }

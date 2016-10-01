@@ -17,22 +17,13 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
-        private static Action<Exception> _exceptionFunc=null;
+	    private static readonly Lazy<Action<Exception>> _defaultExceptionFunc = new Lazy<Action<Exception>>(() => (e => { }));
+        private static Action<Exception> _exceptionFunc;
         public static Action<Exception> ExceptionFunc
         {
             get
             {
-                if(_exceptionFunc!=null)
-                {
-                    return _exceptionFunc;
-                }
-                else
-                {
-                    return (e)=>
-                    {
-
-                    };
-                }
+				return _exceptionFunc ?? _defaultExceptionFunc.Value;
             }
             set
             {
