@@ -1,11 +1,9 @@
-﻿using Titanium.Web.Proxy.Network;
-
-namespace Titanium.Web.Proxy.Http.Responses
+﻿namespace Titanium.Web.Proxy.Http.Responses
 {
     /// <summary>
     /// Redirect response
     /// </summary>
-    public class RedirectResponse : Response
+    public sealed class RedirectResponse : Response
     {
         public RedirectResponse()
         {

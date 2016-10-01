@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Net.NetworkInformation;
 using System.Net.Security;
-using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Authentication;
 using System.Text;
@@ -169,30 +168,17 @@ namespace Titanium.Web.Proxy.Helpers
                                                                 
             try
             {
-                TcpClient tunnelClient = tcpConnection.TcpClient;
-
                 Stream tunnelStream = tcpConnection.Stream;
 
                 Task sendRelay;
 
                 //Now async relay all server=>client & client=>server data
-                if (sb != null)
-                {
-                    sendRelay = clientStream.CopyToAsync(sb.ToString(), tunnelStream);
-                }
-                else
-                {
-                    sendRelay = clientStream.CopyToAsync(string.Empty, tunnelStream);
-                }
+	            sendRelay = clientStream.CopyToAsync(sb?.ToString() ?? string.Empty, tunnelStream);
 
 
-                var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
+	            var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
 
                 await Task.WhenAll(sendRelay, receiveRelay);
-            }
-            catch
-            {
-                throw;
             }
             finally
             {
