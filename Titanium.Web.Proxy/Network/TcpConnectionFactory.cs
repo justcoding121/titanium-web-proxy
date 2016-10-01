@@ -56,11 +56,11 @@ namespace Titanium.Web.Proxy.Network
 
                     using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true))
                     {
-                        await writer.WriteLineAsync(string.Format("CONNECT {0}:{1} HTTP/{2}", remoteHostName, remotePort,httpVersion));
-                        await writer.WriteLineAsync(string.Format("Host: {0}:{1}", remoteHostName, remotePort));
+                        await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
+                        await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
                         await writer.WriteLineAsync("Connection: Keep-Alive");
 
-                        if (externalHttpsProxy.UserName != null && externalHttpsProxy.UserName != "" && externalHttpsProxy.Password != null)
+                        if (!string.IsNullOrEmpty(externalHttpsProxy.UserName) && externalHttpsProxy.Password != null)
                         {
                             await writer.WriteLineAsync("Proxy-Connection: keep-alive");
                             await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(externalHttpsProxy.UserName + ":" + externalHttpsProxy.Password)));
