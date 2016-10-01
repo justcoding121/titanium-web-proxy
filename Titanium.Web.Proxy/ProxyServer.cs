@@ -9,7 +9,6 @@ using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using System.Linq;
 using System.Security.Authentication;
-using System.Collections.Concurrent;
 
 namespace Titanium.Web.Proxy
 {
@@ -156,6 +155,11 @@ namespace Titanium.Web.Proxy
         /// List of supported Ssl versions
         /// </summary>
         public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
+
+        /// <summary>
+        /// Is the proxy currently running
+        /// </summary>
+        public bool ProxyRunning => proxyRunning;
 
         /// <summary>
         /// Constructor
