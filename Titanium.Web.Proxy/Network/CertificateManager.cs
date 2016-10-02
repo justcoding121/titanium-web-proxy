@@ -2,11 +2,9 @@
 using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
-using System.Threading;
 using System.Linq;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Diagnostics;
 
 namespace Titanium.Web.Proxy.Network
 {
