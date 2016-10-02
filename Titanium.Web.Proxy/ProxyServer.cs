@@ -9,7 +9,6 @@ using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using System.Linq;
 using System.Security.Authentication;
-using System.Collections.Concurrent;
 
 namespace Titanium.Web.Proxy
 {
@@ -18,22 +17,13 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
-        private static Action<Exception> _exceptionFunc=null;
+	    private static readonly Lazy<Action<Exception>> _defaultExceptionFunc = new Lazy<Action<Exception>>(() => (e => { }));
+        private static Action<Exception> _exceptionFunc;
         public static Action<Exception> ExceptionFunc
         {
             get
             {
-                if(_exceptionFunc!=null)
-                {
-                    return _exceptionFunc;
-                }
-                else
-                {
-                    return (e)=>
-                    {
-
-                    };
-                }
+				return _exceptionFunc ?? _defaultExceptionFunc.Value;
             }
             set
             {
@@ -156,6 +146,11 @@ namespace Titanium.Web.Proxy
         /// List of supported Ssl versions
         /// </summary>
         public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
+
+        /// <summary>
+        /// Is the proxy currently running
+        /// </summary>
+        public bool ProxyRunning => proxyRunning;
 
         /// <summary>
         /// Constructor
