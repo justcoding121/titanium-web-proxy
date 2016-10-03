@@ -37,28 +37,36 @@ namespace Titanium.Web.Proxy.Network
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
         }
 
-        /// <summary>
-        /// Attempts to move a self-signed certificate to the root store.
-        /// </summary>
-        /// <returns>true if succeeded, else false</returns>
-        internal bool CreateTrustedRootCertificate()
+        X509Certificate2 GetRootCertificate()
         {
-            var fileName = Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location),"rootCert.pfx");
+            var fileName = Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location), "rootCert.pfx");
 
             if (File.Exists(fileName))
             {
                 try
                 {
-                    rootCertificate = new X509Certificate2(fileName, string.Empty, X509KeyStorageFlags.Exportable);
-                    if (rootCertificate != null)
-                    {
-                        return true;
-                    }
+                   return new X509Certificate2(fileName, string.Empty, X509KeyStorageFlags.Exportable);
+                   
                 }
-                catch(Exception e)
+                catch (Exception e)
                 {
                     ProxyServer.ExceptionFunc(e);
+                    return null;
                 }
+            }
+            return null;
+        }
+        /// <summary>
+        /// Attempts to create a RootCertificate
+        /// </summary>
+        /// <returns>true if succeeded, else false</returns>
+        internal bool CreateTrustedRootCertificate()
+        {
+
+            rootCertificate = GetRootCertificate();
+            if (rootCertificate != null)
+            {
+                return true;
             }
             try
             {
@@ -72,6 +80,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 try
                 {
+                    var fileName = Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location), "rootCert.pfx");
                     File.WriteAllBytes(fileName, rootCertificate.Export(X509ContentType.Pkcs12));
                 }
                 catch(Exception e)
@@ -175,6 +184,32 @@ namespace Titanium.Web.Proxy.Network
 
                 //after a minute come back to check for outdated certificates in cache
                 await Task.Delay(1000 * 60);
+            }
+        }
+       
+        public bool TrustRootCertificate()
+        {
+            if (rootCertificate == null)
+            {
+                return false;
+            }
+            try
+            {
+                X509Store x509Store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
+                x509Store.Open(OpenFlags.ReadWrite);
+                try
+                {
+                    x509Store.Add(rootCertificate);
+                }
+                finally
+                {
+                    x509Store.Close();
+                }
+                return true;
+            }
+            catch (Exception exception)
+            {
+                return false;
             }
         }
 
