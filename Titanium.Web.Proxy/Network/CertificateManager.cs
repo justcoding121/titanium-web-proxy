@@ -59,7 +59,7 @@ namespace Titanium.Web.Proxy.Network
             return null;
         }
         /// <summary>
-        /// Attempts to move a self-signed certificate to the root store.
+        /// Attempts to create a RootCertificate
         /// </summary>
         /// <returns>true if succeeded, else false</returns>
         internal bool CreateTrustedRootCertificate()
