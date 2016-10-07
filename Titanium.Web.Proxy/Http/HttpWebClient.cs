@@ -38,7 +38,8 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (processId == 0)
                 {
-                    TcpRow tcpRow = TcpHelper.GetExtendedTcpTable().TcpRows.FirstOrDefault(row => row.LocalEndPoint.Port == ServerConnection.port);
+                    TcpRow tcpRow = TcpHelper.GetExtendedTcpTable().TcpRows
+                        .FirstOrDefault(row => row.LocalEndPoint.Port == ServerConnection.port);
 
                     processId = tcpRow?.ProcessId ?? -1;
                 }

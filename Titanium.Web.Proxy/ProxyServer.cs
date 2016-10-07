@@ -17,42 +17,31 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
-	    private static readonly Lazy<Action<Exception>> _defaultExceptionFunc = new Lazy<Action<Exception>>(() => (e => { }));
-        private static Action<Exception> _exceptionFunc;
-        public static Action<Exception> ExceptionFunc
-        {
-            get
-            {
-				return _exceptionFunc ?? _defaultExceptionFunc.Value;
-            }
-            set
-            {
-                _exceptionFunc = value;
-            }
-        }
-        public Func<string, string, Task<bool>> AuthenticateUserFunc
-        {
-            get;
-            set;
-        }
-        //parameter is list of headers
-        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpProxyFunc
-        {
-            get;
-            set;
-        }
-        //parameter is list of headers
-        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpsProxyFunc
-        {
-            get;
-            set;
-        }
+	  
+        /// <summary>
+        /// Is the root certificate used by this proxy is valid?
+        /// </summary>
+        private bool certValidated { get; set; }
 
+        /// <summary>
+        /// Is the proxy currently running
+        /// </summary>
+        private bool proxyRunning { get; set; }
 
         /// <summary>
         /// Manages certificates used by this proxy
         /// </summary>
         private CertificateManager certificateCacheManager { get; set; }
+
+        /// <summary>
+        /// An default exception log func
+        /// </summary>
+        private readonly Lazy<Action<Exception>> defaultExceptionFunc = new Lazy<Action<Exception>>(() => (e => { }));
+
+        /// <summary>
+        /// backing exception func for exposed public property
+        /// </summary>
+        private Action<Exception> exceptionFunc;
 
         /// <summary>
         /// A object that creates tcp connection to server
@@ -67,16 +56,6 @@ namespace Titanium.Web.Proxy
         private FireFoxProxySettingsManager firefoxProxySettingsManager { get; set; }
 
         /// <summary>
-        /// Does the root certificate used by this proxy is trusted by the machine?
-        /// </summary>
-        private bool certTrusted { get; set; }
-
-        /// <summary>
-        /// Is the proxy currently running
-        /// </summary>
-        private bool proxyRunning { get; set; }
-
-        /// <summary>
         /// Buffer size used throughout this proxy
         /// </summary>
         public int BUFFER_SIZE { get; set; } = 8192;
@@ -88,8 +67,18 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         /// Name of the root certificate
+        /// If no certificate is provided then a default Root Certificate will be created and used
+        /// The provided root certificate has to be in the proxy exe directory with the private key 
+        /// The root certificate file should be named as  "rootCert.pfx"
         /// </summary>
         public string RootCertificateName { get; set; }
+
+        /// <summary>
+        /// Trust the RootCertificate used by this proxy server
+        /// Note that this do not make the client trust the certificate!
+        /// This would import the root certificate to the certificate store of machine that runs this proxy server
+        /// </summary>
+        public bool TrustRootCertificate { get; set; }
 
         /// <summary>
         /// Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
@@ -136,6 +125,51 @@ namespace Titanium.Web.Proxy
         /// Callback tooverride client certificate during SSL mutual authentication
         /// </summary>
         public event Func<object, CertificateSelectionEventArgs, Task> ClientCertificateSelectionCallback;
+
+        /// <summary>
+        /// Callback for error events in proxy
+        /// </summary>
+        public Action<Exception> ExceptionFunc
+        {
+            get
+            {
+                return exceptionFunc ?? defaultExceptionFunc.Value;
+            }
+            set
+            {
+                exceptionFunc = value;
+            }
+        }
+
+        /// <summary>
+        /// A callback to authenticate clients 
+        /// Parameters are username, password provided by client
+        /// return true for successful authentication
+        /// </summary>
+        public Func<string, string, Task<bool>> AuthenticateUserFunc
+        {
+            get;
+            set;
+        }
+
+        /// <summary>
+        /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP requests
+        /// return the ExternalProxy object with valid credentials
+        /// </summary>
+        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpProxyFunc
+        {
+            get;
+            set;
+        }
+
+        /// <summary>
+        /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTPS requests
+        /// return the ExternalProxy object with valid credentials
+        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpsProxyFunc
+        {
+            get;
+            set;
+        }
 
         /// <summary>
         /// A list of IpAddress & port this proxy is listening to
@@ -254,12 +288,13 @@ namespace Titanium.Web.Proxy
 
 
             //If certificate was trusted by the machine
-            if (certTrusted)
+            if (certValidated)
             {
                 systemProxySettingsManager.SetHttpsProxy(
                    Equals(endPoint.IpAddress, IPAddress.Any) | Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(),
                     endPoint.Port);
             }
+
 
             endPoint.IsSystemHttpsProxy = true;
 
@@ -304,9 +339,14 @@ namespace Titanium.Web.Proxy
             }
 
             certificateCacheManager = new CertificateManager(RootCertificateIssuerName,
-                RootCertificateName);
+                RootCertificateName, ExceptionFunc);
 
-            certTrusted = certificateCacheManager.CreateTrustedRootCertificate();
+            certValidated = certificateCacheManager.CreateTrustedRootCertificate();
+
+            if (TrustRootCertificate)
+            {
+                certificateCacheManager.TrustRootCertificate();
+            }
 
             foreach (var endPoint in ProxyEndPoints)
             {
