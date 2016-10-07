@@ -75,6 +75,7 @@ namespace Titanium.Web.Proxy
             }
             catch (Exception e)
             {
+                ExceptionFunc(e);
                 //Return not authorized
                 await WriteResponseStatus(new Version(1, 1), "407",
                              "Proxy Authentication Invalid", clientStreamWriter);
