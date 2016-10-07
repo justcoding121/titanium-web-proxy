@@ -65,7 +65,7 @@
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
     <Compile Include="Network\CachedCertificate.cs" />
-    <Compile Include="Network\CertEnrollEngine.cs" />
+    <Compile Include="Network\CertificateMaker.cs" />
     <Compile Include="Network\ProxyClient.cs" />
     <Compile Include="Exceptions\BodyNotFoundException.cs" />
     <Compile Include="Extensions\HttpWebResponseExtensions.cs" />
@@ -83,6 +83,7 @@
     <Compile Include="Models\HttpHeader.cs" />
     <Compile Include="Http\HttpWebClient.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ProxyAuthorizationHandler.cs" />
     <Compile Include="RequestHandler.cs" />
     <Compile Include="ResponseHandler.cs" />
     <Compile Include="Helpers\CustomBinaryReader.cs" />

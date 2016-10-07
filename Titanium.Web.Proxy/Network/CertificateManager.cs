@@ -13,31 +13,34 @@ namespace Titanium.Web.Proxy.Network
     /// </summary>
     internal class CertificateManager : IDisposable
     {
-        private CertEnrollEngine certEngine = null;
+        private CertificateMaker certEngine = null;
 
-
+        private bool clearCertificates { get; set; }
         /// <summary>
         /// Cache dictionary
         /// </summary>
         private readonly IDictionary<string, CachedCertificate> certificateCache;
 
+        private Action<Exception> exceptionFunc;
 
         internal string Issuer { get; private set; }
         internal string RootCertificateName { get; private set; }
 
         internal X509Certificate2 rootCertificate { get; set; }
 
-        internal CertificateManager(string issuer, string rootCertificateName)
+        internal CertificateManager(string issuer, string rootCertificateName, Action<Exception> exceptionFunc)
         {
-            certEngine = new CertEnrollEngine();
+            this.exceptionFunc = exceptionFunc;
+
+            certEngine = new CertificateMaker();
 
             Issuer = issuer;
-            RootCertificateName = rootCertificateName;
+            RootCertificateName = rootCertificateName;      
 
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
         }
 
-        X509Certificate2 GetRootCertificate()
+        internal X509Certificate2 GetRootCertificate()
         {
             var fileName = Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location), "rootCert.pfx");
 
@@ -50,7 +53,7 @@ namespace Titanium.Web.Proxy.Network
                 }
                 catch (Exception e)
                 {
-                    ProxyServer.ExceptionFunc(e);
+                    exceptionFunc(e);
                     return null;
                 }
             }
@@ -74,7 +77,7 @@ namespace Titanium.Web.Proxy.Network
             }
             catch(Exception e)
             {
-                ProxyServer.ExceptionFunc(e);
+                exceptionFunc(e);
             }
             if (rootCertificate != null)
             {
@@ -85,7 +88,7 @@ namespace Titanium.Web.Proxy.Network
                 }
                 catch(Exception e)
                 {
-                    ProxyServer.ExceptionFunc(e);
+                    exceptionFunc(e);
                 }
             }
             return rootCertificate != null;
@@ -97,7 +100,7 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="certificateName"></param>
         /// <param name="isRootCertificate"></param>
         /// <returns></returns>
-        public virtual X509Certificate2 CreateCertificate(string certificateName, bool isRootCertificate)
+        internal virtual X509Certificate2 CreateCertificate(string certificateName, bool isRootCertificate)
         {
             try
             {
@@ -119,11 +122,11 @@ namespace Titanium.Web.Proxy.Network
                 {
                     try
                     {
-                        certificate = certEngine.CreateCert(certificateName, isRootCertificate, rootCertificate);
+                        certificate = certEngine.MakeCertificate(certificateName, isRootCertificate, rootCertificate);
                     }
                     catch(Exception e)
                     {
-                        ProxyServer.ExceptionFunc(e);
+                        exceptionFunc(e);
                     }
                     if (certificate != null && !certificateCache.ContainsKey(certificateName))
                     {
@@ -146,9 +149,6 @@ namespace Titanium.Web.Proxy.Network
             return certificate;
 
         }
-
-
-        private bool clearCertificates { get; set; }
 
         /// <summary>
         /// Stops the certificate cache clear process
@@ -187,7 +187,7 @@ namespace Titanium.Web.Proxy.Network
             }
         }
        
-        public bool TrustRootCertificate()
+        internal bool TrustRootCertificate()
         {
             if (rootCertificate == null)
             {
@@ -195,19 +195,25 @@ namespace Titanium.Web.Proxy.Network
             }
             try
             {
-                X509Store x509Store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
-                x509Store.Open(OpenFlags.ReadWrite);
+                X509Store x509RootStore = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
+                var x509PersonalStore = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+
+                x509RootStore.Open(OpenFlags.ReadWrite);
+                x509PersonalStore.Open(OpenFlags.ReadWrite);
+
                 try
                 {
-                    x509Store.Add(rootCertificate);
+                    x509RootStore.Add(rootCertificate);
+                    x509PersonalStore.Add(rootCertificate);
                 }
                 finally
                 {
-                    x509Store.Close();
+                    x509RootStore.Close();
+                    x509PersonalStore.Close();
                 }
                 return true;
             }
-            catch (Exception exception)
+            catch 
             {
                 return false;
             }
