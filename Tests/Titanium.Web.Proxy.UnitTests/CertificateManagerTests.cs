@@ -20,7 +20,8 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager("Titanium", "Titanium Root Certificate Authority");
+            var mgr = new CertificateManager("Titanium", "Titanium Root Certificate Authority", 
+                new Lazy<Action<Exception>>(() => (e => { })).Value);
 
             mgr.ClearIdleCertificates(1);
 

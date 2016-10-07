@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -10,7 +6,7 @@ using System.Threading;
 namespace Titanium.Web.Proxy.Network
 {
 
-    public class CertEnrollEngine
+    public class CertificateMaker
     {
         private Type typeX500DN;
 
@@ -44,7 +40,7 @@ namespace Titanium.Web.Proxy.Network
 
         private object _SharedPrivateKey;
 
-        public CertEnrollEngine()
+        public CertificateMaker()
         {
             this.typeX500DN = Type.GetTypeFromProgID("X509Enrollment.CX500DistinguishedName", true);
             this.typeX509PrivateKey = Type.GetTypeFromProgID("X509Enrollment.CX509PrivateKey", true);
@@ -62,12 +58,12 @@ namespace Titanium.Web.Proxy.Network
             this.typeAlternativeNamesExt = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionAlternativeNames");
         }
 
-        public X509Certificate2 CreateCert(string sSubjectCN, bool isRoot,X509Certificate2 signingCert=null)
+        public X509Certificate2 MakeCertificate(string sSubjectCN, bool isRoot,X509Certificate2 signingCert=null)
         {
-            return this.InternalCreateCert(sSubjectCN, isRoot, true, signingCert);
+            return this.MakeCertificateInternal(sSubjectCN, isRoot, true, signingCert);
         }
 
-        private X509Certificate2 GenerateCertificate(bool IsRoot, string SubjectCN, string FullSubject, int PrivateKeyLength, string HashAlg, DateTime ValidFrom, DateTime ValidTo, X509Certificate2 SigningCertificate)
+        private X509Certificate2 MakeCertificate(bool IsRoot, string SubjectCN, string FullSubject, int PrivateKeyLength, string HashAlg, DateTime ValidFrom, DateTime ValidTo, X509Certificate2 SigningCertificate)
         {
             X509Certificate2 cert;
             if (IsRoot != (null == SigningCertificate))
@@ -193,7 +189,7 @@ namespace Titanium.Web.Proxy.Network
             return cert;
         }
 
-        private X509Certificate2 InternalCreateCert(string sSubjectCN, bool isRoot, bool switchToMTAIfNeeded,X509Certificate2 signingCert=null)
+        private X509Certificate2 MakeCertificateInternal(string sSubjectCN, bool isRoot, bool switchToMTAIfNeeded,X509Certificate2 signingCert=null)
         {
             X509Certificate2 rCert=null;
             if (switchToMTAIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
@@ -201,7 +197,7 @@ namespace Titanium.Web.Proxy.Network
                 ManualResetEvent manualResetEvent = new ManualResetEvent(false);
                 ThreadPool.QueueUserWorkItem((object o) =>
                 {
-                    rCert = this.InternalCreateCert(sSubjectCN, isRoot, false,signingCert);
+                    rCert = this.MakeCertificateInternal(sSubjectCN, isRoot, false,signingCert);
                     manualResetEvent.Set();
                 });
                 manualResetEvent.WaitOne();
@@ -220,11 +216,11 @@ namespace Titanium.Web.Proxy.Network
             {
                 if (!isRoot)
                 {
-                    rCert = this.GenerateCertificate(false, sSubjectCN, fullSubject, keyLength, HashAlgo, graceTime, now.AddDays((double)ValidDays), signingCert);
+                    rCert = this.MakeCertificate(false, sSubjectCN, fullSubject, keyLength, HashAlgo, graceTime, now.AddDays((double)ValidDays), signingCert);
                 }
                 else
                 {
-                    rCert = this.GenerateCertificate(true, sSubjectCN, fullSubject, keyLength, HashAlgo, graceTime, now.AddDays((double)ValidDays), null);
+                    rCert = this.MakeCertificate(true, sSubjectCN, fullSubject, keyLength, HashAlgo, graceTime, now.AddDays((double)ValidDays), null);
                 }
             }
             catch (Exception e)
