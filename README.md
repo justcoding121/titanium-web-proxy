@@ -17,6 +17,8 @@ Features
 * Safely relays WebSocket requests over Http
 * Support mutual SSL authentication
 * Fully asynchronous proxy
+* Supports proxy authentication
+
 
 Usage
 =====
@@ -25,18 +27,17 @@ Refer the HTTP Proxy Server library in your project, look up Test project to lea
 
 Install by nuget:
 
-    Install-Package Titanium.Web.Proxy
-
-After installing nuget package mark following files to be copied to app directory
-
-* makecert.exe
+    Install-Package Titanium.Web.Proxy -Pre
 
 
 Setup HTTP proxy:
 
 ```csharp
 			var proxyServer = new ProxyServer();
-
+			
+			//locally trust root certificate used by this proxy 
+			proxyServer.TrustRootCertificate = true;
+			
 	    	proxyServer.BeforeRequest += OnRequest;
             proxyServer.BeforeResponse += OnResponse;
             proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
@@ -176,7 +177,9 @@ Sample request and response event handlers
 ```
 Future roadmap
 ============
-* Implement Kerberos/NTLM authentication over HTTP protocols for windows domain
 * Support Server Name Indication (SNI) for transparent endpoints
 * Support HTTP 2.0 
+* Support updstream AutoProxy detection
+* Implement Kerberos/NTLM authentication over HTTP protocols for windows domain
+
 

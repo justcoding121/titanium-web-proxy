@@ -19,6 +19,5 @@
   </metadata>
   <files>
 	<file src="bin\$configuration$\Titanium.Web.Proxy.dll" target="lib\net45"  />
-	<file src="bin\$configuration$\makecert.exe"  target="content" />
   </files>
 </package>
