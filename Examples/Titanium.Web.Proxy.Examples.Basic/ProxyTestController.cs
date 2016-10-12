@@ -13,6 +13,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
+            proxyServer.TrustRootCertificate = true;
         }
 
         public void StartProxy()
