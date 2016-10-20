@@ -32,21 +32,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// PID of the process that is created the current session
         /// </summary>
-        public int ProcessId
-        {
-            get
-            {
-                if (processId == 0)
-                {
-                    TcpRow tcpRow = TcpHelper.GetExtendedTcpTable().TcpRows
-                        .FirstOrDefault(row => row.LocalEndPoint.Port == ServerConnection.port);
-
-                    processId = tcpRow?.ProcessId ?? -1;
-                }
-
-                return processId;
-            }
-        }
+        public int ProcessId { get; internal set; }
 
         /// <summary>
         /// Is Https?
