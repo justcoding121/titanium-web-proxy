@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public bool IsHttps => this.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
 
-	    /// <summary>
+        /// <summary>
         /// Set the tcp connection to server used by this webclient
         /// </summary>
         /// <param name="connection">Instance of <see cref="TcpConnection"/></param>
@@ -209,9 +209,9 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var existing = Response.ResponseHeaders[newHeader.Name];
 
-	                var nonUniqueHeaders = new List<HttpHeader> {existing, newHeader};
+                    var nonUniqueHeaders = new List<HttpHeader> {existing, newHeader};
 
-	                Response.NonUniqueResponseHeaders.Add(newHeader.Name, nonUniqueHeaders);
+                    Response.NonUniqueResponseHeaders.Add(newHeader.Name, nonUniqueHeaders);
                     Response.ResponseHeaders.Remove(newHeader.Name);
                 }
                 //add to unique header collection
