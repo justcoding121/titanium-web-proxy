@@ -16,7 +16,6 @@ using Titanium.Web.Proxy.Shared;
 using Titanium.Web.Proxy.Http;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
-using System.Text;
 
 namespace Titanium.Web.Proxy
 {
@@ -25,16 +24,32 @@ namespace Titanium.Web.Proxy
     /// </summary>
     partial class ProxyServer
     {
+        private int FindProcessIdFromLocalPort(int port, IpVersion ipVersion)
+        {
+            var tcpRow = TcpHelper.GetExtendedTcpTable(ipVersion).FirstOrDefault(
+                    row => row.LocalEndPoint.Port == port);
+
+            return tcpRow?.ProcessId ?? 0;
+        }
+
+        private int GetProcessIdFromPort(int port, bool ipV6Enabled)
+        {
+            var processId = FindProcessIdFromLocalPort(port, IpVersion.Ipv4);
+
+            if (processId > 0 && !ipV6Enabled)
+            {
+                return processId;
+            }
+
+            return FindProcessIdFromLocalPort(port, IpVersion.Ipv6);
+        }
 
         //This is called when client is aware of proxy
         //So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
         private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient tcpClient)
         {
-            var tcpRow = TcpHelper.GetExtendedTcpTable().FirstOrDefault(
-                    row => row.LocalEndPoint.Port == ((IPEndPoint) tcpClient.Client.RemoteEndPoint).Port);
-
-            var processId = tcpRow?.ProcessId ?? 0;
-
+            var processId = GetProcessIdFromPort(((IPEndPoint)tcpClient.Client.RemoteEndPoint).Port, endPoint.IpV6Enabled);
+            
             Stream clientStream = tcpClient.GetStream();
 
             clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
@@ -175,10 +190,7 @@ namespace Titanium.Web.Proxy
         //So for HTTPS requests we would start SSL negotiation right away without expecting a CONNECT request from client
         private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
-            var tcpRow = TcpHelper.GetExtendedTcpTable().FirstOrDefault(
-                    row => row.LocalEndPoint.Port == ((IPEndPoint)tcpClient.Client.RemoteEndPoint).Port);
-
-            var processId = tcpRow?.ProcessId ?? 0;
+            var processId = GetProcessIdFromPort(((IPEndPoint)tcpClient.Client.RemoteEndPoint).Port, endPoint.IpV6Enabled);
 
             Stream clientStream = tcpClient.GetStream();
 
@@ -229,7 +241,6 @@ namespace Titanium.Web.Proxy
             await HandleHttpSessionRequest(tcpClient, processId, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
                  endPoint.EnableSsl ? endPoint.GenericCertificateName : null, null);
         }
-
 
         private async Task HandleHttpSessionRequestInternal(TcpConnection connection, SessionEventArgs args, ExternalProxy customUpStreamHttpProxy, ExternalProxy customUpStreamHttpsProxy, bool CloseConnection)
         {
@@ -357,6 +368,7 @@ namespace Titanium.Web.Proxy
                 connection.Dispose();
             }
         }
+
         /// <summary>
         /// This is the core request handler method for a particular connection from client
         /// </summary>
@@ -568,7 +580,6 @@ namespace Titanium.Web.Proxy
             webRequest.Request.RequestHeaders = requestHeaders;
         }
 
-
         /// <summary>
         ///  This is called when the request is PUT/POST to read the body
         /// </summary>
@@ -590,9 +601,7 @@ namespace Titanium.Web.Proxy
             else if (args.WebSession.Request.IsChunked)
             {
                 await args.ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(BUFFER_SIZE, postStream);
-
             }
         }
-
     }
 }
