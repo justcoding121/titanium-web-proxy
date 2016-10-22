@@ -100,9 +100,9 @@ namespace Titanium.Web.Proxy.Network
                 }
                 catch
                 {
-	                sslStream?.Dispose();
+                    sslStream?.Dispose();
 
-	                throw;
+                    throw;
                 }
             }
             else

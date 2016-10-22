@@ -1,14 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Shared;
-using Titanium.Web.Proxy.Tcp;
 
 namespace Titanium.Web.Proxy.Http
 {
