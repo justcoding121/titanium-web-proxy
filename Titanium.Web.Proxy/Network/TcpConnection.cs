@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.Network
         internal ExternalProxy UpStreamHttpsProxy { get; set; }
 
         internal string HostName { get; set; }
-        internal int port { get; set; }
+        internal int Port { get; set; }
 
         internal bool IsHttps { get; set; }
 
