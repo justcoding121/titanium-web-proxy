@@ -165,7 +165,6 @@ namespace Titanium.Web.Proxy
                     //write back successfull CONNECT response
                     await WriteConnectResponse(clientStreamWriter, version);
 
-
                     await TcpHelper.SendRaw(BUFFER_SIZE, ConnectionTimeOutSeconds, httpRemoteUri.Host, httpRemoteUri.Port,
                             httpCmd, version, null,
                             false, SupportedSslProtocols,
@@ -274,9 +273,7 @@ namespace Titanium.Web.Proxy
                         customUpStreamHttpProxy ?? UpStreamHttpProxy, customUpStreamHttpsProxy ?? UpStreamHttpsProxy, args.ProxyClient.ClientStream);
                 }
 
-
                 args.WebSession.Request.RequestLocked = true;
-
 
                 //If request was cancelled by user then dispose the client
                 if (args.WebSession.Request.CancelRequest)
@@ -362,10 +359,10 @@ namespace Titanium.Web.Proxy
                 return;
             }
 
-            if (CloseConnection && connection != null)
+            if (CloseConnection)
             {
                 //dispose
-                connection.Dispose();
+                connection?.Dispose();
             }
         }
 
@@ -471,7 +468,6 @@ namespace Titanium.Web.Proxy
                         Dispose(clientStream, clientStreamReader, clientStreamWriter, args);
                         break;
                     }
-
 
                     PrepareRequestHeaders(args.WebSession.Request.RequestHeaders, args.WebSession);
                     args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
