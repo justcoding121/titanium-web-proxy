@@ -15,16 +15,16 @@ using Titanium.Web.Proxy.Tcp;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-	internal enum IpVersion
-	{
-		Ipv4 = 1,
-		Ipv6 = 2,
-	}
+    internal enum IpVersion
+    {
+        Ipv4 = 1,
+        Ipv6 = 2,
+    }
 
     internal partial class NativeMethods
     {
         internal const int AfInet = 2;
-	    internal const int AfInet6 = 23;
+        internal const int AfInet6 = 23;
 
         internal enum TcpTableType
         {
@@ -89,7 +89,7 @@ namespace Titanium.Web.Proxy.Helpers
             IntPtr tcpTable = IntPtr.Zero;
             int tcpTableLength = 0;
 
-			var ipVersionValue = ipVersion == IpVersion.Ipv4 ? NativeMethods.AfInet : NativeMethods.AfInet6;
+            var ipVersionValue = ipVersion == IpVersion.Ipv4 ? NativeMethods.AfInet : NativeMethods.AfInet6;
 
             if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, false, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) != 0)
             {
@@ -179,10 +179,10 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 Stream tunnelStream = tcpConnection.Stream;
 
-	            //Now async relay all server=>client & client=>server data
-	            var sendRelay = clientStream.CopyToAsync(sb?.ToString() ?? string.Empty, tunnelStream);
+                //Now async relay all server=>client & client=>server data
+                var sendRelay = clientStream.CopyToAsync(sb?.ToString() ?? string.Empty, tunnelStream);
 
-	            var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
+                var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
 
                 await Task.WhenAll(sendRelay, receiveRelay);
             }
