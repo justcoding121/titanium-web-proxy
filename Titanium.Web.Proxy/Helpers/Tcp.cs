@@ -179,11 +179,8 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 Stream tunnelStream = tcpConnection.Stream;
 
-                Task sendRelay;
-
-                //Now async relay all server=>client & client=>server data
-	            sendRelay = clientStream.CopyToAsync(sb?.ToString() ?? string.Empty, tunnelStream);
-
+	            //Now async relay all server=>client & client=>server data
+	            var sendRelay = clientStream.CopyToAsync(sb?.ToString() ?? string.Empty, tunnelStream);
 
 	            var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
 
