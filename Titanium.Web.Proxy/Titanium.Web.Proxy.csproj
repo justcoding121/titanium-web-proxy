@@ -25,6 +25,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <Prefer32Bit>false</Prefer32Bit>
+    <DocumentationFile>bin\Debug\Titanium.Web.Proxy.XML</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -32,6 +33,7 @@
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <DefineConstants>NET45</DefineConstants>
     <Prefer32Bit>false</Prefer32Bit>
+    <DocumentationFile>bin\Release\Titanium.Web.Proxy.XML</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Ionic.Zip, Version=1.9.8.0, Culture=neutral, PublicKeyToken=6583c7c814667745, processorArchitecture=MSIL">
