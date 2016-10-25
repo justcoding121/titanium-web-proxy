@@ -6,6 +6,7 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text.RegularExpressions;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network;
@@ -338,7 +339,7 @@ namespace Titanium.Web.Proxy
             }
             catch (Exception e)
             {
-                ExceptionFunc(e);
+                ExceptionFunc(new ProxyHttpException("Error occured whilst handling session request (internal)", e, args));
                 Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader, args.ProxyClient.ClientStreamWriter, args);
                 return;
             }
@@ -501,7 +502,7 @@ namespace Titanium.Web.Proxy
                 }
                 catch (Exception e)
                 {
-                    ExceptionFunc(e);
+                    ExceptionFunc(new ProxyHttpException("Error occured whilst handling session request", e, args));
                     Dispose(clientStream, clientStreamReader, clientStreamWriter, args);
                     break;
                 }

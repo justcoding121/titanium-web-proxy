@@ -68,6 +68,9 @@
     <Compile Include="Network\CertificateMaker.cs" />
     <Compile Include="Network\ProxyClient.cs" />
     <Compile Include="Exceptions\BodyNotFoundException.cs" />
+    <Compile Include="Exceptions\ProxyAuthorizationException.cs" />
+    <Compile Include="Exceptions\ProxyException.cs" />
+    <Compile Include="Exceptions\ProxyHttpException.cs" />
     <Compile Include="Extensions\HttpWebResponseExtensions.cs" />
     <Compile Include="Extensions\HttpWebRequestExtensions.cs" />
     <Compile Include="Network\CertificateManager.cs" />
