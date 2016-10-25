@@ -5,6 +5,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Compression;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Helpers;
@@ -121,7 +122,7 @@ namespace Titanium.Web.Proxy
             }
             catch(Exception e)
             {
-                ExceptionFunc(e);
+                ExceptionFunc(new ProxyHttpException("Error occured wilst handling session response", e, args));
                 Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader,
                     args.ProxyClient.ClientStreamWriter, args);
             }
