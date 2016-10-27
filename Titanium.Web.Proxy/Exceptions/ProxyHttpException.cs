@@ -13,10 +13,10 @@ namespace Titanium.Web.Proxy.Exceptions
         /// </summary>
         /// <param name="message">Message for this exception</param>
         /// <param name="innerException">Associated inner exception</param>
-        /// <param name="sessionInfo">Instance of <see cref="SessionEventArgs"/> associated to the exception</param>
-        public ProxyHttpException(string message, Exception innerException, SessionEventArgs sessionInfo) : base(message, innerException)
+        /// <param name="sessionEventArgs">Instance of <see cref="EventArguments.SessionEventArgs"/> associated to the exception</param>
+        public ProxyHttpException(string message, Exception innerException, SessionEventArgs sessionEventArgs) : base(message, innerException)
         {
-            SessionInfo = sessionInfo;
+            SessionEventArgs = sessionEventArgs;
         }
 
         /// <summary>
@@ -25,6 +25,6 @@ namespace Titanium.Web.Proxy.Exceptions
         /// <remarks>
         /// This object should not be edited
         /// </remarks>
-        public SessionEventArgs SessionInfo { get; }
+        public SessionEventArgs SessionEventArgs { get; }
     }
 }
