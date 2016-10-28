@@ -20,12 +20,21 @@ namespace Titanium.Web.Proxy.Tcp
             int localPort = (tcpRow.localPort1 << 8) + (tcpRow.localPort2) + (tcpRow.localPort3 << 24) + (tcpRow.localPort4 << 16);
             long localAddress = tcpRow.localAddr;
             LocalEndPoint = new IPEndPoint(localAddress, localPort);
-        }
+
+			int remotePort = (tcpRow.remotePort1 << 8) + (tcpRow.remotePort2) + (tcpRow.remotePort3 << 24) + (tcpRow.remotePort4 << 16);
+			long remoteAddress = tcpRow.remoteAddr;
+			RemoteEndPoint = new IPEndPoint(remoteAddress, remotePort);
+		}
 
         /// <summary>
         /// Gets the local end point.
         /// </summary>
         public IPEndPoint LocalEndPoint { get; private set; }
+
+		/// <summary>
+		/// Gets the remote end point.
+		/// </summary>
+		public IPEndPoint RemoteEndPoint { get; private set; }
 
         /// <summary>
         /// Gets the process identifier.

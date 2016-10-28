@@ -1,14 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Shared;
-using Titanium.Web.Proxy.Tcp;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -32,28 +29,14 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// PID of the process that is created the current session
         /// </summary>
-        public int ProcessId
-        {
-            get
-            {
-                if (processId == 0)
-                {
-                    TcpRow tcpRow = TcpHelper.GetExtendedTcpTable().TcpRows
-                        .FirstOrDefault(row => row.LocalEndPoint.Port == ServerConnection.port);
-
-                    processId = tcpRow?.ProcessId ?? -1;
-                }
-
-                return processId;
-            }
-        }
+        public int ProcessId { get; internal set; }
 
         /// <summary>
         /// Is Https?
         /// </summary>
         public bool IsHttps => this.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
 
-	    /// <summary>
+        /// <summary>
         /// Set the tcp connection to server used by this webclient
         /// </summary>
         /// <param name="connection">Instance of <see cref="TcpConnection"/></param>
@@ -223,9 +206,9 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var existing = Response.ResponseHeaders[newHeader.Name];
 
-	                var nonUniqueHeaders = new List<HttpHeader> {existing, newHeader};
+                    var nonUniqueHeaders = new List<HttpHeader> {existing, newHeader};
 
-	                Response.NonUniqueResponseHeaders.Add(newHeader.Name, nonUniqueHeaders);
+                    Response.NonUniqueResponseHeaders.Add(newHeader.Name, nonUniqueHeaders);
                     Response.ResponseHeaders.Remove(newHeader.Name);
                 }
                 //add to unique header collection
