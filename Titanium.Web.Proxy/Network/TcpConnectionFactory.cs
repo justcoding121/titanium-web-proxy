@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy.Network
                 SslStream sslStream = null;
 
                 //If this proxy uses another external proxy then create a tunnel request for HTTPS connections
-                if (externalHttpsProxy != null)
+                if (externalHttpsProxy != null && externalHttpsProxy.HostName != remoteHostName)
                 {
                     client = new TcpClient(externalHttpsProxy.HostName, externalHttpsProxy.Port);
                     stream = client.GetStream();
@@ -100,17 +100,14 @@ namespace Titanium.Web.Proxy.Network
                 }
                 catch
                 {
-                    if (sslStream != null)
-                    {
-                        sslStream.Dispose();
-                    }
+                    sslStream?.Dispose();
 
                     throw;
                 }
             }
             else
             {
-                if (externalHttpProxy != null)
+                if (externalHttpProxy != null && externalHttpProxy.HostName != remoteHostName)
                 {
                     client = new TcpClient(externalHttpProxy.HostName, externalHttpProxy.Port);
                     stream = client.GetStream();
@@ -133,7 +130,7 @@ namespace Titanium.Web.Proxy.Network
                 UpStreamHttpProxy = externalHttpProxy,
                 UpStreamHttpsProxy = externalHttpsProxy,
                 HostName = remoteHostName,
-                port = remotePort,
+                Port = remotePort,
                 IsHttps = isHttps,
                 TcpClient = client,
                 StreamReader = new CustomBinaryReader(stream),
