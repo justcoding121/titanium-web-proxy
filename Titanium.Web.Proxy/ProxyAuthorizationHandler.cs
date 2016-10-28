@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
@@ -18,9 +19,12 @@ namespace Titanium.Web.Proxy
             {
                 return true;
             }
+
+            var httpHeaders = Headers as HttpHeader[] ?? Headers.ToArray();
+
             try
             {
-                if (!Headers.Where(t => t.Name == "Proxy-Authorization").Any())
+                if (!httpHeaders.Where(t => t.Name == "Proxy-Authorization").Any())
                 {
 
                     await WriteResponseStatus(new Version(1, 1), "407",
@@ -36,7 +40,7 @@ namespace Titanium.Web.Proxy
                 }
                 else
                 {
-                    var headerValue = Headers.Where(t => t.Name == "Proxy-Authorization").FirstOrDefault().Value.Trim();
+                    var headerValue = httpHeaders.Where(t => t.Name == "Proxy-Authorization").FirstOrDefault().Value.Trim();
                     if (!headerValue.ToLower().StartsWith("basic"))
                     {
                         //Return not authorized
@@ -75,7 +79,7 @@ namespace Titanium.Web.Proxy
             }
             catch (Exception e)
             {
-                ExceptionFunc(e);
+                ExceptionFunc(new ProxyAuthorizationException("Error whilst authorizing request", e, httpHeaders));
                 //Return not authorized
                 await WriteResponseStatus(new Version(1, 1), "407",
                              "Proxy Authentication Invalid", clientStreamWriter);
