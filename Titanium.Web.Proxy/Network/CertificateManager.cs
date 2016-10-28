@@ -42,7 +42,7 @@ namespace Titanium.Web.Proxy.Network
 
         internal X509Certificate2 GetRootCertificate()
         {
-            var fileName = Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location), "rootCert.pfx");
+            var fileName = Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "rootCert.pfx");
 
             if (File.Exists(fileName))
             {
@@ -83,7 +83,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 try
                 {
-                    var fileName = Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location), "rootCert.pfx");
+                    var fileName = Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "rootCert.pfx");
                     File.WriteAllBytes(fileName, rootCertificate.Export(X509ContentType.Pkcs12));
                 }
                 catch(Exception e)
