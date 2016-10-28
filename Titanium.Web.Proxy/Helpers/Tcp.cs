@@ -15,9 +15,16 @@ using Titanium.Web.Proxy.Tcp;
 
 namespace Titanium.Web.Proxy.Helpers
 {
+    internal enum IpVersion
+    {
+        Ipv4 = 1,
+        Ipv6 = 2,
+    }
+
     internal partial class NativeMethods
     {
         internal const int AfInet = 2;
+        internal const int AfInet6 = 23;
 
         internal enum TcpTableType
         {
@@ -75,19 +82,21 @@ namespace Titanium.Web.Proxy.Helpers
         /// Gets the extended TCP table.
         /// </summary>
         /// <returns>Collection of <see cref="TcpRow"/>.</returns>
-        internal static TcpTable GetExtendedTcpTable()
+        internal static TcpTable GetExtendedTcpTable(IpVersion ipVersion)
         {
             List<TcpRow> tcpRows = new List<TcpRow>();
 
             IntPtr tcpTable = IntPtr.Zero;
             int tcpTableLength = 0;
 
-            if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, false, NativeMethods.AfInet, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) != 0)
+            var ipVersionValue = ipVersion == IpVersion.Ipv4 ? NativeMethods.AfInet : NativeMethods.AfInet6;
+
+            if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, false, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) != 0)
             {
                 try
                 {
                     tcpTable = Marshal.AllocHGlobal(tcpTableLength);
-                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, NativeMethods.AfInet, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) == 0)
+                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) == 0)
                     {
                         NativeMethods.TcpTable table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable, typeof(NativeMethods.TcpTable));
 
@@ -170,13 +179,10 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 Stream tunnelStream = tcpConnection.Stream;
 
-                Task sendRelay;
-
                 //Now async relay all server=>client & client=>server data
-	            sendRelay = clientStream.CopyToAsync(sb?.ToString() ?? string.Empty, tunnelStream);
+                var sendRelay = clientStream.CopyToAsync(sb?.ToString() ?? string.Empty, tunnelStream);
 
-
-	            var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
+                var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
 
                 await Task.WhenAll(sendRelay, receiveRelay);
             }

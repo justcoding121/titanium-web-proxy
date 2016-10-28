@@ -20,6 +20,10 @@ namespace Titanium.Web.Proxy.Models
         public int Port { get; internal set; }
         public bool EnableSsl { get; internal set; }
 
+        public bool IpV6Enabled => IpAddress == IPAddress.IPv6Any
+                                   || IpAddress == IPAddress.IPv6Loopback
+                                   || IpAddress == IPAddress.IPv6None;
+
         internal TcpListener listener { get; set; }
     }
 

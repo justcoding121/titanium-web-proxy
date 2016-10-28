@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
-	  
+      
         /// <summary>
         /// Is the root certificate used by this proxy is valid?
         /// </summary>
@@ -187,6 +187,11 @@ namespace Titanium.Web.Proxy
         public bool ProxyRunning => proxyRunning;
 
         /// <summary>
+        /// Gets or sets a value indicating whether requests will be chained to upstream gateway.
+        /// </summary>
+        public bool ForwardToUpstreamGateway { get; set; }
+
+        /// <summary>
         /// Constructor
         /// </summary>
         public ProxyServer() : this(null, null) { }
@@ -348,6 +353,12 @@ namespace Titanium.Web.Proxy
                 certificateCacheManager.TrustRootCertificate();
             }
 
+            if (ForwardToUpstreamGateway && GetCustomUpStreamHttpProxyFunc == null && GetCustomUpStreamHttpsProxyFunc == null)
+            {
+                GetCustomUpStreamHttpProxyFunc = GetSystemUpStreamProxy;
+                GetCustomUpStreamHttpsProxyFunc = GetSystemUpStreamProxy;
+            }
+
             foreach (var endPoint in ProxyEndPoints)
             {
                 Listen(endPoint);
@@ -356,6 +367,28 @@ namespace Titanium.Web.Proxy
             certificateCacheManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
             proxyRunning = true;
+        }
+
+        /// <summary>
+        /// Gets the system up stream proxy.
+        /// </summary>
+        /// <param name="sessionEventArgs">The <see cref="SessionEventArgs"/> instance containing the event data.</param>
+        /// <returns><see cref="ExternalProxy"/> instance containing valid proxy configuration from PAC/WAPD scripts if any exists.</returns>
+        private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgs sessionEventArgs)
+        {
+            // Use built-in WebProxy class to handle PAC/WAPD scripts.
+            var systemProxyResolver = new WebProxy();
+
+            var systemProxyUri = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
+            
+            // TODO: Apply authorization
+            var systemProxy = new ExternalProxy
+            {
+                HostName = systemProxyUri.Host,
+                Port = systemProxyUri.Port
+            };
+
+            return Task.FromResult(systemProxy);
         }
 
         /// <summary>
