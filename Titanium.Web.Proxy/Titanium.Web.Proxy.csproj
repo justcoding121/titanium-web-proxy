@@ -66,6 +66,7 @@
     <Compile Include="EventArguments\CertificateSelectionEventArgs.cs" />
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
+    <Compile Include="Helpers\Network.cs" />
     <Compile Include="Network\CachedCertificate.cs" />
     <Compile Include="Network\CertificateMaker.cs" />
     <Compile Include="Network\ProxyClient.cs" />

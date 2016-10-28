@@ -25,32 +25,13 @@ namespace Titanium.Web.Proxy
     /// </summary>
     partial class ProxyServer
     {
-        private int FindProcessIdFromLocalPort(int port, IpVersion ipVersion)
-        {
-            var tcpRow = TcpHelper.GetExtendedTcpTable(ipVersion).FirstOrDefault(
-                    row => row.LocalEndPoint.Port == port);
-
-            return tcpRow?.ProcessId ?? 0;
-        }
-
-        private int GetProcessIdFromPort(int port, bool ipV6Enabled)
-        {
-            var processId = FindProcessIdFromLocalPort(port, IpVersion.Ipv4);
-
-            if (processId > 0 && !ipV6Enabled)
-            {
-                return processId;
-            }
-
-            return FindProcessIdFromLocalPort(port, IpVersion.Ipv6);
-        }
-
+       
         //This is called when client is aware of proxy
         //So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
         private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient tcpClient)
         {
-            var processId = GetProcessIdFromPort(((IPEndPoint)tcpClient.Client.RemoteEndPoint).Port, endPoint.IpV6Enabled);
-            
+
+
             Stream clientStream = tcpClient.GetStream();
 
             clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
@@ -177,10 +158,10 @@ namespace Titanium.Web.Proxy
                     return;
                 }
                 //Now create the request
-                await HandleHttpSessionRequest(tcpClient, processId, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                      httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null, connectRequestHeaders, null, null);
+                await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
+                      httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null, endPoint, connectRequestHeaders, null, null);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
             }
@@ -190,7 +171,6 @@ namespace Titanium.Web.Proxy
         //So for HTTPS requests we would start SSL negotiation right away without expecting a CONNECT request from client
         private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
-            var processId = GetProcessIdFromPort(((IPEndPoint)tcpClient.Client.RemoteEndPoint).Port, endPoint.IpV6Enabled);
 
             Stream clientStream = tcpClient.GetStream();
 
@@ -238,8 +218,8 @@ namespace Titanium.Web.Proxy
             var httpCmd = await clientStreamReader.ReadLineAsync();
 
             //Now create the request
-            await HandleHttpSessionRequest(tcpClient, processId, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                 endPoint.EnableSsl ? endPoint.GenericCertificateName : null, null);
+            await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
+                 endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null);
         }
 
         private async Task HandleHttpSessionRequestInternal(TcpConnection connection, SessionEventArgs args, ExternalProxy customUpStreamHttpProxy, ExternalProxy customUpStreamHttpsProxy, bool CloseConnection)
@@ -371,15 +351,14 @@ namespace Titanium.Web.Proxy
         /// This is the core request handler method for a particular connection from client
         /// </summary>
         /// <param name="client"></param>
-        /// <param name="processId"></param>
         /// <param name="httpCmd"></param>
         /// <param name="clientStream"></param>
         /// <param name="clientStreamReader"></param>
         /// <param name="clientStreamWriter"></param>
         /// <param name="httpsHostName"></param>
         /// <returns></returns>
-        private async Task HandleHttpSessionRequest(TcpClient client, int processId, string httpCmd, Stream clientStream,
-            CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName, List<HttpHeader> connectHeaders, ExternalProxy customUpStreamHttpProxy = null, ExternalProxy customUpStreamHttpsProxy = null)
+        private async Task HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
+            CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName, ProxyEndPoint endPoint, List<HttpHeader> connectHeaders, ExternalProxy customUpStreamHttpProxy = null, ExternalProxy customUpStreamHttpsProxy = null)
         {
             TcpConnection connection = null;
 
@@ -396,8 +375,21 @@ namespace Titanium.Web.Proxy
                 var args = new SessionEventArgs(BUFFER_SIZE, HandleHttpSessionResponse);
                 args.ProxyClient.TcpClient = client;
                 args.WebSession.ConnectHeaders = connectHeaders;
-                args.WebSession.ProcessId = processId;
 
+                args.WebSession.ProcessId = new Lazy<int>(() =>
+                {
+                    var remoteEndPoint = (IPEndPoint)args.ProxyClient.TcpClient.Client.RemoteEndPoint;
+
+                    //If client is localhost get the process id
+                    if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
+                    {
+                        return NetworkHelper.GetProcessIdFromPort(remoteEndPoint.Port, endPoint.IpV6Enabled);
+                    }
+
+                    //can't access process Id of remote request from remote machine
+                    return -1;
+
+                });
                 try
                 {
                     //break up the line into three components (method, remote URL & Http Version)
