@@ -14,27 +14,38 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class HttpWebClient
     {
-        private int processId;
+       
 
         /// <summary>
         /// Connection to server
         /// </summary>
         internal TcpConnection ServerConnection { get; set; }
 
+        public Guid RequestId { get; private set; }
 
         public List<HttpHeader> ConnectHeaders { get; set; }
         public Request Request { get; set; }
         public Response Response { get; set; }
 
         /// <summary>
-        /// PID of the process that is created the current session
+        /// PID of the process that is created the current session when client is running in this machine
+        /// If client is remote then this will return 
         /// </summary>
-        public int ProcessId { get; internal set; }
+        public Lazy<int> ProcessId { get; internal set; }
 
         /// <summary>
         /// Is Https?
         /// </summary>
         public bool IsHttps => this.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
+
+
+        internal HttpWebClient()
+        {
+            this.RequestId = Guid.NewGuid();
+
+            this.Request = new Request();
+            this.Response = new Response();
+        }
 
         /// <summary>
         /// Set the tcp connection to server used by this webclient
@@ -45,12 +56,7 @@ namespace Titanium.Web.Proxy.Http
             connection.LastAccess = DateTime.Now;
             ServerConnection = connection;
         }
-
-        internal HttpWebClient()
-        {
-            this.Request = new Request();
-            this.Response = new Response();
-        }
+  
 
         /// <summary>
         /// Prepare & send the http(s) request
