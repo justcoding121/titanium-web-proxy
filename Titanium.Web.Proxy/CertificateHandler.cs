@@ -60,11 +60,12 @@ namespace Titanium.Web.Proxy
         /// Call back to select client certificate used for mutual authentication
         /// </summary>
         /// <param name="sender"></param>
-        /// <param name="certificate"></param>
-        /// <param name="chain"></param>
-        /// <param name="sslPolicyErrors"></param>
+        /// <param name="targetHost"></param>
+        /// <param name="localCertificates"></param>
+        /// <param name="remoteCertificate"></param>
+        /// <param name="acceptableIssuers"></param>
         /// <returns></returns>
-        internal  X509Certificate SelectClientCertificate(
+        internal X509Certificate SelectClientCertificate(
             object sender,
             string targetHost,
             X509CertificateCollection localCertificates,
@@ -101,11 +102,11 @@ namespace Titanium.Web.Proxy
             {
                 var args = new CertificateSelectionEventArgs();
 
-                args.targetHost = targetHost;
-                args.localCertificates = localCertificates;
-                args.remoteCertificate = remoteCertificate;
-                args.acceptableIssuers = acceptableIssuers;
-                args.clientCertificate = clientCertificate;
+                args.TargetHost = targetHost;
+                args.LocalCertificates = localCertificates;
+                args.RemoteCertificate = remoteCertificate;
+                args.AcceptableIssuers = acceptableIssuers;
+                args.ClientCertificate = clientCertificate;
 
                 Delegate[] invocationList = ClientCertificateSelectionCallback.GetInvocationList();
                 Task[] handlerTasks = new Task[invocationList.Length];
@@ -117,7 +118,7 @@ namespace Titanium.Web.Proxy
 
                 Task.WhenAll(handlerTasks).Wait();
 
-                return args.clientCertificate;
+                return args.ClientCertificate;
             }
 
             return clientCertificate;

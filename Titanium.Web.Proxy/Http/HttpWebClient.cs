@@ -14,39 +14,49 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class HttpWebClient
     {
+       
+
         /// <summary>
         /// Connection to server
         /// </summary>
         internal TcpConnection ServerConnection { get; set; }
 
+        public Guid RequestId { get; private set; }
+
+        public List<HttpHeader> ConnectHeaders { get; set; }
         public Request Request { get; set; }
         public Response Response { get; set; }
 
         /// <summary>
+        /// PID of the process that is created the current session when client is running in this machine
+        /// If client is remote then this will return 
+        /// </summary>
+        public Lazy<int> ProcessId { get; internal set; }
+
+        /// <summary>
         /// Is Https?
         /// </summary>
-        public bool IsHttps
+        public bool IsHttps => this.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
+
+
+        internal HttpWebClient()
         {
-            get
-            {
-                return this.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
-            }
+            this.RequestId = Guid.NewGuid();
+
+            this.Request = new Request();
+            this.Response = new Response();
         }
 
         /// <summary>
         /// Set the tcp connection to server used by this webclient
         /// </summary>
-        /// <param name="Connection"></param>
-        internal void SetConnection(TcpConnection Connection)
+        /// <param name="connection">Instance of <see cref="TcpConnection"/></param>
+        internal void SetConnection(TcpConnection connection)
         {
-            ServerConnection = Connection;
+            connection.LastAccess = DateTime.Now;
+            ServerConnection = connection;
         }
-
-        internal HttpWebClient()
-        {
-            this.Request = new Request();
-            this.Response = new Response();
-        }
+  
 
         /// <summary>
         /// Prepare & send the http(s) request
@@ -59,18 +69,29 @@ namespace Titanium.Web.Proxy.Http
             StringBuilder requestLines = new StringBuilder();
 
             //prepare the request & headers
-            requestLines.AppendLine(string.Join(" ", new string[3]
-              {
-                this.Request.Method,
-                this.Request.RequestUri.PathAndQuery,
-                string.Format("HTTP/{0}.{1}",this.Request.HttpVersion.Major, this.Request.HttpVersion.Minor)
-              }));
+            if ((ServerConnection.UpStreamHttpProxy != null && ServerConnection.IsHttps == false) || (ServerConnection.UpStreamHttpsProxy != null && ServerConnection.IsHttps == true))
+            {
+                requestLines.AppendLine(string.Join(" ", this.Request.Method, this.Request.RequestUri.AbsoluteUri, $"HTTP/{this.Request.HttpVersion.Major}.{this.Request.HttpVersion.Minor}"));
+            }
+            else
+            {
+                requestLines.AppendLine(string.Join(" ", this.Request.Method, this.Request.RequestUri.PathAndQuery, $"HTTP/{this.Request.HttpVersion.Major}.{this.Request.HttpVersion.Minor}"));
+            }
 
+            //Send Authentication to Upstream proxy if needed
+            if (ServerConnection.UpStreamHttpProxy != null && ServerConnection.IsHttps == false && !string.IsNullOrEmpty(ServerConnection.UpStreamHttpProxy.UserName) && ServerConnection.UpStreamHttpProxy.Password != null)
+            {
+                requestLines.AppendLine("Proxy-Connection: keep-alive");
+                requestLines.AppendLine("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(ServerConnection.UpStreamHttpProxy.UserName + ":" + ServerConnection.UpStreamHttpProxy.Password)));
+            }
             //write request headers
             foreach (var headerItem in this.Request.RequestHeaders)
             {
                 var header = headerItem.Value;
-                requestLines.AppendLine(header.Name + ':' + header.Value);
+                if (headerItem.Key != "Proxy-Authorization")
+                {
+                    requestLines.AppendLine(header.Name + ':' + header.Value);
+                }
             }
 
             //write non unique request headers
@@ -79,7 +100,10 @@ namespace Titanium.Web.Proxy.Http
                 var headers = headerItem.Value;
                 foreach (var header in headers)
                 {
-                    requestLines.AppendLine(header.Name + ':' + header.Value);
+                    if (headerItem.Key != "Proxy-Authorization")
+                    {
+                        requestLines.AppendLine(header.Name + ':' + header.Value);
+                    }
                 }
             }
 
@@ -87,6 +111,7 @@ namespace Titanium.Web.Proxy.Http
 
             string request = requestLines.ToString();
             byte[] requestBytes = Encoding.ASCII.GetBytes(request);
+
             await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
             await stream.FlushAsync();
 
@@ -187,10 +212,7 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var existing = Response.ResponseHeaders[newHeader.Name];
 
-                    var nonUniqueHeaders = new List<HttpHeader>();
-
-                    nonUniqueHeaders.Add(existing);
-                    nonUniqueHeaders.Add(newHeader);
+                    var nonUniqueHeaders = new List<HttpHeader> {existing, newHeader};
 
                     Response.NonUniqueResponseHeaders.Add(newHeader.Name, nonUniqueHeaders);
                     Response.ResponseHeaders.Remove(newHeader.Name);
@@ -203,5 +225,4 @@ namespace Titanium.Web.Proxy.Http
             }
         }
     }
-
 }
