@@ -79,7 +79,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             ////read request headers
             var requestHeaders = e.WebSession.Request.RequestHeaders;
 
-            if ((e.WebSession.Request.Method == "POST" || e.WebSession.Request.Method == "PUT"))
+            var method = e.WebSession.Request.Method.ToUpper();
+            if ((method == "POST" || method == "PUT" || method == "PATCH"))
             {
                 //Get/Set request body bytes
                 byte[] bodyBytes = await e.GetRequestBody();
