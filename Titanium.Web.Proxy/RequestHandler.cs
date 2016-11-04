@@ -312,8 +312,9 @@ namespace Titanium.Web.Proxy
                 {
                     if (!args.WebSession.Request.ExpectationFailed)
                     {
-                        //If its a post/put request, then read the client html body and send it to server
-                        if (args.WebSession.Request.Method.ToUpper() == "POST" || args.WebSession.Request.Method.ToUpper() == "PUT")
+                        //If its a post/put/patch request, then read the client html body and send it to server
+                        var method = args.WebSession.Request.Method.ToUpper();
+                        if (method == "POST" || method == "PUT" || method == "PATCH")
                         {
                             await SendClientRequestBody(args);
                         }
@@ -570,7 +571,7 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///  This is called when the request is PUT/POST to read the body
+        ///  This is called when the request is PUT/POST/PATCH to read the body
         /// </summary>
         /// <param name="args"></param>
         /// <returns></returns>
