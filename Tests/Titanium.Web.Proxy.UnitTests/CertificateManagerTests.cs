@@ -20,7 +20,8 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager("Titanium","Titanium Root Certificate Authority");
+            var mgr = new CertificateManager("Titanium", "Titanium Root Certificate Authority", 
+                new Lazy<Action<Exception>>(() => (e => { })).Value);
 
             mgr.ClearIdleCertificates(1);
 
@@ -33,9 +34,9 @@ namespace Titanium.Web.Proxy.UnitTests
                         await Task.Delay(random.Next(0, 10) * 1000);
 
                         //get the connection
-                        var certificate = await mgr.CreateCertificate(host, false);
+                        var certificate = mgr.CreateCertificate(host, false);
 
-                        Assert.IsNotNull(certificate);                     
+                        Assert.IsNotNull(certificate);
 
                     }));
 

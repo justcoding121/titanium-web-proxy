@@ -5,6 +5,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Compression;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Helpers;
@@ -29,6 +30,8 @@ namespace Titanium.Web.Proxy
                     args.WebSession.Response.ResponseStream = args.WebSession.ServerConnection.Stream;
                 }
 
+                args.ReRequest = false;
+
                 //If user requested call back then do it
                 if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
                 {
@@ -37,10 +40,16 @@ namespace Titanium.Web.Proxy
 
                     for (int i = 0; i < invocationList.Length; i++)
                     {
-                        handlerTasks[i] = ((Func<object, SessionEventArgs, Task>)invocationList[i])(null, args);
+                        handlerTasks[i] = ((Func<object, SessionEventArgs, Task>)invocationList[i])(this, args);
                     }
 
                     await Task.WhenAll(handlerTasks);
+                }
+
+                if(args.ReRequest)
+                {
+                    await HandleHttpSessionRequestInternal(null, args, null, null, true).ConfigureAwait(false);
+                    return;
                 }
 
                 args.WebSession.Response.ResponseLocked = true;
@@ -111,8 +120,9 @@ namespace Titanium.Web.Proxy
                 await args.ProxyClient.ClientStream.FlushAsync();
 
             }
-            catch
+            catch(Exception e)
             {
+                ExceptionFunc(new ProxyHttpException("Error occured wilst handling session response", e, args));
                 Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader,
                     args.ProxyClient.ClientStreamWriter, args);
             }
