@@ -81,10 +81,11 @@ namespace Titanium.Web.Proxy.EventArguments
         private async Task ReadRequestBody()
         {
             //GET request don't have a request body to read
-            if ((WebSession.Request.Method.ToUpper() != "POST" && WebSession.Request.Method.ToUpper() != "PUT"))
+            var method = WebSession.Request.Method.ToUpper();
+            if ((method != "POST" && method != "PUT" && method != "PATCH"))
             {
-                throw new BodyNotFoundException("Request don't have a body." +
-                                                "Please verify that this request is a Http POST/PUT and request " +
+                throw new BodyNotFoundException("Request don't have a body. " +
+                                                "Please verify that this request is a Http POST/PUT/PATCH and request " +
                                                 "content length is greater than zero before accessing the body.");
             }
 
