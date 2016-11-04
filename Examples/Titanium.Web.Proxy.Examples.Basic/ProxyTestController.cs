@@ -13,6 +13,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
+            proxyServer.TrustRootCertificate = true;
         }
 
         public void StartProxy()
@@ -114,6 +115,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             //read response headers
             var responseHeaders = e.WebSession.Response.ResponseHeaders;
+
+            // print out process id of current session
+            Console.WriteLine($"PID: {e.WebSession.ProcessId.Value}");
 
             //if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
             if (e.WebSession.Request.Method == "GET" || e.WebSession.Request.Method == "POST")

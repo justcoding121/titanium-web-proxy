@@ -3,7 +3,7 @@
     /// <summary>
     /// 200 Ok response
     /// </summary>
-    public class OkResponse : Response
+    public sealed class OkResponse : Response
     {
         public OkResponse()
         {

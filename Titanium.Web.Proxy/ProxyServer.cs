@@ -17,10 +17,11 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
+      
         /// <summary>
-        /// Does the root certificate used by this proxy is trusted by the machine?
+        /// Is the root certificate used by this proxy is valid?
         /// </summary>
-        private bool certTrusted { get; set; }
+        private bool certValidated { get; set; }
 
         /// <summary>
         /// Is the proxy currently running
@@ -31,6 +32,16 @@ namespace Titanium.Web.Proxy
         /// Manages certificates used by this proxy
         /// </summary>
         private CertificateManager certificateCacheManager { get; set; }
+
+        /// <summary>
+        /// An default exception log func
+        /// </summary>
+        private readonly Lazy<Action<Exception>> defaultExceptionFunc = new Lazy<Action<Exception>>(() => (e => { }));
+
+        /// <summary>
+        /// backing exception func for exposed public property
+        /// </summary>
+        private Action<Exception> exceptionFunc;
 
         /// <summary>
         /// A object that creates tcp connection to server
@@ -56,8 +67,18 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         /// Name of the root certificate
+        /// If no certificate is provided then a default Root Certificate will be created and used
+        /// The provided root certificate has to be in the proxy exe directory with the private key 
+        /// The root certificate file should be named as  "rootCert.pfx"
         /// </summary>
         public string RootCertificateName { get; set; }
+
+        /// <summary>
+        /// Trust the RootCertificate used by this proxy server
+        /// Note that this do not make the client trust the certificate!
+        /// This would import the root certificate to the certificate store of machine that runs this proxy server
+        /// </summary>
+        public bool TrustRootCertificate { get; set; }
 
         /// <summary>
         /// Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
@@ -88,12 +109,12 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// External proxy for Http
         /// </summary>
-        public ExternalProxy ExternalHttpProxy { get; set; }
+        public ExternalProxy UpStreamHttpProxy { get; set; }
 
         /// <summary>
-        /// External proxy for Https
+        /// External proxy for Http
         /// </summary>
-        public ExternalProxy ExternalHttpsProxy { get; set; }
+        public ExternalProxy UpStreamHttpsProxy { get; set; }
 
         /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
@@ -106,6 +127,51 @@ namespace Titanium.Web.Proxy
         public event Func<object, CertificateSelectionEventArgs, Task> ClientCertificateSelectionCallback;
 
         /// <summary>
+        /// Callback for error events in proxy
+        /// </summary>
+        public Action<Exception> ExceptionFunc
+        {
+            get
+            {
+                return exceptionFunc ?? defaultExceptionFunc.Value;
+            }
+            set
+            {
+                exceptionFunc = value;
+            }
+        }
+
+        /// <summary>
+        /// A callback to authenticate clients 
+        /// Parameters are username, password provided by client
+        /// return true for successful authentication
+        /// </summary>
+        public Func<string, string, Task<bool>> AuthenticateUserFunc
+        {
+            get;
+            set;
+        }
+
+        /// <summary>
+        /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP requests
+        /// return the ExternalProxy object with valid credentials
+        /// </summary>
+        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpProxyFunc
+        {
+            get;
+            set;
+        }
+
+        /// <summary>
+        /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTPS requests
+        /// return the ExternalProxy object with valid credentials
+        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpsProxyFunc
+        {
+            get;
+            set;
+        }
+
+        /// <summary>
         /// A list of IpAddress & port this proxy is listening to
         /// </summary>
         public List<ProxyEndPoint> ProxyEndPoints { get; set; }
@@ -116,10 +182,24 @@ namespace Titanium.Web.Proxy
         public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 
         /// <summary>
+        /// Is the proxy currently running
+        /// </summary>
+        public bool ProxyRunning => proxyRunning;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether requests will be chained to upstream gateway.
+        /// </summary>
+        public bool ForwardToUpstreamGateway { get; set; }
+
+        /// <summary>
         /// Constructor
         /// </summary>
-        public ProxyServer()
+        public ProxyServer() : this(null, null) { }
+
+        public ProxyServer(string rootCertificateName, string rootCertificateIssuerName)
         {
+            RootCertificateName = rootCertificateName;
+            RootCertificateIssuerName = rootCertificateIssuerName;
             //default values
             ConnectionTimeOutSeconds = 120;
             CertificateCacheTimeOutMinutes = 60;
@@ -131,9 +211,6 @@ namespace Titanium.Web.Proxy
 
             RootCertificateName = RootCertificateName ?? "Titanium Root Certificate Authority";
             RootCertificateIssuerName = RootCertificateIssuerName ?? "Titanium";
-
-            certificateCacheManager = new CertificateManager(RootCertificateIssuerName,
-                RootCertificateName);
         }
 
         /// <summary>
@@ -142,7 +219,7 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void AddEndPoint(ProxyEndPoint endPoint)
         {
-            if (ProxyEndPoints.Any(x => x.IpAddress == endPoint.IpAddress && x.Port == endPoint.Port))
+            if (ProxyEndPoints.Any(x => x.IpAddress.Equals(endPoint.IpAddress) && endPoint.Port != 0 && x.Port == endPoint.Port))
             {
                 throw new Exception("Cannot add another endpoint to same port & ip address");
             }
@@ -216,12 +293,13 @@ namespace Titanium.Web.Proxy
 
 
             //If certificate was trusted by the machine
-            if (certTrusted)
+            if (certValidated)
             {
                 systemProxySettingsManager.SetHttpsProxy(
                    Equals(endPoint.IpAddress, IPAddress.Any) | Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(),
                     endPoint.Port);
             }
+
 
             endPoint.IsSystemHttpsProxy = true;
 
@@ -265,7 +343,21 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
-            certTrusted = certificateCacheManager.CreateTrustedRootCertificate().Result;
+            certificateCacheManager = new CertificateManager(RootCertificateIssuerName,
+                RootCertificateName, ExceptionFunc);
+
+            certValidated = certificateCacheManager.CreateTrustedRootCertificate();
+
+            if (TrustRootCertificate)
+            {
+                certificateCacheManager.TrustRootCertificate();
+            }
+
+            if (ForwardToUpstreamGateway && GetCustomUpStreamHttpProxyFunc == null && GetCustomUpStreamHttpsProxyFunc == null)
+            {
+                GetCustomUpStreamHttpProxyFunc = GetSystemUpStreamProxy;
+                GetCustomUpStreamHttpsProxyFunc = GetSystemUpStreamProxy;
+            }
 
             foreach (var endPoint in ProxyEndPoints)
             {
@@ -275,6 +367,28 @@ namespace Titanium.Web.Proxy
             certificateCacheManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
             proxyRunning = true;
+        }
+
+        /// <summary>
+        /// Gets the system up stream proxy.
+        /// </summary>
+        /// <param name="sessionEventArgs">The <see cref="SessionEventArgs"/> instance containing the event data.</param>
+        /// <returns><see cref="ExternalProxy"/> instance containing valid proxy configuration from PAC/WAPD scripts if any exists.</returns>
+        private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgs sessionEventArgs)
+        {
+            // Use built-in WebProxy class to handle PAC/WAPD scripts.
+            var systemProxyResolver = new WebProxy();
+
+            var systemProxyUri = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
+            
+            // TODO: Apply authorization
+            var systemProxy = new ExternalProxy
+            {
+                HostName = systemProxyUri.Host,
+                Port = systemProxyUri.Port
+            };
+
+            return Task.FromResult(systemProxy);
         }
 
         /// <summary>
@@ -304,7 +418,7 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints.Clear();
 
-            certificateCacheManager.StopClearIdleCertificates();
+            certificateCacheManager?.StopClearIdleCertificates();
 
             proxyRunning = false;
         }
@@ -378,32 +492,40 @@ namespace Titanium.Web.Proxy
                 //Other errors are discarded to keep proxy running
             }
 
+
             if (tcpClient != null)
-            {               
+            {
                 Task.Run(async () =>
                 {
                     try
-                    {      
+                    {
                         if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
                         {
                             await HandleClient(endPoint as TransparentProxyEndPoint, tcpClient);
                         }
                         else
                         {
+
+
                             await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient);
                         }
-                     
+
                     }
                     finally
                     {
                         if (tcpClient != null)
                         {
+                            //This line is important!
+                            //contributors please don't remove it without discussion
+                            //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
+                            //due to default TCP CLOSE_WAIT timeout for 4 minutes
                             tcpClient.LingerState = new LingerOption(true, 0);
+
                             tcpClient.Client.Shutdown(SocketShutdown.Both);
                             tcpClient.Client.Close();
                             tcpClient.Client.Dispose();
-
                             tcpClient.Close();
+
                         }
                     }
                 });
@@ -420,7 +542,7 @@ namespace Titanium.Web.Proxy
                 Stop();
             }
 
-            certificateCacheManager.Dispose();
+            certificateCacheManager?.Dispose();
         }
     }
 }

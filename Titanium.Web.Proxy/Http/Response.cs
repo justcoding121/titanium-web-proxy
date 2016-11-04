@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Extensions;
@@ -16,9 +15,9 @@ namespace Titanium.Web.Proxy.Http
         public string ResponseStatusCode { get; set; }
         public string ResponseStatusDescription { get; set; }
 
-        internal Encoding Encoding { get { return this.GetResponseCharacterEncoding(); } }
+        internal Encoding Encoding => this.GetResponseCharacterEncoding();
 
-        /// <summary>
+	    /// <summary>
         /// Content encoding for this response
         /// </summary>
         internal string ContentEncoding
@@ -205,7 +204,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Response network stream
         /// </summary>
-        internal Stream ResponseStream { get; set; }
+        public Stream ResponseStream { get; set; }
 
         /// <summary>
         /// response body contenst as byte array

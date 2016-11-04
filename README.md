@@ -17,6 +17,8 @@ Features
 * Safely relays WebSocket requests over Http
 * Support mutual SSL authentication
 * Fully asynchronous proxy
+* Supports proxy authentication
+
 
 Usage
 =====
@@ -25,18 +27,22 @@ Refer the HTTP Proxy Server library in your project, look up Test project to lea
 
 Install by nuget:
 
+For beta releases on [release branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/release)
+
+    Install-Package Titanium.Web.Proxy -Pre
+
+For stable releases on [master branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/master)
+
     Install-Package Titanium.Web.Proxy
-
-After installing nuget package mark following files to be copied to app directory
-
-* makecert.exe
-
 
 Setup HTTP proxy:
 
 ```csharp
 			var proxyServer = new ProxyServer();
-
+			
+			//locally trust root certificate used by this proxy 
+			proxyServer.TrustRootCertificate = true;
+			
 	    	proxyServer.BeforeRequest += OnRequest;
             proxyServer.BeforeResponse += OnResponse;
             proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
@@ -69,8 +75,8 @@ Setup HTTP proxy:
             };
             proxyServer.AddEndPoint(transparentEndPoint);
 
-            //proxyServer.ExternalHttpProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
-            //proxyServer.ExternalHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
+            //proxyServer.UpStreamHttpProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
+            //proxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
 
             foreach (var endPoint in proxyServer.ProxyEndPoints)
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ",
@@ -176,7 +182,10 @@ Sample request and response event handlers
 ```
 Future roadmap
 ============
-* Implement Kerberos/NTLM authentication over HTTP protocols for windows domain
 * Support Server Name Indication (SNI) for transparent endpoints
 * Support HTTP 2.0 
+* Support upstream AutoProxy detection
+* Support SOCKS protocol
+* Implement Kerberos/NTLM authentication over HTTP protocols for windows domain
+
 
