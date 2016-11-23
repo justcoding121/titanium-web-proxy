@@ -109,6 +109,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
             {
                 await e.Redirect("https://www.paypal.com");
             }
+
+            // set CustomData to provide state set here to the
+            // response handler
+            e.CustomData = "Custom data test";
         }
 
         //Modify response
@@ -135,6 +139,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
                     }
                 }
             }
+
+            // retrieve the custom state set in the request handler
+            string data = (string)e.CustomData;
         }
 
         /// <summary>

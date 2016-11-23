@@ -59,6 +59,12 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public HttpWebClient WebSession { get; set; }
 
+        /// <summary>
+        /// Gets or sets custom data which can be set in the <see cref="E:Titanium.Web.Proxy.ProxyServer.BeforeRequest" />
+        /// handler and read in the <see cref="E:Titanium.Web.Proxy.ProxyServer.BeforeResponse" /> handler
+        /// </summary>
+        public object CustomData { get; set; }
+
         public ExternalProxy CustomUpStreamHttpProxyUsed { get; set; }
 
         public ExternalProxy CustomUpStreamHttpsProxyUsed { get; set; }
@@ -345,9 +351,9 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Before request is made to server 
+        /// Before request is made to server
         /// Respond with the specified HTML string to client
-        /// and ignore the request 
+        /// and ignore the request
         /// </summary>
         /// <param name="html"></param>
         public async Task Ok(string html)
@@ -356,9 +362,9 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Before request is made to server 
+        /// Before request is made to server
         /// Respond with the specified HTML string to client
-        /// and ignore the request 
+        /// and ignore the request
         /// </summary>
         /// <param name="html"></param>
         /// <param name="headers"></param>
@@ -380,9 +386,9 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Before request is made to server 
+        /// Before request is made to server
         /// Respond with the specified byte[] to client
-        /// and ignore the request 
+        /// and ignore the request
         /// </summary>
         /// <param name="result"></param>
         public async Task Ok(byte[] result)
@@ -391,9 +397,9 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Before request is made to server 
+        /// Before request is made to server
         /// Respond with the specified byte[] to client
-        /// and ignore the request 
+        /// and ignore the request
         /// </summary>
         /// <param name="result"></param>
         /// <param name="headers"></param>
@@ -425,7 +431,7 @@ namespace Titanium.Web.Proxy.EventArguments
             WebSession.Request.CancelRequest = true;
         }
 
-        /// a generic responder method 
+        /// a generic responder method
         public async Task Respond(Response response)
         {
             WebSession.Request.RequestLocked = true;
