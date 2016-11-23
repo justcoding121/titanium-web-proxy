@@ -38,7 +38,7 @@ namespace Titanium.Web.Proxy
             clientStream.WriteTimeout = ConnectionTimeOutSeconds * 1000;
 
             var clientStreamReader = new CustomBinaryReader(clientStream);
-            var clientStreamWriter = new StreamWriter(clientStream);
+            var clientStreamWriter = new StreamWriter(clientStream) { NewLine = "\r\n" };
 
             Uri httpRemoteUri;
             try
@@ -121,7 +121,7 @@ namespace Titanium.Web.Proxy
                         clientStream = sslStream;
 
                         clientStreamReader = new CustomBinaryReader(sslStream);
-                        clientStreamWriter = new StreamWriter(sslStream);
+                        clientStreamWriter = new StreamWriter(sslStream) {NewLine = "\r\n"};
 
                     }
                     catch
@@ -195,7 +195,7 @@ namespace Titanium.Web.Proxy
                         SslProtocols.Tls, false);
 
                     clientStreamReader = new CustomBinaryReader(sslStream);
-                    clientStreamWriter = new StreamWriter(sslStream);
+                    clientStreamWriter = new StreamWriter(sslStream) { NewLine = "\r\n" };
                     //HTTPS server created - we can now decrypt the client's traffic
 
                 }
@@ -211,7 +211,7 @@ namespace Titanium.Web.Proxy
             else
             {
                 clientStreamReader = new CustomBinaryReader(clientStream);
-                clientStreamWriter = new StreamWriter(clientStream);
+                clientStreamWriter = new StreamWriter(clientStream) { NewLine = "\r\n" };
             }
 
             //now read the request line
