@@ -38,6 +38,12 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         internal ProxyClient ProxyClient { get; set; }
 
+        /// <summary>
+        /// Returns a unique Id for this request/response session
+        /// same as RequestId of WebSession
+        /// </summary>
+        public Guid Id => WebSession.RequestId;
+
         //Should we send a rerequest
         public bool ReRequest
         {
