@@ -54,7 +54,7 @@ namespace Titanium.Web.Proxy.Network
                     client = new TcpClient(externalHttpsProxy.HostName, externalHttpsProxy.Port);
                     stream = client.GetStream();
 
-                    using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true))
+                    using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true) { NewLine = "\r\n" })
                     {
                         await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
                         await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
