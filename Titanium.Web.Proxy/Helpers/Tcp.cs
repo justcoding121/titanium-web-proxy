@@ -10,8 +10,8 @@ using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
-using Titanium.Web.Proxy.Tcp;
+using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -154,7 +154,7 @@ namespace Titanium.Web.Proxy.Helpers
                 if (httpCmd != null)
                 {
                     sb.Append(httpCmd);
-                    sb.Append(Environment.NewLine);
+                    sb.Append(ProxyConstants.NewLine);
                 }
 
                 if (requestHeaders != null)
@@ -162,11 +162,11 @@ namespace Titanium.Web.Proxy.Helpers
                     foreach (var header in requestHeaders.Select(t => t.Value.ToString()))
                     {
                         sb.Append(header);
-                        sb.Append(Environment.NewLine);
+                        sb.Append(ProxyConstants.NewLine);
                     }
                 }
 
-                sb.Append(Environment.NewLine);
+                sb.Append(ProxyConstants.NewLine);
             }
 
             var tcpConnection = await tcpConnectionFactory.CreateClient(bufferSize, connectionTimeOutSeconds,
