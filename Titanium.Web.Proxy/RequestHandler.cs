@@ -10,13 +10,13 @@ using System.Text.RegularExpressions;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Models;
 using System.Security.Cryptography.X509Certificates;
 using Titanium.Web.Proxy.Shared;
 using Titanium.Web.Proxy.Http;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy
 {
@@ -38,7 +38,7 @@ namespace Titanium.Web.Proxy
             clientStream.WriteTimeout = ConnectionTimeOutSeconds * 1000;
 
             var clientStreamReader = new CustomBinaryReader(clientStream);
-            var clientStreamWriter = new StreamWriter(clientStream) { NewLine = "\r\n" };
+            var clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
 
             Uri httpRemoteUri;
             try
@@ -121,7 +121,7 @@ namespace Titanium.Web.Proxy
                         clientStream = sslStream;
 
                         clientStreamReader = new CustomBinaryReader(sslStream);
-                        clientStreamWriter = new StreamWriter(sslStream) {NewLine = "\r\n"};
+                        clientStreamWriter = new StreamWriter(sslStream) {NewLine = ProxyConstants.NewLine };
 
                     }
                     catch
@@ -195,7 +195,7 @@ namespace Titanium.Web.Proxy
                         SslProtocols.Tls, false);
 
                     clientStreamReader = new CustomBinaryReader(sslStream);
-                    clientStreamWriter = new StreamWriter(sslStream) { NewLine = "\r\n" };
+                    clientStreamWriter = new StreamWriter(sslStream) { NewLine = ProxyConstants.NewLine };
                     //HTTPS server created - we can now decrypt the client's traffic
 
                 }
@@ -211,7 +211,7 @@ namespace Titanium.Web.Proxy
             else
             {
                 clientStreamReader = new CustomBinaryReader(clientStream);
-                clientStreamWriter = new StreamWriter(clientStream) { NewLine = "\r\n" };
+                clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
             }
 
             //now read the request line

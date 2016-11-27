@@ -8,8 +8,9 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using System.Security.Authentication;
 using System.Linq;
+using Titanium.Web.Proxy.Shared;
 
-namespace Titanium.Web.Proxy.Network
+namespace Titanium.Web.Proxy.Network.Tcp
 {
     /// <summary>
     /// A class that manages Tcp Connection to server used by this proxy server
@@ -54,7 +55,7 @@ namespace Titanium.Web.Proxy.Network
                     client = new TcpClient(externalHttpsProxy.HostName, externalHttpsProxy.Port);
                     stream = client.GetStream();
 
-                    using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true) { NewLine = "\r\n" })
+                    using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true) { NewLine = ProxyConstants.NewLine })
                     {
                         await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
                         await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
