@@ -10,11 +10,13 @@ using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
-using Titanium.Web.Proxy.Tcp;
+using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
+    using System.Net;
+
     internal enum IpVersion
     {
         Ipv4 = 1,
@@ -143,7 +145,7 @@ namespace Titanium.Web.Proxy.Helpers
             string remoteHostName, int remotePort, string httpCmd, Version httpVersion, Dictionary<string, HttpHeader> requestHeaders,
             bool isHttps,  SslProtocols supportedProtocols,
             RemoteCertificateValidationCallback remoteCertificateValidationCallback, LocalCertificateSelectionCallback localCertificateSelectionCallback,
-            Stream clientStream, TcpConnectionFactory tcpConnectionFactory)
+            Stream clientStream, TcpConnectionFactory tcpConnectionFactory, IPEndPoint upStreamEndPoint)
         {
             //prepare the prefix content
             StringBuilder sb = null;
@@ -154,7 +156,7 @@ namespace Titanium.Web.Proxy.Helpers
                 if (httpCmd != null)
                 {
                     sb.Append(httpCmd);
-                    sb.Append(Environment.NewLine);
+                    sb.Append(ProxyConstants.NewLine);
                 }
 
                 if (requestHeaders != null)
@@ -162,18 +164,18 @@ namespace Titanium.Web.Proxy.Helpers
                     foreach (var header in requestHeaders.Select(t => t.Value.ToString()))
                     {
                         sb.Append(header);
-                        sb.Append(Environment.NewLine);
+                        sb.Append(ProxyConstants.NewLine);
                     }
                 }
 
-                sb.Append(Environment.NewLine);
+                sb.Append(ProxyConstants.NewLine);
             }
 
             var tcpConnection = await tcpConnectionFactory.CreateClient(bufferSize, connectionTimeOutSeconds,
                                         remoteHostName, remotePort,
                                         httpVersion, isHttps, 
                                         supportedProtocols, remoteCertificateValidationCallback, localCertificateSelectionCallback, 
-                                        null, null, clientStream);
+                                        null, null, clientStream, upStreamEndPoint);
                                                                 
             try
             {
