@@ -1,12 +1,12 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 
-namespace Titanium.Web.Proxy.Tcp
+namespace Titanium.Web.Proxy.Network.Tcp
 {
     /// <summary>
     /// Represents collection of TcpRows
     /// </summary>
-    /// <seealso cref="System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Tcp.TcpRow}" />
+    /// <seealso cref="System.Collections.Generic.IEnumerable{Proxy.Tcp.TcpRow}" />
     internal class TcpTable : IEnumerable<TcpRow>
     {
         private readonly IEnumerable<TcpRow> tcpRows;
