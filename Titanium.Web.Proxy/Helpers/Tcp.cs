@@ -145,7 +145,7 @@ namespace Titanium.Web.Proxy.Helpers
             string remoteHostName, int remotePort, string httpCmd, Version httpVersion, Dictionary<string, HttpHeader> requestHeaders,
             bool isHttps,  SslProtocols supportedProtocols,
             RemoteCertificateValidationCallback remoteCertificateValidationCallback, LocalCertificateSelectionCallback localCertificateSelectionCallback,
-            Stream clientStream, TcpConnectionFactory tcpConnectionFactory)
+            Stream clientStream, TcpConnectionFactory tcpConnectionFactory, IPEndPoint upStreamEndPoint)
         {
             //prepare the prefix content
             StringBuilder sb = null;
@@ -175,7 +175,7 @@ namespace Titanium.Web.Proxy.Helpers
                                         remoteHostName, remotePort,
                                         httpVersion, isHttps, 
                                         supportedProtocols, remoteCertificateValidationCallback, localCertificateSelectionCallback, 
-                                        null, null, clientStream, new IPEndPoint(IPAddress.Any, 0));
+                                        null, null, clientStream, upStreamEndPoint);
                                                                 
             try
             {
