@@ -25,7 +25,7 @@ if(!$Version) { $Version = "2.0.$BuildNumber" }
 
 if(!$Branch) { $Branch = $env:APPVEYOR_REPO_BRANCH }
 if(!$Branch) { $Branch = "local" }
-if($Branch -eq "release" ) { $Version = "$Version-beta" }
+if($Branch -eq "beta" ) { $Version = "$Version-beta" }
 
 Import-Module "$Here\Common" -DisableNameChecking
 
