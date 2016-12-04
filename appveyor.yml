@@ -56,9 +56,9 @@ deploy:
   auth_token:
     secure: ItVm+50ASpDXx1w+FCe2NTpZxqCbjRWfugLjk/bqBIi00DvPnSGOV1rIQ5hnwBW3
   on:
-    branch: /(master|release)/ 
+    branch: /(stable|beta)/ 
 - provider: NuGet
   api_key:
     secure: ZbRmjOcp+TDllRV1wxqLZjdRV7hld388rXlWVJuGGiQleomP9Ku+Nsy3a75E7/9k
   on:
-    branch: /(master|release)/
+    branch: /(stable|beta)/

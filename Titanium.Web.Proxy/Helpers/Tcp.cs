@@ -15,6 +15,8 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
+    using System.Net;
+
     internal enum IpVersion
     {
         Ipv4 = 1,
@@ -143,7 +145,7 @@ namespace Titanium.Web.Proxy.Helpers
             string remoteHostName, int remotePort, string httpCmd, Version httpVersion, Dictionary<string, HttpHeader> requestHeaders,
             bool isHttps,  SslProtocols supportedProtocols,
             RemoteCertificateValidationCallback remoteCertificateValidationCallback, LocalCertificateSelectionCallback localCertificateSelectionCallback,
-            Stream clientStream, TcpConnectionFactory tcpConnectionFactory)
+            Stream clientStream, TcpConnectionFactory tcpConnectionFactory, IPEndPoint upStreamEndPoint)
         {
             //prepare the prefix content
             StringBuilder sb = null;
@@ -173,7 +175,7 @@ namespace Titanium.Web.Proxy.Helpers
                                         remoteHostName, remotePort,
                                         httpVersion, isHttps, 
                                         supportedProtocols, remoteCertificateValidationCallback, localCertificateSelectionCallback, 
-                                        null, null, clientStream);
+                                        null, null, clientStream, upStreamEndPoint);
                                                                 
             try
             {
