@@ -36,13 +36,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="externalHttpProxy"></param>
         /// <param name="externalHttpsProxy"></param>
         /// <param name="clientStream"></param>
+        /// <param name="upStreamEndPoint"></param>
         /// <returns></returns>
         internal async Task<TcpConnection> CreateClient(int bufferSize, int connectionTimeOutSeconds,
             string remoteHostName, int remotePort, Version httpVersion,
             bool isHttps, SslProtocols supportedSslProtocols,
             RemoteCertificateValidationCallback remoteCertificateValidationCallback, LocalCertificateSelectionCallback localCertificateSelectionCallback,
             ExternalProxy externalHttpProxy, ExternalProxy externalHttpsProxy,
-            Stream clientStream, EndPoint localEndPoint)
+            Stream clientStream, EndPoint upStreamEndPoint)
         {
             TcpClient client;
             Stream stream;
@@ -55,7 +56,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 if (externalHttpsProxy != null && externalHttpsProxy.HostName != remoteHostName)
                 {
                     client = new TcpClient();
-                    client.Client.Bind(localEndPoint);
+                    client.Client.Bind(upStreamEndPoint);
                     client.Client.Connect(externalHttpsProxy.HostName, externalHttpsProxy.Port);
                     stream = client.GetStream();
 
@@ -91,7 +92,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 else
                 {
                     client = new TcpClient();
-                    client.Client.Bind(localEndPoint);
+                    client.Client.Bind(upStreamEndPoint);
                     client.Client.Connect(remoteHostName, remotePort);
                     stream = client.GetStream();
                 }
@@ -117,14 +118,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 if (externalHttpProxy != null && externalHttpProxy.HostName != remoteHostName)
                 {
                     client = new TcpClient();
-                    client.Client.Bind(localEndPoint);
+                    client.Client.Bind(upStreamEndPoint);
                     client.Client.Connect(externalHttpProxy.HostName, externalHttpProxy.Port);
                     stream = client.GetStream();
                 }
                 else
                 {
                     client = new TcpClient();
-                    client.Client.Bind(localEndPoint);
+                    client.Client.Bind(upStreamEndPoint);
                     client.Client.Connect(remoteHostName, remotePort);
                     stream = client.GetStream();
                 }

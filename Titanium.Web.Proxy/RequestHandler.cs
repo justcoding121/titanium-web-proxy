@@ -152,7 +152,7 @@ namespace Titanium.Web.Proxy
                             false, SupportedSslProtocols,
                             new RemoteCertificateValidationCallback(ValidateServerCertificate),
                             new LocalCertificateSelectionCallback(SelectClientCertificate),
-                            clientStream, tcpConnectionFactory);
+                            clientStream, tcpConnectionFactory, UpStreamEndPoint);
 
                     Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                     return;
@@ -251,7 +251,7 @@ namespace Titanium.Web.Proxy
                         args.IsHttps, SupportedSslProtocols,
                         new RemoteCertificateValidationCallback(ValidateServerCertificate),
                         new LocalCertificateSelectionCallback(SelectClientCertificate),
-                        customUpStreamHttpProxy ?? UpStreamHttpProxy, customUpStreamHttpsProxy ?? UpStreamHttpsProxy, args.ProxyClient.ClientStream, LocalEndPoint);
+                        customUpStreamHttpProxy ?? UpStreamHttpProxy, customUpStreamHttpsProxy ?? UpStreamHttpsProxy, args.ProxyClient.ClientStream, UpStreamEndPoint);
                 }
 
                 args.WebSession.Request.RequestLocked = true;
@@ -487,7 +487,7 @@ namespace Titanium.Web.Proxy
                                                 httpCmd, httpVersion, args.WebSession.Request.RequestHeaders, args.IsHttps,
                                                 SupportedSslProtocols, new RemoteCertificateValidationCallback(ValidateServerCertificate),
                                                 new LocalCertificateSelectionCallback(SelectClientCertificate),
-                                                clientStream, tcpConnectionFactory);
+                                                clientStream, tcpConnectionFactory, UpStreamEndPoint);
 
                         Dispose(clientStream, clientStreamReader, clientStreamWriter, args);
                         break;
