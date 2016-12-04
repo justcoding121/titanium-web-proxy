@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -10,10 +11,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
     {
         private ProxyServer proxyServer;
 
+        //share requestBody outside handlers
+        private Dictionary<Guid, string> requestBodyHistory;
+
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
             proxyServer.TrustRootCertificate = true;
+            requestBodyHistory = new Dictionary<Guid, string>();
         }
 
         public void StartProxy()
@@ -79,7 +84,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             ////read request headers
             var requestHeaders = e.WebSession.Request.RequestHeaders;
 
-            if ((e.WebSession.Request.Method == "POST" || e.WebSession.Request.Method == "PUT"))
+            var method = e.WebSession.Request.Method.ToUpper();
+            if ((method == "POST" || method == "PUT" || method == "PATCH"))
             {
                 //Get/Set request body bytes
                 byte[] bodyBytes = await e.GetRequestBody();
@@ -89,6 +95,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 string bodyString = await e.GetRequestBodyAsString();
                 await e.SetRequestBodyString(bodyString);
 
+                requestBodyHistory[e.Id] = bodyString;
             }
 
             //To cancel a request with a custom HTML content
@@ -113,6 +120,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
         //Modify response
         public async Task OnResponse(object sender, SessionEventArgs e)
         {
+            if(requestBodyHistory.ContainsKey(e.Id))
+            {
+                //access request body by looking up the shared dictionary using requestId
+                var requestBody = requestBodyHistory[e.Id];
+            }
             //read response headers
             var responseHeaders = e.WebSession.Response.ResponseHeaders;
 
