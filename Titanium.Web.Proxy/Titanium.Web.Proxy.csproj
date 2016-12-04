@@ -84,8 +84,8 @@
     <Compile Include="Http\Request.cs" />
     <Compile Include="Http\Response.cs" />
     <Compile Include="Models\ExternalProxy.cs" />
-    <Compile Include="Network\TcpConnection.cs" />
-    <Compile Include="Network\TcpConnectionFactory.cs" />
+    <Compile Include="Network\Tcp\TcpConnection.cs" />
+    <Compile Include="Network\Tcp\TcpConnectionFactory.cs" />
     <Compile Include="Models\HttpHeader.cs" />
     <Compile Include="Http\HttpWebClient.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -100,8 +100,8 @@
     <Compile Include="Http\Responses\OkResponse.cs" />
     <Compile Include="Http\Responses\RedirectResponse.cs" />
     <Compile Include="Shared\ProxyConstants.cs" />
-    <Compile Include="Tcp\TcpRow.cs" />
-    <Compile Include="Tcp\TcpTable.cs" />
+    <Compile Include="Network\Tcp\TcpRow.cs" />
+    <Compile Include="Network\Tcp\TcpTable.cs" />
   </ItemGroup>
   <ItemGroup>
     <COMReference Include="CERTENROLLLib">
