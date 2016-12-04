@@ -118,6 +118,12 @@ namespace Titanium.Web.Proxy
         public ExternalProxy UpStreamHttpsProxy { get; set; }
 
         /// <summary>
+        /// Local adapter/NIC endpoint (where proxy makes request via)
+        /// default via any IP addresses of this machine
+        /// </summary>
+        public IPEndPoint UpStreamEndPoint { get; set; } = new IPEndPoint(IPAddress.Any, 0);
+
+        /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
         /// </summary>
         public event Func<object, CertificateValidationEventArgs, Task> ServerCertificateValidationCallback;
