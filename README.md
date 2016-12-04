@@ -27,11 +27,11 @@ Refer the HTTP Proxy Server library in your project, look up Test project to lea
 
 Install by nuget:
 
-For beta releases on [release branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/release)
+For beta releases on [beta branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/release)
 
     Install-Package Titanium.Web.Proxy -Pre
 
-For stable releases on [master branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/master)
+For stable releases on [stable branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/master)
 
     Install-Package Titanium.Web.Proxy
 
