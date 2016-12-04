@@ -6,7 +6,7 @@ A light weight http(s) proxy server written in C#
 
 Kindly report only issues/bugs here . For programming help or questions use [StackOverflow](http://stackoverflow.com/questions/tagged/titanium-web-proxy) with the tag Titanium-Web-Proxy.
 
-![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/release/Examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
+![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/develop/Examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
 
 Features
 ========
@@ -27,11 +27,11 @@ Refer the HTTP Proxy Server library in your project, look up Test project to lea
 
 Install by nuget:
 
-For beta releases on [release branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/release)
+For beta releases on [beta branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/release)
 
     Install-Package Titanium.Web.Proxy -Pre
 
-For stable releases on [master branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/master)
+For stable releases on [stable branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/master)
 
     Install-Package Titanium.Web.Proxy
 
@@ -107,8 +107,9 @@ Sample request and response event handlers
 
             ////read request headers
             var requestHeaders = e.WebSession.Request.RequestHeaders;
-
-            if ((e.WebSession.Request.Method == "POST" || e.WebSession.Request.Method == "PUT"))
+            
+            var method = e.WebSession.Request.Method.ToUpper();
+            if ((method == "POST" || method == "PUT" || method == "PATCH"))
             {
                 //Get/Set request body bytes
                 byte[] bodyBytes = await e.GetRequestBody();
