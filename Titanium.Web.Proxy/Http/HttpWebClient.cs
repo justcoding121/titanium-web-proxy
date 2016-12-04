@@ -91,7 +91,7 @@ namespace Titanium.Web.Proxy.Http
                 var header = headerItem.Value;
                 if (headerItem.Key != "Proxy-Authorization")
                 {
-                    requestLines.AppendLine(header.Name + ":" + header.Value);
+                    requestLines.AppendLine(header.Name + ": " + header.Value);
                 }
             }
 
@@ -103,7 +103,7 @@ namespace Titanium.Web.Proxy.Http
                 {
                     if (headerItem.Key != "Proxy-Authorization")
                     {
-                        requestLines.AppendLine(header.Name + ":" + header.Value);
+                        requestLines.AppendLine(header.Name + ": " + header.Value);
                     }
                 }
             }
