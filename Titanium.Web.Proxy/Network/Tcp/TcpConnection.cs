@@ -4,7 +4,7 @@ using System.Net.Sockets;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
-namespace Titanium.Web.Proxy.Network
+namespace Titanium.Web.Proxy.Network.Tcp
 {
     /// <summary>
     /// An object that holds TcpConnection to a particular server & port

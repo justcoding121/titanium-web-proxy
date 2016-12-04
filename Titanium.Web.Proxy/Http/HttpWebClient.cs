@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
+using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
@@ -90,7 +91,7 @@ namespace Titanium.Web.Proxy.Http
                 var header = headerItem.Value;
                 if (headerItem.Key != "Proxy-Authorization")
                 {
-                    requestLines.AppendLine(header.Name + ':' + header.Value);
+                    requestLines.AppendLine(header.Name + ": " + header.Value);
                 }
             }
 
@@ -102,7 +103,7 @@ namespace Titanium.Web.Proxy.Http
                 {
                     if (headerItem.Key != "Proxy-Authorization")
                     {
-                        requestLines.AppendLine(header.Name + ':' + header.Value);
+                        requestLines.AppendLine(header.Name + ": " + header.Value);
                     }
                 }
             }

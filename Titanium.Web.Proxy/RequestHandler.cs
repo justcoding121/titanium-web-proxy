@@ -10,13 +10,13 @@ using System.Text.RegularExpressions;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Models;
 using System.Security.Cryptography.X509Certificates;
 using Titanium.Web.Proxy.Shared;
 using Titanium.Web.Proxy.Http;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy
 {
@@ -38,7 +38,7 @@ namespace Titanium.Web.Proxy
             clientStream.WriteTimeout = ConnectionTimeOutSeconds * 1000;
 
             var clientStreamReader = new CustomBinaryReader(clientStream);
-            var clientStreamWriter = new StreamWriter(clientStream);
+            var clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
 
             Uri httpRemoteUri;
             try
@@ -121,7 +121,7 @@ namespace Titanium.Web.Proxy
                         clientStream = sslStream;
 
                         clientStreamReader = new CustomBinaryReader(sslStream);
-                        clientStreamWriter = new StreamWriter(sslStream);
+                        clientStreamWriter = new StreamWriter(sslStream) {NewLine = ProxyConstants.NewLine };
 
                     }
                     catch
@@ -152,7 +152,7 @@ namespace Titanium.Web.Proxy
                             false, SupportedSslProtocols,
                             new RemoteCertificateValidationCallback(ValidateServerCertificate),
                             new LocalCertificateSelectionCallback(SelectClientCertificate),
-                            clientStream, tcpConnectionFactory);
+                            clientStream, tcpConnectionFactory, UpStreamEndPoint);
 
                     Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                     return;
@@ -195,7 +195,7 @@ namespace Titanium.Web.Proxy
                         SslProtocols.Tls, false);
 
                     clientStreamReader = new CustomBinaryReader(sslStream);
-                    clientStreamWriter = new StreamWriter(sslStream);
+                    clientStreamWriter = new StreamWriter(sslStream) { NewLine = ProxyConstants.NewLine };
                     //HTTPS server created - we can now decrypt the client's traffic
 
                 }
@@ -211,7 +211,7 @@ namespace Titanium.Web.Proxy
             else
             {
                 clientStreamReader = new CustomBinaryReader(clientStream);
-                clientStreamWriter = new StreamWriter(clientStream);
+                clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
             }
 
             //now read the request line
@@ -251,7 +251,7 @@ namespace Titanium.Web.Proxy
                         args.IsHttps, SupportedSslProtocols,
                         new RemoteCertificateValidationCallback(ValidateServerCertificate),
                         new LocalCertificateSelectionCallback(SelectClientCertificate),
-                        customUpStreamHttpProxy ?? UpStreamHttpProxy, customUpStreamHttpsProxy ?? UpStreamHttpsProxy, args.ProxyClient.ClientStream);
+                        customUpStreamHttpProxy ?? UpStreamHttpProxy, customUpStreamHttpsProxy ?? UpStreamHttpsProxy, args.ProxyClient.ClientStream, UpStreamEndPoint);
                 }
 
                 args.WebSession.Request.RequestLocked = true;
@@ -312,8 +312,9 @@ namespace Titanium.Web.Proxy
                 {
                     if (!args.WebSession.Request.ExpectationFailed)
                     {
-                        //If its a post/put request, then read the client html body and send it to server
-                        if (args.WebSession.Request.Method.ToUpper() == "POST" || args.WebSession.Request.Method.ToUpper() == "PUT")
+                        //If its a post/put/patch request, then read the client html body and send it to server
+                        var method = args.WebSession.Request.Method.ToUpper();
+                        if (method == "POST" || method == "PUT" || method == "PATCH")
                         {
                             await SendClientRequestBody(args);
                         }
@@ -486,7 +487,7 @@ namespace Titanium.Web.Proxy
                                                 httpCmd, httpVersion, args.WebSession.Request.RequestHeaders, args.IsHttps,
                                                 SupportedSslProtocols, new RemoteCertificateValidationCallback(ValidateServerCertificate),
                                                 new LocalCertificateSelectionCallback(SelectClientCertificate),
-                                                clientStream, tcpConnectionFactory);
+                                                clientStream, tcpConnectionFactory, UpStreamEndPoint);
 
                         Dispose(clientStream, clientStreamReader, clientStreamWriter, args);
                         break;
@@ -570,7 +571,7 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///  This is called when the request is PUT/POST to read the body
+        ///  This is called when the request is PUT/POST/PATCH to read the body
         /// </summary>
         /// <param name="args"></param>
         /// <returns></returns>
