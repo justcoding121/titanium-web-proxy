@@ -8,15 +8,14 @@ namespace Titanium.Web.Proxy.Shared
     /// </summary>
     internal class ProxyConstants
     { 
-        internal static readonly char[] SpaceSplit = { ' ' };
+        internal static  readonly char[] SpaceSplit = { ' ' };
         internal static readonly char[] ColonSplit = { ':' };
         internal static readonly char[] SemiColonSplit = { ';' };
 
-        internal static readonly byte[] NewLineBytes = Encoding.ASCII.GetBytes(NewLine);
+        internal static readonly byte[] NewLineBytes = Encoding.ASCII.GetBytes(Environment.NewLine);
 
         internal static readonly byte[] ChunkEnd =
-            Encoding.ASCII.GetBytes(0.ToString("x2") + NewLine + NewLine);
+            Encoding.ASCII.GetBytes(0.ToString("x2") + Environment.NewLine + Environment.NewLine);
 
-        internal const string NewLine = "\r\n";
     }
 }
