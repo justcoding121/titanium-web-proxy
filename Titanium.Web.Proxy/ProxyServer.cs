@@ -9,7 +9,6 @@ using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using System.Linq;
 using System.Security.Authentication;
-using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy
 {
@@ -116,12 +115,6 @@ namespace Titanium.Web.Proxy
         /// External proxy for Http
         /// </summary>
         public ExternalProxy UpStreamHttpsProxy { get; set; }
-
-        /// <summary>
-        /// Local adapter/NIC endpoint (where proxy makes request via)
-        /// default via any IP addresses of this machine
-        /// </summary>
-        public IPEndPoint UpStreamEndPoint { get; set; } = new IPEndPoint(IPAddress.Any, 0);
 
         /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
