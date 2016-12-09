@@ -419,45 +419,46 @@ namespace Titanium.Web.Proxy.EventArguments
             WebSession.Request.CancelRequest = true;
         }
         
-        public async Task GenericResponse(string html, HttpStatusCode status)
-        {
+        public async Task GenericResponse(string html, HttpStatusCode status)        
+        {
             await GenericResponse(html, null, status);
-        }
- 
-        public async Task GenericResponse(string html, Dictionary<string, HttpHeader> headers, HttpStatusCode status)
-        {
-            if (WebSession.Request.RequestLocked)
-            {
-                throw new Exception("You cannot call this function after request is made to server.");
-            }
-         
-            if (html == null)
-            {
-                html = string.Empty;
-            }
- 
-            var result = Encoding.Default.GetBytes(html);
- 
-            await GenericResponse(result, headers, status);
-        }
- 
-        public async Task GenericResponse(byte[] result, Dictionary<string, HttpHeader> headers, HttpStatusCode status)
-        {
-            var response = new GenericResponse(status);
- 
-            if (headers != null && headers.Count > 0)
-            {
-                response.ResponseHeaders = headers;
-            }
-
-            response.HttpVersion = WebSession.Request.HttpVersion;
-            response.ResponseBody = result;
- 
-            await Respond(response);
- 
-            WebSession.Request.CancelRequest = true;
-        }
-
+        }
+        
+        public async Task GenericResponse(string html, Dictionary<string, HttpHeader> headers, HttpStatusCode status)
+        {            
+            if (WebSession.Request.RequestLocked)            
+            {                
+                throw new Exception("You cannot call this function after request is made to server.");            
+            }
+            
+            if (html == null)
+            {                
+                html = string.Empty;            
+            }
+            
+            var result = Encoding.Default.GetBytes(html);
+            
+            await GenericResponse(result, headers, status);        
+        }
+         
+        public async Task GenericResponse(byte[] result, Dictionary<string, HttpHeader> headers, HttpStatusCode status)
+        {
+            var response = new GenericResponse(status);
+            
+            if (headers != null && headers.Count > 0)
+            {
+                response.ResponseHeaders = headers;
+            }
+            
+            response.HttpVersion = WebSession.Request.HttpVersion;
+            
+            response.ResponseBody = result;
+            
+            await Respond(response);
+            
+            WebSession.Request.CancelRequest = true;
+        }
+        
         public async Task Redirect(string url)
         {
             var response = new RedirectResponse();
