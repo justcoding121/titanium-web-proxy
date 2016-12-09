@@ -467,7 +467,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <returns></returns>
         public async Task GenericResponse(string html, HttpStatusCode status)
         {
-            await GenericResponse(html, null, status);
+            await GenericResponse(html, null, status);
         }
 
         /// <summary>
