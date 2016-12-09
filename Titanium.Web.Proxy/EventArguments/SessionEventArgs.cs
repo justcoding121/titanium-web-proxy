@@ -405,7 +405,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="headers"></param>
         public async Task Ok(byte[] result, Dictionary<string, HttpHeader> headers)
         {
-            var response = new OkResponse();
+            var response = new OkResponse();            
+            
             if (headers != null && headers.Count > 0)
             {
                 response.ResponseHeaders = headers;
@@ -420,7 +421,7 @@ namespace Titanium.Web.Proxy.EventArguments
         
         public async Task GenericResponse(string html, HttpStatusCode status)
         {
-            await GenericResponse(html, null, status);
+            await GenericResponse(html, null, status);
         }
  
         public async Task GenericResponse(string html, Dictionary<string, HttpHeader> headers, HttpStatusCode status)
@@ -430,7 +431,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 throw new Exception("You cannot call this function after request is made to server.");
             }
          
-            if (html == null)
+            if (html == null)
             {
                 html = string.Empty;
             }
