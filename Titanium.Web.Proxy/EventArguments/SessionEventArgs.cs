@@ -457,19 +457,6 @@ namespace Titanium.Web.Proxy.EventArguments
             await GenericResponse(result, headers, status);        
         }
         
-        /// <summary>
-        /// Before request is made to server 
-        /// Respond with the specified HTML string to client
-        /// and ignore the request 
-        /// </summary>
-        /// <param name="html"></param>
-        /// <param name="status"></param>
-        /// <returns></returns>
-        public async Task GenericResponse(string html, HttpStatusCode status)
-        {
-            await GenericResponse(html, null, status);
-        }
-
         /// <summary>
         /// Before request is made to server
         /// Respond with the specified byte[] to client
