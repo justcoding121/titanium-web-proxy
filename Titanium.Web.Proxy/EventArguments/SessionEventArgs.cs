@@ -405,7 +405,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="headers"></param>
         public async Task Ok(byte[] result, Dictionary<string, HttpHeader> headers)
         {
-            var response = new OkResponse();
+            var response = new OkResponse();            
+            
             if (headers != null && headers.Count > 0)
             {
                 response.ResponseHeaders = headers;
@@ -417,7 +418,73 @@ namespace Titanium.Web.Proxy.EventArguments
 
             WebSession.Request.CancelRequest = true;
         }
-
+        
+        /// <summary>
+        /// Before request is made to server 
+        /// Respond with the specified HTML string to client
+        /// and ignore the request 
+        /// </summary>
+        /// <param name="html"></param>
+        /// <param name="status"></param>
+        public async Task GenericResponse(string html, HttpStatusCode status)        
+        {
+            await GenericResponse(html, null, status);
+        }
+       
+        /// <summary>
+        /// Before request is made to server 
+        /// Respond with the specified HTML string to client
+        /// and the specified status
+        /// and ignore the request 
+        /// </summary>
+        /// <param name="html"></param>
+        /// <param name="headers"></param>
+        /// <param name="status"></param>
+        public async Task GenericResponse(string html, Dictionary<string, HttpHeader> headers, HttpStatusCode status)
+        {            
+            if (WebSession.Request.RequestLocked)            
+            {                
+                throw new Exception("You cannot call this function after request is made to server.");            
+            }
+            
+            if (html == null)
+            {                
+                html = string.Empty;            
+            }
+            
+            var result = Encoding.Default.GetBytes(html);
+            
+            await GenericResponse(result, headers, status);        
+        }
+        
+        /// <summary>
+        /// Before request is made to server
+        /// Respond with the specified byte[] to client
+        /// and the specified status
+        /// and ignore the request
+        /// </summary>
+        /// <param name="result"></param>
+        /// <param name="headers"></param>
+        /// <param name="status"></param>
+        /// <returns></returns>
+        public async Task GenericResponse(byte[] result, Dictionary<string, HttpHeader> headers, HttpStatusCode status)
+        {
+            var response = new GenericResponse(status);
+            
+            if (headers != null && headers.Count > 0)
+            {
+                response.ResponseHeaders = headers;
+            }
+            
+            response.HttpVersion = WebSession.Request.HttpVersion;
+            
+            response.ResponseBody = result;
+            
+            await Respond(response);
+            
+            WebSession.Request.CancelRequest = true;
+        }
+        
         public async Task Redirect(string url)
         {
             var response = new RedirectResponse();
