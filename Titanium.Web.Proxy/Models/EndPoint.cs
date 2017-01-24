@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Titanium.Web.Proxy.Models
 {
@@ -37,6 +38,8 @@ namespace Titanium.Web.Proxy.Models
         internal bool IsSystemHttpsProxy { get; set; }
 
         public  List<string> ExcludedHttpsHostNameRegex { get; set; }
+
+        public X509Certificate2 GenericCertificate { get; set; }
 
         public ExplicitProxyEndPoint(IPAddress IpAddress, int Port, bool EnableSsl)
             : base(IpAddress, Port, EnableSsl)
