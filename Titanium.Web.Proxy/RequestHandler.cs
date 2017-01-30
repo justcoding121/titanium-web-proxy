@@ -568,7 +568,7 @@ namespace Titanium.Web.Proxy
                 {
                     //these are the only encoding this proxy can read
                     case "accept-encoding":
-                        header.Value = "gzip,deflate,zlib";
+                        header.Value = "gzip,deflate";
                         break;
 
                     default:
