@@ -13,8 +13,6 @@
                     return new GZipCompression();
                 case "deflate":
                     return new DeflateCompression();
-                case "zlib":
-                    return new ZlibCompression();
                 default:
                     return null;
             }

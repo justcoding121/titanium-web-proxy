@@ -1,7 +1,6 @@
-﻿using Ionic.Zlib;
-using System.IO;
+﻿using System.IO;
+using System.IO.Compression;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Decompression
 {
@@ -12,8 +11,7 @@ namespace Titanium.Web.Proxy.Decompression
     {
         public async Task<byte[]> Decompress(byte[] compressedArray, int bufferSize)
         {
-            var stream = new MemoryStream(compressedArray);
-
+            using (var stream = new MemoryStream(compressedArray))
             using (var decompressor = new DeflateStream(stream, CompressionMode.Decompress))
             {
                 var buffer = new byte[bufferSize];
@@ -23,7 +21,7 @@ namespace Titanium.Web.Proxy.Decompression
                     int read;
                     while ((read = await decompressor.ReadAsync(buffer, 0, buffer.Length)) > 0)
                     {
-                       await output.WriteAsync(buffer, 0, read);
+                        await output.WriteAsync(buffer, 0, read);
                     }
 
                     return output.ToArray();
