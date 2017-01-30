@@ -57,7 +57,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     client = new TcpClient();
                     client.Client.Bind(upStreamEndPoint);
-                    client.Client.Connect(externalHttpsProxy.HostName, externalHttpsProxy.Port);
+                    await client.ConnectAsync(externalHttpsProxy.HostName, externalHttpsProxy.Port);
                     stream = client.GetStream();
 
                     using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true) { NewLine = ProxyConstants.NewLine })
@@ -93,7 +93,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     client = new TcpClient();
                     client.Client.Bind(upStreamEndPoint);
-                    client.Client.Connect(remoteHostName, remotePort);
+                    await client.ConnectAsync(remoteHostName, remotePort);
                     stream = client.GetStream();
                 }
 
@@ -119,14 +119,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     client = new TcpClient();
                     client.Client.Bind(upStreamEndPoint);
-                    client.Client.Connect(externalHttpProxy.HostName, externalHttpProxy.Port);
+                    await client.ConnectAsync(externalHttpProxy.HostName, externalHttpProxy.Port);
                     stream = client.GetStream();
                 }
                 else
                 {
                     client = new TcpClient();
                     client.Client.Bind(upStreamEndPoint);
-                    client.Client.Connect(remoteHostName, remotePort);
+                    await client.ConnectAsync(remoteHostName, remotePort);
                     stream = client.GetStream();
                 }
             }
