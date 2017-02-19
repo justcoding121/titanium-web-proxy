@@ -42,10 +42,6 @@
     <AssemblyOriginatorKeyFile>StrongNameKey.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Ionic.Zip, Version=1.9.8.0, Culture=neutral, PublicKeyToken=6583c7c814667745, processorArchitecture=MSIL">
-      <HintPath>..\packages\DotNetZip.1.9.8\lib\net20\Ionic.Zip.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Net" />
     <Reference Include="System.configuration" />
@@ -62,13 +58,11 @@
     <Compile Include="Compression\DeflateCompression.cs" />
     <Compile Include="Compression\GZipCompression.cs" />
     <Compile Include="Compression\ICompression.cs" />
-    <Compile Include="Compression\ZlibCompression.cs" />
     <Compile Include="Decompression\DecompressionFactory.cs" />
     <Compile Include="Decompression\DefaultDecompression.cs" />
     <Compile Include="Decompression\DeflateDecompression.cs" />
     <Compile Include="Decompression\GZipDecompression.cs" />
     <Compile Include="Decompression\IDecompression.cs" />
-    <Compile Include="Decompression\ZlibDecompression.cs" />
     <Compile Include="EventArguments\CertificateSelectionEventArgs.cs" />
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
@@ -123,7 +117,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
-    <None Include="packages.config" />
     <None Include="StrongNameKey.snk" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
