@@ -51,15 +51,15 @@ proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
 var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
 {
-		//Exclude Https addresses you don't want to proxy
-		//Usefull for clients that use certificate pinning
-		//for example dropbox.com
+//Exclude Https addresses you don't want to proxy
+//Usefull for clients that use certificate pinning
+//for example dropbox.com
 // ExcludedHttpsHostNameRegex = new List<string>() { "google.com", "dropbox.com" }
 
-		//Use self-issued generic certificate on all https requests
-		//Optimizes performance by not creating a certificate for each https-enabled domain
-		//Usefull when certificate trust is not requiered by proxy clients
-		// GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
+//Use self-issued generic certificate on all https requests
+//Optimizes performance by not creating a certificate for each https-enabled domain
+//Usefull when certificate trust is not requiered by proxy clients
+// GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
 };
 
 //An explicit endpoint is where the client knows about the existance of a proxy
