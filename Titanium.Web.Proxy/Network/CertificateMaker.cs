@@ -42,20 +42,22 @@ namespace Titanium.Web.Proxy.Network
 
         public CertificateMaker()
         {
-            this.typeX500DN = Type.GetTypeFromProgID("X509Enrollment.CX500DistinguishedName", true);
-            this.typeX509PrivateKey = Type.GetTypeFromProgID("X509Enrollment.CX509PrivateKey", true);
-            this.typeOID = Type.GetTypeFromProgID("X509Enrollment.CObjectId", true);
-            this.typeOIDS = Type.GetTypeFromProgID("X509Enrollment.CObjectIds.1", true);
-            this.typeEKUExt = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionEnhancedKeyUsage");
-            this.typeKUExt = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionKeyUsage");
-            this.typeRequestCert = Type.GetTypeFromProgID("X509Enrollment.CX509CertificateRequestCertificate");
-            this.typeX509Extensions = Type.GetTypeFromProgID("X509Enrollment.CX509Extensions");
-            this.typeBasicConstraints = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionBasicConstraints");
-            this.typeSignerCertificate = Type.GetTypeFromProgID("X509Enrollment.CSignerCertificate");
-            this.typeX509Enrollment = Type.GetTypeFromProgID("X509Enrollment.CX509Enrollment");
-            this.typeAlternativeName = Type.GetTypeFromProgID("X509Enrollment.CAlternativeName");
-            this.typeAlternativeNames = Type.GetTypeFromProgID("X509Enrollment.CAlternativeNames");
-            this.typeAlternativeNamesExt = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionAlternativeNames");
+			if (!RuntimeHelper.IsMono ()) {
+				this.typeX500DN = Type.GetTypeFromProgID ("X509Enrollment.CX500DistinguishedName", true);
+				this.typeX509PrivateKey = Type.GetTypeFromProgID ("X509Enrollment.CX509PrivateKey", true);
+				this.typeOID = Type.GetTypeFromProgID ("X509Enrollment.CObjectId", true);
+				this.typeOIDS = Type.GetTypeFromProgID ("X509Enrollment.CObjectIds.1", true);
+				this.typeEKUExt = Type.GetTypeFromProgID ("X509Enrollment.CX509ExtensionEnhancedKeyUsage");
+				this.typeKUExt = Type.GetTypeFromProgID ("X509Enrollment.CX509ExtensionKeyUsage");
+				this.typeRequestCert = Type.GetTypeFromProgID ("X509Enrollment.CX509CertificateRequestCertificate");
+				this.typeX509Extensions = Type.GetTypeFromProgID ("X509Enrollment.CX509Extensions");
+				this.typeBasicConstraints = Type.GetTypeFromProgID ("X509Enrollment.CX509ExtensionBasicConstraints");
+				this.typeSignerCertificate = Type.GetTypeFromProgID ("X509Enrollment.CSignerCertificate");
+				this.typeX509Enrollment = Type.GetTypeFromProgID ("X509Enrollment.CX509Enrollment");
+				this.typeAlternativeName = Type.GetTypeFromProgID ("X509Enrollment.CAlternativeName");
+				this.typeAlternativeNames = Type.GetTypeFromProgID ("X509Enrollment.CAlternativeNames");
+				this.typeAlternativeNamesExt = Type.GetTypeFromProgID ("X509Enrollment.CX509ExtensionAlternativeNames");
+			}
         }
 
         public X509Certificate2 MakeCertificate(string sSubjectCN, bool isRoot,X509Certificate2 signingCert=null)

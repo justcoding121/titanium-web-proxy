@@ -265,6 +265,10 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint)
         {
+			// TODO: Currently not supported on mono
+			if (RuntimeHelper.IsMono ())
+				return;
+
             ValidateEndPointAsSystemProxy(endPoint);
 
             //clear any settings previously added
@@ -288,6 +292,10 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint)
         {
+			// TODO: Currently not supported on mono
+			if (RuntimeHelper.IsMono ())
+				return;
+
             ValidateEndPointAsSystemProxy(endPoint);
 
             if (!endPoint.EnableSsl)
