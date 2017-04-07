@@ -1,5 +1,4 @@
-﻿using System;
-
+﻿
 namespace Titanium.Web.Proxy.Exceptions
 {
     /// <summary>
@@ -7,6 +6,10 @@ namespace Titanium.Web.Proxy.Exceptions
     /// </summary>
     public class BodyNotFoundException : ProxyException
     {
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="message"></param>
         public BodyNotFoundException(string message)
             : base(message)
         {
