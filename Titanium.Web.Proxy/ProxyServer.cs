@@ -121,7 +121,7 @@ namespace Titanium.Web.Proxy
         /// Local adapter/NIC endpoint (where proxy makes request via)
         /// default via any IP addresses of this machine
         /// </summary>
-        public IPEndPoint UpStreamEndPoint { get; set; } = new IPEndPoint(IPAddress.Any, 0);
+		public IPEndPoint UpStreamEndPoint { get; set; } = new IPEndPoint(IPAddress.Any, 0);
 
         /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
@@ -265,6 +265,10 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint)
         {
+			// TODO: Currently not supported on mono
+			if (RuntimeHelper.IsMono ())
+				return;
+
             ValidateEndPointAsSystemProxy(endPoint);
 
             //clear any settings previously added
@@ -288,6 +292,10 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint)
         {
+			// TODO: Currently not supported on mono
+			if (RuntimeHelper.IsMono ())
+				return;
+
             ValidateEndPointAsSystemProxy(endPoint);
 
             if (!endPoint.EnableSsl)

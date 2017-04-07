@@ -30,8 +30,6 @@ namespace Titanium.Web.Proxy
         //So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
         private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient tcpClient)
         {
-
-
             Stream clientStream = tcpClient.GetStream();
 
             clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
@@ -167,6 +165,7 @@ namespace Titanium.Web.Proxy
                     Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                     return;
                 }
+
                 //Now create the request
                 await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
                       httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null, endPoint, connectRequestHeaders, null, null);
@@ -256,12 +255,20 @@ namespace Titanium.Web.Proxy
                     args.CustomUpStreamHttpProxyUsed = customUpStreamHttpProxy;
                     args.CustomUpStreamHttpsProxyUsed = customUpStreamHttpsProxy;
 
-                    connection = await tcpConnectionFactory.CreateClient(BUFFER_SIZE, ConnectionTimeOutSeconds,
-                        args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.WebSession.Request.HttpVersion,
-                        args.IsHttps, SupportedSslProtocols,
+                    connection = await tcpConnectionFactory.CreateClient(
+						BUFFER_SIZE, 
+						ConnectionTimeOutSeconds,
+                        args.WebSession.Request.RequestUri.Host, 
+						args.WebSession.Request.RequestUri.Port, 
+						args.WebSession.Request.HttpVersion,
+                        args.IsHttps, 
+						SupportedSslProtocols,
                         new RemoteCertificateValidationCallback(ValidateServerCertificate),
                         new LocalCertificateSelectionCallback(SelectClientCertificate),
-                        customUpStreamHttpProxy ?? UpStreamHttpProxy, customUpStreamHttpsProxy ?? UpStreamHttpsProxy, args.ProxyClient.ClientStream, UpStreamEndPoint);
+                        customUpStreamHttpProxy ?? UpStreamHttpProxy, 
+						customUpStreamHttpsProxy ?? UpStreamHttpsProxy, 
+						args.ProxyClient.ClientStream, 
+						UpStreamEndPoint);
                 }
 
                 args.WebSession.Request.RequestLocked = true;
