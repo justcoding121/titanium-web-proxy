@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
-            proxyServer.TrustRootCertificate = true;
+            //proxyServer.TrustRootCertificate = true;
             requestBodyHistory = new Dictionary<Guid, string>();
         }
 
@@ -47,9 +47,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 			proxyServer.ExceptionFunc = new Action<Exception>((Exception e) =>
 				{
 					Console.WriteLine(e.Message);
-					Console.WriteLine(e.StackTrace);
-
-					throw e;
+					Console.WriteLine(e.StackTrace);				
 				});
 			proxyServer.Start ();
 
@@ -73,9 +71,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ",
                     endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
-            //Only explicit proxies can be set as system proxy!
-            proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
-            proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
+            ////Only explicit proxies can be set as system proxy!
+            //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
+            //proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
         }
 
         public void Stop()

@@ -255,12 +255,20 @@ namespace Titanium.Web.Proxy
                     args.CustomUpStreamHttpProxyUsed = customUpStreamHttpProxy;
                     args.CustomUpStreamHttpsProxyUsed = customUpStreamHttpsProxy;
 
-                    connection = await tcpConnectionFactory.CreateClient(BUFFER_SIZE, ConnectionTimeOutSeconds,
-                        args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.WebSession.Request.HttpVersion,
-                        args.IsHttps, SupportedSslProtocols,
+                    connection = await tcpConnectionFactory.CreateClient(
+						BUFFER_SIZE, 
+						ConnectionTimeOutSeconds,
+                        args.WebSession.Request.RequestUri.Host, 
+						args.WebSession.Request.RequestUri.Port, 
+						args.WebSession.Request.HttpVersion,
+                        args.IsHttps, 
+						SupportedSslProtocols,
                         new RemoteCertificateValidationCallback(ValidateServerCertificate),
                         new LocalCertificateSelectionCallback(SelectClientCertificate),
-                        customUpStreamHttpProxy ?? UpStreamHttpProxy, customUpStreamHttpsProxy ?? UpStreamHttpsProxy, args.ProxyClient.ClientStream, UpStreamEndPoint);
+                        customUpStreamHttpProxy ?? UpStreamHttpProxy, 
+						customUpStreamHttpsProxy ?? UpStreamHttpsProxy, 
+						args.ProxyClient.ClientStream, 
+						UpStreamEndPoint);
                 }
 
                 args.WebSession.Request.RequestLocked = true;
