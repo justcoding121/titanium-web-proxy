@@ -47,6 +47,9 @@ namespace Titanium.Web.Proxy.Network.Tcp
             LastAccess = DateTime.Now;
         }
 
+        /// <summary>
+        /// Dispose.
+        /// </summary>
         public void Dispose()
         {
             Stream.Close();
