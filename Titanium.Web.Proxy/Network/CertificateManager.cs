@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Network
     /// </summary>
     internal class CertificateManager : IDisposable
     {
-        private CertificateMaker certEngine = null;
+        private readonly CertificateMaker certEngine;
 
         private bool clearCertificates { get; set; }
         /// <summary>
@@ -21,10 +21,10 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         private readonly IDictionary<string, CachedCertificate> certificateCache;
 
-        private Action<Exception> exceptionFunc;
+        private readonly Action<Exception> exceptionFunc;
 
-        internal string Issuer { get; private set; }
-        internal string RootCertificateName { get; private set; }
+        internal string Issuer { get; }
+        internal string RootCertificateName { get; }
 
         internal X509Certificate2 rootCertificate { get; set; }
 
@@ -35,29 +35,28 @@ namespace Titanium.Web.Proxy.Network
             certEngine = new CertificateMaker();
 
             Issuer = issuer;
-            RootCertificateName = rootCertificateName;      
+            RootCertificateName = rootCertificateName;
 
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
         }
 
         internal X509Certificate2 GetRootCertificate()
         {
-            var fileName = Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "rootCert.pfx");
+            var path = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            if (null == path) throw new NullReferenceException();
+            var fileName = Path.Combine(path, "rootCert.pfx");
 
-            if (File.Exists(fileName))
+            if (!File.Exists(fileName)) return null;
+            try
             {
-                try
-                {
-                   return new X509Certificate2(fileName, string.Empty, X509KeyStorageFlags.Exportable);
-                   
-                }
-                catch (Exception e)
-                {
-                    exceptionFunc(e);
-                    return null;
-                }
+                return new X509Certificate2(fileName, string.Empty, X509KeyStorageFlags.Exportable);
+
             }
-            return null;
+            catch (Exception e)
+            {
+                exceptionFunc(e);
+                return null;
+            }
         }
         /// <summary>
         /// Attempts to create a RootCertificate
@@ -75,7 +74,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 rootCertificate = CreateCertificate(RootCertificateName, true);
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 exceptionFunc(e);
             }
@@ -83,38 +82,36 @@ namespace Titanium.Web.Proxy.Network
             {
                 try
                 {
-                    var fileName = Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "rootCert.pfx");
+                    var path = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                    if (null == path) throw new NullReferenceException();
+                    var fileName = Path.Combine(path, "rootCert.pfx");
                     File.WriteAllBytes(fileName, rootCertificate.Export(X509ContentType.Pkcs12));
                 }
-                catch(Exception e)
+                catch (Exception e)
                 {
                     exceptionFunc(e);
                 }
             }
             return rootCertificate != null;
         }
+
         /// <summary>
         /// Create an SSL certificate
         /// </summary>
-        /// <param name="store"></param>
         /// <param name="certificateName"></param>
         /// <param name="isRootCertificate"></param>
         /// <returns></returns>
         internal virtual X509Certificate2 CreateCertificate(string certificateName, bool isRootCertificate)
         {
-            try
-            {
-                if (certificateCache.ContainsKey(certificateName))
-                {
-                    var cached = certificateCache[certificateName];
-                    cached.LastAccess = DateTime.Now;
-                    return cached.Certificate;
-                }
-            }
-            catch
-            {
 
+            if (certificateCache.ContainsKey(certificateName))
+            {
+                var cached = certificateCache[certificateName];
+                cached.LastAccess = DateTime.Now;
+                return cached.Certificate;
             }
+
+
             X509Certificate2 certificate = null;
             lock (string.Intern(certificateName))
             {
@@ -124,7 +121,7 @@ namespace Titanium.Web.Proxy.Network
                     {
                         certificate = certEngine.MakeCertificate(certificateName, isRootCertificate, rootCertificate);
                     }
-                    catch(Exception e)
+                    catch (Exception e)
                     {
                         exceptionFunc(e);
                     }
@@ -166,27 +163,20 @@ namespace Titanium.Web.Proxy.Network
             clearCertificates = true;
             while (clearCertificates)
             {
+                var cutOff = DateTime.Now.AddMinutes(-1 * certificateCacheTimeOutMinutes);
 
-                try
-                {
-                    var cutOff = DateTime.Now.AddMinutes(-1 * certificateCacheTimeOutMinutes);
+                var outdated = certificateCache
+                    .Where(x => x.Value.LastAccess < cutOff)
+                    .ToList();
 
-                    var outdated = certificateCache
-                       .Where(x => x.Value.LastAccess < cutOff)
-                       .ToList();
-
-                    foreach (var cache in outdated)
-                        certificateCache.Remove(cache.Key);
-                }
-                finally
-                {
-                }
+                foreach (var cache in outdated)
+                    certificateCache.Remove(cache.Key);
 
                 //after a minute come back to check for outdated certificates in cache
                 await Task.Delay(1000 * 60);
             }
         }
-       
+
         internal bool TrustRootCertificate()
         {
             if (rootCertificate == null)
@@ -213,7 +203,7 @@ namespace Titanium.Web.Proxy.Network
                 }
                 return true;
             }
-            catch 
+            catch
             {
                 return false;
             }
