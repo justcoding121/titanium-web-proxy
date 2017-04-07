@@ -79,18 +79,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 exceptionFunc(e);
             }
-            if (rootCertificate != null)
-            {
-                try
-                {
-                    var fileName = Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "rootCert.pfx");
-                    File.WriteAllBytes(fileName, rootCertificate.Export(X509ContentType.Pkcs12));
-                }
-                catch(Exception e)
-                {
-                    exceptionFunc(e);
-                }
-            }
+
             return rootCertificate != null;
         }
         /// <summary>
@@ -144,10 +133,7 @@ namespace Titanium.Web.Proxy.Network
                 }
             }
 
-
-
             return certificate;
-
         }
 
         /// <summary>

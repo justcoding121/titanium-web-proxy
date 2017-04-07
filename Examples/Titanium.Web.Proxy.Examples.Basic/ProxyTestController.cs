@@ -23,10 +23,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public void StartProxy()
         {
-            proxyServer.BeforeRequest += OnRequest;
+            /*proxyServer.BeforeRequest += OnRequest;
             proxyServer.BeforeResponse += OnResponse;
             proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
-            proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
+            proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;*/
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
             {
@@ -44,7 +44,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //An explicit endpoint is where the client knows about the existance of a proxy
             //So client sends request in a proxy friendly manner
             proxyServer.AddEndPoint(explicitEndPoint);
-            proxyServer.Start();
+			proxyServer.ExceptionFunc = new Action<Exception>((Exception e) =>
+				{
+					Console.WriteLine(e.Message);
+					Console.WriteLine(e.StackTrace);
+
+					throw e;
+				});
+			proxyServer.Start ();
 
 
             //Transparent endpoint is usefull for reverse proxying (client is not aware of the existance of proxy)
@@ -53,11 +60,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //That means that the transparent endpoint will always provide the same Generic Certificate to all HTTPS requests
             //In this example only google.com will work for HTTPS requests
             //Other sites will receive a certificate mismatch warning on browser
-            var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 8001, true)
-            {
-                GenericCertificateName = "google.com"
-            };
-            proxyServer.AddEndPoint(transparentEndPoint);
+            //var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 8001, true)
+            //{
+            //    GenericCertificateName = "google.com"
+            //};
+            //proxyServer.AddEndPoint(transparentEndPoint);
 
             //ProxyServer.UpStreamHttpProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
             //ProxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
@@ -73,10 +80,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public void Stop()
         {
-            proxyServer.BeforeRequest -= OnRequest;
+            /*proxyServer.BeforeRequest -= OnRequest;
             proxyServer.BeforeResponse -= OnResponse;
             proxyServer.ServerCertificateValidationCallback -= OnCertificateValidation;
-            proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;
+            proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;*/
 
             proxyServer.Stop();
         }
