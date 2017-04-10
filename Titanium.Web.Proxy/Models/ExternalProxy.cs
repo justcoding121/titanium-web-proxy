@@ -13,10 +13,16 @@ namespace Titanium.Web.Proxy.Models
         private string userName;
         private string password;
         
+        /// <summary>
+        /// Use default windows credentials?
+        /// </summary>
         public bool UseDefaultCredentials { get; set; }
 
+        /// <summary>
+        /// Username.
+        /// </summary>
         public string UserName {
-            get { return UseDefaultCredentials ? DefaultCredentials.Value.UserName : userName; }
+            get => UseDefaultCredentials ? DefaultCredentials.Value.UserName : userName;
             set
             {
                 userName = value;
@@ -28,9 +34,12 @@ namespace Titanium.Web.Proxy.Models
             }
         }
 
+        /// <summary>
+        /// Password.
+        /// </summary>
         public string Password
         {
-            get { return UseDefaultCredentials ? DefaultCredentials.Value.Password : password; }
+            get => UseDefaultCredentials ? DefaultCredentials.Value.Password : password;
             set
             {
                 password = value;
@@ -42,7 +51,13 @@ namespace Titanium.Web.Proxy.Models
             }
         }
 
+        /// <summary>
+        /// Host name.
+        /// </summary>
         public string HostName { get; set; }
+        /// <summary>
+        /// Port.
+        /// </summary>
         public int Port { get; set; }
     }
 }

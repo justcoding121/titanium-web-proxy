@@ -4,7 +4,6 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -16,15 +15,15 @@ namespace Titanium.Web.Proxy.Helpers
     /// </summary>
     internal class CustomBinaryReader : IDisposable
     {
-        private Stream stream;
-        private Encoding encoding;
+        private readonly Stream stream;
+        private readonly Encoding encoding;
 
         internal CustomBinaryReader(Stream stream)
         {
             this.stream = stream;
 
             //default to UTF-8
-            this.encoding = Encoding.UTF8;
+            encoding = Encoding.UTF8;
         }
 
         internal Stream BaseStream => stream;
@@ -40,7 +39,7 @@ namespace Titanium.Web.Proxy.Helpers
 	            var lastChar = default(char);
 	            var buffer = new byte[1];
 
-	            while ((await this.stream.ReadAsync(buffer, 0, 1)) > 0)
+	            while ((await stream.ReadAsync(buffer, 0, 1)) > 0)
 	            {
 		            //if new line
 		            if (lastChar == '\r' && buffer[0] == '\n')
@@ -82,6 +81,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         /// Read the specified number of raw bytes from the base stream
         /// </summary>
+        /// <param name="bufferSize"></param>
         /// <param name="totalBytesToRead"></param>
         /// <returns></returns>
         internal async Task<byte[]> ReadBytesAsync(int bufferSize, long totalBytesToRead)
@@ -98,7 +98,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             using (var outStream = new MemoryStream())
             {
-                while ((bytesRead += await this.stream.ReadAsync(buffer, 0, bytesToRead)) > 0)
+                while ((bytesRead += await stream.ReadAsync(buffer, 0, bytesToRead)) > 0)
                 {
                     await outStream.WriteAsync(buffer, 0, bytesRead);
                     totalBytesRead += bytesRead;
