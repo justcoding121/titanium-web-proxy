@@ -7,16 +7,25 @@ namespace Titanium.Web.Proxy.Http.Responses
     /// </summary>
     public class GenericResponse : Response
     {
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="status"></param>
         public GenericResponse(HttpStatusCode status)
         {
             ResponseStatusCode = ((int)status).ToString();
             ResponseStatusDescription = status.ToString(); 
         }
 
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="statusCode"></param>
+        /// <param name="statusDescription"></param>
         public GenericResponse(string statusCode, string statusDescription)
         {
             ResponseStatusCode = statusCode;
-            ResponseStatusDescription = statusCode;
+            ResponseStatusDescription = statusDescription;
         }
     }
 }
