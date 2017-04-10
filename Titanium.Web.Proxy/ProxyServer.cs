@@ -140,8 +140,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public Action<Exception> ExceptionFunc
         {
-            get => exceptionFunc ?? defaultExceptionFunc.Value;
-            set => exceptionFunc = value;
+            get { return exceptionFunc ?? defaultExceptionFunc.Value; }
+            set { exceptionFunc = value; }
         }
 
         /// <summary>
