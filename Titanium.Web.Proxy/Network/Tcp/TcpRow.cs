@@ -29,16 +29,16 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         /// Gets the local end point.
         /// </summary>
-        public IPEndPoint LocalEndPoint { get; private set; }
+        public IPEndPoint LocalEndPoint { get; }
 
 		/// <summary>
 		/// Gets the remote end point.
 		/// </summary>
-		public IPEndPoint RemoteEndPoint { get; private set; }
+		public IPEndPoint RemoteEndPoint { get; }
 
         /// <summary>
         /// Gets the process identifier.
         /// </summary>
-        public int ProcessId { get; private set; }
+        public int ProcessId { get; }
     }
 }

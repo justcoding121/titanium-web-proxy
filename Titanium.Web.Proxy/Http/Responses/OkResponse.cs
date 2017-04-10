@@ -5,6 +5,9 @@
     /// </summary>
     public sealed class OkResponse : Response
     {
+        /// <summary>
+        /// Constructor.
+        /// </summary>
         public OkResponse()
         {
             ResponseStatusCode = "200";
