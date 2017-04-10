@@ -22,7 +22,7 @@ namespace Titanium.Web.Proxy.Models
         /// Username.
         /// </summary>
         public string UserName {
-            get => UseDefaultCredentials ? DefaultCredentials.Value.UserName : userName;
+            get { return UseDefaultCredentials ? DefaultCredentials.Value.UserName : userName; } 
             set
             {
                 userName = value;
@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         public string Password
         {
-            get => UseDefaultCredentials ? DefaultCredentials.Value.Password : password;
+            get { return UseDefaultCredentials ? DefaultCredentials.Value.Password : password; }
             set
             {
                 password = value;
