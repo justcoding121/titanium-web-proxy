@@ -49,14 +49,10 @@ namespace Titanium.Web.Proxy.IntegrationTests
     {
         private ProxyServer proxyServer;
 
-        //share requestBody outside handlers
-        private Dictionary<Guid, string> requestBodyHistory;
-
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
             proxyServer.TrustRootCertificate = true;
-            requestBodyHistory = new Dictionary<Guid, string>();
         }
 
         public void StartProxy(int proxyPort)
