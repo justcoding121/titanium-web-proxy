@@ -67,7 +67,7 @@ var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
 proxyServer.AddEndPoint(explicitEndPoint);
 proxyServer.Start();
 
-
+//Warning! Transparent endpoint is not tested end to end 
 //Transparent endpoint is usefull for reverse proxying (client is not aware of the existance of proxy)
 //A transparent endpoint usually requires a network router port forwarding HTTP(S) packets to this endpoint
 //Currently do not support Server Name Indication (It is not currently supported by SslStream class)
