@@ -31,17 +31,17 @@ namespace Titanium.Web.Proxy.Examples.Basic
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
             {
                 //Exclude Https addresses you don't want to proxy
-                //Usefull for clients that use certificate pinning
+                //Useful for clients that use certificate pinning
                 //for example dropbox.com
                 // ExcludedHttpsHostNameRegex = new List<string>() { "google.com", "dropbox.com" }
 
                 //Use self-issued generic certificate on all https requests
                 //Optimizes performance by not creating a certificate for each https-enabled domain
-                //Usefull when certificate trust is not requiered by proxy clients
+                //Useful when certificate trust is not required by proxy clients
                 // GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
             };
 
-            //An explicit endpoint is where the client knows about the existance of a proxy
+            //An explicit endpoint is where the client knows about the existence of a proxy
             //So client sends request in a proxy friendly manner
             proxyServer.AddEndPoint(explicitEndPoint);
             proxyServer.Start();
@@ -81,7 +81,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.Stop();
         }
 
-        //intecept & cancel, redirect or update requests
+        //intecept & cancel redirect or update requests
         public async Task OnRequest(object sender, SessionEventArgs e)
         {
             Console.WriteLine(e.WebSession.Request.Url);
