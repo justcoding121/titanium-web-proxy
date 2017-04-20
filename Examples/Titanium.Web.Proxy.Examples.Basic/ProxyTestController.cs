@@ -47,7 +47,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.Start();
 
 
-            //Transparent endpoint is usefull for reverse proxying (client is not aware of the existance of proxy)
+            //Transparent endpoint is useful for reverse proxying (client is not aware of the existence of proxy)
             //A transparent endpoint usually requires a network router port forwarding HTTP(S) packets to this endpoint
             //Currently do not support Server Name Indication (It is not currently supported by SslStream class)
             //That means that the transparent endpoint will always provide the same Generic Certificate to all HTTPS requests
