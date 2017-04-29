@@ -4,11 +4,8 @@ using Microsoft.Win32;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Sockets;
 
-/// <summary>
-/// Helper classes for setting system proxy settings
-/// </summary>
+// Helper classes for setting system proxy settings
 namespace Titanium.Web.Proxy.Helpers
 {
     internal enum ProxyProtocolType

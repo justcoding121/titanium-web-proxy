@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using System.Net;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -33,28 +29,14 @@ namespace Titanium.Web.Proxy.Helpers
         /// Adapated from below link
         /// http://stackoverflow.com/questions/11834091/how-to-check-if-localhost
         /// </summary>
-        /// <param name="address></param>
+        /// <param name="address"></param>
         /// <returns></returns>
         internal static bool IsLocalIpAddress(IPAddress address)
         {
-            try
-            {
-                // get local IP addresses
-                IPAddress[] localIPs = Dns.GetHostAddresses(Dns.GetHostName());
-
-                // test if any host IP equals to any local IP or to localhost
-
-                // is localhost
-                if (IPAddress.IsLoopback(address)) return true;
-                // is local address
-                foreach (IPAddress localIP in localIPs)
-                {
-                    if (address.Equals(localIP)) return true;
-                }
-
-            }
-            catch { }
-            return false;
+            // get local IP addresses
+            var localIPs = Dns.GetHostAddresses(Dns.GetHostName());
+            // test if any host IP equals to any local IP or to localhost
+            return IPAddress.IsLoopback(address) || localIPs.Contains(address);
         }
     }
 }

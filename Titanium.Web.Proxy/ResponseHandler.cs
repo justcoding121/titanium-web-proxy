@@ -17,7 +17,11 @@ namespace Titanium.Web.Proxy
     /// </summary>
     partial class ProxyServer
     {
-        //Called asynchronously when a request was successfully and we received the response
+        /// <summary>
+        /// Called asynchronously when a request was successfully and we received the response 
+        /// </summary>
+        /// <param name="args"></param>
+        /// <returns></returns>
         public async Task HandleHttpSessionResponse(SessionEventArgs args)
         {
             //read response & headers from server
@@ -156,14 +160,14 @@ namespace Titanium.Web.Proxy
         private async Task WriteResponseStatus(Version version, string code, string description,
             StreamWriter responseWriter)
         {
-            await responseWriter.WriteLineAsync(string.Format("HTTP/{0}.{1} {2} {3}", version.Major, version.Minor, code, description));
+            await responseWriter.WriteLineAsync($"HTTP/{version.Major}.{version.Minor} {code} {description}");
         }
 
         /// <summary>
         /// Write response headers to client
         /// </summary>
         /// <param name="responseWriter"></param>
-        /// <param name="headers"></param>
+        /// <param name="response"></param>
         /// <returns></returns>
         private async Task WriteResponseHeaders(StreamWriter responseWriter, Response response)
         {
@@ -220,7 +224,6 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Handle dispose of a client/server session
         /// </summary>
-        /// <param name="tcpClient"></param>
         /// <param name="clientStream"></param>
         /// <param name="clientStreamReader"></param>
         /// <param name="clientStreamWriter"></param>
@@ -235,21 +238,13 @@ namespace Titanium.Web.Proxy
                 clientStream.Dispose();
             }
 
-            if (args != null)
-            {
-                args.Dispose();
-            }
+            args?.Dispose();
 
-            if (clientStreamReader != null)
-            {
-                clientStreamReader.Dispose();
-            }
+            clientStreamReader?.Dispose();
 
-            if (clientStreamWriter != null)
-            {
-                clientStreamWriter.Close();
-                clientStreamWriter.Dispose();
-            }
+            if (clientStreamWriter == null) return;
+            clientStreamWriter.Close();
+            clientStreamWriter.Dispose();
         }
     }
 }
