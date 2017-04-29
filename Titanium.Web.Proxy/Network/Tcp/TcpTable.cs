@@ -6,7 +6,9 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// <summary>
     /// Represents collection of TcpRows
     /// </summary>
-    /// <seealso cref="System.Collections.Generic.IEnumerable{Proxy.Tcp.TcpRow}" />
+    /// <seealso>
+    ///     <cref>System.Collections.Generic.IEnumerable{Proxy.Tcp.TcpRow}</cref>
+    /// </seealso>
     internal class TcpTable : IEnumerable<TcpRow>
     {
         private readonly IEnumerable<TcpRow> tcpRows;

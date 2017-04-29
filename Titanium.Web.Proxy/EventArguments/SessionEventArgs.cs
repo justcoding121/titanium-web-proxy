@@ -44,7 +44,9 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public Guid Id => WebSession.RequestId;
 
-        //Should we send a rerequest
+        /// <summary>
+        /// Should we send a rerequest 
+        /// </summary>
         public bool ReRequest
         {
             get;
@@ -56,7 +58,9 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public bool IsHttps => WebSession.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
 
-
+        /// <summary>
+        /// Client End Point.
+        /// </summary>
         public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
 
         /// <summary>
@@ -65,8 +69,14 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public HttpWebClient WebSession { get; set; }
 
+        /// <summary>
+        /// Are we using a custom upstream HTTP proxy?
+        /// </summary>
         public ExternalProxy CustomUpStreamHttpProxyUsed { get; set; }
 
+        /// <summary>
+        /// Are we using a custom upstream HTTPS proxy?
+        /// </summary>
         public ExternalProxy CustomUpStreamHttpsProxyUsed { get; set; }
 
         /// <summary>
@@ -105,7 +115,7 @@ namespace Titanium.Web.Proxy.EventArguments
                     //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
                     if (WebSession.Request.IsChunked)
                     {
-                        await this.ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(bufferSize, requestBodyStream);
+                        await ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(bufferSize, requestBodyStream);
                     }
                     else
                     {
@@ -113,7 +123,7 @@ namespace Titanium.Web.Proxy.EventArguments
                         if (WebSession.Request.ContentLength > 0)
                         {
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await this.ProxyClient.ClientStreamReader.CopyBytesToStream(bufferSize, requestBodyStream,
+                            await ProxyClient.ClientStreamReader.CopyBytesToStream(bufferSize, requestBodyStream,
                                 WebSession.Request.ContentLength);
 
                         }
@@ -431,7 +441,7 @@ namespace Titanium.Web.Proxy.EventArguments
             await GenericResponse(html, null, status);
         }
        
-        /// <summary>
+        /// <summary>
         /// Before request is made to server 
         /// Respond with the specified HTML string to client
         /// and the specified status
@@ -485,12 +495,17 @@ namespace Titanium.Web.Proxy.EventArguments
             WebSession.Request.CancelRequest = true;
         }
         
+        /// <summary>
+        /// Redirect to URL.
+        /// </summary>
+        /// <param name="url"></param>
+        /// <returns></returns>
         public async Task Redirect(string url)
         {
             var response = new RedirectResponse();
 
             response.HttpVersion = WebSession.Request.HttpVersion;
-            response.ResponseHeaders.Add("Location", new Models.HttpHeader("Location", url));
+            response.ResponseHeaders.Add("Location", new HttpHeader("Location", url));
             response.ResponseBody = Encoding.ASCII.GetBytes(string.Empty);
 
             await Respond(response);
