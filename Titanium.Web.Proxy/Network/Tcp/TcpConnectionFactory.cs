@@ -19,14 +19,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpConnectionFactory
     {
-
         /// <summary>
         /// Creates a TCP connection to server
         /// </summary>
         /// <param name="bufferSize"></param>
         /// <param name="connectionTimeOutSeconds"></param>
         /// <param name="remoteHostName"></param>
-        /// <param name="httpCmd"></param>
         /// <param name="httpVersion"></param>
         /// <param name="isHttps"></param>
         /// <param name="remotePort"></param>
@@ -57,7 +55,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     client = new TcpClient();
                     client.Client.Bind(upStreamEndPoint);
-                    client.Client.Connect(externalHttpsProxy.HostName, externalHttpsProxy.Port);
+                    await client.ConnectAsync(externalHttpsProxy.HostName, externalHttpsProxy.Port);
                     stream = client.GetStream();
 
                     using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true) { NewLine = ProxyConstants.NewLine })
@@ -69,7 +67,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         if (!string.IsNullOrEmpty(externalHttpsProxy.UserName) && externalHttpsProxy.Password != null)
                         {
                             await writer.WriteLineAsync("Proxy-Connection: keep-alive");
-                            await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(externalHttpsProxy.UserName + ":" + externalHttpsProxy.Password)));
+                            await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(externalHttpsProxy.UserName + ":" + externalHttpsProxy.Password)));
                         }
                         await writer.WriteLineAsync();
                         await writer.FlushAsync();
@@ -81,7 +79,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         var result = await reader.ReadLineAsync();
 
 
-                        if (!new string[] { "200 OK", "connection established" }.Any(s => result.ToLower().Contains(s.ToLower())))
+                        if (!new[] { "200 OK", "connection established" }.Any(s => result.ToLower().Contains(s.ToLower())))
                         {
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
                         }
@@ -93,7 +91,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     client = new TcpClient();
                     client.Client.Bind(upStreamEndPoint);
-                    client.Client.Connect(remoteHostName, remotePort);
+                    await client.ConnectAsync(remoteHostName, remotePort);
                     stream = client.GetStream();
                 }
 
@@ -119,14 +117,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     client = new TcpClient();
                     client.Client.Bind(upStreamEndPoint);
-                    client.Client.Connect(externalHttpProxy.HostName, externalHttpProxy.Port);
+                    await client.ConnectAsync(externalHttpProxy.HostName, externalHttpProxy.Port);
                     stream = client.GetStream();
                 }
                 else
                 {
                     client = new TcpClient();
                     client.Client.Bind(upStreamEndPoint);
-                    client.Client.Connect(remoteHostName, remotePort);
+                    await client.ConnectAsync(remoteHostName, remotePort);
                     stream = client.GetStream();
                 }
             }

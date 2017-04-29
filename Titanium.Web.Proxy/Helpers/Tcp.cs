@@ -140,6 +140,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="localCertificateSelectionCallback"></param>
         /// <param name="clientStream"></param>
         /// <param name="tcpConnectionFactory"></param>
+        /// <param name="upStreamEndPoint"></param>
         /// <returns></returns>
         internal static async Task SendRaw(int bufferSize, int connectionTimeOutSeconds,
             string remoteHostName, int remotePort, string httpCmd, Version httpVersion, Dictionary<string, HttpHeader> requestHeaders,

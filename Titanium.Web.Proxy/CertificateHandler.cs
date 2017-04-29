@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
@@ -26,11 +25,13 @@ namespace Titanium.Web.Proxy
             //if user callback is registered then do it
             if (ServerCertificateValidationCallback != null)
             {
-                var args = new CertificateValidationEventArgs();
+                var args = new CertificateValidationEventArgs
+                {
+                    Certificate = certificate,
+                    Chain = chain,
+                    SslPolicyErrors = sslPolicyErrors
+                };
 
-                args.Certificate = certificate;
-                args.Chain = chain;
-                args.SslPolicyErrors = sslPolicyErrors;
 
 
                 Delegate[] invocationList = ServerCertificateValidationCallback.GetInvocationList();
@@ -73,7 +74,6 @@ namespace Titanium.Web.Proxy
             string[] acceptableIssuers)
         {
             X509Certificate clientCertificate = null;
-            var customSslStream = sender as SslStream;
 
             if (acceptableIssuers != null &&
                 acceptableIssuers.Length > 0 &&
@@ -100,13 +100,15 @@ namespace Titanium.Web.Proxy
             //If user call back is registered
             if (ClientCertificateSelectionCallback != null)
             {
-                var args = new CertificateSelectionEventArgs();
+                var args = new CertificateSelectionEventArgs
+                {
+                    TargetHost = targetHost,
+                    LocalCertificates = localCertificates,
+                    RemoteCertificate = remoteCertificate,
+                    AcceptableIssuers = acceptableIssuers,
+                    ClientCertificate = clientCertificate
+                };
 
-                args.TargetHost = targetHost;
-                args.LocalCertificates = localCertificates;
-                args.RemoteCertificate = remoteCertificate;
-                args.AcceptableIssuers = acceptableIssuers;
-                args.ClientCertificate = clientCertificate;
 
                 Delegate[] invocationList = ClientCertificateSelectionCallback.GetInvocationList();
                 Task[] handlerTasks = new Task[invocationList.Length];

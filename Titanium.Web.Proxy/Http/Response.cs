@@ -12,7 +12,13 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class Response
     {
+        /// <summary>
+        /// Response Status Code.
+        /// </summary>
         public string ResponseStatusCode { get; set; }
+        /// <summary>
+        /// Response Status description.
+        /// </summary>
         public string ResponseStatusDescription { get; set; }
 
         internal Encoding Encoding => this.GetResponseCharacterEncoding();
@@ -26,14 +32,10 @@ namespace Titanium.Web.Proxy.Http
             {
                 var hasHeader = ResponseHeaders.ContainsKey("content-encoding");
 
-                if (hasHeader)
-                {
-                    var header = ResponseHeaders["content-encoding"];
+                if (!hasHeader) return null;
+                var header = ResponseHeaders["content-encoding"];
 
-                    return header.Value.Trim();
-                }
-
-                return null;
+                return header.Value.Trim();
             }
         }
 
@@ -229,10 +231,13 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public bool ExpectationFailed { get; internal set; }
 
+        /// <summary>
+        /// Constructor.
+        /// </summary>
         public Response()
         {
-            this.ResponseHeaders = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
-            this.NonUniqueResponseHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
+            ResponseHeaders = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
+            NonUniqueResponseHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
         }
     }
 
