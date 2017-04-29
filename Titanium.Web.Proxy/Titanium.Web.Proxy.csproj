@@ -34,6 +34,8 @@
     <DefineConstants>NET45</DefineConstants>
     <Prefer32Bit>false</Prefer32Bit>
     <DocumentationFile>bin\Release\Titanium.Web.Proxy.XML</DocumentationFile>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
   <PropertyGroup>
     <SignAssembly>true</SignAssembly>
