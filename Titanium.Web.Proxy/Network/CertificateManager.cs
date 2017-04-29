@@ -177,35 +177,45 @@ namespace Titanium.Web.Proxy.Network
             }
         }
 
-        internal bool TrustRootCertificate()
+        /// <summary>
+        /// Make current machine trust the Root Certificate used by this proxy
+        /// </summary>
+        /// <param name="storeLocation"></param>
+        /// <param name="exceptionFunc"></param>
+        /// <returns></returns>
+        internal void TrustRootCertificate(StoreLocation storeLocation,
+            Action<Exception> exceptionFunc)
         {
             if (rootCertificate == null)
             {
-                return false;
+                exceptionFunc(
+                    new Exception("Could not set root certificate"
+                    + " as system proxy since it is null or empty."));
+
+                return;
             }
+
+            X509Store x509RootStore = new X509Store(StoreName.Root, storeLocation);
+            var x509PersonalStore = new X509Store(StoreName.My, storeLocation);
+
             try
             {
-                X509Store x509RootStore = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
-                var x509PersonalStore = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-
                 x509RootStore.Open(OpenFlags.ReadWrite);
                 x509PersonalStore.Open(OpenFlags.ReadWrite);
 
-                try
-                {
-                    x509RootStore.Add(rootCertificate);
-                    x509PersonalStore.Add(rootCertificate);
-                }
-                finally
-                {
-                    x509RootStore.Close();
-                    x509PersonalStore.Close();
-                }
-                return true;
+                x509RootStore.Add(rootCertificate);
+                x509PersonalStore.Add(rootCertificate);
             }
-            catch
+            catch (Exception e)
             {
-                return false;
+                exceptionFunc(
+                    new Exception("Failed to make system trust root certificate "
+                   + $" for {storeLocation} store location. You may need admin rights.", e));
+            }
+            finally
+            {
+                x509RootStore.Close();
+                x509PersonalStore.Close();
             }
         }
 

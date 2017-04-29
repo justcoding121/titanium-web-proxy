@@ -10,6 +10,7 @@ using Titanium.Web.Proxy.Network;
 using System.Linq;
 using System.Security.Authentication;
 using Titanium.Web.Proxy.Network.Tcp;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Titanium.Web.Proxy
 {
@@ -55,7 +56,8 @@ namespace Titanium.Web.Proxy
         private SystemProxyManager systemProxySettingsManager { get; }
 
 #if !DEBUG
-        private FireFoxProxySettingsManager firefoxProxySettingsManager { get; set; }
+        private FireFoxProxySettingsManager firefoxProxySettingsManager
+            = new FireFoxProxySettingsManager();
 #endif
 
         /// <summary>
@@ -360,7 +362,13 @@ namespace Titanium.Web.Proxy
 
             if (TrustRootCertificate)
             {
-                certificateCacheManager.TrustRootCertificate();
+                //current user
+                certificateCacheManager
+                  .TrustRootCertificate(StoreLocation.CurrentUser, exceptionFunc);
+
+                //current system
+                certificateCacheManager
+                 .TrustRootCertificate(StoreLocation.LocalMachine, exceptionFunc);
             }
 
             if (ForwardToUpstreamGateway && GetCustomUpStreamHttpProxyFunc == null && GetCustomUpStreamHttpsProxyFunc == null)
