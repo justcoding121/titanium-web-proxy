@@ -205,7 +205,8 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// List of supported Ssl versions
         /// </summary>
-        public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
+        public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls 
+            | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 
         /// <summary>
         /// Constructor
@@ -242,7 +243,8 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void AddEndPoint(ProxyEndPoint endPoint)
         {
-            if (ProxyEndPoints.Any(x => x.IpAddress.Equals(endPoint.IpAddress) && endPoint.Port != 0 && x.Port == endPoint.Port))
+            if (ProxyEndPoints.Any(x => x.IpAddress.Equals(endPoint.IpAddress) 
+            && endPoint.Port != 0 && x.Port == endPoint.Port))
             {
                 throw new Exception("Cannot add another endpoint to same port & ip address");
             }
@@ -281,6 +283,11 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint)
         {
+            if(RunTime.IsRunningOnMono())
+            {
+                throw new Exception("Mono Runtime do not support system proxy settings.");
+            }
+
             ValidateEndPointAsSystemProxy(endPoint);
 
             //clear any settings previously added
@@ -304,6 +311,11 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint)
         {
+            if (RunTime.IsRunningOnMono())
+            {
+                throw new Exception("Mono Runtime do not support system proxy settings.");
+            }
+
             ValidateEndPointAsSystemProxy(endPoint);
 
             if (!endPoint.EnableSsl)
@@ -312,14 +324,17 @@ namespace Titanium.Web.Proxy
             }
 
             //clear any settings previously added
-            ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpsProxy = false);
-
+            ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
+                .ToList()
+                .ForEach(x => x.IsSystemHttpsProxy = false);
 
             //If certificate was trusted by the machine
             if (certValidated)
             {
                 systemProxySettingsManager.SetHttpsProxy(
-                   Equals(endPoint.IpAddress, IPAddress.Any) | Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(),
+                   Equals(endPoint.IpAddress, IPAddress.Any) | 
+                   Equals(endPoint.IpAddress, IPAddress.Loopback) ? 
+                   "127.0.0.1" : endPoint.IpAddress.ToString(),
                     endPoint.Port);
             }
 
@@ -329,7 +344,8 @@ namespace Titanium.Web.Proxy
 #if !DEBUG
             firefoxProxySettingsManager.AddFirefox();
 #endif
-            Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System HTTPS Proxy", endPoint.IpAddress, endPoint.Port);
+            Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System HTTPS Proxy",
+                endPoint.IpAddress, endPoint.Port);
         }
 
         /// <summary>
@@ -337,6 +353,11 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemHttpProxy()
         {
+            if (RunTime.IsRunningOnMono())
+            {
+                throw new Exception("Mono Runtime do not support system proxy settings.");
+            }
+
             systemProxySettingsManager.RemoveHttpProxy();
         }
 
@@ -345,6 +366,11 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemHttpsProxy()
         {
+            if (RunTime.IsRunningOnMono())
+            {
+                throw new Exception("Mono Runtime do not support system proxy settings.");
+            }
+
             systemProxySettingsManager.RemoveHttpsProxy();
         }
 
@@ -353,6 +379,11 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableAllSystemProxies()
         {
+            if (RunTime.IsRunningOnMono())
+            {
+                throw new Exception("Mono Runtime do not support system proxy settings.");
+            }
+
             systemProxySettingsManager.DisableAllProxy();
         }
 
@@ -372,7 +403,7 @@ namespace Titanium.Web.Proxy
 
             certValidated = certificateCacheManager.CreateTrustedRootCertificate();
 
-            if (TrustRootCertificate)
+            if (TrustRootCertificate) 
             {
                 //current user
                 certificateCacheManager
@@ -383,7 +414,8 @@ namespace Titanium.Web.Proxy
                  .TrustRootCertificate(StoreLocation.LocalMachine, exceptionFunc);
             }
 
-            if (ForwardToUpstreamGateway && GetCustomUpStreamHttpProxyFunc == null && GetCustomUpStreamHttpsProxyFunc == null)
+            if (ForwardToUpstreamGateway && GetCustomUpStreamHttpProxyFunc == null 
+                && GetCustomUpStreamHttpsProxyFunc == null)
             {
                 GetCustomUpStreamHttpProxyFunc = GetSystemUpStreamProxy;
                 GetCustomUpStreamHttpsProxyFunc = GetSystemUpStreamProxy;
