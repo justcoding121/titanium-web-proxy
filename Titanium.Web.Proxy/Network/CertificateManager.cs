@@ -5,15 +5,33 @@ using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Concurrent;
 using System.IO;
+using Titanium.Web.Proxy.Network.Certificate;
+using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Network
 {
+    /// <summary>
+    /// Certificate Engine option
+    /// </summary>
+    public enum CertificateEngine
+    {
+        /// <summary>
+        /// Uses Windows Certification Generation API
+        /// </summary>
+        DefaultWindows = 0,
+
+        /// <summary>
+        /// Uses BouncyCastle 3rd party library
+        /// </summary>
+        BouncyCastle = 1
+    }
+
     /// <summary>
     /// A class to manage SSL certificates used by this proxy server
     /// </summary>
     internal class CertificateManager : IDisposable
     {
-        private readonly CertificateMaker certEngine;
+        private readonly ICertificateMaker certEngine;
 
         private bool clearCertificates { get; set; }
         /// <summary>
@@ -28,11 +46,23 @@ namespace Titanium.Web.Proxy.Network
 
         internal X509Certificate2 rootCertificate { get; set; }
 
-        internal CertificateManager(string issuer, string rootCertificateName, Action<Exception> exceptionFunc)
+        internal CertificateManager(CertificateEngine engine,
+            string issuer,
+            string rootCertificateName,
+            Action<Exception> exceptionFunc)
         {
             this.exceptionFunc = exceptionFunc;
 
-            certEngine = new CertificateMaker();
+            //For Mono only Bouncy Castle is supported
+            if (RunTime.IsRunningOnMono() 
+                || engine == CertificateEngine.BouncyCastle)
+            {
+                certEngine = new BCCertificateMaker();
+            }
+            else
+            {
+                certEngine = new WinCertificateMaker();
+            }
 
             Issuer = issuer;
             RootCertificateName = rootCertificateName;
