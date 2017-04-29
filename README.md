@@ -43,6 +43,10 @@ var proxyServer = new ProxyServer();
 //locally trust root certificate used by this proxy 
 proxyServer.TrustRootCertificate = true;
 
+//optionally set the Certificate Engine
+//Under Mono only BouncyCastle will be supported
+//proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
+
 proxyServer.BeforeRequest += OnRequest;
 proxyServer.BeforeResponse += OnResponse;
 proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
