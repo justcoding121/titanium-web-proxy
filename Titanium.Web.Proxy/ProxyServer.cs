@@ -56,6 +56,9 @@ namespace Titanium.Web.Proxy
         private SystemProxyManager systemProxySettingsManager { get; }
 
 #if !DEBUG
+       /// <summary>
+       /// Set firefox to use default system proxy
+       /// </summary>
         private FireFoxProxySettingsManager firefoxProxySettingsManager
             = new FireFoxProxySettingsManager();
 #endif
@@ -84,6 +87,13 @@ namespace Titanium.Web.Proxy
         /// This would import the root certificate to the certificate store of machine that runs this proxy server
         /// </summary>
         public bool TrustRootCertificate { get; set; }
+
+        /// <summary>
+        /// Select Certificate Engine 
+        /// Optionally set to BouncyCastle
+        /// Mono only support BouncyCastle and it is the default
+        /// </summary>
+        public CertificateEngine CertificateEngine { get; set; }
 
         /// <summary>
         /// Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
@@ -126,6 +136,16 @@ namespace Titanium.Web.Proxy
         /// default via any IP addresses of this machine
         /// </summary>
         public IPEndPoint UpStreamEndPoint { get; set; } = new IPEndPoint(IPAddress.Any, 0);
+
+        /// <summary>
+        /// Is the proxy currently running
+        /// </summary>
+        public bool ProxyRunning => proxyRunning;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether requests will be chained to upstream gateway.
+        /// </summary>
+        public bool ForwardToUpstreamGateway { get; set; }
 
         /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
@@ -188,16 +208,6 @@ namespace Titanium.Web.Proxy
         public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 
         /// <summary>
-        /// Is the proxy currently running
-        /// </summary>
-        public bool ProxyRunning => proxyRunning;
-
-        /// <summary>
-        /// Gets or sets a value indicating whether requests will be chained to upstream gateway.
-        /// </summary>
-        public bool ForwardToUpstreamGateway { get; set; }
-
-        /// <summary>
         /// Constructor
         /// </summary>
         public ProxyServer() : this(null, null) { }
@@ -211,6 +221,7 @@ namespace Titanium.Web.Proxy
         {
             RootCertificateName = rootCertificateName;
             RootCertificateIssuerName = rootCertificateIssuerName;
+
             //default values
             ConnectionTimeOutSeconds = 120;
             CertificateCacheTimeOutMinutes = 60;
@@ -355,7 +366,8 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
-            certificateCacheManager = new CertificateManager(RootCertificateIssuerName,
+            certificateCacheManager = new CertificateManager(CertificateEngine,
+                RootCertificateIssuerName,
                 RootCertificateName, ExceptionFunc);
 
             certValidated = certificateCacheManager.CreateTrustedRootCertificate();

@@ -3,13 +3,13 @@ using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 
-namespace Titanium.Web.Proxy.Network
+namespace Titanium.Web.Proxy.Network.Certificate
 {
 
     /// <summary>
     /// Certificate Maker - uses MakeCert
     /// </summary>
-    public class CertificateMaker
+    public class WinCertificateMaker: ICertificateMaker
     {
         private readonly Type typeX500DN;
 
@@ -33,12 +33,6 @@ namespace Titanium.Web.Proxy.Network
 
         private readonly Type typeX509Enrollment;
 
-        //private Type typeAlternativeName;
-
-        //private Type typeAlternativeNames;
-
-        //private Type typeAlternativeNamesExt;
-
         private readonly string sProviderName = "Microsoft Enhanced Cryptographic Provider v1.0";
 
         private object _SharedPrivateKey;
@@ -46,7 +40,7 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// Constructor.
         /// </summary>
-        public CertificateMaker()
+        public WinCertificateMaker()
         {
             typeX500DN = Type.GetTypeFromProgID("X509Enrollment.CX500DistinguishedName", true);
             typeX509PrivateKey = Type.GetTypeFromProgID("X509Enrollment.CX509PrivateKey", true);
@@ -59,9 +53,6 @@ namespace Titanium.Web.Proxy.Network
             typeBasicConstraints = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionBasicConstraints");
             typeSignerCertificate = Type.GetTypeFromProgID("X509Enrollment.CSignerCertificate");
             typeX509Enrollment = Type.GetTypeFromProgID("X509Enrollment.CX509Enrollment");
-            //this.typeAlternativeName = Type.GetTypeFromProgID("X509Enrollment.CAlternativeName");
-            //this.typeAlternativeNames = Type.GetTypeFromProgID("X509Enrollment.CAlternativeNames");
-            //this.typeAlternativeNamesExt = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionAlternativeNames");
         }
 
         /// <summary>
@@ -214,11 +205,17 @@ namespace Titanium.Web.Proxy.Network
                 manualResetEvent.Close();
                 return rCert;
             }
-            var fullSubject = $"CN={sSubjectCN}";//Subject
-            var HashAlgo = "SHA256";  //Sig Algo
-            var GraceDays = -366; //Grace Days
-            var ValidDays = 1825; //ValiDays
-            var keyLength = 2048; //KeyLength
+
+            //Subject
+            var fullSubject = $"CN={sSubjectCN}";
+            //Sig Algo
+            var HashAlgo = "SHA256";
+            //Grace Days
+            var GraceDays = -366;
+            //ValiDays
+            var ValidDays = 1825;
+            //KeyLength
+            var keyLength = 2048;
 
             var graceTime = DateTime.Now.AddDays(GraceDays);
             var now = DateTime.Now;

@@ -44,6 +44,10 @@
     <AssemblyOriginatorKeyFile>StrongNameKey.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="BouncyCastle.Crypto, Version=1.8.1.0, Culture=neutral, PublicKeyToken=0e99375e54769942">
+      <HintPath>..\packages\BouncyCastle.1.8.1\lib\BouncyCastle.Crypto.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Net" />
     <Reference Include="System.configuration" />
@@ -69,9 +73,12 @@
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
     <Compile Include="Helpers\Network.cs" />
+    <Compile Include="Helpers\RunTime.cs" />
     <Compile Include="Http\Responses\GenericResponse.cs" />
     <Compile Include="Network\CachedCertificate.cs" />
-    <Compile Include="Network\CertificateMaker.cs" />
+    <Compile Include="Network\Certificate\WinCertificateMaker.cs" />
+    <Compile Include="Network\Certificate\BCCertificateMaker.cs" />
+    <Compile Include="Network\Certificate\ICertificateMaker.cs" />
     <Compile Include="Network\ProxyClient.cs" />
     <Compile Include="Exceptions\BodyNotFoundException.cs" />
     <Compile Include="Exceptions\ProxyAuthorizationException.cs" />
@@ -119,6 +126,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
+    <None Include="packages.config" />
     <None Include="StrongNameKey.snk" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
