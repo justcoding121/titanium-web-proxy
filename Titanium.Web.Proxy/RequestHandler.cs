@@ -30,7 +30,6 @@ namespace Titanium.Web.Proxy
         private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient tcpClient)
         {
 
-
             Stream clientStream = tcpClient.GetStream();
 
             clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
@@ -57,7 +56,8 @@ namespace Titanium.Web.Proxy
                 //Find the request Verb
                 var httpVerb = httpCmdSplit[0];
 
-                httpRemoteUri = httpVerb.ToUpper() == "CONNECT" ? new Uri("http://" + httpCmdSplit[1]) : new Uri(httpCmdSplit[1]);
+                httpRemoteUri = httpVerb.ToUpper() == "CONNECT" ? 
+                    new Uri("http://" + httpCmdSplit[1]) : new Uri(httpCmdSplit[1]);
 
                 //parse the HTTP version
                 var version = new Version(1, 1);
@@ -70,9 +70,10 @@ namespace Titanium.Web.Proxy
                         version = new Version(1, 0);
                     }
                 }
-                //filter out excluded host names
-                var excluded = endPoint.ExcludedHttpsHostNameRegex != null && endPoint.ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
 
+                //filter out excluded host names
+                var excluded = endPoint.ExcludedHttpsHostNameRegex != null 
+                    && endPoint.ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
 
                 List<HttpHeader> connectRequestHeaders = null;
 
