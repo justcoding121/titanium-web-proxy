@@ -407,11 +407,11 @@ namespace Titanium.Web.Proxy
             {
                 //current user
                 certificateCacheManager
-                  .TrustRootCertificate(StoreLocation.CurrentUser, exceptionFunc);
+                  .TrustRootCertificate(StoreLocation.CurrentUser, ExceptionFunc);
 
                 //current system
                 certificateCacheManager
-                 .TrustRootCertificate(StoreLocation.LocalMachine, exceptionFunc);
+                 .TrustRootCertificate(StoreLocation.LocalMachine, ExceptionFunc);
             }
 
             if (ForwardToUpstreamGateway && GetCustomUpStreamHttpProxyFunc == null 
