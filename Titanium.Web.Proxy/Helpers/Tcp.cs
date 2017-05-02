@@ -42,7 +42,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// <see cref="http://msdn2.microsoft.com/en-us/library/aa366921.aspx"/>
+        /// <see href="http://msdn2.microsoft.com/en-us/library/aa366921.aspx"/>
         /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         internal struct TcpTable
@@ -52,7 +52,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// <see cref="http://msdn2.microsoft.com/en-us/library/aa366913.aspx"/>
+        /// <see href="http://msdn2.microsoft.com/en-us/library/aa366913.aspx"/>
         /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         internal struct TcpRow
@@ -72,7 +72,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// <see cref="http://msdn2.microsoft.com/en-us/library/aa365928.aspx"/>
+        /// <see href="http://msdn2.microsoft.com/en-us/library/aa365928.aspx"/>
         /// </summary>
         [DllImport("iphlpapi.dll", SetLastError = true)]
         internal static extern uint GetExtendedTcpTable(IntPtr tcpTable, ref int size, bool sort, int ipVersion, int tableClass, int reserved);
@@ -124,7 +124,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// relays the input clientStream to the server at the specified host name & port with the given httpCmd & headers as prefix
+        /// relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers as prefix
         /// Usefull for websocket requests
         /// </summary>
         /// <param name="bufferSize"></param>
