@@ -123,7 +123,8 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="signingCertificate">The signing certificate.</param>
         /// <returns>X509Certificate2 instance.</returns>
         /// <exception cref="System.ArgumentException">You must specify a Signing Certificate if and only if you are not creating a root.</exception>
-        private X509Certificate2 MakeCertificateInternal(bool isRoot, string fullSubject, DateTime validFrom, DateTime validTo, X509Certificate2 signingCertificate)
+        private X509Certificate2 MakeCertificateInternal(bool isRoot, string fullSubject, 
+            DateTime validFrom, DateTime validTo, X509Certificate2 signingCertificate)
         {
             if (isRoot != (null == signingCertificate))
             {
@@ -143,7 +144,9 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="switchToMtaIfNeeded">if set to <c>true</c> [switch to MTA if needed].</param>
         /// <param name="signingCert">The signing cert.</param>
         /// <returns>X509Certificate2.</returns>
-        private X509Certificate2 MakeCertificateInternal(string subject, bool isRoot, bool switchToMtaIfNeeded, X509Certificate2 signingCert = null, CancellationToken cancellationToken = default(CancellationToken))
+        private X509Certificate2 MakeCertificateInternal(string subject, bool isRoot, 
+            bool switchToMtaIfNeeded, X509Certificate2 signingCert = null, 
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             X509Certificate2 certificate = null;
 
