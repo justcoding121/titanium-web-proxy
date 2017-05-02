@@ -8,8 +8,9 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
     /// <summary>
     /// Certificate Maker - uses MakeCert
+    /// Calls COM objects using reflection
     /// </summary>
-    public class WinCertificateMaker: ICertificateMaker
+    public class WinCertificateMaker : ICertificateMaker
     {
         private readonly Type typeX500DN;
 
@@ -53,6 +54,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             typeBasicConstraints = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionBasicConstraints");
             typeSignerCertificate = Type.GetTypeFromProgID("X509Enrollment.CSignerCertificate");
             typeX509Enrollment = Type.GetTypeFromProgID("X509Enrollment.CX509Enrollment");
+
         }
 
         /// <summary>
@@ -62,143 +64,211 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="isRoot"></param>
         /// <param name="signingCert"></param>
         /// <returns></returns>
-        public X509Certificate2 MakeCertificate(string sSubjectCN, bool isRoot,X509Certificate2 signingCert=null)
+        public X509Certificate2 MakeCertificate(string sSubjectCN, bool isRoot, X509Certificate2 signingCert = null)
         {
             return MakeCertificateInternal(sSubjectCN, isRoot, true, signingCert);
         }
 
-        private X509Certificate2 MakeCertificate(bool IsRoot, string FullSubject, int PrivateKeyLength, string HashAlg, DateTime ValidFrom, DateTime ValidTo, X509Certificate2 SigningCertificate)
+        private X509Certificate2 MakeCertificate(bool isRoot, string subject, string fullSubject,
+            int privateKeyLength, string hashAlg, DateTime validFrom, DateTime validTo, 
+            X509Certificate2 signingCertificate)
         {
-            if (IsRoot != (null == SigningCertificate))
+            if (isRoot != (null == signingCertificate))
             {
-                throw new ArgumentException("You must specify a Signing Certificate if and only if you are not creating a root.", nameof(IsRoot));
+                throw new ArgumentException("You must specify a Signing Certificate if and only if you are not creating a root.", nameof(isRoot));
             }
-            var x500DN = Activator.CreateInstance(typeX500DN);
-            var subject = new object[] { FullSubject, 0 };
-            typeX500DN.InvokeMember("Encode", BindingFlags.InvokeMethod, null, x500DN, subject);
-            var x500DN2 = Activator.CreateInstance(typeX500DN);
-            if (!IsRoot)
+
+            var x500CertDN = Activator.CreateInstance(typeX500DN);
+            var typeValue = new object[] { fullSubject, 0 };
+            typeX500DN.InvokeMember("Encode", BindingFlags.InvokeMethod, null, x500CertDN, typeValue);
+
+            var x500RootCertDN = Activator.CreateInstance(typeX500DN);
+
+            if (!isRoot)
             {
-                subject[0] = SigningCertificate.Subject;
+                typeValue[0] = signingCertificate.Subject;
             }
-            typeX500DN.InvokeMember("Encode", BindingFlags.InvokeMethod, null, x500DN2, subject);
+
+            typeX500DN.InvokeMember("Encode", BindingFlags.InvokeMethod, null, x500RootCertDN, typeValue);
             object sharedPrivateKey = null;
-            if (!IsRoot)
+
+            if (!isRoot)
             {
                 sharedPrivateKey = _SharedPrivateKey;
             }
+
             if (sharedPrivateKey == null)
             {
                 sharedPrivateKey = Activator.CreateInstance(typeX509PrivateKey);
-                subject = new object[] { sProviderName };
-                typeX509PrivateKey.InvokeMember("ProviderName", BindingFlags.PutDispProperty, null, sharedPrivateKey, subject);
-                subject[0] = 2;
-                typeX509PrivateKey.InvokeMember("ExportPolicy", BindingFlags.PutDispProperty, null, sharedPrivateKey, subject);
-                subject = new object[] { (IsRoot ? 2 : 1) };
-                typeX509PrivateKey.InvokeMember("KeySpec", BindingFlags.PutDispProperty, null, sharedPrivateKey, subject);
-                if (!IsRoot)
+                typeValue = new object[] { sProviderName };
+                typeX509PrivateKey.InvokeMember("ProviderName", BindingFlags.PutDispProperty, null, sharedPrivateKey, typeValue);
+                typeValue[0] = 2;
+                typeX509PrivateKey.InvokeMember("ExportPolicy", BindingFlags.PutDispProperty, null, sharedPrivateKey, typeValue);
+                typeValue = new object[] { (isRoot ? 2 : 1) };
+                typeX509PrivateKey.InvokeMember("KeySpec", BindingFlags.PutDispProperty, null, sharedPrivateKey, typeValue);
+
+                if (!isRoot)
                 {
-                    subject = new object[] { 176 };
-                    typeX509PrivateKey.InvokeMember("KeyUsage", BindingFlags.PutDispProperty, null, sharedPrivateKey, subject);
+                    typeValue = new object[] { 176 };
+                    typeX509PrivateKey.InvokeMember("KeyUsage", BindingFlags.PutDispProperty, null, sharedPrivateKey, typeValue);
                 }
-                subject[0] = PrivateKeyLength;
-                typeX509PrivateKey.InvokeMember("Length", BindingFlags.PutDispProperty, null, sharedPrivateKey, subject);
+
+                typeValue[0] = privateKeyLength;
+                typeX509PrivateKey.InvokeMember("Length", BindingFlags.PutDispProperty, null, sharedPrivateKey, typeValue);
                 typeX509PrivateKey.InvokeMember("Create", BindingFlags.InvokeMethod, null, sharedPrivateKey, null);
-                if (!IsRoot)
+
+                if (!isRoot)
                 {
                     _SharedPrivateKey = sharedPrivateKey;
                 }
             }
-            subject = new object[1];
-            var obj3 = Activator.CreateInstance(typeOID);
-            subject[0] = "1.3.6.1.5.5.7.3.1";
-            typeOID.InvokeMember("InitializeFromValue", BindingFlags.InvokeMethod, null, obj3, subject);
-            var obj4 = Activator.CreateInstance(typeOIDS);
-            subject[0] = obj3;
-            typeOIDS.InvokeMember("Add", BindingFlags.InvokeMethod, null, obj4, subject);
-            var obj5 = Activator.CreateInstance(typeEKUExt);
-            subject[0] = obj4;
-            typeEKUExt.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, obj5, subject);
-            var obj6 = Activator.CreateInstance(typeRequestCert);
-            subject = new[] { 1, sharedPrivateKey, string.Empty };
-            typeRequestCert.InvokeMember("InitializeFromPrivateKey", BindingFlags.InvokeMethod, null, obj6, subject);
-            subject = new[] { x500DN };
-            typeRequestCert.InvokeMember("Subject", BindingFlags.PutDispProperty, null, obj6, subject);
-            subject[0] = x500DN;
-            typeRequestCert.InvokeMember("Issuer", BindingFlags.PutDispProperty, null, obj6, subject);
-            subject[0] = ValidFrom;
-            typeRequestCert.InvokeMember("NotBefore", BindingFlags.PutDispProperty, null, obj6, subject);
-            subject[0] = ValidTo;
-            typeRequestCert.InvokeMember("NotAfter", BindingFlags.PutDispProperty, null, obj6, subject);
-            var obj7 = Activator.CreateInstance(typeKUExt);
-            subject[0] = 176;
-            typeKUExt.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, obj7, subject);
-            var obj8 = typeRequestCert.InvokeMember("X509Extensions", BindingFlags.GetProperty, null, obj6, null);
-            subject = new object[1];
-            if (!IsRoot)
-            {
-                subject[0] = obj7;
-                typeX509Extensions.InvokeMember("Add", BindingFlags.InvokeMethod, null, obj8, subject);
-            }
-            subject[0] = obj5;
-            typeX509Extensions.InvokeMember("Add", BindingFlags.InvokeMethod, null, obj8, subject);
 
-            if (!IsRoot)
+            typeValue = new object[1];
+
+            var OID = Activator.CreateInstance(typeOID);
+            typeValue[0] = "1.3.6.1.5.5.7.3.1";
+            typeOID.InvokeMember("InitializeFromValue", BindingFlags.InvokeMethod, null, OID, typeValue);
+
+            var OIDS = Activator.CreateInstance(typeOIDS);
+            typeValue[0] = OID;
+            typeOIDS.InvokeMember("Add", BindingFlags.InvokeMethod, null, OIDS, typeValue);
+
+            var EKUExt = Activator.CreateInstance(typeEKUExt);
+            typeValue[0] = OIDS;
+            typeEKUExt.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, EKUExt, typeValue);
+
+            var RequestCert = Activator.CreateInstance(typeRequestCert);
+
+            typeValue = new[] { 1, sharedPrivateKey, string.Empty };
+            typeRequestCert.InvokeMember("InitializeFromPrivateKey", BindingFlags.InvokeMethod, null, RequestCert, typeValue);
+            typeValue = new[] { x500CertDN };
+            typeRequestCert.InvokeMember("Subject", BindingFlags.PutDispProperty, null, RequestCert, typeValue);
+            typeValue[0] = x500RootCertDN;
+            typeRequestCert.InvokeMember("Issuer", BindingFlags.PutDispProperty, null, RequestCert, typeValue);
+            typeValue[0] = validFrom;
+            typeRequestCert.InvokeMember("NotBefore", BindingFlags.PutDispProperty, null, RequestCert, typeValue);
+            typeValue[0] = validTo;
+            typeRequestCert.InvokeMember("NotAfter", BindingFlags.PutDispProperty, null, RequestCert, typeValue);
+
+            var KUExt = Activator.CreateInstance(typeKUExt);
+
+            typeValue[0] = 176;
+            typeKUExt.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, KUExt, typeValue);
+
+            var certificate = typeRequestCert.InvokeMember("X509Extensions", BindingFlags.GetProperty, null, RequestCert, null);
+            typeValue = new object[1];
+
+            if (!isRoot)
             {
-                var obj12 = Activator.CreateInstance(typeSignerCertificate);
-                subject = new object[] { 0, 0, 12, SigningCertificate.Thumbprint };
-                typeSignerCertificate.InvokeMember("Initialize", BindingFlags.InvokeMethod, null, obj12, subject);
-                subject = new[] { obj12 };
-                typeRequestCert.InvokeMember("SignerCertificate", BindingFlags.PutDispProperty, null, obj6, subject);
+                typeValue[0] = KUExt;
+                typeX509Extensions.InvokeMember("Add", BindingFlags.InvokeMethod, null, certificate, typeValue);
+            }
+
+            typeValue[0] = EKUExt;
+            typeX509Extensions.InvokeMember("Add", BindingFlags.InvokeMethod, null, certificate, typeValue);
+
+            if (!isRoot)
+            {
+                //add alternative names 
+                // https://forums.iis.net/t/1180823.aspx
+
+                var typeAltNamesCollection = Type.GetTypeFromProgID("X509Enrollment.CAlternativeNames");
+                var altNameCollection = Activator.CreateInstance(typeAltNamesCollection);
+
+                var typeExtNames = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionAlternativeNames");
+                var extNames = Activator.CreateInstance(typeExtNames);
+
+                var typeCAlternativeName = Type.GetTypeFromProgID("X509Enrollment.CAlternativeName");
+                var altDnsNames = Activator.CreateInstance(typeCAlternativeName);
+
+                typeValue = new object[] { 3,  subject };
+                typeCAlternativeName.InvokeMember("InitializeFromString", BindingFlags.InvokeMethod, null, altDnsNames, typeValue);
+
+                typeValue = new[] { altDnsNames };
+                typeAltNamesCollection.InvokeMember("Add", BindingFlags.InvokeMethod, null, altNameCollection, typeValue);
+
+
+                typeValue = new[] { altNameCollection };
+                typeExtNames.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, extNames, typeValue);
+
+                typeValue[0] = extNames;
+                typeX509Extensions.InvokeMember("Add", BindingFlags.InvokeMethod, null, certificate, typeValue);
+            }
+
+            if (!isRoot)
+            {
+                var SignerCertificate = Activator.CreateInstance(typeSignerCertificate);
+
+                typeValue = new object[] { 0, 0, 12, signingCertificate.Thumbprint };
+                typeSignerCertificate.InvokeMember("Initialize", BindingFlags.InvokeMethod, null, SignerCertificate, typeValue);
+                typeValue = new[] { SignerCertificate };
+                typeRequestCert.InvokeMember("SignerCertificate", BindingFlags.PutDispProperty, null, RequestCert, typeValue);
             }
             else
             {
-                var obj13 = Activator.CreateInstance(typeBasicConstraints);
-                subject = new object[] { "true", "0" };
-                typeBasicConstraints.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, obj13, subject);
-                subject = new[] { obj13 };
-                typeX509Extensions.InvokeMember("Add", BindingFlags.InvokeMethod, null, obj8, subject);
+                var basicConstraints = Activator.CreateInstance(typeBasicConstraints);
+
+                typeValue = new object[] { "true", "0" };
+                typeBasicConstraints.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, basicConstraints, typeValue);
+                typeValue = new[] { basicConstraints };
+                typeX509Extensions.InvokeMember("Add", BindingFlags.InvokeMethod, null, certificate, typeValue);
             }
-            var obj14 = Activator.CreateInstance(typeOID);
-            subject = new object[] { 1, 0, 0, HashAlg };
-            typeOID.InvokeMember("InitializeFromAlgorithmName", BindingFlags.InvokeMethod, null, obj14, subject);
-            subject = new[] { obj14 };
-            typeRequestCert.InvokeMember("HashAlgorithm", BindingFlags.PutDispProperty, null, obj6, subject);
-            typeRequestCert.InvokeMember("Encode", BindingFlags.InvokeMethod, null, obj6, null);
-            var obj15 = Activator.CreateInstance(typeX509Enrollment);
-            subject[0] = obj6;
-            typeX509Enrollment.InvokeMember("InitializeFromRequest", BindingFlags.InvokeMethod, null, obj15, subject);
-            if (IsRoot)
+
+            OID = Activator.CreateInstance(typeOID);
+
+            typeValue = new object[] { 1, 0, 0, hashAlg };
+            typeOID.InvokeMember("InitializeFromAlgorithmName", BindingFlags.InvokeMethod, null, OID, typeValue);
+
+            typeValue = new[] { OID };
+            typeRequestCert.InvokeMember("HashAlgorithm", BindingFlags.PutDispProperty, null, RequestCert, typeValue);
+            typeRequestCert.InvokeMember("Encode", BindingFlags.InvokeMethod, null, RequestCert, null);
+
+            var X509Enrollment = Activator.CreateInstance(typeX509Enrollment);
+
+            typeValue[0] = RequestCert;
+            typeX509Enrollment.InvokeMember("InitializeFromRequest", BindingFlags.InvokeMethod, null, X509Enrollment, typeValue);
+
+            if (isRoot)
             {
-                subject[0] = "DO_NOT_TRUST_TitaniumProxy-CE";
-                typeX509Enrollment.InvokeMember("CertificateFriendlyName", BindingFlags.PutDispProperty, null, obj15, subject);
+                typeValue[0] = fullSubject;
+                typeX509Enrollment.InvokeMember("CertificateFriendlyName", BindingFlags.PutDispProperty, null, X509Enrollment, typeValue);
+
             }
-            subject[0] = 0;
-            var obj16 = typeX509Enrollment.InvokeMember("CreateRequest", BindingFlags.InvokeMethod, null, obj15, subject);
-            subject = new[] { 2, obj16, 0, string.Empty };
-            typeX509Enrollment.InvokeMember("InstallResponse", BindingFlags.InvokeMethod, null, obj15, subject);
-            subject = new object[] { null, 0, 1 };
+
+            var members = typeX509Enrollment.GetMembers();
+
+            typeValue[0] = 0;
+
+            var createCertRequest = typeX509Enrollment.InvokeMember("CreateRequest", BindingFlags.InvokeMethod, null, X509Enrollment, typeValue);
+            typeValue = new[] { 2, createCertRequest, 0, string.Empty };
+
+            typeX509Enrollment.InvokeMember("InstallResponse", BindingFlags.InvokeMethod, null, X509Enrollment, typeValue);
+            typeValue = new object[] { null, 0, 1 };
+
             try
             {
-                var empty = (string)typeX509Enrollment.InvokeMember("CreatePFX", BindingFlags.InvokeMethod, null, obj15, subject);
+                var empty = (string)typeX509Enrollment.InvokeMember("CreatePFX", BindingFlags.InvokeMethod, null, X509Enrollment, typeValue);
                 return new X509Certificate2(Convert.FromBase64String(empty), string.Empty, X509KeyStorageFlags.Exportable);
             }
             catch (Exception)
             {
                 // ignored
             }
+
             return null;
         }
 
-        private X509Certificate2 MakeCertificateInternal(string sSubjectCN, bool isRoot, bool switchToMTAIfNeeded,X509Certificate2 signingCert=null)
+        private X509Certificate2 MakeCertificateInternal(string sSubjectCN, bool isRoot, 
+            bool switchToMTAIfNeeded, 
+            X509Certificate2 signingCert = null)
         {
-            X509Certificate2 rCert=null;
+            X509Certificate2 rCert = null;
             if (switchToMTAIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
             {
                 var manualResetEvent = new ManualResetEvent(false);
                 ThreadPool.QueueUserWorkItem(o =>
                 {
-                    rCert = MakeCertificateInternal(sSubjectCN, isRoot, false,signingCert);
+                    rCert = MakeCertificateInternal(sSubjectCN, isRoot, false, signingCert);
                     manualResetEvent.Set();
                 });
                 manualResetEvent.WaitOne();
@@ -219,8 +289,8 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             var graceTime = DateTime.Now.AddDays(GraceDays);
             var now = DateTime.Now;
-            rCert = !isRoot ? MakeCertificate(false, fullSubject, keyLength, HashAlgo, graceTime, now.AddDays(ValidDays), signingCert) : 
-                MakeCertificate(true, fullSubject, keyLength, HashAlgo, graceTime, now.AddDays(ValidDays), null);
+            rCert = !isRoot ? MakeCertificate(false, sSubjectCN, fullSubject, keyLength, HashAlgo, graceTime, now.AddDays(ValidDays), signingCert) :
+                MakeCertificate(true, sSubjectCN, fullSubject, keyLength, HashAlgo, graceTime, now.AddDays(ValidDays), null);
             return rCert;
         }
     }
