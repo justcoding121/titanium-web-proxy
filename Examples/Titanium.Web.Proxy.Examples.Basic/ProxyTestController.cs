@@ -21,7 +21,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             //optionally set the Certificate Engine
             //Under Mono only BouncyCastle will be supported
-            //proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
+           //proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
 
             requestBodyHistory = new Dictionary<Guid, string>();
         }
