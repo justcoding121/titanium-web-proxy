@@ -7,7 +7,7 @@ using Titanium.Web.Proxy.Models;
 namespace Titanium.Web.Proxy.Network.Tcp
 {
     /// <summary>
-    /// An object that holds TcpConnection to a particular server & port
+    /// An object that holds TcpConnection to a particular server and port
     /// </summary>
     public class TcpConnection : IDisposable
     {

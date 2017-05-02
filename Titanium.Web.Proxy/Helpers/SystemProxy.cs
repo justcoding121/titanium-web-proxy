@@ -125,7 +125,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Removes all types of proxy settings (both http & https)
+        /// Removes all types of proxy settings (both http and https)
         /// </summary>
         internal void DisableAllProxy()
         {
