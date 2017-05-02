@@ -34,6 +34,12 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
         private readonly Type typeX509Enrollment;
 
+        private readonly Type typeAltNamesCollection;
+
+        private readonly Type typeExtNames;
+
+        private readonly Type typeCAlternativeName;
+
         private readonly string sProviderName = "Microsoft Enhanced Cryptographic Provider v1.0";
 
         private object _SharedPrivateKey;
@@ -55,7 +61,12 @@ namespace Titanium.Web.Proxy.Network.Certificate
             typeSignerCertificate = Type.GetTypeFromProgID("X509Enrollment.CSignerCertificate");
             typeX509Enrollment = Type.GetTypeFromProgID("X509Enrollment.CX509Enrollment");
 
+            //for alternative names
+            typeAltNamesCollection = Type.GetTypeFromProgID("X509Enrollment.CAlternativeNames");
+            typeExtNames = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionAlternativeNames");
+            typeCAlternativeName = Type.GetTypeFromProgID("X509Enrollment.CAlternativeName");
         }
+
 
         /// <summary>
         /// Make certificate.
@@ -172,13 +183,8 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 //add alternative names 
                 // https://forums.iis.net/t/1180823.aspx
 
-                var typeAltNamesCollection = Type.GetTypeFromProgID("X509Enrollment.CAlternativeNames");
                 var altNameCollection = Activator.CreateInstance(typeAltNamesCollection);
-
-                var typeExtNames = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionAlternativeNames");
                 var extNames = Activator.CreateInstance(typeExtNames);
-
-                var typeCAlternativeName = Type.GetTypeFromProgID("X509Enrollment.CAlternativeName");
                 var altDnsNames = Activator.CreateInstance(typeCAlternativeName);
 
                 typeValue = new object[] { 3,  subject };
