@@ -34,6 +34,7 @@ namespace Titanium.Web.Proxy.Network
         private readonly ICertificateMaker certEngine;
 
         private bool clearCertificates { get; set; }
+
         /// <summary>
         /// Cache dictionary
         /// </summary>
@@ -70,17 +71,29 @@ namespace Titanium.Web.Proxy.Network
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
         }
 
-        internal X509Certificate2 GetRootCertificate()
+        private string GetRootCertificatePath()
         {
-            var path = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            var assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
+            
+            // dynamically loaded assemblies returns string.Empty location
+            if (assemblyLocation == string.Empty)
+            {
+                assemblyLocation = System.Reflection.Assembly.GetEntryAssembly().Location;
+            }
+
+            var path = Path.GetDirectoryName(assemblyLocation);
             if (null == path) throw new NullReferenceException();
             var fileName = Path.Combine(path, "rootCert.pfx");
+            return fileName;
+        }
 
+        internal X509Certificate2 GetRootCertificate()
+        {
+            var fileName = GetRootCertificatePath();
             if (!File.Exists(fileName)) return null;
             try
             {
                 return new X509Certificate2(fileName, string.Empty, X509KeyStorageFlags.Exportable);
-
             }
             catch (Exception e)
             {
@@ -94,7 +107,6 @@ namespace Titanium.Web.Proxy.Network
         /// <returns>true if succeeded, else false</returns>
         internal bool CreateTrustedRootCertificate()
         {
-
             rootCertificate = GetRootCertificate();
             if (rootCertificate != null)
             {
@@ -112,9 +124,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 try
                 {
-                    var path = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                    if (null == path) throw new NullReferenceException();
-                    var fileName = Path.Combine(path, "rootCert.pfx");
+                    var fileName = GetRootCertificatePath();
                     File.WriteAllBytes(fileName, rootCertificate.Export(X509ContentType.Pkcs12));
                 }
                 catch (Exception e)
