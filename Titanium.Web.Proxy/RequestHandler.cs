@@ -139,7 +139,7 @@ namespace Titanium.Web.Proxy
                     await WriteConnectResponse(clientStreamWriter, version);
 
                     await TcpHelper.SendRaw(BUFFER_SIZE, ConnectionTimeOutSeconds, httpRemoteUri.Host, httpRemoteUri.Port,
-                            httpCmd, version, null,
+                            null, version, null,
                             false, SupportedSslProtocols,
                             ValidateServerCertificate,
                             SelectClientCertificate,
