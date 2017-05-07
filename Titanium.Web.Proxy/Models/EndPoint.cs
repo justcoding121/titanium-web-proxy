@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
@@ -52,13 +53,46 @@ namespace Titanium.Web.Proxy.Models
     /// </summary>
     public class ExplicitProxyEndPoint : ProxyEndPoint
     {
+        private List<string> _excludedHttpsHostNameRegex;
+        private List<string> _includedHttpsHostNameRegex;
+
         internal bool IsSystemHttpProxy { get; set; }
+
         internal bool IsSystemHttpsProxy { get; set; }
 
         /// <summary>
         /// List of host names to exclude using Regular Expressions.
         /// </summary>
-        public List<string> ExcludedHttpsHostNameRegex { get; set; }
+        public List<string> ExcludedHttpsHostNameRegex
+        {
+            get { return _excludedHttpsHostNameRegex; }
+            set
+            {
+                if (IncludedHttpsHostNameRegex != null)
+                {
+                    throw new ArgumentException("Cannot set excluded when included is set");
+                }
+
+                _excludedHttpsHostNameRegex = value;
+            }
+        }
+
+        /// <summary>
+        /// List of host names to exclude using Regular Expressions.
+        /// </summary>
+        public List<string> IncludedHttpsHostNameRegex
+        {
+            get { return _includedHttpsHostNameRegex; }
+            set
+            {
+                if (ExcludedHttpsHostNameRegex != null)
+                {
+                    throw new ArgumentException("Cannot set included when excluded is set");
+                }
+
+                _includedHttpsHostNameRegex = value;
+            }
+        }
 
         /// <summary>
         /// Generic certificate to use for SSL decryption.
