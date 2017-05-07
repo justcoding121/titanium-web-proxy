@@ -72,8 +72,17 @@ namespace Titanium.Web.Proxy
                 }
 
                 //filter out excluded host names
-                var excluded = endPoint.ExcludedHttpsHostNameRegex != null 
-                    && endPoint.ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
+                bool excluded = false;
+
+                if (endPoint.ExcludedHttpsHostNameRegex != null)
+                {
+                    excluded = endPoint.ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
+                }
+
+                if (endPoint.IncludedHttpsHostNameRegex != null)
+                {
+                    excluded = !endPoint.IncludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
+                }
 
                 List<HttpHeader> connectRequestHeaders = null;
 
