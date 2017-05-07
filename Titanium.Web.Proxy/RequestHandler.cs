@@ -212,7 +212,7 @@ namespace Titanium.Web.Proxy
                  endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null);
         }
 
-        private async Task HandleHttpSessionRequestInternal(TcpConnection connection, SessionEventArgs args, ExternalProxy customUpStreamHttpProxy, ExternalProxy customUpStreamHttpsProxy, bool CloseConnection)
+        private async Task HandleHttpSessionRequestInternal(TcpConnection connection, SessionEventArgs args, ExternalProxy customUpStreamHttpProxy, ExternalProxy customUpStreamHttpsProxy, bool closeConnection)
         {
             try
             {
@@ -331,7 +331,7 @@ namespace Titanium.Web.Proxy
                 return;
             }
 
-            if (CloseConnection)
+            if (closeConnection)
             {
                 //dispose
                 connection?.Dispose();

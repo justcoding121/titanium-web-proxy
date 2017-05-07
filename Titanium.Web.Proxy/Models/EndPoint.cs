@@ -13,14 +13,14 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         /// Constructor.
         /// </summary>
-        /// <param name="IpAddress"></param>
-        /// <param name="Port"></param>
-        /// <param name="EnableSsl"></param>
-        protected ProxyEndPoint(IPAddress IpAddress, int Port, bool EnableSsl)
+        /// <param name="ipAddress"></param>
+        /// <param name="port"></param>
+        /// <param name="enableSsl"></param>
+        protected ProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl)
         {
-            this.IpAddress = IpAddress;
-            this.Port = Port;
-            this.EnableSsl = EnableSsl;
+            this.IpAddress = ipAddress;
+            this.Port = port;
+            this.EnableSsl = enableSsl;
         }
 
         /// <summary>
@@ -43,7 +43,7 @@ namespace Titanium.Web.Proxy.Models
                                    || Equals(IpAddress, IPAddress.IPv6Loopback)
                                    || Equals(IpAddress, IPAddress.IPv6None);
 
-        internal TcpListener listener { get; set; }
+        internal TcpListener Listener { get; set; }
     }
 
     /// <summary>
@@ -68,11 +68,11 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         /// Constructor.
         /// </summary>
-        /// <param name="IpAddress"></param>
-        /// <param name="Port"></param>
-        /// <param name="EnableSsl"></param>
-        public ExplicitProxyEndPoint(IPAddress IpAddress, int Port, bool EnableSsl)
-            : base(IpAddress, Port, EnableSsl)
+        /// <param name="ipAddress"></param>
+        /// <param name="port"></param>
+        /// <param name="enableSsl"></param>
+        public ExplicitProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl)
+            : base(ipAddress, port, enableSsl)
         {
 
         }
@@ -94,11 +94,11 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         /// Constructor.
         /// </summary>
-        /// <param name="IpAddress"></param>
-        /// <param name="Port"></param>
-        /// <param name="EnableSsl"></param>
-        public TransparentProxyEndPoint(IPAddress IpAddress, int Port, bool EnableSsl)
-            : base(IpAddress, Port, EnableSsl)
+        /// <param name="ipAddress"></param>
+        /// <param name="port"></param>
+        /// <param name="enableSsl"></param>
+        public TransparentProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl)
+            : base(ipAddress, port, enableSsl)
         {
             this.GenericCertificateName = "localhost";
         }
