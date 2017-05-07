@@ -54,9 +54,9 @@ namespace Titanium.Web.Proxy
                 var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
 
                 //Find the request Verb
-                var httpVerb = httpCmdSplit[0];
+                var httpVerb = httpCmdSplit[0].ToUpper();
 
-                httpRemoteUri = httpVerb.ToUpper() == "CONNECT" ? 
+                httpRemoteUri = httpVerb == "CONNECT" ? 
                     new Uri("http://" + httpCmdSplit[1]) : new Uri(httpCmdSplit[1]);
 
                 //parse the HTTP version
@@ -78,7 +78,7 @@ namespace Titanium.Web.Proxy
                 List<HttpHeader> connectRequestHeaders = null;
 
                 //Client wants to create a secure tcp tunnel (its a HTTPS request)
-                if (httpVerb.ToUpper() == "CONNECT" && !excluded && httpRemoteUri.Port != 80)
+                if (httpVerb == "CONNECT" && !excluded && httpRemoteUri.Port != 80)
                 {
                     httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
                     string tmpLine;
@@ -131,7 +131,7 @@ namespace Titanium.Web.Proxy
 
                 }
                 //Sorry cannot do a HTTPS request decrypt to port 80 at this time
-                else if (httpVerb.ToUpper() == "CONNECT")
+                else if (httpVerb == "CONNECT")
                 {
                     //Cyphen out CONNECT request headers
                     await clientStreamReader.ReadAllLinesAsync();
