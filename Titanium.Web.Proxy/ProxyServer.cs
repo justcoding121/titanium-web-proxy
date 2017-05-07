@@ -491,12 +491,12 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         private void Listen(ProxyEndPoint endPoint)
         {
-            endPoint.listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
-            endPoint.listener.Start();
+            endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
+            endPoint.Listener.Start();
 
-            endPoint.Port = ((IPEndPoint)endPoint.listener.LocalEndpoint).Port;
+            endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
             // accept clients asynchronously
-            endPoint.listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
+            endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
         }
 
         /// <summary>
@@ -505,9 +505,9 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         private void QuitListen(ProxyEndPoint endPoint)
         {
-            endPoint.listener.Stop();
-            endPoint.listener.Server.Close();
-            endPoint.listener.Server.Dispose();
+            endPoint.Listener.Stop();
+            endPoint.Listener.Server.Close();
+            endPoint.Listener.Server.Dispose();
         }
 
         /// <summary>
@@ -541,7 +541,7 @@ namespace Titanium.Web.Proxy
             try
             {
                 //based on end point type call appropriate request handlers
-                tcpClient = endPoint.listener.EndAcceptTcpClient(asyn);
+                tcpClient = endPoint.Listener.EndAcceptTcpClient(asyn);
             }
             catch (ObjectDisposedException)
             {
@@ -595,7 +595,7 @@ namespace Titanium.Web.Proxy
             }
 
             // Get the listener that handles the client request.
-            endPoint.listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
+            endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
         }
 
         /// <summary>

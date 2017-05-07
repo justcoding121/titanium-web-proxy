@@ -13,14 +13,14 @@ namespace Titanium.Web.Proxy
     public partial class ProxyServer
     {
 
-        private async Task<bool> CheckAuthorization(StreamWriter clientStreamWriter, IEnumerable<HttpHeader> Headers)
+        private async Task<bool> CheckAuthorization(StreamWriter clientStreamWriter, IEnumerable<HttpHeader> headers)
         {
             if (AuthenticateUserFunc == null)
             {
                 return true;
             }
 
-            var httpHeaders = Headers as HttpHeader[] ?? Headers.ToArray();
+            var httpHeaders = headers as HttpHeader[] ?? headers.ToArray();
 
             try
             {
