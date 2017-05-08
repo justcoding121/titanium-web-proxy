@@ -23,7 +23,7 @@ Features
 Usage
 =====
 
-Refer the HTTP Proxy Server library in your project, look up Test project to learn usage.
+Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. ([Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki))
 
 Install by nuget:
 
