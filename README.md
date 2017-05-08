@@ -110,6 +110,10 @@ proxyServer.Stop();
 Sample request and response event handlers
 
 ```csharp		
+
+//To access requestBody from OnResponse handler
+private Dictionary<Guid, string> requestBodyHistory;
+
 public async Task OnRequest(object sender, SessionEventArgs e)
 {
     Console.WriteLine(e.WebSession.Request.Url);
@@ -127,7 +131,10 @@ public async Task OnRequest(object sender, SessionEventArgs e)
 	//Get/Set request body as string
 	string bodyString = await e.GetRequestBodyAsString();
 	await e.SetRequestBodyString(bodyString);
-
+	
+	//store request Body/request headers etc with request Id as key
+	//so that you can find it from response handler using request Id
+  	requestBodyHistory[e.Id] = bodyString;
     }
 
     //To cancel a request with a custom HTML content
@@ -169,6 +176,12 @@ public async Task OnResponse(object sender, SessionEventArgs e)
 		await e.SetResponseBodyString(body);
 	    }
 	}
+    }
+    
+    //access request body/request headers etc by looking up using requestId
+    if(requestBodyHistory.ContainsKey(e.Id))
+    {
+	var requestBody = requestBodyHistory[e.Id];
     }
 }
 
