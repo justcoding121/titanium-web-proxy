@@ -43,9 +43,10 @@ namespace Titanium.Web.Proxy.Network
         private readonly Action<Exception> exceptionFunc;
 
         internal string Issuer { get; }
+
         internal string RootCertificateName { get; }
 
-        internal X509Certificate2 rootCertificate { get; set; }
+        internal X509Certificate2 RootCertificate { get; set; }
 
         internal CertificateManager(CertificateEngine engine,
             string issuer,
@@ -107,32 +108,32 @@ namespace Titanium.Web.Proxy.Network
         /// <returns>true if succeeded, else false</returns>
         internal bool CreateTrustedRootCertificate()
         {
-            rootCertificate = GetRootCertificate();
-            if (rootCertificate != null)
+            RootCertificate = GetRootCertificate();
+            if (RootCertificate != null)
             {
                 return true;
             }
             try
             {
-                rootCertificate = CreateCertificate(RootCertificateName, true);
+                RootCertificate = CreateCertificate(RootCertificateName, true);
             }
             catch (Exception e)
             {
                 exceptionFunc(e);
             }
-            if (rootCertificate != null)
+            if (RootCertificate != null)
             {
                 try
                 {
                     var fileName = GetRootCertificatePath();
-                    File.WriteAllBytes(fileName, rootCertificate.Export(X509ContentType.Pkcs12));
+                    File.WriteAllBytes(fileName, RootCertificate.Export(X509ContentType.Pkcs12));
                 }
                 catch (Exception e)
                 {
                     exceptionFunc(e);
                 }
             }
-            return rootCertificate != null;
+            return RootCertificate != null;
         }
 
         /// <summary>
@@ -159,7 +160,7 @@ namespace Titanium.Web.Proxy.Network
                 {
                     try
                     {
-                        certificate = certEngine.MakeCertificate(certificateName, isRootCertificate, rootCertificate);
+                        certificate = certEngine.MakeCertificate(certificateName, isRootCertificate, RootCertificate);
                     }
                     catch (Exception e)
                     {
@@ -226,7 +227,7 @@ namespace Titanium.Web.Proxy.Network
         internal void TrustRootCertificate(StoreLocation storeLocation,
             Action<Exception> exceptionFunc)
         {
-            if (rootCertificate == null)
+            if (RootCertificate == null)
             {
                 exceptionFunc(
                     new Exception("Could not set root certificate"
@@ -243,8 +244,8 @@ namespace Titanium.Web.Proxy.Network
                 x509RootStore.Open(OpenFlags.ReadWrite);
                 x509PersonalStore.Open(OpenFlags.ReadWrite);
 
-                x509RootStore.Add(rootCertificate);
-                x509PersonalStore.Add(rootCertificate);
+                x509RootStore.Add(RootCertificate);
+                x509PersonalStore.Add(RootCertificate);
             }
             catch (Exception e)
             {

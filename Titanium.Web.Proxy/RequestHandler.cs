@@ -72,8 +72,17 @@ namespace Titanium.Web.Proxy
                 }
 
                 //filter out excluded host names
-                var excluded = endPoint.ExcludedHttpsHostNameRegex != null 
-                    && endPoint.ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
+                bool excluded = false;
+
+                if (endPoint.ExcludedHttpsHostNameRegex != null)
+                {
+                    excluded = endPoint.ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
+                }
+
+                if (endPoint.IncludedHttpsHostNameRegex != null)
+                {
+                    excluded = !endPoint.IncludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
+                }
 
                 List<HttpHeader> connectRequestHeaders = null;
 
@@ -212,7 +221,7 @@ namespace Titanium.Web.Proxy
                  endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null);
         }
 
-        private async Task HandleHttpSessionRequestInternal(TcpConnection connection, SessionEventArgs args, ExternalProxy customUpStreamHttpProxy, ExternalProxy customUpStreamHttpsProxy, bool CloseConnection)
+        private async Task HandleHttpSessionRequestInternal(TcpConnection connection, SessionEventArgs args, ExternalProxy customUpStreamHttpProxy, ExternalProxy customUpStreamHttpsProxy, bool closeConnection)
         {
             try
             {
@@ -331,7 +340,7 @@ namespace Titanium.Web.Proxy
                 return;
             }
 
-            if (CloseConnection)
+            if (closeConnection)
             {
                 //dispose
                 connection?.Dispose();
