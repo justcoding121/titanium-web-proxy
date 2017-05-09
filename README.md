@@ -1,6 +1,6 @@
 Titanium
 ========
-A light weight http(s) proxy server written in C#
+A light weight HTTP(S) proxy server written in C#
 
 ![Build Status](https://ci.appveyor.com/api/projects/status/rvlxv8xgj0m7lkr4?svg=true)
 
@@ -11,10 +11,10 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 Features
 ========
 
-* Supports Http(s) and most features of HTTP 1.1 
+* Supports HTTP(S) and most features of HTTP 1.1 
 * Support redirect/block/update requests
 * Supports updating response
-* Safely relays WebSocket requests over Http
+* Safely relays Web Socket requests over HTTP
 * Support mutual SSL authentication
 * Fully asynchronous proxy
 * Supports proxy authentication
@@ -23,7 +23,7 @@ Features
 Usage
 =====
 
-Refer the HTTP Proxy Server library in your project, look up Test project to learn usage.
+Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. ([Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki))
 
 Install by nuget:
 
@@ -55,24 +55,24 @@ proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
 var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
 {
-//Exclude Https addresses you don't want to proxy
-//Usefull for clients that use certificate pinning
+//Exclude HTTPS addresses you don't want to proxy
+//Useful for clients that use certificate pinning
 //for example dropbox.com
 // ExcludedHttpsHostNameRegex = new List<string>() { "google.com", "dropbox.com" }
 
-//Use self-issued generic certificate on all https requests
-//Optimizes performance by not creating a certificate for each https-enabled domain
-//Usefull when certificate trust is not requiered by proxy clients
+//Use self-issued generic certificate on all HTTPS requests
+//Optimizes performance by not creating a certificate for each HTTPS-enabled domain
+//Useful when certificate trust is not required by proxy clients
 // GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
 };
 
-//An explicit endpoint is where the client knows about the existance of a proxy
+//An explicit endpoint is where the client knows about the existence of a proxy
 //So client sends request in a proxy friendly manner
 proxyServer.AddEndPoint(explicitEndPoint);
 proxyServer.Start();
 
 //Warning! Transparent endpoint is not tested end to end 
-//Transparent endpoint is usefull for reverse proxying (client is not aware of the existance of proxy)
+//Transparent endpoint is useful for reverse proxy (client is not aware of the existence of proxy)
 //A transparent endpoint usually requires a network router port forwarding HTTP(S) packets to this endpoint
 //Currently do not support Server Name Indication (It is not currently supported by SslStream class)
 //That means that the transparent endpoint will always provide the same Generic Certificate to all HTTPS requests
@@ -110,6 +110,10 @@ proxyServer.Stop();
 Sample request and response event handlers
 
 ```csharp		
+
+//To access requestBody from OnResponse handler
+private Dictionary<Guid, string> requestBodyHistory;
+
 public async Task OnRequest(object sender, SessionEventArgs e)
 {
     Console.WriteLine(e.WebSession.Request.Url);
@@ -127,7 +131,10 @@ public async Task OnRequest(object sender, SessionEventArgs e)
 	//Get/Set request body as string
 	string bodyString = await e.GetRequestBodyAsString();
 	await e.SetRequestBodyString(bodyString);
-
+	
+	//store request Body/request headers etc with request Id as key
+	//so that you can find it from response handler using request Id
+  	requestBodyHistory[e.Id] = bodyString;
     }
 
     //To cancel a request with a custom HTML content
@@ -170,6 +177,12 @@ public async Task OnResponse(object sender, SessionEventArgs e)
 	    }
 	}
     }
+    
+    //access request body/request headers etc by looking up using requestId
+    if(requestBodyHistory.ContainsKey(e.Id))
+    {
+	var requestBody = requestBodyHistory[e.Id];
+    }
 }
 
 /// Allows overriding default certificate validation logic
@@ -189,7 +202,7 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
     return Task.FromResult(0);
 }
 ```
-Future roadmap
+Future road map (Pull requests are welcome!)
 ============
 * Support Server Name Indication (SNI) for transparent endpoints
 * Support HTTP 2.0 
