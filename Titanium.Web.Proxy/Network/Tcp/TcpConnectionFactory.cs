@@ -46,12 +46,17 @@ namespace Titanium.Web.Proxy.Network.Tcp
             TcpClient client;
             Stream stream;
 
+            bool isLocalhost = (externalHttpsProxy == null && externalHttpProxy == null) ? false : NetworkHelper.IsLocalIpAddress(remoteHostName);
+            
+            bool useHttpsProxy = externalHttpsProxy != null && externalHttpsProxy.HostName != remoteHostName && (externalHttpsProxy.BypassForLocalhost && !isLocalhost);
+            bool useHttpProxy = externalHttpProxy != null && externalHttpProxy.HostName != remoteHostName && (externalHttpProxy.BypassForLocalhost && !isLocalhost);
+
             if (isHttps)
             {
                 SslStream sslStream = null;
 
                 //If this proxy uses another external proxy then create a tunnel request for HTTPS connections
-                if (externalHttpsProxy != null && externalHttpsProxy.HostName != remoteHostName)
+                if (useHttpsProxy)
                 {
                     client = new TcpClient();
                     client.Client.Bind(upStreamEndPoint);
@@ -113,7 +118,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             }
             else
             {
-                if (externalHttpProxy != null && externalHttpProxy.HostName != remoteHostName)
+                if (useHttpProxy)
                 {
                     client = new TcpClient();
                     client.Client.Bind(upStreamEndPoint);
