@@ -48,6 +48,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="keyStrength">The key strength.</param>
         /// <param name="signatureAlgorithm">The signature algorithm.</param>
         /// <param name="issuerPrivateKey">The issuer private key.</param>
+		/// <param name="hostName">The host name</param>
         /// <returns>X509Certificate2 instance.</returns>
         /// <exception cref="PemException">Malformed sequence in RSA private key</exception>
         private static X509Certificate2 GenerateCertificate(string hostName,
