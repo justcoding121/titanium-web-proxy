@@ -66,7 +66,7 @@ namespace Titanium.Web.Proxy.Http
   
 
         /// <summary>
-        /// Prepare & send the http(s) request
+        /// Prepare and send the http(s) request
         /// </summary>
         /// <returns></returns>
         internal async Task SendRequest(bool enable100ContinueBehaviour)
@@ -148,7 +148,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Receive & parse the http response from server
+        /// Receive and parse the http response from server
         /// </summary>
         /// <returns></returns>
         internal async Task ReceiveResponse()

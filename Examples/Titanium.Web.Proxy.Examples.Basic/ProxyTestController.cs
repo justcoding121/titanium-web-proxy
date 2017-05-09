@@ -37,8 +37,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
             {
                 //Exclude Https addresses you don't want to proxy
                 //Useful for clients that use certificate pinning
-                //for example dropbox.com
+                //for example google.com and dropbox.com
                 // ExcludedHttpsHostNameRegex = new List<string>() { "google.com", "dropbox.com" }
+
+                //Include Https addresses you want to proxy (others will be excluded)
+                //for example github.com
+                // IncludedHttpsHostNameRegex = new List<string>() { "github.com" }
+
+                //You can set only one of the ExcludedHttpsHostNameRegex and IncludedHttpsHostNameRegex properties, otherwise ArgumentException will be thrown
 
                 //Use self-issued generic certificate on all https requests
                 //Optimizes performance by not creating a certificate for each https-enabled domain

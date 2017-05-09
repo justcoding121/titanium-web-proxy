@@ -5,7 +5,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 {
     /// <summary>
     /// Represents a managed interface of IP Helper API TcpRow struct
-    /// <see cref="http://msdn2.microsoft.com/en-us/library/aa366913.aspx"/>
+    /// <see href="http://msdn2.microsoft.com/en-us/library/aa366913.aspx"/>
     /// </summary>
     internal class TcpRow
     {
