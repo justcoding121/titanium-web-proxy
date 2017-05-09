@@ -46,7 +46,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             TcpClient client;
             Stream stream;
 
-            bool isLocalhost = IsLocalhost(remoteHostName);
+            bool isLocalhost = (externalHttpsProxy == null && externalHttpProxy == null) ? false : NetworkHelper.IsLocalIpAddress(remoteHostName);
             
             bool useHttpsProxy = externalHttpsProxy != null && externalHttpsProxy.HostName != remoteHostName && (externalHttpsProxy.BypassForLocalhost && !isLocalhost);
             bool useHttpProxy = externalHttpProxy != null && externalHttpProxy.HostName != remoteHostName && (externalHttpProxy.BypassForLocalhost && !isLocalhost);
@@ -153,43 +153,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 Stream = stream,
                 Version = httpVersion
             };
-        }
-
-        private bool IsLocalhost(string hostName)
-        {
-            bool isLocalhost = false;
-
-            IPHostEntry localhost = Dns.GetHostEntry("127.0.0.1");
-            if (hostName == localhost.HostName)
-            {
-                IPHostEntry hostEntry = Dns.GetHostEntry(hostName);
-                isLocalhost = hostEntry.AddressList.Any(IPAddress.IsLoopback);
-            }
-
-            if (!isLocalhost)
-            {
-                localhost = Dns.GetHostEntry(Dns.GetHostName());
-
-                IPAddress ipAddress = null;
-
-                if (IPAddress.TryParse(hostName, out ipAddress))
-                    isLocalhost = localhost.AddressList.Any(x => x.Equals(ipAddress));
-
-                if (!isLocalhost)
-                {
-                    try
-                    {
-                        var hostEntry = Dns.GetHostEntry(hostName);
-                        isLocalhost = localhost.AddressList.Any(x => hostEntry.AddressList.Any(x.Equals));
-                    }
-                    catch (SocketException)
-                    {
-                        
-                    }
-                }
-            }
-
-            return isLocalhost;
         }
     }
 }
