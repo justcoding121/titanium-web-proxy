@@ -19,6 +19,11 @@ namespace Titanium.Web.Proxy.Models
         public bool UseDefaultCredentials { get; set; }
 
         /// <summary>
+        /// Bypass this proxy for connections to localhost?
+        /// </summary>
+        public bool BypassForLocalhost { get; set; }
+
+        /// <summary>
         /// Username.
         /// </summary>
         public string UserName {
