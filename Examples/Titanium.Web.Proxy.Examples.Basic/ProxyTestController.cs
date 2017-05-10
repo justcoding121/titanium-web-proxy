@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
@@ -9,10 +10,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
 {
     public class ProxyTestController
     {
-        private ProxyServer proxyServer;
+        private readonly ProxyServer proxyServer;
 
         //share requestBody outside handlers
-        private Dictionary<Guid, string> requestBodyHistory;
+        private readonly Dictionary<Guid, string> requestBodyHistory = new Dictionary<Guid, string>();
 
         public ProxyTestController()
         {
@@ -21,9 +22,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             //optionally set the Certificate Engine
             //Under Mono only BouncyCastle will be supported
-           //proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
+            //proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
 
-            requestBodyHistory = new Dictionary<Guid, string>();
+            //optionally set the Root Certificate
+            //proxyServer.RootCertificate = new X509Certificate2("myCert.pfx", string.Empty, X509KeyStorageFlags.Exportable);
         }
 
         public void StartProxy()
