@@ -19,11 +19,10 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
-      
         /// <summary>
         /// Is the root certificate used by this proxy is valid?
         /// </summary>
-        private bool certValidated { get; set; }
+        private bool? certValidated { get; set; }
 
         /// <summary>
         /// Is the proxy currently running
@@ -44,6 +43,8 @@ namespace Titanium.Web.Proxy
         /// backing exception func for exposed public property
         /// </summary>
         private Action<Exception> exceptionFunc;
+
+        private bool trustRootCertificate;
 
         /// <summary>
         /// A object that creates tcp connection to server
@@ -69,24 +70,60 @@ namespace Titanium.Web.Proxy
         public int BUFFER_SIZE { get; set; } = 8192;
 
         /// <summary>
+        /// The root certificate
+        /// </summary>
+        public X509Certificate2 RootCertificate
+        {
+            get { return certificateCacheManager.RootCertificate; }
+            set { certificateCacheManager.RootCertificate = value; }
+        }
+
+        /// <summary>
         /// Name of the root certificate issuer
         /// </summary>
-        public string RootCertificateIssuerName { get; set; }
+        public string RootCertificateIssuerName
+        {
+            get { return certificateCacheManager.Issuer; }
+            set
+            {
+                CreateCertificateCacheManager(certificateCacheManager.RootCertificateName, value);
+                certValidated = null;
+            }
+        }
 
         /// <summary>
         /// Name of the root certificate
         /// If no certificate is provided then a default Root Certificate will be created and used
         /// The provided root certificate has to be in the proxy exe directory with the private key 
-        /// The root certificate file should be named as  "rootCert.pfx"
+        /// The root certificate file should be named as "rootCert.pfx"
         /// </summary>
-        public string RootCertificateName { get; set; }
+        public string RootCertificateName
+        {
+            get { return certificateCacheManager.RootCertificateName; }
+            set
+            {
+                CreateCertificateCacheManager(value, certificateCacheManager.Issuer);
+                certValidated = null;
+            }
+        }
 
         /// <summary>
         /// Trust the RootCertificate used by this proxy server
         /// Note that this do not make the client trust the certificate!
         /// This would import the root certificate to the certificate store of machine that runs this proxy server
         /// </summary>
-        public bool TrustRootCertificate { get; set; }
+        public bool TrustRootCertificate
+        {
+            get { return trustRootCertificate; }
+            set
+            {
+                trustRootCertificate = value;
+                if (value)
+                {
+                    EnsureRootCertificate();
+                }
+            }
+        }
 
         /// <summary>
         /// Select Certificate Engine 
@@ -211,7 +248,9 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Constructor
         /// </summary>
-        public ProxyServer() : this(null, null) { }
+        public ProxyServer() : this(null, null)
+        {
+        }
 
         /// <summary>
         /// Constructor.
@@ -220,9 +259,6 @@ namespace Titanium.Web.Proxy
         /// <param name="rootCertificateIssuerName">Name of root certificate issuer.</param>
         public ProxyServer(string rootCertificateName, string rootCertificateIssuerName)
         {
-            RootCertificateName = rootCertificateName;
-            RootCertificateIssuerName = rootCertificateIssuerName;
-
             //default values
             ConnectionTimeOutSeconds = 120;
             CertificateCacheTimeOutMinutes = 60;
@@ -233,8 +269,8 @@ namespace Titanium.Web.Proxy
 #if !DEBUG
             new FireFoxProxySettingsManager();
 #endif
-            RootCertificateName = RootCertificateName ?? "Titanium Root Certificate Authority";
-            RootCertificateIssuerName = RootCertificateIssuerName ?? "Titanium";
+
+            CreateCertificateCacheManager(rootCertificateName, rootCertificateIssuerName);
         }
 
         /// <summary>
@@ -328,8 +364,10 @@ namespace Titanium.Web.Proxy
                 .ToList()
                 .ForEach(x => x.IsSystemHttpsProxy = false);
 
+            EnsureRootCertificate();
+
             //If certificate was trusted by the machine
-            if (certValidated)
+            if (certValidated == true)
             {
                 systemProxySettingsManager.SetHttpsProxy(
                    Equals(endPoint.IpAddress, IPAddress.Any) | 
@@ -397,23 +435,6 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
-            certificateCacheManager = new CertificateManager(CertificateEngine,
-                RootCertificateIssuerName,
-                RootCertificateName, ExceptionFunc);
-
-            certValidated = certificateCacheManager.CreateTrustedRootCertificate();
-
-            if (TrustRootCertificate) 
-            {
-                //current user
-                certificateCacheManager
-                  .TrustRootCertificate(StoreLocation.CurrentUser, ExceptionFunc);
-
-                //current system
-                certificateCacheManager
-                 .TrustRootCertificate(StoreLocation.LocalMachine, ExceptionFunc);
-            }
-
             if (ForwardToUpstreamGateway && GetCustomUpStreamHttpProxyFunc == null 
                 && GetCustomUpStreamHttpsProxyFunc == null)
             {
@@ -429,6 +450,25 @@ namespace Titanium.Web.Proxy
             certificateCacheManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
             proxyRunning = true;
+        }
+
+        private void CreateCertificateCacheManager(string rootCertificateName, string rootCertificateIssuerName)
+        {
+            certificateCacheManager = new CertificateManager(CertificateEngine,
+                rootCertificateIssuerName, rootCertificateName, ExceptionFunc);
+        }
+
+        private void EnsureRootCertificate()
+        {
+            if (!certValidated.HasValue)
+            {
+                certValidated = certificateCacheManager.CreateTrustedRootCertificate();
+
+                if (TrustRootCertificate)
+                {
+                    certificateCacheManager.TrustRootCertificate(ExceptionFunc);
+                }
+            }
         }
 
         /// <summary>
