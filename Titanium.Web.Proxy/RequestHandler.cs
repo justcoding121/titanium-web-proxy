@@ -147,7 +147,7 @@ namespace Titanium.Web.Proxy
                     //write back successfull CONNECT response
                     await WriteConnectResponse(clientStreamWriter, version);
 
-                    await TcpHelper.SendRaw(BUFFER_SIZE, ConnectionTimeOutSeconds, httpRemoteUri.Host, httpRemoteUri.Port,
+                    await TcpHelper.SendRaw(BufferSize, ConnectionTimeOutSeconds, httpRemoteUri.Host, httpRemoteUri.Port,
                             null, version, null,
                             false, SupportedSslProtocols,
                             ValidateServerCertificate,
@@ -245,7 +245,7 @@ namespace Titanium.Web.Proxy
                     args.CustomUpStreamHttpProxyUsed = customUpStreamHttpProxy;
                     args.CustomUpStreamHttpsProxyUsed = customUpStreamHttpsProxy;
 
-                    connection = await tcpConnectionFactory.CreateClient(BUFFER_SIZE, ConnectionTimeOutSeconds,
+                    connection = await tcpConnectionFactory.CreateClient(BufferSize, ConnectionTimeOutSeconds,
                         args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.WebSession.Request.HttpVersion,
                         args.IsHttps, SupportedSslProtocols,
                         ValidateServerCertificate,
@@ -378,7 +378,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 var args =
-                    new SessionEventArgs(BUFFER_SIZE, HandleHttpSessionResponse)
+                    new SessionEventArgs(BufferSize, HandleHttpSessionResponse)
                     {
                         ProxyClient = {TcpClient = client},
                         WebSession = {ConnectHeaders = connectHeaders}
@@ -487,7 +487,7 @@ namespace Titanium.Web.Proxy
                     //if upgrading to websocket then relay the requet without reading the contents
                     if (args.WebSession.Request.UpgradeToWebSocket)
                     {
-                        await TcpHelper.SendRaw(BUFFER_SIZE, ConnectionTimeOutSeconds, httpRemoteUri.Host, httpRemoteUri.Port,
+                        await TcpHelper.SendRaw(BufferSize, ConnectionTimeOutSeconds, httpRemoteUri.Host, httpRemoteUri.Port,
                                                 httpCmd, httpVersion, args.WebSession.Request.RequestHeaders, args.IsHttps,
                                                 SupportedSslProtocols, ValidateServerCertificate,
                                                 SelectClientCertificate,
@@ -581,14 +581,14 @@ namespace Titanium.Web.Proxy
             //send the request body bytes to server
             if (args.WebSession.Request.ContentLength > 0)
             {
-                await args.ProxyClient.ClientStreamReader.CopyBytesToStream(BUFFER_SIZE, postStream, args.WebSession.Request.ContentLength);
+                await args.ProxyClient.ClientStreamReader.CopyBytesToStream(BufferSize, postStream, args.WebSession.Request.ContentLength);
 
             }
             //Need to revist, find any potential bugs
             //send the request body bytes to server in chunks
             else if (args.WebSession.Request.IsChunked)
             {
-                await args.ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(BUFFER_SIZE, postStream);
+                await args.ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(BufferSize, postStream);
             }
         }
     }

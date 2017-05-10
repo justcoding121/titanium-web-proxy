@@ -108,7 +108,7 @@ namespace Titanium.Web.Proxy
                         || !args.WebSession.Response.ResponseKeepAlive)
                     {
                         await args.WebSession.ServerConnection.StreamReader
-                            .WriteResponseBody(BUFFER_SIZE, args.ProxyClient.ClientStream, args.WebSession.Response.IsChunked,
+                            .WriteResponseBody(BufferSize, args.ProxyClient.ClientStream, args.WebSession.Response.IsChunked,
                             args.WebSession.Response.ContentLength);
                     }
                     //write response if connection:keep-alive header exist and when version is http/1.0
@@ -116,7 +116,7 @@ namespace Titanium.Web.Proxy
                     else if (args.WebSession.Response.ResponseKeepAlive && args.WebSession.Response.HttpVersion.Minor == 0)
                     {
                         await args.WebSession.ServerConnection.StreamReader
-                            .WriteResponseBody(BUFFER_SIZE, args.ProxyClient.ClientStream, args.WebSession.Response.IsChunked,
+                            .WriteResponseBody(BufferSize, args.ProxyClient.ClientStream, args.WebSession.Response.IsChunked,
                             args.WebSession.Response.ContentLength);
                     }
                 }
