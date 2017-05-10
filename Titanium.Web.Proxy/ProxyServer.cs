@@ -67,7 +67,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Buffer size used throughout this proxy
         /// </summary>
-        public int BUFFER_SIZE { get; set; } = 8192;
+        public int BufferSize { get; set; } = 8192;
 
         /// <summary>
         /// The root certificate
