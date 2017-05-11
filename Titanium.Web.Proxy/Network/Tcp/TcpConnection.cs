@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// <summary>
     /// An object that holds TcpConnection to a particular server and port
     /// </summary>
-    public class TcpConnection : IDisposable
+    internal class TcpConnection : IDisposable
     {
         internal ExternalProxy UpStreamHttpProxy { get; set; }
 

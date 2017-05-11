@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// Initializes a new instance of the <see cref="TcpRow"/> class.
         /// </summary>
         /// <param name="tcpRow">TcpRow struct.</param>
-        public TcpRow(NativeMethods.TcpRow tcpRow)
+        internal TcpRow(NativeMethods.TcpRow tcpRow)
         {
             ProcessId = tcpRow.owningPid;
 
@@ -29,16 +29,16 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         /// Gets the local end point.
         /// </summary>
-        public IPEndPoint LocalEndPoint { get; }
+        internal IPEndPoint LocalEndPoint { get; }
 
-		/// <summary>
-		/// Gets the remote end point.
-		/// </summary>
-		public IPEndPoint RemoteEndPoint { get; }
+        /// <summary>
+        /// Gets the remote end point.
+        /// </summary>
+        internal IPEndPoint RemoteEndPoint { get; }
 
         /// <summary>
         /// Gets the process identifier.
         /// </summary>
-        public int ProcessId { get; }
+        internal int ProcessId { get; }
     }
 }

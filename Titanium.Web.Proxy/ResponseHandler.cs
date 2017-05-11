@@ -22,7 +22,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="args"></param>
         /// <returns></returns>
-        public async Task HandleHttpSessionResponse(SessionEventArgs args)
+        private async Task HandleHttpSessionResponse(SessionEventArgs args)
         {
             //read response & headers from server
             await args.WebSession.ReceiveResponse();
