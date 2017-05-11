@@ -454,46 +454,6 @@ namespace Titanium.Web.Proxy
             proxyRunning = true;
         }
 
-        private void CreateCertificateCacheManager(string rootCertificateName, string rootCertificateIssuerName)
-        {
-            certificateManager = new CertificateManager(CertificateEngine,
-                rootCertificateIssuerName, rootCertificateName, ExceptionFunc);
-        }
-
-        private void EnsureRootCertificate()
-        {
-            if (!certValidated.HasValue)
-            {
-                certValidated = certificateManager.CreateTrustedRootCertificate();
-
-                if (TrustRootCertificate)
-                {
-                    certificateManager.TrustRootCertificate(ExceptionFunc);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets the system up stream proxy.
-        /// </summary>
-        /// <param name="sessionEventArgs">The <see cref="SessionEventArgs"/> instance containing the event data.</param>
-        /// <returns><see cref="ExternalProxy"/> instance containing valid proxy configuration from PAC/WAPD scripts if any exists.</returns>
-        private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgs sessionEventArgs)
-        {
-            // Use built-in WebProxy class to handle PAC/WAPD scripts.
-            var systemProxyResolver = new WebProxy();
-
-            var systemProxyUri = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
-            
-            // TODO: Apply authorization
-            var systemProxy = new ExternalProxy
-            {
-                HostName = systemProxyUri.Host,
-                Port = systemProxyUri.Port
-            };
-
-            return Task.FromResult(systemProxy);
-        }
 
         /// <summary>
         /// Stop this proxy server
@@ -528,6 +488,19 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
+        /// Dispose Proxy.
+        /// </summary>
+        public void Dispose()
+        {
+            if (proxyRunning)
+            {
+                Stop();
+            }
+
+            certificateManager?.Dispose();
+        }
+
+        /// <summary>
         /// Listen on the given end point on local machine
         /// </summary>
         /// <param name="endPoint"></param>
@@ -541,16 +514,7 @@ namespace Titanium.Web.Proxy
             endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
         }
 
-        /// <summary>
-        /// Quit listening on the given end point
-        /// </summary>
-        /// <param name="endPoint"></param>
-        private void QuitListen(ProxyEndPoint endPoint)
-        {
-            endPoint.Listener.Stop();
-            endPoint.Listener.Server.Close();
-            endPoint.Listener.Server.Dispose();
-        }
+      
 
         /// <summary>
         /// Verifiy if its safe to set this end point as System proxy
@@ -567,6 +531,48 @@ namespace Titanium.Web.Proxy
             if (!proxyRunning)
             {
                 throw new Exception("Cannot set system proxy settings before proxy has been started.");
+            }
+        }
+
+        /// <summary>
+        /// Gets the system up stream proxy.
+        /// </summary>
+        /// <param name="sessionEventArgs">The <see cref="SessionEventArgs"/> instance containing the event data.</param>
+        /// <returns><see cref="ExternalProxy"/> instance containing valid proxy configuration from PAC/WAPD scripts if any exists.</returns>
+        private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgs sessionEventArgs)
+        {
+            // Use built-in WebProxy class to handle PAC/WAPD scripts.
+            var systemProxyResolver = new WebProxy();
+
+            var systemProxyUri = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
+
+            // TODO: Apply authorization
+            var systemProxy = new ExternalProxy
+            {
+                HostName = systemProxyUri.Host,
+                Port = systemProxyUri.Port
+            };
+
+            return Task.FromResult(systemProxy);
+        }
+
+
+        private void CreateCertificateCacheManager(string rootCertificateName, string rootCertificateIssuerName)
+        {
+            certificateManager = new CertificateManager(CertificateEngine,
+                rootCertificateIssuerName, rootCertificateName, ExceptionFunc);
+        }
+
+        private void EnsureRootCertificate()
+        {
+            if (!certValidated.HasValue)
+            {
+                certValidated = certificateManager.CreateTrustedRootCertificate();
+
+                if (TrustRootCertificate)
+                {
+                    certificateManager.TrustRootCertificate(ExceptionFunc);
+                }
             }
         }
 
@@ -641,18 +647,16 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        /// Dispose Proxy.
+        /// Quit listening on the given end point
         /// </summary>
-        public void Dispose()
+        /// <param name="endPoint"></param>
+        private void QuitListen(ProxyEndPoint endPoint)
         {
-            if (proxyRunning)
-            {
-                Stop();
-            }
-
-            certificateManager?.Dispose();
+            endPoint.Listener.Stop();
+            endPoint.Listener.Server.Close();
+            endPoint.Listener.Server.Dispose();
         }
-       
+
         /// <summary>
         /// Invocator for BeforeRequest event.
         /// </summary>
