@@ -32,7 +32,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Manages certificates used by this proxy
         /// </summary>
-        private CertificateManager certificateCacheManager { get; set; }
+        private CertificateManager certificateManager { get; set; }
 
         /// <summary>
         /// An default exception log func
@@ -74,35 +74,37 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public X509Certificate2 RootCertificate
         {
-            get { return certificateCacheManager.RootCertificate; }
-            set { certificateCacheManager.RootCertificate = value; }
+            get { return certificateManager.RootCertificate; }
+            set { certificateManager.RootCertificate = value; }
         }
 
         /// <summary>
-        /// Name of the root certificate issuer
+        /// Name of the root certificate issuer 
+        /// (This is valid only when RootCertificate property is not set)
         /// </summary>
         public string RootCertificateIssuerName
         {
-            get { return certificateCacheManager.Issuer; }
+            get { return certificateManager.Issuer; }
             set
             {
-                CreateCertificateCacheManager(certificateCacheManager.RootCertificateName, value);
+                CreateCertificateCacheManager(certificateManager.RootCertificateName, value);
                 certValidated = null;
             }
         }
 
         /// <summary>
         /// Name of the root certificate
+        /// (This is valid only when RootCertificate property is not set)
         /// If no certificate is provided then a default Root Certificate will be created and used
-        /// The provided root certificate has to be in the proxy exe directory with the private key 
-        /// The root certificate file should be named as "rootCert.pfx"
+        /// The provided root certificate will be stored in proxy exe directory with the private key 
+        /// Root certificate file will be named as "rootCert.pfx"
         /// </summary>
         public string RootCertificateName
         {
-            get { return certificateCacheManager.RootCertificateName; }
+            get { return certificateManager.RootCertificateName; }
             set
             {
-                CreateCertificateCacheManager(value, certificateCacheManager.Issuer);
+                CreateCertificateCacheManager(value, certificateManager.Issuer);
                 certValidated = null;
             }
         }
@@ -447,14 +449,14 @@ namespace Titanium.Web.Proxy
                 Listen(endPoint);
             }
 
-            certificateCacheManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
+            certificateManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
             proxyRunning = true;
         }
 
         private void CreateCertificateCacheManager(string rootCertificateName, string rootCertificateIssuerName)
         {
-            certificateCacheManager = new CertificateManager(CertificateEngine,
+            certificateManager = new CertificateManager(CertificateEngine,
                 rootCertificateIssuerName, rootCertificateName, ExceptionFunc);
         }
 
@@ -462,11 +464,11 @@ namespace Titanium.Web.Proxy
         {
             if (!certValidated.HasValue)
             {
-                certValidated = certificateCacheManager.CreateTrustedRootCertificate();
+                certValidated = certificateManager.CreateTrustedRootCertificate();
 
                 if (TrustRootCertificate)
                 {
-                    certificateCacheManager.TrustRootCertificate(ExceptionFunc);
+                    certificateManager.TrustRootCertificate(ExceptionFunc);
                 }
             }
         }
@@ -520,7 +522,7 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints.Clear();
 
-            certificateCacheManager?.StopClearIdleCertificates();
+            certificateManager?.StopClearIdleCertificates();
 
             proxyRunning = false;
         }
@@ -648,7 +650,7 @@ namespace Titanium.Web.Proxy
                 Stop();
             }
 
-            certificateCacheManager?.Dispose();
+            certificateManager?.Dispose();
         }
        
         /// <summary>
