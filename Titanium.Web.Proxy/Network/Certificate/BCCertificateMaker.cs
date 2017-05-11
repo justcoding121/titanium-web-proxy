@@ -21,7 +21,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
     /// <summary>
     /// Implements certificate generation operations.
     /// </summary>
-    public class BCCertificateMaker : ICertificateMaker
+    internal class BCCertificateMaker : ICertificateMaker
     {
         private const int CertificateValidDays = 1825;
         private const int CertificateGraceDays = 366;
