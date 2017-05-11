@@ -53,8 +53,8 @@ namespace Titanium.Web.Proxy.Models
     /// </summary>
     public class ExplicitProxyEndPoint : ProxyEndPoint
     {
-        private List<string> _excludedHttpsHostNameRegex;
-        private List<string> _includedHttpsHostNameRegex;
+        private List<string> excludedHttpsHostNameRegex;
+        private List<string> includedHttpsHostNameRegex;
 
         internal bool IsSystemHttpProxy { get; set; }
 
@@ -65,7 +65,7 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         public List<string> ExcludedHttpsHostNameRegex
         {
-            get { return _excludedHttpsHostNameRegex; }
+            get { return excludedHttpsHostNameRegex; }
             set
             {
                 if (IncludedHttpsHostNameRegex != null)
@@ -73,7 +73,7 @@ namespace Titanium.Web.Proxy.Models
                     throw new ArgumentException("Cannot set excluded when included is set");
                 }
 
-                _excludedHttpsHostNameRegex = value;
+                excludedHttpsHostNameRegex = value;
             }
         }
 
@@ -82,7 +82,7 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         public List<string> IncludedHttpsHostNameRegex
         {
-            get { return _includedHttpsHostNameRegex; }
+            get { return includedHttpsHostNameRegex; }
             set
             {
                 if (ExcludedHttpsHostNameRegex != null)
@@ -90,7 +90,7 @@ namespace Titanium.Web.Proxy.Models
                     throw new ArgumentException("Cannot set included when excluded is set");
                 }
 
-                _includedHttpsHostNameRegex = value;
+                includedHttpsHostNameRegex = value;
             }
         }
 
