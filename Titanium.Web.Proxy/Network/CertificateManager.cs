@@ -31,9 +31,9 @@ namespace Titanium.Web.Proxy.Network
     /// </summary>
     internal class CertificateManager : IDisposable
     {
-        private const string DefaultRootCertificateIssuer = "Titanium";
+        private const string defaultRootCertificateIssuer = "Titanium";
 
-        private const string DefaultRootRootCertificateName = "Titanium Root Certificate Authority";
+        private const string defaultRootRootCertificateName = "Titanium Root Certificate Authority";
 
         private readonly ICertificateMaker certEngine;
 
@@ -70,8 +70,8 @@ namespace Titanium.Web.Proxy.Network
                 certEngine = new WinCertificateMaker();
             }
 
-            Issuer = issuer ?? DefaultRootCertificateIssuer;
-            RootCertificateName = rootCertificateName ?? DefaultRootRootCertificateName;
+            Issuer = issuer ?? defaultRootCertificateIssuer;
+            RootCertificateName = rootCertificateName ?? defaultRootRootCertificateName;
 
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
         }
