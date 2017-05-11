@@ -87,7 +87,7 @@ namespace Titanium.Web.Proxy
             get { return certificateManager.Issuer; }
             set
             {
-                CreateCertificateCacheManager(certificateManager.RootCertificateName, value);
+                CreateCertificateManager(certificateManager.RootCertificateName, value);
                 certValidated = null;
             }
         }
@@ -104,7 +104,7 @@ namespace Titanium.Web.Proxy
             get { return certificateManager.RootCertificateName; }
             set
             {
-                CreateCertificateCacheManager(value, certificateManager.Issuer);
+                CreateCertificateManager(value, certificateManager.Issuer);
                 certValidated = null;
             }
         }
@@ -272,7 +272,7 @@ namespace Titanium.Web.Proxy
             new FireFoxProxySettingsManager();
 #endif
 
-            CreateCertificateCacheManager(rootCertificateName, rootCertificateIssuerName);
+            CreateCertificateManager(rootCertificateName, rootCertificateIssuerName);
         }
 
         /// <summary>
@@ -557,7 +557,7 @@ namespace Titanium.Web.Proxy
         }
 
 
-        private void CreateCertificateCacheManager(string rootCertificateName, string rootCertificateIssuerName)
+        private void CreateCertificateManager(string rootCertificateName, string rootCertificateIssuerName)
         {
             certificateManager = new CertificateManager(CertificateEngine,
                 rootCertificateIssuerName, rootCertificateName, ExceptionFunc);
