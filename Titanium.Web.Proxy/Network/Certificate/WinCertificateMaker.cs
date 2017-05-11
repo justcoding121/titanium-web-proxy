@@ -10,7 +10,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
     /// Certificate Maker - uses MakeCert
     /// Calls COM objects using reflection
     /// </summary>
-    public class WinCertificateMaker : ICertificateMaker
+    internal class WinCertificateMaker : ICertificateMaker
     {
         private readonly Type typeX500DN;
 
@@ -47,7 +47,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <summary>
         /// Constructor.
         /// </summary>
-        public WinCertificateMaker()
+        internal WinCertificateMaker()
         {
             typeX500DN = Type.GetTypeFromProgID("X509Enrollment.CX500DistinguishedName", true);
             typeX509PrivateKey = Type.GetTypeFromProgID("X509Enrollment.CX509PrivateKey", true);
