@@ -23,8 +23,8 @@ namespace Titanium.Web.Proxy.Network.Certificate
     /// </summary>
     internal class BCCertificateMaker : ICertificateMaker
     {
-        private const int CertificateValidDays = 1825;
-        private const int CertificateGraceDays = 366;
+        private const int certificateValidDays = 1825;
+        private const int certificateGraceDays = 366;
 
         /// <summary>
         /// Makes the certificate.
@@ -187,7 +187,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 return certificate;
             }
 
-            return MakeCertificateInternal(isRoot, subject, $"CN={subject}", DateTime.UtcNow.AddDays(-CertificateGraceDays), DateTime.UtcNow.AddDays(CertificateValidDays), isRoot ? null : signingCert);
+            return MakeCertificateInternal(isRoot, subject, $"CN={subject}", DateTime.UtcNow.AddDays(-certificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays), isRoot ? null : signingCert);
         }
     }
 
