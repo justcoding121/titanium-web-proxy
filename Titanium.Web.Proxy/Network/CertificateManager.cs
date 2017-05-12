@@ -31,6 +31,10 @@ namespace Titanium.Web.Proxy.Network
     /// </summary>
     internal class CertificateManager : IDisposable
     {
+        private const string defaultRootCertificateIssuer = "Titanium";
+
+        private const string defaultRootRootCertificateName = "Titanium Root Certificate Authority";
+
         private readonly ICertificateMaker certEngine;
 
         private bool clearCertificates { get; set; }
@@ -66,8 +70,8 @@ namespace Titanium.Web.Proxy.Network
                 certEngine = new WinCertificateMaker();
             }
 
-            Issuer = issuer;
-            RootCertificateName = rootCertificateName;
+            Issuer = issuer ?? defaultRootCertificateIssuer;
+            RootCertificateName = rootCertificateName ?? defaultRootRootCertificateName;
 
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
         }
@@ -88,7 +92,7 @@ namespace Titanium.Web.Proxy.Network
             return fileName;
         }
 
-        internal X509Certificate2 GetRootCertificate()
+        internal X509Certificate2 LoadRootCertificate()
         {
             var fileName = GetRootCertificatePath();
             if (!File.Exists(fileName)) return null;
@@ -108,11 +112,16 @@ namespace Titanium.Web.Proxy.Network
         /// <returns>true if succeeded, else false</returns>
         internal bool CreateTrustedRootCertificate()
         {
-            RootCertificate = GetRootCertificate();
+            if (RootCertificate == null)
+            {
+                RootCertificate = LoadRootCertificate();
+            }
+
             if (RootCertificate != null)
             {
                 return true;
             }
+
             try
             {
                 RootCertificate = CreateCertificate(RootCertificateName, true);
@@ -121,6 +130,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 exceptionFunc(e);
             }
+
             if (RootCertificate != null)
             {
                 try
@@ -133,7 +143,21 @@ namespace Titanium.Web.Proxy.Network
                     exceptionFunc(e);
                 }
             }
+
             return RootCertificate != null;
+        }
+
+        /// <summary>
+        /// Trusts the root certificate.
+        /// </summary>
+        /// <param name="exceptionFunc"></param>
+        internal void TrustRootCertificate(Action<Exception> exceptionFunc)
+        {
+            //current user
+            TrustRootCertificate(StoreLocation.CurrentUser, exceptionFunc);
+            
+            //current system
+            TrustRootCertificate(StoreLocation.LocalMachine, exceptionFunc);
         }
 
         /// <summary>
@@ -144,15 +168,13 @@ namespace Titanium.Web.Proxy.Network
         /// <returns></returns>
         internal virtual X509Certificate2 CreateCertificate(string certificateName, bool isRootCertificate)
         {
-
             if (certificateCache.ContainsKey(certificateName))
             {
                 var cached = certificateCache[certificateName];
                 cached.LastAccess = DateTime.Now;
                 return cached.Certificate;
             }
-
-
+            
             X509Certificate2 certificate = null;
             lock (string.Intern(certificateName))
             {
@@ -160,6 +182,11 @@ namespace Titanium.Web.Proxy.Network
                 {
                     try
                     {
+                        if (!isRootCertificate && RootCertificate == null)
+                        {
+                            CreateTrustedRootCertificate();
+                        }
+
                         certificate = certEngine.MakeCertificate(certificateName, isRootCertificate, RootCertificate);
                     }
                     catch (Exception e)
@@ -168,7 +195,7 @@ namespace Titanium.Web.Proxy.Network
                     }
                     if (certificate != null && !certificateCache.ContainsKey(certificateName))
                     {
-                        certificateCache.Add(certificateName, new CachedCertificate() { Certificate = certificate });
+                        certificateCache.Add(certificateName, new CachedCertificate { Certificate = certificate });
                     }
                 }
                 else
@@ -182,10 +209,7 @@ namespace Titanium.Web.Proxy.Network
                 }
             }
 
-
-
             return certificate;
-
         }
 
         /// <summary>

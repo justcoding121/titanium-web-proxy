@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.UnitTests
     [TestClass]
     public class CertificateManagerTests
     {
-        private readonly static string[] hostNames
+        private static readonly string[] hostNames
             = new string[] { "facebook.com", "youtube.com", "google.com",
                                 "bing.com", "yahoo.com"};
 

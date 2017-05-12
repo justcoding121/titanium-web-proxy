@@ -6,12 +6,12 @@ namespace Titanium.Web.Proxy.Helpers
     /// <summary>
     /// A helper class to set proxy settings for firefox
     /// </summary>
-    public class FireFoxProxySettingsManager
+    internal class FireFoxProxySettingsManager
     {
         /// <summary>
         /// Add Firefox settings.
         /// </summary>
-        public void AddFirefox()
+        internal void AddFirefox()
         {
             try
             {
@@ -40,7 +40,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         /// Remove firefox settings.
         /// </summary>
-        public void RemoveFirefox()
+        internal void RemoveFirefox()
         {
             try
             {
