@@ -112,7 +112,7 @@ Sample request and response event handlers
 ```csharp		
 
 //To access requestBody from OnResponse handler
-private Dictionary<Guid, string> requestBodyHistory;
+private Dictionary<Guid, string> requestBodyHistory = new Dictionary<Guid, string>();
 
 public async Task OnRequest(object sender, SessionEventArgs e)
 {

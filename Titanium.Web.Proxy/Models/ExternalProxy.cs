@@ -8,7 +8,7 @@ namespace Titanium.Web.Proxy.Models
     /// </summary>
     public class ExternalProxy
     {
-        private static readonly Lazy<NetworkCredential> DefaultCredentials = new Lazy<NetworkCredential>(() => CredentialCache.DefaultNetworkCredentials);
+        private static readonly Lazy<NetworkCredential> defaultCredentials = new Lazy<NetworkCredential>(() => CredentialCache.DefaultNetworkCredentials);
 
         private string userName;
         private string password;
@@ -19,15 +19,20 @@ namespace Titanium.Web.Proxy.Models
         public bool UseDefaultCredentials { get; set; }
 
         /// <summary>
+        /// Bypass this proxy for connections to localhost?
+        /// </summary>
+        public bool BypassForLocalhost { get; set; }
+
+        /// <summary>
         /// Username.
         /// </summary>
         public string UserName {
-            get { return UseDefaultCredentials ? DefaultCredentials.Value.UserName : userName; } 
+            get { return UseDefaultCredentials ? defaultCredentials.Value.UserName : userName; } 
             set
             {
                 userName = value;
 
-                if (DefaultCredentials.Value.UserName != userName)
+                if (defaultCredentials.Value.UserName != userName)
                 {
                     UseDefaultCredentials = false;
                 }
@@ -39,12 +44,12 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         public string Password
         {
-            get { return UseDefaultCredentials ? DefaultCredentials.Value.Password : password; }
+            get { return UseDefaultCredentials ? defaultCredentials.Value.Password : password; }
             set
             {
                 password = value;
 
-                if (DefaultCredentials.Value.Password != password)
+                if (defaultCredentials.Value.Password != password)
                 {
                     UseDefaultCredentials = false;
                 }

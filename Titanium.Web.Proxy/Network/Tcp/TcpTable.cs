@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// Initializes a new instance of the <see cref="TcpTable"/> class.
         /// </summary>
         /// <param name="tcpRows">TcpRow collection to initialize with.</param>
-        public TcpTable(IEnumerable<TcpRow> tcpRows)
+        internal TcpTable(IEnumerable<TcpRow> tcpRows)
         {
             this.tcpRows = tcpRows;
         }
@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         /// Gets the TCP rows.
         /// </summary>
-        public IEnumerable<TcpRow> TcpRows => tcpRows;
+        internal IEnumerable<TcpRow> TcpRows => tcpRows;
 
         /// <summary>
         /// Returns an enumerator that iterates through the collection.
