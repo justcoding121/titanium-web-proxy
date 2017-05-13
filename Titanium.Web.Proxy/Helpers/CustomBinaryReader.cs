@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Extensions;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -17,13 +16,16 @@ namespace Titanium.Web.Proxy.Helpers
     {
         private readonly Stream stream;
         private readonly Encoding encoding;
+        private readonly byte[] buffer;
 
-        internal CustomBinaryReader(Stream stream)
+        internal CustomBinaryReader(Stream stream, int bufferSize)
         {
             this.stream = stream;
 
             //default to UTF-8
             encoding = Encoding.UTF8;
+
+            buffer = new byte[bufferSize];
         }
 
         internal Stream BaseStream => stream;
@@ -34,33 +36,40 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         internal async Task<string> ReadLineAsync()
         {
-            using (var readBuffer = new MemoryStream())
+            var lastChar = default(byte);
+
+            int bufferDataLength = 0;
+
+            // try to use the instance buffer, usually it is enough
+            var buffer = this.buffer;
+
+            while (await stream.ReadAsync(buffer, bufferDataLength, 1) > 0)
             {
-	            var lastChar = default(char);
-	            var buffer = new byte[1];
+                var newChar = buffer[bufferDataLength];
 
-	            while ((await stream.ReadAsync(buffer, 0, 1)) > 0)
-	            {
-		            //if new line
-		            if (lastChar == '\r' && buffer[0] == '\n')
-		            {
-			            var result = readBuffer.ToArray();
-			            return  encoding.GetString(result.SubArray(0, result.Length - 1));
-		            }
-		            //end of stream
-		            if (buffer[0] == '\0')
-		            {
-			            return encoding.GetString(readBuffer.ToArray());
-		            }
+                //if new line
+                if (lastChar == '\r' && newChar == '\n')
+                {
+                    return encoding.GetString(buffer, 0, bufferDataLength - 1);
+                }
+                //end of stream
+                if (newChar == '\0')
+                {
+                    return encoding.GetString(buffer, 0, bufferDataLength);
+                }
 
-		            await readBuffer.WriteAsync(buffer,0,1);
+                bufferDataLength++;
 
-		            //store last char for new line comparison
-		            lastChar = (char)buffer[0];
-	            }
+                //store last char for new line comparison
+                lastChar = newChar;
 
-	            return encoding.GetString(readBuffer.ToArray());
+                if (bufferDataLength == buffer.Length)
+                {
+                    ResizeBuffer(ref buffer, bufferDataLength * 2);
+                }
             }
+
+            return encoding.GetString(buffer, 0, bufferDataLength);
         }
 
         /// <summary>
@@ -79,6 +88,17 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
+        /// Read until the last new line, ignores the result
+        /// </summary>
+        /// <returns></returns>
+        internal async Task ReadAndIgnoreAllLinesAsync()
+        {
+            while (!string.IsNullOrEmpty(await ReadLineAsync()))
+            {
+            }
+        }
+
+        /// <summary>
         /// Read the specified number of raw bytes from the base stream
         /// </summary>
         /// <param name="bufferSize"></param>
@@ -91,34 +111,47 @@ namespace Titanium.Web.Proxy.Helpers
             if (totalBytesToRead < bufferSize)
                 bytesToRead = (int)totalBytesToRead;
 
-            var buffer = new byte[bufferSize];
+            var buffer = bytesToRead > this.buffer.Length ? new byte[bytesToRead] : this.buffer;
 
-            var bytesRead = 0;
+            int bytesRead;
             var totalBytesRead = 0;
 
-            using (var outStream = new MemoryStream())
+            while ((bytesRead = await stream.ReadAsync(buffer, totalBytesRead, bytesToRead)) > 0)
             {
-                while ((bytesRead += await stream.ReadAsync(buffer, 0, bytesToRead)) > 0)
+                totalBytesRead += bytesRead;
+
+                if (totalBytesRead == totalBytesToRead)
+                    break;
+
+                var remainingBytes = totalBytesToRead - totalBytesRead;
+                bytesToRead = Math.Min(bufferSize, (int)remainingBytes);
+
+                if (totalBytesRead + bytesToRead > buffer.Length)
                 {
-                    await outStream.WriteAsync(buffer, 0, bytesRead);
-                    totalBytesRead += bytesRead;
-
-                    if (totalBytesRead == totalBytesToRead)
-                        break;
-
-                    bytesRead = 0;
-                    var remainingBytes = (totalBytesToRead - totalBytesRead);
-                    bytesToRead = remainingBytes > (long)bufferSize ? bufferSize : (int)remainingBytes;
+                    ResizeBuffer(ref buffer, Math.Min(totalBytesToRead, buffer.Length * 2));
                 }
-
-                return outStream.ToArray();
             }
 
+            if (totalBytesRead != buffer.Length)
+            {
+                //Normally this should not happen. Resize the buffer anyway
+                var newBuffer = new byte[totalBytesRead];
+                Buffer.BlockCopy(buffer, 0, newBuffer, 0, totalBytesRead);
+                buffer = newBuffer;
+            }
+
+            return buffer;
         }
 
         public void Dispose()
         {
+        }
 
+        private void ResizeBuffer(ref byte[] buffer, long size)
+        {
+            var newBuffer = new byte[size];
+            Buffer.BlockCopy(buffer, 0, newBuffer, 0, buffer.Length);
+            buffer = newBuffer;
         }
     }
 }

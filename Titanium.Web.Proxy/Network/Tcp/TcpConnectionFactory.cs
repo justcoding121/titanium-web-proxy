@@ -8,6 +8,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using System.Security.Authentication;
 using System.Linq;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Network.Tcp
@@ -78,17 +79,17 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         writer.Close();
                     }
 
-                    using (var reader = new CustomBinaryReader(stream))
+                    using (var reader = new CustomBinaryReader(stream, bufferSize))
                     {
                         var result = await reader.ReadLineAsync();
 
 
-                        if (!new[] { "200 OK", "connection established" }.Any(s => result.ToLower().Contains(s.ToLower())))
+                        if (!new[] { "200 OK", "connection established" }.Any(s => result.ContainsIgnoreCase(s)))
                         {
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
                         }
 
-                        await reader.ReadAllLinesAsync();
+                        await reader.ReadAndIgnoreAllLinesAsync();
                     }
                 }
                 else
@@ -137,7 +138,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             stream.WriteTimeout = connectionTimeOutSeconds * 1000;
 
 
-            return new TcpConnection()
+            return new TcpConnection
             {
                 UpStreamHttpProxy = externalHttpProxy,
                 UpStreamHttpsProxy = externalHttpsProxy,
@@ -145,7 +146,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 Port = remotePort,
                 IsHttps = isHttps,
                 TcpClient = client,
-                StreamReader = new CustomBinaryReader(stream),
+                StreamReader = new CustomBinaryReader(stream, bufferSize),
                 Stream = stream,
                 Version = httpVersion
             };
