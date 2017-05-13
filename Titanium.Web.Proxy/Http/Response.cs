@@ -54,7 +54,7 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var header = ResponseHeaders["connection"];
 
-                    if (header.Value.ToLower().Contains("close"))
+                    if (header.Value.ContainsIgnoreCase("close"))
                     {
                         return false;
                     }
@@ -153,7 +153,7 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var header = ResponseHeaders["transfer-encoding"];
 
-                    if (header.Value.ToLower().Contains("chunked"))
+                    if (header.Value.ContainsIgnoreCase("chunked"))
                     {
                         return true;
                     }         
