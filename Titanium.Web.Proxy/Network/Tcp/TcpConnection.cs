@@ -52,14 +52,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         public void Dispose()
         {
-            Stream.Close();
-            Stream.Dispose();
+            Stream?.Close();
+            Stream?.Dispose();
+            StreamReader?.Dispose();
 
             TcpClient.LingerState = new LingerOption(true, 0);
-            TcpClient.Client.Shutdown(SocketShutdown.Both);
-            TcpClient.Client.Close();
-            TcpClient.Client.Dispose();
-
             TcpClient.Close();
             
         }

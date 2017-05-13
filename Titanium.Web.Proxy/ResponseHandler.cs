@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy
                     await Task.WhenAll(handlerTasks);
                 }
 
-                if(args.ReRequest)
+                if (args.ReRequest)
                 {
                     await HandleHttpSessionRequestInternal(null, args, null, null, true);
                     return;
@@ -124,7 +124,7 @@ namespace Titanium.Web.Proxy
                 await args.ProxyClient.ClientStream.FlushAsync();
 
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 ExceptionFunc(new ProxyHttpException("Error occured wilst handling session response", e, args));
                 Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader,
@@ -231,20 +231,15 @@ namespace Titanium.Web.Proxy
         private void Dispose(Stream clientStream, CustomBinaryReader clientStreamReader,
             StreamWriter clientStreamWriter, IDisposable args)
         {
-
-            if (clientStream != null)
-            {
-                clientStream.Close();
-                clientStream.Dispose();
-            }
-
-            args?.Dispose();
+            clientStream?.Close();
+            clientStream?.Dispose();
 
             clientStreamReader?.Dispose();
 
-            if (clientStreamWriter == null) return;
-            clientStreamWriter.Close();
-            clientStreamWriter.Dispose();
+            clientStreamWriter?.Close();
+            clientStreamWriter?.Dispose();
+
+            args?.Dispose();
         }
     }
 }
