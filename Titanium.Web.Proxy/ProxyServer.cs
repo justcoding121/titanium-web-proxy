@@ -629,11 +629,6 @@ namespace Titanium.Web.Proxy
                             //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
                             //due to default TCP CLOSE_WAIT timeout for 4 minutes
                             tcpClient.LingerState = new LingerOption(true, 0);
-
-                            //the following 3 lines are unnecessary, tcpClient.Close() calls all of them internally
-                            //tcpClient.Client.Shutdown(SocketShutdown.Both);
-                            //tcpClient.Client.Close();
-                            //tcpClient.Client.Dispose();
                             tcpClient.Close();
                         }
                     }
