@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.RegularExpressions;
 
 namespace Titanium.Web.Proxy.Models
 {
@@ -53,8 +55,8 @@ namespace Titanium.Web.Proxy.Models
     /// </summary>
     public class ExplicitProxyEndPoint : ProxyEndPoint
     {
-        private List<string> excludedHttpsHostNameRegex;
-        private List<string> includedHttpsHostNameRegex;
+        internal List<Regex> excludedHttpsHostNameRegex;
+        internal List<Regex> includedHttpsHostNameRegex;
 
         internal bool IsSystemHttpProxy { get; set; }
 
@@ -63,9 +65,9 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         /// List of host names to exclude using Regular Expressions.
         /// </summary>
-        public List<string> ExcludedHttpsHostNameRegex
+        public IEnumerable<string> ExcludedHttpsHostNameRegex
         {
-            get { return excludedHttpsHostNameRegex; }
+            get { return excludedHttpsHostNameRegex?.Select(x => x.ToString()).ToList(); }
             set
             {
                 if (IncludedHttpsHostNameRegex != null)
@@ -73,16 +75,16 @@ namespace Titanium.Web.Proxy.Models
                     throw new ArgumentException("Cannot set excluded when included is set");
                 }
 
-                excludedHttpsHostNameRegex = value;
+                excludedHttpsHostNameRegex = value?.Select(x=>new Regex(x, RegexOptions.Compiled)).ToList();
             }
         }
 
         /// <summary>
         /// List of host names to exclude using Regular Expressions.
         /// </summary>
-        public List<string> IncludedHttpsHostNameRegex
+        public IEnumerable<string> IncludedHttpsHostNameRegex
         {
-            get { return includedHttpsHostNameRegex; }
+            get { return includedHttpsHostNameRegex?.Select(x => x.ToString()).ToList(); }
             set
             {
                 if (ExcludedHttpsHostNameRegex != null)
@@ -90,7 +92,7 @@ namespace Titanium.Web.Proxy.Models
                     throw new ArgumentException("Cannot set included when excluded is set");
                 }
 
-                includedHttpsHostNameRegex = value;
+                includedHttpsHostNameRegex = value?.Select(x => new Regex(x, RegexOptions.Compiled)).ToList();
             }
         }
 

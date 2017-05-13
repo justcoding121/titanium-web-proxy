@@ -48,7 +48,7 @@ namespace Titanium.Web.Proxy
                 var header = httpHeaders.FirstOrDefault(t => t.Name == "Proxy-Authorization");
                 if (null == header) throw new NullReferenceException();
                 var headerValue = header.Value.Trim();
-                if (!headerValue.ToLower().StartsWith("basic"))
+                if (!headerValue.StartsWith("basic", StringComparison.CurrentCultureIgnoreCase))
                 {
                     //Return not authorized
                     await WriteResponseStatus(new Version(1, 1), "407",
