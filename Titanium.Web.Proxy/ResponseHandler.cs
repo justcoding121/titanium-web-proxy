@@ -52,7 +52,7 @@ namespace Titanium.Web.Proxy
 
                 if(args.ReRequest)
                 {
-                    await HandleHttpSessionRequestInternal(null, args, null, null, true).ConfigureAwait(false);
+                    await HandleHttpSessionRequestInternal(null, args, null, null, true);
                     return;
                 }
 

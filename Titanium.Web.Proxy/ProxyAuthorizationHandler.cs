@@ -95,7 +95,7 @@ namespace Titanium.Web.Proxy
                 }
                 var username = decoded.Substring(0, decoded.IndexOf(':'));
                 var password = decoded.Substring(decoded.IndexOf(':') + 1);
-                return await AuthenticateUserFunc(username, password).ConfigureAwait(false);
+                return await AuthenticateUserFunc(username, password);
             }
             catch (Exception e)
             {
