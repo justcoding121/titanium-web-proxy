@@ -231,14 +231,14 @@ namespace Titanium.Web.Proxy
                     {
                         if (GetCustomUpStreamHttpProxyFunc != null)
                         {
-                            customUpStreamHttpProxy = await GetCustomUpStreamHttpProxyFunc(args).ConfigureAwait(false);
+                            customUpStreamHttpProxy = await GetCustomUpStreamHttpProxyFunc(args);
                         }
                     }
                     else
                     {
                         if (GetCustomUpStreamHttpsProxyFunc != null)
                         {
-                            customUpStreamHttpsProxy = await GetCustomUpStreamHttpsProxyFunc(args).ConfigureAwait(false);
+                            customUpStreamHttpsProxy = await GetCustomUpStreamHttpsProxyFunc(args);
                         }
                     }
 
@@ -498,7 +498,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     //construct the web request that we are going to issue on behalf of the client.
-                    await HandleHttpSessionRequestInternal(null, args, customUpStreamHttpProxy, customUpStreamHttpsProxy, false).ConfigureAwait(false);
+                    await HandleHttpSessionRequestInternal(null, args, customUpStreamHttpProxy, customUpStreamHttpsProxy, false);
 
 
                     if (args.WebSession.Request.CancelRequest)
