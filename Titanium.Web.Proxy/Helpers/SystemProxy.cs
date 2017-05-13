@@ -181,7 +181,7 @@ namespace Titanium.Web.Proxy.Helpers
             if (tmp.StartsWith("http=") || tmp.StartsWith("https="))
             {
                 var endPoint = tmp.Substring(5);
-                return new HttpSystemProxyValue()
+                return new HttpSystemProxyValue
                 {
                     HostName = endPoint.Split(':')[0],
                     Port = int.Parse(endPoint.Split(':')[1]),

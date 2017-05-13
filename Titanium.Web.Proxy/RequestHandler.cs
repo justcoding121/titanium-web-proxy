@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy
             clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
             clientStream.WriteTimeout = ConnectionTimeOutSeconds * 1000;
 
-            var clientStreamReader = new CustomBinaryReader(clientStream);
+            var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
             var clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
 
             Uri httpRemoteUri;
@@ -76,12 +76,12 @@ namespace Titanium.Web.Proxy
 
                 if (endPoint.ExcludedHttpsHostNameRegex != null)
                 {
-                    excluded = endPoint.ExcludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
+                    excluded = endPoint.excludedHttpsHostNameRegex.Any(x => x.IsMatch(httpRemoteUri.Host));
                 }
 
                 if (endPoint.IncludedHttpsHostNameRegex != null)
                 {
-                    excluded = !endPoint.IncludedHttpsHostNameRegex.Any(x => Regex.IsMatch(httpRemoteUri.Host, x));
+                    excluded = !endPoint.includedHttpsHostNameRegex.Any(x => x.IsMatch(httpRemoteUri.Host));
                 }
 
                 List<HttpHeader> connectRequestHeaders = null;
@@ -123,7 +123,7 @@ namespace Titanium.Web.Proxy
                         //HTTPS server created - we can now decrypt the client's traffic
                         clientStream = sslStream;
 
-                        clientStreamReader = new CustomBinaryReader(sslStream);
+                        clientStreamReader = new CustomBinaryReader(sslStream, BufferSize);
                         clientStreamWriter = new StreamWriter(sslStream) {NewLine = ProxyConstants.NewLine };
 
                     }
@@ -143,7 +143,7 @@ namespace Titanium.Web.Proxy
                 else if (httpVerb == "CONNECT")
                 {
                     //Cyphen out CONNECT request headers
-                    await clientStreamReader.ReadAllLinesAsync();
+                    await clientStreamReader.ReadAndIgnoreAllLinesAsync();
                     //write back successfull CONNECT response
                     await WriteConnectResponse(clientStreamWriter, version);
 
@@ -193,7 +193,7 @@ namespace Titanium.Web.Proxy
                     await sslStream.AuthenticateAsServerAsync(certificate, false,
                         SslProtocols.Tls, false);
 
-                    clientStreamReader = new CustomBinaryReader(sslStream);
+                    clientStreamReader = new CustomBinaryReader(sslStream, BufferSize);
                     clientStreamWriter = new StreamWriter(sslStream) { NewLine = ProxyConstants.NewLine };
                     //HTTPS server created - we can now decrypt the client's traffic
 
@@ -209,7 +209,7 @@ namespace Titanium.Web.Proxy
             }
             else
             {
-                clientStreamReader = new CustomBinaryReader(clientStream);
+                clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
                 clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
             }
 

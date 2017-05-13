@@ -72,6 +72,7 @@
     <Compile Include="EventArguments\CertificateSelectionEventArgs.cs" />
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
+    <Compile Include="Extensions\StringExtensions.cs" />
     <Compile Include="Helpers\Network.cs" />
     <Compile Include="Helpers\RunTime.cs" />
     <Compile Include="Http\Responses\GenericResponse.cs" />
