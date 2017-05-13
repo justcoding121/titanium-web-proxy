@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System;
+using System.Text;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Shared;
 
@@ -29,7 +30,7 @@ namespace Titanium.Web.Proxy.Extensions
                 foreach (var contentType in contentTypes)
                 {
                     var encodingSplit = contentType.Split('=');
-                    if (encodingSplit.Length == 2 && encodingSplit[0].ToLower().Trim() == "charset")
+                    if (encodingSplit.Length == 2 && encodingSplit[0].Trim().Equals("charset", StringComparison.CurrentCultureIgnoreCase))
                     {
                         return Encoding.GetEncoding(encodingSplit[1]);
                     }
