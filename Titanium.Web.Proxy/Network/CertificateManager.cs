@@ -31,13 +31,47 @@ namespace Titanium.Web.Proxy.Network
     /// </summary>
     internal class CertificateManager : IDisposable
     {
+        public CertificateEngine Engine
+        {
+            get { return engine; }
+            set
+            {
+                //For Mono only Bouncy Castle is supported
+                if (RunTime.IsRunningOnMono())
+                {
+                    value = CertificateEngine.BouncyCastle;
+                }
+
+                if (value != engine)
+                {
+                    certEngine = null;
+                    engine = value;
+                }
+
+                if (certEngine == null)
+                {
+                    certEngine = engine == CertificateEngine.BouncyCastle ? 
+                        (ICertificateMaker) new BCCertificateMaker() 
+                        : new WinCertificateMaker();
+                }
+            }
+        }
+
         private const string defaultRootCertificateIssuer = "Titanium";
 
         private const string defaultRootRootCertificateName = "Titanium Root Certificate Authority";
 
-        private readonly ICertificateMaker certEngine;
+        private CertificateEngine engine;
+
+        private ICertificateMaker certEngine;
+
+        private string issuer;
+
+        private string rootCertificateName;
 
         private bool clearCertificates { get; set; }
+
+        private X509Certificate2 rootCertificate;
 
         /// <summary>
         /// Cache dictionary
@@ -46,34 +80,54 @@ namespace Titanium.Web.Proxy.Network
 
         private readonly Action<Exception> exceptionFunc;
 
-        internal string Issuer { get; }
+        internal string Issuer
+        {
+            get { return issuer ?? defaultRootCertificateIssuer; }
+            set
+            {
+                issuer = value;
+                ClearRootCertificate();
+            }
+        }
 
-        internal string RootCertificateName { get; }
+        internal string RootCertificateName
+        {
+            get { return rootCertificateName ?? defaultRootRootCertificateName; }
+            set
+            {
+                rootCertificateName = value; 
+                ClearRootCertificate();
+            }
+        }
 
-        internal X509Certificate2 RootCertificate { get; set; }
+        internal X509Certificate2 RootCertificate
+        {
+            get { return rootCertificate; }
+            set
+            {
+                ClearRootCertificate();
+                rootCertificate = value;
+            }
+        }
 
-        internal CertificateManager(CertificateEngine engine,
-            string issuer,
-            string rootCertificateName,
-            Action<Exception> exceptionFunc)
+        /// <summary>
+        /// Is the root certificate used by this proxy is valid?
+        /// </summary>
+        internal bool CertValidated => RootCertificate != null;
+
+
+        internal CertificateManager(Action<Exception> exceptionFunc)
         {
             this.exceptionFunc = exceptionFunc;
-
-            //For Mono only Bouncy Castle is supported
-            if (RunTime.IsRunningOnMono() 
-                || engine == CertificateEngine.BouncyCastle)
-            {
-                certEngine = new BCCertificateMaker();
-            }
-            else
-            {
-                certEngine = new WinCertificateMaker();
-            }
-
-            Issuer = issuer ?? defaultRootCertificateIssuer;
-            RootCertificateName = rootCertificateName ?? defaultRootRootCertificateName;
+            Engine = CertificateEngine.DefaultWindows;
 
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
+        }
+
+        private void ClearRootCertificate()
+        {
+            certificateCache.Clear();
+            rootCertificate = null;
         }
 
         private string GetRootCertificatePath()
@@ -150,14 +204,13 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// Trusts the root certificate.
         /// </summary>
-        /// <param name="exceptionFunc"></param>
-        internal void TrustRootCertificate(Action<Exception> exceptionFunc)
+        internal void TrustRootCertificate()
         {
             //current user
-            TrustRootCertificate(StoreLocation.CurrentUser, exceptionFunc);
+            TrustRootCertificate(StoreLocation.CurrentUser);
             
             //current system
-            TrustRootCertificate(StoreLocation.LocalMachine, exceptionFunc);
+            TrustRootCertificate(StoreLocation.LocalMachine);
         }
 
         /// <summary>
@@ -246,10 +299,8 @@ namespace Titanium.Web.Proxy.Network
         /// Make current machine trust the Root Certificate used by this proxy
         /// </summary>
         /// <param name="storeLocation"></param>
-        /// <param name="exceptionFunc"></param>
         /// <returns></returns>
-        internal void TrustRootCertificate(StoreLocation storeLocation,
-            Action<Exception> exceptionFunc)
+        internal void TrustRootCertificate(StoreLocation storeLocation)
         {
             if (RootCertificate == null)
             {
