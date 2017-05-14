@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Models
 {
@@ -28,6 +30,7 @@ namespace Titanium.Web.Proxy.Models
         /// Header Name.
         /// </summary>
         public string Name { get; set; }
+
         /// <summary>
         /// Header Value.
         /// </summary>
@@ -40,6 +43,13 @@ namespace Titanium.Web.Proxy.Models
         public override string ToString()
         {
             return $"{Name}: {Value}";
+        }
+
+        internal async Task WriteToStream(StreamWriter writer)
+        {
+            await writer.WriteAsync(Name);
+            await writer.WriteAsync(": ");
+            await writer.WriteLineAsync(Value);
         }
     }
 }

@@ -8,6 +8,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using System.Security.Authentication;
 using System.Linq;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Network.Tcp
@@ -44,7 +45,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             Stream clientStream, IPEndPoint upStreamEndPoint)
         {
             TcpClient client;
-            Stream stream;
+                CustomBufferedStream stream;
 
             bool isLocalhost = (externalHttpsProxy == null && externalHttpProxy == null) ? false : NetworkHelper.IsLocalIpAddress(remoteHostName);
             
@@ -60,7 +61,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     client = new TcpClient(upStreamEndPoint);
                     await client.ConnectAsync(externalHttpsProxy.HostName, externalHttpsProxy.Port);
-                    stream = client.GetStream();
+                    stream = new CustomBufferedStream(client.GetStream(), bufferSize);
 
                     using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true) { NewLine = ProxyConstants.NewLine })
                     {
@@ -78,24 +79,23 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         writer.Close();
                     }
 
-                    using (var reader = new CustomBinaryReader(stream))
+                    using (var reader = new CustomBinaryReader(stream, bufferSize))
                     {
                         var result = await reader.ReadLineAsync();
 
-
-                        if (!new[] { "200 OK", "connection established" }.Any(s => result.ToLower().Contains(s.ToLower())))
+                        if (!new[] { "200 OK", "connection established" }.Any(s => result.ContainsIgnoreCase(s)))
                         {
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
                         }
 
-                        await reader.ReadAllLinesAsync();
+                        await reader.ReadAndIgnoreAllLinesAsync();
                     }
                 }
                 else
                 {
                     client = new TcpClient(upStreamEndPoint);
                     await client.ConnectAsync(remoteHostName, remotePort);
-                    stream = client.GetStream();
+                    stream = new CustomBufferedStream(client.GetStream(), bufferSize);
                 }
 
                 try
@@ -105,7 +105,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                     await sslStream.AuthenticateAsClientAsync(remoteHostName, null, supportedSslProtocols, false);
 
-                    stream = sslStream;
+                    stream = new CustomBufferedStream(sslStream, bufferSize);
                 }
                 catch
                 {
@@ -120,13 +120,13 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     client = new TcpClient(upStreamEndPoint);
                     await client.ConnectAsync(externalHttpProxy.HostName, externalHttpProxy.Port);
-                    stream = client.GetStream();
+                    stream = new CustomBufferedStream(client.GetStream(), bufferSize);
                 }
                 else
                 {
                     client = new TcpClient(upStreamEndPoint);
                     await client.ConnectAsync(remoteHostName, remotePort);
-                    stream = client.GetStream();
+                    stream = new CustomBufferedStream(client.GetStream(), bufferSize);
                 }
             }
 
@@ -137,7 +137,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             stream.WriteTimeout = connectionTimeOutSeconds * 1000;
 
 
-            return new TcpConnection()
+            return new TcpConnection
             {
                 UpStreamHttpProxy = externalHttpProxy,
                 UpStreamHttpsProxy = externalHttpsProxy,
@@ -145,7 +145,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 Port = remotePort,
                 IsHttps = isHttps,
                 TcpClient = client,
-                StreamReader = new CustomBinaryReader(stream),
+                StreamReader = new CustomBinaryReader(stream, bufferSize),
                 Stream = stream,
                 Version = httpVersion
             };
