@@ -204,14 +204,13 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// Trusts the root certificate.
         /// </summary>
-        /// <param name="exceptionFunc"></param>
-        internal void TrustRootCertificate(Action<Exception> exceptionFunc)
+        internal void TrustRootCertificate()
         {
             //current user
-            TrustRootCertificate(StoreLocation.CurrentUser, exceptionFunc);
+            TrustRootCertificate(StoreLocation.CurrentUser);
             
             //current system
-            TrustRootCertificate(StoreLocation.LocalMachine, exceptionFunc);
+            TrustRootCertificate(StoreLocation.LocalMachine);
         }
 
         /// <summary>
@@ -300,10 +299,8 @@ namespace Titanium.Web.Proxy.Network
         /// Make current machine trust the Root Certificate used by this proxy
         /// </summary>
         /// <param name="storeLocation"></param>
-        /// <param name="exceptionFunc"></param>
         /// <returns></returns>
-        internal void TrustRootCertificate(StoreLocation storeLocation,
-            Action<Exception> exceptionFunc)
+        internal void TrustRootCertificate(StoreLocation storeLocation)
         {
             if (RootCertificate == null)
             {

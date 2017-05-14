@@ -181,7 +181,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
                         }
                     });
 
-                    manualResetEvent.Wait(TimeSpan.FromMinutes(1), cancellationToken: cancellationToken);
+                    manualResetEvent.Wait(TimeSpan.FromMinutes(1), cancellationToken);
                 }
 
                 return certificate;

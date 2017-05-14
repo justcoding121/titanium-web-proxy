@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.Helpers
     {
         private readonly Stream baseStream;
         
-        private readonly byte[] buffer;
+        private readonly byte[] streamBuffer;
         
         private int bufferLength;
         
@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.Helpers
         public CustomBufferedStream(Stream baseStream, int bufferSize)
         {
             this.baseStream = baseStream;
-            buffer = new byte[bufferSize];
+            streamBuffer = new byte[bufferSize];
         }
 
         /// <summary>
@@ -84,7 +84,7 @@ namespace Titanium.Web.Proxy.Helpers
             int available = Math.Min(bufferLength, count);
             if (available > 0)
             {
-                Buffer.BlockCopy(this.buffer, bufferPos, buffer, offset, available);
+                Buffer.BlockCopy(streamBuffer, bufferPos, buffer, offset, available);
                 bufferPos += available;
                 bufferLength -= available;
             }
@@ -120,7 +120,7 @@ namespace Titanium.Web.Proxy.Helpers
             if (bufferLength > 0)
             {
                 int available = Math.Min(bufferLength, count);
-                Buffer.BlockCopy(this.buffer, bufferPos, buffer, offset, available);
+                Buffer.BlockCopy(streamBuffer, bufferPos, buffer, offset, available);
                 bufferPos += available;
                 bufferLength -= available;
                 return new ReadAsyncResult(available);
@@ -167,7 +167,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             if (bufferLength > 0)
             {
-                await destination.WriteAsync(buffer, bufferPos, bufferLength, cancellationToken);
+                await destination.WriteAsync(streamBuffer, bufferPos, bufferLength, cancellationToken);
             }
 
             await baseStream.CopyToAsync(destination, bufferSize, cancellationToken);
@@ -256,7 +256,7 @@ namespace Titanium.Web.Proxy.Helpers
             int available = Math.Min(bufferLength, count);
             if (available > 0)
             {
-                Buffer.BlockCopy(this.buffer, bufferPos, buffer, offset, available);
+                Buffer.BlockCopy(streamBuffer, bufferPos, buffer, offset, available);
                 bufferPos += available;
                 bufferLength -= available;
             }
@@ -283,7 +283,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             bufferLength--;
-            return buffer[bufferPos++];
+            return streamBuffer[bufferPos++];
         }
 
         public byte ReadByteFromBuffer()
@@ -294,7 +294,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             bufferLength--;
-            return buffer[bufferPos++];
+            return streamBuffer[bufferPos++];
         }
 
         /// <summary>
@@ -390,7 +390,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         public bool FillBuffer()
         {
-            bufferLength = baseStream.Read(buffer, 0, buffer.Length);
+            bufferLength = baseStream.Read(streamBuffer, 0, streamBuffer.Length);
             bufferPos = 0;
             return bufferLength > 0;
         }
@@ -411,7 +411,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         public async Task<bool> FillBufferAsync(CancellationToken cancellationToken)
         {
-            bufferLength = await baseStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+            bufferLength = await baseStream.ReadAsync(streamBuffer, 0, streamBuffer.Length, cancellationToken);
             bufferPos = 0;
             return bufferLength > 0;
         }

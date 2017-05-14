@@ -46,7 +46,7 @@ namespace Titanium.Web.Proxy.Extensions
 
             while (totalbytesRead < totalBytesToRead)
             {
-                var buffer = await streamReader.ReadBytesAsync(bufferSize, bytesToRead);
+                var buffer = await streamReader.ReadBytesAsync(bytesToRead);
 
                 if (buffer.Length == 0)
                 {
@@ -81,7 +81,7 @@ namespace Titanium.Web.Proxy.Extensions
 
                 if (chunkSize != 0)
                 {
-                    var buffer = await clientStreamReader.ReadBytesAsync(bufferSize, chunkSize);
+                    var buffer = await clientStreamReader.ReadBytesAsync(chunkSize);
                     await stream.WriteAsync(buffer, 0, buffer.Length);
                     //chunk trail
                     await clientStreamReader.ReadLineAsync();
@@ -179,7 +179,7 @@ namespace Titanium.Web.Proxy.Extensions
 
                 if (chunkSize != 0)
                 {
-                    var buffer = await inStreamReader.ReadBytesAsync(bufferSize, chunkSize);
+                    var buffer = await inStreamReader.ReadBytesAsync(chunkSize);
 
                     var chunkHeadBytes = Encoding.ASCII.GetBytes(chunkSize.ToString("x2"));
 

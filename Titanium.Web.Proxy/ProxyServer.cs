@@ -264,6 +264,15 @@ namespace Titanium.Web.Proxy
 #endif
 
             certificateManager = new CertificateManager(ExceptionFunc);
+            if (rootCertificateName != null)
+            {
+                RootCertificateName = rootCertificateName;
+            }
+
+            if (rootCertificateIssuerName != null)
+            {
+                RootCertificateIssuerName = rootCertificateIssuerName;
+            }
         }
 
         /// <summary>
@@ -556,7 +565,7 @@ namespace Titanium.Web.Proxy
 
                 if (TrustRootCertificate)
                 {
-                    certificateManager.TrustRootCertificate(ExceptionFunc);
+                    certificateManager.TrustRootCertificate();
                 }
             }
         }
