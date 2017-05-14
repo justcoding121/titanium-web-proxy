@@ -7,6 +7,6 @@ namespace Titanium.Web.Proxy.Decompression
     /// </summary>
     internal interface IDecompression
     {
-       Task<byte[]> Decompress(byte[] compressedArray, int bufferSize);
+        Task<byte[]> Decompress(byte[] compressedArray, int bufferSize);
     }
 }

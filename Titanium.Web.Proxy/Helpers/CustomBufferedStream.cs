@@ -15,11 +15,11 @@ namespace Titanium.Web.Proxy.Helpers
     internal class CustomBufferedStream : Stream
     {
         private readonly Stream baseStream;
-        
+
         private readonly byte[] streamBuffer;
-        
+
         private int bufferLength;
-        
+
         private int bufferPos;
 
         /// <summary>
@@ -197,7 +197,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             if (asyncResult is ReadAsyncResult)
             {
-                return ((ReadAsyncResult)asyncResult).ReadBytes;
+                return ((ReadAsyncResult) asyncResult).ReadBytes;
             }
 
             return baseStream.EndRead(asyncResult);
