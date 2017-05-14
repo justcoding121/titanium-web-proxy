@@ -172,7 +172,7 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var header = RequestHeaders["transfer-encoding"];
 
-                    return header.Value.ToLower().Contains("chunked");
+                    return header.Value.ContainsIgnoreCase("chunked");
                 }
 
                 return false;
@@ -266,7 +266,7 @@ namespace Titanium.Web.Proxy.Http
 
                 var header = RequestHeaders["upgrade"];
 
-                return header.Value.ToLower() == "websocket";
+                return header.Value.Equals("websocket", StringComparison.CurrentCultureIgnoreCase);
             }
         }
 

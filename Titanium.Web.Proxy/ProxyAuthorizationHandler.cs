@@ -48,7 +48,7 @@ namespace Titanium.Web.Proxy
                 var header = httpHeaders.FirstOrDefault(t => t.Name == "Proxy-Authorization");
                 if (null == header) throw new NullReferenceException();
                 var headerValue = header.Value.Trim();
-                if (!headerValue.ToLower().StartsWith("basic"))
+                if (!headerValue.StartsWith("basic", StringComparison.CurrentCultureIgnoreCase))
                 {
                     //Return not authorized
                     await WriteResponseStatus(new Version(1, 1), "407",
@@ -95,7 +95,7 @@ namespace Titanium.Web.Proxy
                 }
                 var username = decoded.Substring(0, decoded.IndexOf(':'));
                 var password = decoded.Substring(decoded.IndexOf(':') + 1);
-                return await AuthenticateUserFunc(username, password).ConfigureAwait(false);
+                return await AuthenticateUserFunc(username, password);
             }
             catch (Exception e)
             {
