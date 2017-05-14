@@ -16,6 +16,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal ExternalProxy UpStreamHttpsProxy { get; set; }
 
         internal string HostName { get; set; }
+
         internal int Port { get; set; }
 
         internal bool IsHttps { get; set; }
@@ -58,7 +59,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             TcpClient.LingerState = new LingerOption(true, 0);
             TcpClient.Close();
-            
         }
     }
 }

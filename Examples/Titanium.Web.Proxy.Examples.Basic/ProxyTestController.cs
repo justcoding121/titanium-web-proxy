@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
@@ -129,6 +128,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                       "</body>" +
                       "</html>");
             }
+
             //Redirect example
             if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
             {
@@ -144,6 +144,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 //access request body by looking up the shared dictionary using requestId
                 var requestBody = requestBodyHistory[e.Id];
             }
+
             //read response headers
             var responseHeaders = e.WebSession.Response.ResponseHeaders;
 
