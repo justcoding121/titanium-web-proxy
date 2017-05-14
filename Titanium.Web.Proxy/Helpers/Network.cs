@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.Helpers
         private static int FindProcessIdFromLocalPort(int port, IpVersion ipVersion)
         {
             var tcpRow = TcpHelper.GetExtendedTcpTable(ipVersion).FirstOrDefault(
-                    row => row.LocalEndPoint.Port == port);
+                row => row.LocalEndPoint.Port == port);
 
             return tcpRow?.ProcessId ?? 0;
         }
@@ -69,7 +69,6 @@ namespace Titanium.Web.Proxy.Helpers
                     }
                     catch (SocketException)
                     {
-
                     }
                 }
             }

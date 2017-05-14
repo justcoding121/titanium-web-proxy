@@ -45,10 +45,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
             Stream clientStream, IPEndPoint upStreamEndPoint)
         {
             TcpClient client;
-                CustomBufferedStream stream;
+            CustomBufferedStream stream;
 
             bool isLocalhost = (externalHttpsProxy == null && externalHttpProxy == null) ? false : NetworkHelper.IsLocalIpAddress(remoteHostName);
-            
+
             bool useHttpsProxy = externalHttpsProxy != null && externalHttpsProxy.HostName != remoteHostName && (externalHttpsProxy.BypassForLocalhost && !isLocalhost);
             bool useHttpProxy = externalHttpProxy != null && externalHttpProxy.HostName != remoteHostName && (externalHttpProxy.BypassForLocalhost && !isLocalhost);
 
@@ -63,7 +63,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     await client.ConnectAsync(externalHttpsProxy.HostName, externalHttpsProxy.Port);
                     stream = new CustomBufferedStream(client.GetStream(), bufferSize);
 
-                    using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true) { NewLine = ProxyConstants.NewLine })
+                    using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true) {NewLine = ProxyConstants.NewLine})
                     {
                         await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
                         await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
@@ -83,7 +83,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     {
                         var result = await reader.ReadLineAsync();
 
-                        if (!new[] { "200 OK", "connection established" }.Any(s => result.ContainsIgnoreCase(s)))
+                        if (!new[] {"200 OK", "connection established"}.Any(s => result.ContainsIgnoreCase(s)))
                         {
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
                         }
