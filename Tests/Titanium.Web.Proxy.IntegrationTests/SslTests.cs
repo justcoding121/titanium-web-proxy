@@ -1,7 +1,6 @@
 ﻿using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Net;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
@@ -28,14 +27,13 @@ namespace Titanium.Web.Proxy.IntegrationTests
             {
                 var response = client.GetAsync(new Uri(testUrl)).Result;
             }
-
         }
 
         private HttpClient CreateHttpClient(string url, int localProxyPort)
         {
             var handler = new HttpClientHandler
             {
-                Proxy = new WebProxy(string.Format("http://localhost:{0}", localProxyPort), false),
+                Proxy = new WebProxy($"http://localhost:{localProxyPort}", false),
                 UseProxy = true,
             };
 
@@ -47,7 +45,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
 
     public class ProxyTestController
     {
-        private ProxyServer proxyServer;
+        private readonly ProxyServer proxyServer;
 
         public ProxyTestController()
         {
@@ -63,7 +61,6 @@ namespace Titanium.Web.Proxy.IntegrationTests
             proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, proxyPort, true);
-          
 
             //An explicit endpoint is where the client knows about the existance of a proxy
             //So client sends request in a proxy friendly manner
@@ -73,7 +70,6 @@ namespace Titanium.Web.Proxy.IntegrationTests
             foreach (var endPoint in proxyServer.ProxyEndPoints)
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ",
                     endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
-
         }
 
         public void Stop()
