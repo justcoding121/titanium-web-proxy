@@ -6,7 +6,6 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
-using System.Text.RegularExpressions;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
@@ -30,7 +29,7 @@ namespace Titanium.Web.Proxy
         private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient tcpClient)
         {
 
-            Stream clientStream = tcpClient.GetStream();
+            CustomBufferedStream clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
             clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
             clientStream.WriteTimeout = ConnectionTimeOutSeconds * 1000;
@@ -112,7 +111,6 @@ namespace Titanium.Web.Proxy
 
                     try
                     {
-
                         sslStream = new SslStream(clientStream, true);
 
                         var certificate = endPoint.GenericCertificate ?? certificateManager.CreateCertificate(httpRemoteUri.Host, false);
@@ -121,11 +119,10 @@ namespace Titanium.Web.Proxy
                         await sslStream.AuthenticateAsServerAsync(certificate, false,
                             SupportedSslProtocols, false);
                         //HTTPS server created - we can now decrypt the client's traffic
-                        clientStream = sslStream;
+                        clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
-                        clientStreamReader = new CustomBinaryReader(sslStream, BufferSize);
-                        clientStreamWriter = new StreamWriter(sslStream) {NewLine = ProxyConstants.NewLine };
-
+                        clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
+                        clientStreamWriter = new StreamWriter(clientStream) {NewLine = ProxyConstants.NewLine };
                     }
                     catch
                     {
@@ -171,8 +168,7 @@ namespace Titanium.Web.Proxy
         //So for HTTPS requests we would start SSL negotiation right away without expecting a CONNECT request from client
         private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
-
-            Stream clientStream = tcpClient.GetStream();
+            CustomBufferedStream clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
             clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
             clientStream.WriteTimeout = ConnectionTimeOutSeconds * 1000;
@@ -193,8 +189,9 @@ namespace Titanium.Web.Proxy
                     await sslStream.AuthenticateAsServerAsync(certificate, false,
                         SslProtocols.Tls, false);
 
-                    clientStreamReader = new CustomBinaryReader(sslStream, BufferSize);
-                    clientStreamWriter = new StreamWriter(sslStream) { NewLine = ProxyConstants.NewLine };
+                    clientStream = new CustomBufferedStream(sslStream, BufferSize);
+                    clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
+                    clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
                     //HTTPS server created - we can now decrypt the client's traffic
 
                 }
@@ -205,7 +202,6 @@ namespace Titanium.Web.Proxy
                     Dispose(sslStream, clientStreamReader, clientStreamWriter, null);
                     return;
                 }
-                clientStream = sslStream;
             }
             else
             {
