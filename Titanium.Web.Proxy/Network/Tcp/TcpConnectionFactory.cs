@@ -45,7 +45,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             Stream clientStream, IPEndPoint upStreamEndPoint)
         {
             TcpClient client;
-            Stream stream;
+                CustomBufferedStream stream;
 
             bool isLocalhost = (externalHttpsProxy == null && externalHttpProxy == null) ? false : NetworkHelper.IsLocalIpAddress(remoteHostName);
             
@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     client = new TcpClient(upStreamEndPoint);
                     await client.ConnectAsync(externalHttpsProxy.HostName, externalHttpsProxy.Port);
-                    stream = client.GetStream();
+                    stream = new CustomBufferedStream(client.GetStream(), bufferSize);
 
                     using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true) { NewLine = ProxyConstants.NewLine })
                     {
@@ -83,7 +83,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     {
                         var result = await reader.ReadLineAsync();
 
-
                         if (!new[] { "200 OK", "connection established" }.Any(s => result.ContainsIgnoreCase(s)))
                         {
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
@@ -96,7 +95,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     client = new TcpClient(upStreamEndPoint);
                     await client.ConnectAsync(remoteHostName, remotePort);
-                    stream = client.GetStream();
+                    stream = new CustomBufferedStream(client.GetStream(), bufferSize);
                 }
 
                 try
@@ -106,7 +105,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                     await sslStream.AuthenticateAsClientAsync(remoteHostName, null, supportedSslProtocols, false);
 
-                    stream = sslStream;
+                    stream = new CustomBufferedStream(sslStream, bufferSize);
                 }
                 catch
                 {
@@ -121,13 +120,13 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     client = new TcpClient(upStreamEndPoint);
                     await client.ConnectAsync(externalHttpProxy.HostName, externalHttpProxy.Port);
-                    stream = client.GetStream();
+                    stream = new CustomBufferedStream(client.GetStream(), bufferSize);
                 }
                 else
                 {
                     client = new TcpClient(upStreamEndPoint);
                     await client.ConnectAsync(remoteHostName, remotePort);
-                    stream = client.GetStream();
+                    stream = new CustomBufferedStream(client.GetStream(), bufferSize);
                 }
             }
 
