@@ -139,7 +139,7 @@ namespace Titanium.Web.Proxy
                 //Sorry cannot do a HTTPS request decrypt to port 80 at this time
                 else if (httpVerb == "CONNECT")
                 {
-                    //Cyphen out CONNECT request headers
+                    //Siphon out CONNECT request headers
                     await clientStreamReader.ReadAndIgnoreAllLinesAsync();
                     //write back successfull CONNECT response
                     await WriteConnectResponse(clientStreamWriter, version);
