@@ -19,12 +19,7 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
-        /// <summary>
-        /// Is the root certificate used by this proxy is valid?
-        /// </summary>
-        private bool? certValidated { get; set; }
-
-        /// <summary>
+            /// <summary>
         /// Is the proxy currently running
         /// </summary>
         private bool proxyRunning { get; set; }
@@ -85,11 +80,7 @@ namespace Titanium.Web.Proxy
         public string RootCertificateIssuerName
         {
             get { return certificateManager.Issuer; }
-            set
-            {
-                CreateCertificateManager(certificateManager.RootCertificateName, value);
-                certValidated = null;
-            }
+            set { certificateManager.RootCertificateName = value; }
         }
 
         /// <summary>
@@ -102,11 +93,7 @@ namespace Titanium.Web.Proxy
         public string RootCertificateName
         {
             get { return certificateManager.RootCertificateName; }
-            set
-            {
-                CreateCertificateManager(value, certificateManager.Issuer);
-                certValidated = null;
-            }
+            set { certificateManager.Issuer = value; }
         }
 
         /// <summary>
@@ -132,7 +119,11 @@ namespace Titanium.Web.Proxy
         /// Optionally set to BouncyCastle
         /// Mono only support BouncyCastle and it is the default
         /// </summary>
-        public CertificateEngine CertificateEngine { get; set; }
+        public CertificateEngine CertificateEngine
+        {
+            get { return certificateManager.Engine; }
+            set { certificateManager.Engine = value; }
+        }
 
         /// <summary>
         /// Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
@@ -272,7 +263,7 @@ namespace Titanium.Web.Proxy
             new FireFoxProxySettingsManager();
 #endif
 
-            CreateCertificateManager(rootCertificateName, rootCertificateIssuerName);
+            certificateManager = new CertificateManager(ExceptionFunc);
         }
 
         /// <summary>
@@ -369,7 +360,7 @@ namespace Titanium.Web.Proxy
             EnsureRootCertificate();
 
             //If certificate was trusted by the machine
-            if (certValidated == true)
+            if (certificateManager.CertValidated)
             {
                 systemProxySettingsManager.SetHttpsProxy(
                    Equals(endPoint.IpAddress, IPAddress.Any) | 
@@ -557,17 +548,11 @@ namespace Titanium.Web.Proxy
         }
 
 
-        private void CreateCertificateManager(string rootCertificateName, string rootCertificateIssuerName)
-        {
-            certificateManager = new CertificateManager(CertificateEngine,
-                rootCertificateIssuerName, rootCertificateName, ExceptionFunc);
-        }
-
         private void EnsureRootCertificate()
         {
-            if (!certValidated.HasValue)
+            if (!certificateManager.CertValidated)
             {
-                certValidated = certificateManager.CreateTrustedRootCertificate();
+                certificateManager.CreateTrustedRootCertificate();
 
                 if (TrustRootCertificate)
                 {
