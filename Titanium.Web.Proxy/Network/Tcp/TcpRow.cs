@@ -21,10 +21,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
             long localAddress = tcpRow.localAddr;
             LocalEndPoint = new IPEndPoint(localAddress, localPort);
 
-			int remotePort = (tcpRow.remotePort1 << 8) + (tcpRow.remotePort2) + (tcpRow.remotePort3 << 24) + (tcpRow.remotePort4 << 16);
-			long remoteAddress = tcpRow.remoteAddr;
-			RemoteEndPoint = new IPEndPoint(remoteAddress, remotePort);
-		}
+            int remotePort = (tcpRow.remotePort1 << 8) + (tcpRow.remotePort2) + (tcpRow.remotePort3 << 24) + (tcpRow.remotePort4 << 16);
+            long remoteAddress = tcpRow.remoteAddr;
+            RemoteEndPoint = new IPEndPoint(remoteAddress, remotePort);
+        }
 
         /// <summary>
         /// Gets the local end point.

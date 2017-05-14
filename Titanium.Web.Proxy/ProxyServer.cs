@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
-            /// <summary>
+        /// <summary>
         /// Is the proxy currently running
         /// </summary>
         private bool proxyRunning { get; set; }
@@ -52,9 +52,9 @@ namespace Titanium.Web.Proxy
         private SystemProxyManager systemProxySettingsManager { get; }
 
 #if !DEBUG
-       /// <summary>
-       /// Set firefox to use default system proxy
-       /// </summary>
+        /// <summary>
+        /// Set firefox to use default system proxy
+        /// </summary>
         private FireFoxProxySettingsManager firefoxProxySettingsManager
             = new FireFoxProxySettingsManager();
 #endif
@@ -201,31 +201,19 @@ namespace Titanium.Web.Proxy
         /// Parameters are username, password provided by client
         /// return true for successful authentication
         /// </summary>
-        public Func<string, string, Task<bool>> AuthenticateUserFunc
-        {
-            get;
-            set;
-        }
+        public Func<string, string, Task<bool>> AuthenticateUserFunc { get; set; }
 
         /// <summary>
         /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP requests
         /// return the ExternalProxy object with valid credentials
         /// </summary>
-        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpProxyFunc
-        {
-            get;
-            set;
-        }
+        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpProxyFunc { get; set; }
 
         /// <summary>
         /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTPS requests
         /// return the ExternalProxy object with valid credentials
         /// </summary>
-        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpsProxyFunc
-        {
-            get;
-            set;
-        }
+        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpsProxyFunc { get; set; }
 
         /// <summary>
         /// A list of IpAddress & port this proxy is listening to
@@ -235,7 +223,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// List of supported Ssl versions
         /// </summary>
-        public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls 
+        public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls
             | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 
         /// <summary>
@@ -281,8 +269,8 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void AddEndPoint(ProxyEndPoint endPoint)
         {
-            if (ProxyEndPoints.Any(x => x.IpAddress.Equals(endPoint.IpAddress) 
-            && endPoint.Port != 0 && x.Port == endPoint.Port))
+            if (ProxyEndPoints.Any(x => x.IpAddress.Equals(endPoint.IpAddress)
+                                        && endPoint.Port != 0 && x.Port == endPoint.Port))
             {
                 throw new Exception("Cannot add another endpoint to same port & ip address");
             }
@@ -321,7 +309,7 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint)
         {
-            if(RunTime.IsRunningOnMono())
+            if (RunTime.IsRunningOnMono())
             {
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
@@ -339,7 +327,6 @@ namespace Titanium.Web.Proxy
             firefoxProxySettingsManager.AddFirefox();
 #endif
             Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System HTTP Proxy", endPoint.IpAddress, endPoint.Port);
-
         }
 
 
@@ -372,9 +359,8 @@ namespace Titanium.Web.Proxy
             if (certificateManager.CertValidated)
             {
                 systemProxySettingsManager.SetHttpsProxy(
-                   Equals(endPoint.IpAddress, IPAddress.Any) | 
-                   Equals(endPoint.IpAddress, IPAddress.Loopback) ? 
-                   "127.0.0.1" : endPoint.IpAddress.ToString(),
+                    Equals(endPoint.IpAddress, IPAddress.Any) |
+                    Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(),
                     endPoint.Port);
             }
 
@@ -437,7 +423,7 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
-            if (ForwardToUpstreamGateway && GetCustomUpStreamHttpProxyFunc == null 
+            if (ForwardToUpstreamGateway && GetCustomUpStreamHttpProxyFunc == null
                 && GetCustomUpStreamHttpsProxyFunc == null)
             {
                 GetCustomUpStreamHttpProxyFunc = GetSystemUpStreamProxy;
@@ -509,12 +495,10 @@ namespace Titanium.Web.Proxy
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
             endPoint.Listener.Start();
 
-            endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
+            endPoint.Port = ((IPEndPoint) endPoint.Listener.LocalEndpoint).Port;
             // accept clients asynchronously
             endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
         }
-
-      
 
         /// <summary>
         /// Verifiy if its safe to set this end point as System proxy
@@ -576,7 +560,7 @@ namespace Titanium.Web.Proxy
         /// <param name="asyn"></param>
         private void OnAcceptConnection(IAsyncResult asyn)
         {
-            var endPoint = (ProxyEndPoint)asyn.AsyncState;
+            var endPoint = (ProxyEndPoint) asyn.AsyncState;
 
             TcpClient tcpClient = null;
 
@@ -612,7 +596,6 @@ namespace Titanium.Web.Proxy
                         {
                             await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient);
                         }
-
                     }
                     finally
                     {
@@ -664,6 +647,7 @@ namespace Titanium.Web.Proxy
         {
             BeforeResponse?.Invoke(sender, e);
         }
+
         /// <summary>
         /// Invocator for ServerCertificateValidationCallback event.
         /// </summary>

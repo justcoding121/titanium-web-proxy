@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-
     /// <summary>
     /// A custom binary reader that would allo us to read string line by line
     /// using the specified encoding
@@ -124,7 +123,7 @@ namespace Titanium.Web.Proxy.Helpers
             int bytesToRead = bufferSize;
 
             if (totalBytesToRead < bufferSize)
-                bytesToRead = (int)totalBytesToRead;
+                bytesToRead = (int) totalBytesToRead;
 
             var buffer = staticBuffer;
             int bytesRead;
@@ -138,7 +137,7 @@ namespace Titanium.Web.Proxy.Helpers
                     break;
 
                 var remainingBytes = totalBytesToRead - totalBytesRead;
-                bytesToRead = Math.Min(bufferSize, (int)remainingBytes);
+                bytesToRead = Math.Min(bufferSize, (int) remainingBytes);
 
                 if (totalBytesRead + bytesToRead > buffer.Length)
                 {

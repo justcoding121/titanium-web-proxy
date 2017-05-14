@@ -1,5 +1,4 @@
-﻿
-namespace Titanium.Web.Proxy.Exceptions
+﻿namespace Titanium.Web.Proxy.Exceptions
 {
     /// <summary>
     /// An expception thrown when body is unexpectedly empty
