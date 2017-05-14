@@ -19,18 +19,18 @@ namespace Titanium.Web.Proxy.Helpers
         private readonly Encoding encoding;
 
         [ThreadStatic]
-        private static byte[] staticBuffer;
+        private static byte[] staticBufferField;
 
-        private byte[] buffer
+        private byte[] staticBuffer
         {
             get
             {
-                if (staticBuffer == null || staticBuffer.Length != bufferSize)
+                if (staticBufferField == null || staticBufferField.Length != bufferSize)
                 {
-                    staticBuffer = new byte[bufferSize];
+                    staticBufferField = new byte[bufferSize];
                 }
 
-                return staticBuffer;
+                return staticBufferField;
             }
         }
 
@@ -56,7 +56,7 @@ namespace Titanium.Web.Proxy.Helpers
             int bufferDataLength = 0;
 
             // try to use the thread static buffer, usually it is enough
-            var buffer = this.buffer;
+            var buffer = staticBuffer;
 
             while (stream.DataAvailable || await stream.FillBufferAsync())
             {
@@ -117,22 +117,16 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         /// Read the specified number of raw bytes from the base stream
         /// </summary>
-        /// <param name="bufferSize"></param>
         /// <param name="totalBytesToRead"></param>
         /// <returns></returns>
-        internal async Task<byte[]> ReadBytesAsync(int bufferSize, long totalBytesToRead)
+        internal async Task<byte[]> ReadBytesAsync(long totalBytesToRead)
         {
             int bytesToRead = bufferSize;
 
             if (totalBytesToRead < bufferSize)
                 bytesToRead = (int)totalBytesToRead;
 
-            var buffer = this.buffer;
-            if (bytesToRead > buffer.Length)
-            {
-                buffer = new byte[bytesToRead];
-            }
-
+            var buffer = staticBuffer;
             int bytesRead;
             var totalBytesRead = 0;
 
