@@ -1,21 +1,18 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Runtime.Remoting;
-using System.Runtime.Remoting.Messaging;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Helpers
 {
     /// <summary>
-    /// 
+    /// A custom network stream inherited from stream
+    /// with an underlying buffer 
     /// </summary>
     /// <seealso cref="System.IO.Stream" />
-    class CustomBufferedStream : Stream
+    internal class CustomBufferedStream : Stream
     {
         private readonly Stream baseStream;
         
@@ -419,7 +416,7 @@ namespace Titanium.Web.Proxy.Helpers
             return bufferLength > 0;
         }
 
-        class ReadAsyncResult : IAsyncResult
+        private class ReadAsyncResult : IAsyncResult
         {
             public int ReadBytes { get; }
 
