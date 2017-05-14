@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
@@ -18,6 +17,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
+            proxyServer.ExceptionFunc = exception => Console.WriteLine(exception.Message);
             proxyServer.TrustRootCertificate = true;
 
             //optionally set the Certificate Engine
@@ -99,7 +99,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             Console.WriteLine(e.WebSession.Request.Url);
 
-            ////read request headers
+            //read request headers
             var requestHeaders = e.WebSession.Request.RequestHeaders;
 
             var method = e.WebSession.Request.Method.ToUpper();
@@ -128,6 +128,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                       "</body>" +
                       "</html>");
             }
+
             //Redirect example
             if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
             {
@@ -143,6 +144,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 //access request body by looking up the shared dictionary using requestId
                 var requestBody = requestBodyHistory[e.Id];
             }
+
             //read response headers
             var responseHeaders = e.WebSession.Response.ResponseHeaders;
 

@@ -21,9 +21,9 @@ namespace Titanium.Web.Proxy.Models
         /// <param name="enableSsl"></param>
         protected ProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl)
         {
-            this.IpAddress = ipAddress;
-            this.Port = port;
-            this.EnableSsl = enableSsl;
+            IpAddress = ipAddress;
+            Port = port;
+            EnableSsl = enableSsl;
         }
 
         /// <summary>
@@ -55,8 +55,8 @@ namespace Titanium.Web.Proxy.Models
     /// </summary>
     public class ExplicitProxyEndPoint : ProxyEndPoint
     {
-        internal List<Regex> excludedHttpsHostNameRegex;
-        internal List<Regex> includedHttpsHostNameRegex;
+        internal List<Regex> ExcludedHttpsHostNameRegexList;
+        internal List<Regex> IncludedHttpsHostNameRegexList;
 
         internal bool IsSystemHttpProxy { get; set; }
 
@@ -67,7 +67,7 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         public IEnumerable<string> ExcludedHttpsHostNameRegex
         {
-            get { return excludedHttpsHostNameRegex?.Select(x => x.ToString()).ToList(); }
+            get { return ExcludedHttpsHostNameRegexList?.Select(x => x.ToString()).ToList(); }
             set
             {
                 if (IncludedHttpsHostNameRegex != null)
@@ -75,7 +75,7 @@ namespace Titanium.Web.Proxy.Models
                     throw new ArgumentException("Cannot set excluded when included is set");
                 }
 
-                excludedHttpsHostNameRegex = value?.Select(x=>new Regex(x, RegexOptions.Compiled)).ToList();
+                ExcludedHttpsHostNameRegexList = value?.Select(x=>new Regex(x, RegexOptions.Compiled)).ToList();
             }
         }
 
@@ -84,7 +84,7 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         public IEnumerable<string> IncludedHttpsHostNameRegex
         {
-            get { return includedHttpsHostNameRegex?.Select(x => x.ToString()).ToList(); }
+            get { return IncludedHttpsHostNameRegexList?.Select(x => x.ToString()).ToList(); }
             set
             {
                 if (ExcludedHttpsHostNameRegex != null)
@@ -92,7 +92,7 @@ namespace Titanium.Web.Proxy.Models
                     throw new ArgumentException("Cannot set included when excluded is set");
                 }
 
-                includedHttpsHostNameRegex = value?.Select(x => new Regex(x, RegexOptions.Compiled)).ToList();
+                IncludedHttpsHostNameRegexList = value?.Select(x => new Regex(x, RegexOptions.Compiled)).ToList();
             }
         }
 
@@ -136,7 +136,7 @@ namespace Titanium.Web.Proxy.Models
         public TransparentProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl)
             : base(ipAddress, port, enableSsl)
         {
-            this.GenericCertificateName = "localhost";
+            GenericCertificateName = "localhost";
         }
     }
 

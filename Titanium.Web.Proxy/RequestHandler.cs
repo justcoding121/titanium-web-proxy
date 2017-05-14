@@ -75,12 +75,12 @@ namespace Titanium.Web.Proxy
 
                 if (endPoint.ExcludedHttpsHostNameRegex != null)
                 {
-                    excluded = endPoint.excludedHttpsHostNameRegex.Any(x => x.IsMatch(httpRemoteUri.Host));
+                    excluded = endPoint.ExcludedHttpsHostNameRegexList.Any(x => x.IsMatch(httpRemoteUri.Host));
                 }
 
                 if (endPoint.IncludedHttpsHostNameRegex != null)
                 {
-                    excluded = !endPoint.includedHttpsHostNameRegex.Any(x => x.IsMatch(httpRemoteUri.Host));
+                    excluded = !endPoint.IncludedHttpsHostNameRegexList.Any(x => x.IsMatch(httpRemoteUri.Host));
                 }
 
                 List<HttpHeader> connectRequestHeaders = null;
