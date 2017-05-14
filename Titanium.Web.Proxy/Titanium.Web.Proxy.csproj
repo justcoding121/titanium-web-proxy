@@ -26,6 +26,7 @@
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <Prefer32Bit>false</Prefer32Bit>
     <DocumentationFile>bin\Debug\Titanium.Web.Proxy.XML</DocumentationFile>
+    <LangVersion>6</LangVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -73,6 +74,7 @@
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
     <Compile Include="Extensions\StringExtensions.cs" />
+    <Compile Include="Helpers\CustomBufferedStream.cs" />
     <Compile Include="Helpers\Network.cs" />
     <Compile Include="Helpers\RunTime.cs" />
     <Compile Include="Http\Responses\GenericResponse.cs" />

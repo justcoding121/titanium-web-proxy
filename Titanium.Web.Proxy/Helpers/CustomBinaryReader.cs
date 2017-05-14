@@ -14,18 +14,33 @@ namespace Titanium.Web.Proxy.Helpers
     /// </summary>
     internal class CustomBinaryReader : IDisposable
     {
-        private readonly Stream stream;
+        private readonly CustomBufferedStream stream;
+        private readonly int bufferSize;
         private readonly Encoding encoding;
-        private readonly byte[] buffer;
 
-        internal CustomBinaryReader(Stream stream, int bufferSize)
+        [ThreadStatic]
+        private static byte[] staticBuffer;
+
+        private byte[] buffer
+        {
+            get
+            {
+                if (staticBuffer == null || staticBuffer.Length != bufferSize)
+                {
+                    staticBuffer = new byte[bufferSize];
+                }
+
+                return staticBuffer;
+            }
+        }
+
+        internal CustomBinaryReader(CustomBufferedStream stream, int bufferSize)
         {
             this.stream = stream;
+            this.bufferSize = bufferSize;
 
             //default to UTF-8
             encoding = Encoding.UTF8;
-
-            buffer = new byte[bufferSize];
         }
 
         internal Stream BaseStream => stream;
@@ -40,12 +55,13 @@ namespace Titanium.Web.Proxy.Helpers
 
             int bufferDataLength = 0;
 
-            // try to use the instance buffer, usually it is enough
+            // try to use the thread static buffer, usually it is enough
             var buffer = this.buffer;
 
-            while (await stream.ReadAsync(buffer, bufferDataLength, 1) > 0)
+            while (stream.DataAvailable || await stream.FillBufferAsync())
             {
-                var newChar = buffer[bufferDataLength];
+                var newChar = stream.ReadByteFromBuffer();
+                buffer[bufferDataLength] = newChar;
 
                 //if new line
                 if (lastChar == '\r' && newChar == '\n')
@@ -111,7 +127,11 @@ namespace Titanium.Web.Proxy.Helpers
             if (totalBytesToRead < bufferSize)
                 bytesToRead = (int)totalBytesToRead;
 
-            var buffer = bytesToRead > this.buffer.Length ? new byte[bytesToRead] : this.buffer;
+            var buffer = this.buffer;
+            if (bytesToRead > buffer.Length)
+            {
+                buffer = new byte[bytesToRead];
+            }
 
             int bytesRead;
             var totalBytesRead = 0;

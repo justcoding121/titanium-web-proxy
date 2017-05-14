@@ -175,7 +175,7 @@ namespace Titanium.Web.Proxy
 
             foreach (var header in response.ResponseHeaders)
             {
-                await responseWriter.WriteLineAsync(header.Value.ToString());
+                await header.Value.WriteToStream(responseWriter);
             }
 
             //write non unique request headers
@@ -184,10 +184,9 @@ namespace Titanium.Web.Proxy
                 var headers = headerItem.Value;
                 foreach (var header in headers)
                 {
-                    await responseWriter.WriteLineAsync(header.ToString());
+                    await header.WriteToStream(responseWriter);
                 }
             }
-
 
             await responseWriter.WriteLineAsync();
             await responseWriter.FlushAsync();
