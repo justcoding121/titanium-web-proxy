@@ -18,6 +18,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
+            proxyServer.ExceptionFunc = exception => Console.WriteLine(exception.Message);
             proxyServer.TrustRootCertificate = true;
 
             //optionally set the Certificate Engine
@@ -99,7 +100,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             Console.WriteLine(e.WebSession.Request.Url);
 
-            ////read request headers
+            //read request headers
             var requestHeaders = e.WebSession.Request.RequestHeaders;
 
             var method = e.WebSession.Request.Method.ToUpper();
