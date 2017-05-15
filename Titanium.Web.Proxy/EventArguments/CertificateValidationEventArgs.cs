@@ -13,10 +13,12 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Certificate
         /// </summary>
         public X509Certificate Certificate { get; internal set; }
+
         /// <summary>
         /// Certificate chain
         /// </summary>
         public X509Chain Chain { get; internal set; }
+
         /// <summary>
         /// SSL policy errors.
         /// </summary>

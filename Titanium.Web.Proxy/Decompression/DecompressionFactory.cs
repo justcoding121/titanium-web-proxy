@@ -7,7 +7,7 @@
     {
         internal IDecompression Create(string type)
         {
-            switch(type)
+            switch (type)
             {
                 case "gzip":
                     return new GZipDecompression();
