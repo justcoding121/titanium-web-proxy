@@ -7,15 +7,16 @@ using Titanium.Web.Proxy.Models;
 namespace Titanium.Web.Proxy.Network.Tcp
 {
     /// <summary>
-    /// An object that holds TcpConnection to a particular server & port
+    /// An object that holds TcpConnection to a particular server and port
     /// </summary>
-    public class TcpConnection : IDisposable
+    internal class TcpConnection : IDisposable
     {
         internal ExternalProxy UpStreamHttpProxy { get; set; }
 
         internal ExternalProxy UpStreamHttpsProxy { get; set; }
 
         internal string HostName { get; set; }
+
         internal int Port { get; set; }
 
         internal bool IsHttps { get; set; }
@@ -47,18 +48,17 @@ namespace Titanium.Web.Proxy.Network.Tcp
             LastAccess = DateTime.Now;
         }
 
+        /// <summary>
+        /// Dispose.
+        /// </summary>
         public void Dispose()
         {
-            Stream.Close();
-            Stream.Dispose();
+            Stream?.Close();
+            Stream?.Dispose();
 
-            TcpClient.LingerState = new LingerOption(true, 0);
-            TcpClient.Client.Shutdown(SocketShutdown.Both);
-            TcpClient.Client.Close();
-            TcpClient.Client.Dispose();
+            StreamReader?.Dispose();
 
-            TcpClient.Close();
-            
+            TcpClient?.Close();
         }
     }
 }

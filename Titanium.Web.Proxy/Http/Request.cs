@@ -34,12 +34,7 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 var hasHeader = RequestHeaders.ContainsKey("host");
-                if (hasHeader)
-                {
-                    return RequestHeaders["host"].Value;
-                }
-
-                return null;
+                return hasHeader ? RequestHeaders["host"].Value : null;
             }
             set
             {
@@ -52,7 +47,6 @@ namespace Titanium.Web.Proxy.Http
                 {
                     RequestHeaders.Add("Host", new HttpHeader("Host", value));
                 }
-
             }
         }
 
@@ -124,9 +118,7 @@ namespace Titanium.Web.Proxy.Http
                     {
                         RequestHeaders.Remove("content-length");
                     }
-
                 }
-
             }
         }
 
@@ -154,14 +146,13 @@ namespace Titanium.Web.Proxy.Http
                 if (hasHeader)
                 {
                     var header = RequestHeaders["content-type"];
-                    header.Value = value.ToString();
+                    header.Value = value;
                 }
                 else
                 {
-                    RequestHeaders.Add("content-type", new HttpHeader("content-type", value.ToString()));
+                    RequestHeaders.Add("content-type", new HttpHeader("content-type", value));
                 }
             }
-
         }
 
         /// <summary>
@@ -177,7 +168,7 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var header = RequestHeaders["transfer-encoding"];
 
-                    return header.Value.ToLower().Contains("chunked");
+                    return header.Value.ContainsIgnoreCase("chunked");
                 }
 
                 return false;
@@ -219,14 +210,10 @@ namespace Titanium.Web.Proxy.Http
             {
                 var hasHeader = RequestHeaders.ContainsKey("expect");
 
-                if (hasHeader)
-                {
-                    var header = RequestHeaders["expect"];
+                if (!hasHeader) return false;
+                var header = RequestHeaders["expect"];
 
-                    return header.Value.Equals("100-continue");
-                }
-
-                return false;
+                return header.Value.Equals("100-continue");
             }
         }
 
@@ -235,12 +222,12 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public string Url => RequestUri.OriginalString;
 
-	    /// <summary>
+        /// <summary>
         /// Encoding for this request
         /// </summary>
         internal Encoding Encoding => this.GetEncoding();
 
-	    /// <summary>
+        /// <summary>
         /// Terminates the underlying Tcp Connection to client after current request
         /// </summary>
         internal bool CancelRequest { get; set; }
@@ -254,9 +241,9 @@ namespace Titanium.Web.Proxy.Http
         /// request body as string
         /// </summary>
         internal string RequestBodyString { get; set; }
-
-
+        
         internal bool RequestBodyRead { get; set; }
+
         internal bool RequestLocked { get; set; }
 
         /// <summary>
@@ -275,13 +262,7 @@ namespace Titanium.Web.Proxy.Http
 
                 var header = RequestHeaders["upgrade"];
 
-                if (header.Value.ToLower() == "websocket")
-                {
-                    return true;
-                }
-
-                return false;
-
+                return header.Value.Equals("websocket", StringComparison.CurrentCultureIgnoreCase);
             }
         }
 
@@ -305,11 +286,13 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public bool ExpectationFailed { get; internal set; }
 
+        /// <summary>
+        /// Constructor.
+        /// </summary>
         public Request()
         {
             RequestHeaders = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
             NonUniqueRequestHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
         }
-
     }
 }

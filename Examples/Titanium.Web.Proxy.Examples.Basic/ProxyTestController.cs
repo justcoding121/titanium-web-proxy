@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -9,16 +10,29 @@ namespace Titanium.Web.Proxy.Examples.Basic
 {
     public class ProxyTestController
     {
-        private ProxyServer proxyServer;
+        private readonly ProxyServer proxyServer;
 
         //share requestBody outside handlers
-        private Dictionary<Guid, string> requestBodyHistory;
+        private readonly Dictionary<Guid, string> requestBodyHistory = new Dictionary<Guid, string>();
 
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
+
+            //generate root certificate without storing it in file system
+            //proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
+            //proxyServer.CertificateManager.CreateTrustedRootCertificate(false);
+            //proxyServer.CertificateManager.TrustRootCertificate();
+
+            proxyServer.ExceptionFunc = exception => Console.WriteLine(exception.Message);
             proxyServer.TrustRootCertificate = true;
-            requestBodyHistory = new Dictionary<Guid, string>();
+
+            //optionally set the Certificate Engine
+            //Under Mono only BouncyCastle will be supported
+            //proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
+
+            //optionally set the Root Certificate
+            //proxyServer.RootCertificate = new X509Certificate2("myCert.pfx", string.Empty, X509KeyStorageFlags.Exportable);
         }
 
         public void StartProxy()
@@ -28,21 +42,32 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
             proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
-            //Exclude Https addresses you don't want to proxy
-            //Usefull for clients that use certificate pinning
-            //for example dropbox.com
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
             {
-                // ExcludedHttpsHostNameRegex = new List<string>() { "google.com", "dropbox.com" }
+                //Exclude Https addresses you don't want to proxy
+                //Useful for clients that use certificate pinning
+                //for example google.com and dropbox.com
+                 ExcludedHttpsHostNameRegex = new List<string>() { "dropbox.com" }
+
+                //Include Https addresses you want to proxy (others will be excluded)
+                //for example github.com
+                // IncludedHttpsHostNameRegex = new List<string>() { "github.com" }
+
+                //You can set only one of the ExcludedHttpsHostNameRegex and IncludedHttpsHostNameRegex properties, otherwise ArgumentException will be thrown
+
+                //Use self-issued generic certificate on all https requests
+                //Optimizes performance by not creating a certificate for each https-enabled domain
+                //Useful when certificate trust is not required by proxy clients
+                // GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
             };
 
-            //An explicit endpoint is where the client knows about the existance of a proxy
+            //An explicit endpoint is where the client knows about the existence of a proxy
             //So client sends request in a proxy friendly manner
             proxyServer.AddEndPoint(explicitEndPoint);
             proxyServer.Start();
 
 
-            //Transparent endpoint is usefull for reverse proxying (client is not aware of the existance of proxy)
+            //Transparent endpoint is useful for reverse proxying (client is not aware of the existence of proxy)
             //A transparent endpoint usually requires a network router port forwarding HTTP(S) packets to this endpoint
             //Currently do not support Server Name Indication (It is not currently supported by SslStream class)
             //That means that the transparent endpoint will always provide the same Generic Certificate to all HTTPS requests
@@ -74,18 +99,22 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;
 
             proxyServer.Stop();
+
+            //remove the generated certificates
+            //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
         }
 
-        //intecept & cancel, redirect or update requests
+        //intecept & cancel redirect or update requests
         public async Task OnRequest(object sender, SessionEventArgs e)
         {
+            Console.WriteLine("Active Client Connections:" + ((ProxyServer) sender).ClientConnectionCount);
             Console.WriteLine(e.WebSession.Request.Url);
 
-            ////read request headers
+            //read request headers
             var requestHeaders = e.WebSession.Request.RequestHeaders;
 
             var method = e.WebSession.Request.Method.ToUpper();
-            if ((method == "POST" || method == "PUT" || method == "PATCH"))
+            if (method == "POST" || method == "PUT" || method == "PATCH")
             {
                 //Get/Set request body bytes
                 byte[] bodyBytes = await e.GetRequestBody();
@@ -98,45 +127,49 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 requestBodyHistory[e.Id] = bodyString;
             }
 
-            //To cancel a request with a custom HTML content
-            //Filter URL
-            if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
-            {
-                await e.Ok("<!DOCTYPE html>" +
-                      "<html><body><h1>" +
-                      "Website Blocked" +
-                      "</h1>" +
-                      "<p>Blocked by titanium web proxy.</p>" +
-                      "</body>" +
-                      "</html>");
-            }
-            //Redirect example
-            if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
-            {
-                await e.Redirect("https://www.paypal.com");
-            }
+            ////To cancel a request with a custom HTML content
+            ////Filter URL
+            //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
+            //{
+            //    await e.Ok("<!DOCTYPE html>" +
+            //          "<html><body><h1>" +
+            //          "Website Blocked" +
+            //          "</h1>" +
+            //          "<p>Blocked by titanium web proxy.</p>" +
+            //          "</body>" +
+            //          "</html>");
+            //}
+
+            ////Redirect example
+            //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
+            //{
+            //    await e.Redirect("https://www.paypal.com");
+            //}
         }
 
         //Modify response
         public async Task OnResponse(object sender, SessionEventArgs e)
         {
-            if(requestBodyHistory.ContainsKey(e.Id))
+            Console.WriteLine("Active Server Connections:" + (sender as ProxyServer).ServerConnectionCount);
+
+            if (requestBodyHistory.ContainsKey(e.Id))
             {
                 //access request body by looking up the shared dictionary using requestId
                 var requestBody = requestBodyHistory[e.Id];
             }
+
             //read response headers
             var responseHeaders = e.WebSession.Response.ResponseHeaders;
 
             // print out process id of current session
-            Console.WriteLine($"PID: {e.WebSession.ProcessId.Value}");
+            //Console.WriteLine($"PID: {e.WebSession.ProcessId.Value}");
 
             //if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
             if (e.WebSession.Request.Method == "GET" || e.WebSession.Request.Method == "POST")
             {
                 if (e.WebSession.Response.ResponseStatusCode == "200")
                 {
-                    if (e.WebSession.Response.ContentType!=null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
+                    if (e.WebSession.Response.ContentType != null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
                     {
                         byte[] bodyBytes = await e.GetResponseBody();
                         await e.SetResponseBody(bodyBytes);

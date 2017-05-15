@@ -1,5 +1,5 @@
-﻿using Ionic.Zlib;
-using System.IO;
+﻿using System.IO;
+using System.IO.Compression;
 using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Compression
@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy.Compression
             {
                 using (var zip = new GZipStream(ms, CompressionMode.Compress, true))
                 {
-                   await zip.WriteAsync(responseBody, 0, responseBody.Length);
+                    await zip.WriteAsync(responseBody, 0, responseBody.Length);
                 }
 
                 return ms.ToArray();
