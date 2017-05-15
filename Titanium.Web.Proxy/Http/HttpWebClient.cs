@@ -22,14 +22,17 @@ namespace Titanium.Web.Proxy.Http
         /// Request ID.
         /// </summary>
         public Guid RequestId { get; }
+
         /// <summary>
         /// Headers passed with Connect.
         /// </summary>
         public List<HttpHeader> ConnectHeaders { get; set; }
+
         /// <summary>
         /// Web Request.
         /// </summary>
         public Request Request { get; set; }
+
         /// <summary>
         /// Web Response.
         /// </summary>
@@ -63,7 +66,7 @@ namespace Titanium.Web.Proxy.Http
             connection.LastAccess = DateTime.Now;
             ServerConnection = connection;
         }
-  
+
 
         /// <summary>
         /// Prepare and send the http(s) request
@@ -90,7 +93,7 @@ namespace Titanium.Web.Proxy.Http
             {
                 requestLines.AppendLine("Proxy-Connection: keep-alive");
                 requestLines.AppendLine("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                                            $"{ServerConnection.UpStreamHttpProxy.UserName}:{ServerConnection.UpStreamHttpProxy.Password}")));
+                                                $"{ServerConnection.UpStreamHttpProxy.UserName}:{ServerConnection.UpStreamHttpProxy.Password}")));
             }
             //write request headers
             foreach (var headerItem in Request.RequestHeaders)
@@ -133,13 +136,13 @@ namespace Titanium.Web.Proxy.Http
 
                     //find if server is willing for expect continue
                     if (responseStatusCode.Equals("100")
-                    && responseStatusDescription.Equals("continue", StringComparison.CurrentCultureIgnoreCase))
+                        && responseStatusDescription.Equals("continue", StringComparison.CurrentCultureIgnoreCase))
                     {
                         Request.Is100Continue = true;
                         await ServerConnection.StreamReader.ReadLineAsync();
                     }
                     else if (responseStatusCode.Equals("417")
-                         && responseStatusDescription.Equals("expectation failed", StringComparison.CurrentCultureIgnoreCase))
+                             && responseStatusDescription.Equals("expectation failed", StringComparison.CurrentCultureIgnoreCase))
                     {
                         Request.ExpectationFailed = true;
                         await ServerConnection.StreamReader.ReadLineAsync();
@@ -190,7 +193,7 @@ namespace Titanium.Web.Proxy.Http
                 return;
             }
             else if (Response.ResponseStatusCode.Equals("417")
-                 && Response.ResponseStatusDescription.Equals("expectation failed", StringComparison.CurrentCultureIgnoreCase))
+                     && Response.ResponseStatusDescription.Equals("expectation failed", StringComparison.CurrentCultureIgnoreCase))
             {
                 //read next line after expectation failed response
                 Response.ExpectationFailed = true;

@@ -93,21 +93,21 @@ namespace Titanium.Web.Proxy.Helpers
 
             var ipVersionValue = ipVersion == IpVersion.Ipv4 ? NativeMethods.AfInet : NativeMethods.AfInet6;
 
-            if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, false, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) != 0)
+            if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, false, ipVersionValue, (int) NativeMethods.TcpTableType.OwnerPidAll, 0) != 0) 
             {
                 try
                 {
                     tcpTable = Marshal.AllocHGlobal(tcpTableLength);
-                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) == 0)
+                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, (int) NativeMethods.TcpTableType.OwnerPidAll, 0) == 0)
                     {
-                        NativeMethods.TcpTable table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable, typeof(NativeMethods.TcpTable));
+                        NativeMethods.TcpTable table = (NativeMethods.TcpTable) Marshal.PtrToStructure(tcpTable, typeof(NativeMethods.TcpTable));
 
-                        IntPtr rowPtr = (IntPtr)((long)tcpTable + Marshal.SizeOf(table.length));
+                        IntPtr rowPtr = (IntPtr) ((long) tcpTable + Marshal.SizeOf(table.length));
 
                         for (int i = 0; i < table.length; ++i)
                         {
-                            tcpRows.Add(new TcpRow((NativeMethods.TcpRow)Marshal.PtrToStructure(rowPtr, typeof(NativeMethods.TcpRow))));
-                            rowPtr = (IntPtr)((long)rowPtr + Marshal.SizeOf(typeof(NativeMethods.TcpRow)));
+                            tcpRows.Add(new TcpRow((NativeMethods.TcpRow) Marshal.PtrToStructure(rowPtr, typeof(NativeMethods.TcpRow))));
+                            rowPtr = (IntPtr) ((long) rowPtr + Marshal.SizeOf(typeof(NativeMethods.TcpRow)));
                         }
                     }
                 }
@@ -144,7 +144,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         internal static async Task SendRaw(int bufferSize, int connectionTimeOutSeconds,
             string remoteHostName, int remotePort, string httpCmd, Version httpVersion, Dictionary<string, HttpHeader> requestHeaders,
-            bool isHttps,  SslProtocols supportedProtocols,
+            bool isHttps, SslProtocols supportedProtocols,
             RemoteCertificateValidationCallback remoteCertificateValidationCallback, LocalCertificateSelectionCallback localCertificateSelectionCallback,
             Stream clientStream, TcpConnectionFactory tcpConnectionFactory, IPEndPoint upStreamEndPoint)
         {
@@ -173,11 +173,11 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             var tcpConnection = await tcpConnectionFactory.CreateClient(bufferSize, connectionTimeOutSeconds,
-                                        remoteHostName, remotePort,
-                                        httpVersion, isHttps, 
-                                        supportedProtocols, remoteCertificateValidationCallback, localCertificateSelectionCallback, 
-                                        null, null, clientStream, upStreamEndPoint);
-                                                                
+                remoteHostName, remotePort,
+                httpVersion, isHttps,
+                supportedProtocols, remoteCertificateValidationCallback, localCertificateSelectionCallback,
+                null, null, clientStream, upStreamEndPoint);
+
             try
             {
                 Stream tunnelStream = tcpConnection.Stream;
