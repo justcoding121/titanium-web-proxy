@@ -106,7 +106,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         //intecept & cancel redirect or update requests
         public async Task OnRequest(object sender, SessionEventArgs e)
         {
-            Console.WriteLine("Active Connections:" + (sender as ProxyServer).ClientConnectionCount);
+            Console.WriteLine("Active Client Connections:" + (sender as ProxyServer).ClientConnectionCount);
             Console.WriteLine(e.WebSession.Request.Url);
 
             //read request headers
@@ -149,7 +149,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
         //Modify response
         public async Task OnResponse(object sender, SessionEventArgs e)
         {
-            if(requestBodyHistory.ContainsKey(e.Id))
+            Console.WriteLine("Active Server Connections:" + (sender as ProxyServer).ServerConnectionCount);
+
+            if (requestBodyHistory.ContainsKey(e.Id))
             {
                 //access request body by looking up the shared dictionary using requestId
                 var requestBody = requestBodyHistory[e.Id];
@@ -159,7 +161,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             var responseHeaders = e.WebSession.Response.ResponseHeaders;
 
             // print out process id of current session
-            Console.WriteLine($"PID: {e.WebSession.ProcessId.Value}");
+            //Console.WriteLine($"PID: {e.WebSession.ProcessId.Value}");
 
             //if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
             if (e.WebSession.Request.Method == "GET" || e.WebSession.Request.Method == "POST")
