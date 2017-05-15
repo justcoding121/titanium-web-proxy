@@ -30,10 +30,12 @@ namespace Titanium.Web.Proxy.Models
         /// Ip Address.
         /// </summary>
         public IPAddress IpAddress { get; internal set; }
+
         /// <summary>
         /// Port.
         /// </summary>
         public int Port { get; internal set; }
+
         /// <summary>
         /// Enable SSL?
         /// </summary>
@@ -75,7 +77,7 @@ namespace Titanium.Web.Proxy.Models
                     throw new ArgumentException("Cannot set excluded when included is set");
                 }
 
-                ExcludedHttpsHostNameRegexList = value?.Select(x=>new Regex(x, RegexOptions.Compiled)).ToList();
+                ExcludedHttpsHostNameRegexList = value?.Select(x => new Regex(x, RegexOptions.Compiled)).ToList();
             }
         }
 
@@ -110,7 +112,6 @@ namespace Titanium.Web.Proxy.Models
         public ExplicitProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl)
             : base(ipAddress, port, enableSsl)
         {
-
         }
     }
 
@@ -120,7 +121,6 @@ namespace Titanium.Web.Proxy.Models
     /// </summary>
     public class TransparentProxyEndPoint : ProxyEndPoint
     {
-
         /// <summary>
         /// Name of the Certificate need to be sent (same as the hostname we want to proxy)
         /// This is valid only when UseServerNameIndication is set to false
@@ -139,5 +139,4 @@ namespace Titanium.Web.Proxy.Models
             GenericCertificateName = "localhost";
         }
     }
-
 }

@@ -28,6 +28,5 @@ namespace Titanium.Web.Proxy.Network
         /// used to write line by line to client
         /// </summary>
         internal StreamWriter ClientStreamWriter { get; set; }
-
     }
 }

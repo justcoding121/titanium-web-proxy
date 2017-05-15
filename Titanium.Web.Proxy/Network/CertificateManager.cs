@@ -50,8 +50,8 @@ namespace Titanium.Web.Proxy.Network
 
                 if (certEngine == null)
                 {
-                    certEngine = engine == CertificateEngine.BouncyCastle ? 
-                        (ICertificateMaker) new BCCertificateMaker() 
+                    certEngine = engine == CertificateEngine.BouncyCastle
+                        ? (ICertificateMaker) new BCCertificateMaker()
                         : new WinCertificateMaker();
                 }
             }
@@ -95,7 +95,7 @@ namespace Titanium.Web.Proxy.Network
             get { return rootCertificateName ?? defaultRootRootCertificateName; }
             set
             {
-                rootCertificateName = value; 
+                rootCertificateName = value;
                 ClearRootCertificate();
             }
         }
@@ -133,7 +133,7 @@ namespace Titanium.Web.Proxy.Network
         private string GetRootCertificatePath()
         {
             var assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
-            
+
             // dynamically loaded assemblies returns string.Empty location
             if (assemblyLocation == string.Empty)
             {
@@ -160,6 +160,7 @@ namespace Titanium.Web.Proxy.Network
                 return null;
             }
         }
+
         /// <summary>
         /// Attempts to create a RootCertificate
         /// </summary>
@@ -208,7 +209,7 @@ namespace Titanium.Web.Proxy.Network
         {
             //current user
             TrustRootCertificate(StoreLocation.CurrentUser);
-            
+
             //current system
             TrustRootCertificate(StoreLocation.LocalMachine);
         }
@@ -227,7 +228,7 @@ namespace Titanium.Web.Proxy.Network
                 cached.LastAccess = DateTime.Now;
                 return cached.Certificate;
             }
-            
+
             X509Certificate2 certificate = null;
             lock (string.Intern(certificateName))
             {
@@ -248,7 +249,7 @@ namespace Titanium.Web.Proxy.Network
                     }
                     if (certificate != null && !certificateCache.ContainsKey(certificateName))
                     {
-                        certificateCache.Add(certificateName, new CachedCertificate { Certificate = certificate });
+                        certificateCache.Add(certificateName, new CachedCertificate {Certificate = certificate});
                     }
                 }
                 else
@@ -306,7 +307,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 exceptionFunc(
                     new Exception("Could not set root certificate"
-                    + " as system proxy since it is null or empty."));
+                                  + " as system proxy since it is null or empty."));
 
                 return;
             }
@@ -326,7 +327,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 exceptionFunc(
                     new Exception("Failed to make system trust root certificate "
-                   + $" for {storeLocation} store location. You may need admin rights.", e));
+                                  + $" for {storeLocation} store location. You may need admin rights.", e));
             }
             finally
             {
