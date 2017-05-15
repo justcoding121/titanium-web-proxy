@@ -47,7 +47,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 //Exclude Https addresses you don't want to proxy
                 //Useful for clients that use certificate pinning
                 //for example google.com and dropbox.com
-                // ExcludedHttpsHostNameRegex = new List<string>() { "google.com", "dropbox.com" }
+                 ExcludedHttpsHostNameRegex = new List<string>() { "dropbox.com" }
 
                 //Include Https addresses you want to proxy (others will be excluded)
                 //for example github.com
@@ -127,24 +127,24 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 requestBodyHistory[e.Id] = bodyString;
             }
 
-            //To cancel a request with a custom HTML content
-            //Filter URL
-            if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
-            {
-                await e.Ok("<!DOCTYPE html>" +
-                      "<html><body><h1>" +
-                      "Website Blocked" +
-                      "</h1>" +
-                      "<p>Blocked by titanium web proxy.</p>" +
-                      "</body>" +
-                      "</html>");
-            }
+            ////To cancel a request with a custom HTML content
+            ////Filter URL
+            //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
+            //{
+            //    await e.Ok("<!DOCTYPE html>" +
+            //          "<html><body><h1>" +
+            //          "Website Blocked" +
+            //          "</h1>" +
+            //          "<p>Blocked by titanium web proxy.</p>" +
+            //          "</body>" +
+            //          "</html>");
+            //}
 
-            //Redirect example
-            if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
-            {
-                await e.Redirect("https://www.paypal.com");
-            }
+            ////Redirect example
+            //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
+            //{
+            //    await e.Redirect("https://www.paypal.com");
+            //}
         }
 
         //Modify response
