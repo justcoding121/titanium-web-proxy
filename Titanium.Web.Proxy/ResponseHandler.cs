@@ -234,6 +234,8 @@ namespace Titanium.Web.Proxy
             StreamWriter clientStreamWriter,
             TcpConnection serverConnection)
         {
+            ServerConnectionCount--;
+
             clientStream?.Close();
             clientStream?.Dispose();
 

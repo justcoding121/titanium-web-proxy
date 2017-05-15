@@ -127,26 +127,21 @@ namespace Titanium.Web.Proxy.Helpers
         /// relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers as prefix
         /// Usefull for websocket requests
         /// </summary>
-        /// <param name="bufferSize"></param>
-        /// <param name="connectionTimeOutSeconds"></param>
+        /// <param name="server"></param>
         /// <param name="remoteHostName"></param>
+        /// <param name="remotePort"></param>
         /// <param name="httpCmd"></param>
         /// <param name="httpVersion"></param>
         /// <param name="requestHeaders"></param>
         /// <param name="isHttps"></param>
-        /// <param name="remotePort"></param>
-        /// <param name="supportedProtocols"></param>
-        /// <param name="remoteCertificateValidationCallback"></param>
-        /// <param name="localCertificateSelectionCallback"></param>
         /// <param name="clientStream"></param>
         /// <param name="tcpConnectionFactory"></param>
-        /// <param name="upStreamEndPoint"></param>
         /// <returns></returns>
-        internal static async Task SendRaw(int bufferSize, int connectionTimeOutSeconds,
-            string remoteHostName, int remotePort, string httpCmd, Version httpVersion, Dictionary<string, HttpHeader> requestHeaders,
-            bool isHttps, SslProtocols supportedProtocols,
-            RemoteCertificateValidationCallback remoteCertificateValidationCallback, LocalCertificateSelectionCallback localCertificateSelectionCallback,
-            Stream clientStream, TcpConnectionFactory tcpConnectionFactory, IPEndPoint upStreamEndPoint)
+        internal static async Task SendRaw(ProxyServer server,
+            string remoteHostName, int remotePort, 
+            string httpCmd, Version httpVersion, Dictionary<string, HttpHeader> requestHeaders,
+            bool isHttps, 
+            Stream clientStream, TcpConnectionFactory tcpConnectionFactory)
         {
             //prepare the prefix content
             StringBuilder sb = null;
@@ -172,11 +167,10 @@ namespace Titanium.Web.Proxy.Helpers
                 sb.Append(ProxyConstants.NewLine);
             }
 
-            var tcpConnection = await tcpConnectionFactory.CreateClient(bufferSize, connectionTimeOutSeconds,
+            var tcpConnection = await tcpConnectionFactory.CreateClient(server, 
                 remoteHostName, remotePort,
                 httpVersion, isHttps,
-                supportedProtocols, remoteCertificateValidationCallback, localCertificateSelectionCallback,
-                null, null, clientStream, upStreamEndPoint);
+                null, null, clientStream);
 
             try
             {

@@ -226,7 +226,16 @@ namespace Titanium.Web.Proxy
         public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls
             | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 
+        /// <summary>
+        /// Total number of active client connections
+        /// </summary>
         public int ClientConnectionCount { get; private set; }
+
+
+        /// <summary>
+        /// Total number of active server connections
+        /// </summary>
+        public int ServerConnectionCount { get; internal set; }
 
         /// <summary>
         /// Constructor
