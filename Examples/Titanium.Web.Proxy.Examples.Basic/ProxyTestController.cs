@@ -17,6 +17,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
+
+            //generate root certificate without storing it in file system
+            //proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
+            //proxyServer.CertificateManager.CreateTrustedRootCertificate(false);
+            //proxyServer.CertificateManager.TrustRootCertificate();
+
             proxyServer.ExceptionFunc = exception => Console.WriteLine(exception.Message);
             proxyServer.TrustRootCertificate = true;
 
