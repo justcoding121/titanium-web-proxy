@@ -9,7 +9,6 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Helpers;
-using System.Net.Sockets;
 using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy
