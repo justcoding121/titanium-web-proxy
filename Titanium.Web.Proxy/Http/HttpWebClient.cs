@@ -214,7 +214,6 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public void Dispose()
         {
-            ServerConnection.Dispose();
         }
     }
 }
