@@ -218,6 +218,18 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
+        /// Removes the trusted certificates.
+        /// </summary>
+        public void RemoveTrustedRootCertificates()
+        {
+            //current user
+            RemoveTrustedRootCertificates(StoreLocation.CurrentUser);
+
+            //current system
+            RemoveTrustedRootCertificates(StoreLocation.LocalMachine);
+        }
+
+        /// <summary>
         /// Create an SSL certificate
         /// </summary>
         /// <param name="certificateName"></param>
@@ -325,6 +337,46 @@ namespace Titanium.Web.Proxy.Network
 
                 x509RootStore.Add(RootCertificate);
                 x509PersonalStore.Add(RootCertificate);
+            }
+            catch (Exception e)
+            {
+                exceptionFunc(
+                    new Exception("Failed to make system trust root certificate "
+                                  + $" for {storeLocation} store location. You may need admin rights.", e));
+            }
+            finally
+            {
+                x509RootStore.Close();
+                x509PersonalStore.Close();
+            }
+        }
+
+        /// <summary>
+        /// Remove the Root Certificate trust
+        /// </summary>
+        /// <param name="storeLocation"></param>
+        /// <returns></returns>
+        internal void RemoveTrustedRootCertificates(StoreLocation storeLocation)
+        {
+            if (RootCertificate == null)
+            {
+                exceptionFunc(
+                    new Exception("Could not set root certificate"
+                                  + " as system proxy since it is null or empty."));
+
+                return;
+            }
+
+            X509Store x509RootStore = new X509Store(StoreName.Root, storeLocation);
+            var x509PersonalStore = new X509Store(StoreName.My, storeLocation);
+
+            try
+            {
+                x509RootStore.Open(OpenFlags.ReadWrite);
+                x509PersonalStore.Open(OpenFlags.ReadWrite);
+
+                x509RootStore.Remove(RootCertificate);
+                x509PersonalStore.Remove(RootCertificate);
             }
             catch (Exception e)
             {
