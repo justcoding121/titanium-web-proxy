@@ -123,9 +123,11 @@ namespace Titanium.Web.Proxy.Helpers
             int bytesToRead = bufferSize;
 
             if (totalBytesToRead < bufferSize)
+            {
                 bytesToRead = (int) totalBytesToRead;
+            }
 
-            var buffer = staticBuffer;
+            var buffer = new byte[bytesToRead];
             int bytesRead;
             var totalBytesRead = 0;
 
