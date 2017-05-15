@@ -33,5 +33,4 @@ namespace Titanium.Web.Proxy.Extensions
             }
         }
     }
-
 }

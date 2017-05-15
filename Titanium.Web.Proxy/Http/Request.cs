@@ -47,7 +47,6 @@ namespace Titanium.Web.Proxy.Http
                 {
                     RequestHeaders.Add("Host", new HttpHeader("Host", value));
                 }
-
             }
         }
 
@@ -119,9 +118,7 @@ namespace Titanium.Web.Proxy.Http
                     {
                         RequestHeaders.Remove("content-length");
                     }
-
                 }
-
             }
         }
 
@@ -156,7 +153,6 @@ namespace Titanium.Web.Proxy.Http
                     RequestHeaders.Add("content-type", new HttpHeader("content-type", value));
                 }
             }
-
         }
 
         /// <summary>
@@ -226,12 +222,12 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public string Url => RequestUri.OriginalString;
 
-	    /// <summary>
+        /// <summary>
         /// Encoding for this request
         /// </summary>
         internal Encoding Encoding => this.GetEncoding();
 
-	    /// <summary>
+        /// <summary>
         /// Terminates the underlying Tcp Connection to client after current request
         /// </summary>
         internal bool CancelRequest { get; set; }
@@ -298,6 +294,5 @@ namespace Titanium.Web.Proxy.Http
             RequestHeaders = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
             NonUniqueRequestHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
         }
-
     }
 }
