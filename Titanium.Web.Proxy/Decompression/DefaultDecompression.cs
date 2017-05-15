@@ -2,6 +2,7 @@
 
 namespace Titanium.Web.Proxy.Decompression
 {
+
     /// <summary>
     /// When no compression is specified just return the byte array
     /// </summary>

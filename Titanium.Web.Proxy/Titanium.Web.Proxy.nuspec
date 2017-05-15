@@ -14,7 +14,7 @@
     <copyright>Copyright &#x00A9; Titanium.  All rights reserved.</copyright>
     <tags></tags>
 	 <dependencies>
-		 <dependency id="BouncyCastle" version="1.8.1" />
+		 <dependency id="DotNetZip" version="1.9.8" />
     </dependencies>
   </metadata>
   <files>

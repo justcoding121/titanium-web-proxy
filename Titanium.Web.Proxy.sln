@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.25420.1
+VisualStudioVersion = 14.0.25123.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Examples", "Examples", "{B6DBABDC-C985-4872-9C38-B4E5079CBC4B}"
 EndProject
@@ -33,8 +33,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{BC1E0789
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Proxy.UnitTests", "Tests\Titanium.Web.Proxy.UnitTests\Titanium.Web.Proxy.UnitTests.csproj", "{B517E3D0-D03B-436F-AB03-34BA0D5321AF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Proxy.IntegrationTests", "Tests\Titanium.Web.Proxy.IntegrationTests\Titanium.Web.Proxy.IntegrationTests.csproj", "{32231301-B0FB-4F9E-98DF-B3E8A88F4C16}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -53,10 +51,6 @@ Global
 		{B517E3D0-D03B-436F-AB03-34BA0D5321AF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B517E3D0-D03B-436F-AB03-34BA0D5321AF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B517E3D0-D03B-436F-AB03-34BA0D5321AF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{32231301-B0FB-4F9E-98DF-B3E8A88F4C16}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{32231301-B0FB-4F9E-98DF-B3E8A88F4C16}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{32231301-B0FB-4F9E-98DF-B3E8A88F4C16}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{32231301-B0FB-4F9E-98DF-B3E8A88F4C16}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -64,7 +58,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{F3B7E553-1904-4E80-BDC7-212342B5C952} = {B6DBABDC-C985-4872-9C38-B4E5079CBC4B}
 		{B517E3D0-D03B-436F-AB03-34BA0D5321AF} = {BC1E0789-D348-49CF-8B67-5E99D50EDF64}
-		{32231301-B0FB-4F9E-98DF-B3E8A88F4C16} = {BC1E0789-D348-49CF-8B67-5E99D50EDF64}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		EnterpriseLibraryConfigurationToolBinariesPath = .1.505.2\lib\NET35

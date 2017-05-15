@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System;
+using System.Text;
 
 namespace Titanium.Web.Proxy.Shared
 {
@@ -6,10 +7,10 @@ namespace Titanium.Web.Proxy.Shared
     /// Literals shared by Proxy Server
     /// </summary>
     internal class ProxyConstants
-    {
-        internal static readonly char[] SpaceSplit = {' '};
-        internal static readonly char[] ColonSplit = {':'};
-        internal static readonly char[] SemiColonSplit = {';'};
+    { 
+        internal static readonly char[] SpaceSplit = { ' ' };
+        internal static readonly char[] ColonSplit = { ':' };
+        internal static readonly char[] SemiColonSplit = { ';' };
 
         internal static readonly byte[] NewLineBytes = Encoding.ASCII.GetBytes(NewLine);
 

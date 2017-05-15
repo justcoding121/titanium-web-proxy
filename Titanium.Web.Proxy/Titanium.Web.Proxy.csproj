@@ -26,7 +26,6 @@
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <Prefer32Bit>false</Prefer32Bit>
     <DocumentationFile>bin\Debug\Titanium.Web.Proxy.XML</DocumentationFile>
-    <LangVersion>6</LangVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -35,18 +34,10 @@
     <DefineConstants>NET45</DefineConstants>
     <Prefer32Bit>false</Prefer32Bit>
     <DocumentationFile>bin\Release\Titanium.Web.Proxy.XML</DocumentationFile>
-    <DebugType>none</DebugType>
-    <DebugSymbols>false</DebugSymbols>
-  </PropertyGroup>
-  <PropertyGroup>
-    <SignAssembly>true</SignAssembly>
-  </PropertyGroup>
-  <PropertyGroup>
-    <AssemblyOriginatorKeyFile>StrongNameKey.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="BouncyCastle.Crypto, Version=1.8.1.0, Culture=neutral, PublicKeyToken=0e99375e54769942">
-      <HintPath>..\packages\BouncyCastle.1.8.1\lib\BouncyCastle.Crypto.dll</HintPath>
+    <Reference Include="Ionic.Zip, Version=1.9.8.0, Culture=neutral, PublicKeyToken=6583c7c814667745, processorArchitecture=MSIL">
+      <HintPath>..\packages\DotNetZip.1.9.8\lib\net20\Ionic.Zip.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
@@ -65,23 +56,19 @@
     <Compile Include="Compression\DeflateCompression.cs" />
     <Compile Include="Compression\GZipCompression.cs" />
     <Compile Include="Compression\ICompression.cs" />
+    <Compile Include="Compression\ZlibCompression.cs" />
     <Compile Include="Decompression\DecompressionFactory.cs" />
     <Compile Include="Decompression\DefaultDecompression.cs" />
     <Compile Include="Decompression\DeflateDecompression.cs" />
     <Compile Include="Decompression\GZipDecompression.cs" />
     <Compile Include="Decompression\IDecompression.cs" />
+    <Compile Include="Decompression\ZlibDecompression.cs" />
     <Compile Include="EventArguments\CertificateSelectionEventArgs.cs" />
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
-    <Compile Include="Extensions\StringExtensions.cs" />
-    <Compile Include="Helpers\CustomBufferedStream.cs" />
     <Compile Include="Helpers\Network.cs" />
-    <Compile Include="Helpers\RunTime.cs" />
-    <Compile Include="Http\Responses\GenericResponse.cs" />
     <Compile Include="Network\CachedCertificate.cs" />
-    <Compile Include="Network\Certificate\WinCertificateMaker.cs" />
-    <Compile Include="Network\Certificate\BCCertificateMaker.cs" />
-    <Compile Include="Network\Certificate\ICertificateMaker.cs" />
+    <Compile Include="Network\CertificateMaker.cs" />
     <Compile Include="Network\ProxyClient.cs" />
     <Compile Include="Exceptions\BodyNotFoundException.cs" />
     <Compile Include="Exceptions\ProxyAuthorizationException.cs" />
@@ -130,7 +117,6 @@
   <ItemGroup>
     <None Include="app.config" />
     <None Include="packages.config" />
-    <None Include="StrongNameKey.snk" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />

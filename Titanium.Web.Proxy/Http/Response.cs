@@ -12,19 +12,12 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class Response
     {
-        /// <summary>
-        /// Response Status Code.
-        /// </summary>
         public string ResponseStatusCode { get; set; }
-
-        /// <summary>
-        /// Response Status description.
-        /// </summary>
         public string ResponseStatusDescription { get; set; }
 
         internal Encoding Encoding => this.GetResponseCharacterEncoding();
 
-        /// <summary>
+	    /// <summary>
         /// Content encoding for this response
         /// </summary>
         internal string ContentEncoding
@@ -33,10 +26,14 @@ namespace Titanium.Web.Proxy.Http
             {
                 var hasHeader = ResponseHeaders.ContainsKey("content-encoding");
 
-                if (!hasHeader) return null;
-                var header = ResponseHeaders["content-encoding"];
+                if (hasHeader)
+                {
+                    var header = ResponseHeaders["content-encoding"];
 
-                return header.Value.Trim();
+                    return header.Value.Trim();
+                }
+
+                return null;
             }
         }
 
@@ -55,13 +52,14 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var header = ResponseHeaders["connection"];
 
-                    if (header.Value.ContainsIgnoreCase("close"))
+                    if (header.Value.ToLower().Contains("close"))
                     {
                         return false;
                     }
                 }
 
                 return true;
+
             }
         }
 
@@ -82,6 +80,7 @@ namespace Titanium.Web.Proxy.Http
                 }
 
                 return null;
+
             }
         }
 
@@ -109,6 +108,7 @@ namespace Titanium.Web.Proxy.Http
                 }
 
                 return -1;
+
             }
             set
             {
@@ -151,13 +151,14 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var header = ResponseHeaders["transfer-encoding"];
 
-                    if (header.Value.ContainsIgnoreCase("chunked"))
+                    if (header.Value.ToLower().Contains("chunked"))
                     {
                         return true;
-                    }
+                    }         
                 }
 
                 return false;
+
             }
             set
             {
@@ -183,7 +184,9 @@ namespace Titanium.Web.Proxy.Http
                     {
                         ResponseHeaders.Remove("transfer-encoding");
                     }
+                       
                 }
+
             }
         }
 
@@ -226,13 +229,11 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public bool ExpectationFailed { get; internal set; }
 
-        /// <summary>
-        /// Constructor.
-        /// </summary>
         public Response()
         {
-            ResponseHeaders = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
-            NonUniqueResponseHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
+            this.ResponseHeaders = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
+            this.NonUniqueResponseHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
         }
     }
+
 }
