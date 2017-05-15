@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -106,14 +107,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
         //intecept & cancel redirect or update requests
         public async Task OnRequest(object sender, SessionEventArgs e)
         {
-            Console.WriteLine("Active Client Connections:" + (sender as ProxyServer).ClientConnectionCount);
+            Console.WriteLine("Active Client Connections:" + ((ProxyServer) sender).ClientConnectionCount);
             Console.WriteLine(e.WebSession.Request.Url);
 
             //read request headers
             var requestHeaders = e.WebSession.Request.RequestHeaders;
 
             var method = e.WebSession.Request.Method.ToUpper();
-            if ((method == "POST" || method == "PUT" || method == "PATCH"))
+            if (method == "POST" || method == "PUT" || method == "PATCH")
             {
                 //Get/Set request body bytes
                 byte[] bodyBytes = await e.GetRequestBody();
@@ -168,7 +169,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             {
                 if (e.WebSession.Response.ResponseStatusCode == "200")
                 {
-                    if (e.WebSession.Response.ContentType!=null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
+                    if (e.WebSession.Response.ContentType != null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
                     {
                         byte[] bodyBytes = await e.GetResponseBody();
                         await e.SetResponseBody(bodyBytes);

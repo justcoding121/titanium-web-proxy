@@ -168,6 +168,7 @@ namespace Titanium.Web.Proxy.Helpers
             if (bufferLength > 0)
             {
                 await destination.WriteAsync(streamBuffer, bufferPos, bufferLength, cancellationToken);
+                bufferLength = 0;
             }
 
             await baseStream.CopyToAsync(destination, bufferSize, cancellationToken);
@@ -307,6 +308,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns>
         /// A task that represents the asynchronous write operation.
         /// </returns>
+        [DebuggerStepThrough]
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             return baseStream.WriteAsync(buffer, offset, count, cancellationToken);
