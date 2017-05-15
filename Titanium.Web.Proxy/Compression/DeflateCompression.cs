@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy.Compression
             {
                 using (var zip = new DeflateStream(ms, CompressionMode.Compress, true))
                 {
-                    await zip.WriteAsync(responseBody, 0, responseBody.Length);
+                   await zip.WriteAsync(responseBody, 0, responseBody.Length);
                 }
 
                 return ms.ToArray();
