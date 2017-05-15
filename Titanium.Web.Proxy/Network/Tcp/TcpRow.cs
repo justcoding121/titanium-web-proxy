@@ -5,7 +5,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 {
     /// <summary>
     /// Represents a managed interface of IP Helper API TcpRow struct
-    /// <see cref="http://msdn2.microsoft.com/en-us/library/aa366913.aspx"/>
+    /// <see href="http://msdn2.microsoft.com/en-us/library/aa366913.aspx"/>
     /// </summary>
     internal class TcpRow
     {
@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// Initializes a new instance of the <see cref="TcpRow"/> class.
         /// </summary>
         /// <param name="tcpRow">TcpRow struct.</param>
-        public TcpRow(NativeMethods.TcpRow tcpRow)
+        internal TcpRow(NativeMethods.TcpRow tcpRow)
         {
             ProcessId = tcpRow.owningPid;
 
@@ -21,24 +21,24 @@ namespace Titanium.Web.Proxy.Network.Tcp
             long localAddress = tcpRow.localAddr;
             LocalEndPoint = new IPEndPoint(localAddress, localPort);
 
-			int remotePort = (tcpRow.remotePort1 << 8) + (tcpRow.remotePort2) + (tcpRow.remotePort3 << 24) + (tcpRow.remotePort4 << 16);
-			long remoteAddress = tcpRow.remoteAddr;
-			RemoteEndPoint = new IPEndPoint(remoteAddress, remotePort);
-		}
+            int remotePort = (tcpRow.remotePort1 << 8) + (tcpRow.remotePort2) + (tcpRow.remotePort3 << 24) + (tcpRow.remotePort4 << 16);
+            long remoteAddress = tcpRow.remoteAddr;
+            RemoteEndPoint = new IPEndPoint(remoteAddress, remotePort);
+        }
 
         /// <summary>
         /// Gets the local end point.
         /// </summary>
-        public IPEndPoint LocalEndPoint { get; private set; }
+        internal IPEndPoint LocalEndPoint { get; }
 
-		/// <summary>
-		/// Gets the remote end point.
-		/// </summary>
-		public IPEndPoint RemoteEndPoint { get; private set; }
+        /// <summary>
+        /// Gets the remote end point.
+        /// </summary>
+        internal IPEndPoint RemoteEndPoint { get; }
 
         /// <summary>
         /// Gets the process identifier.
         /// </summary>
-        public int ProcessId { get; private set; }
+        internal int ProcessId { get; }
     }
 }

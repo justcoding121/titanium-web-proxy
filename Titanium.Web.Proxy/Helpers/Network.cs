@@ -1,9 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using System.Net;
-using System.Text;
-using System.Threading.Tasks;
+using System.Net.Sockets;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -12,7 +9,7 @@ namespace Titanium.Web.Proxy.Helpers
         private static int FindProcessIdFromLocalPort(int port, IpVersion ipVersion)
         {
             var tcpRow = TcpHelper.GetExtendedTcpTable(ipVersion).FirstOrDefault(
-                    row => row.LocalEndPoint.Port == port);
+                row => row.LocalEndPoint.Port == port);
 
             return tcpRow?.ProcessId ?? 0;
         }
@@ -33,28 +30,50 @@ namespace Titanium.Web.Proxy.Helpers
         /// Adapated from below link
         /// http://stackoverflow.com/questions/11834091/how-to-check-if-localhost
         /// </summary>
-        /// <param name="address></param>
+        /// <param name="address"></param>
         /// <returns></returns>
         internal static bool IsLocalIpAddress(IPAddress address)
         {
-            try
+            // get local IP addresses
+            var localIPs = Dns.GetHostAddresses(Dns.GetHostName());
+            // test if any host IP equals to any local IP or to localhost
+            return IPAddress.IsLoopback(address) || localIPs.Contains(address);
+        }
+
+        internal static bool IsLocalIpAddress(string hostName)
+        {
+            bool isLocalhost = false;
+
+            IPHostEntry localhost = Dns.GetHostEntry("127.0.0.1");
+            if (hostName == localhost.HostName)
             {
-                // get local IP addresses
-                IPAddress[] localIPs = Dns.GetHostAddresses(Dns.GetHostName());
-
-                // test if any host IP equals to any local IP or to localhost
-
-                // is localhost
-                if (IPAddress.IsLoopback(address)) return true;
-                // is local address
-                foreach (IPAddress localIP in localIPs)
-                {
-                    if (address.Equals(localIP)) return true;
-                }
-
+                IPHostEntry hostEntry = Dns.GetHostEntry(hostName);
+                isLocalhost = hostEntry.AddressList.Any(IPAddress.IsLoopback);
             }
-            catch { }
-            return false;
+
+            if (!isLocalhost)
+            {
+                localhost = Dns.GetHostEntry(Dns.GetHostName());
+
+                IPAddress ipAddress;
+
+                if (IPAddress.TryParse(hostName, out ipAddress))
+                    isLocalhost = localhost.AddressList.Any(x => x.Equals(ipAddress));
+
+                if (!isLocalhost)
+                {
+                    try
+                    {
+                        var hostEntry = Dns.GetHostEntry(hostName);
+                        isLocalhost = localhost.AddressList.Any(x => hostEntry.AddressList.Any(x.Equals));
+                    }
+                    catch (SocketException)
+                    {
+                    }
+                }
+            }
+
+            return isLocalhost;
         }
     }
 }

@@ -7,7 +7,7 @@ namespace Titanium.Web.Proxy.Network
     /// <summary>
     /// This class wraps Tcp connection to client
     /// </summary>
-    public class ProxyClient
+    internal class ProxyClient
     {
         /// <summary>
         /// TcpClient used to communicate with client
@@ -28,6 +28,5 @@ namespace Titanium.Web.Proxy.Network
         /// used to write line by line to client
         /// </summary>
         internal StreamWriter ClientStreamWriter { get; set; }
-
     }
 }

@@ -5,7 +5,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 {
     public class Program
     {
-        private static readonly ProxyTestController Controller = new ProxyTestController();
+        private static readonly ProxyTestController controller = new ProxyTestController();
 
         public static void Main(string[] args)
         {
@@ -15,13 +15,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
 
             //Start proxy controller
-            Controller.StartProxy();
+            controller.StartProxy();
 
             Console.WriteLine("Hit any key to exit..");
             Console.WriteLine();
             Console.Read();
 
-            Controller.Stop();
+            controller.Stop();
         }
 
 
@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             if (eventType != 2) return false;
             try
             {
-                Controller.Stop();
+                controller.Stop();
             }
             catch
             {
