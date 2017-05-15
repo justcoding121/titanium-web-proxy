@@ -29,9 +29,9 @@ namespace Titanium.Web.Proxy.Network
     /// <summary>
     /// A class to manage SSL certificates used by this proxy server
     /// </summary>
-    internal class CertificateManager : IDisposable
+    public class CertificateManager : IDisposable
     {
-        public CertificateEngine Engine
+        internal CertificateEngine Engine
         {
             get { return engine; }
             set
@@ -164,10 +164,13 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// Attempts to create a RootCertificate
         /// </summary>
-        /// <returns>true if succeeded, else false</returns>
-        internal bool CreateTrustedRootCertificate()
+        /// <param name="persistToFile">if set to <c>true</c> try to load/save the certificate from rootCert.pfx.</param>
+        /// <returns>
+        /// true if succeeded, else false
+        /// </returns>
+        public bool CreateTrustedRootCertificate(bool persistToFile = true)
         {
-            if (RootCertificate == null)
+            if (persistToFile && RootCertificate == null)
             {
                 RootCertificate = LoadRootCertificate();
             }
@@ -186,7 +189,7 @@ namespace Titanium.Web.Proxy.Network
                 exceptionFunc(e);
             }
 
-            if (RootCertificate != null)
+            if (persistToFile && RootCertificate != null)
             {
                 try
                 {
@@ -205,7 +208,7 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// Trusts the root certificate.
         /// </summary>
-        internal void TrustRootCertificate()
+        public void TrustRootCertificate()
         {
             //current user
             TrustRootCertificate(StoreLocation.CurrentUser);
