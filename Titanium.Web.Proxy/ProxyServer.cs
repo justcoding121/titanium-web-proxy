@@ -226,6 +226,8 @@ namespace Titanium.Web.Proxy
         public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls
             | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 
+        public int ClientConnectionCount { get; private set; }
+
         /// <summary>
         /// Constructor
         /// </summary>
@@ -495,7 +497,7 @@ namespace Titanium.Web.Proxy
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
             endPoint.Listener.Start();
 
-            endPoint.Port = ((IPEndPoint) endPoint.Listener.LocalEndpoint).Port;
+            endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
             // accept clients asynchronously
             endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
         }
@@ -560,7 +562,7 @@ namespace Titanium.Web.Proxy
         /// <param name="asyn"></param>
         private void OnAcceptConnection(IAsyncResult asyn)
         {
-            var endPoint = (ProxyEndPoint) asyn.AsyncState;
+            var endPoint = (ProxyEndPoint)asyn.AsyncState;
 
             TcpClient tcpClient = null;
 
@@ -586,6 +588,8 @@ namespace Titanium.Web.Proxy
             {
                 Task.Run(async () =>
                 {
+                    ClientConnectionCount++;
+
                     try
                     {
                         if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
@@ -599,15 +603,14 @@ namespace Titanium.Web.Proxy
                     }
                     finally
                     {
-                        if (tcpClient != null)
-                        {
-                            //This line is important!
-                            //contributors please don't remove it without discussion
-                            //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
-                            //due to default TCP CLOSE_WAIT timeout for 4 minutes
-                            tcpClient.LingerState = new LingerOption(true, 0);
-                            tcpClient.Close();
-                        }
+                        //This line is important!
+                        //contributors please don't remove it without discussion
+                        //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
+                        //due to default TCP CLOSE_WAIT timeout for 4 minutes
+                        tcpClient.LingerState = new LingerOption(true, 0);
+                        tcpClient?.Close();
+
+                        ClientConnectionCount--;
                     }
                 });
             }

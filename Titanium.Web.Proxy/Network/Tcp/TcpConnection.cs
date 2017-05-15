@@ -55,10 +55,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         {
             Stream?.Close();
             Stream?.Dispose();
+
             StreamReader?.Dispose();
 
             TcpClient.LingerState = new LingerOption(true, 0);
-            TcpClient.Close();
+            TcpClient?.Close();
         }
     }
 }
