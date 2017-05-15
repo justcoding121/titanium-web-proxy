@@ -77,6 +77,7 @@
     <Compile Include="Helpers\CustomBufferedStream.cs" />
     <Compile Include="Helpers\Network.cs" />
     <Compile Include="Helpers\RunTime.cs" />
+    <Compile Include="Http\HeaderParser.cs" />
     <Compile Include="Http\Responses\GenericResponse.cs" />
     <Compile Include="Network\CachedCertificate.cs" />
     <Compile Include="Network\Certificate\WinCertificateMaker.cs" />
