@@ -59,9 +59,9 @@ namespace Titanium.Web.Proxy
                         ServerConnectionCount--;
                     }
 
-                    var connection = await GetServerConnection(args, null, null, true);
-                    await HandleHttpSessionRequestInternal(null, args, true);
-                    return true;
+                    var connection = await GetServerConnection(args);
+                    var result = await HandleHttpSessionRequestInternal(null, args, true);
+                    return result;
                 }
 
                 args.WebSession.Response.ResponseLocked = true;
