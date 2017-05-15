@@ -217,11 +217,16 @@ namespace Titanium.Web.Proxy
                 endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null);
         }
 
+        /// <summary>
+        /// Create a Server Connection
+        /// </summary>
+        /// <param name="args"></param>
+        /// <returns></returns>
         private async Task<TcpConnection> GetServerConnection(
-            SessionEventArgs args,
-            ExternalProxy customUpStreamHttpProxy,
-            ExternalProxy customUpStreamHttpsProxy, bool closeConnection)
+            SessionEventArgs args)
         {
+            ExternalProxy customUpStreamHttpProxy = null;
+            ExternalProxy customUpStreamHttpsProxy = null;
 
             if (args.WebSession.Request.RequestUri.Scheme == "http")
             {
@@ -243,7 +248,8 @@ namespace Titanium.Web.Proxy
 
             return await tcpConnectionFactory.CreateClient(this,
                 args.WebSession.Request.RequestUri.Host,
-                args.WebSession.Request.RequestUri.Port, args.WebSession.Request.HttpVersion,
+                args.WebSession.Request.RequestUri.Port,
+                args.WebSession.Request.HttpVersion,
                 args.IsHttps,
                 customUpStreamHttpProxy ?? UpStreamHttpProxy,
                 customUpStreamHttpsProxy ?? UpStreamHttpsProxy,
@@ -392,7 +398,7 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         private async Task HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
             CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName,
-            ProxyEndPoint endPoint, List<HttpHeader> connectHeaders, ExternalProxy customUpStreamHttpProxy = null, ExternalProxy customUpStreamHttpsProxy = null)
+            ProxyEndPoint endPoint, List<HttpHeader> connectHeaders)
         {
             TcpConnection connection = null;
 
@@ -410,8 +416,7 @@ namespace Titanium.Web.Proxy
                     break;
                 }
 
-                var args =
-                    new SessionEventArgs(BufferSize, HandleHttpSessionResponse)
+                var args = new SessionEventArgs(BufferSize, HandleHttpSessionResponse)
                     {
                         ProxyClient = { TcpClient = client },
                         WebSession = { ConnectHeaders = connectHeaders }
@@ -464,12 +469,14 @@ namespace Titanium.Web.Proxy
                     args.ProxyClient.ClientStreamReader = clientStreamReader;
                     args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
-                    if (httpsHostName == null && await CheckAuthorization(clientStreamWriter, args.WebSession.Request.RequestHeaders.Values) == false)
+                    if (httpsHostName == null && 
+                        await CheckAuthorization(clientStreamWriter, 
+                            args.WebSession.Request.RequestHeaders.Values) == false)
                     {
                         Dispose(clientStream,
                               clientStreamReader,
                               clientStreamWriter,
-                              args.WebSession.ServerConnection);
+                              connection);
 
                         break;
                     }
@@ -502,14 +509,14 @@ namespace Titanium.Web.Proxy
                         Dispose(clientStream,
                             clientStreamReader,
                             clientStreamWriter,
-                            args.WebSession.ServerConnection);
+                            connection);
 
                         break;
                     }
 
                     if (connection == null)
                     {
-                        connection = await GetServerConnection(args, customUpStreamHttpProxy, customUpStreamHttpsProxy, false);
+                        connection = await GetServerConnection(args);
                     }
 
                     //construct the web request that we are going to issue on behalf of the client.
@@ -526,7 +533,7 @@ namespace Titanium.Web.Proxy
                         Dispose(clientStream,
                             clientStreamReader,
                             clientStreamWriter,
-                            args.WebSession.ServerConnection);
+                            connection);
 
                         break;
                     }
@@ -537,7 +544,7 @@ namespace Titanium.Web.Proxy
                         Dispose(clientStream,
                             clientStreamReader,
                             clientStreamWriter,
-                            args.WebSession.ServerConnection);
+                            connection);
 
                         break;
                     }
@@ -552,7 +559,7 @@ namespace Titanium.Web.Proxy
                     Dispose(clientStream,
                              clientStreamReader,
                              clientStreamWriter,
-                             args.WebSession.ServerConnection);
+                             connection);
                     break;
                 }
             }
