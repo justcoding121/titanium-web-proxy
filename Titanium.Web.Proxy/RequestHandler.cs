@@ -44,7 +44,6 @@ namespace Titanium.Web.Proxy
 
                 if (string.IsNullOrEmpty(httpCmd))
                 {
-                    Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                     return;
                 }
 
@@ -99,7 +98,6 @@ namespace Titanium.Web.Proxy
 
                     if (await CheckAuthorization(clientStreamWriter, connectRequestHeaders) == false)
                     {
-                        Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                         return;
                     }
 
@@ -111,7 +109,8 @@ namespace Titanium.Web.Proxy
                     {
                         sslStream = new SslStream(clientStream, true);
 
-                        var certificate = endPoint.GenericCertificate ?? CertificateManager.CreateCertificate(httpRemoteUri.Host, false);
+                        var certificate = endPoint.GenericCertificate ??
+                                          CertificateManager.CreateCertificate(httpRemoteUri.Host, false);
 
                         //Successfully managed to authenticate the client using the fake certificate
                         await sslStream.AuthenticateAsServerAsync(certificate, false,
@@ -119,14 +118,13 @@ namespace Titanium.Web.Proxy
                         //HTTPS server created - we can now decrypt the client's traffic
                         clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
+                        clientStreamReader.Dispose();
                         clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-                        clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
+                        clientStreamWriter = new StreamWriter(clientStream) {NewLine = ProxyConstants.NewLine};
                     }
                     catch
                     {
                         sslStream?.Dispose();
-
-                        Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                         return;
                     }
 
@@ -141,24 +139,25 @@ namespace Titanium.Web.Proxy
                     //write back successfull CONNECT response
                     await WriteConnectResponse(clientStreamWriter, version);
 
-                    await TcpHelper.SendRaw(this, 
+                    await TcpHelper.SendRaw(this,
                         httpRemoteUri.Host, httpRemoteUri.Port,
                         null, version, null,
-                        false, 
+                        false,
                         clientStream, tcpConnectionFactory);
 
-                    Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                     return;
                 }
                 //Now create the request
                 await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                    httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null, endPoint, connectRequestHeaders);
+                    httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null, endPoint,
+                    connectRequestHeaders);
             }
             catch (Exception)
             {
-                Dispose(clientStream,
-                    clientStreamReader,
-                    clientStreamWriter, null);
+            }
+            finally
+            {
+                Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
             }
         }
 
@@ -544,7 +543,6 @@ namespace Titanium.Web.Proxy
                     break;
                 }
             }
-
         }
 
         /// <summary>
