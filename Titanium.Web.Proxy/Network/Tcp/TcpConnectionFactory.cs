@@ -133,6 +133,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
             client.ReceiveTimeout = connectionTimeOutSeconds * 1000;
             client.SendTimeout = connectionTimeOutSeconds * 1000;
 
+            client.LingerState = new LingerOption(true, 0);
+
             return new TcpConnection
             {
                 UpStreamHttpProxy = externalHttpProxy,
