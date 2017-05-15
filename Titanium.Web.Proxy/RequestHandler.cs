@@ -141,12 +141,11 @@ namespace Titanium.Web.Proxy
                     //write back successfull CONNECT response
                     await WriteConnectResponse(clientStreamWriter, version);
 
-                    await TcpHelper.SendRaw(BufferSize, ConnectionTimeOutSeconds, httpRemoteUri.Host, httpRemoteUri.Port,
+                    await TcpHelper.SendRaw(this, 
+                        httpRemoteUri.Host, httpRemoteUri.Port,
                         null, version, null,
-                        false, SupportedSslProtocols,
-                        ValidateServerCertificate,
-                        SelectClientCertificate,
-                        clientStream, tcpConnectionFactory, UpStreamEndPoint);
+                        false, 
+                        clientStream, tcpConnectionFactory);
 
                     Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                     return;
@@ -243,15 +242,13 @@ namespace Titanium.Web.Proxy
                     args.CustomUpStreamHttpProxyUsed = customUpStreamHttpProxy;
                     args.CustomUpStreamHttpsProxyUsed = customUpStreamHttpsProxy;
 
-                    connection = await tcpConnectionFactory.CreateClient(BufferSize, ConnectionTimeOutSeconds,
-                        args.WebSession.Request.RequestUri.Host, args.WebSession.Request.RequestUri.Port, args.WebSession.Request.HttpVersion,
-                        args.IsHttps, SupportedSslProtocols,
-                        ValidateServerCertificate,
-                        SelectClientCertificate,
+                    connection = await tcpConnectionFactory.CreateClient(this, 
+                        args.WebSession.Request.RequestUri.Host,
+                        args.WebSession.Request.RequestUri.Port, args.WebSession.Request.HttpVersion,
+                        args.IsHttps, 
                         customUpStreamHttpProxy ?? UpStreamHttpProxy,
                         customUpStreamHttpsProxy ?? UpStreamHttpsProxy,
-                        args.ProxyClient.ClientStream,
-                        UpStreamEndPoint);
+                        args.ProxyClient.ClientStream);
                 }
 
                 args.WebSession.Request.RequestLocked = true;
@@ -519,11 +516,10 @@ namespace Titanium.Web.Proxy
                     //if upgrading to websocket then relay the requet without reading the contents
                     if (args.WebSession.Request.UpgradeToWebSocket)
                     {
-                        await TcpHelper.SendRaw(BufferSize, ConnectionTimeOutSeconds, httpRemoteUri.Host, httpRemoteUri.Port,
+                        await TcpHelper.SendRaw(this, 
+                            httpRemoteUri.Host, httpRemoteUri.Port,
                             httpCmd, httpVersion, args.WebSession.Request.RequestHeaders, args.IsHttps,
-                            SupportedSslProtocols, ValidateServerCertificate,
-                            SelectClientCertificate,
-                            clientStream, tcpConnectionFactory, UpStreamEndPoint);
+                            clientStream, tcpConnectionFactory);
 
                         Dispose(clientStream,
                             clientStreamReader,
