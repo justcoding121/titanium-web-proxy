@@ -2,7 +2,10 @@
 
 namespace Titanium.Web.Proxy.Extensions
 {
-    public static class ByteArrayExtensions
+    /// <summary>
+    /// Extension methods for Byte Arrays.
+    /// </summary>
+    internal static class ByteArrayExtensions
     {
         /// <summary>
         /// Get the sub array from byte of data
@@ -12,12 +15,11 @@ namespace Titanium.Web.Proxy.Extensions
         /// <param name="index"></param>
         /// <param name="length"></param>
         /// <returns></returns>
-        public static T[] SubArray<T>(this T[] data, int index, int length)
+        internal static T[] SubArray<T>(this T[] data, int index, int length)
         {
-            T[] result = new T[length];
+            var result = new T[length];
             Array.Copy(data, index, result, 0, length);
             return result;
         }
-       
     }
 }
