@@ -9,23 +9,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
 {
     public class ProxyTestController
     {
-        private readonly ProxyServer proxyServer;
+        private ProxyServer proxyServer;
 
         //share requestBody outside handlers
-        private readonly Dictionary<Guid, string> requestBodyHistory = new Dictionary<Guid, string>();
+        private Dictionary<Guid, string> requestBodyHistory;
 
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
-            proxyServer.ExceptionFunc = exception => Console.WriteLine(exception.Message);
             proxyServer.TrustRootCertificate = true;
-
-            //optionally set the Certificate Engine
-            //Under Mono only BouncyCastle will be supported
-            //proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
-
-            //optionally set the Root Certificate
-            //proxyServer.RootCertificate = new X509Certificate2("myCert.pfx", string.Empty, X509KeyStorageFlags.Exportable);
+            requestBodyHistory = new Dictionary<Guid, string>();
         }
 
         public void StartProxy()
@@ -35,32 +28,21 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
             proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
+            //Exclude Https addresses you don't want to proxy
+            //Usefull for clients that use certificate pinning
+            //for example dropbox.com
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
             {
-                //Exclude Https addresses you don't want to proxy
-                //Useful for clients that use certificate pinning
-                //for example google.com and dropbox.com
                 // ExcludedHttpsHostNameRegex = new List<string>() { "google.com", "dropbox.com" }
-
-                //Include Https addresses you want to proxy (others will be excluded)
-                //for example github.com
-                // IncludedHttpsHostNameRegex = new List<string>() { "github.com" }
-
-                //You can set only one of the ExcludedHttpsHostNameRegex and IncludedHttpsHostNameRegex properties, otherwise ArgumentException will be thrown
-
-                //Use self-issued generic certificate on all https requests
-                //Optimizes performance by not creating a certificate for each https-enabled domain
-                //Useful when certificate trust is not required by proxy clients
-                // GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
             };
 
-            //An explicit endpoint is where the client knows about the existence of a proxy
+            //An explicit endpoint is where the client knows about the existance of a proxy
             //So client sends request in a proxy friendly manner
             proxyServer.AddEndPoint(explicitEndPoint);
             proxyServer.Start();
 
 
-            //Transparent endpoint is useful for reverse proxying (client is not aware of the existence of proxy)
+            //Transparent endpoint is usefull for reverse proxying (client is not aware of the existance of proxy)
             //A transparent endpoint usually requires a network router port forwarding HTTP(S) packets to this endpoint
             //Currently do not support Server Name Indication (It is not currently supported by SslStream class)
             //That means that the transparent endpoint will always provide the same Generic Certificate to all HTTPS requests
@@ -94,12 +76,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.Stop();
         }
 
-        //intecept & cancel redirect or update requests
+        //intecept & cancel, redirect or update requests
         public async Task OnRequest(object sender, SessionEventArgs e)
         {
             Console.WriteLine(e.WebSession.Request.Url);
 
-            //read request headers
+            ////read request headers
             var requestHeaders = e.WebSession.Request.RequestHeaders;
 
             var method = e.WebSession.Request.Method.ToUpper();
@@ -128,7 +110,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
                       "</body>" +
                       "</html>");
             }
-
             //Redirect example
             if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
             {
@@ -144,7 +125,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 //access request body by looking up the shared dictionary using requestId
                 var requestBody = requestBodyHistory[e.Id];
             }
-
             //read response headers
             var responseHeaders = e.WebSession.Response.ResponseHeaders;
 
