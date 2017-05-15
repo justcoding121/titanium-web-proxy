@@ -57,14 +57,14 @@ namespace Titanium.Web.Proxy
                 httpRemoteUri = httpVerb == "CONNECT" ? new Uri("http://" + httpCmdSplit[1]) : new Uri(httpCmdSplit[1]);
 
                 //parse the HTTP version
-                var version = new Version(1, 1);
+                var version = HttpHeader.Version11;
                 if (httpCmdSplit.Length == 3)
                 {
                     var httpVersion = httpCmdSplit[2].Trim();
 
-                    if (0 == string.CompareOrdinal(httpVersion, "http/1.0"))
+                    if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
                     {
-                        version = new Version(1, 0);
+                        version = HttpHeader.Version10;
                     }
                 }
 
@@ -87,8 +87,8 @@ namespace Titanium.Web.Proxy
                 if (httpVerb == "CONNECT" && !excluded && httpRemoteUri.Port != 80)
                 {
                     httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
-                    string tmpLine;
                     connectRequestHeaders = new List<HttpHeader>();
+                    string tmpLine;
                     while (!string.IsNullOrEmpty(tmpLine = await clientStreamReader.ReadLineAsync()))
                     {
                         var header = tmpLine.Split(ProxyConstants.ColonSplit, 2);
@@ -432,50 +432,22 @@ namespace Titanium.Web.Proxy
                     var httpMethod = httpCmdSplit[0];
 
                     //find the request HTTP version
-                    var httpVersion = new Version(1, 1);
+                    var httpVersion = HttpHeader.Version11;
                     if (httpCmdSplit.Length == 3)
                     {
-                        var httpVersionString = httpCmdSplit[2].ToLower().Trim();
+                        var httpVersionString = httpCmdSplit[2].Trim();
 
-                        if (0 == string.CompareOrdinal(httpVersionString, "http/1.0"))
+                        if (string.Equals(httpVersionString, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
                         {
-                            httpVersion = new Version(1, 0);
+                            httpVersion = HttpHeader.Version10;
                         }
                     }
-
 
                     //Read the request headers in to unique and non-unique header collections
-                    string tmpLine;
-                    while (!string.IsNullOrEmpty(tmpLine = await clientStreamReader.ReadLineAsync()))
-                    {
-                        var header = tmpLine.Split(ProxyConstants.ColonSplit, 2);
-
-                        var newHeader = new HttpHeader(header[0], header[1]);
-
-                        //if header exist in non-unique header collection add it there
-                        if (args.WebSession.Request.NonUniqueRequestHeaders.ContainsKey(newHeader.Name))
-                        {
-                            args.WebSession.Request.NonUniqueRequestHeaders[newHeader.Name].Add(newHeader);
-                        }
-                        //if header is alread in unique header collection then move both to non-unique collection
-                        else if (args.WebSession.Request.RequestHeaders.ContainsKey(newHeader.Name))
-                        {
-                            var existing = args.WebSession.Request.RequestHeaders[newHeader.Name];
-
-                            var nonUniqueHeaders = new List<HttpHeader> { existing, newHeader };
-
-                            args.WebSession.Request.NonUniqueRequestHeaders.Add(newHeader.Name, nonUniqueHeaders);
-                            args.WebSession.Request.RequestHeaders.Remove(newHeader.Name);
-                        }
-                        //add to unique header collection
-                        else
-                        {
-                            args.WebSession.Request.RequestHeaders.Add(newHeader.Name, newHeader);
-                        }
-                    }
+                    await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.NonUniqueRequestHeaders, args.WebSession.Request.RequestHeaders);
 
                     var httpRemoteUri = new Uri(httpsHostName == null ? httpCmdSplit[1]
-                        : (string.Concat("https://", args.WebSession.Request.Host ?? httpsHostName, httpCmdSplit[1])));
+                        : string.Concat("https://", args.WebSession.Request.Host ?? httpsHostName, httpCmdSplit[1]));
 
                     args.WebSession.Request.RequestUri = httpRemoteUri;
 
@@ -483,10 +455,9 @@ namespace Titanium.Web.Proxy
                     args.WebSession.Request.HttpVersion = httpVersion;
                     args.ProxyClient.ClientStream = clientStream;
                     args.ProxyClient.ClientStreamReader = clientStreamReader;
-                    args.ProxyClient.ClientStreamWriter = clientStreamWriter;
+                    args.ProxyClient.ClientStreamWriter = clientStreamWriter;   
 
-                    if (httpsHostName == null &&
-                        (await CheckAuthorization(clientStreamWriter, args.WebSession.Request.RequestHeaders.Values) == false))
+                    if (httpsHostName == null && await CheckAuthorization(clientStreamWriter, args.WebSession.Request.RequestHeaders.Values) == false)
                     {
                         Dispose(clientStream,
                               clientStreamReader,

@@ -170,10 +170,10 @@ namespace Titanium.Web.Proxy.Http
 
             var httpVersion = httpResult[0].Trim().ToLower();
 
-            var version = new Version(1, 1);
-            if (0 == string.CompareOrdinal(httpVersion, "http/1.0"))
+            var version = HttpHeader.Version11;
+            if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
             {
-                version = new Version(1, 0);
+                version = HttpHeader.Version10;
             }
 
             Response.HttpVersion = version;
@@ -192,8 +192,9 @@ namespace Titanium.Web.Proxy.Http
                 await ReceiveResponse();
                 return;
             }
-            else if (Response.ResponseStatusCode.Equals("417")
-                     && Response.ResponseStatusDescription.Equals("expectation failed", StringComparison.CurrentCultureIgnoreCase))
+
+            if (Response.ResponseStatusCode.Equals("417")
+                && Response.ResponseStatusDescription.Equals("expectation failed", StringComparison.CurrentCultureIgnoreCase))
             {
                 //read next line after expectation failed response
                 Response.ExpectationFailed = true;
@@ -204,36 +205,8 @@ namespace Titanium.Web.Proxy.Http
                 return;
             }
 
-            //Read the Response headers
             //Read the response headers in to unique and non-unique header collections
-            string tmpLine;
-            while (!string.IsNullOrEmpty(tmpLine = await ServerConnection.StreamReader.ReadLineAsync()))
-            {
-                var header = tmpLine.Split(ProxyConstants.ColonSplit, 2);
-
-                var newHeader = new HttpHeader(header[0], header[1]);
-
-                //if header exist in non-unique header collection add it there
-                if (Response.NonUniqueResponseHeaders.ContainsKey(newHeader.Name))
-                {
-                    Response.NonUniqueResponseHeaders[newHeader.Name].Add(newHeader);
-                }
-                //if header is alread in unique header collection then move both to non-unique collection
-                else if (Response.ResponseHeaders.ContainsKey(newHeader.Name))
-                {
-                    var existing = Response.ResponseHeaders[newHeader.Name];
-
-                    var nonUniqueHeaders = new List<HttpHeader> {existing, newHeader};
-
-                    Response.NonUniqueResponseHeaders.Add(newHeader.Name, nonUniqueHeaders);
-                    Response.ResponseHeaders.Remove(newHeader.Name);
-                }
-                //add to unique header collection
-                else
-                {
-                    Response.ResponseHeaders.Add(newHeader.Name, newHeader);
-                }
-            }
+            await HeaderParser.ReadHeaders(ServerConnection.StreamReader, Response.NonUniqueResponseHeaders, Response.ResponseHeaders);
         }
     }
 }

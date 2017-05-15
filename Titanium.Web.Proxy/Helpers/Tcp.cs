@@ -124,6 +124,52 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
+        /// Gets the TCP row by local port number.
+        /// </summary>
+        /// <returns><see cref="TcpRow"/>.</returns>
+        internal static TcpRow GetTcpRowByLocalPort(IpVersion ipVersion, int localPort)
+        {
+            IntPtr tcpTable = IntPtr.Zero;
+            int tcpTableLength = 0;
+
+            var ipVersionValue = ipVersion == IpVersion.Ipv4 ? NativeMethods.AfInet : NativeMethods.AfInet6;
+
+            if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, false, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) != 0)
+            {
+                try
+                {
+                    tcpTable = Marshal.AllocHGlobal(tcpTableLength);
+                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) == 0)
+                    {
+                        NativeMethods.TcpTable table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable, typeof(NativeMethods.TcpTable));
+
+                        IntPtr rowPtr = (IntPtr)((long)tcpTable + Marshal.SizeOf(table.length));
+
+                        for (int i = 0; i < table.length; ++i)
+                        {
+                            var tcpRow = (NativeMethods.TcpRow)Marshal.PtrToStructure(rowPtr, typeof(NativeMethods.TcpRow));
+                            if (tcpRow.GetLocalPort() == localPort)
+                            {
+                                return new TcpRow(tcpRow);
+                            }
+
+                            rowPtr = (IntPtr)((long)rowPtr + Marshal.SizeOf(typeof(NativeMethods.TcpRow)));
+                        }
+                    }
+                }
+                finally
+                {
+                    if (tcpTable != IntPtr.Zero)
+                    {
+                        Marshal.FreeHGlobal(tcpTable);
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers as prefix
         /// Usefull for websocket requests
         /// </summary>
