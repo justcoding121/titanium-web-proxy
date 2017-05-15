@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy
 
                     for (int i = 0; i < invocationList.Length; i++)
                     {
-                        handlerTasks[i] = ((Func<object, SessionEventArgs, Task>)invocationList[i])(this, args);
+                        handlerTasks[i] = ((Func<object, SessionEventArgs, Task>) invocationList[i])(this, args);
                     }
 
                     await Task.WhenAll(handlerTasks);
@@ -62,19 +62,19 @@ namespace Titanium.Web.Proxy
                 if (args.WebSession.Response.Is100Continue)
                 {
                     await WriteResponseStatus(args.WebSession.Response.HttpVersion, "100",
-                            "Continue", args.ProxyClient.ClientStreamWriter);
+                        "Continue", args.ProxyClient.ClientStreamWriter);
                     await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                 }
                 else if (args.WebSession.Response.ExpectationFailed)
                 {
                     await WriteResponseStatus(args.WebSession.Response.HttpVersion, "417",
-                            "Expectation Failed", args.ProxyClient.ClientStreamWriter);
+                        "Expectation Failed", args.ProxyClient.ClientStreamWriter);
                     await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                 }
 
                 //Write back response status to client
                 await WriteResponseStatus(args.WebSession.Response.HttpVersion, args.WebSession.Response.ResponseStatusCode,
-                              args.WebSession.Response.ResponseStatusDescription, args.ProxyClient.ClientStreamWriter);
+                    args.WebSession.Response.ResponseStatusDescription, args.ProxyClient.ClientStreamWriter);
 
                 if (args.WebSession.Response.ResponseBodyRead)
                 {
@@ -109,7 +109,7 @@ namespace Titanium.Web.Proxy
                     {
                         await args.WebSession.ServerConnection.StreamReader
                             .WriteResponseBody(BufferSize, args.ProxyClient.ClientStream, args.WebSession.Response.IsChunked,
-                            args.WebSession.Response.ContentLength);
+                                args.WebSession.Response.ContentLength);
                     }
                     //write response if connection:keep-alive header exist and when version is http/1.0
                     //Because in Http 1.0 server can return a response without content-length (expectation being client would read until end of stream)
@@ -117,12 +117,11 @@ namespace Titanium.Web.Proxy
                     {
                         await args.WebSession.ServerConnection.StreamReader
                             .WriteResponseBody(BufferSize, args.ProxyClient.ClientStream, args.WebSession.Response.IsChunked,
-                            args.WebSession.Response.ContentLength);
+                                args.WebSession.Response.ContentLength);
                     }
                 }
 
                 await args.ProxyClient.ClientStream.FlushAsync();
-
             }
             catch (Exception e)
             {
@@ -217,7 +216,6 @@ namespace Titanium.Web.Proxy
 
                 headers.Remove("proxy-connection");
             }
-
         }
 
         /// <summary>

@@ -21,6 +21,5 @@ namespace Titanium.Web.Proxy.Extensions
             Array.Copy(data, index, result, 0, length);
             return result;
         }
-       
     }
 }
