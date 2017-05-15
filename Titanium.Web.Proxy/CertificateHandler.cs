@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy
         /// <param name="chain"></param>
         /// <param name="sslPolicyErrors"></param>
         /// <returns></returns>
-        private bool ValidateServerCertificate(
+        internal bool ValidateServerCertificate(
             object sender,
             X509Certificate certificate,
             X509Chain chain,
@@ -65,7 +65,7 @@ namespace Titanium.Web.Proxy
         /// <param name="remoteCertificate"></param>
         /// <param name="acceptableIssuers"></param>
         /// <returns></returns>
-        private X509Certificate SelectClientCertificate(
+        internal X509Certificate SelectClientCertificate(
             object sender,
             string targetHost,
             X509CertificateCollection localCertificates,

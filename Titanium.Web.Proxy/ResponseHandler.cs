@@ -9,6 +9,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy
 {
@@ -21,14 +22,14 @@ namespace Titanium.Web.Proxy
         /// Called asynchronously when a request was successfully and we received the response 
         /// </summary>
         /// <param name="args"></param>
-        /// <returns></returns>
-        private async Task HandleHttpSessionResponse(SessionEventArgs args)
+        /// <returns>true if no errors</returns>
+        private async Task<bool> HandleHttpSessionResponse(SessionEventArgs args)
         {
-            //read response & headers from server
-            await args.WebSession.ReceiveResponse();
-
             try
             {
+                //read response & headers from server
+                await args.WebSession.ReceiveResponse();
+
                 if (!args.WebSession.Response.ResponseBodyRead)
                 {
                     args.WebSession.Response.ResponseStream = args.WebSession.ServerConnection.Stream;
@@ -44,7 +45,7 @@ namespace Titanium.Web.Proxy
 
                     for (int i = 0; i < invocationList.Length; i++)
                     {
-                        handlerTasks[i] = ((Func<object, SessionEventArgs, Task>) invocationList[i])(this, args);
+                        handlerTasks[i] = ((Func<object, SessionEventArgs, Task>)invocationList[i])(this, args);
                     }
 
                     await Task.WhenAll(handlerTasks);
@@ -52,8 +53,15 @@ namespace Titanium.Web.Proxy
 
                 if (args.ReRequest)
                 {
-                    await HandleHttpSessionRequestInternal(null, args, null, null, true);
-                    return;
+                    if(args.WebSession.ServerConnection != null)
+                    {
+                        args.WebSession.ServerConnection.Dispose();
+                        ServerConnectionCount--;
+                    }
+
+                    var connection = await GetServerConnection(args);
+                    var result = await HandleHttpSessionRequestInternal(null, args, true);
+                    return result;
                 }
 
                 args.WebSession.Response.ResponseLocked = true;
@@ -125,14 +133,16 @@ namespace Titanium.Web.Proxy
             }
             catch (Exception e)
             {
-                ExceptionFunc(new ProxyHttpException("Error occured wilst handling session response", e, args));
+                ExceptionFunc(new ProxyHttpException("Error occured whilst handling session response", e, args));
                 Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader,
-                    args.ProxyClient.ClientStreamWriter, args);
+                    args.ProxyClient.ClientStreamWriter, args.WebSession.ServerConnection);
+
+                return false;
             }
-            finally
-            {
-                args.Dispose();
-            }
+
+            args.Dispose();
+
+            return true;
         }
 
         /// <summary>
@@ -219,24 +229,26 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        /// Handle dispose of a client/server session
+        ///  Handle dispose of a client/server session
         /// </summary>
         /// <param name="clientStream"></param>
         /// <param name="clientStreamReader"></param>
         /// <param name="clientStreamWriter"></param>
-        /// <param name="args"></param>
-        private void Dispose(Stream clientStream, CustomBinaryReader clientStreamReader,
-            StreamWriter clientStreamWriter, IDisposable args)
+        /// <param name="serverConnection"></param>
+        private void Dispose(Stream clientStream,
+            CustomBinaryReader clientStreamReader,
+            StreamWriter clientStreamWriter,
+            TcpConnection serverConnection)
         {
+            ServerConnectionCount--;
+
             clientStream?.Close();
             clientStream?.Dispose();
 
             clientStreamReader?.Dispose();
-
-            clientStreamWriter?.Close();
             clientStreamWriter?.Dispose();
 
-            args?.Dispose();
+            serverConnection?.Dispose();
         }
     }
 }
