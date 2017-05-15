@@ -252,7 +252,7 @@ namespace Titanium.Web.Proxy
         public ProxyServer(string rootCertificateName, string rootCertificateIssuerName)
         {
             //default values
-            ConnectionTimeOutSeconds = 120;
+            ConnectionTimeOutSeconds = 30;
             CertificateCacheTimeOutMinutes = 60;
 
             ProxyEndPoints = new List<ProxyEndPoint>();
