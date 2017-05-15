@@ -583,12 +583,17 @@ namespace Titanium.Web.Proxy
                 //Other errors are discarded to keep proxy running
             }
 
-
             if (tcpClient != null)
             {
                 Task.Run(async () =>
                 {
                     ClientConnectionCount++;
+
+                    //This line is important!
+                    //contributors please don't remove it without discussion
+                    //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
+                    //due to default TCP CLOSE_WAIT timeout for 4 minutes
+                    tcpClient.LingerState = new LingerOption(true, 0);
 
                     try
                     {
@@ -603,14 +608,8 @@ namespace Titanium.Web.Proxy
                     }
                     finally
                     {
-                        //This line is important!
-                        //contributors please don't remove it without discussion
-                        //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
-                        //due to default TCP CLOSE_WAIT timeout for 4 minutes
-                        tcpClient.LingerState = new LingerOption(true, 0);
-                        tcpClient?.Close();
-
                         ClientConnectionCount--;
+                        tcpClient?.Close();
                     }
                 });
             }
