@@ -8,7 +8,6 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using System.Security.Authentication;
 using System.Linq;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Network.Tcp
@@ -20,12 +19,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpConnectionFactory
     {
+
         /// <summary>
         /// Creates a TCP connection to server
         /// </summary>
         /// <param name="bufferSize"></param>
         /// <param name="connectionTimeOutSeconds"></param>
         /// <param name="remoteHostName"></param>
+        /// <param name="httpCmd"></param>
         /// <param name="httpVersion"></param>
         /// <param name="isHttps"></param>
         /// <param name="remotePort"></param>
@@ -42,28 +43,24 @@ namespace Titanium.Web.Proxy.Network.Tcp
             bool isHttps, SslProtocols supportedSslProtocols,
             RemoteCertificateValidationCallback remoteCertificateValidationCallback, LocalCertificateSelectionCallback localCertificateSelectionCallback,
             ExternalProxy externalHttpProxy, ExternalProxy externalHttpsProxy,
-            Stream clientStream, IPEndPoint upStreamEndPoint)
+            Stream clientStream, EndPoint upStreamEndPoint)
         {
             TcpClient client;
-            CustomBufferedStream stream;
-
-            bool isLocalhost = (externalHttpsProxy == null && externalHttpProxy == null) ? false : NetworkHelper.IsLocalIpAddress(remoteHostName);
-
-            bool useHttpsProxy = externalHttpsProxy != null && externalHttpsProxy.HostName != remoteHostName && (externalHttpsProxy.BypassForLocalhost && !isLocalhost);
-            bool useHttpProxy = externalHttpProxy != null && externalHttpProxy.HostName != remoteHostName && (externalHttpProxy.BypassForLocalhost && !isLocalhost);
+            Stream stream;
 
             if (isHttps)
             {
                 SslStream sslStream = null;
 
                 //If this proxy uses another external proxy then create a tunnel request for HTTPS connections
-                if (useHttpsProxy)
+                if (externalHttpsProxy != null && externalHttpsProxy.HostName != remoteHostName)
                 {
-                    client = new TcpClient(upStreamEndPoint);
-                    await client.ConnectAsync(externalHttpsProxy.HostName, externalHttpsProxy.Port);
-                    stream = new CustomBufferedStream(client.GetStream(), bufferSize);
+                    client = new TcpClient();
+                    client.Client.Bind(upStreamEndPoint);
+                    client.Client.Connect(externalHttpsProxy.HostName, externalHttpsProxy.Port);
+                    stream = client.GetStream();
 
-                    using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true) {NewLine = ProxyConstants.NewLine})
+                    using (var writer = new StreamWriter(stream, Encoding.ASCII, bufferSize, true) { NewLine = ProxyConstants.NewLine })
                     {
                         await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
                         await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
@@ -72,30 +69,32 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         if (!string.IsNullOrEmpty(externalHttpsProxy.UserName) && externalHttpsProxy.Password != null)
                         {
                             await writer.WriteLineAsync("Proxy-Connection: keep-alive");
-                            await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(externalHttpsProxy.UserName + ":" + externalHttpsProxy.Password)));
+                            await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(externalHttpsProxy.UserName + ":" + externalHttpsProxy.Password)));
                         }
                         await writer.WriteLineAsync();
                         await writer.FlushAsync();
                         writer.Close();
                     }
 
-                    using (var reader = new CustomBinaryReader(stream, bufferSize))
+                    using (var reader = new CustomBinaryReader(stream))
                     {
                         var result = await reader.ReadLineAsync();
 
-                        if (!new[] {"200 OK", "connection established"}.Any(s => result.ContainsIgnoreCase(s)))
+
+                        if (!new string[] { "200 OK", "connection established" }.Any(s => result.ToLower().Contains(s.ToLower())))
                         {
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
                         }
 
-                        await reader.ReadAndIgnoreAllLinesAsync();
+                        await reader.ReadAllLinesAsync();
                     }
                 }
                 else
                 {
-                    client = new TcpClient(upStreamEndPoint);
-                    await client.ConnectAsync(remoteHostName, remotePort);
-                    stream = new CustomBufferedStream(client.GetStream(), bufferSize);
+                    client = new TcpClient();
+                    client.Client.Bind(upStreamEndPoint);
+                    client.Client.Connect(remoteHostName, remotePort);
+                    stream = client.GetStream();
                 }
 
                 try
@@ -105,7 +104,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                     await sslStream.AuthenticateAsClientAsync(remoteHostName, null, supportedSslProtocols, false);
 
-                    stream = new CustomBufferedStream(sslStream, bufferSize);
+                    stream = sslStream;
                 }
                 catch
                 {
@@ -116,17 +115,19 @@ namespace Titanium.Web.Proxy.Network.Tcp
             }
             else
             {
-                if (useHttpProxy)
+                if (externalHttpProxy != null && externalHttpProxy.HostName != remoteHostName)
                 {
-                    client = new TcpClient(upStreamEndPoint);
-                    await client.ConnectAsync(externalHttpProxy.HostName, externalHttpProxy.Port);
-                    stream = new CustomBufferedStream(client.GetStream(), bufferSize);
+                    client = new TcpClient();
+                    client.Client.Bind(upStreamEndPoint);
+                    client.Client.Connect(externalHttpProxy.HostName, externalHttpProxy.Port);
+                    stream = client.GetStream();
                 }
                 else
                 {
-                    client = new TcpClient(upStreamEndPoint);
-                    await client.ConnectAsync(remoteHostName, remotePort);
-                    stream = new CustomBufferedStream(client.GetStream(), bufferSize);
+                    client = new TcpClient();
+                    client.Client.Bind(upStreamEndPoint);
+                    client.Client.Connect(remoteHostName, remotePort);
+                    stream = client.GetStream();
                 }
             }
 
@@ -137,7 +138,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             stream.WriteTimeout = connectionTimeOutSeconds * 1000;
 
 
-            return new TcpConnection
+            return new TcpConnection()
             {
                 UpStreamHttpProxy = externalHttpProxy,
                 UpStreamHttpsProxy = externalHttpsProxy,
@@ -145,7 +146,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 Port = remotePort,
                 IsHttps = isHttps,
                 TcpClient = client,
-                StreamReader = new CustomBinaryReader(stream, bufferSize),
+                StreamReader = new CustomBinaryReader(stream),
                 Stream = stream,
                 Version = httpVersion
             };
