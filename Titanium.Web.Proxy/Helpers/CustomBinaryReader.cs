@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -18,10 +19,15 @@ namespace Titanium.Web.Proxy.Helpers
         private readonly byte[] staticBuffer;
         private readonly Encoding encoding;
 
+        private static readonly ConcurrentQueue<byte[]> buffers = new ConcurrentQueue<byte[]>();
+
         internal CustomBinaryReader(CustomBufferedStream stream, int bufferSize)
         {
             this.stream = stream;
-            staticBuffer = new byte[bufferSize];
+            if (!buffers.TryDequeue(out staticBuffer) || staticBuffer.Length != bufferSize)
+            {
+                staticBuffer = new byte[bufferSize];
+            }
 
             this.bufferSize = bufferSize;
 
@@ -148,6 +154,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         public void Dispose()
         {
+            buffers.Enqueue(staticBuffer);
         }
 
         private void ResizeBuffer(ref byte[] buffer, long size)
