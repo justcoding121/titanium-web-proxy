@@ -405,7 +405,7 @@ namespace Titanium.Web.Proxy
                     Dispose(clientStream,
                             clientStreamReader,
                             clientStreamWriter,
-                            null);
+                            connection);
 
                     break;
                 }
@@ -556,8 +556,6 @@ namespace Titanium.Web.Proxy
                     break;
                 }
             }
-
-            connection?.Dispose();
 
         }
 
