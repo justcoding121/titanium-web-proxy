@@ -53,7 +53,14 @@ namespace Titanium.Web.Proxy
 
                 if (args.ReRequest)
                 {
-                    await HandleHttpSessionRequestInternal(null, args, null, null, true);
+                    if(args.WebSession.ServerConnection != null)
+                    {
+                        args.WebSession.ServerConnection.Dispose();
+                        ServerConnectionCount--;
+                    }
+
+                    var connection = await GetServerConnection(args, null, null, true);
+                    await HandleHttpSessionRequestInternal(null, args, true);
                     return true;
                 }
 

@@ -141,10 +141,10 @@ namespace Titanium.Web.Proxy
                     //write back successfull CONNECT response
                     await WriteConnectResponse(clientStreamWriter, version);
 
-                    await TcpHelper.SendRaw(this, 
+                    await TcpHelper.SendRaw(this,
                         httpRemoteUri.Host, httpRemoteUri.Port,
                         null, version, null,
-                        false, 
+                        false,
                         clientStream, tcpConnectionFactory);
 
                     Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
@@ -217,40 +217,45 @@ namespace Titanium.Web.Proxy
                 endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null);
         }
 
-        private async Task<bool> HandleHttpSessionRequestInternal(TcpConnection connection, SessionEventArgs args,
-            ExternalProxy customUpStreamHttpProxy, ExternalProxy customUpStreamHttpsProxy, bool closeConnection)
+        private async Task<TcpConnection> GetServerConnection(
+            SessionEventArgs args,
+            ExternalProxy customUpStreamHttpProxy,
+            ExternalProxy customUpStreamHttpsProxy, bool closeConnection)
+        {
+
+            if (args.WebSession.Request.RequestUri.Scheme == "http")
+            {
+                if (GetCustomUpStreamHttpProxyFunc != null)
+                {
+                    customUpStreamHttpProxy = await GetCustomUpStreamHttpProxyFunc(args);
+                }
+            }
+            else
+            {
+                if (GetCustomUpStreamHttpsProxyFunc != null)
+                {
+                    customUpStreamHttpsProxy = await GetCustomUpStreamHttpsProxyFunc(args);
+                }
+            }
+
+            args.CustomUpStreamHttpProxyUsed = customUpStreamHttpProxy;
+            args.CustomUpStreamHttpsProxyUsed = customUpStreamHttpsProxy;
+
+            return await tcpConnectionFactory.CreateClient(this,
+                args.WebSession.Request.RequestUri.Host,
+                args.WebSession.Request.RequestUri.Port, args.WebSession.Request.HttpVersion,
+                args.IsHttps,
+                customUpStreamHttpProxy ?? UpStreamHttpProxy,
+                customUpStreamHttpsProxy ?? UpStreamHttpsProxy,
+                args.ProxyClient.ClientStream);
+        }
+
+
+        private async Task<bool> HandleHttpSessionRequestInternal(TcpConnection connection,
+            SessionEventArgs args, bool closeConnection)
         {
             try
             {
-                if (connection == null)
-                {
-                    if (args.WebSession.Request.RequestUri.Scheme == "http")
-                    {
-                        if (GetCustomUpStreamHttpProxyFunc != null)
-                        {
-                            customUpStreamHttpProxy = await GetCustomUpStreamHttpProxyFunc(args);
-                        }
-                    }
-                    else
-                    {
-                        if (GetCustomUpStreamHttpsProxyFunc != null)
-                        {
-                            customUpStreamHttpsProxy = await GetCustomUpStreamHttpsProxyFunc(args);
-                        }
-                    }
-
-                    args.CustomUpStreamHttpProxyUsed = customUpStreamHttpProxy;
-                    args.CustomUpStreamHttpsProxyUsed = customUpStreamHttpsProxy;
-
-                    connection = await tcpConnectionFactory.CreateClient(this, 
-                        args.WebSession.Request.RequestUri.Host,
-                        args.WebSession.Request.RequestUri.Port, args.WebSession.Request.HttpVersion,
-                        args.IsHttps, 
-                        customUpStreamHttpProxy ?? UpStreamHttpProxy,
-                        customUpStreamHttpsProxy ?? UpStreamHttpsProxy,
-                        args.ProxyClient.ClientStream);
-                }
-
                 args.WebSession.Request.RequestLocked = true;
 
                 //If request was cancelled by user then dispose the client
@@ -389,6 +394,8 @@ namespace Titanium.Web.Proxy
             CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName,
             ProxyEndPoint endPoint, List<HttpHeader> connectHeaders, ExternalProxy customUpStreamHttpProxy = null, ExternalProxy customUpStreamHttpsProxy = null)
         {
+            TcpConnection connection = null;
+
             //Loop through each subsequest request on this particular client connection
             //(assuming HTTP connection is kept alive by client)
             while (true)
@@ -455,7 +462,7 @@ namespace Titanium.Web.Proxy
                     args.WebSession.Request.HttpVersion = httpVersion;
                     args.ProxyClient.ClientStream = clientStream;
                     args.ProxyClient.ClientStreamReader = clientStreamReader;
-                    args.ProxyClient.ClientStreamWriter = clientStreamWriter;   
+                    args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                     if (httpsHostName == null && await CheckAuthorization(clientStreamWriter, args.WebSession.Request.RequestHeaders.Values) == false)
                     {
@@ -487,7 +494,7 @@ namespace Titanium.Web.Proxy
                     //if upgrading to websocket then relay the requet without reading the contents
                     if (args.WebSession.Request.UpgradeToWebSocket)
                     {
-                        await TcpHelper.SendRaw(this, 
+                        await TcpHelper.SendRaw(this,
                             httpRemoteUri.Host, httpRemoteUri.Port,
                             httpCmd, httpVersion, args.WebSession.Request.RequestHeaders, args.IsHttps,
                             clientStream, tcpConnectionFactory);
@@ -500,8 +507,13 @@ namespace Titanium.Web.Proxy
                         break;
                     }
 
+                    if (connection == null)
+                    {
+                        connection = await GetServerConnection(args, customUpStreamHttpProxy, customUpStreamHttpsProxy, false);
+                    }
+
                     //construct the web request that we are going to issue on behalf of the client.
-                    var result = await HandleHttpSessionRequestInternal(null, args, customUpStreamHttpProxy, customUpStreamHttpsProxy, false);
+                    var result = await HandleHttpSessionRequestInternal(connection, args, false);
 
                     if (result == false)
                     {
@@ -544,6 +556,8 @@ namespace Titanium.Web.Proxy
                     break;
                 }
             }
+
+            connection?.Dispose();
 
         }
 
