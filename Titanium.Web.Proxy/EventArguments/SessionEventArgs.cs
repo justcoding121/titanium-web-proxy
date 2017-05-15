@@ -93,7 +93,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             //GET request don't have a request body to read
             var method = WebSession.Request.Method.ToUpper();
-            if ((method != "POST" && method != "PUT" && method != "PATCH"))
+            if (method != "POST" && method != "PUT" && method != "PATCH")
             {
                 throw new BodyNotFoundException("Request don't have a body. " +
                                                 "Please verify that this request is a Http POST/PUT/PATCH and request " +
@@ -411,6 +411,7 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 response.ResponseHeaders = headers;
             }
+
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.ResponseBody = result;
 

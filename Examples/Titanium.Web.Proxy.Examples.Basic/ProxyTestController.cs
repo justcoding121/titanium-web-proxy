@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -17,6 +18,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
+
+            //generate root certificate without storing it in file system
+            //proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
+            //proxyServer.CertificateManager.CreateTrustedRootCertificate(false);
+            //proxyServer.CertificateManager.TrustRootCertificate();
+
             proxyServer.ExceptionFunc = exception => Console.WriteLine(exception.Message);
             proxyServer.TrustRootCertificate = true;
 
@@ -40,7 +47,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 //Exclude Https addresses you don't want to proxy
                 //Useful for clients that use certificate pinning
                 //for example google.com and dropbox.com
-                // ExcludedHttpsHostNameRegex = new List<string>() { "google.com", "dropbox.com" }
+                 ExcludedHttpsHostNameRegex = new List<string>() { "dropbox.com" }
 
                 //Include Https addresses you want to proxy (others will be excluded)
                 //for example github.com
@@ -92,18 +99,22 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;
 
             proxyServer.Stop();
+
+            //remove the generated certificates
+            //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
         }
 
         //intecept & cancel redirect or update requests
         public async Task OnRequest(object sender, SessionEventArgs e)
         {
+            Console.WriteLine("Active Client Connections:" + ((ProxyServer) sender).ClientConnectionCount);
             Console.WriteLine(e.WebSession.Request.Url);
 
             //read request headers
             var requestHeaders = e.WebSession.Request.RequestHeaders;
 
             var method = e.WebSession.Request.Method.ToUpper();
-            if ((method == "POST" || method == "PUT" || method == "PATCH"))
+            if (method == "POST" || method == "PUT" || method == "PATCH")
             {
                 //Get/Set request body bytes
                 byte[] bodyBytes = await e.GetRequestBody();
@@ -116,30 +127,32 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 requestBodyHistory[e.Id] = bodyString;
             }
 
-            //To cancel a request with a custom HTML content
-            //Filter URL
-            if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
-            {
-                await e.Ok("<!DOCTYPE html>" +
-                      "<html><body><h1>" +
-                      "Website Blocked" +
-                      "</h1>" +
-                      "<p>Blocked by titanium web proxy.</p>" +
-                      "</body>" +
-                      "</html>");
-            }
+            ////To cancel a request with a custom HTML content
+            ////Filter URL
+            //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
+            //{
+            //    await e.Ok("<!DOCTYPE html>" +
+            //          "<html><body><h1>" +
+            //          "Website Blocked" +
+            //          "</h1>" +
+            //          "<p>Blocked by titanium web proxy.</p>" +
+            //          "</body>" +
+            //          "</html>");
+            //}
 
-            //Redirect example
-            if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
-            {
-                await e.Redirect("https://www.paypal.com");
-            }
+            ////Redirect example
+            //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
+            //{
+            //    await e.Redirect("https://www.paypal.com");
+            //}
         }
 
         //Modify response
         public async Task OnResponse(object sender, SessionEventArgs e)
         {
-            if(requestBodyHistory.ContainsKey(e.Id))
+            Console.WriteLine("Active Server Connections:" + (sender as ProxyServer).ServerConnectionCount);
+
+            if (requestBodyHistory.ContainsKey(e.Id))
             {
                 //access request body by looking up the shared dictionary using requestId
                 var requestBody = requestBodyHistory[e.Id];
@@ -149,14 +162,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
             var responseHeaders = e.WebSession.Response.ResponseHeaders;
 
             // print out process id of current session
-            Console.WriteLine($"PID: {e.WebSession.ProcessId.Value}");
+            //Console.WriteLine($"PID: {e.WebSession.ProcessId.Value}");
 
             //if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
             if (e.WebSession.Request.Method == "GET" || e.WebSession.Request.Method == "POST")
             {
                 if (e.WebSession.Response.ResponseStatusCode == "200")
                 {
-                    if (e.WebSession.Response.ContentType!=null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
+                    if (e.WebSession.Response.ContentType != null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
                     {
                         byte[] bodyBytes = await e.GetResponseBody();
                         await e.SetResponseBody(bodyBytes);

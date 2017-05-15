@@ -25,11 +25,6 @@ namespace Titanium.Web.Proxy
         private bool proxyRunning { get; set; }
 
         /// <summary>
-        /// Manages certificates used by this proxy
-        /// </summary>
-        private CertificateManager certificateManager { get; set; }
-
-        /// <summary>
         /// An default exception log func
         /// </summary>
         private readonly Lazy<Action<Exception>> defaultExceptionFunc = new Lazy<Action<Exception>>(() => (e => { }));
@@ -65,12 +60,17 @@ namespace Titanium.Web.Proxy
         public int BufferSize { get; set; } = 8192;
 
         /// <summary>
+        /// Manages certificates used by this proxy
+        /// </summary>
+        public CertificateManager CertificateManager { get; }
+
+        /// <summary>
         /// The root certificate
         /// </summary>
         public X509Certificate2 RootCertificate
         {
-            get { return certificateManager.RootCertificate; }
-            set { certificateManager.RootCertificate = value; }
+            get { return CertificateManager.RootCertificate; }
+            set { CertificateManager.RootCertificate = value; }
         }
 
         /// <summary>
@@ -79,8 +79,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public string RootCertificateIssuerName
         {
-            get { return certificateManager.Issuer; }
-            set { certificateManager.RootCertificateName = value; }
+            get { return CertificateManager.Issuer; }
+            set { CertificateManager.Issuer = value; }
         }
 
         /// <summary>
@@ -92,8 +92,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public string RootCertificateName
         {
-            get { return certificateManager.RootCertificateName; }
-            set { certificateManager.Issuer = value; }
+            get { return CertificateManager.RootCertificateName; }
+            set { CertificateManager.RootCertificateName = value; }
         }
 
         /// <summary>
@@ -121,8 +121,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public CertificateEngine CertificateEngine
         {
-            get { return certificateManager.Engine; }
-            set { certificateManager.Engine = value; }
+            get { return CertificateManager.Engine; }
+            set { CertificateManager.Engine = value; }
         }
 
         /// <summary>
@@ -227,6 +227,17 @@ namespace Titanium.Web.Proxy
             | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 
         /// <summary>
+        /// Total number of active client connections
+        /// </summary>
+        public int ClientConnectionCount { get; private set; }
+
+
+        /// <summary>
+        /// Total number of active server connections
+        /// </summary>
+        public int ServerConnectionCount { get; internal set; }
+
+        /// <summary>
         /// Constructor
         /// </summary>
         public ProxyServer() : this(null, null)
@@ -241,7 +252,7 @@ namespace Titanium.Web.Proxy
         public ProxyServer(string rootCertificateName, string rootCertificateIssuerName)
         {
             //default values
-            ConnectionTimeOutSeconds = 120;
+            ConnectionTimeOutSeconds = 30;
             CertificateCacheTimeOutMinutes = 60;
 
             ProxyEndPoints = new List<ProxyEndPoint>();
@@ -251,7 +262,7 @@ namespace Titanium.Web.Proxy
             new FireFoxProxySettingsManager();
 #endif
 
-            certificateManager = new CertificateManager(ExceptionFunc);
+            CertificateManager = new CertificateManager(ExceptionFunc);
             if (rootCertificateName != null)
             {
                 RootCertificateName = rootCertificateName;
@@ -356,7 +367,7 @@ namespace Titanium.Web.Proxy
             EnsureRootCertificate();
 
             //If certificate was trusted by the machine
-            if (certificateManager.CertValidated)
+            if (CertificateManager.CertValidated)
             {
                 systemProxySettingsManager.SetHttpsProxy(
                     Equals(endPoint.IpAddress, IPAddress.Any) |
@@ -435,7 +446,7 @@ namespace Titanium.Web.Proxy
                 Listen(endPoint);
             }
 
-            certificateManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
+            CertificateManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
             proxyRunning = true;
         }
@@ -468,7 +479,7 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints.Clear();
 
-            certificateManager?.StopClearIdleCertificates();
+            CertificateManager?.StopClearIdleCertificates();
 
             proxyRunning = false;
         }
@@ -483,7 +494,7 @@ namespace Titanium.Web.Proxy
                 Stop();
             }
 
-            certificateManager?.Dispose();
+            CertificateManager?.Dispose();
         }
 
         /// <summary>
@@ -495,7 +506,7 @@ namespace Titanium.Web.Proxy
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
             endPoint.Listener.Start();
 
-            endPoint.Port = ((IPEndPoint) endPoint.Listener.LocalEndpoint).Port;
+            endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
             // accept clients asynchronously
             endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
         }
@@ -543,13 +554,13 @@ namespace Titanium.Web.Proxy
 
         private void EnsureRootCertificate()
         {
-            if (!certificateManager.CertValidated)
+            if (!CertificateManager.CertValidated)
             {
-                certificateManager.CreateTrustedRootCertificate();
+                CertificateManager.CreateTrustedRootCertificate();
 
                 if (TrustRootCertificate)
                 {
-                    certificateManager.TrustRootCertificate();
+                    CertificateManager.TrustRootCertificate();
                 }
             }
         }
@@ -560,7 +571,7 @@ namespace Titanium.Web.Proxy
         /// <param name="asyn"></param>
         private void OnAcceptConnection(IAsyncResult asyn)
         {
-            var endPoint = (ProxyEndPoint) asyn.AsyncState;
+            var endPoint = (ProxyEndPoint)asyn.AsyncState;
 
             TcpClient tcpClient = null;
 
@@ -581,11 +592,18 @@ namespace Titanium.Web.Proxy
                 //Other errors are discarded to keep proxy running
             }
 
-
             if (tcpClient != null)
             {
                 Task.Run(async () =>
                 {
+                    ClientConnectionCount++;
+
+                    //This line is important!
+                    //contributors please don't remove it without discussion
+                    //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
+                    //due to default TCP CLOSE_WAIT timeout for 4 minutes
+                    tcpClient.LingerState = new LingerOption(true, 0);
+
                     try
                     {
                         if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
@@ -599,15 +617,8 @@ namespace Titanium.Web.Proxy
                     }
                     finally
                     {
-                        if (tcpClient != null)
-                        {
-                            //This line is important!
-                            //contributors please don't remove it without discussion
-                            //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
-                            //due to default TCP CLOSE_WAIT timeout for 4 minutes
-                            tcpClient.LingerState = new LingerOption(true, 0);
-                            tcpClient.Close();
-                        }
+                        ClientConnectionCount--;
+                        tcpClient?.Close();
                     }
                 });
             }
