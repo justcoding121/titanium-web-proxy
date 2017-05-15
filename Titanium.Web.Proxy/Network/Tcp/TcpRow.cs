@@ -1,11 +1,12 @@
 ﻿using System.Net;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Network.Tcp
 {
     /// <summary>
     /// Represents a managed interface of IP Helper API TcpRow struct
-    /// <see cref="http://msdn2.microsoft.com/en-us/library/aa366913.aspx"/>
+    /// <see href="http://msdn2.microsoft.com/en-us/library/aa366913.aspx"/>
     /// </summary>
     internal class TcpRow
     {
@@ -13,32 +14,50 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// Initializes a new instance of the <see cref="TcpRow"/> class.
         /// </summary>
         /// <param name="tcpRow">TcpRow struct.</param>
-        public TcpRow(NativeMethods.TcpRow tcpRow)
+        internal TcpRow(NativeMethods.TcpRow tcpRow)
         {
             ProcessId = tcpRow.owningPid;
 
-            int localPort = (tcpRow.localPort1 << 8) + (tcpRow.localPort2) + (tcpRow.localPort3 << 24) + (tcpRow.localPort4 << 16);
-            long localAddress = tcpRow.localAddr;
-            LocalEndPoint = new IPEndPoint(localAddress, localPort);
+            LocalPort = tcpRow.GetLocalPort();
+            LocalAddress = tcpRow.localAddr;
 
-			int remotePort = (tcpRow.remotePort1 << 8) + (tcpRow.remotePort2) + (tcpRow.remotePort3 << 24) + (tcpRow.remotePort4 << 16);
-			long remoteAddress = tcpRow.remoteAddr;
-			RemoteEndPoint = new IPEndPoint(remoteAddress, remotePort);
-		}
+            RemotePort = tcpRow.GetRemotePort();
+            RemoteAddress = tcpRow.remoteAddr;
+        }
+
+        /// <summary>
+        /// Gets the local end point address.
+        /// </summary>
+        internal long LocalAddress { get; }
+
+        /// <summary>
+        /// Gets the local end point port.
+        /// </summary>
+        internal int LocalPort { get; }
 
         /// <summary>
         /// Gets the local end point.
         /// </summary>
-        public IPEndPoint LocalEndPoint { get; private set; }
+        internal IPEndPoint LocalEndPoint => new IPEndPoint(LocalAddress, LocalPort);
 
-		/// <summary>
-		/// Gets the remote end point.
-		/// </summary>
-		public IPEndPoint RemoteEndPoint { get; private set; }
+        /// <summary>
+        /// Gets the remote end point address.
+        /// </summary>
+        internal long RemoteAddress { get; }
+
+        /// <summary>
+        /// Gets the remote end point port.
+        /// </summary>
+        internal int RemotePort { get; }
+
+        /// <summary>
+        /// Gets the remote end point.
+        /// </summary>
+        internal IPEndPoint RemoteEndPoint => new IPEndPoint(RemoteAddress, RemotePort);
 
         /// <summary>
         /// Gets the process identifier.
         /// </summary>
-        public int ProcessId { get; private set; }
+        internal int ProcessId { get; }
     }
 }

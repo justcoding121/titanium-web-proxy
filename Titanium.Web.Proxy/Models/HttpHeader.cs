@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Models
 {
@@ -7,6 +9,16 @@ namespace Titanium.Web.Proxy.Models
     /// </summary>
     public class HttpHeader
     {
+        internal static Version Version10 = new Version(1, 0);
+
+        internal static Version Version11 = new Version(1, 1);
+
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="value"></param>
+        /// <exception cref="Exception"></exception>
         public HttpHeader(string name, string value)
         {
             if (string.IsNullOrEmpty(name))
@@ -18,7 +30,14 @@ namespace Titanium.Web.Proxy.Models
             Value = value.Trim();
         }
 
+        /// <summary>
+        /// Header Name.
+        /// </summary>
         public string Name { get; set; }
+
+        /// <summary>
+        /// Header Value.
+        /// </summary>
         public string Value { get; set; }
 
         /// <summary>
@@ -27,7 +46,14 @@ namespace Titanium.Web.Proxy.Models
         /// <returns></returns>
         public override string ToString()
         {
-            return string.Format("{0}: {1}", Name, Value);
+            return $"{Name}: {Value}";
+        }
+
+        internal async Task WriteToStream(StreamWriter writer)
+        {
+            await writer.WriteAsync(Name);
+            await writer.WriteAsync(": ");
+            await writer.WriteLineAsync(Value);
         }
     }
 }
