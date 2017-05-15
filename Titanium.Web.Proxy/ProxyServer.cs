@@ -25,11 +25,6 @@ namespace Titanium.Web.Proxy
         private bool proxyRunning { get; set; }
 
         /// <summary>
-        /// Manages certificates used by this proxy
-        /// </summary>
-        private CertificateManager certificateManager { get; set; }
-
-        /// <summary>
         /// An default exception log func
         /// </summary>
         private readonly Lazy<Action<Exception>> defaultExceptionFunc = new Lazy<Action<Exception>>(() => (e => { }));
@@ -65,12 +60,17 @@ namespace Titanium.Web.Proxy
         public int BufferSize { get; set; } = 8192;
 
         /// <summary>
+        /// Manages certificates used by this proxy
+        /// </summary>
+        public CertificateManager CertificateManager { get; }
+
+        /// <summary>
         /// The root certificate
         /// </summary>
         public X509Certificate2 RootCertificate
         {
-            get { return certificateManager.RootCertificate; }
-            set { certificateManager.RootCertificate = value; }
+            get { return CertificateManager.RootCertificate; }
+            set { CertificateManager.RootCertificate = value; }
         }
 
         /// <summary>
@@ -79,8 +79,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public string RootCertificateIssuerName
         {
-            get { return certificateManager.Issuer; }
-            set { certificateManager.RootCertificateName = value; }
+            get { return CertificateManager.Issuer; }
+            set { CertificateManager.RootCertificateName = value; }
         }
 
         /// <summary>
@@ -92,8 +92,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public string RootCertificateName
         {
-            get { return certificateManager.RootCertificateName; }
-            set { certificateManager.Issuer = value; }
+            get { return CertificateManager.RootCertificateName; }
+            set { CertificateManager.Issuer = value; }
         }
 
         /// <summary>
@@ -121,8 +121,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public CertificateEngine CertificateEngine
         {
-            get { return certificateManager.Engine; }
-            set { certificateManager.Engine = value; }
+            get { return CertificateManager.Engine; }
+            set { CertificateManager.Engine = value; }
         }
 
         /// <summary>
@@ -251,7 +251,7 @@ namespace Titanium.Web.Proxy
             new FireFoxProxySettingsManager();
 #endif
 
-            certificateManager = new CertificateManager(ExceptionFunc);
+            CertificateManager = new CertificateManager(ExceptionFunc);
             if (rootCertificateName != null)
             {
                 RootCertificateName = rootCertificateName;
@@ -356,7 +356,7 @@ namespace Titanium.Web.Proxy
             EnsureRootCertificate();
 
             //If certificate was trusted by the machine
-            if (certificateManager.CertValidated)
+            if (CertificateManager.CertValidated)
             {
                 systemProxySettingsManager.SetHttpsProxy(
                     Equals(endPoint.IpAddress, IPAddress.Any) |
@@ -435,7 +435,7 @@ namespace Titanium.Web.Proxy
                 Listen(endPoint);
             }
 
-            certificateManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
+            CertificateManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
             proxyRunning = true;
         }
@@ -468,7 +468,7 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints.Clear();
 
-            certificateManager?.StopClearIdleCertificates();
+            CertificateManager?.StopClearIdleCertificates();
 
             proxyRunning = false;
         }
@@ -483,7 +483,7 @@ namespace Titanium.Web.Proxy
                 Stop();
             }
 
-            certificateManager?.Dispose();
+            CertificateManager?.Dispose();
         }
 
         /// <summary>
@@ -543,13 +543,13 @@ namespace Titanium.Web.Proxy
 
         private void EnsureRootCertificate()
         {
-            if (!certificateManager.CertValidated)
+            if (!CertificateManager.CertValidated)
             {
-                certificateManager.CreateTrustedRootCertificate();
+                CertificateManager.CreateTrustedRootCertificate();
 
                 if (TrustRootCertificate)
                 {
-                    certificateManager.TrustRootCertificate();
+                    CertificateManager.TrustRootCertificate();
                 }
             }
         }
