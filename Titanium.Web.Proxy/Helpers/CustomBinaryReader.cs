@@ -15,27 +15,14 @@ namespace Titanium.Web.Proxy.Helpers
     {
         private readonly CustomBufferedStream stream;
         private readonly int bufferSize;
+        private readonly byte[] staticBuffer;
         private readonly Encoding encoding;
-
-        [ThreadStatic]
-        private static byte[] staticBufferField;
-
-        private byte[] staticBuffer
-        {
-            get
-            {
-                if (staticBufferField == null || staticBufferField.Length != bufferSize)
-                {
-                    staticBufferField = new byte[bufferSize];
-                }
-
-                return staticBufferField;
-            }
-        }
 
         internal CustomBinaryReader(CustomBufferedStream stream, int bufferSize)
         {
             this.stream = stream;
+            staticBuffer = new byte[bufferSize];
+
             this.bufferSize = bufferSize;
 
             //default to UTF-8
@@ -122,12 +109,13 @@ namespace Titanium.Web.Proxy.Helpers
         {
             int bytesToRead = bufferSize;
 
+            var buffer = staticBuffer;
             if (totalBytesToRead < bufferSize)
             {
                 bytesToRead = (int) totalBytesToRead;
+                buffer = new byte[bytesToRead];
             }
 
-            var buffer = new byte[bytesToRead];
             int bytesRead;
             var totalBytesRead = 0;
 
