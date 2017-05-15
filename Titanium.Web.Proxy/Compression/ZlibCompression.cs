@@ -5,15 +5,15 @@ using System.Threading.Tasks;
 namespace Titanium.Web.Proxy.Compression
 {
     /// <summary>
-    /// concreate implementation of gzip compression
+    /// concrete implementation of zlib compression
     /// </summary>
-    internal class GZipCompression : ICompression
+   internal class ZlibCompression : ICompression
     {
         public async Task<byte[]> Compress(byte[] responseBody)
         {
             using (var ms = new MemoryStream())
             {
-                using (var zip = new GZipStream(ms, CompressionMode.Compress, true))
+                using (var zip = new ZlibStream(ms, CompressionMode.Compress, true))
                 {
                    await zip.WriteAsync(responseBody, 0, responseBody.Length);
                 }
