@@ -98,6 +98,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;
 
             proxyServer.Stop();
+
+            //remove the generated certificates
+            //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
         }
 
         //intecept & cancel redirect or update requests
