@@ -80,7 +80,7 @@ namespace Titanium.Web.Proxy
         public string RootCertificateIssuerName
         {
             get { return CertificateManager.Issuer; }
-            set { CertificateManager.RootCertificateName = value; }
+            set { CertificateManager.Issuer = value; }
         }
 
         /// <summary>
@@ -93,7 +93,7 @@ namespace Titanium.Web.Proxy
         public string RootCertificateName
         {
             get { return CertificateManager.RootCertificateName; }
-            set { CertificateManager.Issuer = value; }
+            set { CertificateManager.RootCertificateName = value; }
         }
 
         /// <summary>
