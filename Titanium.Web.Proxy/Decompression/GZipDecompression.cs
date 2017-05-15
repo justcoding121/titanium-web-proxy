@@ -1,7 +1,6 @@
 ﻿using System.IO;
 using System.IO.Compression;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Decompression
 {
@@ -20,8 +19,9 @@ namespace Titanium.Web.Proxy.Decompression
                     int read;
                     while ((read = await decompressor.ReadAsync(buffer, 0, buffer.Length)) > 0)
                     {
-                       await output.WriteAsync(buffer, 0, read);
+                        output.Write(buffer, 0, read);
                     }
+
                     return output.ToArray();
                 }
             }

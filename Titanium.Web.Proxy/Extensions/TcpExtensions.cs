@@ -1,4 +1,5 @@
 ﻿using System.Net.Sockets;
+using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Extensions
 {
@@ -12,11 +13,11 @@ namespace Titanium.Web.Proxy.Extensions
         internal static bool IsConnected(this Socket client)
         {
             // This is how you can determine whether a socket is still connected.
-            bool blockingState = client.Blocking;
+            var blockingState = client.Blocking;
 
             try
             {
-                byte[] tmp = new byte[1];
+                var tmp = new byte[1];
 
                 client.Blocking = false;
                 client.Send(tmp, 0, 0);
@@ -25,20 +26,32 @@ namespace Titanium.Web.Proxy.Extensions
             catch (SocketException e)
             {
                 // 10035 == WSAEWOULDBLOCK
-                if (e.NativeErrorCode.Equals(10035))
-                {
-                    return true;
-                }
-                else
-                {
-                    return false;
-                }
+                return e.NativeErrorCode.Equals(10035);
             }
             finally
             {
                 client.Blocking = blockingState;
             }
         }
-    }
 
+        /// <summary>
+        /// Gets the local port from a native TCP row object.
+        /// </summary>
+        /// <param name="tcpRow">The TCP row.</param>
+        /// <returns>The local port</returns>
+        internal static int GetLocalPort(this NativeMethods.TcpRow tcpRow)
+        {
+            return (tcpRow.localPort1 << 8) + tcpRow.localPort2 + (tcpRow.localPort3 << 24) + (tcpRow.localPort4 << 16);
+        }
+
+        /// <summary>
+        /// Gets the remote port from a native TCP row object.
+        /// </summary>
+        /// <param name="tcpRow">The TCP row.</param>
+        /// <returns>The remote port</returns>
+        internal static int GetRemotePort(this NativeMethods.TcpRow tcpRow)
+        {
+            return (tcpRow.remotePort1 << 8) + tcpRow.remotePort2 + (tcpRow.remotePort3 << 24) + (tcpRow.remotePort4 << 16);
+        }
+    }
 }
