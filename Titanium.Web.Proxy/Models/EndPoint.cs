@@ -1,6 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.RegularExpressions;
 
 namespace Titanium.Web.Proxy.Models
 {
@@ -9,22 +13,42 @@ namespace Titanium.Web.Proxy.Models
     /// </summary>
     public abstract class ProxyEndPoint
     {
-        public ProxyEndPoint(IPAddress IpAddress, int Port, bool EnableSsl)
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="ipAddress"></param>
+        /// <param name="port"></param>
+        /// <param name="enableSsl"></param>
+        protected ProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl)
         {
-            this.IpAddress = IpAddress;
-            this.Port = Port;
-            this.EnableSsl = EnableSsl;
+            IpAddress = ipAddress;
+            Port = port;
+            EnableSsl = enableSsl;
         }
 
+        /// <summary>
+        /// Ip Address.
+        /// </summary>
         public IPAddress IpAddress { get; internal set; }
+
+        /// <summary>
+        /// Port.
+        /// </summary>
         public int Port { get; internal set; }
+
+        /// <summary>
+        /// Enable SSL?
+        /// </summary>
         public bool EnableSsl { get; internal set; }
 
-        public bool IpV6Enabled => IpAddress == IPAddress.IPv6Any
-                                   || IpAddress == IPAddress.IPv6Loopback
-                                   || IpAddress == IPAddress.IPv6None;
+        /// <summary>
+        /// Is IPv6 enabled?
+        /// </summary>
+        public bool IpV6Enabled => Equals(IpAddress, IPAddress.IPv6Any)
+                                   || Equals(IpAddress, IPAddress.IPv6Loopback)
+                                   || Equals(IpAddress, IPAddress.IPv6None);
 
-        internal TcpListener listener { get; set; }
+        internal TcpListener Listener { get; set; }
     }
 
     /// <summary>
@@ -33,15 +57,61 @@ namespace Titanium.Web.Proxy.Models
     /// </summary>
     public class ExplicitProxyEndPoint : ProxyEndPoint
     {
+        internal List<Regex> ExcludedHttpsHostNameRegexList;
+        internal List<Regex> IncludedHttpsHostNameRegexList;
+
         internal bool IsSystemHttpProxy { get; set; }
+
         internal bool IsSystemHttpsProxy { get; set; }
 
-        public  List<string> ExcludedHttpsHostNameRegex { get; set; }
-
-        public ExplicitProxyEndPoint(IPAddress IpAddress, int Port, bool EnableSsl)
-            : base(IpAddress, Port, EnableSsl)
+        /// <summary>
+        /// List of host names to exclude using Regular Expressions.
+        /// </summary>
+        public IEnumerable<string> ExcludedHttpsHostNameRegex
         {
-        
+            get { return ExcludedHttpsHostNameRegexList?.Select(x => x.ToString()).ToList(); }
+            set
+            {
+                if (IncludedHttpsHostNameRegex != null)
+                {
+                    throw new ArgumentException("Cannot set excluded when included is set");
+                }
+
+                ExcludedHttpsHostNameRegexList = value?.Select(x => new Regex(x, RegexOptions.Compiled)).ToList();
+            }
+        }
+
+        /// <summary>
+        /// List of host names to exclude using Regular Expressions.
+        /// </summary>
+        public IEnumerable<string> IncludedHttpsHostNameRegex
+        {
+            get { return IncludedHttpsHostNameRegexList?.Select(x => x.ToString()).ToList(); }
+            set
+            {
+                if (ExcludedHttpsHostNameRegex != null)
+                {
+                    throw new ArgumentException("Cannot set included when excluded is set");
+                }
+
+                IncludedHttpsHostNameRegexList = value?.Select(x => new Regex(x, RegexOptions.Compiled)).ToList();
+            }
+        }
+
+        /// <summary>
+        /// Generic certificate to use for SSL decryption.
+        /// </summary>
+        public X509Certificate2 GenericCertificate { get; set; }
+
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="ipAddress"></param>
+        /// <param name="port"></param>
+        /// <param name="enableSsl"></param>
+        public ExplicitProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl)
+            : base(ipAddress, port, enableSsl)
+        {
         }
     }
 
@@ -51,18 +121,22 @@ namespace Titanium.Web.Proxy.Models
     /// </summary>
     public class TransparentProxyEndPoint : ProxyEndPoint
     {
-        //Name of the Certificate need to be sent (same as the hostname we want to proxy)
-        //This is valid only when UseServerNameIndication is set to false
+        /// <summary>
+        /// Name of the Certificate need to be sent (same as the hostname we want to proxy)
+        /// This is valid only when UseServerNameIndication is set to false
+        /// </summary>
         public string GenericCertificateName { get; set; }
 
-        
-       // public bool UseServerNameIndication { get; set; } 
-
-        public TransparentProxyEndPoint(IPAddress IpAddress, int Port, bool EnableSsl)
-            : base(IpAddress, Port, EnableSsl)
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="ipAddress"></param>
+        /// <param name="port"></param>
+        /// <param name="enableSsl"></param>
+        public TransparentProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl)
+            : base(ipAddress, port, enableSsl)
         {
-            this.GenericCertificateName = "localhost";
+            GenericCertificateName = "localhost";
         }
     }
-
 }

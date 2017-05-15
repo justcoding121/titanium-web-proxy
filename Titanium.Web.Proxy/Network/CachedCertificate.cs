@@ -20,6 +20,5 @@ namespace Titanium.Web.Proxy.Network
         {
             LastAccess = DateTime.Now;
         }
-
     }
 }
