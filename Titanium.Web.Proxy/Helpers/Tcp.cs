@@ -186,6 +186,7 @@ namespace Titanium.Web.Proxy.Helpers
             finally
             {
                 tcpConnection.Dispose();
+                server.ServerConnectionCount--;
             }
         }
     }
