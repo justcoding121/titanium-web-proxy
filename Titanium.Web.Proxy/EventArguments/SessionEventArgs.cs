@@ -22,7 +22,6 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public class SessionEventArgs : EventArgs, IDisposable
     {
-
         /// <summary>
         /// Size of Buffers used by this object
         /// </summary>
@@ -47,11 +46,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Should we send a rerequest 
         /// </summary>
-        public bool ReRequest
-        {
-            get;
-            set;
-        }
+        public bool ReRequest { get; set; }
 
         /// <summary>
         /// Does this session uses SSL
@@ -61,7 +56,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Client End Point.
         /// </summary>
-        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
+        public IPEndPoint ClientEndPoint => (IPEndPoint) ProxyClient.TcpClient.Client.RemoteEndPoint;
 
         /// <summary>
         /// A web session corresponding to a single request/response sequence
@@ -108,14 +103,13 @@ namespace Titanium.Web.Proxy.EventArguments
             //Caching check
             if (WebSession.Request.RequestBody == null)
             {
-
                 //If chunked then its easy just read the whole body with the content length mentioned in the request header
                 using (var requestBodyStream = new MemoryStream())
                 {
                     //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
                     if (WebSession.Request.IsChunked)
                     {
-                        await ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(bufferSize, requestBodyStream);
+                        await ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(requestBodyStream);
                     }
                     else
                     {
@@ -125,7 +119,6 @@ namespace Titanium.Web.Proxy.EventArguments
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
                             await ProxyClient.ClientStreamReader.CopyBytesToStream(bufferSize, requestBodyStream,
                                 WebSession.Request.ContentLength);
-
                         }
                         else if (WebSession.Request.HttpVersion.Major == 1 && WebSession.Request.HttpVersion.Minor == 0)
                         {
@@ -140,7 +133,6 @@ namespace Titanium.Web.Proxy.EventArguments
                 //So that next time we can deliver body from cache
                 WebSession.Request.RequestBodyRead = true;
             }
-
         }
 
         /// <summary>
@@ -156,7 +148,7 @@ namespace Titanium.Web.Proxy.EventArguments
                     //If chuncked the read chunk by chunk until we hit chunk end symbol
                     if (WebSession.Response.IsChunked)
                     {
-                        await WebSession.ServerConnection.StreamReader.CopyBytesToStreamChunked(bufferSize, responseBodyStream);
+                        await WebSession.ServerConnection.StreamReader.CopyBytesToStreamChunked(responseBodyStream);
                     }
                     else
                     {
@@ -165,7 +157,6 @@ namespace Titanium.Web.Proxy.EventArguments
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
                             await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, responseBodyStream,
                                 WebSession.Response.ContentLength);
-
                         }
                         else if ((WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0) || WebSession.Response.ContentLength == -1)
                         {
@@ -175,7 +166,6 @@ namespace Titanium.Web.Proxy.EventArguments
 
                     WebSession.Response.ResponseBody = await GetDecompressedResponseBody(WebSession.Response.ContentEncoding,
                         responseBodyStream.ToArray());
-
                 }
                 //set this to true for caching
                 WebSession.Response.ResponseBodyRead = true;
@@ -199,6 +189,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             return WebSession.Request.RequestBody;
         }
+
         /// <summary>
         /// Gets the request body as string
         /// </summary>
@@ -265,7 +256,6 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             await SetRequestBody(WebSession.Request.Encoding.GetBytes(body));
-
         }
 
         /// <summary>
@@ -297,7 +287,7 @@ namespace Titanium.Web.Proxy.EventArguments
             await GetResponseBody();
 
             return WebSession.Response.ResponseBodyString ??
-                (WebSession.Response.ResponseBodyString = WebSession.Response.Encoding.GetString(WebSession.Response.ResponseBody));
+                   (WebSession.Response.ResponseBodyString = WebSession.Response.Encoding.GetString(WebSession.Response.ResponseBody));
         }
 
         /// <summary>
@@ -415,8 +405,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="headers"></param>
         public async Task Ok(byte[] result, Dictionary<string, HttpHeader> headers)
         {
-            var response = new OkResponse();            
-            
+            var response = new OkResponse();
+
             if (headers != null && headers.Count > 0)
             {
                 response.ResponseHeaders = headers;
@@ -428,7 +418,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             WebSession.Request.CancelRequest = true;
         }
-        
+
         /// <summary>
         /// Before request is made to server 
         /// Respond with the specified HTML string to client
@@ -436,11 +426,11 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         /// <param name="html"></param>
         /// <param name="status"></param>
-        public async Task GenericResponse(string html, HttpStatusCode status)        
+        public async Task GenericResponse(string html, HttpStatusCode status)
         {
-            await GenericResponse(html, null, status);
+            await GenericResponse(html, null, status);
         }
-       
+
         /// <summary>
         /// Before request is made to server 
         /// Respond with the specified HTML string to client
@@ -450,23 +440,23 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="html"></param>
         /// <param name="headers"></param>
         /// <param name="status"></param>
-        public async Task GenericResponse(string html, Dictionary<string, HttpHeader> headers, HttpStatusCode status)
-        {            
-            if (WebSession.Request.RequestLocked)            
-            {                
-                throw new Exception("You cannot call this function after request is made to server.");            
+        public async Task GenericResponse(string html, Dictionary<string, HttpHeader> headers, HttpStatusCode status)
+        {
+            if (WebSession.Request.RequestLocked)
+            {
+                throw new Exception("You cannot call this function after request is made to server.");
             }
-            
+
             if (html == null)
-            {                
-                html = string.Empty;            
+            {
+                html = string.Empty;
             }
-            
+
             var result = Encoding.Default.GetBytes(html);
-            
-            await GenericResponse(result, headers, status);        
+
+            await GenericResponse(result, headers, status);
         }
-        
+
         /// <summary>
         /// Before request is made to server
         /// Respond with the specified byte[] to client
@@ -480,21 +470,21 @@ namespace Titanium.Web.Proxy.EventArguments
         public async Task GenericResponse(byte[] result, Dictionary<string, HttpHeader> headers, HttpStatusCode status)
         {
             var response = new GenericResponse(status);
-            
+
             if (headers != null && headers.Count > 0)
             {
                 response.ResponseHeaders = headers;
             }
-            
+
             response.HttpVersion = WebSession.Request.HttpVersion;
-            
+
             response.ResponseBody = result;
-            
+
             await Respond(response);
-            
+
             WebSession.Request.CancelRequest = true;
         }
-        
+
         /// <summary>
         /// Redirect to URL.
         /// </summary>
@@ -531,7 +521,6 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public void Dispose()
         {
-
         }
     }
 }
