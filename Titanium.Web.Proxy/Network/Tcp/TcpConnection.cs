@@ -70,7 +70,9 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     TcpClient.Close();
                 }
             }
-            catch { }
+            catch
+            {
+            }
         }
     }
 }

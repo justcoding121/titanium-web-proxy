@@ -55,7 +55,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     await client.ConnectAsync(externalHttpsProxy.HostName, externalHttpsProxy.Port);
                     stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
 
-                    using (var writer = new StreamWriter(stream, Encoding.ASCII, server.BufferSize, true) {NewLine = ProxyConstants.NewLine})
+                    using (var writer = new StreamWriter(stream, Encoding.ASCII, server.BufferSize, true) { NewLine = ProxyConstants.NewLine })
                     {
                         await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
                         await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
@@ -75,7 +75,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     {
                         var result = await reader.ReadLineAsync();
 
-                        if (!new[] {"200 OK", "connection established"}.Any(s => result.ContainsIgnoreCase(s)))
+                        if (!new[] { "200 OK", "connection established" }.Any(s => result.ContainsIgnoreCase(s)))
                         {
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
                         }
