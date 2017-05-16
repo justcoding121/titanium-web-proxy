@@ -19,7 +19,10 @@ namespace Titanium.Web.Proxy.Helpers
         private readonly byte[] staticBuffer;
         private readonly Encoding encoding;
 
-        private static readonly ConcurrentQueue<byte[]> buffers = new ConcurrentQueue<byte[]>();
+        private static readonly ConcurrentQueue<byte[]> buffers
+            = new ConcurrentQueue<byte[]>();
+
+        private volatile bool disposed = false;
 
         internal CustomBinaryReader(CustomBufferedStream stream, int bufferSize)
         {
@@ -154,9 +157,18 @@ namespace Titanium.Web.Proxy.Helpers
 
         public void Dispose()
         {
-            buffers.Enqueue(staticBuffer);
+            if (!disposed)
+            {
+                disposed = true;
+                buffers.Enqueue(staticBuffer);
+            }
         }
 
+        /// <summary>
+        /// Increase size of buffer and copy existing content to new buffer
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="size"></param>
         private void ResizeBuffer(ref byte[] buffer, long size)
         {
             var newBuffer = new byte[size];
