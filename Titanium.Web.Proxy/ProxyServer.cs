@@ -600,12 +600,6 @@ namespace Titanium.Web.Proxy
                 {
                     Interlocked.Increment(ref clientConnectionCountField);
 
-                    //This line is important!
-                    //contributors please don't remove it without discussion
-                    //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
-                    //due to default TCP CLOSE_WAIT timeout for 4 minutes
-                    tcpClient.LingerState = new LingerOption(true, 0);
-
                     try
                     {
                         if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
@@ -620,7 +614,20 @@ namespace Titanium.Web.Proxy
                     finally
                     {
                         Interlocked.Decrement(ref clientConnectionCountField);
-                        tcpClient?.Close();
+
+                        try
+                        {
+                            if (tcpClient != null)
+                            {
+                                //This line is important!
+                                //contributors please don't remove it without discussion
+                                //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
+                                //due to default TCP CLOSE_WAIT timeout for 4 minutes
+                                tcpClient.LingerState = new LingerOption(true, 0);
+                                tcpClient.Close();
+                            }
+                        }
+                        catch { }
                     }
                 });
             }

@@ -125,8 +125,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
             client.ReceiveTimeout = server.ConnectionTimeOutSeconds * 1000;
             client.SendTimeout = server.ConnectionTimeOutSeconds * 1000;
 
-            client.LingerState = new LingerOption(true, 0);
-
             Interlocked.Increment(ref server.ServerConnectionCountField);
 
             return new TcpConnection
