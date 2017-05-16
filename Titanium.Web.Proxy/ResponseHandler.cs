@@ -133,8 +133,6 @@ namespace Titanium.Web.Proxy
                 return true;
             }
 
-            args.Dispose();
-
             return false;
         }
 
