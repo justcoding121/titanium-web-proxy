@@ -522,6 +522,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public void Dispose()
         {
+            WebSession.Dispose();
         }
     }
 }
