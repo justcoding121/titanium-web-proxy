@@ -627,7 +627,9 @@ namespace Titanium.Web.Proxy
                                 tcpClient.Close();
                             }
                         }
-                        catch { }
+                        catch
+                        {
+                        }
                     }
                 });
             }

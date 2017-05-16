@@ -265,7 +265,7 @@ namespace Titanium.Web.Proxy.Network
                     }
                     if (certificate != null && !certificateCache.ContainsKey(certificateName))
                     {
-                        certificateCache.Add(certificateName, new CachedCertificate {Certificate = certificate});
+                        certificateCache.Add(certificateName, new CachedCertificate { Certificate = certificate });
                     }
                 }
                 else
