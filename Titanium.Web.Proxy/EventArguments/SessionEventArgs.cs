@@ -1,16 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Text;
-using Titanium.Web.Proxy.Exceptions;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.Decompression;
+using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
-using Titanium.Web.Proxy.Extensions;
-using System.Threading.Tasks;
-using Titanium.Web.Proxy.Network;
-using System.Net;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
