@@ -117,6 +117,7 @@ namespace Titanium.Web.Proxy
                         //Successfully managed to authenticate the client using the fake certificate
                         await sslStream.AuthenticateAsServerAsync(certificate, false,
                             SupportedSslProtocols, false);
+
                         //HTTPS server created - we can now decrypt the client's traffic
                         clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
@@ -138,6 +139,7 @@ namespace Titanium.Web.Proxy
                 {
                     //Siphon out CONNECT request headers
                     await clientStreamReader.ReadAndIgnoreAllLinesAsync();
+                    
                     //write back successfull CONNECT response
                     await WriteConnectResponse(clientStreamWriter, version);
 
@@ -172,8 +174,7 @@ namespace Titanium.Web.Proxy
         //So for HTTPS requests we would start SSL negotiation right away without expecting a CONNECT request from client
         private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
-            var disposed = false;
-
+            bool disposed = false;
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
             clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
@@ -182,52 +183,39 @@ namespace Titanium.Web.Proxy
             CustomBinaryReader clientStreamReader = null;
             StreamWriter clientStreamWriter = null;
 
-            if (endPoint.EnableSsl)
+            try
             {
-                var sslStream = new SslStream(clientStream, true);
-
-                //implement in future once SNI supported by SSL stream, for now use the same certificate
-                var certificate = CertificateManager.CreateCertificate(endPoint.GenericCertificateName, false);
-
-                try
+                if (endPoint.EnableSsl)
                 {
+                    var sslStream = new SslStream(clientStream, true);
+                    clientStream = new CustomBufferedStream(sslStream, BufferSize);
+
+                    //implement in future once SNI supported by SSL stream, for now use the same certificate
+                    var certificate = CertificateManager.CreateCertificate(endPoint.GenericCertificateName, false);
+
                     //Successfully managed to authenticate the client using the fake certificate
                     await sslStream.AuthenticateAsServerAsync(certificate, false,
                         SslProtocols.Tls, false);
 
-                    clientStream = new CustomBufferedStream(sslStream, BufferSize);
-                    clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-                    clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
                     //HTTPS server created - we can now decrypt the client's traffic
                 }
-                catch (Exception)
-                {
-                    sslStream.Dispose();
 
-                    Dispose(sslStream,
-                        clientStreamReader,
-                        clientStreamWriter, null);
-
-                    disposed = true;
-                    return;
-                }
-            }
-            else
-            {
                 clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
                 clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
+
+                //now read the request line
+                var httpCmd = await clientStreamReader.ReadLineAsync();
+
+                //Now create the request
+                disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
+                    endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null);
             }
-
-            //now read the request line
-            var httpCmd = await clientStreamReader.ReadLineAsync();
-
-            //Now create the request
-            disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null);
-
-            if (!disposed)
+            finally
             {
-                Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
+                if (!disposed)
+                {
+                    Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
+                }
             }
         }
 
@@ -271,9 +259,11 @@ namespace Titanium.Web.Proxy
         }
 
 
-        private async Task<bool> HandleHttpSessionRequestInternal(TcpConnection connection,
-            SessionEventArgs args, bool closeConnection)
+        private async Task<bool> HandleHttpSessionRequestInternal(TcpConnection connection, SessionEventArgs args, bool closeConnection)
         {
+            bool disposed = false;
+            bool keepAlive = false;
+
             try
             {
                 args.WebSession.Request.RequestLocked = true;
@@ -281,11 +271,6 @@ namespace Titanium.Web.Proxy
                 //If request was cancelled by user then dispose the client
                 if (args.WebSession.Request.CancelRequest)
                 {
-                    Dispose(args.ProxyClient.ClientStream,
-                        args.ProxyClient.ClientStreamReader,
-                        args.ProxyClient.ClientStreamWriter,
-                        args.WebSession.ServerConnection);
-
                     return true;
                 }
 
@@ -350,7 +335,7 @@ namespace Titanium.Web.Proxy
                 //If not expectation failed response was returned by server then parse response
                 if (!args.WebSession.Request.ExpectationFailed)
                 {
-                    var disposed = await HandleHttpSessionResponse(args);
+                    disposed = await HandleHttpSessionResponse(args);
 
                     //already disposed inside above method
                     if (disposed)
@@ -362,38 +347,30 @@ namespace Titanium.Web.Proxy
                 //if connection is closing exit
                 if (args.WebSession.Response.ResponseKeepAlive == false)
                 {
-                    Dispose(args.ProxyClient.ClientStream,
-                        args.ProxyClient.ClientStreamReader,
-                        args.ProxyClient.ClientStreamWriter,
-                        args.WebSession.ServerConnection);
-
                     return true;
+                }
+
+                if (!closeConnection)
+                {
+                    keepAlive = true;
+                    return false;
                 }
             }
             catch (Exception e)
             {
                 ExceptionFunc(new ProxyHttpException("Error occured whilst handling session request (internal)", e, args));
-
-                Dispose(args.ProxyClient.ClientStream,
-                    args.ProxyClient.ClientStreamReader,
-                    args.ProxyClient.ClientStreamWriter,
-                    args.WebSession.ServerConnection);
-
                 return true;
             }
-
-            if (closeConnection)
+            finally
             {
-                //dispose
-                Dispose(args.ProxyClient.ClientStream,
-                    args.ProxyClient.ClientStreamReader,
-                    args.ProxyClient.ClientStreamWriter,
-                    args.WebSession.ServerConnection);
-
-                return true;
+                if (!disposed && !keepAlive)
+                {
+                    //dispose
+                    Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader, args.ProxyClient.ClientStreamWriter, args.WebSession.ServerConnection);
+                }
             }
 
-            return false;
+            return true;
         }
 
         /// <summary>
@@ -412,7 +389,7 @@ namespace Titanium.Web.Proxy
             CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName,
             ProxyEndPoint endPoint, List<HttpHeader> connectHeaders)
         {
-            var disposed = false;
+            bool disposed = false;
 
             TcpConnection connection = null;
 
@@ -422,12 +399,6 @@ namespace Titanium.Web.Proxy
             {
                 if (string.IsNullOrEmpty(httpCmd))
                 {
-                    Dispose(clientStream,
-                        clientStreamReader,
-                        clientStreamWriter,
-                        connection);
-
-                    disposed = true;
                     break;
                 }
 
@@ -489,12 +460,6 @@ namespace Titanium.Web.Proxy
                         await CheckAuthorization(clientStreamWriter,
                             args.WebSession.Request.RequestHeaders.Values) == false)
                     {
-                        Dispose(clientStream,
-                            clientStreamReader,
-                            clientStreamWriter,
-                            connection);
-
-                        disposed = true;
                         break;
                     }
 
@@ -515,12 +480,6 @@ namespace Titanium.Web.Proxy
                             httpCmd, httpVersion, args.WebSession.Request.RequestHeaders, args.IsHttps,
                             clientStream, tcpConnectionFactory);
 
-                        Dispose(clientStream,
-                            clientStreamReader,
-                            clientStreamWriter,
-                            connection);
-
-                        disposed = true;
                         break;
                     }
 
@@ -540,24 +499,12 @@ namespace Titanium.Web.Proxy
 
                     if (args.WebSession.Request.CancelRequest)
                     {
-                        Dispose(clientStream,
-                            clientStreamReader,
-                            clientStreamWriter,
-                            connection);
-
-                        disposed = true;
                         break;
                     }
 
                     //if connection is closing exit
                     if (args.WebSession.Response.ResponseKeepAlive == false)
                     {
-                        Dispose(clientStream,
-                            clientStreamReader,
-                            clientStreamWriter,
-                            connection);
-
-                        disposed = true;
                         break;
                     }
 
@@ -567,18 +514,16 @@ namespace Titanium.Web.Proxy
                 catch (Exception e)
                 {
                     ExceptionFunc(new ProxyHttpException("Error occured whilst handling session request", e, args));
-
-                    Dispose(clientStream,
-                        clientStreamReader,
-                        clientStreamWriter,
-                        connection);
-
-                    disposed = true;
                     break;
                 }
             }
 
-            return disposed;
+            if (!disposed)
+            {
+                Dispose(clientStream, clientStreamReader, clientStreamWriter, connection);
+            }
+
+            return true;
         }
 
         /// <summary>
