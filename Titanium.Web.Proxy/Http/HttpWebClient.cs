@@ -218,6 +218,10 @@ namespace Titanium.Web.Proxy.Http
             //but just to be on safe side
             Request.RequestBody = null;
             Response.ResponseBody = null;
+
+            Request.RequestBodyString = null;
+            Response.ResponseBodyString = null;
+
         }
     }
 }

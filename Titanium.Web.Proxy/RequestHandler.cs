@@ -460,6 +460,7 @@ namespace Titanium.Web.Proxy
                         await CheckAuthorization(clientStreamWriter,
                             args.WebSession.Request.RequestHeaders.Values) == false)
                     {
+                        args.Dispose();
                         break;
                     }
 
@@ -480,6 +481,7 @@ namespace Titanium.Web.Proxy
                             httpCmd, httpVersion, args.WebSession.Request.RequestHeaders, args.IsHttps,
                             clientStream, tcpConnectionFactory);
 
+                        args.Dispose();
                         break;
                     }
 
@@ -494,19 +496,24 @@ namespace Titanium.Web.Proxy
                     if (disposed)
                     {
                         //already disposed inside above method
+                        args.Dispose();
                         break;
                     }
 
                     if (args.WebSession.Request.CancelRequest)
                     {
+                        args.Dispose();
                         break;
                     }
 
                     //if connection is closing exit
                     if (args.WebSession.Response.ResponseKeepAlive == false)
                     {
+                        args.Dispose();
                         break;
                     }
+
+                    args.Dispose();
 
                     // read the next request
                     httpCmd = await clientStreamReader.ReadLineAsync();
