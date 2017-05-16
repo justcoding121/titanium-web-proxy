@@ -139,7 +139,7 @@ namespace Titanium.Web.Proxy.Network
         private string GetRootCertificatePath()
         {
             if (!string.IsNullOrEmpty(this.rootCertificatePath))
-                return rootCertificatePath;
+                return Path.Combine(this.rootCertificatePath, "rootCert.pfx"); ;
 
             var assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
 
