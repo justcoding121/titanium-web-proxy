@@ -107,7 +107,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         //intecept & cancel redirect or update requests
         public async Task OnRequest(object sender, SessionEventArgs e)
         {
-            Console.WriteLine("Active Client Connections:" + ((ProxyServer) sender).ClientConnectionCount);
+            Console.WriteLine("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
             Console.WriteLine(e.WebSession.Request.Url);
 
             //read request headers
@@ -150,7 +150,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         //Modify response
         public async Task OnResponse(object sender, SessionEventArgs e)
         {
-            Console.WriteLine("Active Server Connections:" + ((ProxyServer) sender).ServerConnectionCount);
+            Console.WriteLine("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
             if (requestBodyHistory.ContainsKey(e.Id))
             {
