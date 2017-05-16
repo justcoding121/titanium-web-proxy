@@ -249,7 +249,17 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="rootCertificateName">Name of root certificate.</param>
         /// <param name="rootCertificateIssuerName">Name of root certificate issuer.</param>
-        public ProxyServer(string rootCertificateName, string rootCertificateIssuerName)
+        public ProxyServer(string rootCertificateName, string rootCertificateIssuerName) : this(rootCertificateName, rootCertificateIssuerName, null)
+        {
+        }
+
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="rootCertificateName">Name of root certificate.</param>
+        /// <param name="rootCertificateIssuerName">Name of root certificate issuer.</param>
+        /// <param name="rootCertificatePath">Path where the root certificate can be stored.</param>
+        public ProxyServer(string rootCertificateName, string rootCertificateIssuerName, string rootCertificatePath)
         {
             //default values
             ConnectionTimeOutSeconds = 30;
@@ -262,7 +272,7 @@ namespace Titanium.Web.Proxy
             new FireFoxProxySettingsManager();
 #endif
 
-            CertificateManager = new CertificateManager(ExceptionFunc);
+            CertificateManager = new CertificateManager(rootCertificatePath, ExceptionFunc);
             if (rootCertificateName != null)
             {
                 RootCertificateName = rootCertificateName;

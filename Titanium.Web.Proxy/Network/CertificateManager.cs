@@ -69,6 +69,8 @@ namespace Titanium.Web.Proxy.Network
 
         private string rootCertificateName;
 
+        private string rootCertificatePath;
+
         private bool clearCertificates { get; set; }
 
         private X509Certificate2 rootCertificate;
@@ -115,13 +117,17 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         internal bool CertValidated => RootCertificate != null;
 
-
         internal CertificateManager(Action<Exception> exceptionFunc)
         {
             this.exceptionFunc = exceptionFunc;
             Engine = CertificateEngine.DefaultWindows;
 
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
+        }
+
+        internal CertificateManager(string rootCertificatePath, Action<Exception> exceptionFunc) : this(exceptionFunc)
+        {
+            this.rootCertificatePath = rootCertificatePath;
         }
 
         private void ClearRootCertificate()
@@ -132,6 +138,9 @@ namespace Titanium.Web.Proxy.Network
 
         private string GetRootCertificatePath()
         {
+            if (!string.IsNullOrEmpty(this.rootCertificatePath))
+                return Path.Combine(this.rootCertificatePath, "rootCert.pfx"); ;
+
             var assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
 
             // dynamically loaded assemblies returns string.Empty location
