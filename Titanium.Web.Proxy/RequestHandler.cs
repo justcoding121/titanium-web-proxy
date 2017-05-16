@@ -355,7 +355,7 @@ namespace Titanium.Web.Proxy
                     //already disposed inside above method
                     if (disposed)
                     {
-                        return disposed;
+                        return true;
                     }
                 }
 
