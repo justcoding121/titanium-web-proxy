@@ -33,7 +33,7 @@ namespace Titanium.Web.Proxy
                 };
 
                 //why is the sender null?
-                ServerCertificateValidationCallback.InvokeParallel(null, args);
+                ServerCertificateValidationCallback.InvokeParallel(this, args);
                 return args.IsValid;
             }
 
@@ -100,7 +100,7 @@ namespace Titanium.Web.Proxy
                 };
 
                 //why is the sender null?
-                ClientCertificateSelectionCallback.InvokeParallel(null, args);
+                ClientCertificateSelectionCallback.InvokeParallel(this, args);
                 return args.ClientCertificate;
             }
 
