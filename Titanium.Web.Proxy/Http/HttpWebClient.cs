@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.Http
     /// <summary>
     /// Used to communicate with the server over HTTP(S)
     /// </summary>
-    public class HttpWebClient
+    public class HttpWebClient : IDisposable
     {
         /// <summary>
         /// Connection to server
@@ -207,6 +207,13 @@ namespace Titanium.Web.Proxy.Http
 
             //Read the response headers in to unique and non-unique header collections
             await HeaderParser.ReadHeaders(ServerConnection.StreamReader, Response.NonUniqueResponseHeaders, Response.ResponseHeaders);
+        }
+
+        /// <summary>
+        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        /// </summary>
+        public void Dispose()
+        {
         }
     }
 }
