@@ -16,6 +16,7 @@ namespace Titanium.Web.Proxy.Http
         /// Response Status Code.
         /// </summary>
         public string ResponseStatusCode { get; set; }
+
         /// <summary>
         /// Response Status description.
         /// </summary>
@@ -23,7 +24,7 @@ namespace Titanium.Web.Proxy.Http
 
         internal Encoding Encoding => this.GetResponseCharacterEncoding();
 
-	    /// <summary>
+        /// <summary>
         /// Content encoding for this response
         /// </summary>
         internal string ContentEncoding
@@ -54,14 +55,13 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var header = ResponseHeaders["connection"];
 
-                    if (header.Value.ToLower().Contains("close"))
+                    if (header.Value.ContainsIgnoreCase("close"))
                     {
                         return false;
                     }
                 }
 
                 return true;
-
             }
         }
 
@@ -82,7 +82,6 @@ namespace Titanium.Web.Proxy.Http
                 }
 
                 return null;
-
             }
         }
 
@@ -110,7 +109,6 @@ namespace Titanium.Web.Proxy.Http
                 }
 
                 return -1;
-
             }
             set
             {
@@ -153,14 +151,13 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var header = ResponseHeaders["transfer-encoding"];
 
-                    if (header.Value.ToLower().Contains("chunked"))
+                    if (header.Value.ContainsIgnoreCase("chunked"))
                     {
                         return true;
-                    }         
+                    }
                 }
 
                 return false;
-
             }
             set
             {
@@ -186,9 +183,7 @@ namespace Titanium.Web.Proxy.Http
                     {
                         ResponseHeaders.Remove("transfer-encoding");
                     }
-                       
                 }
-
             }
         }
 
@@ -240,5 +235,4 @@ namespace Titanium.Web.Proxy.Http
             NonUniqueResponseHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
         }
     }
-
 }

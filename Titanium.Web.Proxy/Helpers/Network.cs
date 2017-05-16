@@ -8,8 +8,7 @@ namespace Titanium.Web.Proxy.Helpers
     {
         private static int FindProcessIdFromLocalPort(int port, IpVersion ipVersion)
         {
-            var tcpRow = TcpHelper.GetExtendedTcpTable(ipVersion).FirstOrDefault(
-                    row => row.LocalEndPoint.Port == port);
+            var tcpRow = TcpHelper.GetTcpRowByLocalPort(ipVersion, port);
 
             return tcpRow?.ProcessId ?? 0;
         }
@@ -55,7 +54,7 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 localhost = Dns.GetHostEntry(Dns.GetHostName());
 
-                IPAddress ipAddress = null;
+                IPAddress ipAddress;
 
                 if (IPAddress.TryParse(hostName, out ipAddress))
                     isLocalhost = localhost.AddressList.Any(x => x.Equals(ipAddress));
@@ -69,7 +68,6 @@ namespace Titanium.Web.Proxy.Helpers
                     }
                     catch (SocketException)
                     {
-
                     }
                 }
             }

@@ -16,11 +16,11 @@ namespace Titanium.Web.Proxy
         /// <param name="chain"></param>
         /// <param name="sslPolicyErrors"></param>
         /// <returns></returns>
-        private bool ValidateServerCertificate(
-          object sender,
-          X509Certificate certificate,
-          X509Chain chain,
-          SslPolicyErrors sslPolicyErrors)
+        internal bool ValidateServerCertificate(
+            object sender,
+            X509Certificate certificate,
+            X509Chain chain,
+            SslPolicyErrors sslPolicyErrors)
         {
             //if user callback is registered then do it
             if (ServerCertificateValidationCallback != null)
@@ -33,13 +33,12 @@ namespace Titanium.Web.Proxy
                 };
 
 
-
                 Delegate[] invocationList = ServerCertificateValidationCallback.GetInvocationList();
                 Task[] handlerTasks = new Task[invocationList.Length];
 
                 for (int i = 0; i < invocationList.Length; i++)
                 {
-                    handlerTasks[i] = ((Func<object, CertificateValidationEventArgs, Task>)invocationList[i])(null, args);
+                    handlerTasks[i] = ((Func<object, CertificateValidationEventArgs, Task>) invocationList[i])(null, args);
                 }
 
                 Task.WhenAll(handlerTasks).Wait();
@@ -66,7 +65,7 @@ namespace Titanium.Web.Proxy
         /// <param name="remoteCertificate"></param>
         /// <param name="acceptableIssuers"></param>
         /// <returns></returns>
-        private X509Certificate SelectClientCertificate(
+        internal X509Certificate SelectClientCertificate(
             object sender,
             string targetHost,
             X509CertificateCollection localCertificates,
@@ -115,7 +114,7 @@ namespace Titanium.Web.Proxy
 
                 for (int i = 0; i < invocationList.Length; i++)
                 {
-                    handlerTasks[i] = ((Func<object, CertificateSelectionEventArgs, Task>)invocationList[i])(null, args);
+                    handlerTasks[i] = ((Func<object, CertificateSelectionEventArgs, Task>) invocationList[i])(null, args);
                 }
 
                 Task.WhenAll(handlerTasks).Wait();

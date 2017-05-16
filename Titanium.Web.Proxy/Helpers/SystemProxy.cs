@@ -36,7 +36,7 @@ namespace Titanium.Web.Proxy.Helpers
     /// <summary>
     /// Manage system proxy settings
     /// </summary>
-    internal  class SystemProxyManager
+    internal class SystemProxyManager
     {
         internal const int InternetOptionSettingsChanged = 39;
         internal const int InternetOptionRefresh = 37;
@@ -181,17 +181,17 @@ namespace Titanium.Web.Proxy.Helpers
             if (tmp.StartsWith("http=") || tmp.StartsWith("https="))
             {
                 var endPoint = tmp.Substring(5);
-                return new HttpSystemProxyValue()
+                return new HttpSystemProxyValue
                 {
                     HostName = endPoint.Split(':')[0],
                     Port = int.Parse(endPoint.Split(':')[1]),
                     IsHttps = tmp.StartsWith("https=")
-				};
+                };
             }
 
             return null;
-
         }
+
         /// <summary>
         /// Prepares the proxy server registry (create empty values if they don't exist) 
         /// </summary>
@@ -207,7 +207,6 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 reg.SetValue("ProxyServer", string.Empty);
             }
-
         }
 
         /// <summary>

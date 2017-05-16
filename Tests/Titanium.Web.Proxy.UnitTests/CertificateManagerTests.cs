@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.UnitTests
     [TestClass]
     public class CertificateManagerTests
     {
-        private readonly static string[] hostNames
+        private static readonly string[] hostNames
             = new string[] { "facebook.com", "youtube.com", "google.com",
                                 "bing.com", "yahoo.com"};
 
@@ -20,8 +20,7 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(CertificateEngine.DefaultWindows, "Titanium", "Titanium Root Certificate Authority", 
-                new Lazy<Action<Exception>>(() => (e => { })).Value);
+            var mgr = new CertificateManager(new Lazy<Action<Exception>>(() => (e => { })).Value);
 
             mgr.ClearIdleCertificates(1);
 

@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Network.Tcp
@@ -17,24 +18,42 @@ namespace Titanium.Web.Proxy.Network.Tcp
         {
             ProcessId = tcpRow.owningPid;
 
-            int localPort = (tcpRow.localPort1 << 8) + (tcpRow.localPort2) + (tcpRow.localPort3 << 24) + (tcpRow.localPort4 << 16);
-            long localAddress = tcpRow.localAddr;
-            LocalEndPoint = new IPEndPoint(localAddress, localPort);
+            LocalPort = tcpRow.GetLocalPort();
+            LocalAddress = tcpRow.localAddr;
 
-			int remotePort = (tcpRow.remotePort1 << 8) + (tcpRow.remotePort2) + (tcpRow.remotePort3 << 24) + (tcpRow.remotePort4 << 16);
-			long remoteAddress = tcpRow.remoteAddr;
-			RemoteEndPoint = new IPEndPoint(remoteAddress, remotePort);
-		}
+            RemotePort = tcpRow.GetRemotePort();
+            RemoteAddress = tcpRow.remoteAddr;
+        }
+
+        /// <summary>
+        /// Gets the local end point address.
+        /// </summary>
+        internal long LocalAddress { get; }
+
+        /// <summary>
+        /// Gets the local end point port.
+        /// </summary>
+        internal int LocalPort { get; }
 
         /// <summary>
         /// Gets the local end point.
         /// </summary>
-        internal IPEndPoint LocalEndPoint { get; }
+        internal IPEndPoint LocalEndPoint => new IPEndPoint(LocalAddress, LocalPort);
+
+        /// <summary>
+        /// Gets the remote end point address.
+        /// </summary>
+        internal long RemoteAddress { get; }
+
+        /// <summary>
+        /// Gets the remote end point port.
+        /// </summary>
+        internal int RemotePort { get; }
 
         /// <summary>
         /// Gets the remote end point.
         /// </summary>
-        internal IPEndPoint RemoteEndPoint { get; }
+        internal IPEndPoint RemoteEndPoint => new IPEndPoint(RemoteAddress, RemotePort);
 
         /// <summary>
         /// Gets the process identifier.

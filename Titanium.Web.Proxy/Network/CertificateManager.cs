@@ -29,15 +29,49 @@ namespace Titanium.Web.Proxy.Network
     /// <summary>
     /// A class to manage SSL certificates used by this proxy server
     /// </summary>
-    internal class CertificateManager : IDisposable
+    public class CertificateManager : IDisposable
     {
+        internal CertificateEngine Engine
+        {
+            get { return engine; }
+            set
+            {
+                //For Mono only Bouncy Castle is supported
+                if (RunTime.IsRunningOnMono())
+                {
+                    value = CertificateEngine.BouncyCastle;
+                }
+
+                if (value != engine)
+                {
+                    certEngine = null;
+                    engine = value;
+                }
+
+                if (certEngine == null)
+                {
+                    certEngine = engine == CertificateEngine.BouncyCastle
+                        ? (ICertificateMaker) new BCCertificateMaker()
+                        : new WinCertificateMaker();
+                }
+            }
+        }
+
         private const string defaultRootCertificateIssuer = "Titanium";
 
         private const string defaultRootRootCertificateName = "Titanium Root Certificate Authority";
 
-        private readonly ICertificateMaker certEngine;
+        private CertificateEngine engine;
+
+        private ICertificateMaker certEngine;
+
+        private string issuer;
+
+        private string rootCertificateName;
 
         private bool clearCertificates { get; set; }
+
+        private X509Certificate2 rootCertificate;
 
         /// <summary>
         /// Cache dictionary
@@ -46,40 +80,60 @@ namespace Titanium.Web.Proxy.Network
 
         private readonly Action<Exception> exceptionFunc;
 
-        internal string Issuer { get; }
+        internal string Issuer
+        {
+            get { return issuer ?? defaultRootCertificateIssuer; }
+            set
+            {
+                issuer = value;
+                ClearRootCertificate();
+            }
+        }
 
-        internal string RootCertificateName { get; }
+        internal string RootCertificateName
+        {
+            get { return rootCertificateName ?? defaultRootRootCertificateName; }
+            set
+            {
+                rootCertificateName = value;
+                ClearRootCertificate();
+            }
+        }
 
-        internal X509Certificate2 RootCertificate { get; set; }
+        internal X509Certificate2 RootCertificate
+        {
+            get { return rootCertificate; }
+            set
+            {
+                ClearRootCertificate();
+                rootCertificate = value;
+            }
+        }
 
-        internal CertificateManager(CertificateEngine engine,
-            string issuer,
-            string rootCertificateName,
-            Action<Exception> exceptionFunc)
+        /// <summary>
+        /// Is the root certificate used by this proxy is valid?
+        /// </summary>
+        internal bool CertValidated => RootCertificate != null;
+
+
+        internal CertificateManager(Action<Exception> exceptionFunc)
         {
             this.exceptionFunc = exceptionFunc;
-
-            //For Mono only Bouncy Castle is supported
-            if (RunTime.IsRunningOnMono() 
-                || engine == CertificateEngine.BouncyCastle)
-            {
-                certEngine = new BCCertificateMaker();
-            }
-            else
-            {
-                certEngine = new WinCertificateMaker();
-            }
-
-            Issuer = issuer ?? defaultRootCertificateIssuer;
-            RootCertificateName = rootCertificateName ?? defaultRootRootCertificateName;
+            Engine = CertificateEngine.DefaultWindows;
 
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
+        }
+
+        private void ClearRootCertificate()
+        {
+            certificateCache.Clear();
+            rootCertificate = null;
         }
 
         private string GetRootCertificatePath()
         {
             var assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
-            
+
             // dynamically loaded assemblies returns string.Empty location
             if (assemblyLocation == string.Empty)
             {
@@ -106,13 +160,17 @@ namespace Titanium.Web.Proxy.Network
                 return null;
             }
         }
+
         /// <summary>
         /// Attempts to create a RootCertificate
         /// </summary>
-        /// <returns>true if succeeded, else false</returns>
-        internal bool CreateTrustedRootCertificate()
+        /// <param name="persistToFile">if set to <c>true</c> try to load/save the certificate from rootCert.pfx.</param>
+        /// <returns>
+        /// true if succeeded, else false
+        /// </returns>
+        public bool CreateTrustedRootCertificate(bool persistToFile = true)
         {
-            if (RootCertificate == null)
+            if (persistToFile && RootCertificate == null)
             {
                 RootCertificate = LoadRootCertificate();
             }
@@ -131,7 +189,7 @@ namespace Titanium.Web.Proxy.Network
                 exceptionFunc(e);
             }
 
-            if (RootCertificate != null)
+            if (persistToFile && RootCertificate != null)
             {
                 try
                 {
@@ -150,14 +208,25 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// Trusts the root certificate.
         /// </summary>
-        /// <param name="exceptionFunc"></param>
-        internal void TrustRootCertificate(Action<Exception> exceptionFunc)
+        public void TrustRootCertificate()
         {
             //current user
-            TrustRootCertificate(StoreLocation.CurrentUser, exceptionFunc);
-            
+            TrustRootCertificate(StoreLocation.CurrentUser);
+
             //current system
-            TrustRootCertificate(StoreLocation.LocalMachine, exceptionFunc);
+            TrustRootCertificate(StoreLocation.LocalMachine);
+        }
+
+        /// <summary>
+        /// Removes the trusted certificates.
+        /// </summary>
+        public void RemoveTrustedRootCertificates()
+        {
+            //current user
+            RemoveTrustedRootCertificates(StoreLocation.CurrentUser);
+
+            //current system
+            RemoveTrustedRootCertificates(StoreLocation.LocalMachine);
         }
 
         /// <summary>
@@ -174,7 +243,7 @@ namespace Titanium.Web.Proxy.Network
                 cached.LastAccess = DateTime.Now;
                 return cached.Certificate;
             }
-            
+
             X509Certificate2 certificate = null;
             lock (string.Intern(certificateName))
             {
@@ -195,7 +264,7 @@ namespace Titanium.Web.Proxy.Network
                     }
                     if (certificate != null && !certificateCache.ContainsKey(certificateName))
                     {
-                        certificateCache.Add(certificateName, new CachedCertificate { Certificate = certificate });
+                        certificateCache.Add(certificateName, new CachedCertificate {Certificate = certificate});
                     }
                 }
                 else
@@ -246,16 +315,14 @@ namespace Titanium.Web.Proxy.Network
         /// Make current machine trust the Root Certificate used by this proxy
         /// </summary>
         /// <param name="storeLocation"></param>
-        /// <param name="exceptionFunc"></param>
         /// <returns></returns>
-        internal void TrustRootCertificate(StoreLocation storeLocation,
-            Action<Exception> exceptionFunc)
+        internal void TrustRootCertificate(StoreLocation storeLocation)
         {
             if (RootCertificate == null)
             {
                 exceptionFunc(
                     new Exception("Could not set root certificate"
-                    + " as system proxy since it is null or empty."));
+                                  + " as system proxy since it is null or empty."));
 
                 return;
             }
@@ -275,7 +342,47 @@ namespace Titanium.Web.Proxy.Network
             {
                 exceptionFunc(
                     new Exception("Failed to make system trust root certificate "
-                   + $" for {storeLocation} store location. You may need admin rights.", e));
+                                  + $" for {storeLocation} store location. You may need admin rights.", e));
+            }
+            finally
+            {
+                x509RootStore.Close();
+                x509PersonalStore.Close();
+            }
+        }
+
+        /// <summary>
+        /// Remove the Root Certificate trust
+        /// </summary>
+        /// <param name="storeLocation"></param>
+        /// <returns></returns>
+        internal void RemoveTrustedRootCertificates(StoreLocation storeLocation)
+        {
+            if (RootCertificate == null)
+            {
+                exceptionFunc(
+                    new Exception("Could not set root certificate"
+                                  + " as system proxy since it is null or empty."));
+
+                return;
+            }
+
+            X509Store x509RootStore = new X509Store(StoreName.Root, storeLocation);
+            var x509PersonalStore = new X509Store(StoreName.My, storeLocation);
+
+            try
+            {
+                x509RootStore.Open(OpenFlags.ReadWrite);
+                x509PersonalStore.Open(OpenFlags.ReadWrite);
+
+                x509RootStore.Remove(RootCertificate);
+                x509PersonalStore.Remove(RootCertificate);
+            }
+            catch (Exception e)
+            {
+                exceptionFunc(
+                    new Exception("Failed to make system trust root certificate "
+                                  + $" for {storeLocation} store location. You may need admin rights.", e));
             }
             finally
             {

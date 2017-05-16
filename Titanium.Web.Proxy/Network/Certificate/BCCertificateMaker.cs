@@ -23,8 +23,8 @@ namespace Titanium.Web.Proxy.Network.Certificate
     /// </summary>
     internal class BCCertificateMaker : ICertificateMaker
     {
-        private const int CertificateValidDays = 1825;
-        private const int CertificateGraceDays = 366;
+        private const int certificateValidDays = 1825;
+        private const int certificateGraceDays = 366;
 
         /// <summary>
         /// Makes the certificate.
@@ -48,7 +48,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="keyStrength">The key strength.</param>
         /// <param name="signatureAlgorithm">The signature algorithm.</param>
         /// <param name="issuerPrivateKey">The issuer private key.</param>
-		/// <param name="hostName">The host name</param>
+        /// <param name="hostName">The host name</param>
         /// <returns>X509Certificate2 instance.</returns>
         /// <exception cref="PemException">Malformed sequence in RSA private key</exception>
         private static X509Certificate2 GenerateCertificate(string hostName,
@@ -83,7 +83,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 //add subject alternative names
                 var subjectAlternativeNames = new Asn1Encodable[]
                 {
-                new GeneralName(GeneralName.DnsName, hostName),
+                    new GeneralName(GeneralName.DnsName, hostName),
                 };
 
                 var subjectAlternativeNamesExtension = new DerSequence(subjectAlternativeNames);
@@ -110,7 +110,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             // Corresponding private key
             var privateKeyInfo = PrivateKeyInfoFactory.CreatePrivateKeyInfo(subjectKeyPair.Private);
 
-            var seq = (Asn1Sequence)Asn1Object.FromByteArray(privateKeyInfo.ParsePrivateKey().GetDerEncoded());
+            var seq = (Asn1Sequence) Asn1Object.FromByteArray(privateKeyInfo.ParsePrivateKey().GetDerEncoded());
 
             if (seq.Count != 9)
             {
@@ -138,7 +138,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="signingCertificate">The signing certificate.</param>
         /// <returns>X509Certificate2 instance.</returns>
         /// <exception cref="System.ArgumentException">You must specify a Signing Certificate if and only if you are not creating a root.</exception>
-        private X509Certificate2 MakeCertificateInternal(bool isRoot, 
+        private X509Certificate2 MakeCertificateInternal(bool isRoot,
             string hostName, string subjectName,
             DateTime validFrom, DateTime validTo, X509Certificate2 signingCertificate)
         {
@@ -181,14 +181,13 @@ namespace Titanium.Web.Proxy.Network.Certificate
                         }
                     });
 
-                    manualResetEvent.Wait(TimeSpan.FromMinutes(1), cancellationToken: cancellationToken);
+                    manualResetEvent.Wait(TimeSpan.FromMinutes(1), cancellationToken);
                 }
 
                 return certificate;
             }
 
-            return MakeCertificateInternal(isRoot, subject, $"CN={subject}", DateTime.UtcNow.AddDays(-CertificateGraceDays), DateTime.UtcNow.AddDays(CertificateValidDays), isRoot ? null : signingCert);
+            return MakeCertificateInternal(isRoot, subject, $"CN={subject}", DateTime.UtcNow.AddDays(-certificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays), isRoot ? null : signingCert);
         }
     }
-
 }

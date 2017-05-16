@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.Http
     /// <summary>
     /// Used to communicate with the server over HTTP(S)
     /// </summary>
-    public class HttpWebClient
+    public class HttpWebClient : IDisposable
     {
         /// <summary>
         /// Connection to server
@@ -22,14 +22,17 @@ namespace Titanium.Web.Proxy.Http
         /// Request ID.
         /// </summary>
         public Guid RequestId { get; }
+
         /// <summary>
         /// Headers passed with Connect.
         /// </summary>
         public List<HttpHeader> ConnectHeaders { get; set; }
+
         /// <summary>
         /// Web Request.
         /// </summary>
         public Request Request { get; set; }
+
         /// <summary>
         /// Web Response.
         /// </summary>
@@ -63,7 +66,7 @@ namespace Titanium.Web.Proxy.Http
             connection.LastAccess = DateTime.Now;
             ServerConnection = connection;
         }
-  
+
 
         /// <summary>
         /// Prepare and send the http(s) request
@@ -78,18 +81,19 @@ namespace Titanium.Web.Proxy.Http
             //prepare the request & headers
             if ((ServerConnection.UpStreamHttpProxy != null && ServerConnection.IsHttps == false) || (ServerConnection.UpStreamHttpsProxy != null && ServerConnection.IsHttps))
             {
-                requestLines.AppendLine(string.Join(" ", Request.Method, Request.RequestUri.AbsoluteUri, $"HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}"));
+                requestLines.AppendLine($"{Request.Method} {Request.RequestUri.AbsoluteUri} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
             }
             else
             {
-                requestLines.AppendLine(string.Join(" ", Request.Method, Request.RequestUri.PathAndQuery, $"HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}"));
+                requestLines.AppendLine($"{Request.Method} {Request.RequestUri.PathAndQuery} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
             }
 
             //Send Authentication to Upstream proxy if needed
             if (ServerConnection.UpStreamHttpProxy != null && ServerConnection.IsHttps == false && !string.IsNullOrEmpty(ServerConnection.UpStreamHttpProxy.UserName) && ServerConnection.UpStreamHttpProxy.Password != null)
             {
                 requestLines.AppendLine("Proxy-Connection: keep-alive");
-                requestLines.AppendLine("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(ServerConnection.UpStreamHttpProxy.UserName + ":" + ServerConnection.UpStreamHttpProxy.Password)));
+                requestLines.AppendLine("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(
+                                                $"{ServerConnection.UpStreamHttpProxy.UserName}:{ServerConnection.UpStreamHttpProxy.Password}")));
             }
             //write request headers
             foreach (var headerItem in Request.RequestHeaders)
@@ -97,7 +101,7 @@ namespace Titanium.Web.Proxy.Http
                 var header = headerItem.Value;
                 if (headerItem.Key != "Proxy-Authorization")
                 {
-                    requestLines.AppendLine(header.Name + ": " + header.Value);
+                    requestLines.AppendLine($"{header.Name}: {header.Value}");
                 }
             }
 
@@ -109,7 +113,7 @@ namespace Titanium.Web.Proxy.Http
                 {
                     if (headerItem.Key != "Proxy-Authorization")
                     {
-                        requestLines.AppendLine(header.Name + ": " + header.Value);
+                        requestLines.AppendLine($"{header.Name}: {header.Value}");
                     }
                 }
             }
@@ -132,13 +136,13 @@ namespace Titanium.Web.Proxy.Http
 
                     //find if server is willing for expect continue
                     if (responseStatusCode.Equals("100")
-                    && responseStatusDescription.ToLower().Equals("continue"))
+                        && responseStatusDescription.Equals("continue", StringComparison.CurrentCultureIgnoreCase))
                     {
                         Request.Is100Continue = true;
                         await ServerConnection.StreamReader.ReadLineAsync();
                     }
                     else if (responseStatusCode.Equals("417")
-                         && responseStatusDescription.ToLower().Equals("expectation failed"))
+                             && responseStatusDescription.Equals("expectation failed", StringComparison.CurrentCultureIgnoreCase))
                     {
                         Request.ExpectationFailed = true;
                         await ServerConnection.StreamReader.ReadLineAsync();
@@ -166,10 +170,10 @@ namespace Titanium.Web.Proxy.Http
 
             var httpVersion = httpResult[0].Trim().ToLower();
 
-            var version = new Version(1, 1);
-            if (0 == string.CompareOrdinal(httpVersion, "http/1.0"))
+            var version = HttpHeader.Version11;
+            if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
             {
-                version = new Version(1, 0);
+                version = HttpHeader.Version10;
             }
 
             Response.HttpVersion = version;
@@ -178,7 +182,7 @@ namespace Titanium.Web.Proxy.Http
 
             //For HTTP 1.1 comptibility server may send expect-continue even if not asked for it in request
             if (Response.ResponseStatusCode.Equals("100")
-                && Response.ResponseStatusDescription.ToLower().Equals("continue"))
+                && Response.ResponseStatusDescription.Equals("continue", StringComparison.CurrentCultureIgnoreCase))
             {
                 //Read the next line after 100-continue 
                 Response.Is100Continue = true;
@@ -188,8 +192,9 @@ namespace Titanium.Web.Proxy.Http
                 await ReceiveResponse();
                 return;
             }
-            else if (Response.ResponseStatusCode.Equals("417")
-                 && Response.ResponseStatusDescription.ToLower().Equals("expectation failed"))
+
+            if (Response.ResponseStatusCode.Equals("417")
+                && Response.ResponseStatusDescription.Equals("expectation failed", StringComparison.CurrentCultureIgnoreCase))
             {
                 //read next line after expectation failed response
                 Response.ExpectationFailed = true;
@@ -200,36 +205,15 @@ namespace Titanium.Web.Proxy.Http
                 return;
             }
 
-            //Read the Response headers
             //Read the response headers in to unique and non-unique header collections
-            string tmpLine;
-            while (!string.IsNullOrEmpty(tmpLine = await ServerConnection.StreamReader.ReadLineAsync()))
-            {
-                var header = tmpLine.Split(ProxyConstants.ColonSplit, 2);
+            await HeaderParser.ReadHeaders(ServerConnection.StreamReader, Response.NonUniqueResponseHeaders, Response.ResponseHeaders);
+        }
 
-                var newHeader = new HttpHeader(header[0], header[1]);
-
-                //if header exist in non-unique header collection add it there
-                if (Response.NonUniqueResponseHeaders.ContainsKey(newHeader.Name))
-                {
-                    Response.NonUniqueResponseHeaders[newHeader.Name].Add(newHeader);
-                }
-                //if header is alread in unique header collection then move both to non-unique collection
-                else if (Response.ResponseHeaders.ContainsKey(newHeader.Name))
-                {
-                    var existing = Response.ResponseHeaders[newHeader.Name];
-
-                    var nonUniqueHeaders = new List<HttpHeader> {existing, newHeader};
-
-                    Response.NonUniqueResponseHeaders.Add(newHeader.Name, nonUniqueHeaders);
-                    Response.ResponseHeaders.Remove(newHeader.Name);
-                }
-                //add to unique header collection
-                else
-                {
-                    Response.ResponseHeaders.Add(newHeader.Name, newHeader);
-                }
-            }
+        /// <summary>
+        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        /// </summary>
+        public void Dispose()
+        {
         }
     }
 }
