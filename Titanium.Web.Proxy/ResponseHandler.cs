@@ -53,8 +53,8 @@ namespace Titanium.Web.Proxy
                     }
 
                     var connection = await GetServerConnection(args);
-                    var result = await HandleHttpSessionRequestInternal(null, args, true);
-                    return result;
+                    var disposed = await HandleHttpSessionRequestInternal(null, args, true);
+                    return disposed;
                 }
 
                 args.WebSession.Response.ResponseLocked = true;
