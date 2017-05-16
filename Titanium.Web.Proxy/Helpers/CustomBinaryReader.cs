@@ -22,7 +22,7 @@ namespace Titanium.Web.Proxy.Helpers
         private static readonly ConcurrentQueue<byte[]> buffers
             = new ConcurrentQueue<byte[]>();
 
-        private volatile bool disposed = false;
+        private volatile bool disposed;
 
         internal CustomBinaryReader(CustomBufferedStream stream, int bufferSize)
         {
