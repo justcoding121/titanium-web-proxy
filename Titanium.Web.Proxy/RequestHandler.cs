@@ -486,15 +486,7 @@ namespace Titanium.Web.Proxy
                     //If user requested interception do it
                     if (BeforeRequest != null)
                     {
-                        var invocationList = BeforeRequest.GetInvocationList();
-                        var handlerTasks = new Task[invocationList.Length];
-
-                        for (var i = 0; i < invocationList.Length; i++)
-                        {
-                            handlerTasks[i] = ((Func<object, SessionEventArgs, Task>)invocationList[i])(this, args);
-                        }
-
-                        await Task.WhenAll(handlerTasks);
+                        await BeforeRequest.InvokeParallelAsync(this, args);
                     }
 
                     //if upgrading to websocket then relay the requet without reading the contents
