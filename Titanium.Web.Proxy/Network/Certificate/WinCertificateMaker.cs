@@ -89,7 +89,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             }
 
             var x500CertDN = Activator.CreateInstance(typeX500DN);
-            var typeValue = new object[] {fullSubject, 0};
+            var typeValue = new object[] { fullSubject, 0 };
             typeX500DN.InvokeMember("Encode", BindingFlags.InvokeMethod, null, x500CertDN, typeValue);
 
             var x500RootCertDN = Activator.CreateInstance(typeX500DN);
@@ -110,16 +110,16 @@ namespace Titanium.Web.Proxy.Network.Certificate
             if (sharedPrivateKey == null)
             {
                 sharedPrivateKey = Activator.CreateInstance(typeX509PrivateKey);
-                typeValue = new object[] {sProviderName};
+                typeValue = new object[] { sProviderName };
                 typeX509PrivateKey.InvokeMember("ProviderName", BindingFlags.PutDispProperty, null, sharedPrivateKey, typeValue);
                 typeValue[0] = 2;
                 typeX509PrivateKey.InvokeMember("ExportPolicy", BindingFlags.PutDispProperty, null, sharedPrivateKey, typeValue);
-                typeValue = new object[] {(isRoot ? 2 : 1)};
+                typeValue = new object[] { isRoot ? 2 : 1 };
                 typeX509PrivateKey.InvokeMember("KeySpec", BindingFlags.PutDispProperty, null, sharedPrivateKey, typeValue);
 
                 if (!isRoot)
                 {
-                    typeValue = new object[] {176};
+                    typeValue = new object[] { 176 };
                     typeX509PrivateKey.InvokeMember("KeyUsage", BindingFlags.PutDispProperty, null, sharedPrivateKey, typeValue);
                 }
 
@@ -149,9 +149,9 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             var requestCert = Activator.CreateInstance(typeRequestCert);
 
-            typeValue = new[] {1, sharedPrivateKey, string.Empty};
+            typeValue = new[] { 1, sharedPrivateKey, string.Empty };
             typeRequestCert.InvokeMember("InitializeFromPrivateKey", BindingFlags.InvokeMethod, null, requestCert, typeValue);
-            typeValue = new[] {x500CertDN};
+            typeValue = new[] { x500CertDN };
             typeRequestCert.InvokeMember("Subject", BindingFlags.PutDispProperty, null, requestCert, typeValue);
             typeValue[0] = x500RootCertDN;
             typeRequestCert.InvokeMember("Issuer", BindingFlags.PutDispProperty, null, requestCert, typeValue);
@@ -186,14 +186,14 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 var extNames = Activator.CreateInstance(typeExtNames);
                 var altDnsNames = Activator.CreateInstance(typeCAlternativeName);
 
-                typeValue = new object[] {3, subject};
+                typeValue = new object[] { 3, subject };
                 typeCAlternativeName.InvokeMember("InitializeFromString", BindingFlags.InvokeMethod, null, altDnsNames, typeValue);
 
-                typeValue = new[] {altDnsNames};
+                typeValue = new[] { altDnsNames };
                 typeAltNamesCollection.InvokeMember("Add", BindingFlags.InvokeMethod, null, altNameCollection, typeValue);
 
 
-                typeValue = new[] {altNameCollection};
+                typeValue = new[] { altNameCollection };
                 typeExtNames.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, extNames, typeValue);
 
                 typeValue[0] = extNames;
@@ -204,27 +204,27 @@ namespace Titanium.Web.Proxy.Network.Certificate
             {
                 var signerCertificate = Activator.CreateInstance(typeSignerCertificate);
 
-                typeValue = new object[] {0, 0, 12, signingCertificate.Thumbprint};
+                typeValue = new object[] { 0, 0, 12, signingCertificate.Thumbprint };
                 typeSignerCertificate.InvokeMember("Initialize", BindingFlags.InvokeMethod, null, signerCertificate, typeValue);
-                typeValue = new[] {signerCertificate};
+                typeValue = new[] { signerCertificate };
                 typeRequestCert.InvokeMember("SignerCertificate", BindingFlags.PutDispProperty, null, requestCert, typeValue);
             }
             else
             {
                 var basicConstraints = Activator.CreateInstance(typeBasicConstraints);
 
-                typeValue = new object[] {"true", "0"};
+                typeValue = new object[] { "true", "0" };
                 typeBasicConstraints.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, basicConstraints, typeValue);
-                typeValue = new[] {basicConstraints};
+                typeValue = new[] { basicConstraints };
                 typeX509Extensions.InvokeMember("Add", BindingFlags.InvokeMethod, null, certificate, typeValue);
             }
 
             oid = Activator.CreateInstance(typeOID);
 
-            typeValue = new object[] {1, 0, 0, hashAlg};
+            typeValue = new object[] { 1, 0, 0, hashAlg };
             typeOID.InvokeMember("InitializeFromAlgorithmName", BindingFlags.InvokeMethod, null, oid, typeValue);
 
-            typeValue = new[] {oid};
+            typeValue = new[] { oid };
             typeRequestCert.InvokeMember("HashAlgorithm", BindingFlags.PutDispProperty, null, requestCert, typeValue);
             typeRequestCert.InvokeMember("Encode", BindingFlags.InvokeMethod, null, requestCert, null);
 
@@ -243,15 +243,15 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             typeValue[0] = 0;
 
-            var createCertRequest = typeX509Enrollment.InvokeMember("CreateRequest", BindingFlags.InvokeMethod, null, x509Enrollment, typeValue); 
-            typeValue = new[] {2, createCertRequest, 0, string.Empty};
+            var createCertRequest = typeX509Enrollment.InvokeMember("CreateRequest", BindingFlags.InvokeMethod, null, x509Enrollment, typeValue);
+            typeValue = new[] { 2, createCertRequest, 0, string.Empty };
 
             typeX509Enrollment.InvokeMember("InstallResponse", BindingFlags.InvokeMethod, null, x509Enrollment, typeValue);
-            typeValue = new object[] {null, 0, 1};
+            typeValue = new object[] { null, 0, 1 };
 
             try
             {
-                var empty = (string) typeX509Enrollment.InvokeMember("CreatePFX", BindingFlags.InvokeMethod, null, x509Enrollment, typeValue);
+                var empty = (string)typeX509Enrollment.InvokeMember("CreatePFX", BindingFlags.InvokeMethod, null, x509Enrollment, typeValue);
                 return new X509Certificate2(Convert.FromBase64String(empty), string.Empty, X509KeyStorageFlags.Exportable);
             }
             catch (Exception)
@@ -293,8 +293,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             var graceTime = DateTime.Now.AddDays(GraceDays);
             var now = DateTime.Now;
-            rCert = !isRoot ? MakeCertificate(false, sSubjectCN, fullSubject, keyLength, HashAlgo, graceTime, now.AddDays(ValidDays), signingCert) :
-                MakeCertificate(true, sSubjectCN, fullSubject, keyLength, HashAlgo, graceTime, now.AddDays(ValidDays), null);
+            rCert = MakeCertificate(isRoot, sSubjectCN, fullSubject, keyLength, HashAlgo, graceTime, now.AddDays(ValidDays), isRoot ? null : signingCert);
             return rCert;
         }
     }

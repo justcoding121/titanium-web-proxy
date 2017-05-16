@@ -1,9 +1,9 @@
 ﻿using System;
-using System.Runtime.InteropServices;
-using Microsoft.Win32;
-using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
+using Microsoft.Win32;
 
 // Helper classes for setting system proxy settings
 namespace Titanium.Web.Proxy.Helpers
@@ -84,7 +84,7 @@ namespace Titanium.Web.Proxy.Helpers
                 var exisitingContent = reg.GetValue("ProxyServer") as string;
                 var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
                 existingSystemProxyValues.RemoveAll(x => protocolType == ProxyProtocolType.Https ? x.IsHttps : !x.IsHttps);
-                existingSystemProxyValues.Add(new HttpSystemProxyValue()
+                existingSystemProxyValues.Add(new HttpSystemProxyValue
                 {
                     HostName = hostname,
                     IsHttps = protocolType == ProxyProtocolType.Https,
