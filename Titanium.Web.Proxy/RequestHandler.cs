@@ -261,7 +261,8 @@ namespace Titanium.Web.Proxy
 
         private async Task<bool> HandleHttpSessionRequestInternal(TcpConnection connection, SessionEventArgs args, bool closeConnection)
         {
-            bool dispose = true;
+            bool disposed = false;
+            bool keepAlive = false;
 
             try
             {
@@ -334,12 +335,11 @@ namespace Titanium.Web.Proxy
                 //If not expectation failed response was returned by server then parse response
                 if (!args.WebSession.Request.ExpectationFailed)
                 {
-                    var disposed = await HandleHttpSessionResponse(args);
+                    disposed = await HandleHttpSessionResponse(args);
 
                     //already disposed inside above method
                     if (disposed)
                     {
-                        dispose = false;
                         return true;
                     }
                 }
@@ -352,7 +352,7 @@ namespace Titanium.Web.Proxy
 
                 if (!closeConnection)
                 {
-                    dispose = false;
+                    keepAlive = true;
                     return false;
                 }
             }
@@ -363,7 +363,7 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                if (dispose)
+                if (!disposed && !keepAlive)
                 {
                     //dispose
                     Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader, args.ProxyClient.ClientStreamWriter, args.WebSession.ServerConnection);
