@@ -18,7 +18,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpConnectionFactory
     {
-
         /// <summary>
         /// Creates a TCP connection to server
         /// </summary>
@@ -31,19 +30,19 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="externalHttpsProxy"></param>
         /// <param name="clientStream"></param>
         /// <returns></returns>
-        internal async Task<TcpConnection> CreateClient(ProxyServer server, 
+        internal async Task<TcpConnection> CreateClient(ProxyServer server,
             string remoteHostName, int remotePort, Version httpVersion,
-            bool isHttps, 
+            bool isHttps,
             ExternalProxy externalHttpProxy, ExternalProxy externalHttpsProxy,
             Stream clientStream)
         {
             TcpClient client;
             CustomBufferedStream stream;
 
-            bool isLocalhost = (externalHttpsProxy == null && externalHttpProxy == null) ? false : NetworkHelper.IsLocalIpAddress(remoteHostName);
+            bool isLocalhost = (externalHttpsProxy != null || externalHttpProxy != null) && NetworkHelper.IsLocalIpAddress(remoteHostName);
 
-            bool useHttpsProxy = externalHttpsProxy != null && externalHttpsProxy.HostName != remoteHostName && (externalHttpsProxy.BypassForLocalhost && !isLocalhost);
-            bool useHttpProxy = externalHttpProxy != null && externalHttpProxy.HostName != remoteHostName && (externalHttpProxy.BypassForLocalhost && !isLocalhost);
+            bool useHttpsProxy = externalHttpsProxy != null && externalHttpsProxy.HostName != remoteHostName && externalHttpsProxy.BypassForLocalhost && !isLocalhost;
+            bool useHttpProxy = externalHttpProxy != null && externalHttpProxy.HostName != remoteHostName && externalHttpProxy.BypassForLocalhost && !isLocalhost;
 
             if (isHttps)
             {
@@ -128,7 +127,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             client.LingerState = new LingerOption(true, 0);
 
-            Interlocked.Increment(ref server.serverConnectionCount);
+            Interlocked.Increment(ref server.ServerConnectionCountField);
 
             return new TcpConnection
             {
