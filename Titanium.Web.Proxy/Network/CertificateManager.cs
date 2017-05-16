@@ -1,12 +1,13 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
-using System.Linq;
-using System.Collections.Concurrent;
-using System.IO;
-using Titanium.Web.Proxy.Network.Certificate;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Network.Certificate;
 
 namespace Titanium.Web.Proxy.Network
 {
@@ -51,7 +52,7 @@ namespace Titanium.Web.Proxy.Network
                 if (certEngine == null)
                 {
                     certEngine = engine == CertificateEngine.BouncyCastle
-                        ? (ICertificateMaker) new BCCertificateMaker()
+                        ? (ICertificateMaker)new BCCertificateMaker()
                         : new WinCertificateMaker();
                 }
             }
@@ -132,12 +133,12 @@ namespace Titanium.Web.Proxy.Network
 
         private string GetRootCertificatePath()
         {
-            var assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
+            var assemblyLocation = Assembly.GetExecutingAssembly().Location;
 
             // dynamically loaded assemblies returns string.Empty location
             if (assemblyLocation == string.Empty)
             {
-                assemblyLocation = System.Reflection.Assembly.GetEntryAssembly().Location;
+                assemblyLocation = Assembly.GetEntryAssembly().Location;
             }
 
             var path = Path.GetDirectoryName(assemblyLocation);

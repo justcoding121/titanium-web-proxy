@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy.Http
             var requestLines = new StringBuilder();
 
             //prepare the request & headers
-            if ((ServerConnection.UpStreamHttpProxy != null && ServerConnection.IsHttps == false) || (ServerConnection.UpStreamHttpsProxy != null && ServerConnection.IsHttps))
+            if (ServerConnection.UpStreamHttpProxy != null && ServerConnection.IsHttps == false || ServerConnection.UpStreamHttpsProxy != null && ServerConnection.IsHttps)
             {
                 requestLines.AppendLine($"{Request.Method} {Request.RequestUri.AbsoluteUri} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
             }
@@ -93,7 +93,7 @@ namespace Titanium.Web.Proxy.Http
             {
                 requestLines.AppendLine("Proxy-Connection: keep-alive");
                 requestLines.AppendLine("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                                                $"{ServerConnection.UpStreamHttpProxy.UserName}:{ServerConnection.UpStreamHttpProxy.Password}")));
+                                            $"{ServerConnection.UpStreamHttpProxy.UserName}:{ServerConnection.UpStreamHttpProxy.Password}")));
             }
             //write request headers
             foreach (var headerItem in Request.RequestHeaders)
