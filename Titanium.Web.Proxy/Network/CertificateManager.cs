@@ -52,7 +52,7 @@ namespace Titanium.Web.Proxy.Network
                 if (certEngine == null)
                 {
                     certEngine = engine == CertificateEngine.BouncyCastle
-                        ? (ICertificateMaker) new BCCertificateMaker()
+                        ? (ICertificateMaker)new BCCertificateMaker()
                         : new WinCertificateMaker();
                 }
             }

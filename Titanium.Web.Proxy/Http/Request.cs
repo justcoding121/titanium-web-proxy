@@ -241,7 +241,7 @@ namespace Titanium.Web.Proxy.Http
         /// request body as string
         /// </summary>
         internal string RequestBodyString { get; set; }
-        
+
         internal bool RequestBodyRead { get; set; }
 
         internal bool RequestLocked { get; set; }

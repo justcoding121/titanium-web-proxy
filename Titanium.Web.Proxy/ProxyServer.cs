@@ -36,8 +36,8 @@ namespace Titanium.Web.Proxy
         private Action<Exception> exceptionFunc;
 
         private bool trustRootCertificate;
-        private int clientConnectionCount;
-        internal int serverConnectionCount;
+        private int clientConnectionCountField;
+        internal int ServerConnectionCountField;
 
         /// <summary>
         /// A object that creates tcp connection to server
@@ -53,8 +53,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Set firefox to use default system proxy
         /// </summary>
-        private FireFoxProxySettingsManager firefoxProxySettingsManager
-            = new FireFoxProxySettingsManager();
+        private FireFoxProxySettingsManager firefoxProxySettingsManager = new FireFoxProxySettingsManager();
 #endif
 
         /// <summary>
@@ -227,18 +226,18 @@ namespace Titanium.Web.Proxy
         /// List of supported Ssl versions
         /// </summary>
         public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls
-            | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
+                                                                  | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 
         /// <summary>
         /// Total number of active client connections
         /// </summary>
-        public int ClientConnectionCount => clientConnectionCount;
+        public int ClientConnectionCount => clientConnectionCountField;
 
 
         /// <summary>
         /// Total number of active server connections
         /// </summary>
-        public int ServerConnectionCount => serverConnectionCount;
+        public int ServerConnectionCount => ServerConnectionCountField;
 
         /// <summary>
         /// Constructor
@@ -599,7 +598,7 @@ namespace Titanium.Web.Proxy
             {
                 Task.Run(async () =>
                 {
-                    Interlocked.Increment(ref clientConnectionCount);
+                    Interlocked.Increment(ref clientConnectionCountField);
 
                     //This line is important!
                     //contributors please don't remove it without discussion
@@ -620,7 +619,7 @@ namespace Titanium.Web.Proxy
                     }
                     finally
                     {
-                        Interlocked.Decrement(ref clientConnectionCount);
+                        Interlocked.Decrement(ref clientConnectionCountField);
                         tcpClient?.Close();
                     }
                 });

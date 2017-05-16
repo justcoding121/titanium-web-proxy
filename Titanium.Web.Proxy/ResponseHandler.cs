@@ -46,10 +46,10 @@ namespace Titanium.Web.Proxy
 
                 if (args.ReRequest)
                 {
-                    if(args.WebSession.ServerConnection != null)
+                    if (args.WebSession.ServerConnection != null)
                     {
                         args.WebSession.ServerConnection.Dispose();
-                        Interlocked.Decrement(ref serverConnectionCount);
+                        Interlocked.Decrement(ref ServerConnectionCountField);
                     }
 
                     var connection = await GetServerConnection(args);
@@ -233,7 +233,7 @@ namespace Titanium.Web.Proxy
             StreamWriter clientStreamWriter,
             TcpConnection serverConnection)
         {
-            Interlocked.Decrement(ref serverConnectionCount);
+            Interlocked.Decrement(ref ServerConnectionCountField);
 
             clientStream?.Close();
             clientStream?.Dispose();
