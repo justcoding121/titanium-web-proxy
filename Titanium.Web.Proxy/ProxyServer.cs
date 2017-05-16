@@ -1,16 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
-using System.Linq;
-using System.Security.Authentication;
 using Titanium.Web.Proxy.Network.Tcp;
-using System.Security.Cryptography.X509Certificates;
 
 namespace Titanium.Web.Proxy
 {
@@ -35,6 +36,8 @@ namespace Titanium.Web.Proxy
         private Action<Exception> exceptionFunc;
 
         private bool trustRootCertificate;
+        private int clientConnectionCount;
+        internal int serverConnectionCount;
 
         /// <summary>
         /// A object that creates tcp connection to server
@@ -229,13 +232,13 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Total number of active client connections
         /// </summary>
-        public int ClientConnectionCount { get; private set; }
+        public int ClientConnectionCount => clientConnectionCount;
 
 
         /// <summary>
         /// Total number of active server connections
         /// </summary>
-        public int ServerConnectionCount { get; internal set; }
+        public int ServerConnectionCount => serverConnectionCount;
 
         /// <summary>
         /// Constructor
@@ -596,7 +599,7 @@ namespace Titanium.Web.Proxy
             {
                 Task.Run(async () =>
                 {
-                    ClientConnectionCount++;
+                    Interlocked.Increment(ref clientConnectionCount);
 
                     //This line is important!
                     //contributors please don't remove it without discussion
@@ -617,7 +620,7 @@ namespace Titanium.Web.Proxy
                     }
                     finally
                     {
-                        ClientConnectionCount--;
+                        Interlocked.Decrement(ref clientConnectionCount);
                         tcpClient?.Close();
                     }
                 });
