@@ -244,7 +244,6 @@ namespace Titanium.Web.Proxy
                 serverConnection.Dispose();
                 Interlocked.Decrement(ref ServerConnectionCountField);
             }
-
         }
     }
 }

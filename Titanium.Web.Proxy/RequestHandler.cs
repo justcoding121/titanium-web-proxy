@@ -165,7 +165,6 @@ namespace Titanium.Web.Proxy
                 {
                     Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                 }
-
             }
         }
 
@@ -224,7 +223,7 @@ namespace Titanium.Web.Proxy
 
             //Now create the request
             disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                 endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null);
+                endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null);
 
             if (!disposed)
             {
