@@ -14,7 +14,6 @@ namespace Titanium.Web.Proxy.IntegrationTests
     public class SslTests
     {
         [TestMethod]
-        
         public void TestSsl()
         {
             //expand this to stress test to find

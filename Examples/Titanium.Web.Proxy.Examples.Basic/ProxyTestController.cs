@@ -150,7 +150,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         //Modify response
         public async Task OnResponse(object sender, SessionEventArgs e)
         {
-            Console.WriteLine("Active Server Connections:" + (sender as ProxyServer).ServerConnectionCount);
+            Console.WriteLine("Active Server Connections:" + ((ProxyServer) sender).ServerConnectionCount);
 
             if (requestBodyHistory.ContainsKey(e.Id))
             {

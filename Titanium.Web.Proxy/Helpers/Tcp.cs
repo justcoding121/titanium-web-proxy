@@ -229,7 +229,7 @@ namespace Titanium.Web.Proxy.Helpers
             finally
             {
                 tcpConnection.Dispose();
-                Interlocked.Decrement(ref server.serverConnectionCount);
+                Interlocked.Decrement(ref server.ServerConnectionCountField);
             }
         }
     }
