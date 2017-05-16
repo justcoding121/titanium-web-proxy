@@ -136,7 +136,7 @@ namespace Titanium.Web.Proxy.Extensions
 
                 if (contentLength < bufferSize)
                 {
-                    bytesToRead = (int) contentLength;
+                    bytesToRead = (int)contentLength;
                 }
 
                 var buffer = new byte[bufferSize];
@@ -153,8 +153,8 @@ namespace Titanium.Web.Proxy.Extensions
                         break;
 
                     bytesRead = 0;
-                    var remainingBytes = (contentLength - totalBytesRead);
-                    bytesToRead = remainingBytes > (long) bufferSize ? bufferSize : (int) remainingBytes;
+                    var remainingBytes = contentLength - totalBytesRead;
+                    bytesToRead = remainingBytes > (long)bufferSize ? bufferSize : (int)remainingBytes;
                 }
             }
             else
