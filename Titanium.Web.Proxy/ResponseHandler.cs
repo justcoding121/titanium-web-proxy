@@ -41,15 +41,7 @@ namespace Titanium.Web.Proxy
                 //If user requested call back then do it
                 if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
                 {
-                    Delegate[] invocationList = BeforeResponse.GetInvocationList();
-                    Task[] handlerTasks = new Task[invocationList.Length];
-
-                    for (int i = 0; i < invocationList.Length; i++)
-                    {
-                        handlerTasks[i] = ((Func<object, SessionEventArgs, Task>)invocationList[i])(this, args);
-                    }
-
-                    await Task.WhenAll(handlerTasks);
+                    await BeforeResponse.InvokeParallelAsync(this, args);
                 }
 
                 if (args.ReRequest)
