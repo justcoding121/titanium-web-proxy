@@ -1,14 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Compression;
+using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Compression;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy
@@ -40,23 +41,15 @@ namespace Titanium.Web.Proxy
                 //If user requested call back then do it
                 if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
                 {
-                    Delegate[] invocationList = BeforeResponse.GetInvocationList();
-                    Task[] handlerTasks = new Task[invocationList.Length];
-
-                    for (int i = 0; i < invocationList.Length; i++)
-                    {
-                        handlerTasks[i] = ((Func<object, SessionEventArgs, Task>)invocationList[i])(this, args);
-                    }
-
-                    await Task.WhenAll(handlerTasks);
+                    await BeforeResponse.InvokeParallelAsync(this, args);
                 }
 
                 if (args.ReRequest)
                 {
-                    if(args.WebSession.ServerConnection != null)
+                    if (args.WebSession.ServerConnection != null)
                     {
                         args.WebSession.ServerConnection.Dispose();
-                        ServerConnectionCount--;
+                        Interlocked.Decrement(ref ServerConnectionCountField);
                     }
 
                     var connection = await GetServerConnection(args);
@@ -240,7 +233,7 @@ namespace Titanium.Web.Proxy
             StreamWriter clientStreamWriter,
             TcpConnection serverConnection)
         {
-            ServerConnectionCount--;
+            Interlocked.Decrement(ref ServerConnectionCountField);
 
             clientStream?.Close();
             clientStream?.Dispose();

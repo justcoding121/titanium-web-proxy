@@ -110,7 +110,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             // Corresponding private key
             var privateKeyInfo = PrivateKeyInfoFactory.CreatePrivateKeyInfo(subjectKeyPair.Private);
 
-            var seq = (Asn1Sequence) Asn1Object.FromByteArray(privateKeyInfo.ParsePrivateKey().GetDerEncoded());
+            var seq = (Asn1Sequence)Asn1Object.FromByteArray(privateKeyInfo.ParsePrivateKey().GetDerEncoded());
 
             if (seq.Count != 9)
             {

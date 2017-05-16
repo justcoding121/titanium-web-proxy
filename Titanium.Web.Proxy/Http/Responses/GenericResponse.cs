@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Http.Responses
         /// <param name="status"></param>
         public GenericResponse(HttpStatusCode status)
         {
-            ResponseStatusCode = ((int) status).ToString();
+            ResponseStatusCode = ((int)status).ToString();
             ResponseStatusDescription = status.ToString();
         }
 

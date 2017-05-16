@@ -118,7 +118,7 @@ namespace Titanium.Web.Proxy.Helpers
             var buffer = staticBuffer;
             if (totalBytesToRead < bufferSize)
             {
-                bytesToRead = (int) totalBytesToRead;
+                bytesToRead = (int)totalBytesToRead;
                 buffer = new byte[bytesToRead];
             }
 
@@ -133,7 +133,7 @@ namespace Titanium.Web.Proxy.Helpers
                     break;
 
                 var remainingBytes = totalBytesToRead - totalBytesRead;
-                bytesToRead = Math.Min(bufferSize, (int) remainingBytes);
+                bytesToRead = Math.Min(bufferSize, (int)remainingBytes);
 
                 if (totalBytesRead + bytesToRead > buffer.Length)
                 {
