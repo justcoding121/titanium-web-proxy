@@ -27,13 +27,15 @@ namespace Titanium.Web.Proxy
         //So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
         private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient tcpClient)
         {
-            CustomBufferedStream clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
+            var disposed = false;
+
+            var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
             clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
             clientStream.WriteTimeout = ConnectionTimeOutSeconds * 1000;
 
             var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-            var clientStreamWriter = new StreamWriter(clientStream) {NewLine = ProxyConstants.NewLine};
+            var clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
 
             Uri httpRemoteUri;
 
@@ -120,7 +122,7 @@ namespace Titanium.Web.Proxy
 
                         clientStreamReader.Dispose();
                         clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-                        clientStreamWriter = new StreamWriter(clientStream) {NewLine = ProxyConstants.NewLine};
+                        clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
                     }
                     catch
                     {
@@ -147,17 +149,23 @@ namespace Titanium.Web.Proxy
 
                     return;
                 }
+
                 //Now create the request
-                await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
+                disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
                     httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null, endPoint,
                     connectRequestHeaders);
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                ExceptionFunc(new Exception("Error whilst authorizing request", e));
             }
             finally
             {
-                Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
+                if (!disposed)
+                {
+                    Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
+                }
+
             }
         }
 
@@ -165,7 +173,9 @@ namespace Titanium.Web.Proxy
         //So for HTTPS requests we would start SSL negotiation right away without expecting a CONNECT request from client
         private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
-            CustomBufferedStream clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
+            var disposed = false;
+
+            var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
             clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
             clientStream.WriteTimeout = ConnectionTimeOutSeconds * 1000;
@@ -188,7 +198,7 @@ namespace Titanium.Web.Proxy
 
                     clientStream = new CustomBufferedStream(sslStream, BufferSize);
                     clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-                    clientStreamWriter = new StreamWriter(clientStream) {NewLine = ProxyConstants.NewLine};
+                    clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
                     //HTTPS server created - we can now decrypt the client's traffic
                 }
                 catch (Exception)
@@ -199,21 +209,27 @@ namespace Titanium.Web.Proxy
                         clientStreamReader,
                         clientStreamWriter, null);
 
+                    disposed = true;
                     return;
                 }
             }
             else
             {
                 clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-                clientStreamWriter = new StreamWriter(clientStream) {NewLine = ProxyConstants.NewLine};
+                clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
             }
 
             //now read the request line
             var httpCmd = await clientStreamReader.ReadLineAsync();
 
             //Now create the request
-            await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null);
+            disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
+                 endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null);
+
+            if (!disposed)
+            {
+                Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
+            }
         }
 
         /// <summary>
@@ -271,7 +287,7 @@ namespace Titanium.Web.Proxy
                         args.ProxyClient.ClientStreamWriter,
                         args.WebSession.ServerConnection);
 
-                    return false;
+                    return true;
                 }
 
                 //if expect continue is enabled then send the headers first 
@@ -335,12 +351,12 @@ namespace Titanium.Web.Proxy
                 //If not expectation failed response was returned by server then parse response
                 if (!args.WebSession.Request.ExpectationFailed)
                 {
-                    var result = await HandleHttpSessionResponse(args);
+                    var disposed = await HandleHttpSessionResponse(args);
 
                     //already disposed inside above method
-                    if (result == false)
+                    if (disposed)
                     {
-                        return false;
+                        return disposed;
                     }
                 }
 
@@ -352,7 +368,7 @@ namespace Titanium.Web.Proxy
                         args.ProxyClient.ClientStreamWriter,
                         args.WebSession.ServerConnection);
 
-                    return false;
+                    return true;
                 }
             }
             catch (Exception e)
@@ -364,7 +380,7 @@ namespace Titanium.Web.Proxy
                     args.ProxyClient.ClientStreamWriter,
                     args.WebSession.ServerConnection);
 
-                return false;
+                return true;
             }
 
             if (closeConnection)
@@ -375,10 +391,10 @@ namespace Titanium.Web.Proxy
                     args.ProxyClient.ClientStreamWriter,
                     args.WebSession.ServerConnection);
 
-                return false;
+                return true;
             }
 
-            return true;
+            return false;
         }
 
         /// <summary>
@@ -393,10 +409,12 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         /// <param name="connectHeaders"></param>
         /// <returns></returns>
-        private async Task HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
+        private async Task<bool> HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
             CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName,
             ProxyEndPoint endPoint, List<HttpHeader> connectHeaders)
         {
+            var disposed = false;
+
             TcpConnection connection = null;
 
             //Loop through each subsequest request on this particular client connection
@@ -410,13 +428,14 @@ namespace Titanium.Web.Proxy
                         clientStreamWriter,
                         connection);
 
+                    disposed = true;
                     break;
                 }
 
                 var args = new SessionEventArgs(BufferSize, HandleHttpSessionResponse)
                 {
-                    ProxyClient = {TcpClient = client},
-                    WebSession = {ConnectHeaders = connectHeaders}
+                    ProxyClient = { TcpClient = client },
+                    WebSession = { ConnectHeaders = connectHeaders }
                 };
 
                 args.WebSession.ProcessId = new Lazy<int>(() =>
@@ -476,6 +495,7 @@ namespace Titanium.Web.Proxy
                             clientStreamWriter,
                             connection);
 
+                        disposed = true;
                         break;
                     }
 
@@ -501,6 +521,7 @@ namespace Titanium.Web.Proxy
                             clientStreamWriter,
                             connection);
 
+                        disposed = true;
                         break;
                     }
 
@@ -510,9 +531,9 @@ namespace Titanium.Web.Proxy
                     }
 
                     //construct the web request that we are going to issue on behalf of the client.
-                    var result = await HandleHttpSessionRequestInternal(connection, args, false);
+                    disposed = await HandleHttpSessionRequestInternal(connection, args, false);
 
-                    if (result == false)
+                    if (disposed)
                     {
                         //already disposed inside above method
                         break;
@@ -525,6 +546,7 @@ namespace Titanium.Web.Proxy
                             clientStreamWriter,
                             connection);
 
+                        disposed = true;
                         break;
                     }
 
@@ -536,6 +558,7 @@ namespace Titanium.Web.Proxy
                             clientStreamWriter,
                             connection);
 
+                        disposed = true;
                         break;
                     }
 
@@ -550,9 +573,13 @@ namespace Titanium.Web.Proxy
                         clientStreamReader,
                         clientStreamWriter,
                         connection);
+
+                    disposed = true;
                     break;
                 }
             }
+
+            return disposed;
         }
 
         /// <summary>

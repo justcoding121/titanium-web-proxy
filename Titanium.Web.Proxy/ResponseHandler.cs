@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy
         /// Called asynchronously when a request was successfully and we received the response 
         /// </summary>
         /// <param name="args"></param>
-        /// <returns>true if no errors</returns>
+        /// <returns>true if client/server connection was terminated (and disposed) </returns>
         private async Task<bool> HandleHttpSessionResponse(SessionEventArgs args)
         {
             try
@@ -130,12 +130,12 @@ namespace Titanium.Web.Proxy
                 Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader,
                     args.ProxyClient.ClientStreamWriter, args.WebSession.ServerConnection);
 
-                return false;
+                return true;
             }
 
             args.Dispose();
 
-            return true;
+            return false;
         }
 
         /// <summary>
@@ -233,15 +233,18 @@ namespace Titanium.Web.Proxy
             StreamWriter clientStreamWriter,
             TcpConnection serverConnection)
         {
-            Interlocked.Decrement(ref ServerConnectionCountField);
-
             clientStream?.Close();
             clientStream?.Dispose();
 
             clientStreamReader?.Dispose();
             clientStreamWriter?.Dispose();
 
-            serverConnection?.Dispose();
+            if (serverConnection != null)
+            {
+                serverConnection.Dispose();
+                Interlocked.Decrement(ref ServerConnectionCountField);
+            }
+
         }
     }
 }
