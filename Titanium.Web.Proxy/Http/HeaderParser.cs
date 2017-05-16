@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var existing = headers[newHeader.Name];
 
-                    var nonUniqueHeaders = new List<HttpHeader> {existing, newHeader};
+                    var nonUniqueHeaders = new List<HttpHeader> { existing, newHeader };
 
                     nonUniqueResponseHeaders.Add(newHeader.Name, nonUniqueHeaders);
                     headers.Remove(newHeader.Name);
