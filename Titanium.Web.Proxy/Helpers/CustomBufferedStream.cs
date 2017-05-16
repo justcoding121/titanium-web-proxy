@@ -198,7 +198,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             if (asyncResult is ReadAsyncResult)
             {
-                return ((ReadAsyncResult) asyncResult).ReadBytes;
+                return ((ReadAsyncResult)asyncResult).ReadBytes;
             }
 
             return baseStream.EndRead(asyncResult);

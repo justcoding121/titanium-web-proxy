@@ -70,8 +70,8 @@ namespace Titanium.Web.Proxy
             {
                 ResponseHeaders = new Dictionary<string, HttpHeader>
                 {
-                    {"Proxy-Authenticate", new HttpHeader("Proxy-Authenticate", "Basic realm=\"TitaniumProxy\"")},
-                    {"Proxy-Connection", new HttpHeader("Proxy-Connection", "close")}
+                    { "Proxy-Authenticate", new HttpHeader("Proxy-Authenticate", "Basic realm=\"TitaniumProxy\"") },
+                    { "Proxy-Connection", new HttpHeader("Proxy-Connection", "close") }
                 }
             };
             await WriteResponseHeaders(clientStreamWriter, response);

@@ -1,8 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Network;
-using System.Threading.Tasks;
-using System.Collections.Generic;
 
 namespace Titanium.Web.Proxy.UnitTests
 {
@@ -10,8 +10,7 @@ namespace Titanium.Web.Proxy.UnitTests
     public class CertificateManagerTests
     {
         private static readonly string[] hostNames
-            = new string[] { "facebook.com", "youtube.com", "google.com",
-                                "bing.com", "yahoo.com"};
+            = { "facebook.com", "youtube.com", "google.com", "bing.com", "yahoo.com" };
 
         private readonly Random random = new Random();
 
@@ -36,16 +35,13 @@ namespace Titanium.Web.Proxy.UnitTests
                         var certificate = mgr.CreateCertificate(host, false);
 
                         Assert.IsNotNull(certificate);
-
                     }));
-
                 }
             }
 
             await Task.WhenAll(tasks.ToArray());
 
             mgr.StopClearIdleCertificates();
-
         }
     }
 }
