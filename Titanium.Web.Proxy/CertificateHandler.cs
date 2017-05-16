@@ -3,6 +3,7 @@ using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Extensions;
 
 namespace Titanium.Web.Proxy
 {
@@ -32,17 +33,8 @@ namespace Titanium.Web.Proxy
                     SslPolicyErrors = sslPolicyErrors
                 };
 
-
-                Delegate[] invocationList = ServerCertificateValidationCallback.GetInvocationList();
-                Task[] handlerTasks = new Task[invocationList.Length];
-
-                for (int i = 0; i < invocationList.Length; i++)
-                {
-                    handlerTasks[i] = ((Func<object, CertificateValidationEventArgs, Task>) invocationList[i])(null, args);
-                }
-
-                Task.WhenAll(handlerTasks).Wait();
-
+                //why is the sender null?
+                ServerCertificateValidationCallback.InvokeParallel(null, args);
                 return args.IsValid;
             }
 
@@ -108,17 +100,8 @@ namespace Titanium.Web.Proxy
                     ClientCertificate = clientCertificate
                 };
 
-
-                Delegate[] invocationList = ClientCertificateSelectionCallback.GetInvocationList();
-                Task[] handlerTasks = new Task[invocationList.Length];
-
-                for (int i = 0; i < invocationList.Length; i++)
-                {
-                    handlerTasks[i] = ((Func<object, CertificateSelectionEventArgs, Task>) invocationList[i])(null, args);
-                }
-
-                Task.WhenAll(handlerTasks).Wait();
-
+                //why is the sender null?
+                ClientCertificateSelectionCallback.InvokeParallel(null, args);
                 return args.ClientCertificate;
             }
 
