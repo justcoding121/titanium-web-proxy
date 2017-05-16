@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -18,10 +19,18 @@ namespace Titanium.Web.Proxy.Helpers
         private readonly byte[] staticBuffer;
         private readonly Encoding encoding;
 
+        private static readonly ConcurrentQueue<byte[]> buffers
+            = new ConcurrentQueue<byte[]>();
+
+        private volatile bool disposed;
+
         internal CustomBinaryReader(CustomBufferedStream stream, int bufferSize)
         {
             this.stream = stream;
-            staticBuffer = new byte[bufferSize];
+            if (!buffers.TryDequeue(out staticBuffer) || staticBuffer.Length != bufferSize)
+            {
+                staticBuffer = new byte[bufferSize];
+            }
 
             this.bufferSize = bufferSize;
 
@@ -112,7 +121,7 @@ namespace Titanium.Web.Proxy.Helpers
             var buffer = staticBuffer;
             if (totalBytesToRead < bufferSize)
             {
-                bytesToRead = (int) totalBytesToRead;
+                bytesToRead = (int)totalBytesToRead;
                 buffer = new byte[bytesToRead];
             }
 
@@ -127,7 +136,7 @@ namespace Titanium.Web.Proxy.Helpers
                     break;
 
                 var remainingBytes = totalBytesToRead - totalBytesRead;
-                bytesToRead = Math.Min(bufferSize, (int) remainingBytes);
+                bytesToRead = Math.Min(bufferSize, (int)remainingBytes);
 
                 if (totalBytesRead + bytesToRead > buffer.Length)
                 {
@@ -148,8 +157,18 @@ namespace Titanium.Web.Proxy.Helpers
 
         public void Dispose()
         {
+            if (!disposed)
+            {
+                disposed = true;
+                buffers.Enqueue(staticBuffer);
+            }
         }
 
+        /// <summary>
+        /// Increase size of buffer and copy existing content to new buffer
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="size"></param>
         private void ResizeBuffer(ref byte[] buffer, long size)
         {
             var newBuffer = new byte[size];

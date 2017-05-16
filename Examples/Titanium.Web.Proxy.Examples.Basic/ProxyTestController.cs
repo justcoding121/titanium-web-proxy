@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Net;
+using System.Net.Security;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
@@ -47,18 +47,18 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 //Exclude Https addresses you don't want to proxy
                 //Useful for clients that use certificate pinning
                 //for example google.com and dropbox.com
-                 ExcludedHttpsHostNameRegex = new List<string>() { "dropbox.com" }
+                ExcludedHttpsHostNameRegex = new List<string> { "dropbox.com" }
 
                 //Include Https addresses you want to proxy (others will be excluded)
                 //for example github.com
-                // IncludedHttpsHostNameRegex = new List<string>() { "github.com" }
+                //IncludedHttpsHostNameRegex = new List<string> { "github.com" }
 
                 //You can set only one of the ExcludedHttpsHostNameRegex and IncludedHttpsHostNameRegex properties, otherwise ArgumentException will be thrown
 
                 //Use self-issued generic certificate on all https requests
                 //Optimizes performance by not creating a certificate for each https-enabled domain
                 //Useful when certificate trust is not required by proxy clients
-                // GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
+                //GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
             };
 
             //An explicit endpoint is where the client knows about the existence of a proxy
@@ -107,7 +107,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         //intecept & cancel redirect or update requests
         public async Task OnRequest(object sender, SessionEventArgs e)
         {
-            Console.WriteLine("Active Client Connections:" + ((ProxyServer) sender).ClientConnectionCount);
+            Console.WriteLine("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
             Console.WriteLine(e.WebSession.Request.Url);
 
             //read request headers
@@ -150,7 +150,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         //Modify response
         public async Task OnResponse(object sender, SessionEventArgs e)
         {
-            Console.WriteLine("Active Server Connections:" + (sender as ProxyServer).ServerConnectionCount);
+            Console.WriteLine("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
             if (requestBodyHistory.ContainsKey(e.Id))
             {
@@ -189,7 +189,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         public Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
         {
             //set IsValid to true/false based on Certificate Errors
-            if (e.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
+            if (e.SslPolicyErrors == SslPolicyErrors.None)
             {
                 e.IsValid = true;
             }

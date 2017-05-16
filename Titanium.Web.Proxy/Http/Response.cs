@@ -1,9 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Extensions;
-using System;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http
 {
