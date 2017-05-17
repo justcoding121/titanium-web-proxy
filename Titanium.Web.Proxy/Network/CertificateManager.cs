@@ -237,7 +237,7 @@ namespace Titanium.Web.Proxy.Network
             var info = new ProcessStartInfo
             {
                 FileName = "certutil.exe",
-                Arguments = "-importPFX -Enterprise -p \"\" -f \"" + fileName + "\"",
+                Arguments = "-importPFX -p \"\" -f \"" + fileName + "\"",
                 CreateNoWindow = true,
                 UseShellExecute = true,
                 Verb = "runas",
