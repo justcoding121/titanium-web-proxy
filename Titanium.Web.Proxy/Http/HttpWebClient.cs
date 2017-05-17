@@ -214,14 +214,10 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public void Dispose()
         {
-            //not really needed since GC will collect it
-            //but just to be on safe side
-            Request.RequestBody = null;
-            Response.ResponseBody = null;
+            ConnectHeaders = null;
 
-            Request.RequestBodyString = null;
-            Response.ResponseBodyString = null;
-
+            Request.Dispose();
+            Response.Dispose();
         }
     }
 }
