@@ -647,46 +647,5 @@ namespace Titanium.Web.Proxy
             endPoint.Listener.Server.Close();
             endPoint.Listener.Server.Dispose();
         }
-
-        /// <summary>
-        /// Invocator for BeforeRequest event.
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        protected virtual void OnBeforeRequest(object sender, SessionEventArgs e)
-        {
-            BeforeRequest?.Invoke(sender, e);
-        }
-
-        /// <summary>
-        /// Invocator for BeforeResponse event. 
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        /// <returns></returns>
-        protected virtual void OnBeforeResponse(object sender, SessionEventArgs e)
-        {
-            BeforeResponse?.Invoke(sender, e);
-        }
-
-        /// <summary>
-        /// Invocator for ServerCertificateValidationCallback event.
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        protected virtual void OnServerCertificateValidationCallback(object sender, CertificateValidationEventArgs e)
-        {
-            ServerCertificateValidationCallback?.Invoke(sender, e);
-        }
-
-        /// <summary>
-        /// Invocator for ClientCertifcateSelectionCallback event.
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        protected virtual void OnClientCertificateSelectionCallback(object sender, CertificateSelectionEventArgs e)
-        {
-            ClientCertificateSelectionCallback?.Invoke(sender, e);
-        }
     }
 }

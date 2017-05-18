@@ -10,7 +10,7 @@ namespace Titanium.Web.Proxy.Http
     /// <summary>
     /// Http(s) response object
     /// </summary>
-    public class Response
+    public class Response : IDisposable
     {
         /// <summary>
         /// Response Status Code.
@@ -233,6 +233,21 @@ namespace Titanium.Web.Proxy.Http
         {
             ResponseHeaders = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
             NonUniqueResponseHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Dispose off 
+        /// </summary>
+        public void Dispose()
+        {
+            //not really needed since GC will collect it
+            //but just to be on safe side
+
+            ResponseHeaders = null;
+            NonUniqueResponseHeaders = null;
+
+            ResponseBody = null;
+            ResponseBodyString = null;
         }
     }
 }
