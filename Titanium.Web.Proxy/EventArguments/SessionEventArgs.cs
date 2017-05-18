@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Holds a reference to proxy response handler method
         /// </summary>
-        private readonly Func<SessionEventArgs, Task> httpResponseHandler;
+        private Func<SessionEventArgs, Task> httpResponseHandler;
 
         /// <summary>
         /// Holds a reference to client
@@ -522,6 +522,10 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public void Dispose()
         {
+            httpResponseHandler = null;
+            CustomUpStreamHttpProxyUsed = null;
+            CustomUpStreamHttpsProxyUsed = null;
+
             WebSession.Dispose();
         }
     }
