@@ -23,8 +23,13 @@ namespace Titanium.Web.Proxy
     /// </summary>
     partial class ProxyServer
     {
-        //This is called when client is aware of proxy
-        //So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
+        /// <summary>
+        /// This is called when client is aware of proxy
+        /// So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
+        /// </summary>
+        /// <param name="endPoint"></param>
+        /// <param name="tcpClient"></param>
+        /// <returns></returns>
         private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient tcpClient)
         {
             var disposed = false;
@@ -139,7 +144,7 @@ namespace Titanium.Web.Proxy
                 {
                     //Siphon out CONNECT request headers
                     await clientStreamReader.ReadAndIgnoreAllLinesAsync();
-                    
+
                     //write back successfull CONNECT response
                     await WriteConnectResponse(clientStreamWriter, version);
 
@@ -170,8 +175,13 @@ namespace Titanium.Web.Proxy
             }
         }
 
-        //This is called when this proxy acts as a reverse proxy (like a real http server)
-        //So for HTTPS requests we would start SSL negotiation right away without expecting a CONNECT request from client
+        /// <summary>
+        /// This is called when this proxy acts as a reverse proxy (like a real http server)
+        /// So for HTTPS requests we would start SSL negotiation right away without expecting a CONNECT request from client
+        /// </summary>
+        /// <param name="endPoint"></param>
+        /// <param name="tcpClient"></param>
+        /// <returns></returns>
         private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
             bool disposed = false;
@@ -220,161 +230,9 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        /// Create a Server Connection
-        /// </summary>
-        /// <param name="args"></param>
-        /// <returns></returns>
-        private async Task<TcpConnection> GetServerConnection(
-            SessionEventArgs args)
-        {
-            ExternalProxy customUpStreamHttpProxy = null;
-            ExternalProxy customUpStreamHttpsProxy = null;
-
-            if (args.WebSession.Request.RequestUri.Scheme == "http")
-            {
-                if (GetCustomUpStreamHttpProxyFunc != null)
-                {
-                    customUpStreamHttpProxy = await GetCustomUpStreamHttpProxyFunc(args);
-                }
-            }
-            else
-            {
-                if (GetCustomUpStreamHttpsProxyFunc != null)
-                {
-                    customUpStreamHttpsProxy = await GetCustomUpStreamHttpsProxyFunc(args);
-                }
-            }
-
-            args.CustomUpStreamHttpProxyUsed = customUpStreamHttpProxy;
-            args.CustomUpStreamHttpsProxyUsed = customUpStreamHttpsProxy;
-
-            return await tcpConnectionFactory.CreateClient(this,
-                args.WebSession.Request.RequestUri.Host,
-                args.WebSession.Request.RequestUri.Port,
-                args.WebSession.Request.HttpVersion,
-                args.IsHttps,
-                customUpStreamHttpProxy ?? UpStreamHttpProxy,
-                customUpStreamHttpsProxy ?? UpStreamHttpsProxy,
-                args.ProxyClient.ClientStream);
-        }
-
-
-        private async Task<bool> HandleHttpSessionRequestInternal(TcpConnection connection, SessionEventArgs args, bool closeConnection)
-        {
-            bool disposed = false;
-            bool keepAlive = false;
-
-            try
-            {
-                args.WebSession.Request.RequestLocked = true;
-
-                //If request was cancelled by user then dispose the client
-                if (args.WebSession.Request.CancelRequest)
-                {
-                    return true;
-                }
-
-                //if expect continue is enabled then send the headers first 
-                //and see if server would return 100 conitinue
-                if (args.WebSession.Request.ExpectContinue)
-                {
-                    args.WebSession.SetConnection(connection);
-                    await args.WebSession.SendRequest(Enable100ContinueBehaviour);
-                }
-
-                //If 100 continue was the response inform that to the client
-                if (Enable100ContinueBehaviour)
-                {
-                    if (args.WebSession.Request.Is100Continue)
-                    {
-                        await WriteResponseStatus(args.WebSession.Response.HttpVersion, "100",
-                            "Continue", args.ProxyClient.ClientStreamWriter);
-                        await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
-                    }
-                    else if (args.WebSession.Request.ExpectationFailed)
-                    {
-                        await WriteResponseStatus(args.WebSession.Response.HttpVersion, "417",
-                            "Expectation Failed", args.ProxyClient.ClientStreamWriter);
-                        await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
-                    }
-                }
-
-                //If expect continue is not enabled then set the connectio and send request headers
-                if (!args.WebSession.Request.ExpectContinue)
-                {
-                    args.WebSession.SetConnection(connection);
-                    await args.WebSession.SendRequest(Enable100ContinueBehaviour);
-                }
-
-                //If request was modified by user
-                if (args.WebSession.Request.RequestBodyRead)
-                {
-                    if (args.WebSession.Request.ContentEncoding != null)
-                    {
-                        args.WebSession.Request.RequestBody = await GetCompressedResponseBody(args.WebSession.Request.ContentEncoding, args.WebSession.Request.RequestBody);
-                    }
-                    //chunked send is not supported as of now
-                    args.WebSession.Request.ContentLength = args.WebSession.Request.RequestBody.Length;
-
-                    var newStream = args.WebSession.ServerConnection.Stream;
-                    await newStream.WriteAsync(args.WebSession.Request.RequestBody, 0, args.WebSession.Request.RequestBody.Length);
-                }
-                else
-                {
-                    if (!args.WebSession.Request.ExpectationFailed)
-                    {
-                        //If its a post/put/patch request, then read the client html body and send it to server
-                        var method = args.WebSession.Request.Method.ToUpper();
-                        if (method == "POST" || method == "PUT" || method == "PATCH")
-                        {
-                            await SendClientRequestBody(args);
-                        }
-                    }
-                }
-
-                //If not expectation failed response was returned by server then parse response
-                if (!args.WebSession.Request.ExpectationFailed)
-                {
-                    disposed = await HandleHttpSessionResponse(args);
-
-                    //already disposed inside above method
-                    if (disposed)
-                    {
-                        return true;
-                    }
-                }
-
-                //if connection is closing exit
-                if (args.WebSession.Response.ResponseKeepAlive == false)
-                {
-                    return true;
-                }
-
-                if (!closeConnection)
-                {
-                    keepAlive = true;
-                    return false;
-                }
-            }
-            catch (Exception e)
-            {
-                ExceptionFunc(new ProxyHttpException("Error occured whilst handling session request (internal)", e, args));
-                return true;
-            }
-            finally
-            {
-                if (!disposed && !keepAlive)
-                {
-                    //dispose
-                    Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader, args.ProxyClient.ClientStreamWriter, args.WebSession.ServerConnection);
-                }
-            }
-
-            return true;
-        }
-
-        /// <summary>
         /// This is the core request handler method for a particular connection from client
+        /// Will create new session (request/response) sequence until 
+        /// client/server abruptly terminates connection or by normal HTTP termination
         /// </summary>
         /// <param name="client"></param>
         /// <param name="httpCmd"></param>
@@ -532,6 +390,168 @@ namespace Titanium.Web.Proxy
 
             return true;
         }
+
+        /// <summary>
+        /// Handle a specific session (request/response sequence)
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="args"></param>
+        /// <param name="closeConnection"></param>
+        /// <returns></returns>
+        private async Task<bool> HandleHttpSessionRequestInternal(TcpConnection connection,
+            SessionEventArgs args, bool closeConnection)
+        {
+            bool disposed = false;
+            bool keepAlive = false;
+
+            try
+            {
+                args.WebSession.Request.RequestLocked = true;
+
+                //If request was cancelled by user then dispose the client
+                if (args.WebSession.Request.CancelRequest)
+                {
+                    return true;
+                }
+
+                //if expect continue is enabled then send the headers first 
+                //and see if server would return 100 conitinue
+                if (args.WebSession.Request.ExpectContinue)
+                {
+                    args.WebSession.SetConnection(connection);
+                    await args.WebSession.SendRequest(Enable100ContinueBehaviour);
+                }
+
+                //If 100 continue was the response inform that to the client
+                if (Enable100ContinueBehaviour)
+                {
+                    if (args.WebSession.Request.Is100Continue)
+                    {
+                        await WriteResponseStatus(args.WebSession.Response.HttpVersion, "100",
+                            "Continue", args.ProxyClient.ClientStreamWriter);
+                        await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
+                    }
+                    else if (args.WebSession.Request.ExpectationFailed)
+                    {
+                        await WriteResponseStatus(args.WebSession.Response.HttpVersion, "417",
+                            "Expectation Failed", args.ProxyClient.ClientStreamWriter);
+                        await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
+                    }
+                }
+
+                //If expect continue is not enabled then set the connectio and send request headers
+                if (!args.WebSession.Request.ExpectContinue)
+                {
+                    args.WebSession.SetConnection(connection);
+                    await args.WebSession.SendRequest(Enable100ContinueBehaviour);
+                }
+
+                //If request was modified by user
+                if (args.WebSession.Request.RequestBodyRead)
+                {
+                    if (args.WebSession.Request.ContentEncoding != null)
+                    {
+                        args.WebSession.Request.RequestBody = await GetCompressedResponseBody(args.WebSession.Request.ContentEncoding, args.WebSession.Request.RequestBody);
+                    }
+                    //chunked send is not supported as of now
+                    args.WebSession.Request.ContentLength = args.WebSession.Request.RequestBody.Length;
+
+                    var newStream = args.WebSession.ServerConnection.Stream;
+                    await newStream.WriteAsync(args.WebSession.Request.RequestBody, 0, args.WebSession.Request.RequestBody.Length);
+                }
+                else
+                {
+                    if (!args.WebSession.Request.ExpectationFailed)
+                    {
+                        //If its a post/put/patch request, then read the client html body and send it to server
+                        var method = args.WebSession.Request.Method.ToUpper();
+                        if (method == "POST" || method == "PUT" || method == "PATCH")
+                        {
+                            await SendClientRequestBody(args);
+                        }
+                    }
+                }
+
+                //If not expectation failed response was returned by server then parse response
+                if (!args.WebSession.Request.ExpectationFailed)
+                {
+                    disposed = await HandleHttpSessionResponse(args);
+
+                    //already disposed inside above method
+                    if (disposed)
+                    {
+                        return true;
+                    }
+                }
+
+                //if connection is closing exit
+                if (args.WebSession.Response.ResponseKeepAlive == false)
+                {
+                    return true;
+                }
+
+                if (!closeConnection)
+                {
+                    keepAlive = true;
+                    return false;
+                }
+            }
+            catch (Exception e)
+            {
+                ExceptionFunc(new ProxyHttpException("Error occured whilst handling session request (internal)", e, args));
+                return true;
+            }
+            finally
+            {
+                if (!disposed && !keepAlive)
+                {
+                    //dispose
+                    Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader, args.ProxyClient.ClientStreamWriter, args.WebSession.ServerConnection);
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Create a Server Connection
+        /// </summary>
+        /// <param name="args"></param>
+        /// <returns></returns>
+        private async Task<TcpConnection> GetServerConnection(
+            SessionEventArgs args)
+        {
+            ExternalProxy customUpStreamHttpProxy = null;
+            ExternalProxy customUpStreamHttpsProxy = null;
+
+            if (args.WebSession.Request.RequestUri.Scheme == "http")
+            {
+                if (GetCustomUpStreamHttpProxyFunc != null)
+                {
+                    customUpStreamHttpProxy = await GetCustomUpStreamHttpProxyFunc(args);
+                }
+            }
+            else
+            {
+                if (GetCustomUpStreamHttpsProxyFunc != null)
+                {
+                    customUpStreamHttpsProxy = await GetCustomUpStreamHttpsProxyFunc(args);
+                }
+            }
+
+            args.CustomUpStreamHttpProxyUsed = customUpStreamHttpProxy;
+            args.CustomUpStreamHttpsProxyUsed = customUpStreamHttpsProxy;
+
+            return await tcpConnectionFactory.CreateClient(this,
+                args.WebSession.Request.RequestUri.Host,
+                args.WebSession.Request.RequestUri.Port,
+                args.WebSession.Request.HttpVersion,
+                args.IsHttps,
+                customUpStreamHttpProxy ?? UpStreamHttpProxy,
+                customUpStreamHttpsProxy ?? UpStreamHttpsProxy,
+                args.ProxyClient.ClientStream);
+        }
+
 
         /// <summary>
         /// Write successfull CONNECT response to client
