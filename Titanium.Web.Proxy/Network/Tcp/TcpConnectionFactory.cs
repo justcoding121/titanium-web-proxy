@@ -95,12 +95,13 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     sslStream = new SslStream(stream, true, server.ValidateServerCertificate,
                         server.SelectClientCertificate);
 
-                    await sslStream.AuthenticateAsClientAsync(remoteHostName, null, server.SupportedSslProtocols, false);
+                    await sslStream.AuthenticateAsClientAsync(remoteHostName, null, server.SupportedSslProtocols, server.CheckCertificateRevocation);
 
                     stream = new CustomBufferedStream(sslStream, server.BufferSize);
                 }
                 catch
                 {
+                    sslStream?.Close();
                     sslStream?.Dispose();
 
                     throw;
@@ -125,7 +126,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             client.ReceiveTimeout = server.ConnectionTimeOutSeconds * 1000;
             client.SendTimeout = server.ConnectionTimeOutSeconds * 1000;
 
-            Interlocked.Increment(ref server.ServerConnectionCountField);
+            Interlocked.Increment(ref server.serverConnectionCount);
 
             return new TcpConnection
             {
