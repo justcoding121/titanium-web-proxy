@@ -35,9 +35,20 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private Action<Exception> exceptionFunc;
 
+        /// <summary>
+        /// Backing field for corresponding public property
+        /// </summary>
         private bool trustRootCertificate;
-        private int clientConnectionCountField;
-        internal int ServerConnectionCountField;
+
+        /// <summary>
+        /// Backing field for corresponding public property
+        /// </summary>
+        private int clientConnectionCount;
+
+        /// <summary>
+        /// Backing field for corresponding public property
+        /// </summary>
+        internal int serverConnectionCount;
 
         /// <summary>
         /// A object that creates tcp connection to server
@@ -126,6 +137,12 @@ namespace Titanium.Web.Proxy
             get { return CertificateManager.Engine; }
             set { CertificateManager.Engine = value; }
         }
+
+        /// <summary>
+        /// Should we check for certificare revocation during SSL authentication to servers
+        /// Note: If enabled can reduce performance (Default disabled)
+        /// </summary>
+        public bool CheckCertificateRevocation { get; set; }
 
         /// <summary>
         /// Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
@@ -231,13 +248,13 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Total number of active client connections
         /// </summary>
-        public int ClientConnectionCount => clientConnectionCountField;
+        public int ClientConnectionCount => clientConnectionCount;
 
 
         /// <summary>
         /// Total number of active server connections
         /// </summary>
-        public int ServerConnectionCount => ServerConnectionCountField;
+        public int ServerConnectionCount => serverConnectionCount;
 
         /// <summary>
         /// Constructor
@@ -597,7 +614,10 @@ namespace Titanium.Web.Proxy
             {
                 Task.Run(async () =>
                 {
-                    Interlocked.Increment(ref clientConnectionCountField);
+                    Interlocked.Increment(ref clientConnectionCount);
+
+                    tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
+                    tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
 
                     try
                     {
@@ -612,7 +632,7 @@ namespace Titanium.Web.Proxy
                     }
                     finally
                     {
-                        Interlocked.Decrement(ref clientConnectionCountField);
+                        Interlocked.Decrement(ref clientConnectionCount);
 
                         try
                         {
