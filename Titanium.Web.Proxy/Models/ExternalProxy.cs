@@ -21,7 +21,7 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         /// Bypass this proxy for connections to localhost?
         /// </summary>
-        public bool BypassForLocalhost { get; set; }
+        public bool BypassLocalhost { get; set; }
 
         /// <summary>
         /// Username.
