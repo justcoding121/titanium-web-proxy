@@ -1,12 +1,14 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
-using System.Linq;
-using System.Collections.Concurrent;
-using System.IO;
-using Titanium.Web.Proxy.Network.Certificate;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Network.Certificate;
 
 namespace Titanium.Web.Proxy.Network
 {
@@ -29,7 +31,7 @@ namespace Titanium.Web.Proxy.Network
     /// <summary>
     /// A class to manage SSL certificates used by this proxy server
     /// </summary>
-    public class CertificateManager : IDisposable
+    public sealed class CertificateManager : IDisposable
     {
         internal CertificateEngine Engine
         {
@@ -51,7 +53,7 @@ namespace Titanium.Web.Proxy.Network
                 if (certEngine == null)
                 {
                     certEngine = engine == CertificateEngine.BouncyCastle
-                        ? (ICertificateMaker) new BCCertificateMaker()
+                        ? (ICertificateMaker)new BCCertificateMaker()
                         : new WinCertificateMaker();
                 }
             }
@@ -132,12 +134,12 @@ namespace Titanium.Web.Proxy.Network
 
         private string GetRootCertificatePath()
         {
-            var assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
+            var assemblyLocation = Assembly.GetExecutingAssembly().Location;
 
             // dynamically loaded assemblies returns string.Empty location
             if (assemblyLocation == string.Empty)
             {
-                assemblyLocation = System.Reflection.Assembly.GetEntryAssembly().Location;
+                assemblyLocation = Assembly.GetEntryAssembly().Location;
             }
 
             var path = Path.GetDirectoryName(assemblyLocation);
@@ -146,7 +148,7 @@ namespace Titanium.Web.Proxy.Network
             return fileName;
         }
 
-        internal X509Certificate2 LoadRootCertificate()
+        private X509Certificate2 LoadRootCertificate()
         {
             var fileName = GetRootCertificatePath();
             if (!File.Exists(fileName)) return null;
@@ -218,6 +220,51 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
+        /// Puts the certificate to the local machine's certificate store. 
+        /// Needs elevated permission. Works only on Windows.
+        /// </summary>
+        /// <returns></returns>
+        public bool TrustRootCertificateAsAdministrator()
+        {
+            if (RunTime.IsRunningOnMono())
+            {
+                return false;
+            }
+
+            var fileName = Path.GetTempFileName();
+            File.WriteAllBytes(fileName, RootCertificate.Export(X509ContentType.Pkcs12));
+
+            var info = new ProcessStartInfo
+            {
+                FileName = "certutil.exe",
+                Arguments = "-importPFX -p \"\" -f \"" + fileName + "\"",
+                CreateNoWindow = true,
+                UseShellExecute = true,
+                Verb = "runas",
+                ErrorDialog = false,
+            };
+
+            try
+            {
+                var process = Process.Start(info);
+                if (process == null)
+                {
+                    return false;
+                }
+
+                process.WaitForExit();
+
+                File.Delete(fileName);
+            }
+            catch
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Removes the trusted certificates.
         /// </summary>
         public void RemoveTrustedRootCertificates()
@@ -230,12 +277,48 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
+        /// Determines whether the root certificate is trusted.
+        /// </summary>
+        public bool IsRootCertificateTrusted()
+        {
+            return FindRootCertificate(StoreLocation.CurrentUser) || IsRootCertificateMachineTrusted();
+        }
+
+        /// <summary>
+        /// Determines whether the root certificate is machine trusted.
+        /// </summary>
+        public bool IsRootCertificateMachineTrusted()
+        {
+            return FindRootCertificate(StoreLocation.LocalMachine);
+        }
+
+        private bool FindRootCertificate(StoreLocation storeLocation)
+        {
+            string value = $"{RootCertificate.Issuer}";
+            return FindCertificates(StoreName.Root, storeLocation, value).Count > 0;
+        }
+
+        private X509Certificate2Collection FindCertificates(StoreName storeName, StoreLocation storeLocation, string findValue)
+        {
+            X509Store x509Store = new X509Store(storeName, storeLocation);
+            try
+            {
+                x509Store.Open(OpenFlags.OpenExistingOnly);
+                return x509Store.Certificates.Find(X509FindType.FindBySubjectDistinguishedName, findValue, false);
+            }
+            finally
+            {
+                x509Store.Close();
+            }
+        }
+        
+        /// <summary>
         /// Create an SSL certificate
         /// </summary>
         /// <param name="certificateName"></param>
         /// <param name="isRootCertificate"></param>
         /// <returns></returns>
-        internal virtual X509Certificate2 CreateCertificate(string certificateName, bool isRootCertificate)
+        internal X509Certificate2 CreateCertificate(string certificateName, bool isRootCertificate)
         {
             if (certificateCache.ContainsKey(certificateName))
             {
@@ -264,7 +347,7 @@ namespace Titanium.Web.Proxy.Network
                     }
                     if (certificate != null && !certificateCache.ContainsKey(certificateName))
                     {
-                        certificateCache.Add(certificateName, new CachedCertificate {Certificate = certificate});
+                        certificateCache.Add(certificateName, new CachedCertificate { Certificate = certificate });
                     }
                 }
                 else
@@ -316,7 +399,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="storeLocation"></param>
         /// <returns></returns>
-        internal void TrustRootCertificate(StoreLocation storeLocation)
+        private void TrustRootCertificate(StoreLocation storeLocation)
         {
             if (RootCertificate == null)
             {
@@ -327,7 +410,7 @@ namespace Titanium.Web.Proxy.Network
                 return;
             }
 
-            X509Store x509RootStore = new X509Store(StoreName.Root, storeLocation);
+            var x509RootStore = new X509Store(StoreName.Root, storeLocation);
             var x509PersonalStore = new X509Store(StoreName.My, storeLocation);
 
             try
@@ -356,7 +439,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="storeLocation"></param>
         /// <returns></returns>
-        internal void RemoveTrustedRootCertificates(StoreLocation storeLocation)
+        private void RemoveTrustedRootCertificates(StoreLocation storeLocation)
         {
             if (RootCertificate == null)
             {
@@ -367,7 +450,7 @@ namespace Titanium.Web.Proxy.Network
                 return;
             }
 
-            X509Store x509RootStore = new X509Store(StoreName.Root, storeLocation);
+            var x509RootStore = new X509Store(StoreName.Root, storeLocation);
             var x509PersonalStore = new X509Store(StoreName.My, storeLocation);
 
             try
@@ -381,7 +464,7 @@ namespace Titanium.Web.Proxy.Network
             catch (Exception e)
             {
                 exceptionFunc(
-                    new Exception("Failed to make system trust root certificate "
+                    new Exception("Failed to remove root certificate trust "
                                   + $" for {storeLocation} store location. You may need admin rights.", e));
             }
             finally
@@ -391,6 +474,9 @@ namespace Titanium.Web.Proxy.Network
             }
         }
 
+        /// <summary>
+        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        /// </summary>
         public void Dispose()
         {
         }

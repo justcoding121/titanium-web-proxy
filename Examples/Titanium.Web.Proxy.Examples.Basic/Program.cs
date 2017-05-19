@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Titanium.Web.Proxy.Examples.Basic.Helpers;
 
 namespace Titanium.Web.Proxy.Examples.Basic
 {
@@ -9,10 +11,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public static void Main(string[] args)
         {
+            //fix console hang due to QuickEdit mode
+            ConsoleHelper.DisableQuickEditMode();
+
             //On Console exit make sure we also exit the proxy
             NativeMethods.Handler = ConsoleEventCallback;
             NativeMethods.SetConsoleCtrlHandler(NativeMethods.Handler, true);
-
 
             //Start proxy controller
             controller.StartProxy();
@@ -50,5 +54,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         // Pinvoke
         internal delegate bool ConsoleEventDelegate(int eventType);
+
     }
+
 }

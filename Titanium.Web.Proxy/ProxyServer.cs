@@ -1,16 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
-using System.Linq;
-using System.Security.Authentication;
 using Titanium.Web.Proxy.Network.Tcp;
-using System.Security.Cryptography.X509Certificates;
 
 namespace Titanium.Web.Proxy
 {
@@ -34,7 +35,20 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private Action<Exception> exceptionFunc;
 
+        /// <summary>
+        /// Backing field for corresponding public property
+        /// </summary>
         private bool trustRootCertificate;
+
+        /// <summary>
+        /// Backing field for corresponding public property
+        /// </summary>
+        private int clientConnectionCount;
+
+        /// <summary>
+        /// Backing field for corresponding public property
+        /// </summary>
+        internal int serverConnectionCount;
 
         /// <summary>
         /// A object that creates tcp connection to server
@@ -50,8 +64,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Set firefox to use default system proxy
         /// </summary>
-        private FireFoxProxySettingsManager firefoxProxySettingsManager
-            = new FireFoxProxySettingsManager();
+        private FireFoxProxySettingsManager firefoxProxySettingsManager = new FireFoxProxySettingsManager();
 #endif
 
         /// <summary>
@@ -124,6 +137,12 @@ namespace Titanium.Web.Proxy
             get { return CertificateManager.Engine; }
             set { CertificateManager.Engine = value; }
         }
+
+        /// <summary>
+        /// Should we check for certificare revocation during SSL authentication to servers
+        /// Note: If enabled can reduce performance (Default disabled)
+        /// </summary>
+        public bool CheckCertificateRevocation { get; set; }
 
         /// <summary>
         /// Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
@@ -224,18 +243,18 @@ namespace Titanium.Web.Proxy
         /// List of supported Ssl versions
         /// </summary>
         public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls
-            | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
+                                                                  | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 
         /// <summary>
         /// Total number of active client connections
         /// </summary>
-        public int ClientConnectionCount { get; private set; }
+        public int ClientConnectionCount => clientConnectionCount;
 
 
         /// <summary>
         /// Total number of active server connections
         /// </summary>
-        public int ServerConnectionCount { get; internal set; }
+        public int ServerConnectionCount => serverConnectionCount;
 
         /// <summary>
         /// Constructor
@@ -381,8 +400,7 @@ namespace Titanium.Web.Proxy
 #if !DEBUG
             firefoxProxySettingsManager.AddFirefox();
 #endif
-            Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System HTTPS Proxy",
-                endPoint.IpAddress, endPoint.Port);
+            Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System HTTPS Proxy", endPoint.IpAddress, endPoint.Port);
         }
 
         /// <summary>
@@ -596,13 +614,10 @@ namespace Titanium.Web.Proxy
             {
                 Task.Run(async () =>
                 {
-                    ClientConnectionCount++;
+                    Interlocked.Increment(ref clientConnectionCount);
 
-                    //This line is important!
-                    //contributors please don't remove it without discussion
-                    //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
-                    //due to default TCP CLOSE_WAIT timeout for 4 minutes
-                    tcpClient.LingerState = new LingerOption(true, 0);
+                    tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
+                    tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
 
                     try
                     {
@@ -617,8 +632,23 @@ namespace Titanium.Web.Proxy
                     }
                     finally
                     {
-                        ClientConnectionCount--;
-                        tcpClient?.Close();
+                        Interlocked.Decrement(ref clientConnectionCount);
+
+                        try
+                        {
+                            if (tcpClient != null)
+                            {
+                                //This line is important!
+                                //contributors please don't remove it without discussion
+                                //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
+                                //due to default TCP CLOSE_WAIT timeout for 4 minutes
+                                tcpClient.LingerState = new LingerOption(true, 0);
+                                tcpClient.Close();
+                            }
+                        }
+                        catch
+                        {
+                        }
                     }
                 });
             }
@@ -636,47 +666,6 @@ namespace Titanium.Web.Proxy
             endPoint.Listener.Stop();
             endPoint.Listener.Server.Close();
             endPoint.Listener.Server.Dispose();
-        }
-
-        /// <summary>
-        /// Invocator for BeforeRequest event.
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        protected virtual void OnBeforeRequest(object sender, SessionEventArgs e)
-        {
-            BeforeRequest?.Invoke(sender, e);
-        }
-
-        /// <summary>
-        /// Invocator for BeforeResponse event. 
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        /// <returns></returns>
-        protected virtual void OnBeforeResponse(object sender, SessionEventArgs e)
-        {
-            BeforeResponse?.Invoke(sender, e);
-        }
-
-        /// <summary>
-        /// Invocator for ServerCertificateValidationCallback event.
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        protected virtual void OnServerCertificateValidationCallback(object sender, CertificateValidationEventArgs e)
-        {
-            ServerCertificateValidationCallback?.Invoke(sender, e);
-        }
-
-        /// <summary>
-        /// Invocator for ClientCertifcateSelectionCallback event.
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        protected virtual void OnClientCertificateSelectionCallback(object sender, CertificateSelectionEventArgs e)
-        {
-            ClientCertificateSelectionCallback?.Invoke(sender, e);
         }
     }
 }

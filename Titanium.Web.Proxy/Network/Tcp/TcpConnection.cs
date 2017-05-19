@@ -58,7 +58,21 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             StreamReader?.Dispose();
 
-            TcpClient?.Close();
+            try
+            {
+                if (TcpClient != null)
+                {
+                    //This line is important!
+                    //contributors please don't remove it without discussion
+                    //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
+                    //due to default TCP CLOSE_WAIT timeout for 4 minutes
+                    TcpClient.LingerState = new LingerOption(true, 0);
+                    TcpClient.Close();
+                }
+            }
+            catch
+            {
+            }
         }
     }
 }

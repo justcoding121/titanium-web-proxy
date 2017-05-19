@@ -1,11 +1,12 @@
 ﻿using System;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Diagnostics;
 using System.Net;
+using System.Net.Http;
+using System.Net.Security;
 using System.Threading.Tasks;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
-using System.Net.Http;
-using System.Diagnostics;
 
 namespace Titanium.Web.Proxy.IntegrationTests
 {
@@ -13,7 +14,6 @@ namespace Titanium.Web.Proxy.IntegrationTests
     public class SslTests
     {
         [TestMethod]
-        
         public void TestSsl()
         {
             //expand this to stress test to find
@@ -103,7 +103,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
         public Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
         {
             //set IsValid to true/false based on Certificate Errors
-            if (e.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
+            if (e.SslPolicyErrors == SslPolicyErrors.None)
             {
                 e.IsValid = true;
             }

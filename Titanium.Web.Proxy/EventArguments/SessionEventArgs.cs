@@ -1,16 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Text;
-using Titanium.Web.Proxy.Exceptions;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.Decompression;
+using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
-using Titanium.Web.Proxy.Extensions;
-using System.Threading.Tasks;
-using Titanium.Web.Proxy.Network;
-using System.Net;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Holds a reference to proxy response handler method
         /// </summary>
-        private readonly Func<SessionEventArgs, Task> httpResponseHandler;
+        private Func<SessionEventArgs, Task> httpResponseHandler;
 
         /// <summary>
         /// Holds a reference to client
@@ -56,7 +56,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Client End Point.
         /// </summary>
-        public IPEndPoint ClientEndPoint => (IPEndPoint) ProxyClient.TcpClient.Client.RemoteEndPoint;
+        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
 
         /// <summary>
         /// A web session corresponding to a single request/response sequence
@@ -158,7 +158,7 @@ namespace Titanium.Web.Proxy.EventArguments
                             await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, responseBodyStream,
                                 WebSession.Response.ContentLength);
                         }
-                        else if ((WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0) || WebSession.Response.ContentLength == -1)
+                        else if (WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0 || WebSession.Response.ContentLength == -1)
                         {
                             await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, responseBodyStream, long.MaxValue);
                         }
@@ -522,6 +522,11 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public void Dispose()
         {
+            httpResponseHandler = null;
+            CustomUpStreamHttpProxyUsed = null;
+            CustomUpStreamHttpsProxyUsed = null;
+
+            WebSession.Dispose();
         }
     }
 }

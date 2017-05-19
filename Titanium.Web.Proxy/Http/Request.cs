@@ -1,15 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http
 {
     /// <summary>
     /// A HTTP(S) request object
     /// </summary>
-    public class Request
+    public class Request : IDisposable
     {
         /// <summary>
         /// Request Method
@@ -241,7 +241,7 @@ namespace Titanium.Web.Proxy.Http
         /// request body as string
         /// </summary>
         internal string RequestBodyString { get; set; }
-        
+
         internal bool RequestBodyRead { get; set; }
 
         internal bool RequestLocked { get; set; }
@@ -293,6 +293,21 @@ namespace Titanium.Web.Proxy.Http
         {
             RequestHeaders = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
             NonUniqueRequestHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Dispose off 
+        /// </summary>
+        public void Dispose()
+        {
+            //not really needed since GC will collect it
+            //but just to be on safe side
+
+            RequestHeaders = null;
+            NonUniqueRequestHeaders = null;
+
+            RequestBody = null;
+            RequestBody = null;
         }
     }
 }

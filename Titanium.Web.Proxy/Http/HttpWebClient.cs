@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.Http
     /// <summary>
     /// Used to communicate with the server over HTTP(S)
     /// </summary>
-    public class HttpWebClient
+    public class HttpWebClient : IDisposable
     {
         /// <summary>
         /// Connection to server
@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy.Http
             var requestLines = new StringBuilder();
 
             //prepare the request & headers
-            if ((ServerConnection.UpStreamHttpProxy != null && ServerConnection.IsHttps == false) || (ServerConnection.UpStreamHttpsProxy != null && ServerConnection.IsHttps))
+            if (ServerConnection.UpStreamHttpProxy != null && ServerConnection.IsHttps == false || ServerConnection.UpStreamHttpsProxy != null && ServerConnection.IsHttps)
             {
                 requestLines.AppendLine($"{Request.Method} {Request.RequestUri.AbsoluteUri} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
             }
@@ -93,7 +93,7 @@ namespace Titanium.Web.Proxy.Http
             {
                 requestLines.AppendLine("Proxy-Connection: keep-alive");
                 requestLines.AppendLine("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                                                $"{ServerConnection.UpStreamHttpProxy.UserName}:{ServerConnection.UpStreamHttpProxy.Password}")));
+                                            $"{ServerConnection.UpStreamHttpProxy.UserName}:{ServerConnection.UpStreamHttpProxy.Password}")));
             }
             //write request headers
             foreach (var headerItem in Request.RequestHeaders)
@@ -207,6 +207,17 @@ namespace Titanium.Web.Proxy.Http
 
             //Read the response headers in to unique and non-unique header collections
             await HeaderParser.ReadHeaders(ServerConnection.StreamReader, Response.NonUniqueResponseHeaders, Response.ResponseHeaders);
+        }
+
+        /// <summary>
+        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        /// </summary>
+        public void Dispose()
+        {
+            ConnectHeaders = null;
+
+            Request.Dispose();
+            Response.Dispose();
         }
     }
 }

@@ -3,10 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.NetworkInformation;
-using System.Net.Security;
 using System.Runtime.InteropServices;
-using System.Security.Authentication;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
@@ -15,8 +14,6 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    using System.Net;
-
     internal enum IpVersion
     {
         Ipv4 = 1,
@@ -232,7 +229,7 @@ namespace Titanium.Web.Proxy.Helpers
             finally
             {
                 tcpConnection.Dispose();
-                server.ServerConnectionCount--;
+                Interlocked.Decrement(ref server.serverConnectionCount);
             }
         }
     }
