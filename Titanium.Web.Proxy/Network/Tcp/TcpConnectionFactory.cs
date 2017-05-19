@@ -39,10 +39,37 @@ namespace Titanium.Web.Proxy.Network.Tcp
             TcpClient client;
             CustomBufferedStream stream;
 
-            bool isLocalhost = (externalHttpsProxy != null || externalHttpProxy != null) && NetworkHelper.IsLocalIpAddress(remoteHostName);
+          
+            bool useHttpProxy = false;
+           
+            //check if external proxy is set for HTTP
+            if (!isHttps && externalHttpProxy != null
+                && externalHttpProxy.HostName != remoteHostName)
+            {
+                useHttpProxy = true;
 
-            bool useHttpsProxy = externalHttpsProxy != null && externalHttpsProxy.HostName != remoteHostName && externalHttpsProxy.BypassForLocalhost && !isLocalhost;
-            bool useHttpProxy = externalHttpProxy != null && externalHttpProxy.HostName != remoteHostName && externalHttpProxy.BypassForLocalhost && !isLocalhost;
+                //check if we need to ByPass
+                if (externalHttpProxy.BypassLocalhost
+                    && NetworkHelper.IsLocalIpAddress(remoteHostName))
+                {
+                    useHttpProxy = false;
+                }
+            }
+
+            bool useHttpsProxy = false;
+            //check if external proxy is set for HTTPS
+            if (isHttps && externalHttpsProxy != null
+                && externalHttpsProxy.HostName != remoteHostName)
+            {
+                useHttpsProxy = true;
+
+                //check if we need to ByPass
+                if (externalHttpsProxy.BypassLocalhost
+                    && NetworkHelper.IsLocalIpAddress(remoteHostName))
+                {
+                    useHttpsProxy = false;
+                }
+            }
 
             if (isHttps)
             {
