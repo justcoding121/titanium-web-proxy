@@ -36,9 +36,6 @@ namespace Titanium.Web.Proxy
 
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
-            clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
-            clientStream.WriteTimeout = ConnectionTimeOutSeconds * 1000;
-
             var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
             var clientStreamWriter = new StreamWriter(clientStream) { NewLine = ProxyConstants.NewLine };
 
@@ -186,9 +183,6 @@ namespace Titanium.Web.Proxy
         {
             bool disposed = false;
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
-
-            clientStream.ReadTimeout = ConnectionTimeOutSeconds * 1000;
-            clientStream.WriteTimeout = ConnectionTimeOutSeconds * 1000;
 
             CustomBinaryReader clientStreamReader = null;
             StreamWriter clientStreamWriter = null;
