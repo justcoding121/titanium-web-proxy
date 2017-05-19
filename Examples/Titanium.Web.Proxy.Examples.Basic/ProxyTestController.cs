@@ -79,8 +79,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             };
             proxyServer.AddEndPoint(transparentEndPoint);
 
-            //ProxyServer.UpStreamHttpProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
-            //ProxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
+            //proxyServer.UpStreamHttpProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
+            //proxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
 
             foreach (var endPoint in proxyServer.ProxyEndPoints)
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ",
