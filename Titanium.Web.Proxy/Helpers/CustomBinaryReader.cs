@@ -107,52 +107,6 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Read the specified number of raw bytes from the base stream
-        /// </summary>
-        /// <param name="totalBytesToRead"></param>
-        /// <returns></returns>
-        internal async Task<byte[]> ReadBytesAsync(long totalBytesToRead)
-        {
-            int bytesToRead = bufferSize;
-
-            var buffer = Buffer;
-            if (totalBytesToRead < bufferSize)
-            {
-                bytesToRead = (int)totalBytesToRead;
-                buffer = new byte[bytesToRead];
-            }
-
-            int bytesRead;
-            var totalBytesRead = 0;
-
-            while ((bytesRead = await stream.ReadAsync(buffer, totalBytesRead, bytesToRead)) > 0)
-            {
-                totalBytesRead += bytesRead;
-
-                if (totalBytesRead == totalBytesToRead)
-                    break;
-
-                var remainingBytes = totalBytesToRead - totalBytesRead;
-                bytesToRead = Math.Min(bufferSize, (int)remainingBytes);
-
-                if (totalBytesRead + bytesToRead > buffer.Length)
-                {
-                    ResizeBuffer(ref buffer, Math.Min(totalBytesToRead, buffer.Length * 2));
-                }
-            }
-
-            if (totalBytesRead != buffer.Length)
-            {
-                //Normally this should not happen. Resize the buffer anyway
-                var newBuffer = new byte[totalBytesRead];
-                System.Buffer.BlockCopy(buffer, 0, newBuffer, 0, totalBytesRead);
-                buffer = newBuffer;
-            }
-
-            return buffer;
-        }
-
-        /// <summary>
         /// Read the specified number (or less) of raw bytes from the base stream to the given buffer
         /// </summary>
         /// <param name="buffer"></param>
