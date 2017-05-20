@@ -36,7 +36,7 @@ namespace Titanium.Web.Proxy.Extensions
                             continue;
                         }
 
-                        if (value[0] == '"' && value[value.Length - 1] == '"')
+                        if (value.Length > 2 && value[0] == '"' && value[value.Length - 1] == '"')
                         {
                             value = value.Substring(1, value.Length - 2);
                         }
