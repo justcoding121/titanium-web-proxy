@@ -34,34 +34,31 @@ namespace Titanium.Web.Proxy.Extensions
         /// copies the specified bytes to the stream from the input stream
         /// </summary>
         /// <param name="streamReader"></param>
-        /// <param name="bufferSize"></param>
         /// <param name="stream"></param>
         /// <param name="totalBytesToRead"></param>
         /// <returns></returns>
-        internal static async Task CopyBytesToStream(this CustomBinaryReader streamReader, int bufferSize, Stream stream, long totalBytesToRead)
+        internal static async Task CopyBytesToStream(this CustomBinaryReader streamReader, Stream stream, long totalBytesToRead)
         {
-            var totalbytesRead = 0;
+            byte[] buffer = streamReader.Buffer;
+            long remainingBytes = totalBytesToRead;
 
-            long bytesToRead = totalBytesToRead < bufferSize ? totalBytesToRead : bufferSize;
-
-            while (totalbytesRead < totalBytesToRead)
+            while (remainingBytes > 0)
             {
-                var buffer = await streamReader.ReadBytesAsync(bytesToRead);
+                int bytesToRead = buffer.Length;
+                if (remainingBytes < bytesToRead)
+                {
+                    bytesToRead = (int)remainingBytes;
+                }
 
-                if (buffer.Length == 0)
+                int bytesRead = await streamReader.ReadBytesAsync(buffer, bytesToRead);
+                if (bytesRead == 0)
                 {
                     break;
                 }
 
-                totalbytesRead += buffer.Length;
+                remainingBytes -= bytesRead;
 
-                var remainingBytes = totalBytesToRead - totalbytesRead;
-                if (remainingBytes < bytesToRead)
-                {
-                    bytesToRead = remainingBytes;
-                }
-
-                await stream.WriteAsync(buffer, 0, buffer.Length);
+                await stream.WriteAsync(buffer, 0, bytesRead);
             }
         }
 
@@ -80,8 +77,8 @@ namespace Titanium.Web.Proxy.Extensions
 
                 if (chunkSize != 0)
                 {
-                    var buffer = await clientStreamReader.ReadBytesAsync(chunkSize);
-                    await stream.WriteAsync(buffer, 0, buffer.Length);
+                    await CopyBytesToStream(clientStreamReader, stream, chunkSize);
+
                     //chunk trail
                     await clientStreamReader.ReadLineAsync();
                 }
@@ -132,30 +129,7 @@ namespace Titanium.Web.Proxy.Extensions
                     contentLength = long.MaxValue;
                 }
 
-                int bytesToRead = bufferSize;
-
-                if (contentLength < bufferSize)
-                {
-                    bytesToRead = (int)contentLength;
-                }
-
-                var buffer = new byte[bufferSize];
-
-                var bytesRead = 0;
-                var totalBytesRead = 0;
-
-                while ((bytesRead += await inStreamReader.BaseStream.ReadAsync(buffer, 0, bytesToRead)) > 0)
-                {
-                    await outStream.WriteAsync(buffer, 0, bytesRead);
-                    totalBytesRead += bytesRead;
-
-                    if (totalBytesRead == contentLength)
-                        break;
-
-                    bytesRead = 0;
-                    var remainingBytes = contentLength - totalBytesRead;
-                    bytesToRead = remainingBytes > (long)bufferSize ? bufferSize : (int)remainingBytes;
-                }
+                await CopyBytesToStream(inStreamReader, outStream, contentLength);
             }
             else
             {
@@ -178,14 +152,11 @@ namespace Titanium.Web.Proxy.Extensions
 
                 if (chunkSize != 0)
                 {
-                    var buffer = await inStreamReader.ReadBytesAsync(chunkSize);
-
                     var chunkHeadBytes = Encoding.ASCII.GetBytes(chunkSize.ToString("x2"));
-
                     await outStream.WriteAsync(chunkHeadBytes, 0, chunkHeadBytes.Length);
                     await outStream.WriteAsync(ProxyConstants.NewLineBytes, 0, ProxyConstants.NewLineBytes.Length);
 
-                    await outStream.WriteAsync(buffer, 0, chunkSize);
+                    await CopyBytesToStream(inStreamReader, outStream, chunkSize);
                     await outStream.WriteAsync(ProxyConstants.NewLineBytes, 0, ProxyConstants.NewLineBytes.Length);
 
                     await inStreamReader.ReadLineAsync();
