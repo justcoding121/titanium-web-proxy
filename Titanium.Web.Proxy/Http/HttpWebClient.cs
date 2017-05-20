@@ -168,7 +168,7 @@ namespace Titanium.Web.Proxy.Http
                 httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
             }
 
-            var httpVersion = httpResult[0].Trim().ToLower();
+            var httpVersion = httpResult[0];
 
             var version = HttpHeader.Version11;
             if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
