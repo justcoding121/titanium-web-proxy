@@ -117,12 +117,12 @@ namespace Titanium.Web.Proxy.EventArguments
                         if (WebSession.Request.ContentLength > 0)
                         {
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await ProxyClient.ClientStreamReader.CopyBytesToStream(bufferSize, requestBodyStream,
+                            await ProxyClient.ClientStreamReader.CopyBytesToStream(requestBodyStream,
                                 WebSession.Request.ContentLength);
                         }
                         else if (WebSession.Request.HttpVersion.Major == 1 && WebSession.Request.HttpVersion.Minor == 0)
                         {
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, requestBodyStream, long.MaxValue);
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(requestBodyStream, long.MaxValue);
                         }
                     }
                     WebSession.Request.RequestBody = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding,
@@ -155,12 +155,12 @@ namespace Titanium.Web.Proxy.EventArguments
                         if (WebSession.Response.ContentLength > 0)
                         {
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, responseBodyStream,
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream,
                                 WebSession.Response.ContentLength);
                         }
                         else if (WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0 || WebSession.Response.ContentLength == -1)
                         {
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, responseBodyStream, long.MaxValue);
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, long.MaxValue);
                         }
                     }
 
