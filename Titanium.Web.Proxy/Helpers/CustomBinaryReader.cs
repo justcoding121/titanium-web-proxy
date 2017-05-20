@@ -71,6 +71,11 @@ namespace Titanium.Web.Proxy.Helpers
                 }
             }
 
+            if (bufferDataLength == 0)
+            {
+                return null;
+            }
+
             return encoding.GetString(buffer, 0, bufferDataLength);
         }
 

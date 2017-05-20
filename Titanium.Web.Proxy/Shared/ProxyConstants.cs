@@ -10,6 +10,7 @@ namespace Titanium.Web.Proxy.Shared
         internal static readonly char[] SpaceSplit = { ' ' };
         internal static readonly char[] ColonSplit = { ':' };
         internal static readonly char[] SemiColonSplit = { ';' };
+        internal static readonly char[] EqualSplit = { '=' };
 
         internal static readonly byte[] NewLineBytes = Encoding.ASCII.GetBytes(NewLine);
 

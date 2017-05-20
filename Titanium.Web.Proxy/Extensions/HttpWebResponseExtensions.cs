@@ -26,10 +26,22 @@ namespace Titanium.Web.Proxy.Extensions
                 var contentTypes = response.ContentType.Split(ProxyConstants.SemiColonSplit);
                 foreach (var contentType in contentTypes)
                 {
-                    var encodingSplit = contentType.Split('=');
+                    var encodingSplit = contentType.Split(ProxyConstants.EqualSplit, 2);
                     if (encodingSplit.Length == 2 && encodingSplit[0].Trim().Equals("charset", StringComparison.CurrentCultureIgnoreCase))
                     {
-                        return Encoding.GetEncoding(encodingSplit[1]);
+                        string value = encodingSplit[1];
+                        if (value.Equals("x-user-defined", StringComparison.OrdinalIgnoreCase))
+                        {
+                            //todo: what is this?
+                            continue;
+                        }
+
+                        if (value[0] == '"' && value[value.Length - 1] == '"')
+                        {
+                            value = value.Substring(1, value.Length - 2);
+                        }
+
+                        return Encoding.GetEncoding(value);
                     }
                 }
             }
