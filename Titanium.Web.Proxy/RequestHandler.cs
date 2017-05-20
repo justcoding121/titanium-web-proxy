@@ -599,7 +599,7 @@ namespace Titanium.Web.Proxy
             //send the request body bytes to server
             if (args.WebSession.Request.ContentLength > 0)
             {
-                await args.ProxyClient.ClientStreamReader.CopyBytesToStream(BufferSize, postStream, args.WebSession.Request.ContentLength);
+                await args.ProxyClient.ClientStreamReader.CopyBytesToStream(postStream, args.WebSession.Request.ContentLength);
             }
             //Need to revist, find any potential bugs
             //send the request body bytes to server in chunks

@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.Helpers
     {
         private readonly Stream baseStream;
 
-        private readonly byte[] streamBuffer;
+        private byte[] streamBuffer;
 
         private int bufferLength;
 
@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.Helpers
         public CustomBufferedStream(Stream baseStream, int bufferSize)
         {
             this.baseStream = baseStream;
-            streamBuffer = new byte[bufferSize];
+            streamBuffer = BufferPool.GetBuffer(bufferSize);
         }
 
         /// <summary>
@@ -330,8 +330,9 @@ namespace Titanium.Web.Proxy.Helpers
         protected override void Dispose(bool disposing)
         {
             baseStream.Dispose();
+            BufferPool.ReturnBuffer(streamBuffer);
+            streamBuffer = null;
         }
-
 
         /// <summary>
         /// When overridden in a derived class, gets a value indicating whether the current stream supports reading.
