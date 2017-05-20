@@ -74,6 +74,7 @@
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
     <Compile Include="Extensions\FuncExtensions.cs" />
+    <Compile Include="Helpers\HeaderHelper.cs" />
     <Compile Include="Extensions\StringExtensions.cs" />
     <Compile Include="Helpers\BufferPool.cs" />
     <Compile Include="Helpers\CustomBufferedStream.cs" />
