@@ -28,17 +28,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="isHttps"></param>
         /// <param name="externalHttpProxy"></param>
         /// <param name="externalHttpsProxy"></param>
-        /// <param name="clientStream"></param>
         /// <returns></returns>
         internal async Task<TcpConnection> CreateClient(ProxyServer server,
             string remoteHostName, int remotePort, Version httpVersion,
             bool isHttps,
-            ExternalProxy externalHttpProxy, ExternalProxy externalHttpsProxy,
-            Stream clientStream)
+            ExternalProxy externalHttpProxy, ExternalProxy externalHttpsProxy)
         {
-            TcpClient client;
-            CustomBufferedStream stream;
-
             bool useHttpProxy = false;      
             //check if external proxy is set for HTTP
             if (!isHttps && externalHttpProxy != null
@@ -71,87 +66,85 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
             }
 
-            if (isHttps)
+            TcpClient client = null;
+            CustomBufferedStream stream = null;
+
+            try
             {
-                SslStream sslStream = null;
-
-                //If this proxy uses another external proxy then create a tunnel request for HTTPS connections
-                if (useHttpsProxy)
+                if (isHttps)
                 {
-                    client = new TcpClient(server.UpStreamEndPoint);
-                    await client.ConnectAsync(externalHttpsProxy.HostName, externalHttpsProxy.Port);
-                    stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
-
-                    using (var writer = new StreamWriter(stream, Encoding.ASCII, server.BufferSize, true) { NewLine = ProxyConstants.NewLine })
+                    //If this proxy uses another external proxy then create a tunnel request for HTTPS connections
+                    if (useHttpsProxy)
                     {
-                        await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
-                        await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
-                        await writer.WriteLineAsync("Connection: Keep-Alive");
+                        client = new TcpClient(server.UpStreamEndPoint);
+                        await client.ConnectAsync(externalHttpsProxy.HostName, externalHttpsProxy.Port);
+                        stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
 
-                        if (!string.IsNullOrEmpty(externalHttpsProxy.UserName) && externalHttpsProxy.Password != null)
+                        using (var writer = new StreamWriter(stream, Encoding.ASCII, server.BufferSize, true) { NewLine = ProxyConstants.NewLine })
                         {
-                            await writer.WriteLineAsync("Proxy-Connection: keep-alive");
-                            await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(externalHttpsProxy.UserName + ":" + externalHttpsProxy.Password)));
-                        }
-                        await writer.WriteLineAsync();
-                        await writer.FlushAsync();
-                        writer.Close();
-                    }
+                            await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
+                            await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
+                            await writer.WriteLineAsync("Connection: Keep-Alive");
 
-                    using (var reader = new CustomBinaryReader(stream, server.BufferSize))
-                    {
-                        var result = await reader.ReadLineAsync();
-
-                        if (!new[] { "200 OK", "connection established" }.Any(s => result.ContainsIgnoreCase(s)))
-                        {
-                            throw new Exception("Upstream proxy failed to create a secure tunnel");
+                            if (!string.IsNullOrEmpty(externalHttpsProxy.UserName) && externalHttpsProxy.Password != null)
+                            {
+                                await writer.WriteLineAsync("Proxy-Connection: keep-alive");
+                                await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(externalHttpsProxy.UserName + ":" + externalHttpsProxy.Password)));
+                            }
+                            await writer.WriteLineAsync();
+                            await writer.FlushAsync();
+                            writer.Close();
                         }
 
-                        await reader.ReadAndIgnoreAllLinesAsync();
-                    }
-                }
-                else
-                {
-                    client = new TcpClient(server.UpStreamEndPoint);
-                    await client.ConnectAsync(remoteHostName, remotePort);
-                    stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
-                }
+                        using (var reader = new CustomBinaryReader(stream, server.BufferSize))
+                        {
+                            var result = await reader.ReadLineAsync();
 
-                try
-                {
-                    sslStream = new SslStream(stream, true, server.ValidateServerCertificate,
-                        server.SelectClientCertificate);
+                            if (!new[] { "200 OK", "connection established" }.Any(s => result.ContainsIgnoreCase(s)))
+                            {
+                                throw new Exception("Upstream proxy failed to create a secure tunnel");
+                            }
+
+                            await reader.ReadAndIgnoreAllLinesAsync();
+                        }
+                    }
+                    else
+                    {
+                        client = new TcpClient(server.UpStreamEndPoint);
+                        await client.ConnectAsync(remoteHostName, remotePort);
+                        stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
+                    }
+
+                    var sslStream = new SslStream(stream, false, server.ValidateServerCertificate, server.SelectClientCertificate);
+                    stream = new CustomBufferedStream(sslStream, server.BufferSize);
 
                     await sslStream.AuthenticateAsClientAsync(remoteHostName, null, server.SupportedSslProtocols, server.CheckCertificateRevocation);
-
-                    stream = new CustomBufferedStream(sslStream, server.BufferSize);
-                }
-                catch
-                {
-                    sslStream?.Close();
-                    sslStream?.Dispose();
-
-                    throw;
-                }
-            }
-            else
-            {
-                if (useHttpProxy)
-                {
-                    client = new TcpClient(server.UpStreamEndPoint);
-                    await client.ConnectAsync(externalHttpProxy.HostName, externalHttpProxy.Port);
-                    stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
                 }
                 else
                 {
-                    client = new TcpClient(server.UpStreamEndPoint);
-                    await client.ConnectAsync(remoteHostName, remotePort);
-                    stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
+                    if (useHttpProxy)
+                    {
+                        client = new TcpClient(server.UpStreamEndPoint);
+                        await client.ConnectAsync(externalHttpProxy.HostName, externalHttpProxy.Port);
+                        stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
+                    }
+                    else
+                    {
+                        client = new TcpClient(server.UpStreamEndPoint);
+                        await client.ConnectAsync(remoteHostName, remotePort);
+                        stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
+                    }
                 }
-            }
 
-            client.ReceiveTimeout = server.ConnectionTimeOutSeconds * 1000;
-            client.SendTimeout = server.ConnectionTimeOutSeconds * 1000;
+                client.ReceiveTimeout = server.ConnectionTimeOutSeconds * 1000;
+                client.SendTimeout = server.ConnectionTimeOutSeconds * 1000;
+            }
+            catch (Exception)
+            {
+                stream?.Dispose();
+                client?.Close();
+                throw;
+            }
 
             Interlocked.Increment(ref server.serverConnectionCount);
 
