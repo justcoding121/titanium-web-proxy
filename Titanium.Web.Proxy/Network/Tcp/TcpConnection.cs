@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         internal Version Version { get; set; }
 
-        internal TcpClient TcpClient { get; set; }
+        internal TcpClient TcpClient { private get; set; }
 
         /// <summary>
         /// used to read lines from server
@@ -54,7 +54,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
         public void Dispose()
         {
             Stream?.Close();
-            Stream?.Dispose();
 
             StreamReader?.Dispose();
 
