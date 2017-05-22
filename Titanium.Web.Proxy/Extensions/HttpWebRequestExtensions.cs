@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Extensions
         /// <returns></returns>
         internal static Encoding GetEncoding(this Request request)
         {
-            return HeaderHelper.GetEncodingFromContentType(request.ContentType);
+            return HttpHelper.GetEncodingFromContentType(request.ContentType);
         }
     }
 }
