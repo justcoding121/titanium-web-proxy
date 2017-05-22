@@ -87,7 +87,9 @@ namespace Titanium.Web.Proxy
                 List<HttpHeader> connectRequestHeaders = null;
 
                 //Client wants to create a secure tcp tunnel (its a HTTPS request)
-                if (httpVerb == "CONNECT" && !excluded && httpRemoteUri.Port != 80)
+                if (httpVerb == "CONNECT" && !excluded 
+                    && httpRemoteUri.Port != 80
+                    && endPoint.RemoteHttpsPorts.Contains(httpRemoteUri.Port))
                 {
                     httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
                     connectRequestHeaders = new List<HttpHeader>();

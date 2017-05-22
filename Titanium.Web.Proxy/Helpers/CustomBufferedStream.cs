@@ -230,14 +230,24 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Asynchronously reads a sequence of bytes from the current stream, advances the position within the stream by the number of bytes read, and monitors cancellation requests.
+        /// Asynchronously reads a sequence of bytes from the current stream,
+        /// advances the position within the stream by the number of bytes read,
+        /// and monitors cancellation requests.
         /// </summary>
         /// <param name="buffer">The buffer to write the data into.</param>
-        /// <param name="offset">The byte offset in <paramref name="buffer" /> at which to begin writing data from the stream.</param>
+        /// <param name="offset">The byte offset in <paramref name="buffer" /> at which 
+        /// to begin writing data from the stream.</param>
         /// <param name="count">The maximum number of bytes to read.</param>
-        /// <param name="cancellationToken">The token to monitor for cancellation requests. The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests. 
+        /// The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
         /// <returns>
-        /// A task that represents the asynchronous read operation. The value of the <paramref name="TResult" /> parameter contains the total number of bytes read into the buffer. The result value can be less than the number of bytes requested if the number of bytes currently available is less than the requested number, or it can be 0 (zero) if the end of the stream has been reached.
+        /// A task that represents the asynchronous read operation.
+        /// The value of the parameter contains the total 
+        /// number of bytes read into the buffer.
+        /// The result value can be less than the number of bytes
+        /// requested if the number of bytes currently available is
+        /// less than the requested number, or it can be 0 (zero)
+        /// if the end of the stream has been reached.
         /// </returns>
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
