@@ -33,6 +33,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup>
     <SignAssembly>true</SignAssembly>
@@ -59,6 +60,7 @@
     <Compile Include="CertificateManagerTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ProxyServerTests.cs" />
+    <Compile Include="WinAuthTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj">
