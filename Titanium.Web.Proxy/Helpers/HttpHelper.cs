@@ -62,8 +62,10 @@ namespace Titanium.Web.Proxy.Helpers
         {
             /*all needed domain in lower case*/
             /*for now just hard code most common ones */
-            string[] col = { ".com", ".net", ".org", ".cn",
-                             ".co.uk", ".co.in", ".co.us" };
+            string[] col = { ".com", ".net", ".org",
+                ".cn", ".us", ".in",
+                ".co.uk", ".co.in", ".co.us"
+            };
 
             foreach (string name in col)
             {
@@ -72,6 +74,9 @@ namespace Titanium.Web.Proxy.Helpers
                     int idx = hostname.LastIndexOf(name);
                     int sec = hostname.Substring(0, idx - 1).LastIndexOf('.');
 
+                    //only for subdomains we need wild card
+                    //example www.google.com or gstatic.google.com
+                    //but NOT for google.com
                     if(hostname.Substring(0, sec + 1).Contains("."))
                     {
                         var rootDomain = hostname.Substring(sec + 1);
