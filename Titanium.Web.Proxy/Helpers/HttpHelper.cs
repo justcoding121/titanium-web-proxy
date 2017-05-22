@@ -60,31 +60,15 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         internal static string GetWildCardDomainName(string hostname)
         {
-            /*all needed domain in lower case*/
-            /*for now just hard code most common ones */
-            string[] col = { ".com", ".net", ".org",
-                ".cn", ".us", ".in",
-                ".co.uk", ".co.in", ".co.us"
-            };
-
-            foreach (string name in col)
+            //only for subdomains we need wild card
+            //example www.google.com or gstatic.google.com
+            //but NOT for google.com
+            if (hostname.Split(ProxyConstants.DotSplit).Length > 2)
             {
-                if (hostname.EndsWith(name))
-                {
-                    int idx = hostname.LastIndexOf(name);
-                    int sec = hostname.Substring(0, idx - 1).LastIndexOf('.');
+                int idx = hostname.IndexOf(ProxyConstants.DotSplit);
+                var rootDomain = hostname.Substring(idx + 1);
+                return "*." + rootDomain;
 
-                    //only for subdomains we need wild card
-                    //example www.google.com or gstatic.google.com
-                    //but NOT for google.com
-                    if(hostname.Substring(0, sec + 1).Contains("."))
-                    {
-                        var rootDomain = hostname.Substring(sec + 1);
-                        return "*." + rootDomain;
-                    }
-
-                    break;
-                }
             }
 
             //return as it is
