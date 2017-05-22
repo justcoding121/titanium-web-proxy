@@ -213,7 +213,7 @@ namespace Titanium.Web.Proxy.Helpers
             var tcpConnection = await tcpConnectionFactory.CreateClient(server,
                 remoteHostName, remotePort,
                 httpVersion, isHttps,
-                null, null, clientStream);
+                null, null);
 
             try
             {

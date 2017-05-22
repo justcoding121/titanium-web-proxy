@@ -111,7 +111,7 @@ namespace Titanium.Web.Proxy
 
                     try
                     {
-                        sslStream = new SslStream(clientStream, true);
+                        sslStream = new SslStream(clientStream);
 
                         var certificate = endPoint.GenericCertificate ??
                                           CertificateManager.CreateCertificate(httpRemoteUri.Host, false);
@@ -191,7 +191,7 @@ namespace Titanium.Web.Proxy
             {
                 if (endPoint.EnableSsl)
                 {
-                    var sslStream = new SslStream(clientStream, true);
+                    var sslStream = new SslStream(clientStream);
                     clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
                     //implement in future once SNI supported by SSL stream, for now use the same certificate
@@ -542,8 +542,7 @@ namespace Titanium.Web.Proxy
                 args.WebSession.Request.HttpVersion,
                 args.IsHttps,
                 customUpStreamHttpProxy ?? UpStreamHttpProxy,
-                customUpStreamHttpsProxy ?? UpStreamHttpsProxy,
-                args.ProxyClient.ClientStream);
+                customUpStreamHttpsProxy ?? UpStreamHttpsProxy);
         }
 
 
