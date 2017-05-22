@@ -235,7 +235,7 @@ namespace Titanium.Web.Proxy
         public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpsProxyFunc { get; set; }
 
         /// <summary>
-        /// A list of IpAddress & port this proxy is listening to
+        /// A list of IpAddress and port this proxy is listening to
         /// </summary>
         public List<ProxyEndPoint> ProxyEndPoints { get; set; }
 
