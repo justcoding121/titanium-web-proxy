@@ -4,7 +4,7 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    internal static class HeaderHelper
+    internal static class HttpHelper
     {
         private static readonly Encoding defaultEncoding = Encoding.GetEncoding("ISO-8859-1");
 
@@ -49,6 +49,41 @@ namespace Titanium.Web.Proxy.Helpers
 
             //return default if not specified
             return defaultEncoding;
+        }
+
+        /// <summary>
+        /// Tries to get root domain from a given hostname
+        /// Adapted from below answer
+        /// https://stackoverflow.com/questions/16473838/get-domain-name-of-a-url-in-c-sharp-net
+        /// </summary>
+        /// <param name="hostname"></param>
+        /// <returns></returns>
+        internal static string GetWildCardDomainName(string hostname)
+        {
+            /*all needed domain in lower case*/
+            /*for now just hard code most common ones */
+            string[] col = { ".com", ".net", ".org", ".cn",
+                             ".co.uk", ".co.in", ".co.us" };
+
+            foreach (string name in col)
+            {
+                if (hostname.EndsWith(name))
+                {
+                    int idx = hostname.LastIndexOf(name);
+                    int sec = hostname.Substring(0, idx - 1).LastIndexOf('.');
+
+                    if(hostname.Substring(0, sec + 1).Contains("."))
+                    {
+                        var rootDomain = hostname.Substring(sec + 1);
+                        return "*." + rootDomain;
+                    }
+
+                    break;
+                }
+            }
+
+            //return as it is
+            return hostname;
         }
     }
 }

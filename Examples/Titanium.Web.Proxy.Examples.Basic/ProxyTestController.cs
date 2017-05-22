@@ -13,7 +13,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private readonly ProxyServer proxyServer;
 
         //share requestBody outside handlers
-        private readonly Dictionary<Guid, string> requestBodyHistory = new Dictionary<Guid, string>();
+        //Using a dictionary is not a good idea since it can cause memory overflow
+        //ideally the data should be moved out of memory
+        //private readonly Dictionary<Guid, string> requestBodyHistory 
+        //    = new Dictionary<Guid, string>();
 
         public ProxyTestController()
         {
@@ -124,7 +127,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 string bodyString = await e.GetRequestBodyAsString();
                 await e.SetRequestBodyString(bodyString);
 
-                requestBodyHistory[e.Id] = bodyString;
+                //requestBodyHistory[e.Id] = bodyString;
             }
 
             ////To cancel a request with a custom HTML content
@@ -152,11 +155,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             Console.WriteLine("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
-            if (requestBodyHistory.ContainsKey(e.Id))
-            {
-                //access request body by looking up the shared dictionary using requestId
-                var requestBody = requestBodyHistory[e.Id];
-            }
+            //if (requestBodyHistory.ContainsKey(e.Id))
+            //{
+            //    //access request body by looking up the shared dictionary using requestId
+            //    var requestBody = requestBodyHistory[e.Id];
+            //}
 
             //read response headers
             var responseHeaders = e.WebSession.Response.ResponseHeaders;
