@@ -147,14 +147,6 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Closes the current stream and releases any resources (such as sockets and file handles) associated with the current stream. Instead of calling this method, ensure that the stream is properly disposed.
-        /// </summary>
-        public override void Close()
-        {
-            baseStream.Close();
-        }
-
-        /// <summary>
         /// Asynchronously reads the bytes from the current stream and writes them to another stream, using a specified buffer size and cancellation token.
         /// </summary>
         /// <param name="destination">The stream to which the contents of the current stream will be copied.</param>
