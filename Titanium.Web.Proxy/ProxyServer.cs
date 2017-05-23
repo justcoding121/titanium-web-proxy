@@ -12,6 +12,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy
 {
@@ -474,6 +475,11 @@ namespace Titanium.Web.Proxy
             }
 
             CertificateManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
+
+            if (!RunTime.IsRunningOnMono())
+            {
+                WinAuthEndPoint.ClearIdleStates(2);
+            }
 
             proxyRunning = true;
         }

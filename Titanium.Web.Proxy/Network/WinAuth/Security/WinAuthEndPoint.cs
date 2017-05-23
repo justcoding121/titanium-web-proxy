@@ -3,13 +3,15 @@
 namespace Titanium.Web.Proxy.Network.WinAuth.Security
 {
     using System;
+    using System.Linq;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Runtime.InteropServices;
     using System.Security.Principal;
     using static Common;
+    using System.Threading.Tasks;
 
-    internal class EndPoint
+    internal class WinAuthEndPoint
     {
         /// <summary>
         /// Keep track of auth states for reuse in final challenge response
@@ -117,6 +119,8 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
                 var state = authStates[requestId];
 
+                state.UpdatePresence();
+
                 result = InitializeSecurityContext(ref state.Credentials,
                     ref state.Context,
                     hostname,
@@ -136,7 +140,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                     // Client challenge issue operation failed.
                     return null;
                 }
-
+               
                 authStates.Remove(requestId);
                 token = clientToken.GetBytes();
             }
@@ -148,6 +152,28 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
             return token;
         }
+        
+        /// <summary>
+        /// Clear any hanging states
+        /// </summary>
+        /// <param name="stateCacheTimeOutMinutes"></param>
+        internal static async void ClearIdleStates(int stateCacheTimeOutMinutes)
+        {
+            var cutOff = DateTime.Now.AddMinutes(-1 * stateCacheTimeOutMinutes);
+
+            var outdated = authStates
+                .Where(x => x.Value.LastSeen < cutOff)
+                .ToList();
+
+            foreach (var cache in outdated)
+            {
+                authStates.Remove(cache.Key);
+            }
+
+            //after a minute come back to check for outdated certificates in cache
+            await Task.Delay(1000 * 60);
+        }
+
         #region Native calls to secur32.dll
 
         [DllImport("secur32.dll", SetLastError = true)]
