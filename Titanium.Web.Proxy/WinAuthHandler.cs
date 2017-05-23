@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.WinAuth;
-using Titanium.Web.Proxy.Extensions;
 
 namespace Titanium.Web.Proxy
 {
@@ -58,7 +57,7 @@ namespace Titanium.Web.Proxy
             {
                 authHeader = args.WebSession.Response
                     .NonUniqueResponseHeaders[headerName]
-                    .Where(x => authSchemes.Any(y => x.Value.ContainsIgnoreCase(y)))
+                    .Where(x => authSchemes.Any(y => x.Value.StartsWith(y, StringComparison.OrdinalIgnoreCase)))
                     .FirstOrDefault();
             }
 
@@ -79,7 +78,7 @@ namespace Titanium.Web.Proxy
                 if (headerName != null)
                 {
                     authHeader = authSchemes.Any(x => args.WebSession.Response
-                    .ResponseHeaders[headerName].Value.ContainsIgnoreCase(x)) ?
+                    .ResponseHeaders[headerName].Value.StartsWith(x, StringComparison.OrdinalIgnoreCase)) ?
                      args.WebSession.Response.ResponseHeaders[headerName] : null;
                 }
             }
@@ -101,6 +100,7 @@ namespace Titanium.Web.Proxy
 
                     var serverToken = authHeader.Value.Substring(scheme.Length + 1);
                     var clientToken = WinAuthHandler.GetFinalAuthToken(args.WebSession.Request.Host, serverToken, args.Id);
+
 
                     args.WebSession.Request.RequestHeaders["Authorization"]
                         = new HttpHeader("Authorization", string.Concat(scheme, clientToken));
