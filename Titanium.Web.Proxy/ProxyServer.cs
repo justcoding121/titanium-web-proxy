@@ -61,12 +61,13 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private SystemProxyManager systemProxySettingsManager { get; }
 
-#if !DEBUG
+
         /// <summary>
         /// Set firefox to use default system proxy
         /// </summary>
-        private FireFoxProxySettingsManager firefoxProxySettingsManager = new FireFoxProxySettingsManager();
-#endif
+        private FireFoxProxySettingsManager firefoxProxySettingsManager 
+            = new FireFoxProxySettingsManager();
+
 
         /// <summary>
         /// Buffer size used throughout this proxy
@@ -287,9 +288,7 @@ namespace Titanium.Web.Proxy
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory();
             systemProxySettingsManager = new SystemProxyManager();
-#if !DEBUG
-            new FireFoxProxySettingsManager();
-#endif
+
 
             CertificateManager = new CertificateManager(ExceptionFunc);
             if (rootCertificateName != null)
@@ -363,9 +362,9 @@ namespace Titanium.Web.Proxy
                 Equals(endPoint.IpAddress, IPAddress.Any) | Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(), endPoint.Port);
 
             endPoint.IsSystemHttpProxy = true;
-#if !DEBUG
-            firefoxProxySettingsManager.AddFirefox();
-#endif
+
+            firefoxProxySettingsManager.UseSystemProxy();
+
             Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System HTTP Proxy", endPoint.IpAddress, endPoint.Port);
         }
 
@@ -407,9 +406,8 @@ namespace Titanium.Web.Proxy
 
             endPoint.IsSystemHttpsProxy = true;
 
-#if !DEBUG
-            firefoxProxySettingsManager.AddFirefox();
-#endif
+            firefoxProxySettingsManager.UseSystemProxy();
+
             Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System HTTPS Proxy", endPoint.IpAddress, endPoint.Port);
         }
 
@@ -500,9 +498,6 @@ namespace Titanium.Web.Proxy
             if (setAsSystemProxy)
             {
                 systemProxySettingsManager.DisableAllProxy();
-#if !DEBUG
-                firefoxProxySettingsManager.RemoveFirefox();
-#endif
             }
 
             foreach (var endPoint in ProxyEndPoints)
