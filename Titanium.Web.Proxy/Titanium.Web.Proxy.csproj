@@ -108,7 +108,7 @@
     <Compile Include="Http\HttpWebClient.cs" />
     <Compile Include="Network\WinAuth\Security\BufferWrapper.cs" />
     <Compile Include="Network\WinAuth\Security\Common.cs" />
-    <Compile Include="Network\WinAuth\Security\EndPoint.cs" />
+    <Compile Include="Network\WinAuth\Security\WinAuthEndPoint.cs" />
     <Compile Include="Network\WinAuth\Security\LittleEndian.cs" />
     <Compile Include="Network\WinAuth\Security\Message.cs" />
     <Compile Include="Network\WinAuth\Security\State.cs" />
