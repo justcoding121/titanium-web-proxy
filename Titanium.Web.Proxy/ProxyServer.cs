@@ -12,6 +12,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy
 {
@@ -195,6 +196,15 @@ namespace Titanium.Web.Proxy
         /// Gets or sets a value indicating whether requests will be chained to upstream gateway.
         /// </summary>
         public bool ForwardToUpstreamGateway { get; set; }
+
+        /// <summary>
+        /// Enable disable Windows Authentication (NTLM/Kerberos)
+        /// Note: NTLM/Kerberos will always send local credentials of current user
+        /// who is running the proxy process. This is because a man
+        /// in middle attack is not currently supported
+        /// (which would require windows delegation enabled for this server process)
+        /// </summary>
+        public bool EnableWinAuth { get; set; } = true;
 
         /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
@@ -465,6 +475,11 @@ namespace Titanium.Web.Proxy
             }
 
             CertificateManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
+
+            if (!RunTime.IsRunningOnMono())
+            {
+                WinAuthEndPoint.ClearIdleStates(2);
+            }
 
             proxyRunning = true;
         }
