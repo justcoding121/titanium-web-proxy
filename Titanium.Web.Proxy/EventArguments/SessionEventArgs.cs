@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy.EventArguments
         public Guid Id => WebSession.RequestId;
 
         /// <summary>
-        /// Should we send a rerequest 
+        /// Should we send the request again 
         /// </summary>
         public bool ReRequest { get; set; }
 
@@ -136,9 +136,21 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Read response body as byte[] for current response
+        /// reinit response object
         /// </summary>
-        private async Task ReadResponseBody()
+        internal async Task ClearResponse()
+        {
+            //siphon out the body
+            await ReadResponseBody();
+            WebSession.Response.Dispose();
+            WebSession.Response = new Response();
+        }
+  
+
+    /// <summary>
+    /// Read response body as byte[] for current response
+    /// </summary>
+    private async Task ReadResponseBody()
         {
             //If not already read (not cached yet)
             if (WebSession.Response.ResponseBody == null)

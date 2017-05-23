@@ -127,6 +127,7 @@
     <Compile Include="Shared\ProxyConstants.cs" />
     <Compile Include="Network\Tcp\TcpRow.cs" />
     <Compile Include="Network\Tcp\TcpTable.cs" />
+    <Compile Include="WinAuthHandler.cs" />
   </ItemGroup>
   <ItemGroup>
     <COMReference Include="CERTENROLLLib">
