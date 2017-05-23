@@ -175,38 +175,6 @@
                 Marshal.StructureToPtr(ThisSecBuffer, pBuffers, false);
             }
 
-            internal SecurityBufferDesciption(BufferWrapper[] secBufferBytesArray)
-            {
-                if (secBufferBytesArray == null || secBufferBytesArray.Length == 0)
-                {
-                    throw new ArgumentException("secBufferBytesArray cannot be null or 0 length");
-                }
-
-                ulVersion = (int)SecurityBufferType.SECBUFFER_VERSION;
-                cBuffers = secBufferBytesArray.Length;
-
-                //Allocate memory for SecBuffer Array....
-                pBuffers = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(Buffer)) * cBuffers);
-
-                for (int Index = 0; Index < secBufferBytesArray.Length; Index++)
-                {
-                    //Super hack: Now allocate memory for the individual SecBuffers
-                    //and just copy the bit values to the SecBuffer array!!!
-                    Common.SecurityBuffer ThisSecBuffer = new Common.SecurityBuffer(secBufferBytesArray[Index].Buffer, secBufferBytesArray[Index].BufferType);
-
-                    //We will write out bits in the following order:
-                    //int cbBuffer;
-                    //int BufferType;
-                    //pvBuffer;
-                    //Note that we won't be releasing the memory allocated by ThisSecBuffer until we
-                    //are disposed...
-                    int CurrentOffset = Index * Marshal.SizeOf(typeof(Buffer));
-                    Marshal.WriteInt32(pBuffers, CurrentOffset, ThisSecBuffer.cbBuffer);
-                    Marshal.WriteInt32(pBuffers, CurrentOffset + Marshal.SizeOf(ThisSecBuffer.cbBuffer), ThisSecBuffer.cbBufferType);
-                    Marshal.WriteIntPtr(pBuffers, CurrentOffset + Marshal.SizeOf(ThisSecBuffer.cbBuffer) + Marshal.SizeOf(ThisSecBuffer.cbBufferType), ThisSecBuffer.pvBuffer);
-                }
-            }
-
             public void Dispose()
             {
                 if (pBuffers != IntPtr.Zero)
