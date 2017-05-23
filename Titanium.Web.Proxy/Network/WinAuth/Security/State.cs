@@ -12,7 +12,7 @@
             this.Credentials = new Common.SecurityHandle(0);
             this.Context = new Common.SecurityHandle(0);
 
-            this.LastSeen = DateTime.MinValue;
+            this.LastSeen = DateTime.Now;
         }
 
         /// <summary>
@@ -30,11 +30,6 @@
         /// </summary>
         internal DateTime LastSeen;
 
-        internal bool isOlder(int seconds)
-        {
-            return (this.LastSeen.AddSeconds(seconds) < DateTime.UtcNow) ? true : false;
-        }
-
         internal void ResetHandles()
         {
             this.Credentials.Reset();
@@ -43,7 +38,7 @@
 
         internal void UpdatePresence()
         {
-            this.LastSeen = DateTime.UtcNow;
+            this.LastSeen = DateTime.Now;
         }
     }
 }
