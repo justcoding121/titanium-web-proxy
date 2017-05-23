@@ -197,6 +197,15 @@ namespace Titanium.Web.Proxy
         public bool ForwardToUpstreamGateway { get; set; }
 
         /// <summary>
+        /// Enable disable Windows Authentication (NTLM/Kerberos)
+        /// Note: NTLM/Kerberos will always send local credentials of current user
+        /// who is running the proxy process. This is because a man
+        /// in middle attack is not currently supported
+        /// (which would require windows delegation enabled for this server process)
+        /// </summary>
+        public bool EnableWinAuth { get; set; } = true;
+
+        /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
         /// </summary>
         public event Func<object, CertificateValidationEventArgs, Task> ServerCertificateValidationCallback;

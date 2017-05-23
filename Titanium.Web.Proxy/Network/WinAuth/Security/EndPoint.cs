@@ -3,13 +3,30 @@
 namespace Titanium.Web.Proxy.Network.WinAuth.Security
 {
     using System;
+    using System.Collections.Concurrent;
+    using System.Collections.Generic;
     using System.Runtime.InteropServices;
     using System.Security.Principal;
     using static Common;
 
     internal class EndPoint
     {
-        internal static byte[] AcquireInitialSecurityToken(string hostname)
+        /// <summary>
+        /// Keep track of auth states for reuse in final challenge response
+        /// </summary>
+        private static IDictionary<Guid, State> authStates
+            = new ConcurrentDictionary<Guid, State>();
+
+
+        /// <summary>
+        /// Acquire the intial client token to send
+        /// </summary>
+        /// <param name="hostname"></param>
+        /// <param name="authScheme"></param>
+        /// <param name="requestId"></param>
+        /// <returns></returns>
+        internal static byte[] AcquireInitialSecurityToken(string hostname, 
+            string authScheme, Guid requestId)
         {
             byte[] token = null;
 
@@ -28,8 +45,8 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
                 result = AcquireCredentialsHandle(
                     WindowsIdentity.GetCurrent().Name,
-                    "NTLM",
-                    Common.SecurityCredentialsOutbound,
+                    authScheme,
+                    SecurityCredentialsOutbound,
                     IntPtr.Zero,
                     IntPtr.Zero,
                     0,
@@ -64,6 +81,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                 }
 
                 token = clientToken.GetBytes();
+                authStates.Add(requestId, state);
             }
             finally
             {
@@ -79,8 +97,10 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         /// </summary>
         /// <param name="hostname"></param>
         /// <param name="serverChallenge"></param>
+        /// <param name="requestId"></param>
         /// <returns></returns>
-        internal static byte[] AcquireFinalSecurityToken(string hostname, byte[] serverChallenge)
+        internal static byte[] AcquireFinalSecurityToken(string hostname, 
+            byte[] serverChallenge, Guid requestId)
         {
             byte[] token = null;
 
@@ -95,27 +115,10 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             {
                 int result;
 
-                var state = new State();
-
-                result = AcquireCredentialsHandle(
-                    WindowsIdentity.GetCurrent().Name,
-                    "NTLM",
-                    SecurityCredentialsOutbound,
-                    IntPtr.Zero,
-                    IntPtr.Zero,
-                    0,
-                    IntPtr.Zero,
-                    ref state.Credentials,
-                    ref NewLifeTime);
-
-                if (result != SuccessfulResult)
-                {
-                    // Credentials acquire operation failed.
-                    return null;
-                }
+                var state = authStates[requestId];
 
                 result = InitializeSecurityContext(ref state.Credentials,
-                    IntPtr.Zero,
+                    ref state.Context,
                     hostname,
                     StandardContextAttributes,
                     0,
@@ -134,6 +137,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                     return null;
                 }
 
+                authStates.Remove(requestId);
                 token = clientToken.GetBytes();
             }
             finally
@@ -156,9 +160,23 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         ref SecurityBufferDesciption pInput, //PSecBufferDesc SecBufferDesc
         int Reserved2,
         out SecurityHandle phNewContext, //PCtxtHandle
-        out Common.SecurityBufferDesciption pOutput, //PSecBufferDesc SecBufferDesc
+        out SecurityBufferDesciption pOutput, //PSecBufferDesc SecBufferDesc
         out uint pfContextAttr, //managed ulong == 64 bits!!!
-        out Common.SecurityInteger ptsExpiry); //PTimeStamp
+        out SecurityInteger ptsExpiry); //PTimeStamp
+
+        [DllImport("secur32", CharSet = CharSet.Auto, SetLastError = true)]
+        static extern int InitializeSecurityContext(ref SecurityHandle phCredential,//PCredHandle
+           ref SecurityHandle phContext, //PCtxtHandle
+           string pszTargetName,
+           int fContextReq,
+           int Reserved1,
+           int TargetDataRep,
+           ref SecurityBufferDesciption SecBufferDesc, //PSecBufferDesc SecBufferDesc
+           int Reserved2,
+           out SecurityHandle phNewContext, //PCtxtHandle
+           out SecurityBufferDesciption pOutput, //PSecBufferDesc SecBufferDesc
+           out uint pfContextAttr, //managed ulong == 64 bits!!!
+           out SecurityInteger ptsExpiry); //PTimeStamp
 
         [DllImport("secur32.dll", CharSet = CharSet.Auto, SetLastError = false)]
         private static extern int AcquireCredentialsHandle(
