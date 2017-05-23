@@ -106,7 +106,6 @@
     <Compile Include="Network\Tcp\TcpConnectionFactory.cs" />
     <Compile Include="Models\HttpHeader.cs" />
     <Compile Include="Http\HttpWebClient.cs" />
-    <Compile Include="Network\WinAuth\Security\BufferWrapper.cs" />
     <Compile Include="Network\WinAuth\Security\Common.cs" />
     <Compile Include="Network\WinAuth\Security\WinAuthEndPoint.cs" />
     <Compile Include="Network\WinAuth\Security\LittleEndian.cs" />
