@@ -33,6 +33,11 @@ namespace Titanium.Web.Proxy.EventArguments
         private Func<SessionEventArgs, Task> httpResponseHandler;
 
         /// <summary>
+        /// Backing field for corresponding public property
+        /// </summary>
+        private bool reRequest;
+
+        /// <summary>
         /// Holds a reference to client
         /// </summary>
         internal ProxyClient ProxyClient { get; set; }
@@ -43,10 +48,24 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public Guid Id => WebSession.RequestId;
 
+       
         /// <summary>
         /// Should we send the request again 
         /// </summary>
-        public bool ReRequest { get; set; }
+        public bool ReRequest
+        {
+            get { return reRequest; }
+            set
+            {
+                if (WebSession.Response.ResponseStatusCode == null)
+                {
+                    throw new Exception("Response status code is null. Cannot request again a request " 
+                        + "which was never send to server.");
+                }
+
+                reRequest = value;
+            }
+        }
 
         /// <summary>
         /// Does this session uses SSL
@@ -145,12 +164,12 @@ namespace Titanium.Web.Proxy.EventArguments
             WebSession.Response.Dispose();
             WebSession.Response = new Response();
         }
-  
 
-    /// <summary>
-    /// Read response body as byte[] for current response
-    /// </summary>
-    private async Task ReadResponseBody()
+
+        /// <summary>
+        /// Read response body as byte[] for current response
+        /// </summary>
+        private async Task ReadResponseBody()
         {
             //If not already read (not cached yet)
             if (WebSession.Response.ResponseBody == null)
