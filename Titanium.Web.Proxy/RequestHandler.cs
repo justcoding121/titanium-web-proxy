@@ -334,7 +334,7 @@ namespace Titanium.Web.Proxy
                         await TcpHelper.SendRaw(this,
                             httpRemoteUri.Host, httpRemoteUri.Port,
                             httpCmd, httpVersion, args.WebSession.Request.RequestHeaders, args.IsHttps,
-                            clientStream, tcpConnectionFactory);
+                            clientStream, tcpConnectionFactory, connection);
 
                         args.Dispose();
                         break;
