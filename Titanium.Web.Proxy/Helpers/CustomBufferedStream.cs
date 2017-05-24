@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.Helpers
     {
         private readonly Stream baseStream;
 
-        private readonly byte[] streamBuffer;
+        private byte[] streamBuffer;
 
         private int bufferLength;
 
@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.Helpers
         public CustomBufferedStream(Stream baseStream, int bufferSize)
         {
             this.baseStream = baseStream;
-            streamBuffer = new byte[bufferSize];
+            streamBuffer = BufferPool.GetBuffer(bufferSize);
         }
 
         /// <summary>
@@ -147,14 +147,6 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Closes the current stream and releases any resources (such as sockets and file handles) associated with the current stream. Instead of calling this method, ensure that the stream is properly disposed.
-        /// </summary>
-        public override void Close()
-        {
-            baseStream.Close();
-        }
-
-        /// <summary>
         /// Asynchronously reads the bytes from the current stream and writes them to another stream, using a specified buffer size and cancellation token.
         /// </summary>
         /// <param name="destination">The stream to which the contents of the current stream will be copied.</param>
@@ -238,14 +230,24 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Asynchronously reads a sequence of bytes from the current stream, advances the position within the stream by the number of bytes read, and monitors cancellation requests.
+        /// Asynchronously reads a sequence of bytes from the current stream,
+        /// advances the position within the stream by the number of bytes read,
+        /// and monitors cancellation requests.
         /// </summary>
         /// <param name="buffer">The buffer to write the data into.</param>
-        /// <param name="offset">The byte offset in <paramref name="buffer" /> at which to begin writing data from the stream.</param>
+        /// <param name="offset">The byte offset in <paramref name="buffer" /> at which 
+        /// to begin writing data from the stream.</param>
         /// <param name="count">The maximum number of bytes to read.</param>
-        /// <param name="cancellationToken">The token to monitor for cancellation requests. The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests. 
+        /// The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
         /// <returns>
-        /// A task that represents the asynchronous read operation. The value of the <paramref name="TResult" /> parameter contains the total number of bytes read into the buffer. The result value can be less than the number of bytes requested if the number of bytes currently available is less than the requested number, or it can be 0 (zero) if the end of the stream has been reached.
+        /// A task that represents the asynchronous read operation.
+        /// The value of the parameter contains the total 
+        /// number of bytes read into the buffer.
+        /// The result value can be less than the number of bytes
+        /// requested if the number of bytes currently available is
+        /// less than the requested number, or it can be 0 (zero)
+        /// if the end of the stream has been reached.
         /// </returns>
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
@@ -330,8 +332,9 @@ namespace Titanium.Web.Proxy.Helpers
         protected override void Dispose(bool disposing)
         {
             baseStream.Dispose();
+            BufferPool.ReturnBuffer(streamBuffer);
+            streamBuffer = null;
         }
-
 
         /// <summary>
         /// When overridden in a derived class, gets a value indicating whether the current stream supports reading.

@@ -179,12 +179,14 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="isHttps"></param>
         /// <param name="clientStream"></param>
         /// <param name="tcpConnectionFactory"></param>
+        /// <param name="connection"></param>
         /// <returns></returns>
         internal static async Task SendRaw(ProxyServer server,
             string remoteHostName, int remotePort,
             string httpCmd, Version httpVersion, Dictionary<string, HttpHeader> requestHeaders,
             bool isHttps,
-            Stream clientStream, TcpConnectionFactory tcpConnectionFactory)
+            Stream clientStream, TcpConnectionFactory tcpConnectionFactory,
+            TcpConnection connection = null)
         {
             //prepare the prefix content
             StringBuilder sb = null;
@@ -210,10 +212,23 @@ namespace Titanium.Web.Proxy.Helpers
                 sb.Append(ProxyConstants.NewLine);
             }
 
-            var tcpConnection = await tcpConnectionFactory.CreateClient(server,
-                remoteHostName, remotePort,
-                httpVersion, isHttps,
-                null, null, clientStream);
+            bool connectionCreated = false;
+            TcpConnection tcpConnection;
+
+            //create new connection if connection is null
+            if (connection == null)
+            {
+                tcpConnection = await tcpConnectionFactory.CreateClient(server,
+                    remoteHostName, remotePort,
+                    httpVersion, isHttps,
+                    null, null);
+
+                connectionCreated = true;
+            }
+            else
+            {
+                tcpConnection = connection;
+            }
 
             try
             {
@@ -228,8 +243,14 @@ namespace Titanium.Web.Proxy.Helpers
             }
             finally
             {
-                tcpConnection.Dispose();
-                Interlocked.Decrement(ref server.serverConnectionCount);
+                //if connection was null
+                //then a new connection was created
+                //so dispose the new connection
+                if (connectionCreated)
+                {
+                    tcpConnection.Dispose();
+                    Interlocked.Decrement(ref server.serverConnectionCount);
+                }
             }
         }
     }

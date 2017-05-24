@@ -18,6 +18,7 @@ Features
 * Support mutual SSL authentication
 * Fully asynchronous proxy
 * Supports proxy authentication & automatic proxy detection
+* Kerberos/NTLM authentication over HTTP protocols for windows domain
 
 Usage
 =====
@@ -203,7 +204,6 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
 ```
 Future road map (Pull requests are welcome!)
 ============
-* Implement Kerberos/NTLM authentication over HTTP protocols for windows domain
 * Support Server Name Indication (SNI) for transparent endpoints
 * Support HTTP 2.0 
 * Support SOCKS protocol

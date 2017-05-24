@@ -87,7 +87,8 @@ namespace Titanium.Web.Proxy
                 List<HttpHeader> connectRequestHeaders = null;
 
                 //Client wants to create a secure tcp tunnel (its a HTTPS request)
-                if (httpVerb == "CONNECT" && !excluded && httpRemoteUri.Port != 80)
+                if (httpVerb == "CONNECT" && !excluded 
+                    && endPoint.RemoteHttpsPorts.Contains(httpRemoteUri.Port))
                 {
                     httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
                     connectRequestHeaders = new List<HttpHeader>();
@@ -111,10 +112,12 @@ namespace Titanium.Web.Proxy
 
                     try
                     {
-                        sslStream = new SslStream(clientStream, true);
+                        sslStream = new SslStream(clientStream);
+
+                        var certName = HttpHelper.GetWildCardDomainName(httpRemoteUri.Host);
 
                         var certificate = endPoint.GenericCertificate ??
-                                          CertificateManager.CreateCertificate(httpRemoteUri.Host, false);
+                                          CertificateManager.CreateCertificate(certName, false);
 
                         //Successfully managed to authenticate the client using the fake certificate
                         await sslStream.AuthenticateAsServerAsync(certificate, false,
@@ -191,7 +194,7 @@ namespace Titanium.Web.Proxy
             {
                 if (endPoint.EnableSsl)
                 {
-                    var sslStream = new SslStream(clientStream, true);
+                    var sslStream = new SslStream(clientStream);
                     clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
                     //implement in future once SNI supported by SSL stream, for now use the same certificate
@@ -331,7 +334,7 @@ namespace Titanium.Web.Proxy
                         await TcpHelper.SendRaw(this,
                             httpRemoteUri.Host, httpRemoteUri.Port,
                             httpCmd, httpVersion, args.WebSession.Request.RequestHeaders, args.IsHttps,
-                            clientStream, tcpConnectionFactory);
+                            clientStream, tcpConnectionFactory, connection);
 
                         args.Dispose();
                         break;
@@ -542,8 +545,7 @@ namespace Titanium.Web.Proxy
                 args.WebSession.Request.HttpVersion,
                 args.IsHttps,
                 customUpStreamHttpProxy ?? UpStreamHttpProxy,
-                customUpStreamHttpsProxy ?? UpStreamHttpsProxy,
-                args.ProxyClient.ClientStream);
+                customUpStreamHttpsProxy ?? UpStreamHttpsProxy);
         }
 
 
@@ -599,7 +601,7 @@ namespace Titanium.Web.Proxy
             //send the request body bytes to server
             if (args.WebSession.Request.ContentLength > 0)
             {
-                await args.ProxyClient.ClientStreamReader.CopyBytesToStream(BufferSize, postStream, args.WebSession.Request.ContentLength);
+                await args.ProxyClient.ClientStreamReader.CopyBytesToStream(postStream, args.WebSession.Request.ContentLength);
             }
             //Need to revist, find any potential bugs
             //send the request body bytes to server in chunks
