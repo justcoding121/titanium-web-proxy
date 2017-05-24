@@ -213,7 +213,14 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         internal string ResponseBodyString { get; set; }
 
+        /// <summary>
+        /// Was response body read by user
+        /// </summary>
         internal bool ResponseBodyRead { get; set; }
+
+        /// <summary>
+        /// Is response is no more modifyable by user (user callbacks complete?)
+        /// </summary>
         internal bool ResponseLocked { get; set; }
 
         /// <summary>
