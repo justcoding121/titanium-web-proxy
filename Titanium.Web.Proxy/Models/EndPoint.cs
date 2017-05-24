@@ -26,13 +26,19 @@ namespace Titanium.Web.Proxy.Models
             EnableSsl = enableSsl;
         }
 
+
         /// <summary>
-        /// Ip Address.
+        /// underlying TCP Listener object
+        /// </summary>
+        internal TcpListener Listener { get; set; }
+
+        /// <summary>
+        /// Ip Address we are listening.
         /// </summary>
         public IPAddress IpAddress { get; internal set; }
 
         /// <summary>
-        /// Port.
+        /// Port we are listening.
         /// </summary>
         public int Port { get; internal set; }
 
@@ -48,7 +54,6 @@ namespace Titanium.Web.Proxy.Models
                                    || Equals(IpAddress, IPAddress.IPv6Loopback)
                                    || Equals(IpAddress, IPAddress.IPv6None);
 
-        internal TcpListener Listener { get; set; }
     }
 
     /// <summary>
@@ -63,6 +68,12 @@ namespace Titanium.Web.Proxy.Models
         internal bool IsSystemHttpProxy { get; set; }
 
         internal bool IsSystemHttpsProxy { get; set; }
+
+        /// <summary>
+        /// Remote HTTPS ports we are allowed to communicate with
+        /// CONNECT request to ports other than these will not be decrypted
+        /// </summary>
+        public List<int> RemoteHttpsPorts { get; set; }
 
         /// <summary>
         /// List of host names to exclude using Regular Expressions.
@@ -112,6 +123,8 @@ namespace Titanium.Web.Proxy.Models
         public ExplicitProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl)
             : base(ipAddress, port, enableSsl)
         {
+            //init to well known HTTPS ports
+            RemoteHttpsPorts = new List<int> { 443, 8443 };
         }
     }
 

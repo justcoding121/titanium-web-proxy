@@ -37,6 +37,7 @@
     <DocumentationFile>bin\Release\Titanium.Web.Proxy.XML</DocumentationFile>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup>
     <SignAssembly>true</SignAssembly>
@@ -74,7 +75,9 @@
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
     <Compile Include="Extensions\FuncExtensions.cs" />
+    <Compile Include="Helpers\HttpHelper.cs" />
     <Compile Include="Extensions\StringExtensions.cs" />
+    <Compile Include="Helpers\BufferPool.cs" />
     <Compile Include="Helpers\CustomBufferedStream.cs" />
     <Compile Include="Helpers\Network.cs" />
     <Compile Include="Helpers\RunTime.cs" />
@@ -103,6 +106,12 @@
     <Compile Include="Network\Tcp\TcpConnectionFactory.cs" />
     <Compile Include="Models\HttpHeader.cs" />
     <Compile Include="Http\HttpWebClient.cs" />
+    <Compile Include="Network\WinAuth\Security\Common.cs" />
+    <Compile Include="Network\WinAuth\Security\WinAuthEndPoint.cs" />
+    <Compile Include="Network\WinAuth\Security\LittleEndian.cs" />
+    <Compile Include="Network\WinAuth\Security\Message.cs" />
+    <Compile Include="Network\WinAuth\Security\State.cs" />
+    <Compile Include="Network\WinAuth\WinAuthHandler.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ProxyAuthorizationHandler.cs" />
     <Compile Include="RequestHandler.cs" />
@@ -117,6 +126,7 @@
     <Compile Include="Shared\ProxyConstants.cs" />
     <Compile Include="Network\Tcp\TcpRow.cs" />
     <Compile Include="Network\Tcp\TcpTable.cs" />
+    <Compile Include="WinAuthHandler.cs" />
   </ItemGroup>
   <ItemGroup>
     <COMReference Include="CERTENROLLLib">

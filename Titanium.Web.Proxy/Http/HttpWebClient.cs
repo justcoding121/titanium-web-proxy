@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Models;
@@ -160,7 +161,13 @@ namespace Titanium.Web.Proxy.Http
             //return if this is already read
             if (Response.ResponseStatusCode != null) return;
 
-            var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
+            string line = await ServerConnection.StreamReader.ReadLineAsync();
+            if (line == null)
+            {
+                throw new IOException();
+            }
+
+            var httpResult = line.Split(ProxyConstants.SpaceSplit, 3);
 
             if (string.IsNullOrEmpty(httpResult[0]))
             {
@@ -168,7 +175,7 @@ namespace Titanium.Web.Proxy.Http
                 httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
             }
 
-            var httpVersion = httpResult[0].Trim().ToLower();
+            var httpVersion = httpResult[0];
 
             var version = HttpHeader.Version11;
             if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))

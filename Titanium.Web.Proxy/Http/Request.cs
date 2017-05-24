@@ -242,8 +242,14 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         internal string RequestBodyString { get; set; }
 
+        /// <summary>
+        /// Request body was read by user?
+        /// </summary>
         internal bool RequestBodyRead { get; set; }
 
+        /// <summary>
+        /// Request is ready to be sent (user callbacks are complete?)
+        /// </summary>
         internal bool RequestLocked { get; set; }
 
         /// <summary>
