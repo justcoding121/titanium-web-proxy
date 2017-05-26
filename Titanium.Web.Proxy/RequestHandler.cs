@@ -322,6 +322,16 @@ namespace Titanium.Web.Proxy
                     PrepareRequestHeaders(args.WebSession.Request.RequestHeaders, args.WebSession);
                     args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
 
+                    //if win auth is enabled
+                    //we need a cache of request body
+                    //so that we can send it after authentication in WinAuthHandler.cs
+                    if (EnableWinAuth
+                        && !RunTime.IsRunningOnMono()
+                        && args.WebSession.Request.HasBody)
+                    {
+                        await args.GetRequestBody();
+                    }
+
                     //If user requested interception do it
                     if (BeforeRequest != null)
                     {
