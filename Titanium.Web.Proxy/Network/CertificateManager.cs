@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Network
             set
             {
                 //For Mono only Bouncy Castle is supported
-                if (RunTime.IsRunningOnMono())
+                if (RunTime.IsRunningOnMono)
                 {
                     value = CertificateEngine.BouncyCastle;
                 }
@@ -226,7 +226,7 @@ namespace Titanium.Web.Proxy.Network
         /// <returns></returns>
         public bool TrustRootCertificateAsAdministrator()
         {
-            if (RunTime.IsRunningOnMono())
+            if (RunTime.IsRunningOnMono)
             {
                 return false;
             }

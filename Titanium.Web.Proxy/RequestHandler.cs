@@ -326,7 +326,7 @@ namespace Titanium.Web.Proxy
                     //we need a cache of request body
                     //so that we can send it after authentication in WinAuthHandler.cs
                     if (EnableWinAuth
-                        && !RunTime.IsRunningOnMono()
+                        && !RunTime.IsRunningOnMono
                         && args.WebSession.Request.HasBody)
                     {
                         await args.GetRequestBody();
@@ -471,8 +471,7 @@ namespace Titanium.Web.Proxy
                     if (!args.WebSession.Request.ExpectationFailed)
                     {
                         //If its a post/put/patch request, then read the client html body and send it to server
-                        var method = args.WebSession.Request.Method.ToUpper();
-                        if (method == "POST" || method == "PUT" || method == "PATCH")
+                        if (args.WebSession.Request.HasBody)
                         {
                             await SendClientRequestBody(args);
                         }
