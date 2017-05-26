@@ -476,6 +476,7 @@ namespace Titanium.Web.Proxy
 
             if (!RunTime.IsRunningOnMono)
             {
+                //clear orphaned windows auth states every 2 minutes
                 WinAuthEndPoint.ClearIdleStates(2);
             }
 
