@@ -322,6 +322,16 @@ namespace Titanium.Web.Proxy
                     PrepareRequestHeaders(args.WebSession.Request.RequestHeaders, args.WebSession);
                     args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
 
+                    //if win auth is enabled
+                    //we need a cache of request body
+                    //so that we can send it after authentication in WinAuthHandler.cs
+                    if (EnableWinAuth
+                        && !RunTime.IsRunningOnMono
+                        && args.WebSession.Request.HasBody)
+                    {
+                        await args.GetRequestBody();
+                    }
+
                     //If user requested interception do it
                     if (BeforeRequest != null)
                     {
@@ -461,8 +471,7 @@ namespace Titanium.Web.Proxy
                     if (!args.WebSession.Request.ExpectationFailed)
                     {
                         //If its a post/put/patch request, then read the client html body and send it to server
-                        var method = args.WebSession.Request.Method.ToUpper();
-                        if (method == "POST" || method == "PUT" || method == "PATCH")
+                        if (args.WebSession.Request.HasBody)
                         {
                             await SendClientRequestBody(args);
                         }

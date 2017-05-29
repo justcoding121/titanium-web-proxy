@@ -96,7 +96,8 @@ namespace Titanium.Web.Proxy
                 //challenge value will start with any of the scheme selected
                 else
                 {
-                    scheme = authSchemes.FirstOrDefault(x => authHeader.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase));
+                    scheme = authSchemes.FirstOrDefault(x => authHeader.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase)
+                    && authHeader.Value.Length > x.Length + 1);
 
                     var serverToken = authHeader.Value.Substring(scheme.Length + 1);
                     var clientToken = WinAuthHandler.GetFinalAuthToken(args.WebSession.Request.Host, serverToken, args.Id);

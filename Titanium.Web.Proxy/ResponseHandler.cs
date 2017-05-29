@@ -38,7 +38,7 @@ namespace Titanium.Web.Proxy
 
                 //check for windows authentication
                 if(EnableWinAuth
-                    && !RunTime.IsRunningOnMono()
+                    && !RunTime.IsRunningOnMono
                     && args.WebSession.Response.ResponseStatusCode == "401")
                 {
                     var disposed = await Handle401UnAuthorized(args);
