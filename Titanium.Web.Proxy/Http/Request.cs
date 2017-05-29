@@ -27,6 +27,11 @@ namespace Titanium.Web.Proxy.Http
         public Version HttpVersion { get; set; }
 
         /// <summary>
+        /// Has request body?
+        /// </summary>
+        public bool HasBody => Method == "POST" || Method == "PUT" || Method == "PATCH";
+
+        /// <summary>
         /// Request Http hostanem
         /// </summary>
         internal string Host

@@ -348,7 +348,7 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint)
         {
-            if (RunTime.IsRunningOnMono())
+            if (RunTime.IsRunningOnMono)
             {
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
@@ -375,7 +375,7 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint)
         {
-            if (RunTime.IsRunningOnMono())
+            if (RunTime.IsRunningOnMono)
             {
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
@@ -416,7 +416,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemHttpProxy()
         {
-            if (RunTime.IsRunningOnMono())
+            if (RunTime.IsRunningOnMono)
             {
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
@@ -429,7 +429,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemHttpsProxy()
         {
-            if (RunTime.IsRunningOnMono())
+            if (RunTime.IsRunningOnMono)
             {
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
@@ -442,7 +442,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableAllSystemProxies()
         {
-            if (RunTime.IsRunningOnMono())
+            if (RunTime.IsRunningOnMono)
             {
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
@@ -474,8 +474,9 @@ namespace Titanium.Web.Proxy
 
             CertificateManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
-            if (!RunTime.IsRunningOnMono())
+            if (!RunTime.IsRunningOnMono)
             {
+                //clear orphaned windows auth states every 2 minutes
                 WinAuthEndPoint.ClearIdleStates(2);
             }
 
