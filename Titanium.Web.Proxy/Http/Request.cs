@@ -306,6 +306,43 @@ namespace Titanium.Web.Proxy.Http
             NonUniqueRequestHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
         }
 
+
+        /// <summary>
+        /// True if header exists
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public bool HeaderExists(string name)
+        {
+            if (RequestHeaders.ContainsKey(name)
+                || NonUniqueRequestHeaders.ContainsKey(name))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Returns all headers with given name if exists
+        /// Returns null if does'nt exist
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public List<HttpHeader> GetHeaders(string name)
+        {
+            if (RequestHeaders.ContainsKey(name))
+            {
+                return new List<HttpHeader>() { RequestHeaders[name] };
+            }
+            else if (NonUniqueRequestHeaders.ContainsKey(name))
+            {
+                return new List<HttpHeader>(NonUniqueRequestHeaders[name]);
+            }
+
+            return null;
+        }
+
         /// <summary>
         /// Add a new header with given name and value
         /// </summary>
