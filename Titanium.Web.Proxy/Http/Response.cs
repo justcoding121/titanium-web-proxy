@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -276,6 +277,20 @@ namespace Titanium.Web.Proxy.Http
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Returns all headers 
+        /// </summary>
+        /// <returns></returns>
+        public List<HttpHeader> GetAllHeaders()
+        {
+            var result = new List<HttpHeader>();
+
+            result.AddRange(ResponseHeaders.Select(x => x.Value));
+            result.AddRange(NonUniqueResponseHeaders.SelectMany(x => x.Value));
+
+            return result;
         }
 
         /// <summary>
