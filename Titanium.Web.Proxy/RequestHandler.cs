@@ -453,27 +453,31 @@ namespace Titanium.Web.Proxy
                     await args.WebSession.SendRequest(Enable100ContinueBehaviour);
                 }
 
-                //If request was modified by user
-                if (args.WebSession.Request.RequestBodyRead)
+                //check if content-length is > 0
+                if (args.WebSession.Request.ContentLength > 0)
                 {
-                    if (args.WebSession.Request.ContentEncoding != null)
+                    //If request was modified by user
+                    if (args.WebSession.Request.RequestBodyRead)
                     {
-                        args.WebSession.Request.RequestBody = await GetCompressedResponseBody(args.WebSession.Request.ContentEncoding, args.WebSession.Request.RequestBody);
-                    }
-                    //chunked send is not supported as of now
-                    args.WebSession.Request.ContentLength = args.WebSession.Request.RequestBody.Length;
-
-                    var newStream = args.WebSession.ServerConnection.Stream;
-                    await newStream.WriteAsync(args.WebSession.Request.RequestBody, 0, args.WebSession.Request.RequestBody.Length);
-                }
-                else
-                {
-                    if (!args.WebSession.Request.ExpectationFailed)
-                    {
-                        //If its a post/put/patch request, then read the client html body and send it to server
-                        if (args.WebSession.Request.HasBody)
+                        if (args.WebSession.Request.ContentEncoding != null)
                         {
-                            await SendClientRequestBody(args);
+                            args.WebSession.Request.RequestBody = await GetCompressedResponseBody(args.WebSession.Request.ContentEncoding, args.WebSession.Request.RequestBody);
+                        }
+                        //chunked send is not supported as of now
+                        args.WebSession.Request.ContentLength = args.WebSession.Request.RequestBody.Length;
+
+                        var newStream = args.WebSession.ServerConnection.Stream;
+                        await newStream.WriteAsync(args.WebSession.Request.RequestBody, 0, args.WebSession.Request.RequestBody.Length);
+                    }
+                    else
+                    {
+                        if (!args.WebSession.Request.ExpectationFailed)
+                        {
+                            //If its a post/put/patch request, then read the client html body and send it to server
+                            if (args.WebSession.Request.HasBody)
+                            {
+                                await SendClientRequestBody(args);
+                            }
                         }
                     }
                 }
