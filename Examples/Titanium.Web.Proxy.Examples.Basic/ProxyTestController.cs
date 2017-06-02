@@ -13,7 +13,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private readonly ProxyServer proxyServer;
 
         //share requestBody outside handlers
-        private readonly Dictionary<Guid, string> requestBodyHistory = new Dictionary<Guid, string>();
+        //Using a dictionary is not a good idea since it can cause memory overflow
+        //ideally the data should be moved out of memory
+        //private readonly Dictionary<Guid, string> requestBodyHistory 
+        //    = new Dictionary<Guid, string>();
 
         public ProxyTestController()
         {
@@ -41,6 +44,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.BeforeResponse += OnResponse;
             proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
             proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
+
+            //proxyServer.EnableWinAuth = true;
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
             {
@@ -113,8 +118,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //read request headers
             var requestHeaders = e.WebSession.Request.RequestHeaders;
 
-            var method = e.WebSession.Request.Method.ToUpper();
-            if (method == "POST" || method == "PUT" || method == "PATCH")
+            if (e.WebSession.Request.HasBody)
             {
                 //Get/Set request body bytes
                 byte[] bodyBytes = await e.GetRequestBody();
@@ -124,7 +128,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 string bodyString = await e.GetRequestBodyAsString();
                 await e.SetRequestBodyString(bodyString);
 
-                requestBodyHistory[e.Id] = bodyString;
+                //requestBodyHistory[e.Id] = bodyString;
             }
 
             ////To cancel a request with a custom HTML content
@@ -152,11 +156,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             Console.WriteLine("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
-            if (requestBodyHistory.ContainsKey(e.Id))
-            {
-                //access request body by looking up the shared dictionary using requestId
-                var requestBody = requestBodyHistory[e.Id];
-            }
+            //if (requestBodyHistory.ContainsKey(e.Id))
+            //{
+            //    //access request body by looking up the shared dictionary using requestId
+            //    var requestBody = requestBodyHistory[e.Id];
+            //}
 
             //read response headers
             var responseHeaders = e.WebSession.Response.ResponseHeaders;

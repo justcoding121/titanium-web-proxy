@@ -36,6 +36,19 @@ namespace Titanium.Web.Proxy
                     args.WebSession.Response.ResponseStream = args.WebSession.ServerConnection.Stream;
                 }
 
+                //check for windows authentication
+                if(EnableWinAuth
+                    && !RunTime.IsRunningOnMono
+                    && args.WebSession.Response.ResponseStatusCode == "401")
+                {
+                    var disposed = await Handle401UnAuthorized(args);
+                    
+                    if(disposed)
+                    {
+                        return true;
+                    }
+                }
+
                 args.ReRequest = false;
 
                 //If user requested call back then do it
@@ -44,16 +57,13 @@ namespace Titanium.Web.Proxy
                     await BeforeResponse.InvokeParallelAsync(this, args);
                 }
 
+                //if user requested to send request again
+                //likely after making modifications from User Response Handler
                 if (args.ReRequest)
                 {
-                    if (args.WebSession.ServerConnection != null)
-                    {
-                        args.WebSession.ServerConnection.Dispose();
-                        Interlocked.Decrement(ref serverConnectionCount);
-                    }
-
-                    var connection = await GetServerConnection(args);
-                    var disposed = await HandleHttpSessionRequestInternal(null, args, true);
+                    //clear current response
+                    await args.ClearResponse();
+                    var disposed = await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args, false);
                     return disposed;
                 }
 

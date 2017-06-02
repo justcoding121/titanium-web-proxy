@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
@@ -25,6 +26,11 @@ namespace Titanium.Web.Proxy.Http
         /// Request Http Version
         /// </summary>
         public Version HttpVersion { get; set; }
+
+        /// <summary>
+        /// Has request body?
+        /// </summary>
+        public bool HasBody => Method == "POST" || Method == "PUT" || Method == "PATCH";
 
         /// <summary>
         /// Request Http hostanem
@@ -242,8 +248,14 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         internal string RequestBodyString { get; set; }
 
+        /// <summary>
+        /// Request body was read by user?
+        /// </summary>
         internal bool RequestBodyRead { get; set; }
 
+        /// <summary>
+        /// Request is ready to be sent (user callbacks are complete?)
+        /// </summary>
         internal bool RequestLocked { get; set; }
 
         /// <summary>
@@ -295,6 +307,143 @@ namespace Titanium.Web.Proxy.Http
             NonUniqueRequestHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
         }
 
+
+        /// <summary>
+        /// True if header exists
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public bool HeaderExists(string name)
+        {
+            if (RequestHeaders.ContainsKey(name)
+                || NonUniqueRequestHeaders.ContainsKey(name))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Returns all headers with given name if exists
+        /// Returns null if does'nt exist
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public List<HttpHeader> GetHeaders(string name)
+        {
+            if (RequestHeaders.ContainsKey(name))
+            {
+                return new List<HttpHeader>() { RequestHeaders[name] };
+            }
+            else if (NonUniqueRequestHeaders.ContainsKey(name))
+            {
+                return new List<HttpHeader>(NonUniqueRequestHeaders[name]);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Returns all headers 
+        /// </summary>
+        /// <returns></returns>
+        public List<HttpHeader> GetAllHeaders()
+        {
+            var result = new List<HttpHeader>();
+
+            result.AddRange(RequestHeaders.Select(x => x.Value));
+            result.AddRange(NonUniqueRequestHeaders.SelectMany(x => x.Value));
+
+            return result;
+        }
+
+        /// <summary>
+        /// Add a new header with given name and value
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="value"></param>
+        public void AddHeader(string name, string value)
+        {
+            AddHeader(new HttpHeader(name, value));
+        }
+
+        /// <summary>
+        /// Adds the given header object to Request
+        /// </summary>
+        /// <param name="newHeader"></param>
+        public void AddHeader(HttpHeader newHeader)
+        {
+            if (NonUniqueRequestHeaders.ContainsKey(newHeader.Name))
+            {
+                NonUniqueRequestHeaders[newHeader.Name].Add(newHeader);
+                return;
+            }
+
+            if (RequestHeaders.ContainsKey(newHeader.Name))
+            {
+                var existing = RequestHeaders[newHeader.Name];
+                RequestHeaders.Remove(newHeader.Name);
+
+                NonUniqueRequestHeaders.Add(newHeader.Name,
+                    new List<HttpHeader>() { existing, newHeader });
+            }
+            else
+            {
+                RequestHeaders.Add(newHeader.Name, newHeader);
+            }
+        }
+
+        /// <summary>
+        ///  removes all headers with given name
+        /// </summary>
+        /// <param name="headerName"></param>
+        /// <returns>True if header was removed
+        /// False if no header exists with given name</returns>
+        public bool RemoveHeader(string headerName)
+        {
+            if (RequestHeaders.ContainsKey(headerName))
+            {
+                RequestHeaders.Remove(headerName);
+                return true;
+            }
+            else if (NonUniqueRequestHeaders.ContainsKey(headerName))
+            {
+                NonUniqueRequestHeaders.Remove(headerName);
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Removes given header object if it exist
+        /// </summary>
+        /// <param name="header">Returns true if header exists and was removed </param>
+        public bool RemoveHeader(HttpHeader header)
+        {
+            if (RequestHeaders.ContainsKey(header.Name))
+            {
+                if (RequestHeaders[header.Name].Equals(header))
+                {
+                    RequestHeaders.Remove(header.Name);
+                    return true;
+                }
+
+            }
+            else if (NonUniqueRequestHeaders.ContainsKey(header.Name))
+            {
+                if (NonUniqueRequestHeaders[header.Name]
+                    .RemoveAll(x => x.Equals(header)) > 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+
         /// <summary>
         /// Dispose off 
         /// </summary>
@@ -309,5 +458,7 @@ namespace Titanium.Web.Proxy.Http
             RequestBody = null;
             RequestBody = null;
         }
+
+      
     }
 }

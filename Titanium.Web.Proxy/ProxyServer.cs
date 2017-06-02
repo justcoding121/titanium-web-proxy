@@ -12,6 +12,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy
 {
@@ -60,12 +61,13 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private SystemProxyManager systemProxySettingsManager { get; }
 
-#if !DEBUG
+
         /// <summary>
         /// Set firefox to use default system proxy
         /// </summary>
-        private FireFoxProxySettingsManager firefoxProxySettingsManager = new FireFoxProxySettingsManager();
-#endif
+        private FireFoxProxySettingsManager firefoxProxySettingsManager 
+            = new FireFoxProxySettingsManager();
+
 
         /// <summary>
         /// Buffer size used throughout this proxy
@@ -197,6 +199,15 @@ namespace Titanium.Web.Proxy
         public bool ForwardToUpstreamGateway { get; set; }
 
         /// <summary>
+        /// Enable disable Windows Authentication (NTLM/Kerberos)
+        /// Note: NTLM/Kerberos will always send local credentials of current user
+        /// who is running the proxy process. This is because a man
+        /// in middle attack is not currently supported
+        /// (which would require windows delegation enabled for this server process)
+        /// </summary>
+        public bool EnableWinAuth { get; set; }
+
+        /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
         /// </summary>
         public event Func<object, CertificateValidationEventArgs, Task> ServerCertificateValidationCallback;
@@ -235,7 +246,7 @@ namespace Titanium.Web.Proxy
         public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpsProxyFunc { get; set; }
 
         /// <summary>
-        /// A list of IpAddress & port this proxy is listening to
+        /// A list of IpAddress and port this proxy is listening to
         /// </summary>
         public List<ProxyEndPoint> ProxyEndPoints { get; set; }
 
@@ -277,9 +288,7 @@ namespace Titanium.Web.Proxy
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory();
             systemProxySettingsManager = new SystemProxyManager();
-#if !DEBUG
-            new FireFoxProxySettingsManager();
-#endif
+
 
             CertificateManager = new CertificateManager(ExceptionFunc);
             if (rootCertificateName != null)
@@ -339,7 +348,7 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint)
         {
-            if (RunTime.IsRunningOnMono())
+            if (RunTime.IsRunningOnMono)
             {
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
@@ -353,9 +362,9 @@ namespace Titanium.Web.Proxy
                 Equals(endPoint.IpAddress, IPAddress.Any) | Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(), endPoint.Port);
 
             endPoint.IsSystemHttpProxy = true;
-#if !DEBUG
-            firefoxProxySettingsManager.AddFirefox();
-#endif
+
+            firefoxProxySettingsManager.UseSystemProxy();
+
             Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System HTTP Proxy", endPoint.IpAddress, endPoint.Port);
         }
 
@@ -366,7 +375,7 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint)
         {
-            if (RunTime.IsRunningOnMono())
+            if (RunTime.IsRunningOnMono)
             {
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
@@ -397,9 +406,8 @@ namespace Titanium.Web.Proxy
 
             endPoint.IsSystemHttpsProxy = true;
 
-#if !DEBUG
-            firefoxProxySettingsManager.AddFirefox();
-#endif
+            firefoxProxySettingsManager.UseSystemProxy();
+
             Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System HTTPS Proxy", endPoint.IpAddress, endPoint.Port);
         }
 
@@ -408,7 +416,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemHttpProxy()
         {
-            if (RunTime.IsRunningOnMono())
+            if (RunTime.IsRunningOnMono)
             {
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
@@ -421,7 +429,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemHttpsProxy()
         {
-            if (RunTime.IsRunningOnMono())
+            if (RunTime.IsRunningOnMono)
             {
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
@@ -434,7 +442,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableAllSystemProxies()
         {
-            if (RunTime.IsRunningOnMono())
+            if (RunTime.IsRunningOnMono)
             {
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
@@ -466,6 +474,12 @@ namespace Titanium.Web.Proxy
 
             CertificateManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
+            if (!RunTime.IsRunningOnMono)
+            {
+                //clear orphaned windows auth states every 2 minutes
+                WinAuthEndPoint.ClearIdleStates(2);
+            }
+
             proxyRunning = true;
         }
 
@@ -485,9 +499,6 @@ namespace Titanium.Web.Proxy
             if (setAsSystemProxy)
             {
                 systemProxySettingsManager.DisableAllProxy();
-#if !DEBUG
-                firefoxProxySettingsManager.RemoveFirefox();
-#endif
             }
 
             foreach (var endPoint in ProxyEndPoints)

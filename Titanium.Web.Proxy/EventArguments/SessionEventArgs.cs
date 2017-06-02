@@ -33,6 +33,11 @@ namespace Titanium.Web.Proxy.EventArguments
         private Func<SessionEventArgs, Task> httpResponseHandler;
 
         /// <summary>
+        /// Backing field for corresponding public property
+        /// </summary>
+        private bool reRequest;
+
+        /// <summary>
         /// Holds a reference to client
         /// </summary>
         internal ProxyClient ProxyClient { get; set; }
@@ -43,10 +48,24 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public Guid Id => WebSession.RequestId;
 
+       
         /// <summary>
-        /// Should we send a rerequest 
+        /// Should we send the request again 
         /// </summary>
-        public bool ReRequest { get; set; }
+        public bool ReRequest
+        {
+            get { return reRequest; }
+            set
+            {
+                if (WebSession.Response.ResponseStatusCode == null)
+                {
+                    throw new Exception("Response status code is null. Cannot request again a request " 
+                        + "which was never send to server.");
+                }
+
+                reRequest = value;
+            }
+        }
 
         /// <summary>
         /// Does this session uses SSL
@@ -92,8 +111,7 @@ namespace Titanium.Web.Proxy.EventArguments
         private async Task ReadRequestBody()
         {
             //GET request don't have a request body to read
-            var method = WebSession.Request.Method.ToUpper();
-            if (method != "POST" && method != "PUT" && method != "PATCH")
+            if (!WebSession.Request.HasBody)
             {
                 throw new BodyNotFoundException("Request don't have a body. " +
                                                 "Please verify that this request is a Http POST/PUT/PATCH and request " +
@@ -117,12 +135,12 @@ namespace Titanium.Web.Proxy.EventArguments
                         if (WebSession.Request.ContentLength > 0)
                         {
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await ProxyClient.ClientStreamReader.CopyBytesToStream(bufferSize, requestBodyStream,
+                            await ProxyClient.ClientStreamReader.CopyBytesToStream(requestBodyStream,
                                 WebSession.Request.ContentLength);
                         }
                         else if (WebSession.Request.HttpVersion.Major == 1 && WebSession.Request.HttpVersion.Minor == 0)
                         {
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, requestBodyStream, long.MaxValue);
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(requestBodyStream, long.MaxValue);
                         }
                     }
                     WebSession.Request.RequestBody = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding,
@@ -134,6 +152,18 @@ namespace Titanium.Web.Proxy.EventArguments
                 WebSession.Request.RequestBodyRead = true;
             }
         }
+
+        /// <summary>
+        /// reinit response object
+        /// </summary>
+        internal async Task ClearResponse()
+        {
+            //siphon out the body
+            await ReadResponseBody();
+            WebSession.Response.Dispose();
+            WebSession.Response = new Response();
+        }
+
 
         /// <summary>
         /// Read response body as byte[] for current response
@@ -155,12 +185,12 @@ namespace Titanium.Web.Proxy.EventArguments
                         if (WebSession.Response.ContentLength > 0)
                         {
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, responseBodyStream,
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream,
                                 WebSession.Response.ContentLength);
                         }
                         else if (WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0 || WebSession.Response.ContentLength == -1)
                         {
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(bufferSize, responseBodyStream, long.MaxValue);
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, long.MaxValue);
                         }
                     }
 
@@ -420,27 +450,29 @@ namespace Titanium.Web.Proxy.EventArguments
             WebSession.Request.CancelRequest = true;
         }
 
-        /// <summary>
-        /// Before request is made to server 
+        /// <summary>
+        /// Before request is made to server 
         /// Respond with the specified HTML string to client
         /// and ignore the request 
-        /// </summary>
-        /// <param name="html"></param>
-        /// <param name="status"></param>
+        /// </summary>
+        /// <param name="html"></param>
+        /// <param name="status"></param>
+        /// <returns></returns>
         public async Task GenericResponse(string html, HttpStatusCode status)
         {
             await GenericResponse(html, null, status);
         }
 
         /// <summary>
-        /// Before request is made to server 
+        /// Before request is made to server 
         /// Respond with the specified HTML string to client
         /// and the specified status
         /// and ignore the request 
-        /// </summary>
-        /// <param name="html"></param>
-        /// <param name="headers"></param>
-        /// <param name="status"></param>
+        /// </summary>
+        /// <param name="html"></param>
+        /// <param name="headers"></param>
+        /// <param name="status"></param>
+        /// <returns></returns>
         public async Task GenericResponse(string html, Dictionary<string, HttpHeader> headers, HttpStatusCode status)
         {
             if (WebSession.Request.RequestLocked)

@@ -8,12 +8,15 @@ namespace Titanium.Web.Proxy.Helpers
     internal class RunTime
     {
         /// <summary>
-        /// Checks if current run time is Mono
+        /// cache for mono runtime check
         /// </summary>
         /// <returns></returns>
-        internal static bool IsRunningOnMono()
-        {
-            return Type.GetType("Mono.Runtime") != null;
-        }
+        private static Lazy<bool> isRunningOnMono
+            = new Lazy<bool>(()=> Type.GetType("Mono.Runtime") != null);
+      
+        /// <summary>
+        /// Is running on Mono?
+        /// </summary>
+        internal static bool IsRunningOnMono => isRunningOnMono.Value;
     }
 }

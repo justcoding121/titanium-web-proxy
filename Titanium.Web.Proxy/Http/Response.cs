@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -213,7 +214,14 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         internal string ResponseBodyString { get; set; }
 
+        /// <summary>
+        /// Was response body read by user
+        /// </summary>
         internal bool ResponseBodyRead { get; set; }
+
+        /// <summary>
+        /// Is response is no more modifyable by user (user callbacks complete?)
+        /// </summary>
         internal bool ResponseLocked { get; set; }
 
         /// <summary>
@@ -233,6 +241,141 @@ namespace Titanium.Web.Proxy.Http
         {
             ResponseHeaders = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
             NonUniqueResponseHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// True if header exists
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public bool HeaderExists(string name)
+        {
+            if(ResponseHeaders.ContainsKey(name)
+                || NonUniqueResponseHeaders.ContainsKey(name))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Returns all headers with given name if exists
+        /// Returns null if does'nt exist
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public List<HttpHeader> GetHeaders(string name)
+        {
+            if (ResponseHeaders.ContainsKey(name))
+            {
+                return new List<HttpHeader>() { ResponseHeaders[name] };
+            }
+            else if (NonUniqueResponseHeaders.ContainsKey(name))
+            {
+                return new List<HttpHeader>(NonUniqueResponseHeaders[name]);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Returns all headers 
+        /// </summary>
+        /// <returns></returns>
+        public List<HttpHeader> GetAllHeaders()
+        {
+            var result = new List<HttpHeader>();
+
+            result.AddRange(ResponseHeaders.Select(x => x.Value));
+            result.AddRange(NonUniqueResponseHeaders.SelectMany(x => x.Value));
+
+            return result;
+        }
+
+        /// <summary>
+        /// Add a new header with given name and value
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="value"></param>
+        public void AddHeader(string name, string value)
+        {
+            AddHeader(new HttpHeader(name, value));
+        }
+
+        /// <summary>
+        /// Adds the given header object to Response
+        /// </summary>
+        /// <param name="newHeader"></param>
+        public void AddHeader(HttpHeader newHeader)
+        {
+            if (NonUniqueResponseHeaders.ContainsKey(newHeader.Name))
+            {
+                NonUniqueResponseHeaders[newHeader.Name].Add(newHeader);
+                return;
+            }
+
+            if (ResponseHeaders.ContainsKey(newHeader.Name))
+            {
+                var existing = ResponseHeaders[newHeader.Name];
+                ResponseHeaders.Remove(newHeader.Name);
+
+                NonUniqueResponseHeaders.Add(newHeader.Name,
+                    new List<HttpHeader>() { existing, newHeader });
+            }
+            else
+            {
+                ResponseHeaders.Add(newHeader.Name, newHeader);
+            }
+        }
+
+        /// <summary>
+        ///  removes all headers with given name
+        /// </summary>
+        /// <param name="headerName"></param>
+        /// <returns>True if header was removed
+        /// False if no header exists with given name</returns>
+        public bool RemoveHeader(string headerName)
+        {
+            if(ResponseHeaders.ContainsKey(headerName))
+            {
+                ResponseHeaders.Remove(headerName);
+                return true;
+            }
+            else if (NonUniqueResponseHeaders.ContainsKey(headerName))
+            {
+                NonUniqueResponseHeaders.Remove(headerName);
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Removes given header object if it exist
+        /// </summary>
+        /// <param name="header">Returns true if header exists and was removed </param>
+        public bool RemoveHeader(HttpHeader header)
+        {
+            if (ResponseHeaders.ContainsKey(header.Name))
+            {
+                if (ResponseHeaders[header.Name].Equals(header))
+                {
+                    ResponseHeaders.Remove(header.Name);
+                    return true;
+                }
+
+            }
+            else if (NonUniqueResponseHeaders.ContainsKey(header.Name))
+            {
+                if (NonUniqueResponseHeaders[header.Name]
+                    .RemoveAll(x => x.Equals(header)) > 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
