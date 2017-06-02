@@ -205,7 +205,7 @@ namespace Titanium.Web.Proxy
         /// in middle attack is not currently supported
         /// (which would require windows delegation enabled for this server process)
         /// </summary>
-        public bool EnableWinAuth { get; set; } = true;
+        public bool EnableWinAuth { get; set; }
 
         /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication

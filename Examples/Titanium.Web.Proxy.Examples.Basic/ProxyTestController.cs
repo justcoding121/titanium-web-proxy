@@ -45,6 +45,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
             proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
+            //proxyServer.EnableWinAuth = true;
+
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
             {
                 //Exclude Https addresses you don't want to proxy

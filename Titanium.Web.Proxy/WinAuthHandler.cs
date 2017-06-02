@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.WinAuth;
+using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy
 {
@@ -87,11 +89,35 @@ namespace Titanium.Web.Proxy
             {
                 var scheme = authSchemes.FirstOrDefault(x => authHeader.Value.Equals(x, StringComparison.OrdinalIgnoreCase));
 
+                //clear any existing headers to avoid confusing bad servers
+                if (args.WebSession.Request.NonUniqueRequestHeaders.ContainsKey("Authorization"))
+                {
+                    args.WebSession.Request.NonUniqueRequestHeaders.Remove("Authorization");
+                }
+
                 //initial value will match exactly any of the schemes
                 if (scheme != null)
                 {
                     var clientToken = WinAuthHandler.GetInitialAuthToken(args.WebSession.Request.Host, scheme, args.Id);
-                    args.WebSession.Request.RequestHeaders.Add("Authorization", new HttpHeader("Authorization", string.Concat(scheme, clientToken)));
+
+                    var auth = new HttpHeader("Authorization", string.Concat(scheme, clientToken));
+                   
+                    //replace existing authorization header if any
+                    if (args.WebSession.Request.RequestHeaders.ContainsKey("Authorization"))
+                    {
+                        args.WebSession.Request.RequestHeaders["Authorization"] = auth;
+                    }
+                    else
+                    {
+                        args.WebSession.Request.RequestHeaders.Add("Authorization", auth);
+                    }
+
+                    //don't need to send body for Authorization request
+                    if(args.WebSession.Request.HasBody)
+                    {
+                        args.WebSession.Request.ContentLength = 0;
+                    }
+                    
                 }
                 //challenge value will start with any of the scheme selected
                 else
@@ -102,13 +128,28 @@ namespace Titanium.Web.Proxy
                     var serverToken = authHeader.Value.Substring(scheme.Length + 1);
                     var clientToken = WinAuthHandler.GetFinalAuthToken(args.WebSession.Request.Host, serverToken, args.Id);
 
-
+                    //there will be an existing header from initial client request 
                     args.WebSession.Request.RequestHeaders["Authorization"]
                         = new HttpHeader("Authorization", string.Concat(scheme, clientToken));
+
+                    //send body for final auth request
+                    if (args.WebSession.Request.HasBody)
+                    {
+                        args.WebSession.Request.ContentLength 
+                            = args.WebSession.Request.RequestBody.Length;
+                    }
+                        
                 }
 
-                //clear current response
+                //Need to revisit this.
+                //Should we cache all Set-Cokiee headers from server during auth process
+                //and send it to client after auth?
+
+                //clear current server response
                 await args.ClearResponse();
+
+                //request again with updated authorization header
+                //and server cookies
                 var disposed = await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args, false);
                 return disposed;
             }
