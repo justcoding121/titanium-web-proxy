@@ -14,9 +14,13 @@ namespace Titanium.Web.Proxy.Helpers
     /// <seealso cref="System.IO.Stream" />
     internal class CustomBufferedStream : Stream
     {
+        private static readonly AsyncCallback readCallback = ReadCallback;
+
         private readonly Stream baseStream;
 
         private byte[] streamBuffer;
+
+        private readonly byte[] oneByteBuffer = new byte[1];
 
         private int bufferLength;
 
@@ -100,6 +104,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="count">The number of bytes to be written to the current stream.</param>
         public override void Write(byte[] buffer, int offset, int count)
         {
+            OnDataSent(buffer, offset, count);
             baseStream.Write(buffer, offset, count);
         }
 
@@ -123,10 +128,19 @@ namespace Titanium.Web.Proxy.Helpers
                 Buffer.BlockCopy(streamBuffer, bufferPos, buffer, offset, available);
                 bufferPos += available;
                 bufferLength -= available;
-                return new ReadAsyncResult(available);
+                return new ReadAsyncResult(buffer, offset, available, state, callback);
             }
 
-            return baseStream.BeginRead(buffer, offset, count, callback, state);
+            var result = new ReadAsyncResult(buffer, offset, 0, state, callback);
+            result.BaseResult = baseStream.BeginRead(buffer, offset, count, readCallback, result);
+            return result;
+        }
+
+        private static void ReadCallback(IAsyncResult ar)
+        {
+            var readResult = (ReadAsyncResult)ar.AsyncState;
+            readResult.BaseResult = ar;
+            readResult.Callback(readResult);
         }
 
         /// <summary>
@@ -143,6 +157,7 @@ namespace Titanium.Web.Proxy.Helpers
         [DebuggerStepThrough]
         public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
         {
+            OnDataSent(buffer, offset, count);
             return baseStream.BeginWrite(buffer, offset, count, callback, state);
         }
 
@@ -163,7 +178,7 @@ namespace Titanium.Web.Proxy.Helpers
                 bufferLength = 0;
             }
 
-            await baseStream.CopyToAsync(destination, bufferSize, cancellationToken);
+            await base.CopyToAsync(destination, bufferSize, cancellationToken);
         }
 
         /// <summary>
@@ -188,12 +203,11 @@ namespace Titanium.Web.Proxy.Helpers
         [DebuggerStepThrough]
         public override int EndRead(IAsyncResult asyncResult)
         {
-            if (asyncResult is ReadAsyncResult)
-            {
-                return ((ReadAsyncResult)asyncResult).ReadBytes;
-            }
+            var readResult = (ReadAsyncResult)asyncResult;
+            int result = readResult.BaseResult == null ? readResult.ReadBytes : baseStream.EndRead(readResult.BaseResult);
 
-            return baseStream.EndRead(asyncResult);
+            OnDataReceived(readResult.Buffer, readResult.Offset, result);
+            return result;
         }
 
         /// <summary>
@@ -313,6 +327,7 @@ namespace Titanium.Web.Proxy.Helpers
         [DebuggerStepThrough]
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
+            OnDataSent(buffer, offset, count);
             return baseStream.WriteAsync(buffer, offset, count, cancellationToken);
         }
 
@@ -322,7 +337,17 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="value">The byte to write to the stream.</param>
         public override void WriteByte(byte value)
         {
-            baseStream.WriteByte(value);
+            oneByteBuffer[0] = value;
+            OnDataSent(oneByteBuffer, 0, 1);
+            baseStream.Write(oneByteBuffer, 0, 1);
+        }
+
+        private void OnDataSent(byte[] buffer, int offset, int count)
+        {
+        }
+
+        private void OnDataReceived(byte[] buffer, int offset, int count)
+        {
         }
 
         /// <summary>
@@ -397,6 +422,11 @@ namespace Titanium.Web.Proxy.Helpers
         {
             bufferLength = baseStream.Read(streamBuffer, 0, streamBuffer.Length);
             bufferPos = 0;
+            if (bufferLength > 0)
+            {
+                OnDataReceived(streamBuffer, 0, bufferLength);
+            }
+
             return bufferLength > 0;
         }
 
@@ -418,24 +448,41 @@ namespace Titanium.Web.Proxy.Helpers
         {
             bufferLength = await baseStream.ReadAsync(streamBuffer, 0, streamBuffer.Length, cancellationToken);
             bufferPos = 0;
+            if (bufferLength > 0)
+            {
+                OnDataReceived(streamBuffer, 0, bufferLength);
+            }
+
             return bufferLength > 0;
         }
 
         private class ReadAsyncResult : IAsyncResult
         {
+            public byte[] Buffer { get; }
+
+            public int Offset { get; }
+
+            public IAsyncResult BaseResult { get; set; }
+
             public int ReadBytes { get; }
 
-            public bool IsCompleted => true;
+            public object AsyncState { get; }
 
-            public WaitHandle AsyncWaitHandle => null;
+            public AsyncCallback Callback { get; }
 
-            public object AsyncState => null;
+            public bool IsCompleted => CompletedSynchronously || BaseResult.IsCompleted;
 
-            public bool CompletedSynchronously => true;
+            public WaitHandle AsyncWaitHandle => BaseResult?.AsyncWaitHandle;
 
-            public ReadAsyncResult(int readBytes)
+            public bool CompletedSynchronously => BaseResult == null || BaseResult.CompletedSynchronously;
+
+            public ReadAsyncResult(byte[] buffer, int offset, int readBytes, object state, AsyncCallback callback)
             {
+                Buffer = buffer;
+                Offset = offset;
                 ReadBytes = readBytes;
+                AsyncState = state;
+                Callback = callback;
             }
         }
     }
