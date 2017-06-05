@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy.Helpers
         private readonly CustomBufferedStream stream;
         private readonly Encoding encoding;
 
-        private volatile bool disposed;
+        private bool disposed;
 
         internal byte[] Buffer { get; }
 
