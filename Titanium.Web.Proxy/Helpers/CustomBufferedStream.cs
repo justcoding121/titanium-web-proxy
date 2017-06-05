@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy.Helpers
     /// <seealso cref="System.IO.Stream" />
     internal class CustomBufferedStream : Stream
     {
-        private readonly AsyncCallback readCallback = ReadCallback;
+        private AsyncCallback readCallback;
 
         private readonly Stream baseStream;
 
@@ -27,6 +27,7 @@ namespace Titanium.Web.Proxy.Helpers
         private int bufferPos;
 
         private bool disposed;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="CustomBufferedStream"/> class.
         /// </summary>
@@ -34,6 +35,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="bufferSize">Size of the buffer.</param>
         public CustomBufferedStream(Stream baseStream, int bufferSize)
         {
+            readCallback = new AsyncCallback(ReadCallback);
             this.baseStream = baseStream;
             streamBuffer = BufferPool.GetBuffer(bufferSize);
         }
@@ -137,7 +139,7 @@ namespace Titanium.Web.Proxy.Helpers
             return result;
         }
 
-        private static void ReadCallback(IAsyncResult ar)
+        private void ReadCallback(IAsyncResult ar)
         {
             var readResult = (ReadAsyncResult)ar.AsyncState;
             readResult.BaseResult = ar;
@@ -363,6 +365,7 @@ namespace Titanium.Web.Proxy.Helpers
                 baseStream.Dispose();
                 BufferPool.ReturnBuffer(streamBuffer);
                 streamBuffer = null;
+                readCallback = null;
             }
          
         }
