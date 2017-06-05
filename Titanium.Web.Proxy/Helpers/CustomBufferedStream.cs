@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy.Helpers
     /// <seealso cref="System.IO.Stream" />
     internal class CustomBufferedStream : Stream
     {
-        private static readonly AsyncCallback readCallback = ReadCallback;
+        private readonly AsyncCallback readCallback = ReadCallback;
 
         private readonly Stream baseStream;
 
@@ -26,6 +26,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         private int bufferPos;
 
+        private bool disposed;
         /// <summary>
         /// Initializes a new instance of the <see cref="CustomBufferedStream"/> class.
         /// </summary>
@@ -356,9 +357,14 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
         protected override void Dispose(bool disposing)
         {
-            baseStream.Dispose();
-            BufferPool.ReturnBuffer(streamBuffer);
-            streamBuffer = null;
+            if(!disposed)
+            {
+                disposed = true;
+                baseStream.Dispose();
+                BufferPool.ReturnBuffer(streamBuffer);
+                streamBuffer = null;
+            }
+         
         }
 
         /// <summary>
