@@ -8,10 +8,28 @@ using Microsoft.Win32;
 // Helper classes for setting system proxy settings
 namespace Titanium.Web.Proxy.Helpers
 {
-    internal enum ProxyProtocolType
+    [Flags]
+    public enum ProxyProtocolType
     {
-        Http,
-        Https,
+        /// <summary>
+        /// The none
+        /// </summary>
+        None = 0,
+
+        /// <summary>
+        /// HTTP
+        /// </summary>
+        Http = 1,
+
+        /// <summary>
+        /// HTTPS
+        /// </summary>
+        Https = 2,
+
+        /// <summary>
+        /// Both HTTP and HTTPS
+        /// </summary>
+        AllHttp = Http | Https,
     }
 
     internal partial class NativeMethods
@@ -25,11 +43,23 @@ namespace Titanium.Web.Proxy.Helpers
     {
         internal string HostName { get; set; }
         internal int Port { get; set; }
-        internal bool IsHttps { get; set; }
+        internal ProxyProtocolType ProtocolType { get; set; }
 
         public override string ToString()
         {
-            return $"{(IsHttps ? "https" : "http")}={HostName}:{Port}";
+            string protocol = null;
+            switch (ProtocolType)
+            {
+                case ProxyProtocolType.Http:
+                    protocol = "http";
+                    break;
+                case ProxyProtocolType.Https:
+                    protocol = "https";
+                    break;
+                default:
+                    throw new Exception("Unsupported protocol type");
+            }
+            return $"{protocol}={HostName}:{Port}";
         }
     }
 
@@ -41,38 +71,13 @@ namespace Titanium.Web.Proxy.Helpers
         internal const int InternetOptionSettingsChanged = 39;
         internal const int InternetOptionRefresh = 37;
 
-        internal void SetHttpProxy(string hostname, int port)
-        {
-            SetProxy(hostname, port, ProxyProtocolType.Http);
-        }
-
         /// <summary>
-        /// Remove the http proxy setting from current machine
-        /// </summary>
-        internal void RemoveHttpProxy()
-        {
-            RemoveProxy(ProxyProtocolType.Http);
-        }
-
-        /// <summary>
-        /// Set the HTTPS proxy server for current machine
+        /// Set the HTTP and/or HTTPS proxy server for current machine
         /// </summary>
         /// <param name="hostname"></param>
         /// <param name="port"></param>
-        internal void SetHttpsProxy(string hostname, int port)
-        {
-            SetProxy(hostname, port, ProxyProtocolType.Https);
-        }
-
-        /// <summary>
-        /// Removes the https proxy setting to nothing
-        /// </summary>
-        internal void RemoveHttpsProxy()
-        {
-            RemoveProxy(ProxyProtocolType.Https);
-        }
-
-        private void SetProxy(string hostname, int port, ProxyProtocolType protocolType)
+        /// <param name="protocolType"></param>
+        internal void SetProxy(string hostname, int port, ProxyProtocolType protocolType)
         {
             var reg = Registry.CurrentUser.OpenSubKey(
                 "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
@@ -83,13 +88,26 @@ namespace Titanium.Web.Proxy.Helpers
 
                 var exisitingContent = reg.GetValue("ProxyServer") as string;
                 var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                existingSystemProxyValues.RemoveAll(x => protocolType == ProxyProtocolType.Https ? x.IsHttps : !x.IsHttps);
-                existingSystemProxyValues.Add(new HttpSystemProxyValue
+                existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);
+                if ((protocolType & ProxyProtocolType.Http) != 0)
                 {
-                    HostName = hostname,
-                    IsHttps = protocolType == ProxyProtocolType.Https,
-                    Port = port
-                });
+                    existingSystemProxyValues.Add(new HttpSystemProxyValue
+                    {
+                        HostName = hostname,
+                        ProtocolType = ProxyProtocolType.Http,
+                        Port = port
+                    });
+                }
+
+                if ((protocolType & ProxyProtocolType.Https) != 0)
+                {
+                    existingSystemProxyValues.Add(new HttpSystemProxyValue
+                    {
+                        HostName = hostname,
+                        ProtocolType = ProxyProtocolType.Https,
+                        Port = port
+                    });
+                }
 
                 reg.SetValue("ProxyEnable", 1);
                 reg.SetValue("ProxyServer", string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
@@ -98,7 +116,10 @@ namespace Titanium.Web.Proxy.Helpers
             Refresh();
         }
 
-        private void RemoveProxy(ProxyProtocolType protocolType)
+        /// <summary>
+        /// Remove the HTTP and/or HTTPS proxy setting from current machine
+        /// </summary>
+        internal void RemoveProxy(ProxyProtocolType protocolType)
         {
             var reg = Registry.CurrentUser.OpenSubKey(
                 "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
@@ -107,7 +128,7 @@ namespace Titanium.Web.Proxy.Helpers
                 var exisitingContent = reg.GetValue("ProxyServer") as string;
 
                 var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                existingSystemProxyValues.RemoveAll(x => protocolType == ProxyProtocolType.Https ? x.IsHttps : !x.IsHttps);
+                existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);
 
                 if (existingSystemProxyValues.Count != 0)
                 {
@@ -176,17 +197,32 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         private HttpSystemProxyValue ParseProxyValue(string value)
         {
-            var tmp = Regex.Replace(value, @"\s+", " ").Trim().ToLower();
+            var tmp = Regex.Replace(value, @"\s+", " ").Trim();
 
-            if (tmp.StartsWith("http=") || tmp.StartsWith("https="))
+            int equalsIndex = tmp.IndexOf("=", StringComparison.InvariantCulture);
+            if (equalsIndex >= 0)
             {
-                var endPoint = tmp.Substring(5);
-                return new HttpSystemProxyValue
+                string protocolTypeStr = tmp.Substring(0, equalsIndex);
+                ProxyProtocolType? protocolType = null;
+                if (protocolTypeStr.Equals("http", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    HostName = endPoint.Split(':')[0],
-                    Port = int.Parse(endPoint.Split(':')[1]),
-                    IsHttps = tmp.StartsWith("https=")
-                };
+                    protocolType = ProxyProtocolType.Http;
+                }
+                else if (protocolTypeStr.Equals("https", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    protocolType = ProxyProtocolType.Https;
+                }
+
+                if (protocolType.HasValue)
+                {
+                    var endPointParts = tmp.Substring(equalsIndex + 1).Split(':');
+                    return new HttpSystemProxyValue
+                    {
+                        HostName = endPointParts[0],
+                        Port = int.Parse(endPointParts[1]),
+                        ProtocolType = protocolType.Value,
+                    };
+                }
             }
 
             return null;
