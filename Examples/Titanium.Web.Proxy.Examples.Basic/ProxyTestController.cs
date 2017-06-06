@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Security;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Examples.Basic
@@ -92,8 +93,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
                     endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
             //Only explicit proxies can be set as system proxy!
-            proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
-            proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
+            //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
+            //proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
+            proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
         }
 
         public void Stop()
