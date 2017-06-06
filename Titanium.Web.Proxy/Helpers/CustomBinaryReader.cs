@@ -13,10 +13,9 @@ namespace Titanium.Web.Proxy.Helpers
     internal class CustomBinaryReader : IDisposable
     {
         private readonly CustomBufferedStream stream;
-        private readonly int bufferSize;
         private readonly Encoding encoding;
 
-        private volatile bool disposed;
+        private bool disposed;
 
         internal byte[] Buffer { get; }
 
@@ -24,7 +23,6 @@ namespace Titanium.Web.Proxy.Helpers
         {
             this.stream = stream;
             Buffer = BufferPool.GetBuffer(bufferSize);
-            this.bufferSize = bufferSize;
 
             //default to UTF-8
             encoding = Encoding.UTF8;
