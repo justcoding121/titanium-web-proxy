@@ -277,6 +277,46 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
+        /// Removes the trusted certificates from the local machine's certificate store. 
+        /// Needs elevated permission. Works only on Windows.
+        /// </summary>
+        /// <returns></returns>
+        public bool RemoveTrustedRootCertificatesAsAdministrator()
+        {
+            if (RunTime.IsRunningOnMono)
+            {
+                return false;
+            }
+
+            var info = new ProcessStartInfo
+            {
+                FileName = "certutil.exe",
+                Arguments = "-delstore Root \"" + RootCertificateName + "\"",
+                CreateNoWindow = true,
+                UseShellExecute = true,
+                Verb = "runas",
+                ErrorDialog = false,
+            };
+
+            try
+            {
+                var process = Process.Start(info);
+                if (process == null)
+                {
+                    return false;
+                }
+
+                process.WaitForExit();
+            }
+            catch
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Determines whether the root certificate is trusted.
         /// </summary>
         public bool IsRootCertificateTrusted()
