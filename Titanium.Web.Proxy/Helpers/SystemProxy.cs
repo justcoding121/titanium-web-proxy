@@ -71,37 +71,12 @@ namespace Titanium.Web.Proxy.Helpers
         internal const int InternetOptionSettingsChanged = 39;
         internal const int InternetOptionRefresh = 37;
 
-        internal void SetHttpProxy(string hostname, int port)
-        {
-            SetProxy(hostname, port, ProxyProtocolType.Http);
-        }
-
         /// <summary>
-        /// Remove the http proxy setting from current machine
-        /// </summary>
-        internal void RemoveHttpProxy()
-        {
-            RemoveProxy(ProxyProtocolType.Http);
-        }
-
-        /// <summary>
-        /// Set the HTTPS proxy server for current machine
+        /// Set the HTTP and/or HTTPS proxy server for current machine
         /// </summary>
         /// <param name="hostname"></param>
         /// <param name="port"></param>
-        internal void SetHttpsProxy(string hostname, int port)
-        {
-            SetProxy(hostname, port, ProxyProtocolType.Https);
-        }
-
-        /// <summary>
-        /// Removes the https proxy setting to nothing
-        /// </summary>
-        internal void RemoveHttpsProxy()
-        {
-            RemoveProxy(ProxyProtocolType.Https);
-        }
-
+        /// <param name="protocolType"></param>
         internal void SetProxy(string hostname, int port, ProxyProtocolType protocolType)
         {
             var reg = Registry.CurrentUser.OpenSubKey(
@@ -141,6 +116,9 @@ namespace Titanium.Web.Proxy.Helpers
             Refresh();
         }
 
+        /// <summary>
+        /// Remove the HTTP and/or HTTPS proxy setting from current machine
+        /// </summary>
         internal void RemoveProxy(ProxyProtocolType protocolType)
         {
             var reg = Registry.CurrentUser.OpenSubKey(
@@ -150,7 +128,7 @@ namespace Titanium.Web.Proxy.Helpers
                 var exisitingContent = reg.GetValue("ProxyServer") as string;
 
                 var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                existingSystemProxyValues.RemoveAll(x => (protocolType | x.ProtocolType) != 0);
+                existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);
 
                 if (existingSystemProxyValues.Count != 0)
                 {

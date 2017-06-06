@@ -449,12 +449,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemHttpProxy()
         {
-            if (RunTime.IsRunningOnMono)
-            {
-                throw new Exception("Mono Runtime do not support system proxy settings.");
-            }
-
-            systemProxySettingsManager.RemoveHttpProxy();
+            DisableSystemProxy(ProxyProtocolType.Http);
         }
 
         /// <summary>
@@ -462,12 +457,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemHttpsProxy()
         {
-            if (RunTime.IsRunningOnMono)
-            {
-                throw new Exception("Mono Runtime do not support system proxy settings.");
-            }
-
-            systemProxySettingsManager.RemoveHttpsProxy();
+            DisableSystemProxy(ProxyProtocolType.Https);
         }
 
         /// <summary>
