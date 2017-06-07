@@ -287,9 +287,11 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory();
-            systemProxySettingsManager = new SystemProxyManager();
-
-
+            if (!RunTime.IsRunningOnMono)
+            {
+                systemProxySettingsManager = new SystemProxyManager();
+            }
+            
             CertificateManager = new CertificateManager(ExceptionFunc);
             if (rootCertificateName != null)
             {
@@ -530,11 +532,14 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is not running.");
             }
 
-            var setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
-
-            if (setAsSystemProxy)
+            if (!RunTime.IsRunningOnMono)
             {
-                systemProxySettingsManager.DisableAllProxy();
+                var setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
+
+                if (setAsSystemProxy)
+                {
+                    systemProxySettingsManager.RestoreOriginalSettings();
+                }
             }
 
             foreach (var endPoint in ProxyEndPoints)
