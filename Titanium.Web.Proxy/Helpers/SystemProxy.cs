@@ -37,6 +37,18 @@ namespace Titanium.Web.Proxy.Helpers
         [DllImport("wininet.dll")]
         internal static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer,
             int dwBufferLength);
+
+        [DllImport("kernel32.dll")]
+        internal static extern IntPtr GetConsoleWindow();
+
+        // Keeps it from getting garbage collected
+        internal static ConsoleEventDelegate Handler;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern bool SetConsoleCtrlHandler(ConsoleEventDelegate callback, bool add);
+
+        // Pinvoke
+        internal delegate bool ConsoleEventDelegate(int eventType);
     }
 
     internal class HttpSystemProxyValue
@@ -47,7 +59,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         public override string ToString()
         {
-            string protocol = null;
+            string protocol;
             switch (ProtocolType)
             {
                 case ProxyProtocolType.Http:
@@ -59,6 +71,7 @@ namespace Titanium.Web.Proxy.Helpers
                 default:
                     throw new Exception("Unsupported protocol type");
             }
+
             return $"{protocol}={HostName}:{Port}";
         }
     }
@@ -70,6 +83,31 @@ namespace Titanium.Web.Proxy.Helpers
     {
         internal const int InternetOptionSettingsChanged = 39;
         internal const int InternetOptionRefresh = 37;
+
+        private bool originalValuesLoaded;
+        private int? originalProxyEnable;
+        private string originalProxyServer;
+
+        public SystemProxyManager()
+        {
+            AppDomain.CurrentDomain.ProcessExit += (o, args) => RestoreOriginalSettings();
+            if (Environment.UserInteractive && NativeMethods.GetConsoleWindow() != IntPtr.Zero)
+            {
+                NativeMethods.Handler = eventType =>
+                {
+                    if (eventType != 2)
+                    {
+                        return false;
+                    }
+
+                    RestoreOriginalSettings();
+                    return false;
+                };
+
+                //On Console exit make sure we also exit the proxy
+                NativeMethods.SetConsoleCtrlHandler(NativeMethods.Handler, true);
+            }
+        }
 
         /// <summary>
         /// Set the HTTP and/or HTTPS proxy server for current machine
@@ -84,6 +122,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             if (reg != null)
             {
+                SaveOriginalProxyConfiguration(reg);
                 PrepareRegistry(reg);
 
                 var exisitingContent = reg.GetValue("ProxyServer") as string;
@@ -111,9 +150,9 @@ namespace Titanium.Web.Proxy.Helpers
 
                 reg.SetValue("ProxyEnable", 1);
                 reg.SetValue("ProxyServer", string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
-            }
 
-            Refresh();
+                Refresh();
+            }
         }
 
         /// <summary>
@@ -123,26 +162,31 @@ namespace Titanium.Web.Proxy.Helpers
         {
             var reg = Registry.CurrentUser.OpenSubKey(
                 "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
-            if (reg?.GetValue("ProxyServer") != null)
+            if (reg != null)
             {
-                var exisitingContent = reg.GetValue("ProxyServer") as string;
+                SaveOriginalProxyConfiguration(reg);
 
-                var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
-                existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);
+                if (reg.GetValue("ProxyServer") != null)
+                {
+                    var exisitingContent = reg.GetValue("ProxyServer") as string;
 
-                if (existingSystemProxyValues.Count != 0)
-                {
-                    reg.SetValue("ProxyEnable", 1);
-                    reg.SetValue("ProxyServer", string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+                    var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
+                    existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);
+
+                    if (existingSystemProxyValues.Count != 0)
+                    {
+                        reg.SetValue("ProxyEnable", 1);
+                        reg.SetValue("ProxyServer", string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+                    }
+                    else
+                    {
+                        reg.SetValue("ProxyEnable", 0);
+                        reg.SetValue("ProxyServer", string.Empty);
+                    }
                 }
-                else
-                {
-                    reg.SetValue("ProxyEnable", 0);
-                    reg.SetValue("ProxyServer", string.Empty);
-                }
+
+                Refresh();
             }
-
-            Refresh();
         }
 
         /// <summary>
@@ -155,11 +199,55 @@ namespace Titanium.Web.Proxy.Helpers
 
             if (reg != null)
             {
+                SaveOriginalProxyConfiguration(reg);
+
                 reg.SetValue("ProxyEnable", 0);
                 reg.SetValue("ProxyServer", string.Empty);
+
+                Refresh();
+            }
+        }
+
+        internal void RestoreOriginalSettings()
+        {
+            if (!originalValuesLoaded)
+            {
+                return;
             }
 
-            Refresh();
+            var reg = Registry.CurrentUser.OpenSubKey(
+                "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
+
+            if (reg != null)
+            {
+                if (originalProxyEnable.HasValue)
+                {
+                    reg.SetValue("ProxyEnable", originalProxyEnable.Value);
+                }
+                else if (reg.GetValue("ProxyEnable") != null)
+                {
+                    reg.DeleteValue("ProxyEnable");
+                }
+
+                if (originalProxyServer != null)
+                {
+                    reg.SetValue("ProxyServer", originalProxyServer);
+                }
+                else if (reg.GetValue("ProxyServer") != null)
+                {
+                    reg.DeleteValue("ProxyServer");
+                }
+
+                originalValuesLoaded = false;
+                Refresh();
+            }
+        }
+
+        private void SaveOriginalProxyConfiguration(RegistryKey reg)
+        {
+            originalProxyServer = reg.GetValue("ProxyServer") as string;
+            originalProxyEnable = reg.GetValue("ProxyEnable") as int?;
+            originalValuesLoaded = true;
         }
 
         /// <summary>
@@ -239,7 +327,7 @@ namespace Titanium.Web.Proxy.Helpers
                 reg.SetValue("ProxyEnable", 0);
             }
 
-            if (reg.GetValue("ProxyServer") == null || reg.GetValue("ProxyEnable") as string == "0")
+            if (reg.GetValue("ProxyServer") == null || reg.GetValue("ProxyEnable") as int? == 0)
             {
                 reg.SetValue("ProxyServer", string.Empty);
             }
