@@ -17,8 +17,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
         //share requestBody outside handlers
         //Using a dictionary is not a good idea since it can cause memory overflow
         //ideally the data should be moved out of memory
-        private readonly IDictionary<Guid, string> requestBodyHistory 
-            = new ConcurrentDictionary<Guid, string>();
+        //private readonly IDictionary<Guid, string> requestBodyHistory 
+        //    = new ConcurrentDictionary<Guid, string>();
 
         public ProxyTestController()
         {
