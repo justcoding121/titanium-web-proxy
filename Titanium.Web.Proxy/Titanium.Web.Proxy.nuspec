@@ -6,8 +6,8 @@
     <title>Titanium web proxy</title>
     <authors>Titanium</authors>
     <owners>Titanium</owners>
-    <licenseUrl>https://github.com/titanium007/Titanium/blob/master/LICENSE</licenseUrl>
-    <projectUrl>https://github.com/titanium007/Titanium/</projectUrl>
+    <licenseUrl>https://github.com/justcoding121/Titanium-Web-Proxy/blob/develop/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/justcoding121/Titanium-Web-Proxy</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Titanium is a light weight web proxy.</description>
     <releaseNotes></releaseNotes>
