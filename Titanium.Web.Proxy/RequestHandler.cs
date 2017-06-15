@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -352,6 +353,14 @@ namespace Titanium.Web.Proxy
 
                     if (connection == null)
                     {
+                        connection = await GetServerConnection(args);
+                    }
+                    //create a new connection if hostname changes
+                    else if (!connection.HostName.Equals(args.WebSession.Request.RequestUri.Host,
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        connection.Dispose();
+                        Interlocked.Decrement(ref serverConnectionCount);
                         connection = await GetServerConnection(args);
                     }
 
