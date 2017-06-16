@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
 // Helper classes for setting system proxy settings
@@ -212,6 +211,18 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
+        internal void SetAutoProxyUrl(string url)
+        {
+            var reg = Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
+
+            if (reg != null)
+            {
+                SaveOriginalProxyConfiguration(reg);
+                reg.SetValue(regAutoConfigUrl, url);
+                Refresh();
+            }
+        }
+
         internal void RestoreOriginalSettings()
         {
             if (originalValues == null)
@@ -291,6 +302,11 @@ namespace Titanium.Web.Proxy.Helpers
 
         private void SaveOriginalProxyConfiguration(RegistryKey reg)
         {
+            if (originalValues != null)
+            {
+                return;
+            }
+
             originalValues = GetProxyInfoFromRegistry(reg);
         }
 

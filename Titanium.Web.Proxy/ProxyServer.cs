@@ -613,46 +613,8 @@ namespace Titanium.Web.Proxy
         /// <returns><see cref="ExternalProxy"/> instance containing valid proxy configuration from PAC/WAPD scripts if any exists.</returns>
         private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgs sessionEventArgs)
         {
-            var uri = sessionEventArgs.WebSession.Request.RequestUri;
-            IList<string> proxies;
-            if (systemProxyResolver.GetProxies(uri, out proxies) && proxies != null)
-            {
-                string proxy = proxies[0];
-                int port = 80;
-                if (proxy.Contains(":"))
-                {
-                    var parts = proxy.Split(new[] { ':' }, 2);
-                    proxy = parts[0];
-                    port = int.Parse(parts[1]);
-                }
-
-                // TODO: Apply authorization
-                var systemProxy = new ExternalProxy
-                {
-                    HostName = proxy,
-                    Port = port,
-                };
-
-                return Task.FromResult(systemProxy);
-            }
-
-            var protocolType = ProxyInfo.ParseProtocolType(uri.Scheme);
-            if (protocolType.HasValue)
-            {
-                HttpSystemProxyValue value = null;
-                if (systemProxyResolver.ProxyInfo?.Proxies?.TryGetValue(protocolType.Value, out value) == true)
-                {
-                    var systemProxy = new ExternalProxy
-                    {
-                        HostName = value.HostName,
-                        Port = value.Port,
-                    };
-
-                    return Task.FromResult(systemProxy);
-                }
-            }
-
-            return Task.FromResult((ExternalProxy)null);
+            var proxy = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
+            return Task.FromResult(proxy);
         }
 
 

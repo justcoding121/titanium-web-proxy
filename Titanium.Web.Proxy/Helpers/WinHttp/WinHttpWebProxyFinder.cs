@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Security.Policy;
 using System.Text;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Helpers.WinHttp
 {
@@ -17,6 +17,8 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
         public ICredentials Credentials { get; set; }
 
         public ProxyInfo ProxyInfo { get; internal set; }
+
+        public bool BypassOnLocal { get; internal set; }
 
         public Uri AutomaticConfigurationScript { get; internal set; }
 
@@ -38,16 +40,17 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             }
         }
 
-        public bool GetProxies(Uri destination, out IList<string> proxyList)
+        public bool GetAutoProxies(Uri destination, out IList<string> proxyList)
         {
             proxyList = null;
             if (session == null || session.IsInvalid || state == AutoWebProxyState.UnrecognizedScheme)
                 return false;
+
             string proxyListString = null;
             var errorCode = NativeMethods.WinHttp.ErrorCodes.AudodetectionFailed;
             if (AutomaticallyDetectSettings && !autoDetectFailed)
             {
-                errorCode = (NativeMethods.WinHttp.ErrorCodes)GetProxies(destination, null, out proxyListString);
+                errorCode = (NativeMethods.WinHttp.ErrorCodes)GetAutoProxies(destination, null, out proxyListString);
                 autoDetectFailed = IsErrorFatalForAutoDetect(errorCode);
                 if (errorCode == NativeMethods.WinHttp.ErrorCodes.UnrecognizedScheme)
                 {
@@ -55,11 +58,14 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                     return false;
                 }
             }
+
             if (AutomaticConfigurationScript != null && IsRecoverableAutoProxyError(errorCode))
-                errorCode = (NativeMethods.WinHttp.ErrorCodes)GetProxies(destination, AutomaticConfigurationScript, out proxyListString);
+                errorCode = (NativeMethods.WinHttp.ErrorCodes)GetAutoProxies(destination, AutomaticConfigurationScript, out proxyListString);
+
             state = GetStateFromErrorCode(errorCode);
             if (state != AutoWebProxyState.Completed)
                 return false;
+
             if (!string.IsNullOrEmpty(proxyListString))
             {
                 proxyListString = RemoveWhitespaces(proxyListString);
@@ -69,12 +75,101 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             return true;
         }
 
+        public ExternalProxy GetProxy(Uri destination)
+        {
+            IList<string> proxies;
+            if (GetAutoProxies(destination, out proxies))
+            {
+                if (proxies == null)
+                {
+                    return null;
+                }
+
+                string proxy = proxies[0];
+                int port = 80;
+                if (proxy.Contains(":"))
+                {
+                    var parts = proxy.Split(new[] { ':' }, 2);
+                    proxy = parts[0];
+                    port = int.Parse(parts[1]);
+                }
+
+                // TODO: Apply authorization
+                var systemProxy = new ExternalProxy
+                {
+                    HostName = proxy,
+                    Port = port,
+                };
+
+                return systemProxy;
+            }
+
+            if (IsBypassedManual(destination))
+                return null;
+
+            var protocolType = ProxyInfo.ParseProtocolType(destination.Scheme);
+            if (protocolType.HasValue)
+            {
+                HttpSystemProxyValue value = null;
+                if (ProxyInfo?.Proxies?.TryGetValue(protocolType.Value, out value) == true)
+                {
+                    var systemProxy = new ExternalProxy
+                    {
+                        HostName = value.HostName,
+                        Port = value.Port,
+                    };
+
+                    return systemProxy;
+                }
+            }
+
+            return null;
+        }
+
         public void LoadFromIE()
         {
             var pi = GetProxyInfo();
             ProxyInfo = pi;
             AutomaticallyDetectSettings = pi.AutoDetect == true;
             AutomaticConfigurationScript = pi.AutoConfigUrl == null ? null : new Uri(pi.AutoConfigUrl);
+        }
+
+        private bool IsBypassedManual(Uri host)
+        {
+            if (host.IsLoopback || BypassOnLocal && IsLocal(host))
+                return true;
+
+            return false;
+        }
+
+        private bool IsLocal(Uri host)
+        {
+            try
+            {
+                // get host IP addresses
+                IPAddress[] hostIPs = Dns.GetHostAddresses(host.Host);
+                
+                // get local IP addresses
+                IPAddress[] localIPs = Dns.GetHostAddresses(Dns.GetHostName());
+
+                // test if any host IP equals to any local IP or to localhost
+                foreach (IPAddress hostIP in hostIPs)
+                {
+                    // is localhost
+                    if (IPAddress.IsLoopback(hostIP)) return true;
+
+                    // is local address
+                    foreach (IPAddress localIP in localIPs)
+                    {
+                        if (hostIP.Equals(localIP)) return true;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
         }
 
         private ProxyInfo GetProxyInfo()
@@ -129,7 +224,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             session.Close();
         }
 
-        private int GetProxies(Uri destination, Uri scriptLocation, out string proxyListString)
+        private int GetAutoProxies(Uri destination, Uri scriptLocation, out string proxyListString)
         {
             int num = 0;
             var autoProxyOptions = new NativeMethods.WinHttp.WINHTTP_AUTOPROXY_OPTIONS();
@@ -146,6 +241,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                 autoProxyOptions.AutoConfigUrl = scriptLocation.ToString();
                 autoProxyOptions.AutoDetectFlags = NativeMethods.WinHttp.AutoDetectType.None;
             }
+
             if (!WinHttpGetProxyForUrl(destination.ToString(), ref autoProxyOptions, out proxyListString))
             {
                 num = GetLastWin32Error();
