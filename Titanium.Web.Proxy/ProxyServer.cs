@@ -500,6 +500,8 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
+            //clear any system proxy settings which is pointing to our own endpoint
+            //due to non gracious proxy shutdown before
             if (systemProxySettingsManager != null)
             {
                 var proxyInfo = systemProxySettingsManager.GetProxyInfoFromRegistry();
@@ -511,6 +513,7 @@ namespace Titanium.Web.Proxy
                         var value = proxy.Value;
                         if (value.HostName == "127.0.0.1" && ProxyEndPoints.Any(x => x.Port == value.Port))
                         {
+                            //do not restore to any of listening address when we quit
                             systemProxySettingsManager.RemoveProxy(value.ProtocolType, false);
                         }
                     }
