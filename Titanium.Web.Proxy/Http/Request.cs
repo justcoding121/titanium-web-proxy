@@ -33,9 +33,11 @@ namespace Titanium.Web.Proxy.Http
         public bool HasBody => Method == "POST" || Method == "PUT" || Method == "PATCH";
 
         /// <summary>
-        /// Request Http hostanem
+        /// Http hostname header value if exists
+        /// Note: Changing this does NOT change host in RequestUri
+        /// Users can set new RequestUri separately
         /// </summary>
-        internal string Host
+        public string Host
         {
             get
             {
@@ -57,9 +59,9 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Request content encoding
+        /// Content encoding header value
         /// </summary>
-        internal string ContentEncoding
+        public string ContentEncoding
         {
             get
             {
@@ -231,7 +233,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Encoding for this request
         /// </summary>
-        internal Encoding Encoding => this.GetEncoding();
+        public Encoding Encoding => this.GetEncoding();
 
         /// <summary>
         /// Terminates the underlying Tcp Connection to client after current request
@@ -261,7 +263,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Does this request has an upgrade to websocket header?
         /// </summary>
-        internal bool UpgradeToWebSocket
+        public bool UpgradeToWebSocket
         {
             get
             {

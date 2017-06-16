@@ -31,11 +31,6 @@ namespace Titanium.Web.Proxy
                 //read response & headers from server
                 await args.WebSession.ReceiveResponse();
 
-                if (!args.WebSession.Response.ResponseBodyRead)
-                {
-                    args.WebSession.Response.ResponseStream = args.WebSession.ServerConnection.Stream;
-                }
-
                 //check for windows authentication
                 if(EnableWinAuth
                     && !RunTime.IsRunningOnMono
