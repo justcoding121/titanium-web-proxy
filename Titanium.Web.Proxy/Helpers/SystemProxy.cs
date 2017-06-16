@@ -226,6 +226,18 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
+        internal void SetProxyOverride(string proxyOverride)
+        {
+            var reg = Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
+
+            if (reg != null)
+            {
+                SaveOriginalProxyConfiguration(reg);
+                reg.SetValue(regProxyOverride, proxyOverride);
+                Refresh();
+            }
+        }
+
         internal void RestoreOriginalSettings()
         {
             if (originalValues == null)
