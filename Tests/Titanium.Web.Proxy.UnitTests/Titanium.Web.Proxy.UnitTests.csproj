@@ -60,6 +60,7 @@
     <Compile Include="CertificateManagerTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ProxyServerTests.cs" />
+    <Compile Include="SystemProxyTest.cs" />
     <Compile Include="WinAuthTests.cs" />
   </ItemGroup>
   <ItemGroup>
