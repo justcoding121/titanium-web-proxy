@@ -507,15 +507,19 @@ namespace Titanium.Web.Proxy
                 var proxyInfo = systemProxySettingsManager.GetProxyInfoFromRegistry();
                 if (proxyInfo.Proxies != null)
                 {
-                    var proxies = proxyInfo.Proxies.ToArray();
-                    foreach (var proxy in proxies)
+                    var protocolToRemove = ProxyProtocolType.None;
+                    foreach (var proxy in proxyInfo.Proxies.Values)
                     {
-                        var value = proxy.Value;
-                        if (value.HostName == "127.0.0.1" && ProxyEndPoints.Any(x => x.Port == value.Port))
+                        if (proxy.HostName == "127.0.0.1" && ProxyEndPoints.Any(x => x.Port == proxy.Port))
                         {
-                            //do not restore to any of listening address when we quit
-                            systemProxySettingsManager.RemoveProxy(value.ProtocolType, false);
+                            protocolToRemove |= proxy.ProtocolType;
                         }
+                    }
+
+                    if (protocolToRemove != ProxyProtocolType.None)
+                    {
+                        //do not restore to any of listening address when we quit
+                        systemProxySettingsManager.RemoveProxy(protocolToRemove, false);
                     }
                 }
             }
