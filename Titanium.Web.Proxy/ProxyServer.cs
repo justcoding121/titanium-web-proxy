@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -36,6 +37,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private Action<Exception> exceptionFunc;
 
+        private WinHttpWebProxyFinder systemProxyResolver;
+
         /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
@@ -60,7 +63,6 @@ namespace Titanium.Web.Proxy
         /// Manage system proxy settings
         /// </summary>
         private SystemProxyManager systemProxySettingsManager { get; }
-
 
         /// <summary>
         /// Set firefox to use default system proxy
@@ -498,9 +500,14 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
-            if (ForwardToUpstreamGateway && GetCustomUpStreamHttpProxyFunc == null
-                && GetCustomUpStreamHttpsProxyFunc == null)
+            if (ForwardToUpstreamGateway 
+                && GetCustomUpStreamHttpProxyFunc == null && GetCustomUpStreamHttpsProxyFunc == null
+                && systemProxySettingsManager != null)
             {
+                // Use WinHttp to handle PAC/WAPD scripts.
+                systemProxyResolver = new WinHttpWebProxyFinder();
+                systemProxyResolver.LoadFromIE();
+
                 GetCustomUpStreamHttpProxyFunc = GetSystemUpStreamProxy;
                 GetCustomUpStreamHttpsProxyFunc = GetSystemUpStreamProxy;
             }
@@ -606,19 +613,8 @@ namespace Titanium.Web.Proxy
         /// <returns><see cref="ExternalProxy"/> instance containing valid proxy configuration from PAC/WAPD scripts if any exists.</returns>
         private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgs sessionEventArgs)
         {
-            // Use built-in WebProxy class to handle PAC/WAPD scripts.
-            var systemProxyResolver = WebRequest.GetSystemWebProxy();
-
-            var systemProxyUri = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
-
-            // TODO: Apply authorization
-            var systemProxy = new ExternalProxy
-            {
-                HostName = systemProxyUri.Host,
-                Port = systemProxyUri.Port
-            };
-
-            return Task.FromResult(systemProxy);
+            var proxy = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
+            return Task.FromResult(proxy);
         }
 
 
