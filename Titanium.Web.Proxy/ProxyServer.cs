@@ -500,6 +500,23 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
+            if (systemProxySettingsManager != null)
+            {
+                var proxyInfo = systemProxySettingsManager.GetProxyInfoFromRegistry();
+                if (proxyInfo.Proxies != null)
+                {
+                    var proxies = proxyInfo.Proxies.ToArray();
+                    foreach (var proxy in proxies)
+                    {
+                        var value = proxy.Value;
+                        if (value.HostName == "127.0.0.1" && ProxyEndPoints.Any(x => x.Port == value.Port))
+                        {
+                            systemProxySettingsManager.RemoveProxy(value.ProtocolType, false);
+                        }
+                    }
+                }
+            }
+
             if (ForwardToUpstreamGateway 
                 && GetCustomUpStreamHttpProxyFunc == null && GetCustomUpStreamHttpsProxyFunc == null
                 && systemProxySettingsManager != null)
