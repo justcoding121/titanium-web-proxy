@@ -313,7 +313,8 @@ namespace Titanium.Web.Proxy
                     args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                     //proxy authorization check
-                    if (await CheckAuthorization(clientStreamWriter,
+                    if (httpsConnectHostname == null &&
+                        await CheckAuthorization(clientStreamWriter,
                             args.WebSession.Request.RequestHeaders.Values) == false)
                     {
                         args.Dispose();
