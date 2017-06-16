@@ -163,12 +163,15 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         /// Remove the HTTP and/or HTTPS proxy setting from current machine
         /// </summary>
-        internal void RemoveProxy(ProxyProtocolType protocolType)
+        internal void RemoveProxy(ProxyProtocolType protocolType, bool saveOriginalConfig = true)
         {
             var reg = Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
             if (reg != null)
             {
-                SaveOriginalProxyConfiguration(reg);
+                if (saveOriginalConfig)
+                {
+                    SaveOriginalProxyConfiguration(reg);
+                }
 
                 if (reg.GetValue(regProxyServer) != null)
                 {
