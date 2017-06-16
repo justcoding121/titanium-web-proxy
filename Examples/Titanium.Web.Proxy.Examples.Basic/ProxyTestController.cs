@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Security;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Examples.Basic
@@ -15,8 +17,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
         //share requestBody outside handlers
         //Using a dictionary is not a good idea since it can cause memory overflow
         //ideally the data should be moved out of memory
-        //private readonly Dictionary<Guid, string> requestBodyHistory 
-        //    = new Dictionary<Guid, string>();
+        //private readonly IDictionary<Guid, string> requestBodyHistory 
+        //    = new ConcurrentDictionary<Guid, string>();
 
         public ProxyTestController()
         {
@@ -29,6 +31,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             proxyServer.ExceptionFunc = exception => Console.WriteLine(exception.Message);
             proxyServer.TrustRootCertificate = true;
+            proxyServer.ForwardToUpstreamGateway = true;
 
             //optionally set the Certificate Engine
             //Under Mono only BouncyCastle will be supported
@@ -92,8 +95,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
                     endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
             //Only explicit proxies can be set as system proxy!
-            proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
-            proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
+            //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
+            //proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
+            proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
         }
 
         public void Stop()

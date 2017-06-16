@@ -52,7 +52,7 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Net" />
-    <Reference Include="System.configuration" />
+    <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -79,8 +79,12 @@
     <Compile Include="Extensions\StringExtensions.cs" />
     <Compile Include="Helpers\BufferPool.cs" />
     <Compile Include="Helpers\CustomBufferedStream.cs" />
+    <Compile Include="Helpers\ProxyInfo.cs" />
+    <Compile Include="Helpers\WinHttp\NativeMethods.WinHttp.cs" />
     <Compile Include="Helpers\Network.cs" />
     <Compile Include="Helpers\RunTime.cs" />
+    <Compile Include="Helpers\WinHttp\WinHttpHandle.cs" />
+    <Compile Include="Helpers\WinHttp\WinHttpWebProxyFinder.cs" />
     <Compile Include="Http\HeaderParser.cs" />
     <Compile Include="Http\Responses\GenericResponse.cs" />
     <Compile Include="Network\CachedCertificate.cs" />
@@ -129,7 +133,7 @@
     <Compile Include="WinAuthHandler.cs" />
   </ItemGroup>
   <ItemGroup>
-    <COMReference Include="CERTENROLLLib">
+    <COMReference Include="CERTENROLLLib" Condition="'$(OS)' != 'Unix'">
       <Guid>{728AB348-217D-11DA-B2A4-000E7BBB2B09}</Guid>
       <VersionMajor>1</VersionMajor>
       <VersionMinor>0</VersionMinor>

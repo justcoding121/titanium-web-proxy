@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -36,6 +37,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private Action<Exception> exceptionFunc;
 
+        private WinHttpWebProxyFinder systemProxyResolver;
+
         /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
@@ -60,7 +63,6 @@ namespace Titanium.Web.Proxy
         /// Manage system proxy settings
         /// </summary>
         private SystemProxyManager systemProxySettingsManager { get; }
-
 
         /// <summary>
         /// Set firefox to use default system proxy
@@ -287,9 +289,11 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory();
-            systemProxySettingsManager = new SystemProxyManager();
-
-
+            if (!RunTime.IsRunningOnMono)
+            {
+                systemProxySettingsManager = new SystemProxyManager();
+            }
+            
             CertificateManager = new CertificateManager(ExceptionFunc);
             if (rootCertificateName != null)
             {
@@ -348,24 +352,7 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint)
         {
-            if (RunTime.IsRunningOnMono)
-            {
-                throw new Exception("Mono Runtime do not support system proxy settings.");
-            }
-
-            ValidateEndPointAsSystemProxy(endPoint);
-
-            //clear any settings previously added
-            ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpProxy = false);
-
-            systemProxySettingsManager.SetHttpProxy(
-                Equals(endPoint.IpAddress, IPAddress.Any) | Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(), endPoint.Port);
-
-            endPoint.IsSystemHttpProxy = true;
-
-            firefoxProxySettingsManager.UseSystemProxy();
-
-            Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System HTTP Proxy", endPoint.IpAddress, endPoint.Port);
+            SetAsSystemProxy(endPoint, ProxyProtocolType.Http);
         }
 
 
@@ -375,6 +362,16 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint)
         {
+            SetAsSystemProxy(endPoint, ProxyProtocolType.Https);
+        }
+
+        /// <summary>
+        /// Set the given explicit end point as the default proxy server for current machine
+        /// </summary>
+        /// <param name="endPoint"></param>
+        /// <param name="protocolType"></param>
+        public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType)
+        {
             if (RunTime.IsRunningOnMono)
             {
                 throw new Exception("Mono Runtime do not support system proxy settings.");
@@ -382,33 +379,73 @@ namespace Titanium.Web.Proxy
 
             ValidateEndPointAsSystemProxy(endPoint);
 
-            if (!endPoint.EnableSsl)
+            bool isHttp = (protocolType & ProxyProtocolType.Http) > 0;
+            bool isHttps = (protocolType & ProxyProtocolType.Https) > 0;
+
+            if (isHttps)
             {
-                throw new Exception("Endpoint do not support Https connections");
+                if (!endPoint.EnableSsl)
+                {
+                    throw new Exception("Endpoint do not support Https connections");
+                }
+
+                EnsureRootCertificate();
+
+                //If certificate was trusted by the machine
+                if (!CertificateManager.CertValidated)
+                {
+                    protocolType = protocolType & ~ProxyProtocolType.Https;
+                    isHttps = false;
+                }
             }
 
             //clear any settings previously added
-            ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
-                .ToList()
-                .ForEach(x => x.IsSystemHttpsProxy = false);
-
-            EnsureRootCertificate();
-
-            //If certificate was trusted by the machine
-            if (CertificateManager.CertValidated)
+            if (isHttp)
             {
-                systemProxySettingsManager.SetHttpsProxy(
-                    Equals(endPoint.IpAddress, IPAddress.Any) |
-                    Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(),
-                    endPoint.Port);
+                ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpProxy = false);
             }
 
+            if (isHttps)
+            {
+                ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpsProxy = false);
+            }
 
-            endPoint.IsSystemHttpsProxy = true;
+            systemProxySettingsManager.SetProxy(
+                Equals(endPoint.IpAddress, IPAddress.Any) |
+                Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(),
+                endPoint.Port,
+                protocolType);
+
+            if (isHttp)
+            {
+                endPoint.IsSystemHttpsProxy = true;
+            }
+
+            if (isHttps)
+            {
+                endPoint.IsSystemHttpsProxy = true;
+            }
 
             firefoxProxySettingsManager.UseSystemProxy();
 
-            Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System HTTPS Proxy", endPoint.IpAddress, endPoint.Port);
+            string proxyType = null;
+            switch (protocolType)
+            {
+                case ProxyProtocolType.Http:
+                    proxyType = "HTTP";
+                    break;
+                case ProxyProtocolType.Https:
+                    proxyType = "HTTPS";
+                    break;
+                case ProxyProtocolType.AllHttp:
+                    proxyType = "HTTP and HTTPS";
+                    break;
+            }
+
+            if (protocolType != ProxyProtocolType.None)
+            {
+                Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System {2} Proxy", endPoint.IpAddress, endPoint.Port, proxyType);
+            }
         }
 
         /// <summary>
@@ -416,12 +453,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemHttpProxy()
         {
-            if (RunTime.IsRunningOnMono)
-            {
-                throw new Exception("Mono Runtime do not support system proxy settings.");
-            }
-
-            systemProxySettingsManager.RemoveHttpProxy();
+            DisableSystemProxy(ProxyProtocolType.Http);
         }
 
         /// <summary>
@@ -429,12 +461,20 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemHttpsProxy()
         {
+            DisableSystemProxy(ProxyProtocolType.Https);
+        }
+
+        /// <summary>
+        /// Remove the specified proxy settings for current machine
+        /// </summary>
+        public void DisableSystemProxy(ProxyProtocolType protocolType)
+        {
             if (RunTime.IsRunningOnMono)
             {
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
 
-            systemProxySettingsManager.RemoveHttpsProxy();
+            systemProxySettingsManager.RemoveProxy(protocolType);
         }
 
         /// <summary>
@@ -460,9 +500,38 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
-            if (ForwardToUpstreamGateway && GetCustomUpStreamHttpProxyFunc == null
-                && GetCustomUpStreamHttpsProxyFunc == null)
+            //clear any system proxy settings which is pointing to our own endpoint
+            //due to non gracious proxy shutdown before
+            if (systemProxySettingsManager != null)
             {
+                var proxyInfo = systemProxySettingsManager.GetProxyInfoFromRegistry();
+                if (proxyInfo.Proxies != null)
+                {
+                    var protocolToRemove = ProxyProtocolType.None;
+                    foreach (var proxy in proxyInfo.Proxies.Values)
+                    {
+                        if (proxy.HostName == "127.0.0.1" && ProxyEndPoints.Any(x => x.Port == proxy.Port))
+                        {
+                            protocolToRemove |= proxy.ProtocolType;
+                        }
+                    }
+
+                    if (protocolToRemove != ProxyProtocolType.None)
+                    {
+                        //do not restore to any of listening address when we quit
+                        systemProxySettingsManager.RemoveProxy(protocolToRemove, false);
+                    }
+                }
+            }
+
+            if (ForwardToUpstreamGateway 
+                && GetCustomUpStreamHttpProxyFunc == null && GetCustomUpStreamHttpsProxyFunc == null
+                && systemProxySettingsManager != null)
+            {
+                // Use WinHttp to handle PAC/WAPD scripts.
+                systemProxyResolver = new WinHttpWebProxyFinder();
+                systemProxyResolver.LoadFromIE();
+
                 GetCustomUpStreamHttpProxyFunc = GetSystemUpStreamProxy;
                 GetCustomUpStreamHttpsProxyFunc = GetSystemUpStreamProxy;
             }
@@ -494,11 +563,14 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is not running.");
             }
 
-            var setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
-
-            if (setAsSystemProxy)
+            if (!RunTime.IsRunningOnMono)
             {
-                systemProxySettingsManager.DisableAllProxy();
+                var setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
+
+                if (setAsSystemProxy)
+                {
+                    systemProxySettingsManager.RestoreOriginalSettings();
+                }
             }
 
             foreach (var endPoint in ProxyEndPoints)
@@ -565,19 +637,8 @@ namespace Titanium.Web.Proxy
         /// <returns><see cref="ExternalProxy"/> instance containing valid proxy configuration from PAC/WAPD scripts if any exists.</returns>
         private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgs sessionEventArgs)
         {
-            // Use built-in WebProxy class to handle PAC/WAPD scripts.
-            var systemProxyResolver = new WebProxy();
-
-            var systemProxyUri = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
-
-            // TODO: Apply authorization
-            var systemProxy = new ExternalProxy
-            {
-                HostName = systemProxyUri.Host,
-                Port = systemProxyUri.Port
-            };
-
-            return Task.FromResult(systemProxy);
+            var proxy = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
+            return Task.FromResult(proxy);
         }
 
 

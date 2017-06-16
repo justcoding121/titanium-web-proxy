@@ -80,17 +80,14 @@ namespace Titanium.Web.Proxy.Http
             var requestLines = new StringBuilder();
 
             //prepare the request & headers
-            if (ServerConnection.UpStreamHttpProxy != null && ServerConnection.IsHttps == false || ServerConnection.UpStreamHttpsProxy != null && ServerConnection.IsHttps)
-            {
-                requestLines.AppendLine($"{Request.Method} {Request.RequestUri.AbsoluteUri} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
-            }
-            else
-            {
-                requestLines.AppendLine($"{Request.Method} {Request.RequestUri.PathAndQuery} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
-            }
+            requestLines.AppendLine($"{Request.Method} {Request.RequestUri.PathAndQuery} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
+
 
             //Send Authentication to Upstream proxy if needed
-            if (ServerConnection.UpStreamHttpProxy != null && ServerConnection.IsHttps == false && !string.IsNullOrEmpty(ServerConnection.UpStreamHttpProxy.UserName) && ServerConnection.UpStreamHttpProxy.Password != null)
+            if (ServerConnection.UpStreamHttpProxy != null 
+                && ServerConnection.IsHttps == false 
+                && !string.IsNullOrEmpty(ServerConnection.UpStreamHttpProxy.UserName)
+                && ServerConnection.UpStreamHttpProxy.Password != null)
             {
                 requestLines.AppendLine("Proxy-Connection: keep-alive");
                 requestLines.AppendLine("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(
