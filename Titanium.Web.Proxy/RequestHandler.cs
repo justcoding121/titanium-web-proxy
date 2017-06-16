@@ -339,6 +339,12 @@ namespace Titanium.Web.Proxy
                         await BeforeRequest.InvokeParallelAsync(this, args);
                     }
 
+                    if (args.WebSession.Request.CancelRequest)
+                    {
+                        args.Dispose();
+                        break;
+                    }
+
                     //if upgrading to websocket then relay the requet without reading the contents
                     if (args.WebSession.Request.UpgradeToWebSocket)
                     {
@@ -373,13 +379,7 @@ namespace Titanium.Web.Proxy
                         args.Dispose();
                         break;
                     }
-
-                    if (args.WebSession.Request.CancelRequest)
-                    {
-                        args.Dispose();
-                        break;
-                    }
-
+                   
                     //if connection is closing exit
                     if (args.WebSession.Response.ResponseKeepAlive == false)
                     {
@@ -423,12 +423,6 @@ namespace Titanium.Web.Proxy
             try
             {
                 args.WebSession.Request.RequestLocked = true;
-
-                //If request was cancelled by user then dispose the client
-                if (args.WebSession.Request.CancelRequest)
-                {
-                    return true;
-                }
 
                 //if expect continue is enabled then send the headers first 
                 //and see if server would return 100 conitinue
