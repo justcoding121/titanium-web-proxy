@@ -79,8 +79,12 @@
     <Compile Include="Extensions\StringExtensions.cs" />
     <Compile Include="Helpers\BufferPool.cs" />
     <Compile Include="Helpers\CustomBufferedStream.cs" />
+    <Compile Include="Helpers\ProxyInfo.cs" />
+    <Compile Include="Helpers\WinHttp\NativeMethods.WinHttp.cs" />
     <Compile Include="Helpers\Network.cs" />
     <Compile Include="Helpers\RunTime.cs" />
+    <Compile Include="Helpers\WinHttp\WinHttpHandle.cs" />
+    <Compile Include="Helpers\WinHttp\WinHttpWebProxyFinder.cs" />
     <Compile Include="Http\HeaderParser.cs" />
     <Compile Include="Http\Responses\GenericResponse.cs" />
     <Compile Include="Network\CachedCertificate.cs" />

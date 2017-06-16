@@ -54,7 +54,9 @@ namespace Titanium.Web.Proxy.Helpers
     internal class HttpSystemProxyValue
     {
         internal string HostName { get; set; }
+
         internal int Port { get; set; }
+
         internal ProxyProtocolType ProtocolType { get; set; }
 
         public override string ToString()
@@ -85,14 +87,12 @@ namespace Titanium.Web.Proxy.Helpers
         private const string regAutoConfigUrl = "AutoConfigURL";
         private const string regProxyEnable = "ProxyEnable";
         private const string regProxyServer = "ProxyServer";
+        private const string regProxyOverride = "ProxyOverride";
 
         internal const int InternetOptionSettingsChanged = 39;
         internal const int InternetOptionRefresh = 37;
 
-        private bool originalValuesLoaded;
-        private string originalAutoConfigUrl;
-        private int? originalProxyEnable;
-        private string originalProxyServer;
+        private ProxyInfo originalValues;
 
         public SystemProxyManager()
         {
@@ -131,7 +131,7 @@ namespace Titanium.Web.Proxy.Helpers
                 PrepareRegistry(reg);
 
                 var exisitingContent = reg.GetValue(regProxyServer) as string;
-                var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
+                var existingSystemProxyValues = ProxyInfo.GetSystemProxyValues(exisitingContent);
                 existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);
                 if ((protocolType & ProxyProtocolType.Http) != 0)
                 {
@@ -175,7 +175,7 @@ namespace Titanium.Web.Proxy.Helpers
                 {
                     var exisitingContent = reg.GetValue(regProxyServer) as string;
 
-                    var existingSystemProxyValues = GetSystemProxyValues(exisitingContent);
+                    var existingSystemProxyValues = ProxyInfo.GetSystemProxyValues(exisitingContent);
                     existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);
 
                     if (existingSystemProxyValues.Count != 0)
@@ -214,7 +214,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         internal void RestoreOriginalSettings()
         {
-            if (!originalValuesLoaded)
+            if (originalValues == null)
             {
                 return;
             }
@@ -223,110 +223,75 @@ namespace Titanium.Web.Proxy.Helpers
 
             if (reg != null)
             {
-                if (originalAutoConfigUrl != null)
+                var ov = originalValues;
+                if (ov.AutoConfigUrl != null)
                 {
-                    reg.SetValue(regAutoConfigUrl, originalAutoConfigUrl);
+                    reg.SetValue(regAutoConfigUrl, ov.AutoConfigUrl);
                 }
                 else
                 {
                     reg.DeleteValue(regAutoConfigUrl, false);
                 }
 
-                if (originalProxyEnable.HasValue)
+                if (ov.ProxyEnable.HasValue)
                 {
-                    reg.SetValue(regProxyEnable, originalProxyEnable.Value);
+                    reg.SetValue(regProxyEnable, ov.ProxyEnable.Value);
                 }
                 else
                 {
                     reg.DeleteValue(regProxyEnable, false);
                 }
 
-                if (originalProxyServer != null)
+                if (ov.ProxyServer != null)
                 {
-                    reg.SetValue(regProxyServer, originalProxyServer);
+                    reg.SetValue(regProxyServer, ov.ProxyServer);
                 }
                 else
                 {
                     reg.DeleteValue(regProxyServer, false);
                 }
 
-                originalValuesLoaded = false;
+                if (ov.ProxyOverride != null)
+                {
+                    reg.SetValue(regProxyOverride, ov.ProxyOverride);
+                }
+                else
+                {
+                    reg.DeleteValue(regProxyOverride, false);
+                }
+
+                originalValues = null;
                 Refresh();
             }
         }
 
-        private void SaveOriginalProxyConfiguration(RegistryKey reg)
+        internal ProxyInfo GetProxyInfoFromRegistry()
         {
-            originalAutoConfigUrl = reg.GetValue(regAutoConfigUrl) as string;
-            originalProxyServer = reg.GetValue(regProxyServer) as string;
-            originalProxyEnable = reg.GetValue(regProxyEnable) as int?;
-            originalValuesLoaded = true;
-        }
+            var reg = Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
 
-        /// <summary>
-        /// Get the current system proxy setting values
-        /// </summary>
-        /// <param name="prevServerValue"></param>
-        /// <returns></returns>
-        private List<HttpSystemProxyValue> GetSystemProxyValues(string prevServerValue)
-        {
-            var result = new List<HttpSystemProxyValue>();
-
-            if (string.IsNullOrWhiteSpace(prevServerValue))
-                return result;
-
-            var proxyValues = prevServerValue.Split(';');
-
-            if (proxyValues.Length > 0)
+            if (reg != null)
             {
-                result.AddRange(proxyValues.Select(ParseProxyValue).Where(parsedValue => parsedValue != null));
-            }
-            else
-            {
-                var parsedValue = ParseProxyValue(prevServerValue);
-                if (parsedValue != null)
-                    result.Add(parsedValue);
-            }
-
-            return result;
-        }
-
-        /// <summary>
-        /// Parses the system proxy setting string
-        /// </summary>
-        /// <param name="value"></param>
-        /// <returns></returns>
-        private HttpSystemProxyValue ParseProxyValue(string value)
-        {
-            var tmp = Regex.Replace(value, @"\s+", " ").Trim();
-
-            int equalsIndex = tmp.IndexOf("=", StringComparison.InvariantCulture);
-            if (equalsIndex >= 0)
-            {
-                string protocolTypeStr = tmp.Substring(0, equalsIndex);
-                ProxyProtocolType? protocolType = null;
-                if (protocolTypeStr.Equals("http", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    protocolType = ProxyProtocolType.Http;
-                }
-                else if (protocolTypeStr.Equals("https", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    protocolType = ProxyProtocolType.Https;
-                }
-
-                if (protocolType.HasValue)
-                {
-                    var endPointParts = tmp.Substring(equalsIndex + 1).Split(':');
-                    return new HttpSystemProxyValue
-                    {
-                        HostName = endPointParts[0],
-                        Port = int.Parse(endPointParts[1]),
-                        ProtocolType = protocolType.Value,
-                    };
-                }
+                return GetProxyInfoFromRegistry(reg);
             }
 
             return null;
+        }
+
+        private ProxyInfo GetProxyInfoFromRegistry(RegistryKey reg)
+        {
+            var pi = new ProxyInfo(
+                null,
+                reg.GetValue(regAutoConfigUrl) as string,
+                reg.GetValue(regProxyEnable) as int?,
+                reg.GetValue(regProxyServer) as string,
+                reg.GetValue(regProxyOverride) as string);
+
+            return pi;
+        }
+
+        private void SaveOriginalProxyConfiguration(RegistryKey reg)
+        {
+            originalValues = GetProxyInfoFromRegistry(reg);
         }
 
         /// <summary>
