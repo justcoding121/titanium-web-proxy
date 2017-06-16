@@ -31,7 +31,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             proxyServer.ExceptionFunc = exception => Console.WriteLine(exception.Message);
             proxyServer.TrustRootCertificate = true;
-            proxyServer.ForwardToUpstreamGateway = true;
+            //proxyServer.ForwardToUpstreamGateway = true;
 
             //optionally set the Certificate Engine
             //Under Mono only BouncyCastle will be supported
