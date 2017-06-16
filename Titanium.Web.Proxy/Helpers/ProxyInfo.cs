@@ -19,7 +19,13 @@ namespace Titanium.Web.Proxy.Helpers
 
         public string ProxyOverride { get; }
 
+        public bool BypassLoopback { get; }
+
+        public bool BypassOnLocal { get; }
+
         public Dictionary<ProxyProtocolType, HttpSystemProxyValue> Proxies { get; }
+
+        public string[] BypassList { get; }
 
         public ProxyInfo(bool? autoDetect, string autoConfigUrl, int? proxyEnable, string proxyServer, string proxyOverride)
         {
@@ -33,6 +39,84 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 Proxies = GetSystemProxyValues(proxyServer).ToDictionary(x=>x.ProtocolType);
             }
+
+            if (proxyOverride != null)
+            {
+                var overrides = proxyOverride.Split(';');
+                var overrides2 = new List<string>();
+                foreach (var overrideHost in overrides)
+                {
+                    if (overrideHost == "<-loopback>")
+                    {
+                        BypassLoopback = true;
+                    }
+                    else if (overrideHost == "<local>")
+                    {
+                        BypassOnLocal = true;
+                    }
+                    else
+                    {
+                        overrides2.Add(BypassStringEscape(overrideHost));
+                    }
+                }
+
+                if (overrides2.Count > 0)
+                {
+                    BypassList = overrides2.ToArray();
+                }
+
+                Proxies = GetSystemProxyValues(proxyServer).ToDictionary(x => x.ProtocolType);
+            }
+        }
+
+        private static string BypassStringEscape(string rawString)
+        {
+            Match match = new Regex("^(?<scheme>.*://)?(?<host>[^:]*)(?<port>:[0-9]{1,5})?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Match(rawString);
+            string empty1;
+            string rawString1;
+            string empty2;
+            if (match.Success)
+            {
+                empty1 = match.Groups["scheme"].Value;
+                rawString1 = match.Groups["host"].Value;
+                empty2 = match.Groups["port"].Value;
+            }
+            else
+            {
+                empty1 = string.Empty;
+                rawString1 = rawString;
+                empty2 = string.Empty;
+            }
+
+            string str1 = ConvertRegexReservedChars(empty1);
+            string str2 = ConvertRegexReservedChars(rawString1);
+            string str3 = ConvertRegexReservedChars(empty2);
+            if (str1 == string.Empty)
+                str1 = "(?:.*://)?";
+
+            if (str3 == string.Empty)
+                str3 = "(?::[0-9]{1,5})?";
+
+            return "^" + str1 + str2 + str3 + "$";
+        }
+
+        private static string ConvertRegexReservedChars(string rawString)
+        {
+            if (rawString.Length == 0)
+                return rawString;
+
+            var stringBuilder = new StringBuilder();
+            foreach (char ch in rawString)
+            {
+                if ("#$()+.?[\\^{|".IndexOf(ch) != -1)
+                    stringBuilder.Append('\\');
+                else if (ch == 42)
+                    stringBuilder.Append('.');
+
+                stringBuilder.Append(ch);
+            }
+
+            return stringBuilder.ToString();
         }
 
         public static ProxyProtocolType? ParseProtocolType(string protocolTypeStr)
