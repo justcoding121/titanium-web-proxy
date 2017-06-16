@@ -23,12 +23,15 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public string ResponseStatusDescription { get; set; }
 
-        internal Encoding Encoding => this.GetResponseCharacterEncoding();
+        /// <summary>
+        /// Encoding used in response
+        /// </summary>
+        public Encoding Encoding => this.GetResponseCharacterEncoding();
 
         /// <summary>
         /// Content encoding for this response
         /// </summary>
-        internal string ContentEncoding
+        public string ContentEncoding
         {
             get
             {
@@ -41,12 +44,15 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal Version HttpVersion { get; set; }
+        /// <summary>
+        /// Http version
+        /// </summary>
+        public Version HttpVersion { get; set; }
 
         /// <summary>
         /// Keep the connection alive?
         /// </summary>
-        internal bool ResponseKeepAlive
+        public bool ResponseKeepAlive
         {
             get
             {
@@ -89,7 +95,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Length of response body
         /// </summary>
-        internal long ContentLength
+        public long ContentLength
         {
             get
             {
@@ -142,7 +148,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Response transfer-encoding is chunked?
         /// </summary>
-        internal bool IsChunked
+        public bool IsChunked
         {
             get
             {
@@ -198,14 +204,8 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public Dictionary<string, List<HttpHeader>> NonUniqueResponseHeaders { get; set; }
 
-
         /// <summary>
-        /// Response network stream
-        /// </summary>
-        public Stream ResponseStream { get; set; }
-
-        /// <summary>
-        /// response body contenst as byte array
+        /// response body content as byte array
         /// </summary>
         internal byte[] ResponseBody { get; set; }
 

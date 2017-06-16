@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -236,12 +237,12 @@ namespace Titanium.Web.Proxy
         /// <param name="clientStream"></param>
         /// <param name="clientStreamReader"></param>
         /// <param name="clientStreamWriter"></param>
-        /// <param name="httpsHostName"></param>
+        /// <param name="httpsConnectHostname"></param>
         /// <param name="endPoint"></param>
         /// <param name="connectHeaders"></param>
         /// <returns></returns>
         private async Task<bool> HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
-            CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName,
+            CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsConnectHostname,
             ProxyEndPoint endPoint, List<HttpHeader> connectHeaders)
         {
             bool disposed = false;
@@ -299,9 +300,9 @@ namespace Titanium.Web.Proxy
                     //Read the request headers in to unique and non-unique header collections
                     await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.NonUniqueRequestHeaders, args.WebSession.Request.RequestHeaders);
 
-                    var httpRemoteUri = new Uri(httpsHostName == null
+                    var httpRemoteUri = new Uri(httpsConnectHostname == null
                         ? httpCmdSplit[1]
-                        : string.Concat("https://", args.WebSession.Request.Host ?? httpsHostName, httpCmdSplit[1]));
+                        : string.Concat("https://", args.WebSession.Request.Host ?? httpsConnectHostname, httpCmdSplit[1]));
 
                     args.WebSession.Request.RequestUri = httpRemoteUri;
 
@@ -311,7 +312,8 @@ namespace Titanium.Web.Proxy
                     args.ProxyClient.ClientStreamReader = clientStreamReader;
                     args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
-                    if (httpsHostName == null &&
+                    //proxy authorization check
+                    if (httpsConnectHostname == null &&
                         await CheckAuthorization(clientStreamWriter,
                             args.WebSession.Request.RequestHeaders.Values) == false)
                     {
@@ -338,6 +340,12 @@ namespace Titanium.Web.Proxy
                         await BeforeRequest.InvokeParallelAsync(this, args);
                     }
 
+                    if (args.WebSession.Request.CancelRequest)
+                    {
+                        args.Dispose();
+                        break;
+                    }
+
                     //if upgrading to websocket then relay the requet without reading the contents
                     if (args.WebSession.Request.UpgradeToWebSocket)
                     {
@@ -354,6 +362,14 @@ namespace Titanium.Web.Proxy
                     {
                         connection = await GetServerConnection(args);
                     }
+                    //create a new connection if hostname changes
+                    else if (!connection.HostName.Equals(args.WebSession.Request.RequestUri.Host,
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        connection.Dispose();
+                        Interlocked.Decrement(ref serverConnectionCount);
+                        connection = await GetServerConnection(args);
+                    }
 
                     //construct the web request that we are going to issue on behalf of the client.
                     disposed = await HandleHttpSessionRequestInternal(connection, args, false);
@@ -364,13 +380,7 @@ namespace Titanium.Web.Proxy
                         args.Dispose();
                         break;
                     }
-
-                    if (args.WebSession.Request.CancelRequest)
-                    {
-                        args.Dispose();
-                        break;
-                    }
-
+                   
                     //if connection is closing exit
                     if (args.WebSession.Response.ResponseKeepAlive == false)
                     {
@@ -414,12 +424,6 @@ namespace Titanium.Web.Proxy
             try
             {
                 args.WebSession.Request.RequestLocked = true;
-
-                //If request was cancelled by user then dispose the client
-                if (args.WebSession.Request.CancelRequest)
-                {
-                    return true;
-                }
 
                 //if expect continue is enabled then send the headers first 
                 //and see if server would return 100 conitinue
