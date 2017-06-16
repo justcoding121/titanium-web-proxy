@@ -607,7 +607,7 @@ namespace Titanium.Web.Proxy
         private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgs sessionEventArgs)
         {
             // Use built-in WebProxy class to handle PAC/WAPD scripts.
-            var systemProxyResolver = new WebProxy();
+            var systemProxyResolver = WebRequest.GetSystemWebProxy();
 
             var systemProxyUri = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
 
