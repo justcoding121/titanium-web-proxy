@@ -18,11 +18,15 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
 
         public ProxyInfo ProxyInfo { get; internal set; }
 
-        public bool BypassOnLocal { get; internal set; }
+        public bool BypassLoopback { get; internal set; }
 
+        public bool BypassOnLocal { get; internal set; }
+        
         public Uri AutomaticConfigurationScript { get; internal set; }
 
         public bool AutomaticallyDetectSettings { get; internal set; }
+
+        private WebProxy Proxy { get; set; }
 
         public WinHttpWebProxyFinder()
         {
@@ -104,7 +108,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                 return systemProxy;
             }
 
-            if (IsBypassedManual(destination))
+            if (Proxy?.IsBypassed(destination) == true)
                 return null;
 
             var protocolType = ProxyInfo.ParseProtocolType(destination.Scheme);
@@ -132,44 +136,9 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             ProxyInfo = pi;
             AutomaticallyDetectSettings = pi.AutoDetect == true;
             AutomaticConfigurationScript = pi.AutoConfigUrl == null ? null : new Uri(pi.AutoConfigUrl);
-        }
-
-        private bool IsBypassedManual(Uri host)
-        {
-            if (host.IsLoopback || BypassOnLocal && IsLocal(host))
-                return true;
-
-            return false;
-        }
-
-        private bool IsLocal(Uri host)
-        {
-            try
-            {
-                // get host IP addresses
-                IPAddress[] hostIPs = Dns.GetHostAddresses(host.Host);
-                
-                // get local IP addresses
-                IPAddress[] localIPs = Dns.GetHostAddresses(Dns.GetHostName());
-
-                // test if any host IP equals to any local IP or to localhost
-                foreach (IPAddress hostIP in hostIPs)
-                {
-                    // is localhost
-                    if (IPAddress.IsLoopback(hostIP)) return true;
-
-                    // is local address
-                    foreach (IPAddress localIP in localIPs)
-                    {
-                        if (hostIP.Equals(localIP)) return true;
-                    }
-                }
-            }
-            catch
-            {
-            }
-
-            return false;
+            BypassLoopback = pi.BypassLoopback;
+            BypassOnLocal = pi.BypassOnLocal;
+            Proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal, pi.BypassList);
         }
 
         private ProxyInfo GetProxyInfo()

@@ -44,6 +44,27 @@ namespace Titanium.Web.Proxy.UnitTests
 
                 //proxyManager.SetAutoProxyUrl("http://localhost/proxy.pac");
                 //CompareUrls();
+
+                proxyManager.SetProxyOverride("<-loopback>");
+                CompareUrls();
+
+                proxyManager.SetProxyOverride("<local>");
+                CompareUrls();
+
+                proxyManager.SetProxyOverride("yahoo.com");
+                CompareUrls();
+
+                proxyManager.SetProxyOverride("*.local");
+                CompareUrls();
+
+                proxyManager.SetProxyOverride("http://*.local");
+                CompareUrls();
+
+                proxyManager.SetProxyOverride("<-loopback>;*.local");
+                CompareUrls();
+
+                proxyManager.SetProxyOverride("<-loopback>;*.local;<local>");
+                CompareUrls();
             }
             finally
             {
@@ -54,10 +75,12 @@ namespace Titanium.Web.Proxy.UnitTests
         private void CompareUrls()
         {
             var webProxy = WebRequest.GetSystemWebProxy();
+
             var resolver = new WinHttpWebProxyFinder();
             resolver.LoadFromIE();
-            resolver.BypassOnLocal = WebProxy.GetDefaultProxy().BypassProxyOnLocal;
 
+            CompareProxy(webProxy, resolver, "http://127.0.0.1");
+            CompareProxy(webProxy, resolver, "https://127.0.0.1");
             CompareProxy(webProxy, resolver, "http://localhost");
             CompareProxy(webProxy, resolver, "https://localhost");
 
@@ -78,6 +101,10 @@ namespace Titanium.Web.Proxy.UnitTests
             CompareProxy(webProxy, resolver, "https://google.com");
             CompareProxy(webProxy, resolver, "http://bing.com");
             CompareProxy(webProxy, resolver, "https://bing.com");
+            CompareProxy(webProxy, resolver, "http://yahoo.com");
+            CompareProxy(webProxy, resolver, "https://yahoo.com");
+            CompareProxy(webProxy, resolver, "http://test.local");
+            CompareProxy(webProxy, resolver, "https://test.local");
         }
 
         private void CompareProxy(IWebProxy webProxy, WinHttpWebProxyFinder resolver, string url)
