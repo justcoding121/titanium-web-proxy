@@ -237,12 +237,12 @@ namespace Titanium.Web.Proxy
         /// <param name="clientStream"></param>
         /// <param name="clientStreamReader"></param>
         /// <param name="clientStreamWriter"></param>
-        /// <param name="httpsHostName"></param>
+        /// <param name="httpsConnectHostname"></param>
         /// <param name="endPoint"></param>
         /// <param name="connectHeaders"></param>
         /// <returns></returns>
         private async Task<bool> HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
-            CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsHostName,
+            CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsConnectHostname,
             ProxyEndPoint endPoint, List<HttpHeader> connectHeaders)
         {
             bool disposed = false;
@@ -300,9 +300,9 @@ namespace Titanium.Web.Proxy
                     //Read the request headers in to unique and non-unique header collections
                     await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.NonUniqueRequestHeaders, args.WebSession.Request.RequestHeaders);
 
-                    var httpRemoteUri = new Uri(httpsHostName == null
+                    var httpRemoteUri = new Uri(httpsConnectHostname == null
                         ? httpCmdSplit[1]
-                        : string.Concat("https://", args.WebSession.Request.Host ?? httpsHostName, httpCmdSplit[1]));
+                        : string.Concat("https://", args.WebSession.Request.Host ?? httpsConnectHostname, httpCmdSplit[1]));
 
                     args.WebSession.Request.RequestUri = httpRemoteUri;
 
@@ -312,8 +312,8 @@ namespace Titanium.Web.Proxy
                     args.ProxyClient.ClientStreamReader = clientStreamReader;
                     args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
-                    if (httpsHostName == null &&
-                        await CheckAuthorization(clientStreamWriter,
+                    //proxy authorization check
+                    if (await CheckAuthorization(clientStreamWriter,
                             args.WebSession.Request.RequestHeaders.Values) == false)
                     {
                         args.Dispose();
