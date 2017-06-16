@@ -340,7 +340,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     //if upgrading to websocket then relay the requet without reading the contents
-                    if (args.WebSession.Request.UpgradeToWebSocket)
+                    if (!args.WebSession.Request.CancelRequest && args.WebSession.Request.UpgradeToWebSocket)
                     {
                         await TcpHelper.SendRaw(this,
                             httpRemoteUri.Host, httpRemoteUri.Port,
@@ -351,7 +351,7 @@ namespace Titanium.Web.Proxy
                         break;
                     }
 
-                    if (connection == null)
+                    if (!args.WebSession.Request.CancelRequest && connection == null)
                     {
                         connection = await GetServerConnection(args);
                     }
