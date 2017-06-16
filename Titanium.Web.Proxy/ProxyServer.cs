@@ -511,7 +511,7 @@ namespace Titanium.Web.Proxy
                         var value = proxy.Value;
                         if (value.HostName == "127.0.0.1" && ProxyEndPoints.Any(x => x.Port == value.Port))
                         {
-                            systemProxySettingsManager.RemoveProxy(value.ProtocolType);
+                            systemProxySettingsManager.RemoveProxy(value.ProtocolType, false);
                         }
                     }
                 }
