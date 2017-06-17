@@ -67,9 +67,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Set firefox to use default system proxy
         /// </summary>
-        private FireFoxProxySettingsManager firefoxProxySettingsManager 
-            = new FireFoxProxySettingsManager();
-
+        private readonly FireFoxProxySettingsManager firefoxProxySettingsManager = new FireFoxProxySettingsManager();
 
         /// <summary>
         /// Buffer size used throughout this proxy
@@ -255,14 +253,12 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// List of supported Ssl versions
         /// </summary>
-        public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls
-                                                                  | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
+        public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 
         /// <summary>
         /// Total number of active client connections
         /// </summary>
         public int ClientConnectionCount => clientConnectionCount;
-
 
         /// <summary>
         /// Total number of active server connections
@@ -293,7 +289,7 @@ namespace Titanium.Web.Proxy
             {
                 systemProxySettingsManager = new SystemProxyManager();
             }
-            
+
             CertificateManager = new CertificateManager(ExceptionFunc);
             if (rootCertificateName != null)
             {
@@ -312,8 +308,7 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void AddEndPoint(ProxyEndPoint endPoint)
         {
-            if (ProxyEndPoints.Any(x => x.IpAddress.Equals(endPoint.IpAddress)
-                                        && endPoint.Port != 0 && x.Port == endPoint.Port))
+            if (ProxyEndPoints.Any(x => x.IpAddress.Equals(endPoint.IpAddress) && endPoint.Port != 0 && x.Port == endPoint.Port))
             {
                 throw new Exception("Cannot add another endpoint to same port & ip address");
             }
@@ -412,7 +407,9 @@ namespace Titanium.Web.Proxy
 
             systemProxySettingsManager.SetProxy(
                 Equals(endPoint.IpAddress, IPAddress.Any) |
-                Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(),
+                Equals(endPoint.IpAddress, IPAddress.Loopback)
+                    ? "127.0.0.1"
+                    : endPoint.IpAddress.ToString(),
                 endPoint.Port,
                 protocolType);
 
@@ -524,7 +521,7 @@ namespace Titanium.Web.Proxy
                 }
             }
 
-            if (ForwardToUpstreamGateway 
+            if (ForwardToUpstreamGateway
                 && GetCustomUpStreamHttpProxyFunc == null && GetCustomUpStreamHttpsProxyFunc == null
                 && systemProxySettingsManager != null)
             {
@@ -565,7 +562,7 @@ namespace Titanium.Web.Proxy
 
             if (!RunTime.IsRunningOnMono)
             {
-                var setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
+                bool setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
 
                 if (setAsSystemProxy)
                 {
@@ -618,7 +615,8 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         private void ValidateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
         {
-            if (endPoint == null) throw new ArgumentNullException(nameof(endPoint));
+            if (endPoint == null)
+                throw new ArgumentNullException(nameof(endPoint));
             if (ProxyEndPoints.Contains(endPoint) == false)
             {
                 throw new Exception("Cannot set endPoints not added to proxy as system proxy");

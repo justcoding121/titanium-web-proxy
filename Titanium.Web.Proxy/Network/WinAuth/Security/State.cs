@@ -1,7 +1,7 @@
-﻿namespace Titanium.Web.Proxy.Network.WinAuth.Security
-{
-    using System;
+﻿using System;
 
+namespace Titanium.Web.Proxy.Network.WinAuth.Security
+{
     /// <summary>
     /// Status of authenticated session
     /// </summary>
@@ -9,10 +9,10 @@
     {
         internal State()
         {
-            this.Credentials = new Common.SecurityHandle(0);
-            this.Context = new Common.SecurityHandle(0);
+            Credentials = new Common.SecurityHandle(0);
+            Context = new Common.SecurityHandle(0);
 
-            this.LastSeen = DateTime.Now;
+            LastSeen = DateTime.Now;
         }
 
         /// <summary>
@@ -32,13 +32,13 @@
 
         internal void ResetHandles()
         {
-            this.Credentials.Reset();
-            this.Context.Reset();
+            Credentials.Reset();
+            Context.Reset();
         }
 
         internal void UpdatePresence()
         {
-            this.LastSeen = DateTime.Now;
+            LastSeen = DateTime.Now;
         }
     }
 }

@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 using Titanium.Web.Proxy.Examples.Basic.Helpers;
 
 namespace Titanium.Web.Proxy.Examples.Basic
