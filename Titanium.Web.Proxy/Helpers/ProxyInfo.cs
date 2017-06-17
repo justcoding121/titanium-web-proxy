@@ -70,7 +70,8 @@ namespace Titanium.Web.Proxy.Helpers
 
         private static string BypassStringEscape(string rawString)
         {
-            Match match = new Regex("^(?<scheme>.*://)?(?<host>[^:]*)(?<port>:[0-9]{1,5})?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Match(rawString);
+            Match match =
+                new Regex("^(?<scheme>.*://)?(?<host>[^:]*)(?<port>:[0-9]{1,5})?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Match(rawString);
             string empty1;
             string rawString1;
             string empty2;

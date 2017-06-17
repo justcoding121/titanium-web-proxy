@@ -119,7 +119,8 @@ namespace Titanium.Web.Proxy.Extensions
         /// <param name="isChunked"></param>
         /// <param name="contentLength"></param>
         /// <returns></returns>
-        internal static async Task WriteResponseBody(this CustomBinaryReader inStreamReader, int bufferSize, Stream outStream, bool isChunked, long contentLength)
+        internal static async Task WriteResponseBody(this CustomBinaryReader inStreamReader, int bufferSize, Stream outStream, bool isChunked,
+            long contentLength)
         {
             if (!isChunked)
             {

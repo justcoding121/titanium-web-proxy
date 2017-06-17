@@ -43,10 +43,9 @@ namespace Titanium.Web.Proxy
             HttpHeader authHeader = null;
 
             //check in non-unique headers first
-            var header = args.WebSession.Response
-                .NonUniqueResponseHeaders
-                .FirstOrDefault(x =>
-                    authHeaderNames.Any(y => x.Key.Equals(y, StringComparison.OrdinalIgnoreCase)));
+            var header =
+                args.WebSession.Response.NonUniqueResponseHeaders.FirstOrDefault(
+                    x => authHeaderNames.Any(y => x.Key.Equals(y, StringComparison.OrdinalIgnoreCase)));
 
             if (!header.Equals(new KeyValuePair<string, List<HttpHeader>>()))
             {
@@ -55,8 +54,7 @@ namespace Titanium.Web.Proxy
 
             if (headerName != null)
             {
-                authHeader = args.WebSession.Response
-                    .NonUniqueResponseHeaders[headerName]
+                authHeader = args.WebSession.Response.NonUniqueResponseHeaders[headerName]
                     .FirstOrDefault(x => authSchemes.Any(y => x.Value.StartsWith(y, StringComparison.OrdinalIgnoreCase)));
             }
 
@@ -64,10 +62,8 @@ namespace Titanium.Web.Proxy
             if (authHeader == null)
             {
                 //check in non-unique headers first
-                var uHeader = args.WebSession.Response
-                    .ResponseHeaders
-                    .FirstOrDefault(x =>
-                        authHeaderNames.Any(y => x.Key.Equals(y, StringComparison.OrdinalIgnoreCase)));
+                var uHeader =
+                    args.WebSession.Response.ResponseHeaders.FirstOrDefault(x => authHeaderNames.Any(y => x.Key.Equals(y, StringComparison.OrdinalIgnoreCase)));
 
                 if (!uHeader.Equals(new KeyValuePair<string, HttpHeader>()))
                 {
@@ -76,8 +72,8 @@ namespace Titanium.Web.Proxy
 
                 if (headerName != null)
                 {
-                    authHeader = authSchemes.Any(x => args.WebSession.Response
-                        .ResponseHeaders[headerName].Value.StartsWith(x, StringComparison.OrdinalIgnoreCase))
+                    authHeader = authSchemes.Any(x => args.WebSession.Response.ResponseHeaders[headerName].Value
+                        .StartsWith(x, StringComparison.OrdinalIgnoreCase))
                         ? args.WebSession.Response.ResponseHeaders[headerName]
                         : null;
                 }
@@ -119,21 +115,19 @@ namespace Titanium.Web.Proxy
                 //challenge value will start with any of the scheme selected
                 else
                 {
-                    scheme = authSchemes.FirstOrDefault(x => authHeader.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase)
-                                                             && authHeader.Value.Length > x.Length + 1);
+                    scheme = authSchemes.FirstOrDefault(x => authHeader.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase) &&
+                                                             authHeader.Value.Length > x.Length + 1);
 
                     var serverToken = authHeader.Value.Substring(scheme.Length + 1);
                     var clientToken = WinAuthHandler.GetFinalAuthToken(args.WebSession.Request.Host, serverToken, args.Id);
 
                     //there will be an existing header from initial client request 
-                    args.WebSession.Request.RequestHeaders["Authorization"]
-                        = new HttpHeader("Authorization", string.Concat(scheme, clientToken));
+                    args.WebSession.Request.RequestHeaders["Authorization"] = new HttpHeader("Authorization", string.Concat(scheme, clientToken));
 
                     //send body for final auth request
                     if (args.WebSession.Request.HasBody)
                     {
-                        args.WebSession.Request.ContentLength
-                            = args.WebSession.Request.RequestBody.Length;
+                        args.WebSession.Request.ContentLength = args.WebSession.Request.RequestBody.Length;
                     }
                 }
 

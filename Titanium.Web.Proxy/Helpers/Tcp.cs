@@ -181,11 +181,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="tcpConnectionFactory"></param>
         /// <param name="connection"></param>
         /// <returns></returns>
-        internal static async Task SendRaw(ProxyServer server,
-            string remoteHostName, int remotePort,
-            string httpCmd, Version httpVersion, Dictionary<string, HttpHeader> requestHeaders,
-            bool isHttps,
-            Stream clientStream, TcpConnectionFactory tcpConnectionFactory,
+        internal static async Task SendRaw(ProxyServer server, string remoteHostName, int remotePort, string httpCmd, Version httpVersion,
+            Dictionary<string, HttpHeader> requestHeaders, bool isHttps, Stream clientStream, TcpConnectionFactory tcpConnectionFactory,
             TcpConnection connection = null)
         {
             //prepare the prefix content
@@ -218,10 +215,7 @@ namespace Titanium.Web.Proxy.Helpers
             //create new connection if connection is null
             if (connection == null)
             {
-                tcpConnection = await tcpConnectionFactory.CreateClient(server,
-                    remoteHostName, remotePort,
-                    httpVersion, isHttps,
-                    null, null);
+                tcpConnection = await tcpConnectionFactory.CreateClient(server, remoteHostName, remotePort, httpVersion, isHttps, null, null);
 
                 connectionCreated = true;
             }

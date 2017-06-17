@@ -52,9 +52,7 @@ namespace Titanium.Web.Proxy.Network
 
                 if (certEngine == null)
                 {
-                    certEngine = engine == CertificateEngine.BouncyCastle
-                        ? (ICertificateMaker)new BCCertificateMaker()
-                        : new WinCertificateMaker();
+                    certEngine = engine == CertificateEngine.BouncyCastle ? (ICertificateMaker)new BCCertificateMaker() : new WinCertificateMaker();
                 }
             }
         }
@@ -143,7 +141,8 @@ namespace Titanium.Web.Proxy.Network
             }
 
             var path = Path.GetDirectoryName(assemblyLocation);
-            if (null == path) throw new NullReferenceException();
+            if (null == path)
+                throw new NullReferenceException();
             var fileName = Path.Combine(path, "rootCert.pfx");
             return fileName;
         }
@@ -151,7 +150,8 @@ namespace Titanium.Web.Proxy.Network
         private X509Certificate2 LoadRootCertificate()
         {
             var fileName = GetRootCertificatePath();
-            if (!File.Exists(fileName)) return null;
+            if (!File.Exists(fileName))
+                return null;
             try
             {
                 return new X509Certificate2(fileName, string.Empty, X509KeyStorageFlags.Exportable);
@@ -387,7 +387,10 @@ namespace Titanium.Web.Proxy.Network
                     }
                     if (certificate != null && !certificateCache.ContainsKey(certificateName))
                     {
-                        certificateCache.Add(certificateName, new CachedCertificate { Certificate = certificate });
+                        certificateCache.Add(certificateName, new CachedCertificate
+                        {
+                            Certificate = certificate
+                        });
                     }
                 }
                 else
@@ -422,9 +425,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 var cutOff = DateTime.Now.AddMinutes(-1 * certificateCacheTimeOutMinutes);
 
-                var outdated = certificateCache
-                    .Where(x => x.Value.LastAccess < cutOff)
-                    .ToList();
+                var outdated = certificateCache.Where(x => x.Value.LastAccess < cutOff).ToList();
 
                 foreach (var cache in outdated)
                     certificateCache.Remove(cache.Key);

@@ -156,7 +156,8 @@ namespace Titanium.Web.Proxy.Http
         internal async Task ReceiveResponse()
         {
             //return if this is already read
-            if (Response.ResponseStatusCode != null) return;
+            if (Response.ResponseStatusCode != null)
+                return;
 
             string line = await ServerConnection.StreamReader.ReadLineAsync();
             if (line == null)

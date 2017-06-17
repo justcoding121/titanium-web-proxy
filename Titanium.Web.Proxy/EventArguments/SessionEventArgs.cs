@@ -58,8 +58,7 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 if (WebSession.Response.ResponseStatusCode == null)
                 {
-                    throw new Exception("Response status code is null. Cannot request again a request "
-                                        + "which was never send to server.");
+                    throw new Exception("Response status code is null. Cannot request again a request " + "which was never send to server.");
                 }
 
                 reRequest = value;
@@ -112,8 +111,7 @@ namespace Titanium.Web.Proxy.EventArguments
             //GET request don't have a request body to read
             if (!WebSession.Request.HasBody)
             {
-                throw new BodyNotFoundException("Request don't have a body. " +
-                                                "Please verify that this request is a Http POST/PUT/PATCH and request " +
+                throw new BodyNotFoundException("Request don't have a body. " + "Please verify that this request is a Http POST/PUT/PATCH and request " +
                                                 "content length is greater than zero before accessing the body.");
             }
 
@@ -134,16 +132,14 @@ namespace Titanium.Web.Proxy.EventArguments
                         if (WebSession.Request.ContentLength > 0)
                         {
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await ProxyClient.ClientStreamReader.CopyBytesToStream(requestBodyStream,
-                                WebSession.Request.ContentLength);
+                            await ProxyClient.ClientStreamReader.CopyBytesToStream(requestBodyStream, WebSession.Request.ContentLength);
                         }
                         else if (WebSession.Request.HttpVersion.Major == 1 && WebSession.Request.HttpVersion.Minor == 0)
                         {
                             await WebSession.ServerConnection.StreamReader.CopyBytesToStream(requestBodyStream, long.MaxValue);
                         }
                     }
-                    WebSession.Request.RequestBody = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding,
-                        requestBodyStream.ToArray());
+                    WebSession.Request.RequestBody = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding, requestBodyStream.ToArray());
                 }
 
                 //Now set the flag to true
@@ -184,17 +180,16 @@ namespace Titanium.Web.Proxy.EventArguments
                         if (WebSession.Response.ContentLength > 0)
                         {
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream,
-                                WebSession.Response.ContentLength);
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, WebSession.Response.ContentLength);
                         }
-                        else if (WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0 || WebSession.Response.ContentLength == -1)
+                        else if (WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0 ||
+                                 WebSession.Response.ContentLength == -1)
                         {
                             await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, long.MaxValue);
                         }
                     }
 
-                    WebSession.Response.ResponseBody = await GetDecompressedResponseBody(WebSession.Response.ContentEncoding,
-                        responseBodyStream.ToArray());
+                    WebSession.Response.ResponseBody = await GetDecompressedResponseBody(WebSession.Response.ContentEncoding, responseBodyStream.ToArray());
                 }
                 //set this to true for caching
                 WebSession.Response.ResponseBodyRead = true;
@@ -235,7 +230,8 @@ namespace Titanium.Web.Proxy.EventArguments
                 await ReadRequestBody();
             }
             //Use the encoding specified in request to decode the byte[] data to string
-            return WebSession.Request.RequestBodyString ?? (WebSession.Request.RequestBodyString = WebSession.Request.Encoding.GetString(WebSession.Request.RequestBody));
+            return WebSession.Request.RequestBodyString ?? (WebSession.Request.RequestBodyString =
+                       WebSession.Request.Encoding.GetString(WebSession.Request.RequestBody));
         }
 
         /// <summary>
@@ -315,8 +311,8 @@ namespace Titanium.Web.Proxy.EventArguments
 
             await GetResponseBody();
 
-            return WebSession.Response.ResponseBodyString ??
-                   (WebSession.Response.ResponseBodyString = WebSession.Response.Encoding.GetString(WebSession.Response.ResponseBody));
+            return WebSession.Response.ResponseBodyString ?? (WebSession.Response.ResponseBodyString =
+                       WebSession.Response.Encoding.GetString(WebSession.Response.ResponseBody));
         }
 
         /// <summary>
