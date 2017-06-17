@@ -1,30 +1,35 @@
-﻿namespace Titanium.Web.Proxy.Network.WinAuth.Security
-{
-    using System;
-    using System.Runtime.InteropServices;
+﻿using System;
+using System.Runtime.InteropServices;
 
+namespace Titanium.Web.Proxy.Network.WinAuth.Security
+{
     internal class Common
     {
         #region Private constants
+
         private const int ISC_REQ_REPLAY_DETECT = 0x00000004;
         private const int ISC_REQ_SEQUENCE_DETECT = 0x00000008;
         private const int ISC_REQ_CONFIDENTIALITY = 0x00000010;
         private const int ISC_REQ_CONNECTION = 0x00000800;
+
         #endregion
 
         internal static uint NewContextAttributes = 0;
-        internal static Common.SecurityInteger NewLifeTime = new SecurityInteger(0);
+        internal static SecurityInteger NewLifeTime = new SecurityInteger(0);
 
         #region internal constants
+
         internal const int StandardContextAttributes = ISC_REQ_CONFIDENTIALITY | ISC_REQ_REPLAY_DETECT | ISC_REQ_SEQUENCE_DETECT | ISC_REQ_CONNECTION;
         internal const int SecurityNativeDataRepresentation = 0x10;
         internal const int MaximumTokenSize = 12288;
         internal const int SecurityCredentialsOutbound = 2;
         internal const int SuccessfulResult = 0;
         internal const int IntermediateResult = 0x90312;
+
         #endregion
 
         #region internal enumerations
+
         internal enum SecurityBufferType
         {
             SECBUFFER_VERSION = 0,
@@ -34,26 +39,35 @@
         }
 
         [Flags]
-        internal enum NtlmFlags : int
+        internal enum NtlmFlags
         {
             // The client sets this flag to indicate that it supports Unicode strings.
             NegotiateUnicode = 0x00000001,
+
             // This is set to indicate that the client supports OEM strings.
             NegotiateOem = 0x00000002,
+
             // This requests that the server send the authentication target with the Type 2 reply.
             RequestTarget = 0x00000004,
+
             // Indicates that NTLM authentication is supported.
             NegotiateNtlm = 0x00000200,
+
             // When set, the client will send with the message the name of the domain in which the workstation has membership.
             NegotiateDomainSupplied = 0x00001000,
+
             // Indicates that the client is sending its workstation name with the message.  
             NegotiateWorkstationSupplied = 0x00002000,
+
             // Indicates that communication between the client and server after authentication should carry a "dummy" signature.
             NegotiateAlwaysSign = 0x00008000,
+
             // Indicates that this client supports the NTLM2 signing and sealing scheme; if negotiated, this can also affect the response calculations.
             NegotiateNtlm2Key = 0x00080000,
+
             // Indicates that this client supports strong (128-bit) encryption.
             Negotiate128 = 0x20000000,
+
             // Indicates that this client supports medium (56-bit) encryption.
             Negotiate56 = (unchecked((int)0x80000000))
         }
@@ -74,9 +88,11 @@
             /* Use NTLMv2 only. */
             NTLMv2_only,
         }
+
         #endregion
 
         #region internal structures
+
         [StructLayout(LayoutKind.Sequential)]
         internal struct SecurityHandle
         {
@@ -102,6 +118,7 @@
         {
             internal uint LowPart;
             internal int HighPart;
+
             internal SecurityInteger(int dummy)
             {
                 LowPart = 0;
@@ -152,7 +169,6 @@
         [StructLayout(LayoutKind.Sequential)]
         internal struct SecurityBufferDesciption : IDisposable
         {
-
             internal int ulVersion;
             internal int cBuffers;
             internal IntPtr pBuffers; //Point to SecBuffer
@@ -161,18 +177,18 @@
             {
                 ulVersion = (int)SecurityBufferType.SECBUFFER_VERSION;
                 cBuffers = 1;
-                Common.SecurityBuffer ThisSecBuffer = new Common.SecurityBuffer(bufferSize);
-                pBuffers = Marshal.AllocHGlobal(Marshal.SizeOf(ThisSecBuffer));
-                Marshal.StructureToPtr(ThisSecBuffer, pBuffers, false);
+                var thisSecBuffer = new SecurityBuffer(bufferSize);
+                pBuffers = Marshal.AllocHGlobal(Marshal.SizeOf(thisSecBuffer));
+                Marshal.StructureToPtr(thisSecBuffer, pBuffers, false);
             }
 
             internal SecurityBufferDesciption(byte[] secBufferBytes)
             {
                 ulVersion = (int)SecurityBufferType.SECBUFFER_VERSION;
                 cBuffers = 1;
-                Common.SecurityBuffer ThisSecBuffer = new Common.SecurityBuffer(secBufferBytes);
-                pBuffers = Marshal.AllocHGlobal(Marshal.SizeOf(ThisSecBuffer));
-                Marshal.StructureToPtr(ThisSecBuffer, pBuffers, false);
+                var thisSecBuffer = new SecurityBuffer(secBufferBytes);
+                pBuffers = Marshal.AllocHGlobal(Marshal.SizeOf(thisSecBuffer));
+                Marshal.StructureToPtr(thisSecBuffer, pBuffers, false);
             }
 
             public void Dispose()
@@ -181,12 +197,12 @@
                 {
                     if (cBuffers == 1)
                     {
-                        Common.SecurityBuffer ThisSecBuffer = (Common.SecurityBuffer)Marshal.PtrToStructure(pBuffers, typeof(Common.SecurityBuffer));
-                        ThisSecBuffer.Dispose();
+                        var thisSecBuffer = (SecurityBuffer)Marshal.PtrToStructure(pBuffers, typeof(SecurityBuffer));
+                        thisSecBuffer.Dispose();
                     }
                     else
                     {
-                        for (int Index = 0; Index < cBuffers; Index++)
+                        for (int index = 0; index < cBuffers; index++)
                         {
                             //The bits were written out the following order:
                             //int cbBuffer;
@@ -194,9 +210,9 @@
                             //pvBuffer;
                             //What we need to do here is to grab a hold of the pvBuffer allocate by the individual
                             //SecBuffer and release it...
-                            int CurrentOffset = Index * Marshal.SizeOf(typeof(Buffer));
-                            IntPtr SecBufferpvBuffer = Marshal.ReadIntPtr(pBuffers, CurrentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
-                            Marshal.FreeHGlobal(SecBufferpvBuffer);
+                            int currentOffset = index * Marshal.SizeOf(typeof(Buffer));
+                            var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers, currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
+                            Marshal.FreeHGlobal(secBufferpvBuffer);
                         }
                     }
 
@@ -207,7 +223,7 @@
 
             internal byte[] GetBytes()
             {
-                byte[] Buffer = null;
+                byte[] buffer = null;
 
                 if (pBuffers == IntPtr.Zero)
                 {
@@ -216,32 +232,32 @@
 
                 if (cBuffers == 1)
                 {
-                    Common.SecurityBuffer ThisSecBuffer = (Common.SecurityBuffer)Marshal.PtrToStructure(pBuffers, typeof(Common.SecurityBuffer));
+                    var thisSecBuffer = (SecurityBuffer)Marshal.PtrToStructure(pBuffers, typeof(SecurityBuffer));
 
-                    if (ThisSecBuffer.cbBuffer > 0)
+                    if (thisSecBuffer.cbBuffer > 0)
                     {
-                        Buffer = new byte[ThisSecBuffer.cbBuffer];
-                        Marshal.Copy(ThisSecBuffer.pvBuffer, Buffer, 0, ThisSecBuffer.cbBuffer);
+                        buffer = new byte[thisSecBuffer.cbBuffer];
+                        Marshal.Copy(thisSecBuffer.pvBuffer, buffer, 0, thisSecBuffer.cbBuffer);
                     }
                 }
                 else
                 {
-                    int BytesToAllocate = 0;
+                    int bytesToAllocate = 0;
 
-                    for (int Index = 0; Index < cBuffers; Index++)
+                    for (int index = 0; index < cBuffers; index++)
                     {
                         //The bits were written out the following order:
                         //int cbBuffer;
                         //int BufferType;
                         //pvBuffer;
                         //What we need to do here calculate the total number of bytes we need to copy...
-                        int CurrentOffset = Index * Marshal.SizeOf(typeof(Buffer));
-                        BytesToAllocate += Marshal.ReadInt32(pBuffers, CurrentOffset);
+                        int currentOffset = index * Marshal.SizeOf(typeof(Buffer));
+                        bytesToAllocate += Marshal.ReadInt32(pBuffers, currentOffset);
                     }
 
-                    Buffer = new byte[BytesToAllocate];
+                    buffer = new byte[bytesToAllocate];
 
-                    for (int Index = 0, BufferIndex = 0; Index < cBuffers; Index++)
+                    for (int index = 0, bufferIndex = 0; index < cBuffers; index++)
                     {
                         //The bits were written out the following order:
                         //int cbBuffer;
@@ -249,17 +265,18 @@
                         //pvBuffer;
                         //Now iterate over the individual buffers and put them together into a
                         //byte array...
-                        int CurrentOffset = Index * Marshal.SizeOf(typeof(Buffer));
-                        int BytesToCopy = Marshal.ReadInt32(pBuffers, CurrentOffset);
-                        IntPtr SecBufferpvBuffer = Marshal.ReadIntPtr(pBuffers, CurrentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
-                        Marshal.Copy(SecBufferpvBuffer, Buffer, BufferIndex, BytesToCopy);
-                        BufferIndex += BytesToCopy;
+                        int currentOffset = index * Marshal.SizeOf(typeof(Buffer));
+                        int bytesToCopy = Marshal.ReadInt32(pBuffers, currentOffset);
+                        var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers, currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
+                        Marshal.Copy(secBufferpvBuffer, buffer, bufferIndex, bytesToCopy);
+                        bufferIndex += bytesToCopy;
                     }
                 }
 
-                return (Buffer);
+                return (buffer);
             }
         }
+
         #endregion
     }
 }

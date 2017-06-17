@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Extensions
         internal static bool IsConnected(this Socket client)
         {
             // This is how you can determine whether a socket is still connected.
-            var blockingState = client.Blocking;
+            bool blockingState = client.Blocking;
 
             try
             {

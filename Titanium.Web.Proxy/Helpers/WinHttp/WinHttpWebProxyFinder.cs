@@ -21,12 +21,12 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
         public bool BypassLoopback { get; internal set; }
 
         public bool BypassOnLocal { get; internal set; }
-        
+
         public Uri AutomaticConfigurationScript { get; internal set; }
 
         public bool AutomaticallyDetectSettings { get; internal set; }
 
-        private WebProxy Proxy { get; set; }
+        private WebProxy proxy { get; set; }
 
         public WinHttpWebProxyFinder()
         {
@@ -89,26 +89,26 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                     return null;
                 }
 
-                string proxy = proxies[0];
+                string proxyStr = proxies[0];
                 int port = 80;
-                if (proxy.Contains(":"))
+                if (proxyStr.Contains(":"))
                 {
-                    var parts = proxy.Split(new[] { ':' }, 2);
-                    proxy = parts[0];
+                    var parts = proxyStr.Split(new[] { ':' }, 2);
+                    proxyStr = parts[0];
                     port = int.Parse(parts[1]);
                 }
 
                 // TODO: Apply authorization
                 var systemProxy = new ExternalProxy
                 {
-                    HostName = proxy,
+                    HostName = proxyStr,
                     Port = port,
                 };
 
                 return systemProxy;
             }
 
-            if (Proxy?.IsBypassed(destination) == true)
+            if (proxy?.IsBypassed(destination) == true)
                 return null;
 
             var protocolType = ProxyInfo.ParseProtocolType(destination.Scheme);
@@ -138,7 +138,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             AutomaticConfigurationScript = pi.AutoConfigUrl == null ? null : new Uri(pi.AutoConfigUrl);
             BypassLoopback = pi.BypassLoopback;
             BypassOnLocal = pi.BypassOnLocal;
-            Proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal, pi.BypassList);
+            proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal, pi.BypassList);
         }
 
         private ProxyInfo GetProxyInfo()
@@ -214,7 +214,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             if (!WinHttpGetProxyForUrl(destination.ToString(), ref autoProxyOptions, out proxyListString))
             {
                 num = GetLastWin32Error();
-                
+
                 if (num == (int)NativeMethods.WinHttp.ErrorCodes.LoginFailure && Credentials != null)
                 {
                     autoProxyOptions.AutoLogonIfChallenged = true;

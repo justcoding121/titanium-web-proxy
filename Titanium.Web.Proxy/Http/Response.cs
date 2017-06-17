@@ -1,7 +1,6 @@
 ﻿using System;
-using System.Linq;
 using System.Collections.Generic;
-using System.IO;
+using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
@@ -35,9 +34,10 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = ResponseHeaders.ContainsKey("content-encoding");
+                bool hasHeader = ResponseHeaders.ContainsKey("content-encoding");
 
-                if (!hasHeader) return null;
+                if (!hasHeader)
+                    return null;
                 var header = ResponseHeaders["content-encoding"];
 
                 return header.Value.Trim();
@@ -56,7 +56,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = ResponseHeaders.ContainsKey("connection");
+                bool hasHeader = ResponseHeaders.ContainsKey("connection");
 
                 if (hasHeader)
                 {
@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = ResponseHeaders.ContainsKey("content-type");
+                bool hasHeader = ResponseHeaders.ContainsKey("content-type");
 
                 if (hasHeader)
                 {
@@ -99,7 +99,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = ResponseHeaders.ContainsKey("content-length");
+                bool hasHeader = ResponseHeaders.ContainsKey("content-length");
 
                 if (hasHeader == false)
                 {
@@ -119,7 +119,7 @@ namespace Titanium.Web.Proxy.Http
             }
             set
             {
-                var hasHeader = ResponseHeaders.ContainsKey("content-length");
+                bool hasHeader = ResponseHeaders.ContainsKey("content-length");
 
                 if (value >= 0)
                 {
@@ -152,7 +152,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = ResponseHeaders.ContainsKey("transfer-encoding");
+                bool hasHeader = ResponseHeaders.ContainsKey("transfer-encoding");
 
                 if (hasHeader)
                 {
@@ -168,7 +168,7 @@ namespace Titanium.Web.Proxy.Http
             }
             set
             {
-                var hasHeader = ResponseHeaders.ContainsKey("transfer-encoding");
+                bool hasHeader = ResponseHeaders.ContainsKey("transfer-encoding");
 
                 if (value)
                 {
@@ -250,8 +250,7 @@ namespace Titanium.Web.Proxy.Http
         /// <returns></returns>
         public bool HeaderExists(string name)
         {
-            if(ResponseHeaders.ContainsKey(name)
-                || NonUniqueResponseHeaders.ContainsKey(name))
+            if (ResponseHeaders.ContainsKey(name) || NonUniqueResponseHeaders.ContainsKey(name))
             {
                 return true;
             }
@@ -269,9 +268,12 @@ namespace Titanium.Web.Proxy.Http
         {
             if (ResponseHeaders.ContainsKey(name))
             {
-                return new List<HttpHeader>() { ResponseHeaders[name] };
+                return new List<HttpHeader>
+                {
+                    ResponseHeaders[name]
+                };
             }
-            else if (NonUniqueResponseHeaders.ContainsKey(name))
+            if (NonUniqueResponseHeaders.ContainsKey(name))
             {
                 return new List<HttpHeader>(NonUniqueResponseHeaders[name]);
             }
@@ -320,8 +322,11 @@ namespace Titanium.Web.Proxy.Http
                 var existing = ResponseHeaders[newHeader.Name];
                 ResponseHeaders.Remove(newHeader.Name);
 
-                NonUniqueResponseHeaders.Add(newHeader.Name,
-                    new List<HttpHeader>() { existing, newHeader });
+                NonUniqueResponseHeaders.Add(newHeader.Name, new List<HttpHeader>
+                {
+                    existing,
+                    newHeader
+                });
             }
             else
             {
@@ -337,12 +342,12 @@ namespace Titanium.Web.Proxy.Http
         /// False if no header exists with given name</returns>
         public bool RemoveHeader(string headerName)
         {
-            if(ResponseHeaders.ContainsKey(headerName))
+            if (ResponseHeaders.ContainsKey(headerName))
             {
                 ResponseHeaders.Remove(headerName);
                 return true;
             }
-            else if (NonUniqueResponseHeaders.ContainsKey(headerName))
+            if (NonUniqueResponseHeaders.ContainsKey(headerName))
             {
                 NonUniqueResponseHeaders.Remove(headerName);
                 return true;
@@ -364,12 +369,10 @@ namespace Titanium.Web.Proxy.Http
                     ResponseHeaders.Remove(header.Name);
                     return true;
                 }
-
             }
             else if (NonUniqueResponseHeaders.ContainsKey(header.Name))
             {
-                if (NonUniqueResponseHeaders[header.Name]
-                    .RemoveAll(x => x.Equals(header)) > 0)
+                if (NonUniqueResponseHeaders[header.Name].RemoveAll(x => x.Equals(header)) > 0)
                 {
                     return true;
                 }

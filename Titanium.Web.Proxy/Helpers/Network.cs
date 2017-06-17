@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         internal static int GetProcessIdFromPort(int port, bool ipV6Enabled)
         {
-            var processId = FindProcessIdFromLocalPort(port, IpVersion.Ipv4);
+            int processId = FindProcessIdFromLocalPort(port, IpVersion.Ipv4);
 
             if (processId > 0 && !ipV6Enabled)
             {
@@ -43,10 +43,10 @@ namespace Titanium.Web.Proxy.Helpers
         {
             bool isLocalhost = false;
 
-            IPHostEntry localhost = Dns.GetHostEntry("127.0.0.1");
+            var localhost = Dns.GetHostEntry("127.0.0.1");
             if (hostName == localhost.HostName)
             {
-                IPHostEntry hostEntry = Dns.GetHostEntry(hostName);
+                var hostEntry = Dns.GetHostEntry(hostName);
                 isLocalhost = hostEntry.AddressList.Any(IPAddress.IsLoopback);
             }
 

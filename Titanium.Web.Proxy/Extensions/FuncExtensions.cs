@@ -7,8 +7,8 @@ namespace Titanium.Web.Proxy.Extensions
     {
         public static void InvokeParallel<T>(this Func<object, T, Task> callback, object sender, T args)
         {
-            Delegate[] invocationList = callback.GetInvocationList();
-            Task[] handlerTasks = new Task[invocationList.Length];
+            var invocationList = callback.GetInvocationList();
+            var handlerTasks = new Task[invocationList.Length];
 
             for (int i = 0; i < invocationList.Length; i++)
             {
@@ -20,8 +20,8 @@ namespace Titanium.Web.Proxy.Extensions
 
         public static async Task InvokeParallelAsync<T>(this Func<object, T, Task> callback, object sender, T args)
         {
-            Delegate[] invocationList = callback.GetInvocationList();
-            Task[] handlerTasks = new Task[invocationList.Length];
+            var invocationList = callback.GetInvocationList();
+            var handlerTasks = new Task[invocationList.Length];
 
             for (int i = 0; i < invocationList.Length; i++)
             {
