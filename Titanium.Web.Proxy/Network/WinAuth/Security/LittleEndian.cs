@@ -39,45 +39,39 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
 		unsafe private static byte[] GetUShortBytes (byte *bytes)
 		{
-            if (BitConverter.IsLittleEndian)
+		    if (BitConverter.IsLittleEndian)
             {
-                return new byte[] { bytes[0], bytes[1] };
+                return new[] { bytes[0], bytes[1] };
             }
-            else
-            {
-                return new byte[] { bytes[1], bytes[0] };
-            }
+
+            return new[] { bytes[1], bytes[0] };
 		}
 
 		unsafe private static byte[] GetUIntBytes (byte *bytes)
 		{
-            if (BitConverter.IsLittleEndian)
+		    if (BitConverter.IsLittleEndian)
             {
-                return new byte[] { bytes[0], bytes[1], bytes[2], bytes[3] };
+                return new[] { bytes[0], bytes[1], bytes[2], bytes[3] };
             }
-            else
-            {
-                return new byte[] { bytes[3], bytes[2], bytes[1], bytes[0] };
-            }
+
+            return new[] { bytes[3], bytes[2], bytes[1], bytes[0] };
 		}
 
 		unsafe private static byte[] GetULongBytes (byte *bytes)
 		{
-            if (BitConverter.IsLittleEndian)
+		    if (BitConverter.IsLittleEndian)
             {
-                return new byte[] { bytes [0], bytes [1], bytes [2], bytes [3],
+                return new[] { bytes [0], bytes [1], bytes [2], bytes [3],
 						     bytes [4], bytes [5], bytes [6], bytes [7] };
             }
-            else
-            {
-                return new byte[] { bytes [7], bytes [6], bytes [5], bytes [4],
-						     bytes [3], bytes [2], bytes [1], bytes [0] };
-            }
+
+            return new[] { bytes [7], bytes [6], bytes [5], bytes [4],
+		        bytes [3], bytes [2], bytes [1], bytes [0] };
 		}
 
-		unsafe internal static byte[] GetBytes (bool value)
+	    internal static byte[] GetBytes (bool value)
 		{
-			return new byte [] { value ? (byte)1 : (byte)0 };
+			return new[] { value ? (byte)1 : (byte)0 };
 		}
 
 		unsafe internal static byte[] GetBytes (char value)
@@ -168,7 +162,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 			}
 		}
 
-		unsafe internal static bool ToBoolean (byte[] value, int startIndex)
+	    internal static bool ToBoolean (byte[] value, int startIndex)
 		{
 			return value [startIndex] != 0;
 		}

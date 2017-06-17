@@ -67,9 +67,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Set firefox to use default system proxy
         /// </summary>
-        private FireFoxProxySettingsManager firefoxProxySettingsManager 
-            = new FireFoxProxySettingsManager();
-
+        private readonly FireFoxProxySettingsManager firefoxProxySettingsManager = new FireFoxProxySettingsManager();
 
         /// <summary>
         /// Buffer size used throughout this proxy
@@ -262,7 +260,6 @@ namespace Titanium.Web.Proxy
         /// Total number of active client connections
         /// </summary>
         public int ClientConnectionCount => clientConnectionCount;
-
 
         /// <summary>
         /// Total number of active server connections

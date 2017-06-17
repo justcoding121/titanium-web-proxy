@@ -40,11 +40,11 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
 	internal class Message
     {
-        static private byte[] header = { 0x4e, 0x54, 0x4c, 0x4d, 0x53, 0x53, 0x50, 0x00 };
+        static private readonly byte[] header = { 0x4e, 0x54, 0x4c, 0x4d, 0x53, 0x53, 0x50, 0x00 };
 
 		internal Message (byte[] message)
 		{
-            _type = 3;
+            type = 3;
 			Decode (message);
 		}
         
@@ -66,16 +66,11 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             private set;
 		}
 
-        private int _type;
-        private Common.NtlmFlags _flags;
+        private readonly int type;
 
-		internal Common.NtlmFlags Flags 
-        {
-			get { return _flags; }
-			set { _flags = value; }
-		}
+        internal Common.NtlmFlags Flags { get; set; }
 
-		// methods
+        // methods
 		private void Decode (byte[] message)
 		{
             //base.Decode (message);
@@ -110,28 +105,25 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                 Flags = (Common.NtlmFlags)0x8201;
             }
 		
-			int dom_len = LittleEndian.ToUInt16 (message, 28);
-			int dom_off = LittleEndian.ToUInt16 (message, 32);
+			int domLen = LittleEndian.ToUInt16 (message, 28);
+			int domOff = LittleEndian.ToUInt16 (message, 32);
 
-			this.Domain = DecodeString (message, dom_off, dom_len);
+			Domain = DecodeString (message, domOff, domLen);
 
-			int user_len = LittleEndian.ToUInt16 (message, 36);
-			int user_off = LittleEndian.ToUInt16 (message, 40);
+			int userLen = LittleEndian.ToUInt16 (message, 36);
+			int userOff = LittleEndian.ToUInt16 (message, 40);
 
-			this.Username = DecodeString (message, user_off, user_len);
+			Username = DecodeString (message, userOff, userLen);
 		}
 
 		string DecodeString (byte[] buffer, int offset, int len)
 		{
-            if ((Flags & Common.NtlmFlags.NegotiateUnicode) != 0)
+		    if ((Flags & Common.NtlmFlags.NegotiateUnicode) != 0)
             {
                 return Encoding.Unicode.GetString(buffer, offset, len);
             }
-            else
-            {
-                return Encoding.ASCII.GetString(buffer, offset, len);
-            }
-        }
+		    return Encoding.ASCII.GetString(buffer, offset, len);
+		}
 
         protected bool CheckHeader(byte[] message)
         {
@@ -140,7 +132,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                 if (message[i] != header[i])
                     return false;
             }
-            return (LittleEndian.ToUInt32(message, 8) == _type);
+            return (LittleEndian.ToUInt32(message, 8) == type);
         }
 
     }

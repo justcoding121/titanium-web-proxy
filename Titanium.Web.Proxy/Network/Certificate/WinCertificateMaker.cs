@@ -239,8 +239,6 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 typeX509Enrollment.InvokeMember("CertificateFriendlyName", BindingFlags.PutDispProperty, null, x509Enrollment, typeValue);
             }
 
-            var members = typeX509Enrollment.GetMembers();
-
             typeValue[0] = 0;
 
             var createCertRequest = typeX509Enrollment.InvokeMember("CreateRequest", BindingFlags.InvokeMethod, null, x509Enrollment, typeValue);

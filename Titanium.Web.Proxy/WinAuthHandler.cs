@@ -5,30 +5,28 @@ using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.WinAuth;
-using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy
 {
     public partial class ProxyServer
     {
         //possible header names
-        private static List<string> authHeaderNames
-          = new List<string>() {
-                "WWW-Authenticate",
-                //IIS 6.0 messed up names below
-                "WWWAuthenticate",
-                "NTLMAuthorization",
-                "NegotiateAuthorization",
-                "KerberosAuthorization"
-          };
+        private static readonly List<string> authHeaderNames = new List<string>
+        {
+            "WWW-Authenticate",
+            //IIS 6.0 messed up names below
+            "WWWAuthenticate",
+            "NTLMAuthorization",
+            "NegotiateAuthorization",
+            "KerberosAuthorization"
+        };
 
-        private static List<string> authSchemes
-            = new List<string>() {
-                "NTLM",
-                "Negotiate",
-                "Kerberos"
-            };
+        private static readonly List<string> authSchemes = new List<string>
+        {
+            "NTLM",
+            "Negotiate",
+            "Kerberos"
+        };
 
         /// <summary>
         /// Handle windows NTLM authentication 
@@ -48,19 +46,18 @@ namespace Titanium.Web.Proxy
             var header = args.WebSession.Response
                 .NonUniqueResponseHeaders
                 .FirstOrDefault(x =>
-                authHeaderNames.Any(y => x.Key.Equals(y, StringComparison.OrdinalIgnoreCase)));
+                    authHeaderNames.Any(y => x.Key.Equals(y, StringComparison.OrdinalIgnoreCase)));
 
             if (!header.Equals(new KeyValuePair<string, List<HttpHeader>>()))
             {
                 headerName = header.Key;
             }
-  
+
             if (headerName != null)
             {
                 authHeader = args.WebSession.Response
                     .NonUniqueResponseHeaders[headerName]
-                    .Where(x => authSchemes.Any(y => x.Value.StartsWith(y, StringComparison.OrdinalIgnoreCase)))
-                    .FirstOrDefault();
+                    .FirstOrDefault(x => authSchemes.Any(y => x.Value.StartsWith(y, StringComparison.OrdinalIgnoreCase)));
             }
 
             //check in unique headers
@@ -70,7 +67,7 @@ namespace Titanium.Web.Proxy
                 var uHeader = args.WebSession.Response
                     .ResponseHeaders
                     .FirstOrDefault(x =>
-                     authHeaderNames.Any(y => x.Key.Equals(y, StringComparison.OrdinalIgnoreCase)));
+                        authHeaderNames.Any(y => x.Key.Equals(y, StringComparison.OrdinalIgnoreCase)));
 
                 if (!uHeader.Equals(new KeyValuePair<string, HttpHeader>()))
                 {
@@ -80,8 +77,9 @@ namespace Titanium.Web.Proxy
                 if (headerName != null)
                 {
                     authHeader = authSchemes.Any(x => args.WebSession.Response
-                    .ResponseHeaders[headerName].Value.StartsWith(x, StringComparison.OrdinalIgnoreCase)) ?
-                     args.WebSession.Response.ResponseHeaders[headerName] : null;
+                        .ResponseHeaders[headerName].Value.StartsWith(x, StringComparison.OrdinalIgnoreCase))
+                        ? args.WebSession.Response.ResponseHeaders[headerName]
+                        : null;
                 }
             }
 
@@ -101,7 +99,7 @@ namespace Titanium.Web.Proxy
                     var clientToken = WinAuthHandler.GetInitialAuthToken(args.WebSession.Request.Host, scheme, args.Id);
 
                     var auth = new HttpHeader("Authorization", string.Concat(scheme, clientToken));
-                   
+
                     //replace existing authorization header if any
                     if (args.WebSession.Request.RequestHeaders.ContainsKey("Authorization"))
                     {
@@ -113,17 +111,17 @@ namespace Titanium.Web.Proxy
                     }
 
                     //don't need to send body for Authorization request
-                    if(args.WebSession.Request.HasBody)
+                    if (args.WebSession.Request.HasBody)
                     {
                         args.WebSession.Request.ContentLength = 0;
                     }
-                    
+
                 }
                 //challenge value will start with any of the scheme selected
                 else
                 {
                     scheme = authSchemes.FirstOrDefault(x => authHeader.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase)
-                    && authHeader.Value.Length > x.Length + 1);
+                                                             && authHeader.Value.Length > x.Length + 1);
 
                     var serverToken = authHeader.Value.Substring(scheme.Length + 1);
                     var clientToken = WinAuthHandler.GetFinalAuthToken(args.WebSession.Request.Host, serverToken, args.Id);
@@ -135,10 +133,10 @@ namespace Titanium.Web.Proxy
                     //send body for final auth request
                     if (args.WebSession.Request.HasBody)
                     {
-                        args.WebSession.Request.ContentLength 
+                        args.WebSession.Request.ContentLength
                             = args.WebSession.Request.RequestBody.Length;
                     }
-                        
+
                 }
 
                 //Need to revisit this.
@@ -159,4 +157,3 @@ namespace Titanium.Web.Proxy
 
     }
 }
-
