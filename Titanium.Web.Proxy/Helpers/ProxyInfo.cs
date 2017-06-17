@@ -43,7 +43,7 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 var overrides = proxyOverride.Split(';');
                 var overrides2 = new List<string>();
-                foreach (var overrideHost in overrides)
+                foreach (string overrideHost in overrides)
                 {
                     if (overrideHost == "<-loopback>")
                     {
@@ -70,7 +70,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         private static string BypassStringEscape(string rawString)
         {
-            Match match =
+            var match =
                 new Regex("^(?<scheme>.*://)?(?<host>[^:]*)(?<port>:[0-9]{1,5})?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Match(rawString);
             string empty1;
             string rawString1;
@@ -174,7 +174,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         private static HttpSystemProxyValue ParseProxyValue(string value)
         {
-            var tmp = Regex.Replace(value, @"\s+", " ").Trim();
+            string tmp = Regex.Replace(value, @"\s+", " ").Trim();
 
             int equalsIndex = tmp.IndexOf("=", StringComparison.InvariantCulture);
             if (equalsIndex >= 0)

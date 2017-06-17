@@ -1,8 +1,8 @@
-﻿namespace Titanium.Web.Proxy.Network.WinAuth.Security
-{
-    using System;
-    using System.Runtime.InteropServices;
+﻿using System;
+using System.Runtime.InteropServices;
 
+namespace Titanium.Web.Proxy.Network.WinAuth.Security
+{
     internal class Common
     {
         #region Private constants
@@ -177,7 +177,7 @@
             {
                 ulVersion = (int)SecurityBufferType.SECBUFFER_VERSION;
                 cBuffers = 1;
-                SecurityBuffer thisSecBuffer = new SecurityBuffer(bufferSize);
+                var thisSecBuffer = new SecurityBuffer(bufferSize);
                 pBuffers = Marshal.AllocHGlobal(Marshal.SizeOf(thisSecBuffer));
                 Marshal.StructureToPtr(thisSecBuffer, pBuffers, false);
             }
@@ -186,7 +186,7 @@
             {
                 ulVersion = (int)SecurityBufferType.SECBUFFER_VERSION;
                 cBuffers = 1;
-                SecurityBuffer thisSecBuffer = new SecurityBuffer(secBufferBytes);
+                var thisSecBuffer = new SecurityBuffer(secBufferBytes);
                 pBuffers = Marshal.AllocHGlobal(Marshal.SizeOf(thisSecBuffer));
                 Marshal.StructureToPtr(thisSecBuffer, pBuffers, false);
             }
@@ -197,7 +197,7 @@
                 {
                     if (cBuffers == 1)
                     {
-                        SecurityBuffer thisSecBuffer = (SecurityBuffer)Marshal.PtrToStructure(pBuffers, typeof(SecurityBuffer));
+                        var thisSecBuffer = (SecurityBuffer)Marshal.PtrToStructure(pBuffers, typeof(SecurityBuffer));
                         thisSecBuffer.Dispose();
                     }
                     else
@@ -211,7 +211,7 @@
                             //What we need to do here is to grab a hold of the pvBuffer allocate by the individual
                             //SecBuffer and release it...
                             int currentOffset = index * Marshal.SizeOf(typeof(Buffer));
-                            IntPtr secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers, currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
+                            var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers, currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
                             Marshal.FreeHGlobal(secBufferpvBuffer);
                         }
                     }
@@ -232,7 +232,7 @@
 
                 if (cBuffers == 1)
                 {
-                    SecurityBuffer thisSecBuffer = (SecurityBuffer)Marshal.PtrToStructure(pBuffers, typeof(SecurityBuffer));
+                    var thisSecBuffer = (SecurityBuffer)Marshal.PtrToStructure(pBuffers, typeof(SecurityBuffer));
 
                     if (thisSecBuffer.cbBuffer > 0)
                     {
@@ -267,7 +267,7 @@
                         //byte array...
                         int currentOffset = index * Marshal.SizeOf(typeof(Buffer));
                         int bytesToCopy = Marshal.ReadInt32(pBuffers, currentOffset);
-                        IntPtr secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers, currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
+                        var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers, currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
                         Marshal.Copy(secBufferpvBuffer, buffer, bufferIndex, bytesToCopy);
                         bufferIndex += bytesToCopy;
                     }

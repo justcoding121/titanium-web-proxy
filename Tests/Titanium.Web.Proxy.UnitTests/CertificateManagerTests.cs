@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy.UnitTests
 
             for (int i = 0; i < 1000; i++)
             {
-                foreach (var host in hostNames)
+                foreach (string host in hostNames)
                 {
                     tasks.Add(Task.Run(async () =>
                     {

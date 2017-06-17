@@ -562,7 +562,7 @@ namespace Titanium.Web.Proxy
 
             if (!RunTime.IsRunningOnMono)
             {
-                var setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
+                bool setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
 
                 if (setAsSystemProxy)
                 {

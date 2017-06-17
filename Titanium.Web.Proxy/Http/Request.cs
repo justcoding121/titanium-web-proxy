@@ -1,6 +1,6 @@
 ﻿using System;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
@@ -41,12 +41,12 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = RequestHeaders.ContainsKey("host");
+                bool hasHeader = RequestHeaders.ContainsKey("host");
                 return hasHeader ? RequestHeaders["host"].Value : null;
             }
             set
             {
-                var hasHeader = RequestHeaders.ContainsKey("host");
+                bool hasHeader = RequestHeaders.ContainsKey("host");
                 if (hasHeader)
                 {
                     RequestHeaders["host"].Value = value;
@@ -65,7 +65,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = RequestHeaders.ContainsKey("content-encoding");
+                bool hasHeader = RequestHeaders.ContainsKey("content-encoding");
 
                 if (hasHeader)
                 {
@@ -83,7 +83,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = RequestHeaders.ContainsKey("content-length");
+                bool hasHeader = RequestHeaders.ContainsKey("content-length");
 
                 if (hasHeader == false)
                 {
@@ -103,7 +103,7 @@ namespace Titanium.Web.Proxy.Http
             }
             set
             {
-                var hasHeader = RequestHeaders.ContainsKey("content-length");
+                bool hasHeader = RequestHeaders.ContainsKey("content-length");
 
                 var header = RequestHeaders["content-length"];
 
@@ -137,7 +137,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = RequestHeaders.ContainsKey("content-type");
+                bool hasHeader = RequestHeaders.ContainsKey("content-type");
 
                 if (hasHeader)
                 {
@@ -149,7 +149,7 @@ namespace Titanium.Web.Proxy.Http
             }
             set
             {
-                var hasHeader = RequestHeaders.ContainsKey("content-type");
+                bool hasHeader = RequestHeaders.ContainsKey("content-type");
 
                 if (hasHeader)
                 {
@@ -170,7 +170,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = RequestHeaders.ContainsKey("transfer-encoding");
+                bool hasHeader = RequestHeaders.ContainsKey("transfer-encoding");
 
                 if (hasHeader)
                 {
@@ -183,7 +183,7 @@ namespace Titanium.Web.Proxy.Http
             }
             set
             {
-                var hasHeader = RequestHeaders.ContainsKey("transfer-encoding");
+                bool hasHeader = RequestHeaders.ContainsKey("transfer-encoding");
 
                 if (value)
                 {
@@ -216,7 +216,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = RequestHeaders.ContainsKey("expect");
+                bool hasHeader = RequestHeaders.ContainsKey("expect");
 
                 if (!hasHeader)
                     return false;
@@ -268,7 +268,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = RequestHeaders.ContainsKey("upgrade");
+                bool hasHeader = RequestHeaders.ContainsKey("upgrade");
 
                 if (hasHeader == false)
                 {
