@@ -33,7 +33,7 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient tcpClient)
         {
-            var disposed = false;
+            bool disposed = false;
 
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
@@ -48,7 +48,7 @@ namespace Titanium.Web.Proxy
             try
             {
                 //read the first line HTTP command
-                var httpCmd = await clientStreamReader.ReadLineAsync();
+                string httpCmd = await clientStreamReader.ReadLineAsync();
 
                 if (string.IsNullOrEmpty(httpCmd))
                 {
@@ -59,7 +59,7 @@ namespace Titanium.Web.Proxy
                 var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
 
                 //Find the request Verb
-                var httpVerb = httpCmdSplit[0].ToUpper();
+                string httpVerb = httpCmdSplit[0].ToUpper();
 
                 httpRemoteUri = httpVerb == "CONNECT" ? new Uri("http://" + httpCmdSplit[1]) : new Uri(httpCmdSplit[1]);
 
@@ -67,7 +67,7 @@ namespace Titanium.Web.Proxy
                 var version = HttpHeader.Version11;
                 if (httpCmdSplit.Length == 3)
                 {
-                    var httpVersion = httpCmdSplit[2].Trim();
+                    string httpVersion = httpCmdSplit[2].Trim();
 
                     if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
                     {
@@ -117,7 +117,7 @@ namespace Titanium.Web.Proxy
                     {
                         sslStream = new SslStream(clientStream);
 
-                        var certName = HttpHelper.GetWildCardDomainName(httpRemoteUri.Host);
+                        string certName = HttpHelper.GetWildCardDomainName(httpRemoteUri.Host);
 
                         var certificate = endPoint.GenericCertificate ?? CertificateManager.CreateCertificate(certName, false);
 
@@ -216,7 +216,7 @@ namespace Titanium.Web.Proxy
                 };
 
                 //now read the request line
-                var httpCmd = await clientStreamReader.ReadLineAsync();
+                string httpCmd = await clientStreamReader.ReadLineAsync();
 
                 //Now create the request
                 disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
@@ -287,13 +287,13 @@ namespace Titanium.Web.Proxy
                     //break up the line into three components (method, remote URL & Http Version)
                     var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
 
-                    var httpMethod = httpCmdSplit[0];
+                    string httpMethod = httpCmdSplit[0];
 
                     //find the request HTTP version
                     var httpVersion = HttpHeader.Version11;
                     if (httpCmdSplit.Length == 3)
                     {
-                        var httpVersionString = httpCmdSplit[2].Trim();
+                        string httpVersionString = httpCmdSplit[2].Trim();
 
                         if (string.Equals(httpVersionString, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
                         {

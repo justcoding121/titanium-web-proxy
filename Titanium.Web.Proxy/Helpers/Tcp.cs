@@ -83,12 +83,12 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns>Collection of <see cref="TcpRow"/>.</returns>
         internal static TcpTable GetExtendedTcpTable(IpVersion ipVersion)
         {
-            List<TcpRow> tcpRows = new List<TcpRow>();
+            var tcpRows = new List<TcpRow>();
 
-            IntPtr tcpTable = IntPtr.Zero;
+            var tcpTable = IntPtr.Zero;
             int tcpTableLength = 0;
 
-            var ipVersionValue = ipVersion == IpVersion.Ipv4 ? NativeMethods.AfInet : NativeMethods.AfInet6;
+            int ipVersionValue = ipVersion == IpVersion.Ipv4 ? NativeMethods.AfInet : NativeMethods.AfInet6;
 
             if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, false, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) != 0)
             {
@@ -97,9 +97,9 @@ namespace Titanium.Web.Proxy.Helpers
                     tcpTable = Marshal.AllocHGlobal(tcpTableLength);
                     if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) == 0)
                     {
-                        NativeMethods.TcpTable table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable, typeof(NativeMethods.TcpTable));
+                        var table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable, typeof(NativeMethods.TcpTable));
 
-                        IntPtr rowPtr = (IntPtr)((long)tcpTable + Marshal.SizeOf(table.length));
+                        var rowPtr = (IntPtr)((long)tcpTable + Marshal.SizeOf(table.length));
 
                         for (int i = 0; i < table.length; ++i)
                         {
@@ -126,10 +126,10 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns><see cref="TcpRow"/>.</returns>
         internal static TcpRow GetTcpRowByLocalPort(IpVersion ipVersion, int localPort)
         {
-            IntPtr tcpTable = IntPtr.Zero;
+            var tcpTable = IntPtr.Zero;
             int tcpTableLength = 0;
 
-            var ipVersionValue = ipVersion == IpVersion.Ipv4 ? NativeMethods.AfInet : NativeMethods.AfInet6;
+            int ipVersionValue = ipVersion == IpVersion.Ipv4 ? NativeMethods.AfInet : NativeMethods.AfInet6;
 
             if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, false, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) != 0)
             {
@@ -138,9 +138,9 @@ namespace Titanium.Web.Proxy.Helpers
                     tcpTable = Marshal.AllocHGlobal(tcpTableLength);
                     if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) == 0)
                     {
-                        NativeMethods.TcpTable table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable, typeof(NativeMethods.TcpTable));
+                        var table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable, typeof(NativeMethods.TcpTable));
 
-                        IntPtr rowPtr = (IntPtr)((long)tcpTable + Marshal.SizeOf(table.length));
+                        var rowPtr = (IntPtr)((long)tcpTable + Marshal.SizeOf(table.length));
 
                         for (int i = 0; i < table.length; ++i)
                         {
@@ -199,7 +199,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 if (requestHeaders != null)
                 {
-                    foreach (var header in requestHeaders.Select(t => t.Value.ToString()))
+                    foreach (string header in requestHeaders.Select(t => t.Value.ToString()))
                     {
                         sb.Append(header);
                         sb.Append(ProxyConstants.NewLine);
@@ -226,7 +226,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             try
             {
-                Stream tunnelStream = tcpConnection.Stream;
+                var tunnelStream = tcpConnection.Stream;
 
                 //Now async relay all server=>client & client=>server data
                 var sendRelay = clientStream.CopyToAsync(sb?.ToString() ?? string.Empty, tunnelStream);

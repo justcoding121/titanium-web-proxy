@@ -36,7 +36,7 @@ namespace Titanium.Web.Proxy
                     && !RunTime.IsRunningOnMono
                     && args.WebSession.Response.ResponseStatusCode == "401")
                 {
-                    var disposed = await Handle401UnAuthorized(args);
+                    bool disposed = await Handle401UnAuthorized(args);
 
                     if (disposed)
                     {
@@ -58,7 +58,7 @@ namespace Titanium.Web.Proxy
                 {
                     //clear current response
                     await args.ClearResponse();
-                    var disposed = await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args, false);
+                    bool disposed = await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args, false);
                     return disposed;
                 }
 
@@ -82,8 +82,8 @@ namespace Titanium.Web.Proxy
 
                 if (args.WebSession.Response.ResponseBodyRead)
                 {
-                    var isChunked = args.WebSession.Response.IsChunked;
-                    var contentEncoding = args.WebSession.Response.ContentEncoding;
+                    bool isChunked = args.WebSession.Response.IsChunked;
+                    string contentEncoding = args.WebSession.Response.ContentEncoding;
 
                     if (contentEncoding != null)
                     {
@@ -198,8 +198,8 @@ namespace Titanium.Web.Proxy
         private void FixProxyHeaders(Dictionary<string, HttpHeader> headers)
         {
             //If proxy-connection close was returned inform to close the connection
-            var hasProxyHeader = headers.ContainsKey("proxy-connection");
-            var hasConnectionheader = headers.ContainsKey("connection");
+            bool hasProxyHeader = headers.ContainsKey("proxy-connection");
+            bool hasConnectionheader = headers.ContainsKey("connection");
 
             if (hasProxyHeader)
             {

@@ -126,7 +126,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             if (e.WebSession.Request.HasBody)
             {
                 //Get/Set request body bytes
-                byte[] bodyBytes = await e.GetRequestBody();
+                var bodyBytes = await e.GetRequestBody();
                 await e.SetRequestBody(bodyBytes);
 
                 //Get/Set request body as string
@@ -180,7 +180,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 {
                     if (e.WebSession.Response.ContentType != null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
                     {
-                        byte[] bodyBytes = await e.GetResponseBody();
+                        var bodyBytes = await e.GetResponseBody();
                         await e.SetResponseBody(bodyBytes);
 
                         string body = await e.GetResponseBodyAsString();

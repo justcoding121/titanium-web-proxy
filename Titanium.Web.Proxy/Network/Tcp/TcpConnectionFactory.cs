@@ -95,7 +95,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                         using (var reader = new CustomBinaryReader(stream, server.BufferSize))
                         {
-                            var result = await reader.ReadLineAsync();
+                            string result = await reader.ReadLineAsync();
 
                             if (!new[] { "200 OK", "connection established" }.Any(s => result.ContainsIgnoreCase(s)))
                             {

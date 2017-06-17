@@ -81,7 +81,7 @@ namespace Titanium.Web.Proxy
 
             if (authHeader != null)
             {
-                var scheme = authSchemes.FirstOrDefault(x => authHeader.Value.Equals(x, StringComparison.OrdinalIgnoreCase));
+                string scheme = authSchemes.FirstOrDefault(x => authHeader.Value.Equals(x, StringComparison.OrdinalIgnoreCase));
 
                 //clear any existing headers to avoid confusing bad servers
                 if (args.WebSession.Request.NonUniqueRequestHeaders.ContainsKey("Authorization"))
@@ -92,7 +92,7 @@ namespace Titanium.Web.Proxy
                 //initial value will match exactly any of the schemes
                 if (scheme != null)
                 {
-                    var clientToken = WinAuthHandler.GetInitialAuthToken(args.WebSession.Request.Host, scheme, args.Id);
+                    string clientToken = WinAuthHandler.GetInitialAuthToken(args.WebSession.Request.Host, scheme, args.Id);
 
                     var auth = new HttpHeader("Authorization", string.Concat(scheme, clientToken));
 
@@ -118,8 +118,8 @@ namespace Titanium.Web.Proxy
                     scheme = authSchemes.FirstOrDefault(x => authHeader.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase) &&
                                                              authHeader.Value.Length > x.Length + 1);
 
-                    var serverToken = authHeader.Value.Substring(scheme.Length + 1);
-                    var clientToken = WinAuthHandler.GetFinalAuthToken(args.WebSession.Request.Host, serverToken, args.Id);
+                    string serverToken = authHeader.Value.Substring(scheme.Length + 1);
+                    string clientToken = WinAuthHandler.GetFinalAuthToken(args.WebSession.Request.Host, serverToken, args.Id);
 
                     //there will be an existing header from initial client request 
                     args.WebSession.Request.RequestHeaders["Authorization"] = new HttpHeader("Authorization", string.Concat(scheme, clientToken));
@@ -140,7 +140,7 @@ namespace Titanium.Web.Proxy
 
                 //request again with updated authorization header
                 //and server cookies
-                var disposed = await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args, false);
+                bool disposed = await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args, false);
                 return disposed;
             }
 

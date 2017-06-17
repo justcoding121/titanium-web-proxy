@@ -127,7 +127,7 @@ namespace Titanium.Web.Proxy.Helpers
                 SaveOriginalProxyConfiguration(reg);
                 PrepareRegistry(reg);
 
-                var exisitingContent = reg.GetValue(regProxyServer) as string;
+                string exisitingContent = reg.GetValue(regProxyServer) as string;
                 var existingSystemProxyValues = ProxyInfo.GetSystemProxyValues(exisitingContent);
                 existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);
                 if ((protocolType & ProxyProtocolType.Http) != 0)
@@ -173,7 +173,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 if (reg.GetValue(regProxyServer) != null)
                 {
-                    var exisitingContent = reg.GetValue(regProxyServer) as string;
+                    string exisitingContent = reg.GetValue(regProxyServer) as string;
 
                     var existingSystemProxyValues = ProxyInfo.GetSystemProxyValues(exisitingContent);
                     existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);

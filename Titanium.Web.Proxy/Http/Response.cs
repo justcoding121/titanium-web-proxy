@@ -1,6 +1,6 @@
 ﻿using System;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
@@ -34,7 +34,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = ResponseHeaders.ContainsKey("content-encoding");
+                bool hasHeader = ResponseHeaders.ContainsKey("content-encoding");
 
                 if (!hasHeader)
                     return null;
@@ -56,7 +56,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = ResponseHeaders.ContainsKey("connection");
+                bool hasHeader = ResponseHeaders.ContainsKey("connection");
 
                 if (hasHeader)
                 {
@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = ResponseHeaders.ContainsKey("content-type");
+                bool hasHeader = ResponseHeaders.ContainsKey("content-type");
 
                 if (hasHeader)
                 {
@@ -99,7 +99,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = ResponseHeaders.ContainsKey("content-length");
+                bool hasHeader = ResponseHeaders.ContainsKey("content-length");
 
                 if (hasHeader == false)
                 {
@@ -119,7 +119,7 @@ namespace Titanium.Web.Proxy.Http
             }
             set
             {
-                var hasHeader = ResponseHeaders.ContainsKey("content-length");
+                bool hasHeader = ResponseHeaders.ContainsKey("content-length");
 
                 if (value >= 0)
                 {
@@ -152,7 +152,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = ResponseHeaders.ContainsKey("transfer-encoding");
+                bool hasHeader = ResponseHeaders.ContainsKey("transfer-encoding");
 
                 if (hasHeader)
                 {
@@ -168,7 +168,7 @@ namespace Titanium.Web.Proxy.Http
             }
             set
             {
-                var hasHeader = ResponseHeaders.ContainsKey("transfer-encoding");
+                bool hasHeader = ResponseHeaders.ContainsKey("transfer-encoding");
 
                 if (value)
                 {

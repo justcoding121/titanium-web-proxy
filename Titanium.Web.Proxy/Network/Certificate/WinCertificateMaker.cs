@@ -249,7 +249,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             try
             {
-                var empty = (string)typeX509Enrollment.InvokeMember("CreatePFX", BindingFlags.InvokeMethod, null, x509Enrollment, typeValue);
+                string empty = (string)typeX509Enrollment.InvokeMember("CreatePFX", BindingFlags.InvokeMethod, null, x509Enrollment, typeValue);
                 return new X509Certificate2(Convert.FromBase64String(empty), string.Empty, X509KeyStorageFlags.Exportable);
             }
             catch (Exception)
@@ -279,15 +279,15 @@ namespace Titanium.Web.Proxy.Network.Certificate
             }
 
             //Subject
-            var fullSubject = $"CN={sSubjectCN}";
+            string fullSubject = $"CN={sSubjectCN}";
             //Sig Algo
-            var HashAlgo = "SHA256";
+            string HashAlgo = "SHA256";
             //Grace Days
-            var GraceDays = -366;
+            int GraceDays = -366;
             //ValiDays
-            var ValidDays = 1825;
+            int ValidDays = 1825;
             //KeyLength
-            var keyLength = 2048;
+            int keyLength = 2048;
 
             var graceTime = DateTime.Now.AddDays(GraceDays);
             var now = DateTime.Now;

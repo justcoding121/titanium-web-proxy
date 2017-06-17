@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Extensions
         /// <returns></returns>
         internal static async Task CopyBytesToStream(this CustomBinaryReader streamReader, Stream stream, long totalBytesToRead)
         {
-            byte[] buffer = streamReader.Buffer;
+            var buffer = streamReader.Buffer;
             long remainingBytes = totalBytesToRead;
 
             while (remainingBytes > 0)
@@ -72,8 +72,8 @@ namespace Titanium.Web.Proxy.Extensions
         {
             while (true)
             {
-                var chuchkHead = await clientStreamReader.ReadLineAsync();
-                var chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
+                string chuchkHead = await clientStreamReader.ReadLineAsync();
+                int chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
 
                 if (chunkSize != 0)
                 {
@@ -148,8 +148,8 @@ namespace Titanium.Web.Proxy.Extensions
         {
             while (true)
             {
-                var chunkHead = await inStreamReader.ReadLineAsync();
-                var chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
+                string chunkHead = await inStreamReader.ReadLineAsync();
+                int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
 
                 if (chunkSize != 0)
                 {

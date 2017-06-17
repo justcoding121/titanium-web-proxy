@@ -1,15 +1,16 @@
 ﻿// http://pinvoke.net/default.aspx/secur32/InitializeSecurityContext.html
 
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Security.Principal;
+using System.Threading.Tasks;
+
 namespace Titanium.Web.Proxy.Network.WinAuth.Security
 {
-    using System;
-    using System.Linq;
-    using System.Collections.Concurrent;
-    using System.Collections.Generic;
-    using System.Runtime.InteropServices;
-    using System.Security.Principal;
     using static Common;
-    using System.Threading.Tasks;
 
     internal class WinAuthEndPoint
     {
@@ -31,9 +32,9 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             byte[] token;
 
             //null for initial call
-            SecurityBufferDesciption serverToken = new SecurityBufferDesciption();
+            var serverToken = new SecurityBufferDesciption();
 
-            SecurityBufferDesciption clientToken = new SecurityBufferDesciption(MaximumTokenSize);
+            var clientToken = new SecurityBufferDesciption(MaximumTokenSize);
 
             try
             {
@@ -102,9 +103,9 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             byte[] token;
 
             //user server challenge
-            SecurityBufferDesciption serverToken = new SecurityBufferDesciption(serverChallenge);
+            var serverToken = new SecurityBufferDesciption(serverChallenge);
 
-            SecurityBufferDesciption clientToken = new SecurityBufferDesciption(MaximumTokenSize);
+            var clientToken = new SecurityBufferDesciption(MaximumTokenSize);
 
             try
             {
