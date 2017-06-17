@@ -336,9 +336,9 @@ namespace Titanium.Web.Proxy.Http
         {
             if (RequestHeaders.ContainsKey(name))
             {
-                return new List<HttpHeader>() { RequestHeaders[name] };
+                return new List<HttpHeader> { RequestHeaders[name] };
             }
-            else if (NonUniqueRequestHeaders.ContainsKey(name))
+            if (NonUniqueRequestHeaders.ContainsKey(name))
             {
                 return new List<HttpHeader>(NonUniqueRequestHeaders[name]);
             }
@@ -388,7 +388,7 @@ namespace Titanium.Web.Proxy.Http
                 RequestHeaders.Remove(newHeader.Name);
 
                 NonUniqueRequestHeaders.Add(newHeader.Name,
-                    new List<HttpHeader>() { existing, newHeader });
+                    new List<HttpHeader> { existing, newHeader });
             }
             else
             {
@@ -409,7 +409,7 @@ namespace Titanium.Web.Proxy.Http
                 RequestHeaders.Remove(headerName);
                 return true;
             }
-            else if (NonUniqueRequestHeaders.ContainsKey(headerName))
+            if (NonUniqueRequestHeaders.ContainsKey(headerName))
             {
                 NonUniqueRequestHeaders.Remove(headerName);
                 return true;

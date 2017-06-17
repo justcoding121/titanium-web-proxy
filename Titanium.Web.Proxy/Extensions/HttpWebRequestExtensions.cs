@@ -1,5 +1,4 @@
-﻿using System;
-using System.Text;
+﻿using System.Text;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 

@@ -62,8 +62,8 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                 public AutoProxyFlags Flags;
                 public AutoDetectType AutoDetectFlags;
                 [MarshalAs(UnmanagedType.LPWStr)] public string AutoConfigUrl;
-                private IntPtr lpvReserved;
-                private int dwReserved;
+                private readonly IntPtr lpvReserved;
+                private readonly int dwReserved;
                 public bool AutoLogonIfChallenged;
             }
 

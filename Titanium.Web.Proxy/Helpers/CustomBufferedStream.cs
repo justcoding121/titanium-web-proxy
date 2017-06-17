@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="bufferSize">Size of the buffer.</param>
         public CustomBufferedStream(Stream baseStream, int bufferSize)
         {
-            readCallback = new AsyncCallback(ReadCallback);
+            readCallback = ReadCallback;
             this.baseStream = baseStream;
             streamBuffer = BufferPool.GetBuffer(bufferSize);
         }
