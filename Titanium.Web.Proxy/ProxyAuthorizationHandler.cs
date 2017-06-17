@@ -30,7 +30,8 @@ namespace Titanium.Web.Proxy
                 }
 
                 var header = httpHeaders.FirstOrDefault(t => t.Name == "Proxy-Authorization");
-                if (header == null) throw new NullReferenceException();
+                if (header == null)
+                    throw new NullReferenceException();
                 var headerValue = header.Value.Trim();
                 if (!headerValue.StartsWith("basic", StringComparison.CurrentCultureIgnoreCase))
                 {

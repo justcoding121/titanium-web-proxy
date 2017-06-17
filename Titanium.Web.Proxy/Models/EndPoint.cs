@@ -119,11 +119,14 @@ namespace Titanium.Web.Proxy.Models
         /// <param name="ipAddress"></param>
         /// <param name="port"></param>
         /// <param name="enableSsl"></param>
-        public ExplicitProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl)
-            : base(ipAddress, port, enableSsl)
+        public ExplicitProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl) : base(ipAddress, port, enableSsl)
         {
             //init to well known HTTPS ports
-            RemoteHttpsPorts = new List<int> { 443, 8443 };
+            RemoteHttpsPorts = new List<int>
+            {
+                443,
+                8443
+            };
         }
     }
 
@@ -145,8 +148,7 @@ namespace Titanium.Web.Proxy.Models
         /// <param name="ipAddress"></param>
         /// <param name="port"></param>
         /// <param name="enableSsl"></param>
-        public TransparentProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl)
-            : base(ipAddress, port, enableSsl)
+        public TransparentProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl) : base(ipAddress, port, enableSsl)
         {
             GenericCertificateName = "localhost";
         }

@@ -253,8 +253,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// List of supported Ssl versions
         /// </summary>
-        public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls
-                                                                  | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
+        public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
 
         /// <summary>
         /// Total number of active client connections
@@ -309,8 +308,7 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void AddEndPoint(ProxyEndPoint endPoint)
         {
-            if (ProxyEndPoints.Any(x => x.IpAddress.Equals(endPoint.IpAddress)
-                                        && endPoint.Port != 0 && x.Port == endPoint.Port))
+            if (ProxyEndPoints.Any(x => x.IpAddress.Equals(endPoint.IpAddress) && endPoint.Port != 0 && x.Port == endPoint.Port))
             {
                 throw new Exception("Cannot add another endpoint to same port & ip address");
             }
@@ -617,7 +615,8 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         private void ValidateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
         {
-            if (endPoint == null) throw new ArgumentNullException(nameof(endPoint));
+            if (endPoint == null)
+                throw new ArgumentNullException(nameof(endPoint));
             if (ProxyEndPoints.Contains(endPoint) == false)
             {
                 throw new Exception("Cannot set endPoints not added to proxy as system proxy");

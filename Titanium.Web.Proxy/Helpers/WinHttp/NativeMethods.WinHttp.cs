@@ -18,7 +18,8 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             internal static extern bool WinHttpSetTimeouts(WinHttpHandle session, int resolveTimeout, int connectTimeout, int sendTimeout, int receiveTimeout);
 
             [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-            internal static extern bool WinHttpGetProxyForUrl(WinHttpHandle session, string url, [In] ref WINHTTP_AUTOPROXY_OPTIONS autoProxyOptions, out WINHTTP_PROXY_INFO proxyInfo);
+            internal static extern bool WinHttpGetProxyForUrl(WinHttpHandle session, string url, [In] ref WINHTTP_AUTOPROXY_OPTIONS autoProxyOptions,
+                out WINHTTP_PROXY_INFO proxyInfo);
 
             [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
             internal static extern bool WinHttpCloseHandle(IntPtr httpSession);

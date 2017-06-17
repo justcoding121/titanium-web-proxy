@@ -36,7 +36,8 @@ namespace Titanium.Web.Proxy.Http
             {
                 var hasHeader = ResponseHeaders.ContainsKey("content-encoding");
 
-                if (!hasHeader) return null;
+                if (!hasHeader)
+                    return null;
                 var header = ResponseHeaders["content-encoding"];
 
                 return header.Value.Trim();
@@ -249,8 +250,7 @@ namespace Titanium.Web.Proxy.Http
         /// <returns></returns>
         public bool HeaderExists(string name)
         {
-            if (ResponseHeaders.ContainsKey(name)
-                || NonUniqueResponseHeaders.ContainsKey(name))
+            if (ResponseHeaders.ContainsKey(name) || NonUniqueResponseHeaders.ContainsKey(name))
             {
                 return true;
             }
@@ -268,7 +268,10 @@ namespace Titanium.Web.Proxy.Http
         {
             if (ResponseHeaders.ContainsKey(name))
             {
-                return new List<HttpHeader> { ResponseHeaders[name] };
+                return new List<HttpHeader>
+                {
+                    ResponseHeaders[name]
+                };
             }
             if (NonUniqueResponseHeaders.ContainsKey(name))
             {
@@ -319,8 +322,11 @@ namespace Titanium.Web.Proxy.Http
                 var existing = ResponseHeaders[newHeader.Name];
                 ResponseHeaders.Remove(newHeader.Name);
 
-                NonUniqueResponseHeaders.Add(newHeader.Name,
-                    new List<HttpHeader> { existing, newHeader });
+                NonUniqueResponseHeaders.Add(newHeader.Name, new List<HttpHeader>
+                {
+                    existing,
+                    newHeader
+                });
             }
             else
             {
@@ -366,8 +372,7 @@ namespace Titanium.Web.Proxy.Http
             }
             else if (NonUniqueResponseHeaders.ContainsKey(header.Name))
             {
-                if (NonUniqueResponseHeaders[header.Name]
-                        .RemoveAll(x => x.Equals(header)) > 0)
+                if (NonUniqueResponseHeaders[header.Name].RemoveAll(x => x.Equals(header)) > 0)
                 {
                     return true;
                 }

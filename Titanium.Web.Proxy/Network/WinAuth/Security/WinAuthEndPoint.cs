@@ -16,8 +16,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         /// <summary>
         /// Keep track of auth states for reuse in final challenge response
         /// </summary>
-        private static readonly IDictionary<Guid, State> authStates
-            = new ConcurrentDictionary<Guid, State>();
+        private static readonly IDictionary<Guid, State> authStates = new ConcurrentDictionary<Guid, State>();
 
 
         /// <summary>
@@ -27,17 +26,14 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         /// <param name="authScheme"></param>
         /// <param name="requestId"></param>
         /// <returns></returns>
-        internal static byte[] AcquireInitialSecurityToken(string hostname,
-            string authScheme, Guid requestId)
+        internal static byte[] AcquireInitialSecurityToken(string hostname, string authScheme, Guid requestId)
         {
             byte[] token;
 
             //null for initial call
-            SecurityBufferDesciption serverToken
-                = new SecurityBufferDesciption();
+            SecurityBufferDesciption serverToken = new SecurityBufferDesciption();
 
-            SecurityBufferDesciption clientToken
-                = new SecurityBufferDesciption(MaximumTokenSize);
+            SecurityBufferDesciption clientToken = new SecurityBufferDesciption(MaximumTokenSize);
 
             try
             {
@@ -101,17 +97,14 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         /// <param name="serverChallenge"></param>
         /// <param name="requestId"></param>
         /// <returns></returns>
-        internal static byte[] AcquireFinalSecurityToken(string hostname,
-            byte[] serverChallenge, Guid requestId)
+        internal static byte[] AcquireFinalSecurityToken(string hostname, byte[] serverChallenge, Guid requestId)
         {
             byte[] token;
 
             //user server challenge
-            SecurityBufferDesciption serverToken
-                = new SecurityBufferDesciption(serverChallenge);
+            SecurityBufferDesciption serverToken = new SecurityBufferDesciption(serverChallenge);
 
-            SecurityBufferDesciption clientToken
-                = new SecurityBufferDesciption(MaximumTokenSize);
+            SecurityBufferDesciption clientToken = new SecurityBufferDesciption(MaximumTokenSize);
 
             try
             {
@@ -161,9 +154,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         {
             var cutOff = DateTime.Now.AddMinutes(-1 * stateCacheTimeOutMinutes);
 
-            var outdated = authStates
-                .Where(x => x.Value.LastSeen < cutOff)
-                .ToList();
+            var outdated = authStates.Where(x => x.Value.LastSeen < cutOff).ToList();
 
             foreach (var cache in outdated)
             {
