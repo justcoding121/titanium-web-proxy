@@ -6,25 +6,30 @@
     internal class Common
     {
         #region Private constants
+
         private const int ISC_REQ_REPLAY_DETECT = 0x00000004;
         private const int ISC_REQ_SEQUENCE_DETECT = 0x00000008;
         private const int ISC_REQ_CONFIDENTIALITY = 0x00000010;
         private const int ISC_REQ_CONNECTION = 0x00000800;
+
         #endregion
 
         internal static uint NewContextAttributes = 0;
         internal static SecurityInteger NewLifeTime = new SecurityInteger(0);
 
         #region internal constants
+
         internal const int StandardContextAttributes = ISC_REQ_CONFIDENTIALITY | ISC_REQ_REPLAY_DETECT | ISC_REQ_SEQUENCE_DETECT | ISC_REQ_CONNECTION;
         internal const int SecurityNativeDataRepresentation = 0x10;
         internal const int MaximumTokenSize = 12288;
         internal const int SecurityCredentialsOutbound = 2;
         internal const int SuccessfulResult = 0;
         internal const int IntermediateResult = 0x90312;
+
         #endregion
 
         #region internal enumerations
+
         internal enum SecurityBufferType
         {
             SECBUFFER_VERSION = 0,
@@ -38,22 +43,31 @@
         {
             // The client sets this flag to indicate that it supports Unicode strings.
             NegotiateUnicode = 0x00000001,
+
             // This is set to indicate that the client supports OEM strings.
             NegotiateOem = 0x00000002,
+
             // This requests that the server send the authentication target with the Type 2 reply.
             RequestTarget = 0x00000004,
+
             // Indicates that NTLM authentication is supported.
             NegotiateNtlm = 0x00000200,
+
             // When set, the client will send with the message the name of the domain in which the workstation has membership.
             NegotiateDomainSupplied = 0x00001000,
+
             // Indicates that the client is sending its workstation name with the message.  
             NegotiateWorkstationSupplied = 0x00002000,
+
             // Indicates that communication between the client and server after authentication should carry a "dummy" signature.
             NegotiateAlwaysSign = 0x00008000,
+
             // Indicates that this client supports the NTLM2 signing and sealing scheme; if negotiated, this can also affect the response calculations.
             NegotiateNtlm2Key = 0x00080000,
+
             // Indicates that this client supports strong (128-bit) encryption.
             Negotiate128 = 0x20000000,
+
             // Indicates that this client supports medium (56-bit) encryption.
             Negotiate56 = (unchecked((int)0x80000000))
         }
@@ -74,9 +88,11 @@
             /* Use NTLMv2 only. */
             NTLMv2_only,
         }
+
         #endregion
 
         #region internal structures
+
         [StructLayout(LayoutKind.Sequential)]
         internal struct SecurityHandle
         {
@@ -102,6 +118,7 @@
         {
             internal uint LowPart;
             internal int HighPart;
+
             internal SecurityInteger(int dummy)
             {
                 LowPart = 0;
@@ -152,7 +169,6 @@
         [StructLayout(LayoutKind.Sequential)]
         internal struct SecurityBufferDesciption : IDisposable
         {
-
             internal int ulVersion;
             internal int cBuffers;
             internal IntPtr pBuffers; //Point to SecBuffer
@@ -260,6 +276,7 @@
                 return (buffer);
             }
         }
+
         #endregion
     }
 }

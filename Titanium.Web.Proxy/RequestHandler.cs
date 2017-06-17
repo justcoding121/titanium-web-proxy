@@ -88,7 +88,7 @@ namespace Titanium.Web.Proxy
                 List<HttpHeader> connectRequestHeaders = null;
 
                 //Client wants to create a secure tcp tunnel (its a HTTPS request)
-                if (httpVerb == "CONNECT" && !excluded 
+                if (httpVerb == "CONNECT" && !excluded
                     && endPoint.RemoteHttpsPorts.Contains(httpRemoteUri.Port))
                 {
                     httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
@@ -380,7 +380,7 @@ namespace Titanium.Web.Proxy
                         args.Dispose();
                         break;
                     }
-                   
+
                     //if connection is closing exit
                     if (args.WebSession.Response.ResponseKeepAlive == false)
                     {

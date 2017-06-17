@@ -115,7 +115,6 @@ namespace Titanium.Web.Proxy
                     {
                         args.WebSession.Request.ContentLength = 0;
                     }
-
                 }
                 //challenge value will start with any of the scheme selected
                 else
@@ -136,7 +135,6 @@ namespace Titanium.Web.Proxy
                         args.WebSession.Request.ContentLength
                             = args.WebSession.Request.RequestBody.Length;
                     }
-
                 }
 
                 //Need to revisit this.
@@ -154,6 +152,5 @@ namespace Titanium.Web.Proxy
 
             return false;
         }
-
     }
 }

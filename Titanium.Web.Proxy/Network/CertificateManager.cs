@@ -351,7 +351,7 @@ namespace Titanium.Web.Proxy.Network
                 x509Store.Close();
             }
         }
-        
+
         /// <summary>
         /// Create an SSL certificate
         /// </summary>

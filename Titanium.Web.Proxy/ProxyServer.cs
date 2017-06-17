@@ -290,7 +290,7 @@ namespace Titanium.Web.Proxy
             {
                 systemProxySettingsManager = new SystemProxyManager();
             }
-            
+
             CertificateManager = new CertificateManager(ExceptionFunc);
             if (rootCertificateName != null)
             {
@@ -409,7 +409,9 @@ namespace Titanium.Web.Proxy
 
             systemProxySettingsManager.SetProxy(
                 Equals(endPoint.IpAddress, IPAddress.Any) |
-                Equals(endPoint.IpAddress, IPAddress.Loopback) ? "127.0.0.1" : endPoint.IpAddress.ToString(),
+                Equals(endPoint.IpAddress, IPAddress.Loopback)
+                    ? "127.0.0.1"
+                    : endPoint.IpAddress.ToString(),
                 endPoint.Port,
                 protocolType);
 
@@ -521,7 +523,7 @@ namespace Titanium.Web.Proxy
                 }
             }
 
-            if (ForwardToUpstreamGateway 
+            if (ForwardToUpstreamGateway
                 && GetCustomUpStreamHttpProxyFunc == null && GetCustomUpStreamHttpsProxyFunc == null
                 && systemProxySettingsManager != null)
             {

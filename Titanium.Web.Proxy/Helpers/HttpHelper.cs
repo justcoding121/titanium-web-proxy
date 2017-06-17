@@ -68,7 +68,6 @@ namespace Titanium.Web.Proxy.Helpers
                 int idx = hostname.IndexOf(ProxyConstants.DotSplit);
                 var rootDomain = hostname.Substring(idx + 1);
                 return "*." + rootDomain;
-
             }
 
             //return as it is
