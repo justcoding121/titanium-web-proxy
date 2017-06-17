@@ -216,7 +216,6 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             ref SecurityHandle phCredential, //SecHandle //PCtxtHandle ref
             ref SecurityInteger ptsExpiry); //PTimeStamp //TimeStamp ref
 
-
         #endregion
     }
 }

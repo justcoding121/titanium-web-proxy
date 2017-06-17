@@ -431,12 +431,11 @@ namespace Titanium.Web.Proxy.Http
                     RequestHeaders.Remove(header.Name);
                     return true;
                 }
-
             }
             else if (NonUniqueRequestHeaders.ContainsKey(header.Name))
             {
                 if (NonUniqueRequestHeaders[header.Name]
-                    .RemoveAll(x => x.Equals(header)) > 0)
+                        .RemoveAll(x => x.Equals(header)) > 0)
                 {
                     return true;
                 }
@@ -460,7 +459,5 @@ namespace Titanium.Web.Proxy.Http
             RequestBody = null;
             RequestBody = null;
         }
-
-      
     }
 }

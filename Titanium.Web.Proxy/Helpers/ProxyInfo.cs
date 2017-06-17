@@ -36,7 +36,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             if (proxyServer != null)
             {
-                Proxies = GetSystemProxyValues(proxyServer).ToDictionary(x=>x.ProtocolType);
+                Proxies = GetSystemProxyValues(proxyServer).ToDictionary(x => x.ProtocolType);
             }
 
             if (proxyOverride != null)

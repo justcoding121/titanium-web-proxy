@@ -12,8 +12,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <returns></returns>
         private static readonly Lazy<bool> isRunningOnMono
-            = new Lazy<bool>(()=> Type.GetType("Mono.Runtime") != null);
-      
+            = new Lazy<bool>(() => Type.GetType("Mono.Runtime") != null);
+
         /// <summary>
         /// Is running on Mono?
         /// </summary>

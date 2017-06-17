@@ -249,7 +249,7 @@ namespace Titanium.Web.Proxy.Http
         /// <returns></returns>
         public bool HeaderExists(string name)
         {
-            if(ResponseHeaders.ContainsKey(name)
+            if (ResponseHeaders.ContainsKey(name)
                 || NonUniqueResponseHeaders.ContainsKey(name))
             {
                 return true;
@@ -336,7 +336,7 @@ namespace Titanium.Web.Proxy.Http
         /// False if no header exists with given name</returns>
         public bool RemoveHeader(string headerName)
         {
-            if(ResponseHeaders.ContainsKey(headerName))
+            if (ResponseHeaders.ContainsKey(headerName))
             {
                 ResponseHeaders.Remove(headerName);
                 return true;
@@ -363,12 +363,11 @@ namespace Titanium.Web.Proxy.Http
                     ResponseHeaders.Remove(header.Name);
                     return true;
                 }
-
             }
             else if (NonUniqueResponseHeaders.ContainsKey(header.Name))
             {
                 if (NonUniqueResponseHeaders[header.Name]
-                    .RemoveAll(x => x.Equals(header)) > 0)
+                        .RemoveAll(x => x.Equals(header)) > 0)
                 {
                     return true;
                 }

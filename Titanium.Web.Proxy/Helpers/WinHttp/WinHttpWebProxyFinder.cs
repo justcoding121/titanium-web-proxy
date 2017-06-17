@@ -21,7 +21,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
         public bool BypassLoopback { get; internal set; }
 
         public bool BypassOnLocal { get; internal set; }
-        
+
         public Uri AutomaticConfigurationScript { get; internal set; }
 
         public bool AutomaticallyDetectSettings { get; internal set; }
@@ -214,7 +214,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             if (!WinHttpGetProxyForUrl(destination.ToString(), ref autoProxyOptions, out proxyListString))
             {
                 num = GetLastWin32Error();
-                
+
                 if (num == (int)NativeMethods.WinHttp.ErrorCodes.LoginFailure && Credentials != null)
                 {
                     autoProxyOptions.AutoLogonIfChallenged = true;
