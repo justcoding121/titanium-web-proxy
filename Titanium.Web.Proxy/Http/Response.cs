@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.IO;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
@@ -269,9 +268,9 @@ namespace Titanium.Web.Proxy.Http
         {
             if (ResponseHeaders.ContainsKey(name))
             {
-                return new List<HttpHeader>() { ResponseHeaders[name] };
+                return new List<HttpHeader> { ResponseHeaders[name] };
             }
-            else if (NonUniqueResponseHeaders.ContainsKey(name))
+            if (NonUniqueResponseHeaders.ContainsKey(name))
             {
                 return new List<HttpHeader>(NonUniqueResponseHeaders[name]);
             }
@@ -321,7 +320,7 @@ namespace Titanium.Web.Proxy.Http
                 ResponseHeaders.Remove(newHeader.Name);
 
                 NonUniqueResponseHeaders.Add(newHeader.Name,
-                    new List<HttpHeader>() { existing, newHeader });
+                    new List<HttpHeader> { existing, newHeader });
             }
             else
             {
@@ -342,7 +341,7 @@ namespace Titanium.Web.Proxy.Http
                 ResponseHeaders.Remove(headerName);
                 return true;
             }
-            else if (NonUniqueResponseHeaders.ContainsKey(headerName))
+            if (NonUniqueResponseHeaders.ContainsKey(headerName))
             {
                 NonUniqueResponseHeaders.Remove(headerName);
                 return true;
