@@ -33,14 +33,14 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
+using System;
+using System.Text;
+
 namespace Titanium.Web.Proxy.Network.WinAuth.Security
 {
-    using System;
-    using System.Text;
-
     internal class Message
     {
-        static private readonly byte[] header = { 0x4e, 0x54, 0x4c, 0x4d, 0x53, 0x53, 0x50, 0x00 };
+        private static readonly byte[] header = { 0x4e, 0x54, 0x4c, 0x4d, 0x53, 0x53, 0x50, 0x00 };
 
         internal Message(byte[] message)
         {

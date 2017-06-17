@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy.Examples.Basic.Helpers
 
         internal static bool DisableQuickEditMode()
         {
-            IntPtr consoleHandle = GetStdHandle(STD_INPUT_HANDLE);
+            var consoleHandle = GetStdHandle(STD_INPUT_HANDLE);
 
             // get current console mode
             uint consoleMode;

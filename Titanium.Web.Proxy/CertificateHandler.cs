@@ -60,7 +60,7 @@ namespace Titanium.Web.Proxy
             if (acceptableIssuers != null && acceptableIssuers.Length > 0 && localCertificates != null && localCertificates.Count > 0)
             {
                 // Use the first certificate that is from an acceptable issuer.
-                foreach (X509Certificate certificate in localCertificates)
+                foreach (var certificate in localCertificates)
                 {
                     string issuer = certificate.Issuer;
                     if (Array.IndexOf(acceptableIssuers, issuer) != -1)
