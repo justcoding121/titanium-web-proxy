@@ -34,11 +34,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
             bool isHttps,
             ExternalProxy externalHttpProxy, ExternalProxy externalHttpsProxy)
         {
-            bool useHttpProxy = false;      
+            bool useHttpProxy = false;
             //check if external proxy is set for HTTP
             if (!isHttps && externalHttpProxy != null
                 && !(externalHttpProxy.HostName == remoteHostName
-                && externalHttpProxy.Port == remotePort))
+                     && externalHttpProxy.Port == remotePort))
             {
                 useHttpProxy = true;
 
@@ -53,8 +53,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
             bool useHttpsProxy = false;
             //check if external proxy is set for HTTPS
             if (isHttps && externalHttpsProxy != null
-                  && !(externalHttpsProxy.HostName == remoteHostName
-                  && externalHttpsProxy.Port == remotePort))
+                && !(externalHttpsProxy.HostName == remoteHostName
+                     && externalHttpsProxy.Port == remotePort))
             {
                 useHttpsProxy = true;
 

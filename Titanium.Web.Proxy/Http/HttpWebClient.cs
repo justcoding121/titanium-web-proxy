@@ -84,8 +84,8 @@ namespace Titanium.Web.Proxy.Http
 
 
             //Send Authentication to Upstream proxy if needed
-            if (ServerConnection.UpStreamHttpProxy != null 
-                && ServerConnection.IsHttps == false 
+            if (ServerConnection.UpStreamHttpProxy != null
+                && ServerConnection.IsHttps == false
                 && !string.IsNullOrEmpty(ServerConnection.UpStreamHttpProxy.UserName)
                 && ServerConnection.UpStreamHttpProxy.Password != null)
             {
