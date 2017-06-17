@@ -218,7 +218,8 @@ namespace Titanium.Web.Proxy.Http
             {
                 var hasHeader = RequestHeaders.ContainsKey("expect");
 
-                if (!hasHeader) return false;
+                if (!hasHeader)
+                    return false;
                 var header = RequestHeaders["expect"];
 
                 return header.Value.Equals("100-continue");
@@ -317,8 +318,7 @@ namespace Titanium.Web.Proxy.Http
         /// <returns></returns>
         public bool HeaderExists(string name)
         {
-            if (RequestHeaders.ContainsKey(name)
-                || NonUniqueRequestHeaders.ContainsKey(name))
+            if (RequestHeaders.ContainsKey(name) || NonUniqueRequestHeaders.ContainsKey(name))
             {
                 return true;
             }
@@ -336,7 +336,10 @@ namespace Titanium.Web.Proxy.Http
         {
             if (RequestHeaders.ContainsKey(name))
             {
-                return new List<HttpHeader> { RequestHeaders[name] };
+                return new List<HttpHeader>
+                {
+                    RequestHeaders[name]
+                };
             }
             if (NonUniqueRequestHeaders.ContainsKey(name))
             {
@@ -387,8 +390,11 @@ namespace Titanium.Web.Proxy.Http
                 var existing = RequestHeaders[newHeader.Name];
                 RequestHeaders.Remove(newHeader.Name);
 
-                NonUniqueRequestHeaders.Add(newHeader.Name,
-                    new List<HttpHeader> { existing, newHeader });
+                NonUniqueRequestHeaders.Add(newHeader.Name, new List<HttpHeader>
+                {
+                    existing,
+                    newHeader
+                });
             }
             else
             {
@@ -434,8 +440,7 @@ namespace Titanium.Web.Proxy.Http
             }
             else if (NonUniqueRequestHeaders.ContainsKey(header.Name))
             {
-                if (NonUniqueRequestHeaders[header.Name]
-                        .RemoveAll(x => x.Equals(header)) > 0)
+                if (NonUniqueRequestHeaders[header.Name].RemoveAll(x => x.Equals(header)) > 0)
                 {
                     return true;
                 }

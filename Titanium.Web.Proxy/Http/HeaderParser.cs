@@ -8,8 +8,7 @@ namespace Titanium.Web.Proxy.Http
 {
     internal static class HeaderParser
     {
-        internal static async Task ReadHeaders(CustomBinaryReader reader,
-            Dictionary<string, List<HttpHeader>> nonUniqueResponseHeaders,
+        internal static async Task ReadHeaders(CustomBinaryReader reader, Dictionary<string, List<HttpHeader>> nonUniqueResponseHeaders,
             Dictionary<string, HttpHeader> headers)
         {
             string tmpLine;
@@ -29,7 +28,11 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var existing = headers[newHeader.Name];
 
-                    var nonUniqueHeaders = new List<HttpHeader> { existing, newHeader };
+                    var nonUniqueHeaders = new List<HttpHeader>
+                    {
+                        existing,
+                        newHeader
+                    };
 
                     nonUniqueResponseHeaders.Add(newHeader.Name, nonUniqueHeaders);
                     headers.Remove(newHeader.Name);

@@ -33,8 +33,7 @@ namespace Titanium.Web.Proxy.Helpers
     internal partial class NativeMethods
     {
         [DllImport("wininet.dll")]
-        internal static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer,
-            int dwBufferLength);
+        internal static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);
 
         [DllImport("kernel32.dll")]
         internal static extern IntPtr GetConsoleWindow();
@@ -304,11 +303,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         private ProxyInfo GetProxyInfoFromRegistry(RegistryKey reg)
         {
-            var pi = new ProxyInfo(
-                null,
-                reg.GetValue(regAutoConfigUrl) as string,
-                reg.GetValue(regProxyEnable) as int?,
-                reg.GetValue(regProxyServer) as string,
+            var pi = new ProxyInfo(null, reg.GetValue(regAutoConfigUrl) as string, reg.GetValue(regProxyEnable) as int?, reg.GetValue(regProxyServer) as string,
                 reg.GetValue(regProxyOverride) as string);
 
             return pi;

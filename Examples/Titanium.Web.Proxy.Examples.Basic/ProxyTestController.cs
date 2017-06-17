@@ -54,7 +54,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 //Exclude Https addresses you don't want to proxy
                 //Useful for clients that use certificate pinning
                 //for example google.com and dropbox.com
-                ExcludedHttpsHostNameRegex = new List<string> { "dropbox.com" }
+                ExcludedHttpsHostNameRegex = new List<string>
+                {
+                    "dropbox.com"
+                }
 
                 //Include Https addresses you want to proxy (others will be excluded)
                 //for example github.com
@@ -90,8 +93,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
 
             foreach (var endPoint in proxyServer.ProxyEndPoints)
-                Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ",
-                    endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
+                Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
             //Only explicit proxies can be set as system proxy!
             //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);

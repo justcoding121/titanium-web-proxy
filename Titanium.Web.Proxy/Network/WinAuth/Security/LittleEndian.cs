@@ -61,18 +61,10 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         {
             if (BitConverter.IsLittleEndian)
             {
-                return new[]
-                {
-                    bytes[0], bytes[1], bytes[2], bytes[3],
-                    bytes[4], bytes[5], bytes[6], bytes[7]
-                };
+                return new[] { bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7] };
             }
 
-            return new[]
-            {
-                bytes[7], bytes[6], bytes[5], bytes[4],
-                bytes[3], bytes[2], bytes[1], bytes[0]
-            };
+            return new[] { bytes[7], bytes[6], bytes[5], bytes[4], bytes[3], bytes[2], bytes[1], bytes[0] };
         }
 
         internal static byte[] GetBytes(bool value)
