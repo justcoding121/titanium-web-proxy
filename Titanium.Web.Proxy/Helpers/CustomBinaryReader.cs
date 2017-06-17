@@ -34,7 +34,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         internal async Task<string> ReadLineAsync()
         {
-            var lastChar = default(byte);
+            byte lastChar = default(byte);
 
             int bufferDataLength = 0;
 
@@ -43,7 +43,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             while (stream.DataAvailable || await stream.FillBufferAsync())
             {
-                var newChar = stream.ReadByteFromBuffer();
+                byte newChar = stream.ReadByteFromBuffer();
                 buffer[bufferDataLength] = newChar;
 
                 //if new line

@@ -84,8 +84,8 @@ namespace Titanium.Web.Proxy.Http
 
 
             //Send Authentication to Upstream proxy if needed
-            if (ServerConnection.UpStreamHttpProxy != null 
-                && ServerConnection.IsHttps == false 
+            if (ServerConnection.UpStreamHttpProxy != null
+                && ServerConnection.IsHttps == false
                 && !string.IsNullOrEmpty(ServerConnection.UpStreamHttpProxy.UserName)
                 && ServerConnection.UpStreamHttpProxy.Password != null)
             {
@@ -118,7 +118,7 @@ namespace Titanium.Web.Proxy.Http
 
             requestLines.AppendLine();
 
-            var request = requestLines.ToString();
+            string request = requestLines.ToString();
             var requestBytes = Encoding.ASCII.GetBytes(request);
 
             await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
@@ -129,8 +129,8 @@ namespace Titanium.Web.Proxy.Http
                 if (Request.ExpectContinue)
                 {
                     var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
-                    var responseStatusCode = httpResult[1].Trim();
-                    var responseStatusDescription = httpResult[2].Trim();
+                    string responseStatusCode = httpResult[1].Trim();
+                    string responseStatusDescription = httpResult[2].Trim();
 
                     //find if server is willing for expect continue
                     if (responseStatusCode.Equals("100")
@@ -156,7 +156,8 @@ namespace Titanium.Web.Proxy.Http
         internal async Task ReceiveResponse()
         {
             //return if this is already read
-            if (Response.ResponseStatusCode != null) return;
+            if (Response.ResponseStatusCode != null)
+                return;
 
             string line = await ServerConnection.StreamReader.ReadLineAsync();
             if (line == null)
@@ -172,7 +173,7 @@ namespace Titanium.Web.Proxy.Http
                 httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
             }
 
-            var httpVersion = httpResult[0];
+            string httpVersion = httpResult[0];
 
             var version = HttpHeader.Version11;
             if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))

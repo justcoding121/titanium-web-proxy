@@ -11,21 +11,19 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </seealso>
     internal class TcpTable : IEnumerable<TcpRow>
     {
-        private readonly IEnumerable<TcpRow> tcpRows;
-
         /// <summary>
         /// Initializes a new instance of the <see cref="TcpTable"/> class.
         /// </summary>
         /// <param name="tcpRows">TcpRow collection to initialize with.</param>
         internal TcpTable(IEnumerable<TcpRow> tcpRows)
         {
-            this.tcpRows = tcpRows;
+            this.TcpRows = tcpRows;
         }
 
         /// <summary>
         /// Gets the TCP rows.
         /// </summary>
-        internal IEnumerable<TcpRow> TcpRows => tcpRows;
+        internal IEnumerable<TcpRow> TcpRows { get; }
 
         /// <summary>
         /// Returns an enumerator that iterates through the collection.
@@ -33,7 +31,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <returns>An enumerator that can be used to iterate through the collection.</returns>
         public IEnumerator<TcpRow> GetEnumerator()
         {
-            return tcpRows.GetEnumerator();
+            return TcpRows.GetEnumerator();
         }
 
         /// <summary>

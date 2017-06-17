@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Security;
@@ -55,7 +54,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 //Exclude Https addresses you don't want to proxy
                 //Useful for clients that use certificate pinning
                 //for example google.com and dropbox.com
-                ExcludedHttpsHostNameRegex = new List<string> { "dropbox.com" }
+                ExcludedHttpsHostNameRegex = new List<string>
+                {
+                    "dropbox.com"
+                }
 
                 //Include Https addresses you want to proxy (others will be excluded)
                 //for example github.com
@@ -91,8 +93,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
 
             foreach (var endPoint in proxyServer.ProxyEndPoints)
-                Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ",
-                    endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
+                Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
             //Only explicit proxies can be set as system proxy!
             //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
@@ -125,7 +126,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             if (e.WebSession.Request.HasBody)
             {
                 //Get/Set request body bytes
-                byte[] bodyBytes = await e.GetRequestBody();
+                var bodyBytes = await e.GetRequestBody();
                 await e.SetRequestBody(bodyBytes);
 
                 //Get/Set request body as string
@@ -179,7 +180,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 {
                     if (e.WebSession.Response.ContentType != null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
                     {
-                        byte[] bodyBytes = await e.GetResponseBody();
+                        var bodyBytes = await e.GetResponseBody();
                         await e.SetResponseBody(bodyBytes);
 
                         string body = await e.GetResponseBodyAsString();
