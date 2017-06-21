@@ -109,14 +109,9 @@ namespace Titanium.Web.Proxy
                         excluded = true;   
                     }
 
-                    if (!excluded)
+                    if (!excluded && await CheckAuthorization(clientStreamWriter, connectRequestHeaders) == false)
                     {
-                        if (await CheckAuthorization(clientStreamWriter, connectRequestHeaders) == false)
-                        {
-                            return;
-                        }
-
-                        httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
+                        return;
                     }
 
                     //write back successfull CONNECT response
@@ -129,6 +124,8 @@ namespace Titanium.Web.Proxy
 
                     if (!excluded)
                     {
+                        httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
+
                         SslStream sslStream = null;
 
                         try
