@@ -172,6 +172,10 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public event Func<object, SessionEventArgs, Task> BeforeResponse;
 
+        public event Func<object, TunnelConnectEventArgs, Task> TunnelConnectRequest;
+
+        public event Func<object, TunnelConnectEventArgs, Task> TunnelConnectResponse;
+
         /// <summary>
         /// External proxy for Http
         /// </summary>

@@ -174,17 +174,7 @@ namespace Titanium.Web.Proxy
 
             foreach (var header in response.ResponseHeaders)
             {
-                await header.Value.WriteToStream(responseWriter);
-            }
-
-            //write non unique request headers
-            foreach (var headerItem in response.NonUniqueResponseHeaders)
-            {
-                var headers = headerItem.Value;
-                foreach (var header in headers)
-                {
-                    await header.WriteToStream(responseWriter);
-                }
+                await header.WriteToStream(responseWriter);
             }
 
             await responseWriter.WriteLineAsync();
@@ -195,26 +185,15 @@ namespace Titanium.Web.Proxy
         /// Fix proxy specific headers
         /// </summary>
         /// <param name="headers"></param>
-        private void FixProxyHeaders(Dictionary<string, HttpHeader> headers)
+        private void FixProxyHeaders(HeaderCollection headers)
         {
             //If proxy-connection close was returned inform to close the connection
-            bool hasProxyHeader = headers.ContainsKey("proxy-connection");
-            bool hasConnectionheader = headers.ContainsKey("connection");
+            string proxyHeader = headers.GetHeaderValueOrNull("proxy-connection");
+            headers.RemoveHeader("proxy-connection");
 
-            if (hasProxyHeader)
+            if (proxyHeader != null)
             {
-                var proxyHeader = headers["proxy-connection"];
-                if (hasConnectionheader == false)
-                {
-                    headers.Add("connection", new HttpHeader("connection", proxyHeader.Value));
-                }
-                else
-                {
-                    var connectionHeader = headers["connection"];
-                    connectionHeader.Value = proxyHeader.Value;
-                }
-
-                headers.Remove("proxy-connection");
+                headers.SetOrAddHeaderValue("connection", proxyHeader);
             }
         }
 

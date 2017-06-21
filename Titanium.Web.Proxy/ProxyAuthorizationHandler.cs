@@ -12,14 +12,14 @@ namespace Titanium.Web.Proxy
 {
     public partial class ProxyServer
     {
-        private async Task<bool> CheckAuthorization(StreamWriter clientStreamWriter, IEnumerable<HttpHeader> headers)
+        private async Task<bool> CheckAuthorization(StreamWriter clientStreamWriter, Request request)
         {
             if (AuthenticateUserFunc == null)
             {
                 return true;
             }
 
-            var httpHeaders = headers as ICollection<HttpHeader> ?? headers.ToArray();
+            var httpHeaders = request.RequestHeaders.ToArray();
 
             try
             {
@@ -67,14 +67,10 @@ namespace Titanium.Web.Proxy
         private async Task SendAuthentication407Response(StreamWriter clientStreamWriter, string description)
         {
             await WriteResponseStatus(HttpHeader.Version11, "407", description, clientStreamWriter);
-            var response = new Response
-            {
-                ResponseHeaders = new Dictionary<string, HttpHeader>
-                {
-                    { "Proxy-Authenticate", new HttpHeader("Proxy-Authenticate", "Basic realm=\"TitaniumProxy\"") },
-                    { "Proxy-Connection", new HttpHeader("Proxy-Connection", "close") }
-                }
-            };
+            var response = new Response();
+            response.ResponseHeaders.AddHeader("Proxy-Authenticate", "Basic realm=\"TitaniumProxy\"");
+            response.ResponseHeaders.AddHeader("Proxy-Connection", "close");
+
             await WriteResponseHeaders(clientStreamWriter, response);
 
             await clientStreamWriter.WriteLineAsync();
