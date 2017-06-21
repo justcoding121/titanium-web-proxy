@@ -170,20 +170,12 @@ namespace Titanium.Web.Proxy.Helpers
         /// relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers as prefix
         /// Usefull for websocket requests
         /// </summary>
-        /// <param name="server"></param>
-        /// <param name="remoteHostName"></param>
-        /// <param name="remotePort"></param>
         /// <param name="httpCmd"></param>
-        /// <param name="httpVersion"></param>
         /// <param name="requestHeaders"></param>
-        /// <param name="isHttps"></param>
         /// <param name="clientStream"></param>
-        /// <param name="tcpConnectionFactory"></param>
         /// <param name="connection"></param>
         /// <returns></returns>
-        internal static async Task SendRaw(ProxyServer server, string remoteHostName, int remotePort, string httpCmd, Version httpVersion,
-            Dictionary<string, HttpHeader> requestHeaders, bool isHttps, Stream clientStream, TcpConnectionFactory tcpConnectionFactory,
-            TcpConnection connection = null)
+        internal static async Task SendRaw(string httpCmd, IEnumerable<HttpHeader> requestHeaders, Stream clientStream, TcpConnection connection)
         {
             //prepare the prefix content
             StringBuilder sb = null;
@@ -199,7 +191,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 if (requestHeaders != null)
                 {
-                    foreach (string header in requestHeaders.Select(t => t.Value.ToString()))
+                    foreach (string header in requestHeaders.Select(t => t.ToString()))
                     {
                         sb.Append(header);
                         sb.Append(ProxyConstants.NewLine);
@@ -209,43 +201,14 @@ namespace Titanium.Web.Proxy.Helpers
                 sb.Append(ProxyConstants.NewLine);
             }
 
-            bool connectionCreated = false;
-            TcpConnection tcpConnection;
+            var tunnelStream = connection.Stream;
 
-            //create new connection if connection is null
-            if (connection == null)
-            {
-                tcpConnection = await tcpConnectionFactory.CreateClient(server, remoteHostName, remotePort, httpVersion, isHttps, null, null);
+            //Now async relay all server=>client & client=>server data
+            var sendRelay = clientStream.CopyToAsync(sb?.ToString() ?? string.Empty, tunnelStream);
 
-                connectionCreated = true;
-            }
-            else
-            {
-                tcpConnection = connection;
-            }
+            var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
 
-            try
-            {
-                var tunnelStream = tcpConnection.Stream;
-
-                //Now async relay all server=>client & client=>server data
-                var sendRelay = clientStream.CopyToAsync(sb?.ToString() ?? string.Empty, tunnelStream);
-
-                var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
-
-                await Task.WhenAll(sendRelay, receiveRelay);
-            }
-            finally
-            {
-                //if connection was null
-                //then a new connection was created
-                //so dispose the new connection
-                if (connectionCreated)
-                {
-                    tcpConnection.Dispose();
-                    Interlocked.Decrement(ref server.serverConnectionCount);
-                }
-            }
+            await Task.WhenAll(sendRelay, receiveRelay);
         }
     }
 }

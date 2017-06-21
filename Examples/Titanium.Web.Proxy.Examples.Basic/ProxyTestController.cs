@@ -16,8 +16,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         //share requestBody outside handlers
         //Using a dictionary is not a good idea since it can cause memory overflow
         //ideally the data should be moved out of memory
-        //private readonly IDictionary<Guid, string> requestBodyHistory 
-        //    = new ConcurrentDictionary<Guid, string>();
+        //private readonly IDictionary<Guid, string> requestBodyHistory = new ConcurrentDictionary<Guid, string>();
 
         public ProxyTestController()
         {
@@ -57,11 +56,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 ExcludedHttpsHostNameRegex = new List<string>
                 {
                     "dropbox.com"
-                }
+                },
 
                 //Include Https addresses you want to proxy (others will be excluded)
                 //for example github.com
-                //IncludedHttpsHostNameRegex = new List<string> { "github.com" }
+                //IncludedHttpsHostNameRegex = new List<string>
+                //{
+                //    "github.com"
+                //},
 
                 //You can set only one of the ExcludedHttpsHostNameRegex and IncludedHttpsHostNameRegex properties, otherwise ArgumentException will be thrown
 
