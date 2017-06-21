@@ -434,7 +434,10 @@ namespace Titanium.Web.Proxy.EventArguments
 
             if (headers != null && headers.Count > 0)
             {
-                response.ResponseHeaders = headers;
+                foreach (var header in headers)
+                {
+                    response.ResponseHeaders.AddHeader(header.Key, header.Value.Value);
+                }
             }
 
             response.HttpVersion = WebSession.Request.HttpVersion;
@@ -501,7 +504,10 @@ namespace Titanium.Web.Proxy.EventArguments
 
             if (headers != null && headers.Count > 0)
             {
-                response.ResponseHeaders = headers;
+                foreach (var header in headers)
+                {
+                    response.ResponseHeaders.AddHeader(header.Key, header.Value.Value);
+                }
             }
 
             response.HttpVersion = WebSession.Request.HttpVersion;
@@ -523,7 +529,7 @@ namespace Titanium.Web.Proxy.EventArguments
             var response = new RedirectResponse();
 
             response.HttpVersion = WebSession.Request.HttpVersion;
-            response.ResponseHeaders.Add("Location", new HttpHeader("Location", url));
+            response.ResponseHeaders.AddHeader("Location", url);
             response.ResponseBody = Encoding.ASCII.GetBytes(string.Empty);
 
             await Respond(response);

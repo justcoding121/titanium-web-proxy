@@ -88,20 +88,13 @@ namespace Titanium.Web.Proxy
                     excluded = !endPoint.IncludedHttpsHostNameRegexList.Any(x => x.IsMatch(httpRemoteUri.Host));
                 }
 
-                List<HttpHeader> connectRequestHeaders = null;
+                ConnectRequest connectRequest = null;
 
                 //Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
                 if (httpVerb == "CONNECT")
                 {
-                    connectRequestHeaders = new List<HttpHeader>();
-                    string tmpLine;
-                    while (!string.IsNullOrEmpty(tmpLine = await clientStreamReader.ReadLineAsync()))
-                    {
-                        var header = tmpLine.Split(ProxyConstants.ColonSplit, 2);
-
-                        var newHeader = new HttpHeader(header[0], header[1]);
-                        connectRequestHeaders.Add(newHeader);
-                    }
+                    connectRequest = new ConnectRequest();
+                    await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.RequestHeaders);
 
                     if (httpRemoteUri.Port == 80) 
                     {
@@ -109,7 +102,7 @@ namespace Titanium.Web.Proxy
                         excluded = true;   
                     }
 
-                    if (!excluded && await CheckAuthorization(clientStreamWriter, connectRequestHeaders) == false)
+                    if (!excluded && await CheckAuthorization(clientStreamWriter, connectRequest) == false)
                     {
                         return;
                     }
@@ -117,12 +110,17 @@ namespace Titanium.Web.Proxy
                     //write back successfull CONNECT response
                     await WriteConnectResponse(clientStreamWriter, version);
 
-                    if (!excluded && !await HttpsTools.IsClientHello(clientStream))
+                    bool isClientHello = await HttpsTools.IsClientHello(clientStream);
+
+                    if (TunnelConnectRequest != null)
                     {
-                        excluded = true;
+                        var args = new TunnelConnectEventArgs();
+                        args.IsHttps = isClientHello;
+                        args.ConnectRequest = connectRequest;
+                        await TunnelConnectRequest.InvokeParallelAsync(this, args);
                     }
 
-                    if (!excluded)
+                    if (!excluded && isClientHello)
                     {
                         httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
 
@@ -188,7 +186,7 @@ namespace Titanium.Web.Proxy
 
                 //Now create the request
                 disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                    httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null, endPoint, connectRequestHeaders);
+                    httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null, endPoint, connectRequest);
             }
             catch (Exception e)
             {
@@ -268,11 +266,11 @@ namespace Titanium.Web.Proxy
         /// <param name="clientStreamWriter"></param>
         /// <param name="httpsConnectHostname"></param>
         /// <param name="endPoint"></param>
-        /// <param name="connectHeaders"></param>
+        /// <param name="connectRequest"></param>
         /// <returns></returns>
         private async Task<bool> HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
             CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsConnectHostname,
-            ProxyEndPoint endPoint, List<HttpHeader> connectHeaders)
+            ProxyEndPoint endPoint, ConnectRequest connectRequest)
         {
             bool disposed = false;
 
@@ -290,7 +288,7 @@ namespace Titanium.Web.Proxy
                 var args = new SessionEventArgs(BufferSize, HandleHttpSessionResponse)
                 {
                     ProxyClient = { TcpClient = client },
-                    WebSession = { ConnectHeaders = connectHeaders }
+                    WebSession = { ConnectRequest = connectRequest }
                 };
 
                 args.WebSession.ProcessId = new Lazy<int>(() =>
@@ -327,7 +325,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     //Read the request headers in to unique and non-unique header collections
-                    await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.NonUniqueRequestHeaders, args.WebSession.Request.RequestHeaders);
+                    await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.RequestHeaders);
 
                     var httpRemoteUri = new Uri(httpsConnectHostname == null
                         ? httpCmdSplit[1]
@@ -342,7 +340,7 @@ namespace Titanium.Web.Proxy
                     args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                     //proxy authorization check
-                    if (httpsConnectHostname == null && await CheckAuthorization(clientStreamWriter, args.WebSession.Request.RequestHeaders.Values) == false)
+                    if (httpsConnectHostname == null && await CheckAuthorization(clientStreamWriter, args.WebSession.Request) == false)
                     {
                         args.Dispose();
                         break;
@@ -386,7 +384,7 @@ namespace Titanium.Web.Proxy
                     //if upgrading to websocket then relay the requet without reading the contents
                     if (args.WebSession.Request.UpgradeToWebSocket)
                     {
-                        await TcpHelper.SendRaw(httpCmd, args.WebSession.Request.RequestHeaders.Values, clientStream, connection);
+                        await TcpHelper.SendRaw(httpCmd, args.WebSession.Request.RequestHeaders, clientStream, connection);
 
                         args.Dispose();
                         break;
@@ -604,12 +602,10 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="requestHeaders"></param>
         /// <param name="webRequest"></param>
-        private void PrepareRequestHeaders(Dictionary<string, HttpHeader> requestHeaders, HttpWebClient webRequest)
+        private void PrepareRequestHeaders(HeaderCollection requestHeaders, HttpWebClient webRequest)
         {
-            foreach (var headerItem in requestHeaders)
+            foreach (var header in requestHeaders)
             {
-                var header = headerItem.Value;
-
                 switch (header.Name.ToLower())
                 {
                     //these are the only encoding this proxy can read
