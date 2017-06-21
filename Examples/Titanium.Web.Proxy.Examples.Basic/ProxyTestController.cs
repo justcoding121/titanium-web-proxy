@@ -43,6 +43,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             proxyServer.BeforeRequest += OnRequest;
             proxyServer.BeforeResponse += OnResponse;
+            proxyServer.TunnelConnectRequest += OnTunnelConnectRequest;
+            proxyServer.TunnelConnectResponse += OnTunnelConnectResponse;
             proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
             proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
@@ -105,6 +107,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public void Stop()
         {
+            proxyServer.TunnelConnectRequest -= OnTunnelConnectRequest;
+            proxyServer.TunnelConnectResponse -= OnTunnelConnectResponse;
             proxyServer.BeforeRequest -= OnRequest;
             proxyServer.BeforeResponse -= OnResponse;
             proxyServer.ServerCertificateValidationCallback -= OnCertificateValidation;
@@ -114,6 +118,15 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             //remove the generated certificates
             //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
+        }
+
+        private async Task OnTunnelConnectRequest(object sender, TunnelConnectEventArgs e)
+        {
+            Console.WriteLine("Tunnel to: " + e.ConnectRequest.Host);
+        }
+
+        private async Task OnTunnelConnectResponse(object sender, TunnelConnectEventArgs e)
+        {
         }
 
         //intecept & cancel redirect or update requests
