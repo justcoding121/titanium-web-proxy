@@ -86,6 +86,7 @@
     <Compile Include="Helpers\WinHttp\WinHttpHandle.cs" />
     <Compile Include="Helpers\WinHttp\WinHttpWebProxyFinder.cs" />
     <Compile Include="Http\HeaderParser.cs" />
+    <Compile Include="Http\HttpsTools.cs" />
     <Compile Include="Http\Responses\GenericResponse.cs" />
     <Compile Include="Network\CachedCertificate.cs" />
     <Compile Include="Network\Certificate\WinCertificateMaker.cs" />

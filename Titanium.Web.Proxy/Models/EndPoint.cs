@@ -53,6 +53,7 @@ namespace Titanium.Web.Proxy.Models
         public bool IpV6Enabled => Equals(IpAddress, IPAddress.IPv6Any)
                                    || Equals(IpAddress, IPAddress.IPv6Loopback)
                                    || Equals(IpAddress, IPAddress.IPv6None);
+
     }
 
     /// <summary>
@@ -67,12 +68,6 @@ namespace Titanium.Web.Proxy.Models
         internal bool IsSystemHttpProxy { get; set; }
 
         internal bool IsSystemHttpsProxy { get; set; }
-
-        /// <summary>
-        /// Remote HTTPS ports we are allowed to communicate with
-        /// CONNECT request to ports other than these will not be decrypted
-        /// </summary>
-        public List<int> RemoteHttpsPorts { get; set; }
 
         /// <summary>
         /// List of host names to exclude using Regular Expressions.
@@ -121,12 +116,6 @@ namespace Titanium.Web.Proxy.Models
         /// <param name="enableSsl"></param>
         public ExplicitProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl) : base(ipAddress, port, enableSsl)
         {
-            //init to well known HTTPS ports
-            RemoteHttpsPorts = new List<int>
-            {
-                443,
-                8443
-            };
         }
     }
 

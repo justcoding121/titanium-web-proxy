@@ -90,10 +90,9 @@ namespace Titanium.Web.Proxy
 
                 List<HttpHeader> connectRequestHeaders = null;
 
-                //Client wants to create a secure tcp tunnel (its a HTTPS request)
-                if (httpVerb == "CONNECT" && !excluded && endPoint.RemoteHttpsPorts.Contains(httpRemoteUri.Port))
+                //Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
+                if (httpVerb == "CONNECT")
                 {
-                    httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
                     connectRequestHeaders = new List<HttpHeader>();
                     string tmpLine;
                     while (!string.IsNullOrEmpty(tmpLine = await clientStreamReader.ReadLineAsync()))
@@ -104,61 +103,90 @@ namespace Titanium.Web.Proxy
                         connectRequestHeaders.Add(newHeader);
                     }
 
-                    if (await CheckAuthorization(clientStreamWriter, connectRequestHeaders) == false)
+                    if (httpRemoteUri.Port == 80) 
                     {
-                        return;
+                        // why is this needed? HTTPS not allowed on port 80?
+                        excluded = true;   
                     }
 
-                    await WriteConnectResponse(clientStreamWriter, version);
-
-                    SslStream sslStream = null;
-
-                    try
+                    if (!excluded)
                     {
-                        sslStream = new SslStream(clientStream);
-
-                        string certName = HttpHelper.GetWildCardDomainName(httpRemoteUri.Host);
-
-                        var certificate = endPoint.GenericCertificate ?? CertificateManager.CreateCertificate(certName, false);
-
-                        //Successfully managed to authenticate the client using the fake certificate
-                        await sslStream.AuthenticateAsServerAsync(certificate, false, SupportedSslProtocols, false);
-
-                        //HTTPS server created - we can now decrypt the client's traffic
-                        clientStream = new CustomBufferedStream(sslStream, BufferSize);
-
-                        clientStreamReader.Dispose();
-                        clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-                        clientStreamWriter = new StreamWriter(clientStream)
+                        if (await CheckAuthorization(clientStreamWriter, connectRequestHeaders) == false)
                         {
-                            NewLine = ProxyConstants.NewLine
-                        };
-                    }
-                    catch
-                    {
-                        sslStream?.Dispose();
-                        return;
-                    }
+                            return;
+                        }
 
-                    //Now read the actual HTTPS request line
-                    httpCmd = await clientStreamReader.ReadLineAsync();
-                }
-                //Sorry cannot do a HTTPS request decrypt to port 80 at this time
-                else if (httpVerb == "CONNECT")
-                {
-                    //Siphon out CONNECT request headers
-                    await clientStreamReader.ReadAndIgnoreAllLinesAsync();
+                        httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
+                    }
 
                     //write back successfull CONNECT response
                     await WriteConnectResponse(clientStreamWriter, version);
 
-                    await TcpHelper.SendRaw(this,
-                        httpRemoteUri.Host, httpRemoteUri.Port,
-                        null, version, null,
-                        false,
-                        clientStream, tcpConnectionFactory);
+                    if (!excluded && !await HttpsTools.IsClientHello(clientStream))
+                    {
+                        excluded = true;
+                    }
 
-                    return;
+                    if (!excluded)
+                    {
+                        SslStream sslStream = null;
+
+                        try
+                        {
+                            sslStream = new SslStream(clientStream);
+
+                            string certName = HttpHelper.GetWildCardDomainName(httpRemoteUri.Host);
+
+                            var certificate = endPoint.GenericCertificate ?? CertificateManager.CreateCertificate(certName, false);
+
+                            //Successfully managed to authenticate the client using the fake certificate
+                            await sslStream.AuthenticateAsServerAsync(certificate, false, SupportedSslProtocols, false);
+
+                            //HTTPS server created - we can now decrypt the client's traffic
+                            clientStream = new CustomBufferedStream(sslStream, BufferSize);
+
+                            clientStreamReader.Dispose();
+                            clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
+                            clientStreamWriter = new StreamWriter(clientStream)
+                            {
+                                NewLine = ProxyConstants.NewLine
+                            };
+                        }
+                        catch
+                        {
+                            sslStream?.Dispose();
+                            return;
+                        }
+
+                        //Now read the actual HTTPS request line
+                        httpCmd = await clientStreamReader.ReadLineAsync();
+                    }
+                    //Sorry cannot do a HTTPS request decrypt to port 80 at this time
+                    else
+                    {
+                        var args = new SessionEventArgs(BufferSize, HandleHttpSessionResponse);
+                        args.WebSession.Request.RequestUri = httpRemoteUri;
+                        args.WebSession.Request.HttpVersion = version;
+                        args.WebSession.Request.Method = httpVerb;
+                        args.ProxyClient.ClientStream = clientStream;
+                        args.ProxyClient.ClientStreamReader = clientStreamReader;
+                        args.ProxyClient.ClientStreamWriter = clientStreamWriter;
+
+                        //create new connection
+                        using (var connection = await GetServerConnection(args))
+                        {
+                            if (connection.UseProxy)
+                            {
+                                await TcpHelper.SendRaw(null, null, clientStream, connection);
+                            }
+                            else
+                            {
+                                await TcpHelper.SendRaw(null, null, clientStream, connection);
+                            }
+                        }
+
+                        return;
+                    }
                 }
 
                 //Now create the request
@@ -287,7 +315,7 @@ namespace Titanium.Web.Proxy
                     //break up the line into three components (method, remote URL & Http Version)
                     var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
 
-                    string httpMethod = httpCmdSplit[0];
+                    string httpMethod = httpCmdSplit[0].ToUpper();
 
                     //find the request HTTP version
                     var httpVersion = HttpHeader.Version11;
@@ -310,7 +338,7 @@ namespace Titanium.Web.Proxy
 
                     args.WebSession.Request.RequestUri = httpRemoteUri;
 
-                    args.WebSession.Request.Method = httpMethod.Trim().ToUpper();
+                    args.WebSession.Request.Method = httpMethod;
                     args.WebSession.Request.HttpVersion = httpVersion;
                     args.ProxyClient.ClientStream = clientStream;
                     args.ProxyClient.ClientStreamReader = clientStreamReader;
@@ -346,16 +374,6 @@ namespace Titanium.Web.Proxy
                         break;
                     }
 
-                    //if upgrading to websocket then relay the requet without reading the contents
-                    if (args.WebSession.Request.UpgradeToWebSocket)
-                    {
-                        await TcpHelper.SendRaw(this, httpRemoteUri.Host, httpRemoteUri.Port, httpCmd, httpVersion, args.WebSession.Request.RequestHeaders,
-                            args.IsHttps, clientStream, tcpConnectionFactory, connection);
-
-                        args.Dispose();
-                        break;
-                    }
-
                     if (connection == null)
                     {
                         connection = await GetServerConnection(args);
@@ -366,6 +384,15 @@ namespace Titanium.Web.Proxy
                         connection.Dispose();
                         Interlocked.Decrement(ref serverConnectionCount);
                         connection = await GetServerConnection(args);
+                    }
+
+                    //if upgrading to websocket then relay the requet without reading the contents
+                    if (args.WebSession.Request.UpgradeToWebSocket)
+                    {
+                        await TcpHelper.SendRaw(httpCmd, args.WebSession.Request.RequestHeaders.Values, clientStream, connection);
+
+                        args.Dispose();
+                        break;
                     }
 
                     //construct the web request that we are going to issue on behalf of the client.
