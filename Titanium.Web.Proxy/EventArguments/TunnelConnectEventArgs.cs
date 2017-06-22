@@ -7,12 +7,13 @@ using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
-    public class TunnelConnectEventArgs : EventArgs
+    public class TunnelConnectSessionEventArgs : SessionEventArgs
     {
         public bool IsHttps { get; set; }
 
-        public Request ConnectRequest { get; set; }
-
-        public Request ConnectResponse { get; set; }
+        public TunnelConnectSessionEventArgs() : base(0, null)
+        {
+            
+        }
     }
 }

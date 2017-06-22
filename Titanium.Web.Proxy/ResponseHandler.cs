@@ -150,6 +150,19 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
+        /// Writes the response.
+        /// </summary>
+        /// <param name="response"></param>
+        /// <param name="responseWriter"></param>
+        /// <param name="flush"></param>
+        /// <returns></returns>
+        private async Task WriteResponse(Response response, StreamWriter responseWriter, bool flush = true)
+        {
+            await WriteResponseStatus(response.HttpVersion, response.ResponseStatusCode, response.ResponseStatusDescription, responseWriter);
+            await WriteResponseHeaders(responseWriter, response, flush);
+        }
+
+        /// <summary>
         /// Write response status
         /// </summary>
         /// <param name="version"></param>
@@ -167,8 +180,9 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="responseWriter"></param>
         /// <param name="response"></param>
+        /// <param name="flush"></param>
         /// <returns></returns>
-        private async Task WriteResponseHeaders(StreamWriter responseWriter, Response response)
+        private async Task WriteResponseHeaders(StreamWriter responseWriter, Response response, bool flush = true)
         {
             FixProxyHeaders(response.ResponseHeaders);
 
@@ -178,7 +192,10 @@ namespace Titanium.Web.Proxy
             }
 
             await responseWriter.WriteLineAsync();
-            await responseWriter.FlushAsync();
+            if (flush)
+            {
+                await responseWriter.FlushAsync();
+            }
         }
 
         /// <summary>
