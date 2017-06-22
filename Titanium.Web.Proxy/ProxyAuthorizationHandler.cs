@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -12,31 +13,29 @@ namespace Titanium.Web.Proxy
 {
     public partial class ProxyServer
     {
-        private async Task<bool> CheckAuthorization(StreamWriter clientStreamWriter, Request request)
+        private async Task<bool> CheckAuthorization(StreamWriter clientStreamWriter, SessionEventArgs session)
         {
             if (AuthenticateUserFunc == null)
             {
                 return true;
             }
 
-            var httpHeaders = request.RequestHeaders.ToArray();
+            var httpHeaders = session.WebSession.Request.RequestHeaders.ToArray();
 
             try
             {
-                if (httpHeaders.All(t => t.Name != "Proxy-Authorization"))
+                var header = httpHeaders.FirstOrDefault(t => t.Name == "Proxy-Authorization");
+                if (header == null)
                 {
-                    await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Required");
+                    session.WebSession.Response = await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Required");
                     return false;
                 }
 
-                var header = httpHeaders.FirstOrDefault(t => t.Name == "Proxy-Authorization");
-                if (header == null)
-                    throw new NullReferenceException();
                 string headerValue = header.Value.Trim();
                 if (!headerValue.StartsWith("basic", StringComparison.CurrentCultureIgnoreCase))
                 {
                     //Return not authorized
-                    await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Invalid");
+                    session.WebSession.Response = await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Invalid");
                     return false;
                 }
 
@@ -46,7 +45,7 @@ namespace Titanium.Web.Proxy
                 if (decoded.Contains(":") == false)
                 {
                     //Return not authorized
-                    await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Invalid");
+                    session.WebSession.Response = await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Invalid");
                     return false;
                 }
 
@@ -59,21 +58,25 @@ namespace Titanium.Web.Proxy
                 ExceptionFunc(new ProxyAuthorizationException("Error whilst authorizing request", e, httpHeaders));
 
                 //Return not authorized
-                await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Invalid");
+                session.WebSession.Response = await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Invalid");
                 return false;
             }
         }
 
-        private async Task SendAuthentication407Response(StreamWriter clientStreamWriter, string description)
+        private async Task<Response> SendAuthentication407Response(StreamWriter clientStreamWriter, string description)
         {
-            await WriteResponseStatus(HttpHeader.Version11, "407", description, clientStreamWriter);
-            var response = new Response();
+            var response = new Response
+            {
+                HttpVersion = HttpHeader.Version11,
+                ResponseStatusCode = "407",
+                ResponseStatusDescription = description
+            };
+
             response.ResponseHeaders.AddHeader("Proxy-Authenticate", "Basic realm=\"TitaniumProxy\"");
             response.ResponseHeaders.AddHeader("Proxy-Connection", "close");
 
-            await WriteResponseHeaders(clientStreamWriter, response);
-
-            await clientStreamWriter.WriteLineAsync();
+            await WriteResponse(response, clientStreamWriter);
+            return response;
         }
     }
 }

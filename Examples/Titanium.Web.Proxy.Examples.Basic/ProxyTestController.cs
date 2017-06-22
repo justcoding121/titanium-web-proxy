@@ -120,12 +120,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
         }
 
-        private async Task OnTunnelConnectRequest(object sender, TunnelConnectEventArgs e)
+        private async Task OnTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
-            Console.WriteLine("Tunnel to: " + e.ConnectRequest.Host);
+            Console.WriteLine("Tunnel to: " + e.WebSession.Request.Host);
         }
 
-        private async Task OnTunnelConnectResponse(object sender, TunnelConnectEventArgs e)
+        private async Task OnTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
         {
         }
 

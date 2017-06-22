@@ -96,28 +96,40 @@ namespace Titanium.Web.Proxy
                     connectRequest = new ConnectRequest();
                     await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.RequestHeaders);
 
+                    var connectArgs = new TunnelConnectSessionEventArgs();
+                    connectArgs.WebSession.Request = connectRequest;
+
+                    if (TunnelConnectRequest != null)
+                    {
+                        await TunnelConnectRequest.InvokeParallelAsync(this, connectArgs);
+                    }
+
                     if (httpRemoteUri.Port == 80) 
                     {
                         // why is this needed? HTTPS not allowed on port 80?
                         excluded = true;   
                     }
 
-                    if (!excluded && await CheckAuthorization(clientStreamWriter, connectRequest) == false)
+                    if (!excluded && await CheckAuthorization(clientStreamWriter, connectArgs) == false)
                     {
+                        if (TunnelConnectResponse != null)
+                        {
+                            await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs);
+                        }
+
                         return;
                     }
 
                     //write back successfull CONNECT response
-                    await WriteConnectResponse(clientStreamWriter, version);
+                    connectArgs.WebSession.Response = CreateConnectResponse(version);
+                    await WriteResponse(connectArgs.WebSession.Response, clientStreamWriter);
 
                     bool isClientHello = await HttpsTools.IsClientHello(clientStream);
 
-                    if (TunnelConnectRequest != null)
+                    if (TunnelConnectResponse != null)
                     {
-                        var args = new TunnelConnectEventArgs();
-                        args.IsHttps = isClientHello;
-                        args.ConnectRequest = connectRequest;
-                        await TunnelConnectRequest.InvokeParallelAsync(this, args);
+                        connectArgs.IsHttps = isClientHello;
+                        await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs);
                     }
 
                     if (!excluded && isClientHello)
@@ -340,7 +352,7 @@ namespace Titanium.Web.Proxy
                     args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                     //proxy authorization check
-                    if (httpsConnectHostname == null && await CheckAuthorization(clientStreamWriter, args.WebSession.Request) == false)
+                    if (httpsConnectHostname == null && await CheckAuthorization(clientStreamWriter, args) == false)
                     {
                         args.Dispose();
                         break;
@@ -586,15 +598,19 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Write successfull CONNECT response to client
         /// </summary>
-        /// <param name="clientStreamWriter"></param>
         /// <param name="httpVersion"></param>
         /// <returns></returns>
-        private async Task WriteConnectResponse(StreamWriter clientStreamWriter, Version httpVersion)
+        private ConnectResponse CreateConnectResponse(Version httpVersion)
         {
-            await clientStreamWriter.WriteLineAsync($"HTTP/{httpVersion.Major}.{httpVersion.Minor} 200 Connection established");
-            await clientStreamWriter.WriteLineAsync($"Timestamp: {DateTime.Now}");
-            await clientStreamWriter.WriteLineAsync();
-            await clientStreamWriter.FlushAsync();
+            var response = new ConnectResponse
+            {
+                HttpVersion = httpVersion,
+                ResponseStatusCode = "200",
+                ResponseStatusDescription = "Connection established"
+            };
+
+            response.ResponseHeaders.AddHeader("Timestamp", DateTime.Now.ToString());
+            return response;
         }
 
         /// <summary>
