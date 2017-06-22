@@ -190,6 +190,8 @@ namespace Titanium.Web.Proxy
                             {
                                 await TcpHelper.SendRaw(null, null, clientStream, connection);
                             }
+
+                            Interlocked.Decrement(ref serverConnectionCount);
                         }
 
                         return;
