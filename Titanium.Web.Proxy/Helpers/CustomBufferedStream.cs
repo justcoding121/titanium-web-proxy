@@ -306,6 +306,21 @@ namespace Titanium.Web.Proxy.Helpers
             return streamBuffer[bufferPos++];
         }
 
+        public async Task<int> PeekByteAsync(int index)
+        {
+            if (Available <= index)
+            {
+                await FillBufferAsync();
+            }
+
+            if (Available <= index)
+            {
+                return -1;
+            }
+
+            return streamBuffer[bufferPos + index];
+        }
+
         public byte ReadByteFromBuffer()
         {
             if (bufferLength == 0)
@@ -396,6 +411,8 @@ namespace Titanium.Web.Proxy.Helpers
 
         public bool DataAvailable => bufferLength > 0;
 
+        public int Available => bufferLength;
+
         /// <summary>
         /// When overridden in a derived class, gets or sets the position within the current stream.
         /// </summary>
@@ -428,14 +445,22 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         public bool FillBuffer()
         {
-            bufferLength = baseStream.Read(streamBuffer, 0, streamBuffer.Length);
-            bufferPos = 0;
             if (bufferLength > 0)
             {
-                OnDataReceived(streamBuffer, 0, bufferLength);
+                //normally we fill the buffer only when it is empty, but sometimes we need more data
+                //move the remanining data to the beginning of the buffer 
+                Buffer.BlockCopy(streamBuffer, bufferPos, streamBuffer, 0, bufferLength);
             }
 
-            return bufferLength > 0;
+            bufferPos = 0;
+            int readBytes = baseStream.Read(streamBuffer, bufferLength, streamBuffer.Length - bufferLength);
+            if (readBytes > 0)
+            {
+                OnDataReceived(streamBuffer, bufferLength, readBytes);
+                bufferLength += readBytes;
+            }
+
+            return readBytes > 0;
         }
 
         /// <summary>
@@ -454,14 +479,22 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         public async Task<bool> FillBufferAsync(CancellationToken cancellationToken)
         {
-            bufferLength = await baseStream.ReadAsync(streamBuffer, 0, streamBuffer.Length, cancellationToken);
-            bufferPos = 0;
             if (bufferLength > 0)
             {
-                OnDataReceived(streamBuffer, 0, bufferLength);
+                //normally we fill the buffer only when it is empty, but sometimes we need more data
+                //move the remanining data to the beginning of the buffer 
+                Buffer.BlockCopy(streamBuffer, bufferPos, streamBuffer, 0, bufferLength);
             }
 
-            return bufferLength > 0;
+            bufferPos = 0;
+            int readBytes = await baseStream.ReadAsync(streamBuffer, bufferLength, streamBuffer.Length - bufferLength, cancellationToken);
+            if (readBytes > 0)
+            {
+                OnDataReceived(streamBuffer, bufferLength, readBytes);
+                bufferLength += readBytes;
+            }
+
+            return readBytes > 0;
         }
 
         private class ReadAsyncResult : IAsyncResult

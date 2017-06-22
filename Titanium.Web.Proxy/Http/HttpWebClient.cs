@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Headers passed with Connect.
         /// </summary>
-        public List<HttpHeader> ConnectHeaders { get; set; }
+        public ConnectRequest ConnectRequest { get; set; }
 
         /// <summary>
         /// Web Request.
@@ -94,25 +94,11 @@ namespace Titanium.Web.Proxy.Http
                                             $"{ServerConnection.UpStreamHttpProxy.UserName}:{ServerConnection.UpStreamHttpProxy.Password}")));
             }
             //write request headers
-            foreach (var headerItem in Request.RequestHeaders)
+            foreach (var header in Request.RequestHeaders)
             {
-                var header = headerItem.Value;
-                if (headerItem.Key != "Proxy-Authorization")
+                if (header.Name != "Proxy-Authorization")
                 {
                     requestLines.AppendLine($"{header.Name}: {header.Value}");
-                }
-            }
-
-            //write non unique request headers
-            foreach (var headerItem in Request.NonUniqueRequestHeaders)
-            {
-                var headers = headerItem.Value;
-                foreach (var header in headers)
-                {
-                    if (headerItem.Key != "Proxy-Authorization")
-                    {
-                        requestLines.AppendLine($"{header.Name}: {header.Value}");
-                    }
                 }
             }
 
@@ -211,7 +197,7 @@ namespace Titanium.Web.Proxy.Http
             }
 
             //Read the response headers in to unique and non-unique header collections
-            await HeaderParser.ReadHeaders(ServerConnection.StreamReader, Response.NonUniqueResponseHeaders, Response.ResponseHeaders);
+            await HeaderParser.ReadHeaders(ServerConnection.StreamReader, Response.ResponseHeaders);
         }
 
         /// <summary>
@@ -219,7 +205,7 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public void Dispose()
         {
-            ConnectHeaders = null;
+            ConnectRequest = null;
 
             Request.Dispose();
             Response.Dispose();

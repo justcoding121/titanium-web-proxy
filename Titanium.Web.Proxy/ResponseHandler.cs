@@ -150,6 +150,19 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
+        /// Writes the response.
+        /// </summary>
+        /// <param name="response"></param>
+        /// <param name="responseWriter"></param>
+        /// <param name="flush"></param>
+        /// <returns></returns>
+        private async Task WriteResponse(Response response, StreamWriter responseWriter, bool flush = true)
+        {
+            await WriteResponseStatus(response.HttpVersion, response.ResponseStatusCode, response.ResponseStatusDescription, responseWriter);
+            await WriteResponseHeaders(responseWriter, response, flush);
+        }
+
+        /// <summary>
         /// Write response status
         /// </summary>
         /// <param name="version"></param>
@@ -167,54 +180,37 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="responseWriter"></param>
         /// <param name="response"></param>
+        /// <param name="flush"></param>
         /// <returns></returns>
-        private async Task WriteResponseHeaders(StreamWriter responseWriter, Response response)
+        private async Task WriteResponseHeaders(StreamWriter responseWriter, Response response, bool flush = true)
         {
             FixProxyHeaders(response.ResponseHeaders);
 
             foreach (var header in response.ResponseHeaders)
             {
-                await header.Value.WriteToStream(responseWriter);
-            }
-
-            //write non unique request headers
-            foreach (var headerItem in response.NonUniqueResponseHeaders)
-            {
-                var headers = headerItem.Value;
-                foreach (var header in headers)
-                {
-                    await header.WriteToStream(responseWriter);
-                }
+                await header.WriteToStream(responseWriter);
             }
 
             await responseWriter.WriteLineAsync();
-            await responseWriter.FlushAsync();
+            if (flush)
+            {
+                await responseWriter.FlushAsync();
+            }
         }
 
         /// <summary>
         /// Fix proxy specific headers
         /// </summary>
         /// <param name="headers"></param>
-        private void FixProxyHeaders(Dictionary<string, HttpHeader> headers)
+        private void FixProxyHeaders(HeaderCollection headers)
         {
             //If proxy-connection close was returned inform to close the connection
-            bool hasProxyHeader = headers.ContainsKey("proxy-connection");
-            bool hasConnectionheader = headers.ContainsKey("connection");
+            string proxyHeader = headers.GetHeaderValueOrNull("proxy-connection");
+            headers.RemoveHeader("proxy-connection");
 
-            if (hasProxyHeader)
+            if (proxyHeader != null)
             {
-                var proxyHeader = headers["proxy-connection"];
-                if (hasConnectionheader == false)
-                {
-                    headers.Add("connection", new HttpHeader("connection", proxyHeader.Value));
-                }
-                else
-                {
-                    var connectionHeader = headers["connection"];
-                    connectionHeader.Value = proxyHeader.Value;
-                }
-
-                headers.Remove("proxy-connection");
+                headers.SetOrAddHeaderValue("connection", proxyHeader);
             }
         }
 
