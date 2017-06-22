@@ -73,6 +73,7 @@
     <Compile Include="Decompression\IDecompression.cs" />
     <Compile Include="EventArguments\CertificateSelectionEventArgs.cs" />
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
+    <Compile Include="EventArguments\TunnelConnectEventArgs.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
     <Compile Include="Extensions\FuncExtensions.cs" />
     <Compile Include="Helpers\HttpHelper.cs" />
@@ -85,7 +86,11 @@
     <Compile Include="Helpers\RunTime.cs" />
     <Compile Include="Helpers\WinHttp\WinHttpHandle.cs" />
     <Compile Include="Helpers\WinHttp\WinHttpWebProxyFinder.cs" />
+    <Compile Include="Http\ConnectRequest.cs" />
+    <Compile Include="Http\ConnectResponse.cs" />
+    <Compile Include="Http\HeaderCollection.cs" />
     <Compile Include="Http\HeaderParser.cs" />
+    <Compile Include="Http\HttpsTools.cs" />
     <Compile Include="Http\Responses\GenericResponse.cs" />
     <Compile Include="Network\CachedCertificate.cs" />
     <Compile Include="Network\Certificate\WinCertificateMaker.cs" />
