@@ -30,13 +30,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Content encoding for this response
         /// </summary>
-        public string ContentEncoding
-        {
-            get
-            {
-                return ResponseHeaders.GetHeaderValueOrNull("content-encoding")?.Trim();
-            }
-        }
+        public string ContentEncoding => ResponseHeaders.GetHeaderValueOrNull("content-encoding")?.Trim();
 
         /// <summary>
         /// Http version
@@ -67,13 +61,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Content type of this response
         /// </summary>
-        public string ContentType
-        {
-            get
-            {
-                return ResponseHeaders.GetHeaderValueOrNull("content-type");
-            }
-        }
+        public string ContentType => ResponseHeaders.GetHeaderValueOrNull("content-type");
 
         /// <summary>
         /// Length of response body
