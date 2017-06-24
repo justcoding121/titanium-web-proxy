@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -52,13 +51,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Content encoding header value
         /// </summary>
-        public string ContentEncoding
-        {
-            get
-            {
-                return RequestHeaders.GetHeaderValueOrNull("content-encoding");
-            }
-        }
+        public string ContentEncoding => RequestHeaders.GetHeaderValueOrNull("content-encoding");
 
         /// <summary>
         /// Request content-length
@@ -169,7 +162,7 @@ namespace Titanium.Web.Proxy.Http
         internal byte[] RequestBody { get; set; }
 
         /// <summary>
-        /// request body as string
+        /// Request body as string
         /// </summary>
         internal string RequestBodyString { get; set; }
 
@@ -204,7 +197,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Request header collection
         /// </summary>
-        public HeaderCollection RequestHeaders { get; set; }
+        public HeaderCollection RequestHeaders { get; private set; } = new HeaderCollection();
 
         /// <summary>
         /// Does server responsed positively for 100 continue request
@@ -217,11 +210,29 @@ namespace Titanium.Web.Proxy.Http
         public bool ExpectationFailed { get; internal set; }
 
         /// <summary>
+        /// Gets the header text.
+        /// </summary>
+        public string HeaderText
+        {
+            get
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine($"{Method} {RequestUri.PathAndQuery} HTTP/{HttpVersion.Major}.{HttpVersion.Minor}");
+                foreach (var header in RequestHeaders)
+                {
+                    sb.AppendLine(header.ToString());
+                }
+
+                sb.AppendLine();
+                return sb.ToString();
+            }
+        }
+
+        /// <summary>
         /// Constructor.
         /// </summary>
         public Request()
         {
-            RequestHeaders = new HeaderCollection();
         }
 
         /// <summary>
@@ -235,7 +246,7 @@ namespace Titanium.Web.Proxy.Http
             RequestHeaders = null;
 
             RequestBody = null;
-            RequestBody = null;
+            RequestBodyString = null;
         }
     }
 }

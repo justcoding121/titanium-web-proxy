@@ -335,7 +335,7 @@ namespace Titanium.Web.Proxy
                         break;
                     }
 
-                    PrepareRequestHeaders(args.WebSession.Request.RequestHeaders, args.WebSession);
+                    PrepareRequestHeaders(args.WebSession.Request.RequestHeaders);
                     args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
 
                     //if win auth is enabled
@@ -474,6 +474,7 @@ namespace Titanium.Web.Proxy
                             args.WebSession.Request.RequestBody =
                                 await GetCompressedResponseBody(args.WebSession.Request.ContentEncoding, args.WebSession.Request.RequestBody);
                         }
+
                         //chunked send is not supported as of now
                         args.WebSession.Request.ContentLength = args.WebSession.Request.RequestBody.Length;
 
@@ -595,8 +596,7 @@ namespace Titanium.Web.Proxy
         /// prepare the request headers so that we can avoid encodings not parsable by this proxy
         /// </summary>
         /// <param name="requestHeaders"></param>
-        /// <param name="webRequest"></param>
-        private void PrepareRequestHeaders(HeaderCollection requestHeaders, HttpWebClient webRequest)
+        private void PrepareRequestHeaders(HeaderCollection requestHeaders)
         {
             foreach (var header in requestHeaders)
             {
@@ -610,7 +610,6 @@ namespace Titanium.Web.Proxy
             }
 
             FixProxyHeaders(requestHeaders);
-            webRequest.Request.RequestHeaders = requestHeaders;
         }
 
         /// <summary>
