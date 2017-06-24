@@ -415,67 +415,13 @@ namespace Titanium.Web.Proxy.EventArguments
         /// and ignore the request 
         /// </summary>
         /// <param name="html"></param>
-        public async Task Ok(string html)
-        {
-            await Ok(html, null);
-        }
-
-        /// <summary>
-        /// Before request is made to server 
-        /// Respond with the specified HTML string to client
-        /// and ignore the request 
-        /// </summary>
-        /// <param name="html"></param>
         /// <param name="headers"></param>
         public async Task Ok(string html, Dictionary<string, HttpHeader> headers)
         {
-            if (WebSession.Request.RequestLocked)
-            {
-                throw new Exception("You cannot call this function after request is made to server.");
-            }
-
-            if (html == null)
-            {
-                html = string.Empty;
-            }
-
-            var result = Encoding.Default.GetBytes(html);
-
-            await Ok(result, headers);
-        }
-
-        /// <summary>
-        /// Before request is made to server 
-        /// Respond with the specified byte[] to client
-        /// and ignore the request 
-        /// </summary>
-        /// <param name="result"></param>
-        public async Task Ok(byte[] result)
-        {
-            await Ok(result, null);
-        }
-
-        /// <summary>
-        /// Before request is made to server 
-        /// Respond with the specified byte[] to client
-        /// and ignore the request 
-        /// </summary>
-        /// <param name="result"></param>
-        /// <param name="headers"></param>
-        public async Task Ok(byte[] result, Dictionary<string, HttpHeader> headers)
-        {
             var response = new OkResponse();
-
-            if (headers != null && headers.Count > 0)
-            {
-                foreach (var header in headers)
-                {
-                    response.ResponseHeaders.AddHeader(header.Key, header.Value.Value);
-                }
-            }
-
+            response.ResponseHeaders.AddHeaders(headers);
             response.HttpVersion = WebSession.Request.HttpVersion;
-            response.ResponseBody = result;
+            response.ResponseBody = response.Encoding.GetBytes(html ?? string.Empty);
 
             await Respond(response);
 
@@ -483,16 +429,20 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Before request is made to server 
-        /// Respond with the specified HTML string to client
-        /// and ignore the request 
+        /// Before request is made to server 
+        /// Respond with the specified byte[] to client
+        /// and ignore the request 
         /// </summary>
-        /// <param name="html"></param>
-        /// <param name="status"></param>
-        /// <returns></returns>
-        public async Task GenericResponse(string html, HttpStatusCode status)
+        /// <param name="result"></param>
+        /// <param name="headers"></param>
+        public async Task Ok(byte[] result, Dictionary<string, HttpHeader> headers = null)
         {
-            await GenericResponse(html, null, status);
+            var response = new OkResponse();
+            response.ResponseHeaders.AddHeaders(headers);
+            response.HttpVersion = WebSession.Request.HttpVersion;
+            response.ResponseBody = result;
+
+            await Respond(response);
         }
 
         /// <summary>
@@ -502,24 +452,17 @@ namespace Titanium.Web.Proxy.EventArguments
         /// and ignore the request 
         /// </summary>
         /// <param name="html"></param>
-        /// <param name="headers"></param>
         /// <param name="status"></param>
+        /// <param name="headers"></param>
         /// <returns></returns>
-        public async Task GenericResponse(string html, Dictionary<string, HttpHeader> headers, HttpStatusCode status)
+        public async Task GenericResponse(string html, HttpStatusCode status, Dictionary<string, HttpHeader> headers = null)
         {
-            if (WebSession.Request.RequestLocked)
-            {
-                throw new Exception("You cannot call this function after request is made to server.");
-            }
+            var response = new GenericResponse(status);
+            response.HttpVersion = WebSession.Request.HttpVersion;
+            response.ResponseHeaders.AddHeaders(headers);
+            response.ResponseBody = response.Encoding.GetBytes(html ?? string.Empty);
 
-            if (html == null)
-            {
-                html = string.Empty;
-            }
-
-            var result = Encoding.Default.GetBytes(html);
-
-            await GenericResponse(result, headers, status);
+            await Respond(response);
         }
 
         /// <summary>
@@ -529,28 +472,17 @@ namespace Titanium.Web.Proxy.EventArguments
         /// and ignore the request
         /// </summary>
         /// <param name="result"></param>
-        /// <param name="headers"></param>
         /// <param name="status"></param>
+        /// <param name="headers"></param>
         /// <returns></returns>
-        public async Task GenericResponse(byte[] result, Dictionary<string, HttpHeader> headers, HttpStatusCode status)
+        public async Task GenericResponse(byte[] result, HttpStatusCode status, Dictionary<string, HttpHeader> headers)
         {
             var response = new GenericResponse(status);
-
-            if (headers != null && headers.Count > 0)
-            {
-                foreach (var header in headers)
-                {
-                    response.ResponseHeaders.AddHeader(header.Key, header.Value.Value);
-                }
-            }
-
             response.HttpVersion = WebSession.Request.HttpVersion;
-
+            response.ResponseHeaders.AddHeaders(headers);
             response.ResponseBody = result;
 
             await Respond(response);
-
-            WebSession.Request.CancelRequest = true;
         }
 
         /// <summary>
@@ -561,19 +493,21 @@ namespace Titanium.Web.Proxy.EventArguments
         public async Task Redirect(string url)
         {
             var response = new RedirectResponse();
-
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.ResponseHeaders.AddHeader("Location", url);
-            response.ResponseBody = Encoding.ASCII.GetBytes(string.Empty);
+            response.ResponseBody = new byte[0];
 
             await Respond(response);
-
-            WebSession.Request.CancelRequest = true;
         }
 
         /// a generic responder method 
         public async Task Respond(Response response)
         {
+            if (WebSession.Request.RequestLocked)
+            {
+                throw new Exception("You cannot call this function after request is made to server.");
+            }
+
             WebSession.Request.RequestLocked = true;
 
             response.ResponseLocked = true;
@@ -582,6 +516,8 @@ namespace Titanium.Web.Proxy.EventArguments
             WebSession.Response = response;
 
             await httpResponseHandler(this);
+
+            WebSession.Request.CancelRequest = true;
         }
 
         /// <summary>

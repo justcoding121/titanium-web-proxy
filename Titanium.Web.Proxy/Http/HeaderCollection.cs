@@ -116,6 +116,62 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
+        /// Adds the given header objects to Request
+        /// </summary>
+        /// <param name="newHeaders"></param>
+        public void AddHeaders(IEnumerable<HttpHeader> newHeaders)
+        {
+            if (newHeaders == null)
+            {
+                return;
+            }
+
+            foreach (var header in newHeaders)
+            {
+                AddHeader(header);
+            }
+        }
+
+        /// <summary>
+        /// Adds the given header objects to Request
+        /// </summary>
+        /// <param name="newHeaders"></param>
+        public void AddHeaders(IEnumerable<KeyValuePair<string, string>> newHeaders)
+        {
+            if (newHeaders == null)
+            {
+                return;
+            }
+
+            foreach (var header in newHeaders)
+            {
+                AddHeader(header.Key, header.Value);
+            }
+        }
+
+        /// <summary>
+        /// Adds the given header objects to Request
+        /// </summary>
+        /// <param name="newHeaders"></param>
+        public void AddHeaders(IEnumerable<KeyValuePair<string, HttpHeader>> newHeaders)
+        {
+            if (newHeaders == null)
+            {
+                return;
+            }
+
+            foreach (var header in newHeaders)
+            {
+                if (header.Key != header.Value.Name)
+                {
+                    throw new Exception("Header name mismatch. Key and the name of the HttpHeader object should be the same.");
+                }
+
+                AddHeader(header.Value);
+            }
+        }
+
+        /// <summary>
         ///  removes all headers with given name
         /// </summary>
         /// <param name="headerName"></param>
