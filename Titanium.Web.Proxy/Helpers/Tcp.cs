@@ -183,24 +183,22 @@ namespace Titanium.Web.Proxy.Helpers
             if (httpCmd != null || requestHeaders != null)
             {
                 using (var ms = new MemoryStream())
-                using (var writer = new StreamWriter(ms, Encoding.ASCII))
+                using (var writer = new StreamWriter(ms, Encoding.ASCII) { NewLine = ProxyConstants.NewLine })
                 {
                     if (httpCmd != null)
                     {
-                        writer.Write(httpCmd);
-                        writer.Write(ProxyConstants.NewLine);
+                        writer.WriteLine(httpCmd);
                     }
 
                     if (requestHeaders != null)
                     {
                         foreach (string header in requestHeaders.Select(t => t.ToString()))
                         {
-                            writer.Write(header);
-                            writer.Write(ProxyConstants.NewLine);
+                            writer.WriteLine(header);
                         }
                     }
 
-                    writer.Write(ProxyConstants.NewLine);
+                    writer.WriteLine();
                     writer.Flush();
 
                     var data = ms.ToArray();

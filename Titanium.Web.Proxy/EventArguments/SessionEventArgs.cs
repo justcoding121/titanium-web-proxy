@@ -286,15 +286,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             WebSession.Request.RequestBody = body;
-
-            if (WebSession.Request.IsChunked == false)
-            {
-                WebSession.Request.ContentLength = body.Length;
-            }
-            else
-            {
-                WebSession.Request.ContentLength = -1;
-            }
+            WebSession.Request.ContentLength = WebSession.Request.IsChunked ? -1 : body.Length;
         }
 
         /// <summary>
