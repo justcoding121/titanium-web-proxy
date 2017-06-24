@@ -73,6 +73,7 @@
     <Compile Include="Decompression\IDecompression.cs" />
     <Compile Include="EventArguments\CertificateSelectionEventArgs.cs" />
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
+    <Compile Include="EventArguments\DataEventArgs.cs" />
     <Compile Include="EventArguments\TunnelConnectEventArgs.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
     <Compile Include="Extensions\FuncExtensions.cs" />

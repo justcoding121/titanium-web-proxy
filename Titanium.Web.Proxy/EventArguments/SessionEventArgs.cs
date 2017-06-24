@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Titanium.Web.Proxy.Decompression;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
@@ -91,16 +92,34 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public ExternalProxy CustomUpStreamHttpsProxyUsed { get; set; }
 
+        public event EventHandler<DataEventArgs> DataSent;
+
+        public event EventHandler<DataEventArgs> DataReceived;
+
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgs(int bufferSize, Func<SessionEventArgs, Task> httpResponseHandler)
+        internal SessionEventArgs(int bufferSize, ProxyEndPoint endPoint, Func<SessionEventArgs, Task> httpResponseHandler)
         {
             this.bufferSize = bufferSize;
             this.httpResponseHandler = httpResponseHandler;
 
             ProxyClient = new ProxyClient();
             WebSession = new HttpWebClient();
+
+            WebSession.ProcessId = new Lazy<int>(() =>
+            {
+                var remoteEndPoint = (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
+
+                //If client is localhost get the process id
+                if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
+                {
+                    return NetworkHelper.GetProcessIdFromPort(remoteEndPoint.Port, endPoint.IpV6Enabled);
+                }
+
+                //can't access process Id of remote request from remote machine
+                return -1;
+            });
         }
 
         /// <summary>
@@ -139,12 +158,14 @@ namespace Titanium.Web.Proxy.EventArguments
                             await WebSession.ServerConnection.StreamReader.CopyBytesToStream(requestBodyStream, long.MaxValue);
                         }
                     }
+
                     WebSession.Request.RequestBody = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding, requestBodyStream.ToArray());
                 }
 
                 //Now set the flag to true
                 //So that next time we can deliver body from cache
                 WebSession.Request.RequestBodyRead = true;
+                OnDataSent(WebSession.Request.RequestBody, 0, WebSession.Request.RequestBody.Length);
             }
         }
 
@@ -159,6 +180,15 @@ namespace Titanium.Web.Proxy.EventArguments
             WebSession.Response = new Response();
         }
 
+        internal void OnDataSent(byte[] buffer, int offset, int count)
+        {
+            DataSent?.Invoke(this, new DataEventArgs(buffer, offset, count));
+        }
+
+        internal void OnDataReceived(byte[] buffer, int offset, int count)
+        {
+            DataReceived?.Invoke(this, new DataEventArgs(buffer, offset, count));
+        }
 
         /// <summary>
         /// Read response body as byte[] for current response
@@ -191,8 +221,10 @@ namespace Titanium.Web.Proxy.EventArguments
 
                     WebSession.Response.ResponseBody = await GetDecompressedResponseBody(WebSession.Response.ContentEncoding, responseBodyStream.ToArray());
                 }
+
                 //set this to true for caching
                 WebSession.Response.ResponseBodyRead = true;
+                OnDataReceived(WebSession.Response.ResponseBody, 0, WebSession.Response.ResponseBody.Length);
             }
         }
 
@@ -211,6 +243,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
                 await ReadRequestBody();
             }
+
             return WebSession.Request.RequestBody;
         }
 
@@ -229,6 +262,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
                 await ReadRequestBody();
             }
+
             //Use the encoding specified in request to decode the byte[] data to string
             return WebSession.Request.RequestBodyString ?? (WebSession.Request.RequestBodyString =
                        WebSession.Request.Encoding.GetString(WebSession.Request.RequestBody));
