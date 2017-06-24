@@ -104,12 +104,6 @@ namespace Titanium.Web.Proxy
                         await TunnelConnectRequest.InvokeParallelAsync(this, connectArgs);
                     }
 
-                    if (httpRemoteUri.Port == 80) 
-                    {
-                        // why is this needed? HTTPS not allowed on port 80?
-                        excluded = true;   
-                    }
-
                     if (!excluded && await CheckAuthorization(clientStreamWriter, connectArgs) == false)
                     {
                         if (TunnelConnectResponse != null)
