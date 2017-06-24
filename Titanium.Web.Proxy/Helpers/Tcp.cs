@@ -174,39 +174,47 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="requestHeaders"></param>
         /// <param name="clientStream"></param>
         /// <param name="connection"></param>
+        /// <param name="onDataSend"></param>
+        /// <param name="onDataReceive"></param>
         /// <returns></returns>
-        internal static async Task SendRaw(string httpCmd, IEnumerable<HttpHeader> requestHeaders, Stream clientStream, TcpConnection connection)
+        internal static async Task SendRaw(string httpCmd, IEnumerable<HttpHeader> requestHeaders, Stream clientStream, TcpConnection connection, Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive)
         {
             //prepare the prefix content
-            StringBuilder sb = null;
             if (httpCmd != null || requestHeaders != null)
             {
-                sb = new StringBuilder();
-
-                if (httpCmd != null)
+                using (var ms = new MemoryStream())
+                using (var writer = new StreamWriter(ms, Encoding.ASCII))
                 {
-                    sb.Append(httpCmd);
-                    sb.Append(ProxyConstants.NewLine);
-                }
-
-                if (requestHeaders != null)
-                {
-                    foreach (string header in requestHeaders.Select(t => t.ToString()))
+                    if (httpCmd != null)
                     {
-                        sb.Append(header);
-                        sb.Append(ProxyConstants.NewLine);
+                        writer.Write(httpCmd);
+                        writer.Write(ProxyConstants.NewLine);
                     }
-                }
 
-                sb.Append(ProxyConstants.NewLine);
+                    if (requestHeaders != null)
+                    {
+                        foreach (string header in requestHeaders.Select(t => t.ToString()))
+                        {
+                            writer.Write(header);
+                            writer.Write(ProxyConstants.NewLine);
+                        }
+                    }
+
+                    writer.Write(ProxyConstants.NewLine);
+                    writer.Flush();
+
+                    var data = ms.ToArray();
+                    await ms.WriteAsync(data, 0, data.Length);
+                    onDataSend?.Invoke(data, 0, data.Length);
+                }
             }
 
             var tunnelStream = connection.Stream;
 
             //Now async relay all server=>client & client=>server data
-            var sendRelay = clientStream.CopyToAsync(sb?.ToString() ?? string.Empty, tunnelStream);
+            var sendRelay = clientStream.CopyToAsync(tunnelStream, onDataSend);
 
-            var receiveRelay = tunnelStream.CopyToAsync(string.Empty, clientStream);
+            var receiveRelay = tunnelStream.CopyToAsync(clientStream, onDataReceive);
 
             await Task.WhenAll(sendRelay, receiveRelay);
         }
