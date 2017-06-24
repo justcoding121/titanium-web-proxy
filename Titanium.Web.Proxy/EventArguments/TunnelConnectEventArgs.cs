@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -11,7 +12,7 @@ namespace Titanium.Web.Proxy.EventArguments
     {
         public bool IsHttps { get; set; }
 
-        public TunnelConnectSessionEventArgs() : base(0, null)
+        public TunnelConnectSessionEventArgs(ProxyEndPoint endPoint) : base(0, endPoint, null)
         {
             
         }
