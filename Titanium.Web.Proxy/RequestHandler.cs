@@ -93,11 +93,21 @@ namespace Titanium.Web.Proxy
                 //Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
                 if (httpVerb == "CONNECT")
                 {
-                    connectRequest = new ConnectRequest();
+                    connectRequest = new ConnectRequest
+                    {
+                        RequestUri = httpRemoteUri,
+                        HttpVersion = version,
+                        Method = httpVerb,
+                    };
+
                     await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.RequestHeaders);
 
-                    var connectArgs = new TunnelConnectSessionEventArgs();
+                    var connectArgs = new TunnelConnectSessionEventArgs(endPoint);
                     connectArgs.WebSession.Request = connectRequest;
+                    connectArgs.ProxyClient.TcpClient = tcpClient;
+                    connectArgs.ProxyClient.ClientStream = clientStream;
+                    connectArgs.ProxyClient.ClientStreamReader = clientStreamReader;
+                    connectArgs.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                     if (TunnelConnectRequest != null)
                     {
@@ -165,26 +175,11 @@ namespace Titanium.Web.Proxy
                     //Sorry cannot do a HTTPS request decrypt to port 80 at this time
                     else
                     {
-                        var args = new SessionEventArgs(BufferSize, HandleHttpSessionResponse);
-                        args.WebSession.Request.RequestUri = httpRemoteUri;
-                        args.WebSession.Request.HttpVersion = version;
-                        args.WebSession.Request.Method = httpVerb;
-                        args.ProxyClient.ClientStream = clientStream;
-                        args.ProxyClient.ClientStreamReader = clientStreamReader;
-                        args.ProxyClient.ClientStreamWriter = clientStreamWriter;
-
                         //create new connection
-                        using (var connection = await GetServerConnection(args))
+                        using (var connection = await GetServerConnection(connectArgs))
                         {
-                            if (connection.UseProxy)
-                            {
-                                await TcpHelper.SendRaw(null, null, clientStream, connection);
-                            }
-                            else
-                            {
-                                await TcpHelper.SendRaw(null, null, clientStream, connection);
-                            }
-
+                            await TcpHelper.SendRaw(null, null, clientStream, connection,
+                                (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); });
                             Interlocked.Decrement(ref serverConnectionCount);
                         }
 
@@ -293,25 +288,11 @@ namespace Titanium.Web.Proxy
                     break;
                 }
 
-                var args = new SessionEventArgs(BufferSize, HandleHttpSessionResponse)
+                var args = new SessionEventArgs(BufferSize, endPoint, HandleHttpSessionResponse)
                 {
                     ProxyClient = { TcpClient = client },
                     WebSession = { ConnectRequest = connectRequest }
                 };
-
-                args.WebSession.ProcessId = new Lazy<int>(() =>
-                {
-                    var remoteEndPoint = (IPEndPoint)args.ProxyClient.TcpClient.Client.RemoteEndPoint;
-
-                    //If client is localhost get the process id
-                    if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
-                    {
-                        return NetworkHelper.GetProcessIdFromPort(remoteEndPoint.Port, endPoint.IpV6Enabled);
-                    }
-
-                    //can't access process Id of remote request from remote machine
-                    return -1;
-                });
 
                 try
                 {
@@ -392,7 +373,8 @@ namespace Titanium.Web.Proxy
                     //if upgrading to websocket then relay the requet without reading the contents
                     if (args.WebSession.Request.UpgradeToWebSocket)
                     {
-                        await TcpHelper.SendRaw(httpCmd, args.WebSession.Request.RequestHeaders, clientStream, connection);
+                        await TcpHelper.SendRaw(httpCmd, args.WebSession.Request.RequestHeaders, clientStream, connection,
+                            (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); });
 
                         args.Dispose();
                         break;
