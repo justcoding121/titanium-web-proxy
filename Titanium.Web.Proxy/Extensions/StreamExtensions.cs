@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+﻿using System;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -28,6 +29,25 @@ namespace Titanium.Web.Proxy.Extensions
             }
 
             await input.CopyToAsync(output);
+        }
+
+        internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy)
+        {
+            byte[] buffer = new byte[81920];
+            while (true)
+            {
+                int num = await input.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+                int bytesRead;
+                if ((bytesRead = num) != 0)
+                {
+                    await output.WriteAsync(buffer, 0, bytesRead).ConfigureAwait(false);
+                    onCopy?.Invoke(buffer, 0, bytesRead);
+                }
+                else
+                {
+                    break;
+                }
+            }
         }
 
         /// <summary>
