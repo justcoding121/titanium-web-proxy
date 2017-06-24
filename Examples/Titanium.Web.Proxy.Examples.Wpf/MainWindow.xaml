@@ -1,0 +1,33 @@
+﻿<Window x:Class="Titanium.Web.Proxy.Examples.Wpf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Titanium.Web.Proxy.Examples.Wpf"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="500" Width="1000" WindowState="Maximized"
+		DataContext="{Binding RelativeSource={RelativeSource Self}}">
+    <Grid>
+        <Grid.ColumnDefinitions>
+	        <ColumnDefinition Width="500" />
+	        <ColumnDefinition Width="3" />
+	        <ColumnDefinition />
+		</Grid.ColumnDefinitions>
+		<GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" />
+		<ListView Grid.Column="0" HorizontalAlignment="Stretch" ItemsSource="{Binding Sessions}" SelectedItem="{Binding SelectedSession}"
+				  KeyDown="ListViewSessions_OnKeyDown">
+			<ListView.View>
+				<GridView>
+					<GridViewColumn Header="Result" DisplayMemberBinding="{Binding StatusCode}" />
+					<GridViewColumn Header="Protocol" DisplayMemberBinding="{Binding Protocol}" />
+					<GridViewColumn Header="Host" DisplayMemberBinding="{Binding Host}" />
+					<GridViewColumn Header="Url" DisplayMemberBinding="{Binding Url}" />
+					<GridViewColumn Header="BodySize" DisplayMemberBinding="{Binding BodySize}" />
+					<GridViewColumn Header="Process" DisplayMemberBinding="{Binding Process}" />
+					<GridViewColumn Header="SentBytes" DisplayMemberBinding="{Binding SentDataCount}" />
+					<GridViewColumn Header="ReceivedBytes" DisplayMemberBinding="{Binding ReceivedDataCount}" />
+				</GridView>
+			</ListView.View>
+		</ListView>
+    </Grid>
+</Window>
