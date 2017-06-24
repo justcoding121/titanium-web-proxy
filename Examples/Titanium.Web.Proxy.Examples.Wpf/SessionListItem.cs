@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Examples.Wpf.Annotations;
+using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Examples.Wpf
 {
@@ -72,6 +73,14 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             get { return sentDataCount; }
             set { SetField(ref sentDataCount, value); }
         }
+
+        public byte[] RequestBody { get; set; }
+
+        public byte[] ResponseBody { get; set; }
+
+        public Request Request { get; set; } = new Request();
+
+        public Response Response { get; set; } = new Response();
 
         public event PropertyChangedEventHandler PropertyChanged;
 

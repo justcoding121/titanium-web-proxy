@@ -29,5 +29,17 @@
 				</GridView>
 			</ListView.View>
 		</ListView>
+	    <TabControl Grid.Column="2">
+		    <TabItem Header="Session">
+				<Grid Background="Red" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+					<Grid.RowDefinitions>
+						<RowDefinition />
+						<RowDefinition />
+					</Grid.RowDefinitions>
+				    <TextBox x:Name="TextBoxRequest" Grid.Row="0" />
+				    <TextBox x:Name="TextBoxResponse" Grid.Row="1" />
+				</Grid>
+		    </TabItem>
+	    </TabControl>
     </Grid>
 </Window>
