@@ -10,6 +10,7 @@ namespace Titanium.Web.Proxy.Extensions
 {
     internal static class DotNetStandardExtensions
     {
+#if NET45
         /// <summary>
         /// Disposes the specified client.
         /// Int .NET framework 4.5 the TcpClient class has no Dispose method, 
@@ -34,6 +35,6 @@ namespace Titanium.Web.Proxy.Extensions
         {
             client.Close();
         }
-
+#endif
     }
 }
