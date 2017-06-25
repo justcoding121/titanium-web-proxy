@@ -111,14 +111,14 @@ namespace Titanium.Web.Proxy
 
                     if (TunnelConnectRequest != null)
                     {
-                        await TunnelConnectRequest.InvokeParallelAsync(this, connectArgs);
+                        await TunnelConnectRequest.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
                     }
 
                     if (!excluded && await CheckAuthorization(clientStreamWriter, connectArgs) == false)
                     {
                         if (TunnelConnectResponse != null)
                         {
-                            await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs);
+                            await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
                         }
 
                         return;
@@ -133,7 +133,7 @@ namespace Titanium.Web.Proxy
                     if (TunnelConnectResponse != null)
                     {
                         connectArgs.IsHttps = isClientHello;
-                        await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs);
+                        await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
                     }
 
                     if (!excluded && isClientHello)
@@ -349,7 +349,7 @@ namespace Titanium.Web.Proxy
                     //If user requested interception do it
                     if (BeforeRequest != null)
                     {
-                        await BeforeRequest.InvokeParallelAsync(this, args);
+                        await BeforeRequest.InvokeParallelAsync(this, args, ExceptionFunc);
                     }
 
                     if (args.WebSession.Request.CancelRequest)

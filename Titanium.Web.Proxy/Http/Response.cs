@@ -38,6 +38,31 @@ namespace Titanium.Web.Proxy.Http
         public Version HttpVersion { get; set; }
 
         /// <summary>
+        /// Has response body?
+        /// </summary>
+        public bool HasBody
+        {
+            get
+            {
+                //Has body only if response is chunked or content length >0
+                //If none are true then check if connection:close header exist, if so write response until server or client terminates the connection
+                if (IsChunked || ContentLength > 0 || !ResponseKeepAlive)
+                {
+                    return true;
+                }
+
+                //has response if connection:keep-alive header exist and when version is http/1.0
+                //Because in Http 1.0 server can return a response without content-length (expectation being client would read until end of stream)
+                if (ResponseKeepAlive && HttpVersion.Minor == 0)
+                {
+                    return true;
+                }
+
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Keep the connection alive?
         /// </summary>
         public bool ResponseKeepAlive
