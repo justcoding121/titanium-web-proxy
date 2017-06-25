@@ -8,6 +8,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Models;
@@ -723,7 +724,7 @@ namespace Titanium.Web.Proxy
                                 //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
                                 //due to default TCP CLOSE_WAIT timeout for 4 minutes
                                 tcpClient.LingerState = new LingerOption(true, 0);
-                                tcpClient.Close();
+                                tcpClient.Dispose();
                             }
                         }
                         catch
@@ -744,7 +745,6 @@ namespace Titanium.Web.Proxy
         private void QuitListen(ProxyEndPoint endPoint)
         {
             endPoint.Listener.Stop();
-            endPoint.Listener.Server.Close();
             endPoint.Listener.Server.Dispose();
         }
     }
