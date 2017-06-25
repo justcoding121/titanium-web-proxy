@@ -39,11 +39,13 @@ namespace Titanium.Web.Proxy.Network
             get { return engine; }
             set
             {
+#if NET45
                 //For Mono only Bouncy Castle is supported
                 if (RunTime.IsRunningOnMono)
                 {
                     value = CertificateEngine.BouncyCastle;
                 }
+#endif
 
                 if (value != engine)
                 {
@@ -220,6 +222,7 @@ namespace Titanium.Web.Proxy.Network
             TrustRootCertificate(StoreLocation.LocalMachine);
         }
 
+#if NET45
         /// <summary>
         /// Puts the certificate to the local machine's certificate store. 
         /// Needs elevated permission. Works only on Windows.
@@ -264,6 +267,7 @@ namespace Titanium.Web.Proxy.Network
 
             return true;
         }
+#endif
 
         /// <summary>
         /// Removes the trusted certificates.
@@ -277,6 +281,7 @@ namespace Titanium.Web.Proxy.Network
             RemoveTrustedRootCertificates(StoreLocation.LocalMachine);
         }
 
+#if NET45
         /// <summary>
         /// Removes the trusted certificates from the local machine's certificate store. 
         /// Needs elevated permission. Works only on Windows.
@@ -316,6 +321,7 @@ namespace Titanium.Web.Proxy.Network
 
             return true;
         }
+#endif
 
         /// <summary>
         /// Determines whether the root certificate is trusted.
