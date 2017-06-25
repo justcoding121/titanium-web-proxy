@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -178,7 +179,7 @@ namespace Titanium.Web.Proxy
                         //create new connection
                         using (var connection = await GetServerConnection(connectArgs))
                         {
-                            await TcpHelper.SendRaw(null, null, clientStream, connection,
+                            await TcpHelper.SendRaw(clientStream, connection,
                                 (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); });
                             Interlocked.Decrement(ref serverConnectionCount);
                         }
@@ -375,7 +376,36 @@ namespace Titanium.Web.Proxy
                     //if upgrading to websocket then relay the requet without reading the contents
                     if (args.WebSession.Request.UpgradeToWebSocket)
                     {
-                        await TcpHelper.SendRaw(httpCmd, args.WebSession.Request.RequestHeaders, clientStream, connection,
+                        //prepare the prefix content
+                        var requestHeaders = args.WebSession.Request.RequestHeaders;
+                        using (var ms = new MemoryStream())
+                        using (var writer = new StreamWriter(ms, Encoding.ASCII) { NewLine = ProxyConstants.NewLine })
+                        {
+                            writer.WriteLine(httpCmd);
+
+                            if (requestHeaders != null)
+                            {
+                                foreach (string header in requestHeaders.Select(t => t.ToString()))
+                                {
+                                    writer.WriteLine(header);
+                                }
+                            }
+
+                            writer.WriteLine();
+                            writer.Flush();
+
+                            var data = ms.ToArray();
+                            await connection.Stream.WriteAsync(data, 0, data.Length);
+                        }
+
+                        string httpStatus = await connection.StreamReader.ReadLineAsync();
+                        //todo: parse status
+                        await HeaderParser.ReadHeaders(connection.StreamReader, args.WebSession.Response.ResponseHeaders);
+
+                        await clientStreamWriter.WriteLineAsync(httpStatus);
+                        await WriteResponseHeaders(clientStreamWriter, args.WebSession.Response);
+                        
+                        await TcpHelper.SendRaw(clientStream, connection,
                             (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); });
 
                         args.Dispose();
