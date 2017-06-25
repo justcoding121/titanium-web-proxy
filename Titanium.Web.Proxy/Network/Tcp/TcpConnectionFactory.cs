@@ -55,7 +55,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 //If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections
                 if (useProxy)
                 {
+#if NET45
                     client = new TcpClient(server.UpStreamEndPoint);
+#else
+                    client = new TcpClient(server.UpStreamEndPoint.AddressFamily);
+#endif
                     await client.ConnectAsync(externalProxy.HostName, externalProxy.Port);
                     stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
 
@@ -93,7 +97,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
                 else
                 {
+#if NET45
                     client = new TcpClient(server.UpStreamEndPoint);
+#else
+                    client = new TcpClient(server.UpStreamEndPoint.AddressFamily);
+#endif
                     await client.ConnectAsync(remoteHostName, remotePort);
                     stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
                 }

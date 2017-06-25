@@ -132,7 +132,7 @@ namespace Titanium.Web.Proxy
 
                     if (TunnelConnectResponse != null)
                     {
-                        connectArgs.IsHttps = isClientHello;
+                        connectArgs.IsHttpsConnect = isClientHello;
                         await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
                     }
 
@@ -189,7 +189,7 @@ namespace Titanium.Web.Proxy
 
                 //Now create the request
                 disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                    httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null, endPoint, connectRequest);
+                    httpRemoteUri.Scheme == UriSchemeHttps ? httpRemoteUri.Host : null, endPoint, connectRequest);
             }
             catch (Exception e)
             {
@@ -548,7 +548,7 @@ namespace Titanium.Web.Proxy
             ExternalProxy customUpStreamHttpProxy = null;
             ExternalProxy customUpStreamHttpsProxy = null;
 
-            if (args.WebSession.Request.RequestUri.Scheme == "http")
+            if (args.WebSession.Request.RequestUri.Scheme == UriSchemeHttp)
             {
                 if (GetCustomUpStreamHttpProxyFunc != null)
                 {
