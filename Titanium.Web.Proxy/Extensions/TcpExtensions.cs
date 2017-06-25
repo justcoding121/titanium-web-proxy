@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.Extensions
             catch (SocketException e)
             {
                 // 10035 == WSAEWOULDBLOCK
-                return e.NativeErrorCode.Equals(10035);
+                return e.SocketErrorCode == SocketError.WouldBlock;
             }
             finally
             {

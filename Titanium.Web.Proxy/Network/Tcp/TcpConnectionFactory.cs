@@ -77,7 +77,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         }
                         await writer.WriteLineAsync();
                         await writer.FlushAsync();
-                        writer.Close();
                     }
 
                     using (var reader = new CustomBinaryReader(stream, server.BufferSize))
@@ -113,7 +112,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             catch (Exception)
             {
                 stream?.Dispose();
-                client?.Close();
+                client?.Dispose();
                 throw;
             }
 
