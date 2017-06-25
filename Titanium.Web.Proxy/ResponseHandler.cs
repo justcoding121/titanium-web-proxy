@@ -33,6 +33,7 @@ namespace Titanium.Web.Proxy
 
                 var response = args.WebSession.Response;
 
+#if NET45
                 //check for windows authentication
                 if (EnableWinAuth
                     && !RunTime.IsRunningOnMono
@@ -45,6 +46,7 @@ namespace Titanium.Web.Proxy
                         return true;
                     }
                 }
+#endif
 
                 args.ReRequest = false;
 

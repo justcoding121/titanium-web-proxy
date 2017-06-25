@@ -10,7 +10,9 @@ using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
+#if NET45
 using Titanium.Web.Proxy.Helpers.WinHttp;
+#endif
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -38,7 +40,9 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private Action<Exception> exceptionFunc;
 
+#if NET45
         private WinHttpWebProxyFinder systemProxyResolver;
+#endif
 
         /// <summary>
         /// Backing field for corresponding public property
@@ -60,10 +64,12 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private TcpConnectionFactory tcpConnectionFactory { get; }
 
+#if NET45
         /// <summary>
         /// Manage system proxy settings
         /// </summary>
         private SystemProxyManager systemProxySettingsManager { get; }
+#endif
 
         /// <summary>
         /// Set firefox to use default system proxy
@@ -296,10 +302,12 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory();
+#if NET45
             if (!RunTime.IsRunningOnMono)
             {
                 systemProxySettingsManager = new SystemProxyManager();
             }
+#endif
 
             CertificateManager = new CertificateManager(ExceptionFunc);
             if (rootCertificateName != null)
@@ -352,6 +360,7 @@ namespace Titanium.Web.Proxy
             }
         }
 
+#if NET45
         /// <summary>
         /// Set the given explicit end point as the default proxy server for current machine
         /// </summary>
@@ -497,6 +506,7 @@ namespace Titanium.Web.Proxy
 
             systemProxySettingsManager.DisableAllProxy();
         }
+#endif
 
         /// <summary>
         /// Start this proxy server
@@ -508,6 +518,7 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
+#if NET45
             //clear any system proxy settings which is pointing to our own endpoint
             //due to non gracious proxy shutdown before
             if (systemProxySettingsManager != null)
@@ -543,6 +554,7 @@ namespace Titanium.Web.Proxy
                 GetCustomUpStreamHttpProxyFunc = GetSystemUpStreamProxy;
                 GetCustomUpStreamHttpsProxyFunc = GetSystemUpStreamProxy;
             }
+#endif
 
             foreach (var endPoint in ProxyEndPoints)
             {
@@ -551,11 +563,13 @@ namespace Titanium.Web.Proxy
 
             CertificateManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
+#if NET45
             if (!RunTime.IsRunningOnMono)
             {
                 //clear orphaned windows auth states every 2 minutes
                 WinAuthEndPoint.ClearIdleStates(2);
             }
+#endif
 
             proxyRunning = true;
         }
@@ -571,6 +585,7 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is not running.");
             }
 
+#if NET45
             if (!RunTime.IsRunningOnMono)
             {
                 bool setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
@@ -580,6 +595,7 @@ namespace Titanium.Web.Proxy
                     systemProxySettingsManager.RestoreOriginalSettings();
                 }
             }
+#endif
 
             foreach (var endPoint in ProxyEndPoints)
             {
@@ -639,6 +655,7 @@ namespace Titanium.Web.Proxy
             }
         }
 
+#if NET45
         /// <summary>
         /// Gets the system up stream proxy.
         /// </summary>
@@ -649,7 +666,7 @@ namespace Titanium.Web.Proxy
             var proxy = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
             return Task.FromResult(proxy);
         }
-
+#endif
 
         private void EnsureRootCertificate()
         {
