@@ -6,9 +6,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -115,43 +113,13 @@ namespace Titanium.Web.Proxy.Helpers
         /// relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers as prefix
         /// Usefull for websocket requests
         /// </summary>
-        /// <param name="httpCmd"></param>
-        /// <param name="requestHeaders"></param>
         /// <param name="clientStream"></param>
         /// <param name="connection"></param>
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
         /// <returns></returns>
-        internal static async Task SendRaw(string httpCmd, IEnumerable<HttpHeader> requestHeaders, Stream clientStream, TcpConnection connection, Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive)
+        internal static async Task SendRaw(Stream clientStream, TcpConnection connection, Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive)
         {
-            //prepare the prefix content
-            if (httpCmd != null || requestHeaders != null)
-            {
-                using (var ms = new MemoryStream())
-                using (var writer = new StreamWriter(ms, Encoding.ASCII) { NewLine = ProxyConstants.NewLine })
-                {
-                    if (httpCmd != null)
-                    {
-                        writer.WriteLine(httpCmd);
-                    }
-
-                    if (requestHeaders != null)
-                    {
-                        foreach (string header in requestHeaders.Select(t => t.ToString()))
-                        {
-                            writer.WriteLine(header);
-                        }
-                    }
-
-                    writer.WriteLine();
-                    writer.Flush();
-
-                    var data = ms.ToArray();
-                    await clientStream.WriteAsync(data, 0, data.Length);
-                    onDataSend?.Invoke(data, 0, data.Length);
-                }
-            }
-
             var tunnelStream = connection.Stream;
 
             //Now async relay all server=>client & client=>server data
