@@ -1,6 +1,8 @@
+using System;
+
 namespace Titanium.Web.Proxy.EventArguments
 {
-    public class DataEventArgs
+    public class DataEventArgs : EventArgs
     {
         public byte[] Buffer { get; }
 

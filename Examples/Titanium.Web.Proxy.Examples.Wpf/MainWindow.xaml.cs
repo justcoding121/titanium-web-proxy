@@ -119,7 +119,10 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             if (item != null)
             {
-                item.ResponseBody = await e.GetResponseBody();
+                if (e.WebSession.Response.HasBody)
+                {
+                    item.ResponseBody = await e.GetResponseBody();
+                }
             }
         }
 
@@ -195,18 +198,30 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 return;
             }
 
+            const int truncateLimit = 1024;
+
             var session = SelectedSession;
             var data = session.RequestBody ?? new byte[0];
-            data = data.Take(1024).ToArray();
+            bool truncated = data.Length > truncateLimit;
+            if (truncated)
+            {
+                data = data.Take(truncateLimit).ToArray();
+            }
 
-            string dataStr = string.Join(" ", data.Select(x => x.ToString("X2")));
-            TextBoxRequest.Text = session.Request.HeaderText + dataStr;
+            //string hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
+            TextBoxRequest.Text = session.Request.HeaderText + session.Request.Encoding.GetString(data) +
+                                  (truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null);
 
             data = session.ResponseBody ?? new byte[0];
-            data = data.Take(1024).ToArray();
+            truncated = data.Length > truncateLimit;
+            if (truncated)
+            {
+                data = data.Take(truncateLimit).ToArray();
+            }
 
-            dataStr = string.Join(" ", data.Select(x => x.ToString("X2")));
-            TextBoxResponse.Text = session.Response.HeaderText + dataStr;
+            //hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
+            TextBoxResponse.Text = session.Response.HeaderText + session.Response.Encoding.GetString(data) +
+                                   (truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null);
         }
     }
 }

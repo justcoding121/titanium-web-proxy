@@ -8,12 +8,17 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
+#if NET45
 using Titanium.Web.Proxy.Helpers.WinHttp;
+#endif
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
+#if NET45
 using Titanium.Web.Proxy.Network.WinAuth.Security;
+#endif
 
 namespace Titanium.Web.Proxy
 {
@@ -22,6 +27,14 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
+#if NET45
+        internal static readonly string UriSchemeHttp = Uri.UriSchemeHttp;
+        internal static readonly string UriSchemeHttps = Uri.UriSchemeHttps;
+#else
+        internal const string UriSchemeHttp = "http";
+        internal const string UriSchemeHttps = "https";
+#endif
+
         /// <summary>
         /// Is the proxy currently running
         /// </summary>
@@ -37,7 +50,9 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private Action<Exception> exceptionFunc;
 
+#if NET45
         private WinHttpWebProxyFinder systemProxyResolver;
+#endif
 
         /// <summary>
         /// Backing field for corresponding public property
@@ -59,6 +74,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private TcpConnectionFactory tcpConnectionFactory { get; }
 
+#if NET45
         /// <summary>
         /// Manage system proxy settings
         /// </summary>
@@ -68,6 +84,7 @@ namespace Titanium.Web.Proxy
         /// Set firefox to use default system proxy
         /// </summary>
         private readonly FireFoxProxySettingsManager firefoxProxySettingsManager = new FireFoxProxySettingsManager();
+#endif
 
         /// <summary>
         /// Buffer size used throughout this proxy
@@ -295,10 +312,12 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory();
+#if NET45
             if (!RunTime.IsRunningOnMono)
             {
                 systemProxySettingsManager = new SystemProxyManager();
             }
+#endif
 
             CertificateManager = new CertificateManager(ExceptionFunc);
             if (rootCertificateName != null)
@@ -351,6 +370,7 @@ namespace Titanium.Web.Proxy
             }
         }
 
+#if NET45
         /// <summary>
         /// Set the given explicit end point as the default proxy server for current machine
         /// </summary>
@@ -496,6 +516,7 @@ namespace Titanium.Web.Proxy
 
             systemProxySettingsManager.DisableAllProxy();
         }
+#endif
 
         /// <summary>
         /// Start this proxy server
@@ -507,6 +528,7 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
+#if NET45
             //clear any system proxy settings which is pointing to our own endpoint
             //due to non gracious proxy shutdown before
             if (systemProxySettingsManager != null)
@@ -542,6 +564,7 @@ namespace Titanium.Web.Proxy
                 GetCustomUpStreamHttpProxyFunc = GetSystemUpStreamProxy;
                 GetCustomUpStreamHttpsProxyFunc = GetSystemUpStreamProxy;
             }
+#endif
 
             foreach (var endPoint in ProxyEndPoints)
             {
@@ -550,11 +573,13 @@ namespace Titanium.Web.Proxy
 
             CertificateManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
+#if NET45
             if (!RunTime.IsRunningOnMono)
             {
                 //clear orphaned windows auth states every 2 minutes
                 WinAuthEndPoint.ClearIdleStates(2);
             }
+#endif
 
             proxyRunning = true;
         }
@@ -570,6 +595,7 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is not running.");
             }
 
+#if NET45
             if (!RunTime.IsRunningOnMono)
             {
                 bool setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
@@ -579,6 +605,7 @@ namespace Titanium.Web.Proxy
                     systemProxySettingsManager.RestoreOriginalSettings();
                 }
             }
+#endif
 
             foreach (var endPoint in ProxyEndPoints)
             {
@@ -605,6 +632,7 @@ namespace Titanium.Web.Proxy
             CertificateManager?.Dispose();
         }
 
+#if NET45
         /// <summary>
         /// Listen on the given end point on local machine
         /// </summary>
@@ -618,6 +646,23 @@ namespace Titanium.Web.Proxy
             // accept clients asynchronously
             endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
         }
+#else
+        private async void Listen(ProxyEndPoint endPoint)
+        {
+            endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
+            endPoint.Listener.Start();
+
+            endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
+
+            while (true)
+            {
+                TcpClient tcpClient = await endPoint.Listener.AcceptTcpClientAsync();
+                if (tcpClient != null)
+                    Task.Run(async () => HandleClient(tcpClient, endPoint));
+            }
+
+        }
+#endif
 
         /// <summary>
         /// Verifiy if its safe to set this end point as System proxy
@@ -638,6 +683,7 @@ namespace Titanium.Web.Proxy
             }
         }
 
+#if NET45
         /// <summary>
         /// Gets the system up stream proxy.
         /// </summary>
@@ -648,7 +694,7 @@ namespace Titanium.Web.Proxy
             var proxy = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
             return Task.FromResult(proxy);
         }
-
+#endif
 
         private void EnsureRootCertificate()
         {
@@ -663,6 +709,7 @@ namespace Titanium.Web.Proxy
             }
         }
 
+#if NET45
         /// <summary>
         /// When a connection is received from client act
         /// </summary>
@@ -694,47 +741,53 @@ namespace Titanium.Web.Proxy
             {
                 Task.Run(async () =>
                 {
-                    Interlocked.Increment(ref clientConnectionCount);
-
-                    tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
-                    tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
-
-                    try
-                    {
-                        if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
-                        {
-                            await HandleClient(endPoint as TransparentProxyEndPoint, tcpClient);
-                        }
-                        else
-                        {
-                            await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient);
-                        }
-                    }
-                    finally
-                    {
-                        Interlocked.Decrement(ref clientConnectionCount);
-
-                        try
-                        {
-                            if (tcpClient != null)
-                            {
-                                //This line is important!
-                                //contributors please don't remove it without discussion
-                                //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
-                                //due to default TCP CLOSE_WAIT timeout for 4 minutes
-                                tcpClient.LingerState = new LingerOption(true, 0);
-                                tcpClient.Close();
-                            }
-                        }
-                        catch
-                        {
-                        }
-                    }
+                    await HandleClient(tcpClient, endPoint);
                 });
             }
 
             // Get the listener that handles the client request.
             endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
+        }
+#endif
+
+        private async Task HandleClient(TcpClient tcpClient, ProxyEndPoint endPoint)
+        {
+            Interlocked.Increment(ref clientConnectionCount);
+
+            tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
+            tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
+
+            try
+            {
+                if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
+                {
+                    await HandleClient(endPoint as TransparentProxyEndPoint, tcpClient);
+                }
+                else
+                {
+                    await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient);
+                }
+            }
+            finally
+            {
+                Interlocked.Decrement(ref clientConnectionCount);
+
+                try
+                {
+                    if (tcpClient != null)
+                    {
+                        //This line is important!
+                        //contributors please don't remove it without discussion
+                        //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
+                        //due to default TCP CLOSE_WAIT timeout for 4 minutes
+                        tcpClient.LingerState = new LingerOption(true, 0);
+                        tcpClient.Dispose();
+                    }
+                }
+                catch
+                {
+                }
+            }
         }
 
         /// <summary>
@@ -744,7 +797,6 @@ namespace Titanium.Web.Proxy
         private void QuitListen(ProxyEndPoint endPoint)
         {
             endPoint.Listener.Stop();
-            endPoint.Listener.Server.Close();
             endPoint.Listener.Server.Dispose();
         }
     }

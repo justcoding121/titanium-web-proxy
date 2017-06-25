@@ -111,14 +111,14 @@ namespace Titanium.Web.Proxy
 
                     if (TunnelConnectRequest != null)
                     {
-                        await TunnelConnectRequest.InvokeParallelAsync(this, connectArgs);
+                        await TunnelConnectRequest.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
                     }
 
                     if (!excluded && await CheckAuthorization(clientStreamWriter, connectArgs) == false)
                     {
                         if (TunnelConnectResponse != null)
                         {
-                            await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs);
+                            await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
                         }
 
                         return;
@@ -132,8 +132,8 @@ namespace Titanium.Web.Proxy
 
                     if (TunnelConnectResponse != null)
                     {
-                        connectArgs.IsHttps = isClientHello;
-                        await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs);
+                        connectArgs.IsHttpsConnect = isClientHello;
+                        await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
                     }
 
                     if (!excluded && isClientHello)
@@ -189,7 +189,7 @@ namespace Titanium.Web.Proxy
 
                 //Now create the request
                 disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                    httpRemoteUri.Scheme == Uri.UriSchemeHttps ? httpRemoteUri.Host : null, endPoint, connectRequest);
+                    httpRemoteUri.Scheme == UriSchemeHttps ? httpRemoteUri.Host : null, endPoint, connectRequest);
             }
             catch (Exception e)
             {
@@ -338,6 +338,7 @@ namespace Titanium.Web.Proxy
                     PrepareRequestHeaders(args.WebSession.Request.RequestHeaders);
                     args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
 
+#if NET45
                     //if win auth is enabled
                     //we need a cache of request body
                     //so that we can send it after authentication in WinAuthHandler.cs
@@ -345,11 +346,12 @@ namespace Titanium.Web.Proxy
                     {
                         await args.GetRequestBody();
                     }
+#endif
 
                     //If user requested interception do it
                     if (BeforeRequest != null)
                     {
-                        await BeforeRequest.InvokeParallelAsync(this, args);
+                        await BeforeRequest.InvokeParallelAsync(this, args, ExceptionFunc);
                     }
 
                     if (args.WebSession.Request.CancelRequest)
@@ -546,7 +548,7 @@ namespace Titanium.Web.Proxy
             ExternalProxy customUpStreamHttpProxy = null;
             ExternalProxy customUpStreamHttpsProxy = null;
 
-            if (args.WebSession.Request.RequestUri.Scheme == "http")
+            if (args.WebSession.Request.RequestUri.Scheme == UriSchemeHttp)
             {
                 if (GetCustomUpStreamHttpProxyFunc != null)
                 {
