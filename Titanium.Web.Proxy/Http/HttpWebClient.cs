@@ -48,7 +48,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Is Https?
         /// </summary>
-        public bool IsHttps => Request.RequestUri.Scheme == Uri.UriSchemeHttps;
+        public bool IsHttps => Request.RequestUri.Scheme == ProxyServer.UriSchemeHttps;
 
 
         internal HttpWebClient()

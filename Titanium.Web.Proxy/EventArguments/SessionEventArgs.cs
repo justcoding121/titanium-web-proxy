@@ -69,7 +69,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Does this session uses SSL
         /// </summary>
-        public bool IsHttps => WebSession.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
+        public bool IsHttps => WebSession.Request.RequestUri.Scheme == ProxyServer.UriSchemeHttps;
 
         /// <summary>
         /// Client End Point.
@@ -109,6 +109,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             WebSession.ProcessId = new Lazy<int>(() =>
             {
+#if NET45
                 var remoteEndPoint = (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
 
                 //If client is localhost get the process id
@@ -119,6 +120,9 @@ namespace Titanium.Web.Proxy.EventArguments
 
                 //can't access process Id of remote request from remote machine
                 return -1;
+#else
+                throw new PlatformNotSupportedException();
+#endif
             });
         }
 
@@ -198,28 +202,35 @@ namespace Titanium.Web.Proxy.EventArguments
             //If not already read (not cached yet)
             if (WebSession.Response.ResponseBody == null)
             {
-                using (var responseBodyStream = new MemoryStream())
+                if (WebSession.Response.HasBody)
                 {
-                    //If chuncked the read chunk by chunk until we hit chunk end symbol
-                    if (WebSession.Response.IsChunked)
+                    using (var responseBodyStream = new MemoryStream())
                     {
-                        await WebSession.ServerConnection.StreamReader.CopyBytesToStreamChunked(responseBodyStream);
-                    }
-                    else
-                    {
-                        if (WebSession.Response.ContentLength > 0)
+                        //If chuncked the read chunk by chunk until we hit chunk end symbol
+                        if (WebSession.Response.IsChunked)
                         {
-                            //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, WebSession.Response.ContentLength);
+                            await WebSession.ServerConnection.StreamReader.CopyBytesToStreamChunked(responseBodyStream);
                         }
-                        else if (WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0 ||
-                                 WebSession.Response.ContentLength == -1)
+                        else
                         {
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, long.MaxValue);
+                            if (WebSession.Response.ContentLength > 0)
+                            {
+                                //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
+                                await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, WebSession.Response.ContentLength);
+                            }
+                            else if (WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0 ||
+                                     WebSession.Response.ContentLength == -1)
+                            {
+                                await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, long.MaxValue);
+                            }
                         }
-                    }
 
-                    WebSession.Response.ResponseBody = await GetDecompressedResponseBody(WebSession.Response.ContentEncoding, responseBodyStream.ToArray());
+                        WebSession.Response.ResponseBody = await GetDecompressedResponseBody(WebSession.Response.ContentEncoding, responseBodyStream.ToArray());
+                    }
+                }
+                else
+                {
+                    WebSession.Response.ResponseBody = new byte[0];
                 }
 
                 //set this to true for caching
