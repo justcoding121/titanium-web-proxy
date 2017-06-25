@@ -109,6 +109,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             WebSession.ProcessId = new Lazy<int>(() =>
             {
+#if NET45
                 var remoteEndPoint = (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
 
                 //If client is localhost get the process id
@@ -119,6 +120,9 @@ namespace Titanium.Web.Proxy.EventArguments
 
                 //can't access process Id of remote request from remote machine
                 return -1;
+#else
+                throw new PlatformNotSupportedException();
+#endif
             });
         }
 
