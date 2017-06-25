@@ -25,15 +25,15 @@ namespace Titanium.Web.Proxy.Extensions
 
 
         /// <summary>
-        /// Disposes the specified client.
+        /// Disposes the specified store.
         /// Int .NET framework 4.5 the X509Store class has no Dispose method, 
         /// it is available from .NET 4.6, see
         /// https://msdn.microsoft.com/en-us/library/system.security.cryptography.x509certificates.x509store.dispose(v=vs.110).aspx
         /// </summary>
-        /// <param name="client">The client.</param>
-        internal static void Dispose(this X509Store client)
+        /// <param name="store">The store.</param>
+        internal static void Dispose(this X509Store store)
         {
-            client.Close();
+            store.Close();
         }
 #endif
     }
