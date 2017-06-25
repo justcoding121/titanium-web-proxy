@@ -81,6 +81,10 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 SessionListItem item;
                 if (sessionDictionary.TryGetValue(e, out item))
                 {
+                    item.Response.ResponseStatusCode = e.WebSession.Response.ResponseStatusCode;
+                    item.Response.ResponseStatusDescription = e.WebSession.Response.ResponseStatusDescription;
+                    item.Response.HttpVersion = e.WebSession.Response.HttpVersion;
+                    item.Response.ResponseHeaders.AddHeaders(e.WebSession.Response.ResponseHeaders);
                     item.Update();
                 }
             });
