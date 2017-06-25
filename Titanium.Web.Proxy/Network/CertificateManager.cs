@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network.Certificate;
 
@@ -348,7 +349,7 @@ namespace Titanium.Web.Proxy.Network
             }
             finally
             {
-                x509Store.Close();
+                x509Store.Dispose();
             }
         }
 
