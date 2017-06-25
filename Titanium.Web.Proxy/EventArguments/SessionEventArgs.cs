@@ -69,7 +69,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Does this session uses SSL
         /// </summary>
-        public bool IsHttps => WebSession.Request.RequestUri.Scheme == Uri.UriSchemeHttps;
+        public bool IsHttps => WebSession.Request.RequestUri.Scheme == ProxyServer.UriSchemeHttps;
 
         /// <summary>
         /// Client End Point.

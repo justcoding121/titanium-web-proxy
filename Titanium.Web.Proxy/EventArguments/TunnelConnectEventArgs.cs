@@ -10,7 +10,7 @@ namespace Titanium.Web.Proxy.EventArguments
 {
     public class TunnelConnectSessionEventArgs : SessionEventArgs
     {
-        public bool IsHttps { get; set; }
+        public bool IsHttpsConnect { get; set; }
 
         public TunnelConnectSessionEventArgs(ProxyEndPoint endPoint) : base(0, endPoint, null)
         {

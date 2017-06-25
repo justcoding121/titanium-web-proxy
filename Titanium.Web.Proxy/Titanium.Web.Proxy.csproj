@@ -93,13 +93,7 @@
     <Compile Include="Helpers\Firefox.cs" />
     <Compile Include="Helpers\HttpHelper.cs" />
     <Compile Include="Helpers\Network.cs" />
-    <Compile Include="Helpers\ProxyInfo.cs" />
-    <Compile Include="Helpers\RunTime.cs" />
-    <Compile Include="Helpers\SystemProxy.cs" />
     <Compile Include="Helpers\Tcp.cs" />
-    <Compile Include="Helpers\WinHttp\NativeMethods.WinHttp.cs" />
-    <Compile Include="Helpers\WinHttp\WinHttpHandle.cs" />
-    <Compile Include="Helpers\WinHttp\WinHttpWebProxyFinder.cs" />
     <Compile Include="Http\ConnectRequest.cs" />
     <Compile Include="Http\ConnectResponse.cs" />
     <Compile Include="Http\HeaderCollection.cs" />
@@ -138,8 +132,14 @@
     <Compile Include="ResponseHandler.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Helpers\WinHttp\NativeMethods.WinHttp.cs" />
+    <Compile Include="Helpers\WinHttp\WinHttpHandle.cs" />
+    <Compile Include="Helpers\WinHttp\WinHttpWebProxyFinder.cs" />
     <Compile Include="Helpers\NativeMethods.SystemProxy.cs" />
     <Compile Include="Helpers\NativeMethods.Tcp.cs" />
+    <Compile Include="Helpers\ProxyInfo.cs" />
+    <Compile Include="Helpers\RunTime.cs" />
+    <Compile Include="Helpers\SystemProxy.cs" />
     <Compile Include="Network\Tcp\TcpRow.cs" />
     <Compile Include="Network\Tcp\TcpTable.cs" />
   </ItemGroup>

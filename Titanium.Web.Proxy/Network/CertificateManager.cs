@@ -55,7 +55,11 @@ namespace Titanium.Web.Proxy.Network
 
                 if (certEngine == null)
                 {
+#if NET45
                     certEngine = engine == CertificateEngine.BouncyCastle ? (ICertificateMaker)new BCCertificateMaker() : new WinCertificateMaker();
+#else
+                    certEngine = new BCCertificateMaker();
+#endif
                 }
             }
         }
@@ -135,7 +139,11 @@ namespace Titanium.Web.Proxy.Network
 
         private string GetRootCertificatePath()
         {
+#if NET45
             string assemblyLocation = Assembly.GetExecutingAssembly().Location;
+#else
+            string assemblyLocation = string.Empty;
+#endif
 
             // dynamically loaded assemblies returns string.Empty location
             if (assemblyLocation == string.Empty)
@@ -375,8 +383,11 @@ namespace Titanium.Web.Proxy.Network
             }
 
             X509Certificate2 certificate = null;
+            // todo: lock in netstandard, too
+#if NET45
             lock (string.Intern(certificateName))
             {
+#endif
                 if (certificateCache.ContainsKey(certificateName) == false)
                 {
                     try
@@ -409,7 +420,9 @@ namespace Titanium.Web.Proxy.Network
                         return cached.Certificate;
                     }
                 }
-            }
+#if NET45
+        }
+#endif
 
             return certificate;
         }
@@ -477,8 +490,8 @@ namespace Titanium.Web.Proxy.Network
             }
             finally
             {
-                x509RootStore.Close();
-                x509PersonalStore.Close();
+                x509RootStore.Dispose();
+                x509PersonalStore.Dispose();
             }
         }
 
@@ -517,8 +530,8 @@ namespace Titanium.Web.Proxy.Network
             }
             finally
             {
-                x509RootStore.Close();
-                x509PersonalStore.Close();
+                x509RootStore.Dispose();
+                x509PersonalStore.Dispose();
             }
         }
 
