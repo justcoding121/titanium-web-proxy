@@ -155,7 +155,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             item.Request.RequestHeaders.AddHeaders(e.WebSession.Request.RequestHeaders);
 
-            if (e is TunnelConnectSessionEventArgs)
+            if (e is TunnelConnectSessionEventArgs || e.WebSession.Request.UpgradeToWebSocket)
             {
                 e.DataReceived += (sender, args) =>
                 {
