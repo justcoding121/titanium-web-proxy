@@ -127,15 +127,15 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Collection of all response headers
         /// </summary>
-        public HeaderCollection ResponseHeaders { get; set; }
+        public HeaderCollection ResponseHeaders { get; private set; } = new HeaderCollection();
 
         /// <summary>
-        /// response body content as byte array
+        /// Response body content as byte array
         /// </summary>
         internal byte[] ResponseBody { get; set; }
 
         /// <summary>
-        /// response body as string
+        /// Response body as string
         /// </summary>
         internal string ResponseBodyString { get; set; }
 
@@ -160,11 +160,34 @@ namespace Titanium.Web.Proxy.Http
         public bool ExpectationFailed { get; internal set; }
 
         /// <summary>
+        /// Gets the resposne status.
+        /// </summary>
+        public string ResponseStatus => $"HTTP/{HttpVersion?.Major}.{HttpVersion?.Minor} {ResponseStatusCode} {ResponseStatusDescription}";
+
+        /// <summary>
+        /// Gets the header text.
+        /// </summary>
+        public string HeaderText
+        {
+            get
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine(ResponseStatus);
+                foreach (var header in ResponseHeaders)
+                {
+                    sb.AppendLine(header.ToString());
+                }
+
+                sb.AppendLine();
+                return sb.ToString();
+            }
+        }
+
+        /// <summary>
         /// Constructor.
         /// </summary>
         public Response()
         {
-            ResponseHeaders = new HeaderCollection();
         }
 
         /// <summary>
