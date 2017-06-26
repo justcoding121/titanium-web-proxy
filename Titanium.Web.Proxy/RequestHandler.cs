@@ -168,7 +168,7 @@ namespace Titanium.Web.Proxy
                         {
                             await TcpHelper.SendRaw(clientStream, connection,
                                 (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); });
-                            Interlocked.Decrement(ref serverConnectionCount);
+                            UpdateServerConnectionCount(false);
                         }
 
                         return;
@@ -344,7 +344,7 @@ namespace Titanium.Web.Proxy
                     else if (!connection.HostName.Equals(args.WebSession.Request.RequestUri.Host, StringComparison.OrdinalIgnoreCase))
                     {
                         connection.Dispose();
-                        Interlocked.Decrement(ref serverConnectionCount);
+                        UpdateServerConnectionCount(false);
                         connection = await GetServerConnection(args);
                     }
 
