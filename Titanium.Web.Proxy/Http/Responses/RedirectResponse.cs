@@ -1,4 +1,6 @@
-﻿namespace Titanium.Web.Proxy.Http.Responses
+﻿using System.Net;
+
+namespace Titanium.Web.Proxy.Http.Responses
 {
     /// <summary>
     /// Redirect response
@@ -10,7 +12,7 @@
         /// </summary>
         public RedirectResponse()
         {
-            ResponseStatusCode = "302";
+            ResponseStatusCode = (int)HttpStatusCode.Found;
             ResponseStatusDescription = "Found";
         }
     }

@@ -67,7 +67,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
-        internal int serverConnectionCount;
+        private int serverConnectionCount;
 
         /// <summary>
         /// A object that creates tcp connection to server
@@ -198,6 +198,16 @@ namespace Titanium.Web.Proxy
         /// Intercept tunnel connect response
         /// </summary>
         public event Func<object, TunnelConnectSessionEventArgs, Task> TunnelConnectResponse;
+
+        /// <summary>
+        /// Occurs when client connection count changed.
+        /// </summary>
+        public event EventHandler ClientConnectionCountChanged;
+
+        /// <summary>
+        /// Occurs when server connection count changed.
+        /// </summary>
+        public event EventHandler ServerConnectionCountChanged;
 
         /// <summary>
         /// External proxy for Http
@@ -752,7 +762,7 @@ namespace Titanium.Web.Proxy
 
         private async Task HandleClient(TcpClient tcpClient, ProxyEndPoint endPoint)
         {
-            Interlocked.Increment(ref clientConnectionCount);
+            UpdateClientConnectionCount(true);
 
             tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
             tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
@@ -770,7 +780,7 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                Interlocked.Decrement(ref clientConnectionCount);
+                UpdateClientConnectionCount(false);
 
                 try
                 {
@@ -798,6 +808,34 @@ namespace Titanium.Web.Proxy
         {
             endPoint.Listener.Stop();
             endPoint.Listener.Server.Dispose();
+        }
+
+        internal void UpdateClientConnectionCount(bool increment)
+        {
+            if (increment)
+            {
+                Interlocked.Increment(ref clientConnectionCount);
+            }
+            else
+            {
+                Interlocked.Decrement(ref clientConnectionCount);
+            }
+
+            ClientConnectionCountChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        internal void UpdateServerConnectionCount(bool increment)
+        {
+            if (increment)
+            {
+                Interlocked.Increment(ref serverConnectionCount);
+            }
+            else
+            {
+                Interlocked.Decrement(ref serverConnectionCount);
+            }
+
+            ServerConnectionCountChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 }
