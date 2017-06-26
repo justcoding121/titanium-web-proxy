@@ -227,7 +227,7 @@ namespace Titanium.Web.Proxy
             if (serverConnection != null)
             {
                 serverConnection.Dispose();
-                Interlocked.Decrement(ref serverConnectionCount);
+                UpdateServerConnectionCount(false);
             }
         }
     }

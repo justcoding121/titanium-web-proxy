@@ -124,7 +124,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 throw;
             }
 
-            Interlocked.Increment(ref server.serverConnectionCount);
+            server.UpdateServerConnectionCount(true);
 
             return new TcpConnection
             {
