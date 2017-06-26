@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -226,6 +228,57 @@ namespace Titanium.Web.Proxy.Http
                 sb.AppendLine();
                 return sb.ToString();
             }
+        }
+
+        internal static void ParseRequestLine(string httpCmd, out string httpMethod, out string httpUrl, out Version version)
+        {
+            //break up the line into three components (method, remote URL & Http Version)
+            var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
+
+            if (httpCmdSplit.Length < 2)
+            {
+                throw new Exception("Invalid HTTP request line: " + httpCmd);
+            }
+
+            //Find the request Verb
+            httpMethod = httpCmdSplit[0];
+            if (!IsAllUpper(httpMethod))
+            {
+                //method should be upper cased: https://tools.ietf.org/html/rfc7231#section-4
+
+                //todo: create protocol violation message
+
+                //fix it
+                httpMethod = httpMethod.ToUpper();
+            }
+
+            httpUrl = httpCmdSplit[1];
+
+            //parse the HTTP version
+            version = HttpHeader.Version11;
+            if (httpCmdSplit.Length == 3)
+            {
+                string httpVersion = httpCmdSplit[2].Trim();
+
+                if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
+                {
+                    version = HttpHeader.Version10;
+                }
+            }
+        }
+
+        private static bool IsAllUpper(string input)
+        {
+            for (int i = 0; i < input.Length; i++)
+            {
+                char ch = input[i];
+                if (ch < 'A' || ch > 'Z')
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>

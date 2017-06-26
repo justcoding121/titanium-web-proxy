@@ -56,25 +56,12 @@ namespace Titanium.Web.Proxy
                     return;
                 }
 
-                //break up the line into three components (method, remote URL & Http Version)
-                var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
+                string httpMethod;
+                string httpUrl;
+                Version version;
+                Request.ParseRequestLine(httpCmd, out httpMethod, out httpUrl, out version);
 
-                //Find the request Verb
-                string httpVerb = httpCmdSplit[0].ToUpper();
-
-                httpRemoteUri = httpVerb == "CONNECT" ? new Uri("http://" + httpCmdSplit[1]) : new Uri(httpCmdSplit[1]);
-
-                //parse the HTTP version
-                var version = HttpHeader.Version11;
-                if (httpCmdSplit.Length == 3)
-                {
-                    string httpVersion = httpCmdSplit[2].Trim();
-
-                    if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
-                    {
-                        version = HttpHeader.Version10;
-                    }
-                }
+                httpRemoteUri = httpMethod == "CONNECT" ? new Uri("http://" + httpUrl) : new Uri(httpUrl);
 
                 //filter out excluded host names
                 bool excluded = false;
@@ -92,13 +79,13 @@ namespace Titanium.Web.Proxy
                 ConnectRequest connectRequest = null;
 
                 //Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
-                if (httpVerb == "CONNECT")
+                if (httpMethod == "CONNECT")
                 {
                     connectRequest = new ConnectRequest
                     {
                         RequestUri = httpRemoteUri,
                         HttpVersion = version,
-                        Method = httpVerb,
+                        Method = httpMethod,
                     };
 
                     await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.RequestHeaders);
@@ -139,7 +126,7 @@ namespace Titanium.Web.Proxy
 
                     if (!excluded && isClientHello)
                     {
-                        httpRemoteUri = new Uri("https://" + httpCmdSplit[1]);
+                        httpRemoteUri = new Uri("https://" + httpUrl);
 
                         SslStream sslStream = null;
 
@@ -181,7 +168,7 @@ namespace Titanium.Web.Proxy
                         {
                             await TcpHelper.SendRaw(clientStream, connection,
                                 (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); });
-                            Interlocked.Decrement(ref serverConnectionCount);
+                            UpdateServerConnectionCount(false);
                         }
 
                         return;
@@ -297,34 +284,22 @@ namespace Titanium.Web.Proxy
 
                 try
                 {
-                    //break up the line into three components (method, remote URL & Http Version)
-                    var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
-
-                    string httpMethod = httpCmdSplit[0].ToUpper();
-
-                    //find the request HTTP version
-                    var httpVersion = HttpHeader.Version11;
-                    if (httpCmdSplit.Length == 3)
-                    {
-                        string httpVersionString = httpCmdSplit[2].Trim();
-
-                        if (string.Equals(httpVersionString, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
-                        {
-                            httpVersion = HttpHeader.Version10;
-                        }
-                    }
+                    string httpMethod;
+                    string httpUrl;
+                    Version version;
+                    Request.ParseRequestLine(httpCmd, out httpMethod, out httpUrl, out version);
 
                     //Read the request headers in to unique and non-unique header collections
                     await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.RequestHeaders);
 
                     var httpRemoteUri = new Uri(httpsConnectHostname == null
-                        ? httpCmdSplit[1]
-                        : string.Concat("https://", args.WebSession.Request.Host ?? httpsConnectHostname, httpCmdSplit[1]));
+                        ? httpUrl
+                        : string.Concat("https://", args.WebSession.Request.Host ?? httpsConnectHostname, httpUrl));
 
                     args.WebSession.Request.RequestUri = httpRemoteUri;
 
                     args.WebSession.Request.Method = httpMethod;
-                    args.WebSession.Request.HttpVersion = httpVersion;
+                    args.WebSession.Request.HttpVersion = version;
                     args.ProxyClient.ClientStream = clientStream;
                     args.ProxyClient.ClientStreamReader = clientStreamReader;
                     args.ProxyClient.ClientStreamWriter = clientStreamWriter;
@@ -369,7 +344,7 @@ namespace Titanium.Web.Proxy
                     else if (!connection.HostName.Equals(args.WebSession.Request.RequestUri.Host, StringComparison.OrdinalIgnoreCase))
                     {
                         connection.Dispose();
-                        Interlocked.Decrement(ref serverConnectionCount);
+                        UpdateServerConnectionCount(false);
                         connection = await GetServerConnection(args);
                     }
 
@@ -399,12 +374,25 @@ namespace Titanium.Web.Proxy
                         }
 
                         string httpStatus = await connection.StreamReader.ReadLineAsync();
-                        //todo: parse status
+
+                        Version responseVersion;
+                        int responseStatusCode;
+                        string responseStatusDescription;
+                        Response.ParseResponseLine(httpStatus, out responseVersion, out responseStatusCode, out responseStatusDescription);
+                        args.WebSession.Response.HttpVersion = responseVersion;
+                        args.WebSession.Response.ResponseStatusCode = responseStatusCode;
+                        args.WebSession.Response.ResponseStatusDescription = responseStatusDescription;
+
                         await HeaderParser.ReadHeaders(connection.StreamReader, args.WebSession.Response.ResponseHeaders);
 
-                        await clientStreamWriter.WriteLineAsync(httpStatus);
-                        await WriteResponseHeaders(clientStreamWriter, args.WebSession.Response);
-                        
+                        await WriteResponse(args.WebSession.Response, clientStreamWriter);
+
+                        //If user requested call back then do it
+                        if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
+                        {
+                            await BeforeResponse.InvokeParallelAsync(this, args, ExceptionFunc);
+                        }
+
                         await TcpHelper.SendRaw(clientStream, connection,
                             (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); });
 
@@ -478,12 +466,12 @@ namespace Titanium.Web.Proxy
                 {
                     if (args.WebSession.Request.Is100Continue)
                     {
-                        await WriteResponseStatus(args.WebSession.Response.HttpVersion, "100", "Continue", args.ProxyClient.ClientStreamWriter);
+                        await WriteResponseStatus(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.Continue, "Continue", args.ProxyClient.ClientStreamWriter);
                         await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                     }
                     else if (args.WebSession.Request.ExpectationFailed)
                     {
-                        await WriteResponseStatus(args.WebSession.Response.HttpVersion, "417", "Expectation Failed", args.ProxyClient.ClientStreamWriter);
+                        await WriteResponseStatus(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed", args.ProxyClient.ClientStreamWriter);
                         await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                     }
                 }
@@ -616,7 +604,7 @@ namespace Titanium.Web.Proxy
             var response = new ConnectResponse
             {
                 HttpVersion = httpVersion,
-                ResponseStatusCode = "200",
+                ResponseStatusCode = (int)HttpStatusCode.OK,
                 ResponseStatusDescription = "Connection established"
             };
 

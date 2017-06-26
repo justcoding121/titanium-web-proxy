@@ -191,7 +191,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
             if (e.WebSession.Request.Method == "GET" || e.WebSession.Request.Method == "POST")
             {
-                if (e.WebSession.Response.ResponseStatusCode == "200")
+                if (e.WebSession.Response.ResponseStatusCode == (int)HttpStatusCode.OK)
                 {
                     if (e.WebSession.Response.ContentType != null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
                     {

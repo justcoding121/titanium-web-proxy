@@ -44,6 +44,24 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             }
         }
 
+        public static readonly DependencyProperty ClientConnectionCountProperty = DependencyProperty.Register(
+            nameof(ClientConnectionCount), typeof(int), typeof(MainWindow), new PropertyMetadata(default(int)));
+
+        public int ClientConnectionCount
+        {
+            get { return (int)GetValue(ClientConnectionCountProperty); }
+            set { SetValue(ClientConnectionCountProperty, value); }
+        }
+
+        public static readonly DependencyProperty ServerConnectionCountProperty = DependencyProperty.Register(
+            nameof(ServerConnectionCount), typeof(int), typeof(MainWindow), new PropertyMetadata(default(int)));
+
+        public int ServerConnectionCount
+        {
+            get { return (int)GetValue(ServerConnectionCountProperty); }
+            set { SetValue(ServerConnectionCountProperty, value); }
+        }
+
         private readonly Dictionary<SessionEventArgs, SessionListItem> sessionDictionary = new Dictionary<SessionEventArgs, SessionListItem>();
         private SessionListItem selectedSession;
 
@@ -59,6 +77,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             proxyServer.BeforeResponse += ProxyServer_BeforeResponse;
             proxyServer.TunnelConnectRequest += ProxyServer_TunnelConnectRequest;
             proxyServer.TunnelConnectResponse += ProxyServer_TunnelConnectResponse;
+            proxyServer.ClientConnectionCountChanged += delegate { Dispatcher.Invoke(() => { ClientConnectionCount = proxyServer.ClientConnectionCount; }); };
+            proxyServer.ServerConnectionCountChanged += delegate { Dispatcher.Invoke(() => { ServerConnectionCount = proxyServer.ServerConnectionCount; }); };
             proxyServer.Start();
 
             proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
@@ -68,7 +88,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private async Task ProxyServer_TunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
-            Dispatcher.Invoke(() =>
+            await Dispatcher.InvokeAsync(() =>
             {
                 AddSession(e);
             });
@@ -76,7 +96,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private async Task ProxyServer_TunnelConnectResponse(object sender, SessionEventArgs e)
         {
-            Dispatcher.Invoke(() =>
+            await Dispatcher.InvokeAsync(() =>
             {
                 SessionListItem item;
                 if (sessionDictionary.TryGetValue(e, out item))
@@ -93,7 +113,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private async Task ProxyServer_BeforeRequest(object sender, SessionEventArgs e)
         {
             SessionListItem item = null;
-            Dispatcher.Invoke(() =>
+            await Dispatcher.InvokeAsync(() =>
             {
                 item = AddSession(e);
             });
@@ -107,7 +127,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private async Task ProxyServer_BeforeResponse(object sender, SessionEventArgs e)
         {
             SessionListItem item = null;
-            Dispatcher.Invoke(() =>
+            await Dispatcher.InvokeAsync(() =>
             {
                 SessionListItem item2;
                 if (sessionDictionary.TryGetValue(e, out item2))
