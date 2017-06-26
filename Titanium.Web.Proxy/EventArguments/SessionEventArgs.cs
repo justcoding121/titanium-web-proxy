@@ -57,9 +57,9 @@ namespace Titanium.Web.Proxy.EventArguments
             get { return reRequest; }
             set
             {
-                if (WebSession.Response.ResponseStatusCode == null)
+                if (WebSession.Response.ResponseStatusCode == 0)
                 {
-                    throw new Exception("Response status code is null. Cannot request again a request " + "which was never send to server.");
+                    throw new Exception("Response status code is empty. Cannot request again a request " + "which was never send to server.");
                 }
 
                 reRequest = value;

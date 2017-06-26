@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Compression;
@@ -37,7 +38,7 @@ namespace Titanium.Web.Proxy
                 //check for windows authentication
                 if (EnableWinAuth
                     && !RunTime.IsRunningOnMono
-                    && response.ResponseStatusCode == "401")
+                    && response.ResponseStatusCode == (int)HttpStatusCode.Unauthorized)
                 {
                     bool disposed = await Handle401UnAuthorized(args);
 
@@ -71,18 +72,17 @@ namespace Titanium.Web.Proxy
                 //Write back to client 100-conitinue response if that's what server returned
                 if (response.Is100Continue)
                 {
-                    await WriteResponseStatus(response.HttpVersion, "100", "Continue", args.ProxyClient.ClientStreamWriter);
+                    await WriteResponseStatus(response.HttpVersion, (int)HttpStatusCode.Continue, "Continue", args.ProxyClient.ClientStreamWriter);
                     await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                 }
                 else if (response.ExpectationFailed)
                 {
-                    await WriteResponseStatus(response.HttpVersion, "417", "Expectation Failed", args.ProxyClient.ClientStreamWriter);
+                    await WriteResponseStatus(response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed", args.ProxyClient.ClientStreamWriter);
                     await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                 }
 
                 //Write back response status to client
-                await WriteResponseStatus(response.HttpVersion, response.ResponseStatusCode,
-                    response.ResponseStatusDescription, args.ProxyClient.ClientStreamWriter);
+                await WriteResponseStatus(response.HttpVersion, response.ResponseStatusCode, response.ResponseStatusDescription, args.ProxyClient.ClientStreamWriter);
 
                 if (response.ResponseBodyRead)
                 {
@@ -166,7 +166,7 @@ namespace Titanium.Web.Proxy
         /// <param name="description"></param>
         /// <param name="responseWriter"></param>
         /// <returns></returns>
-        private async Task WriteResponseStatus(Version version, string code, string description, StreamWriter responseWriter)
+        private async Task WriteResponseStatus(Version version, int code, string description, StreamWriter responseWriter)
         {
             await responseWriter.WriteLineAsync($"HTTP/{version.Major}.{version.Minor} {code} {description}");
         }

@@ -1,4 +1,6 @@
-﻿namespace Titanium.Web.Proxy.Http.Responses
+﻿using System.Net;
+
+namespace Titanium.Web.Proxy.Http.Responses
 {
     /// <summary>
     /// 200 Ok response
@@ -10,8 +12,8 @@
         /// </summary>
         public OkResponse()
         {
-            ResponseStatusCode = "200";
-            ResponseStatusDescription = "Ok";
+            ResponseStatusCode = (int)HttpStatusCode.OK;
+            ResponseStatusDescription = "OK";
         }
     }
 }

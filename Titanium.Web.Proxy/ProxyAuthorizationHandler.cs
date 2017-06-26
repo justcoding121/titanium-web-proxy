@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -68,7 +69,7 @@ namespace Titanium.Web.Proxy
             var response = new Response
             {
                 HttpVersion = HttpHeader.Version11,
-                ResponseStatusCode = "407",
+                ResponseStatusCode = (int)HttpStatusCode.ProxyAuthenticationRequired,
                 ResponseStatusDescription = description
             };
 

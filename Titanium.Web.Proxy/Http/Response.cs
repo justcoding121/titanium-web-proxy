@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -15,7 +16,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Response Status Code.
         /// </summary>
-        public string ResponseStatusCode { get; set; }
+        public int ResponseStatusCode { get; set; }
 
         /// <summary>
         /// Response Status description.
@@ -206,6 +207,26 @@ namespace Titanium.Web.Proxy.Http
                 sb.AppendLine();
                 return sb.ToString();
             }
+        }
+
+        internal static void ParseResponseLine(string httpStatus, out Version version, out int statusCode, out string statusDescription)
+        {
+            var httpResult = httpStatus.Split(ProxyConstants.SpaceSplit, 3);
+            if (httpResult.Length != 3)
+            {
+                throw new Exception("Invalid HTTP status line: " + httpStatus);
+            }
+
+            string httpVersion = httpResult[0];
+
+            version = HttpHeader.Version11;
+            if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
+            {
+                version = HttpHeader.Version10;
+            }
+
+            statusCode = int.Parse(httpResult[1]);
+            statusDescription = httpResult[2];
         }
 
         /// <summary>
