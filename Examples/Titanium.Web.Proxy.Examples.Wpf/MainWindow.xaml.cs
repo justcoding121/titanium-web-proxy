@@ -88,7 +88,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private async Task ProxyServer_TunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
-            Dispatcher.Invoke(() =>
+            await Dispatcher.InvokeAsync(() =>
             {
                 AddSession(e);
             });
@@ -96,7 +96,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private async Task ProxyServer_TunnelConnectResponse(object sender, SessionEventArgs e)
         {
-            Dispatcher.Invoke(() =>
+            await Dispatcher.InvokeAsync(() =>
             {
                 SessionListItem item;
                 if (sessionDictionary.TryGetValue(e, out item))
@@ -113,7 +113,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private async Task ProxyServer_BeforeRequest(object sender, SessionEventArgs e)
         {
             SessionListItem item = null;
-            Dispatcher.Invoke(() =>
+            await Dispatcher.InvokeAsync(() =>
             {
                 item = AddSession(e);
             });
@@ -127,7 +127,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private async Task ProxyServer_BeforeResponse(object sender, SessionEventArgs e)
         {
             SessionListItem item = null;
-            Dispatcher.Invoke(() =>
+            await Dispatcher.InvokeAsync(() =>
             {
                 SessionListItem item2;
                 if (sessionDictionary.TryGetValue(e, out item2))
