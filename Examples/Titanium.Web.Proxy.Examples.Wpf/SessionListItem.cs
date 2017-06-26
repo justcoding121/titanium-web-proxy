@@ -100,7 +100,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             var request = SessionArgs.WebSession.Request;
             var response = SessionArgs.WebSession.Response;
-            StatusCode = response?.ResponseStatusCode ?? "-";
+            int statusCode = response?.ResponseStatusCode ?? 0;
+            StatusCode = statusCode == 0 ? "-" : statusCode.ToString();
             Protocol = request.RequestUri.Scheme;
 
             if (SessionArgs is TunnelConnectSessionEventArgs)
