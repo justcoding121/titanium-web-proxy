@@ -89,6 +89,7 @@
     <Compile Include="Extensions\TcpExtensions.cs" />
     <Compile Include="Helpers\BufferPool.cs" />
     <Compile Include="Helpers\CustomBinaryReader.cs" />
+    <Compile Include="Helpers\CustomBufferedPeekStream.cs" />
     <Compile Include="Helpers\CustomBufferedStream.cs" />
     <Compile Include="Helpers\Firefox.cs" />
     <Compile Include="Helpers\HttpHelper.cs" />

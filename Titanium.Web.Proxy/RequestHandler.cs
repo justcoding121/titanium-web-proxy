@@ -116,7 +116,7 @@ namespace Titanium.Web.Proxy
                     connectArgs.WebSession.Response = CreateConnectResponse(version);
                     await WriteResponse(connectArgs.WebSession.Response, clientStreamWriter);
 
-                    bool isClientHello = await HttpsTools.IsClientHello(clientStream);
+                    bool isClientHello = await HttpsTools.IsClientHello(clientStream, connectArgs);
 
                     if (TunnelConnectResponse != null)
                     {
