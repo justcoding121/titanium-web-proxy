@@ -17,10 +17,11 @@ namespace Titanium.Web.Proxy.Helpers
             position = startPosition;
         }
 
+        public int Available => baseStream.Available - position;
 
         public async Task<bool> EnsureBufferLength(int length)
         {
-            var val = await baseStream.PeekByteAsync(length - 1);
+            var val = await baseStream.PeekByteAsync(position + length - 1);
             return val != -1;
         }
 
