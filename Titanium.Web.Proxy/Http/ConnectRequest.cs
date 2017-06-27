@@ -36,6 +36,12 @@ namespace Titanium.Web.Proxy.Http
 
         public byte[] SessionId { get; set; }
 
+        public byte[] CiphersData { get; set; }
+
+        public byte[] CompressionData { get; set; }
+
+        public List<Extension> Extensions { get; set; }
+
         private static string SslVersionToString(int major, int minor)
         {
             string str = "Unknown";
@@ -68,6 +74,15 @@ namespace Titanium.Web.Proxy.Http
             sb.AppendLine($"Random: {string.Join(" ", Random.Select(x => x.ToString("X2")))}");
             sb.AppendLine($"\"Time\": {Time}");
             sb.AppendLine($"SessionID: {string.Join(" ", SessionId.Select(x => x.ToString("X2")))}");
+
+            if (Extensions != null)
+            {
+                sb.AppendLine("Extensions:");
+                foreach (var extension in Extensions)
+                {
+                    sb.AppendLine($"{extension.Name}: {extension.Data}");
+                }
+            }
 
             return sb.ToString();
         }
