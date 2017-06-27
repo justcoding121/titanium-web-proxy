@@ -6,6 +6,8 @@ A light weight HTTP(S) proxy server written in C#
 
 Kindly report only issues/bugs here . For programming help or questions use [StackOverflow](http://stackoverflow.com/questions/tagged/titanium-web-proxy) with the tag Titanium-Web-Proxy.
 
+([Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki))
+
 ![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/develop/Examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
 
 Features
@@ -23,7 +25,7 @@ Features
 Usage
 =====
 
-Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. ([Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki))
+Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. 
 
 Install by nuget:
 
