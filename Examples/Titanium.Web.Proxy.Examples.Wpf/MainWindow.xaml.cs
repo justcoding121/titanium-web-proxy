@@ -16,6 +16,7 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Examples.Wpf
@@ -71,7 +72,10 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             proxyServer.TrustRootCertificate = true;
             proxyServer.ForwardToUpstreamGateway = true;
 
-            var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true);
+            var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
+            {
+                //IncludedHttpsHostNameRegex = new string[0],
+            };
             proxyServer.AddEndPoint(explicitEndPoint);
             proxyServer.BeforeRequest += ProxyServer_BeforeRequest;
             proxyServer.BeforeResponse += ProxyServer_BeforeResponse;
@@ -101,10 +105,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 SessionListItem item;
                 if (sessionDictionary.TryGetValue(e, out item))
                 {
-                    item.Response.ResponseStatusCode = e.WebSession.Response.ResponseStatusCode;
-                    item.Response.ResponseStatusDescription = e.WebSession.Response.ResponseStatusDescription;
-                    item.Response.HttpVersion = e.WebSession.Response.HttpVersion;
-                    item.Response.ResponseHeaders.AddHeaders(e.WebSession.Response.ResponseHeaders);
+                    item.Response = e.WebSession.Response;
                     item.Update();
                 }
             });
@@ -132,10 +133,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 SessionListItem item2;
                 if (sessionDictionary.TryGetValue(e, out item2))
                 {
-                    item2.Response.ResponseStatusCode = e.WebSession.Response.ResponseStatusCode;
-                    item2.Response.ResponseStatusDescription = e.WebSession.Response.ResponseStatusDescription;
-                    item2.Response.HttpVersion = e.WebSession.Response.HttpVersion;
-                    item2.Response.ResponseHeaders.AddHeaders(e.WebSession.Response.ResponseHeaders);
+                    item2.Response = e.WebSession.Response;
                     item2.Update();
                     item = item2;
                 }
@@ -165,15 +163,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 Number = lastSessionNumber,
                 SessionArgs = e,
-                Request =
-                {
-                    Method = e.WebSession.Request.Method,
-                    RequestUri = e.WebSession.Request.RequestUri,
-                    HttpVersion = e.WebSession.Request.HttpVersion,
-                },
+                // save the headers because TWP will set it to null in Dispose
+                RequestHeaders = e.WebSession.Request.RequestHeaders,
+                ResponseHeaders = e.WebSession.Response.ResponseHeaders,
+                Request = e.WebSession.Request,
+                Response = e.WebSession.Response,
             };
-
-            item.Request.RequestHeaders.AddHeaders(e.WebSession.Request.RequestHeaders);
 
             if (e is TunnelConnectSessionEventArgs || e.WebSession.Request.UpgradeToWebSocket)
             {
@@ -232,9 +227,14 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 data = data.Take(truncateLimit).ToArray();
             }
 
+            //restore the headers
+            typeof(Request).GetProperty(nameof(Request.RequestHeaders)).SetValue(session.Request, session.RequestHeaders);
+            typeof(Response).GetProperty(nameof(Response.ResponseHeaders)).SetValue(session.Response, session.ResponseHeaders);
+
             //string hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
             TextBoxRequest.Text = session.Request.HeaderText + session.Request.Encoding.GetString(data) +
-                                  (truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null);
+                                  (truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null) +
+                                  (session.Request as ConnectRequest)?.ClientHelloInfo;
 
             data = session.ResponseBody ?? new byte[0];
             truncated = data.Length > truncateLimit;
@@ -245,7 +245,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             //hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
             TextBoxResponse.Text = session.Response.HeaderText + session.Response.Encoding.GetString(data) +
-                                   (truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null);
+                                   (truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null) +
+                                   (session.Response as ConnectResponse)?.ServerHelloInfo;
         }
     }
 }

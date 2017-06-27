@@ -305,6 +305,16 @@ namespace Titanium.Web.Proxy.Helpers
             return streamBuffer[bufferPos + index];
         }
 
+        public byte PeekByteFromBuffer(int index)
+        {
+            if (bufferLength <= index)
+            {
+                throw new Exception("Index is out of buffer size");
+            }
+
+            return streamBuffer[bufferPos + index];
+        }
+
         public byte ReadByteFromBuffer()
         {
             if (bufferLength == 0)
