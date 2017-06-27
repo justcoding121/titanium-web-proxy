@@ -215,6 +215,15 @@ namespace Titanium.Web.Proxy.Http
             return false;
         }
 
+        /// <summary>
+        /// Removes all the headers.
+        /// </summary>
+        public void Clear()
+        {
+            Headers.Clear();
+            NonUniqueHeaders.Clear();
+        }
+
         internal string GetHeaderValueOrNull(string headerName)
         {
             HttpHeader header;

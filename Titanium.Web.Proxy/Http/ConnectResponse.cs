@@ -8,5 +8,6 @@ namespace Titanium.Web.Proxy.Http
 {
     public class ConnectResponse : Response
     {
+        public string ServerHelloInfo { get; set; }
     }
 }

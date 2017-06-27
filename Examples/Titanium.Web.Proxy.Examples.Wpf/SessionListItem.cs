@@ -78,9 +78,13 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         public byte[] ResponseBody { get; set; }
 
-        public Request Request { get; set; } = new Request();
+        public Request Request { get; set; }
 
-        public Response Response { get; set; } = new Response();
+        public Response Response { get; set; }
+
+        public HeaderCollection RequestHeaders { get; set; }
+
+        public HeaderCollection ResponseHeaders { get; set; }
 
         public event PropertyChangedEventHandler PropertyChanged;
 
