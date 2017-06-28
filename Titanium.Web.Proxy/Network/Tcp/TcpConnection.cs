@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         internal ExternalProxy UpStreamHttpsProxy { get; set; }
 
-        internal ExternalProxy UpStreamProxy => UseProxy ? IsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy : null;
+        internal ExternalProxy UpStreamProxy => UseUpstreamProxy ? IsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy : null;
 
         internal string HostName { get; set; }
 
@@ -24,7 +24,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         internal bool IsHttps { get; set; }
 
-        internal bool UseProxy { get; set; }
+        internal bool UseUpstreamProxy { get; set; }
 
         /// <summary>
         /// Http version
