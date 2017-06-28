@@ -17,6 +17,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Shared;
+using Titanium.Web.Proxy.Ssl;
 
 namespace Titanium.Web.Proxy
 {
@@ -116,7 +117,12 @@ namespace Titanium.Web.Proxy
                     connectArgs.WebSession.Response = CreateConnectResponse(version);
                     await WriteResponse(connectArgs.WebSession.Response, clientStreamWriter);
 
-                    bool isClientHello = await HttpsTools.IsClientHello(clientStream, connectArgs);
+                    var clientHelloInfo = await HttpsTools.GetClientHelloInfo(clientStream);
+                    bool isClientHello = clientHelloInfo != null;
+                    if (isClientHello)
+                    {
+                        connectRequest.ClientHelloInfo = clientHelloInfo;
+                    }
 
                     if (TunnelConnectResponse != null)
                     {

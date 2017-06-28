@@ -95,11 +95,15 @@
     <Compile Include="Helpers\HttpHelper.cs" />
     <Compile Include="Helpers\Network.cs" />
     <Compile Include="Helpers\Tcp.cs" />
+    <Compile Include="Ssl\ClientHelloInfo.cs" />
     <Compile Include="Http\ConnectRequest.cs" />
     <Compile Include="Http\ConnectResponse.cs" />
     <Compile Include="Http\HeaderCollection.cs" />
     <Compile Include="Http\HeaderParser.cs" />
-    <Compile Include="Http\HttpsTools.cs" />
+    <Compile Include="Ssl\SslCiphers.cs" />
+    <Compile Include="Ssl\SslExtension.cs" />
+    <Compile Include="Ssl\SslExtensions.cs" />
+    <Compile Include="Ssl\SslTools.cs" />
     <Compile Include="Http\HttpWebClient.cs" />
     <Compile Include="Http\Request.cs" />
     <Compile Include="Http\Response.cs" />
@@ -160,6 +164,7 @@
     <None Include="packages.config" />
     <None Include="StrongNameKey.snk" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
