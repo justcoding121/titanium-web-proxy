@@ -49,8 +49,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Is Https?
         /// </summary>
-        public bool IsHttps => Request.RequestUri.Scheme == ProxyServer.UriSchemeHttps;
-
+        public bool IsHttps => Request.IsHttps;
 
         internal HttpWebClient()
         {
@@ -81,7 +80,7 @@ namespace Titanium.Web.Proxy.Http
             var requestLines = new StringBuilder();
 
             //prepare the request & headers
-            requestLines.AppendLine($"{Request.Method} {Request.RequestUri.PathAndQuery} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
+            requestLines.AppendLine($"{Request.Method} {Request.OriginalRequestUrl} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
 
 
             //Send Authentication to Upstream proxy if needed

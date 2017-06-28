@@ -76,7 +76,16 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 //IncludedHttpsHostNameRegex = new string[0],
             };
+
             proxyServer.AddEndPoint(explicitEndPoint);
+            //proxyServer.UpStreamHttpProxy = new ExternalProxy
+            //{
+            //    HostName = "158.69.115.45",
+            //    Port = 3128,
+            //    UserName = "Titanium",
+            //    Password = "Titanium",
+            //};
+
             proxyServer.BeforeRequest += ProxyServer_BeforeRequest;
             proxyServer.BeforeResponse += ProxyServer_BeforeResponse;
             proxyServer.TunnelConnectRequest += ProxyServer_TunnelConnectRequest;
