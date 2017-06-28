@@ -32,18 +32,18 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal async Task<TcpConnection> CreateClient(ProxyServer server, string remoteHostName, int remotePort, Version httpVersion, bool isHttps,
             ExternalProxy externalHttpProxy, ExternalProxy externalHttpsProxy)
         {
-            bool useProxy = false;
+            bool useUpstreamProxy = false;
             var externalProxy = isHttps ? externalHttpsProxy : externalHttpProxy;
 
             //check if external proxy is set for HTTP/HTTPS
             if (externalProxy != null && !(externalProxy.HostName == remoteHostName && externalProxy.Port == remotePort))
             {
-                useProxy = true;
+                useUpstreamProxy = true;
 
                 //check if we need to ByPass
                 if (externalProxy.BypassLocalhost && NetworkHelper.IsLocalIpAddress(remoteHostName))
                 {
-                    useProxy = false;
+                    useUpstreamProxy = false;
                 }
             }
 
@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             try
             {
                 //If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections
-                if (useProxy)
+                if (useUpstreamProxy)
                 {
 #if NET45
                     client = new TcpClient(server.UpStreamEndPoint);
@@ -136,7 +136,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 HostName = remoteHostName,
                 Port = remotePort,
                 IsHttps = isHttps,
-                UseProxy = useProxy,
+                UseUpstreamProxy = useUpstreamProxy,
                 TcpClient = client,
                 StreamReader = new CustomBinaryReader(stream, server.BufferSize),
                 Stream = stream,
