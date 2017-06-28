@@ -24,6 +24,16 @@ namespace Titanium.Web.Proxy.Http
         public Uri RequestUri { get; set; }
 
         /// <summary>
+        /// Is Https?
+        /// </summary>
+        public bool IsHttps => RequestUri.Scheme == ProxyServer.UriSchemeHttps;
+
+        /// <summary>
+        /// The original request Url.
+        /// </summary>
+        public string OriginalRequestUrl { get; set; }
+
+        /// <summary>
         /// Request Http Version
         /// </summary>
         public Version HttpVersion { get; set; }
@@ -219,7 +229,7 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 var sb = new StringBuilder();
-                sb.AppendLine($"{Method} {RequestUri.PathAndQuery} HTTP/{HttpVersion.Major}.{HttpVersion.Minor}");
+                sb.AppendLine($"{Method} {OriginalRequestUrl} HTTP/{HttpVersion.Major}.{HttpVersion.Minor}");
                 foreach (var header in RequestHeaders)
                 {
                     sb.AppendLine(header.ToString());
