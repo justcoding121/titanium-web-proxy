@@ -80,7 +80,7 @@ namespace Titanium.Web.Proxy.Http
             var requestLines = new StringBuilder();
 
             //prepare the request & headers
-            requestLines.AppendLine($"{Request.Method} {Request.OriginalRequestUrl} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
+            requestLines.AppendLine($"{Request.Method} {Request.RequestUri.PathAndQuery} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
 
 
             //Send Authentication to Upstream proxy if needed
