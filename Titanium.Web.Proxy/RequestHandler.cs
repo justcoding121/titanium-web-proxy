@@ -218,14 +218,20 @@ namespace Titanium.Web.Proxy
             {
                 if (endPoint.EnableSsl)
                 {
-                    var sslStream = new SslStream(clientStream);
-                    clientStream = new CustomBufferedStream(sslStream, BufferSize);
+                    var clientSslHelloInfo = await HttpsTools.GetClientHelloInfo(clientStream);
 
-                    //implement in future once SNI supported by SSL stream, for now use the same certificate
-                    var certificate = CertificateManager.CreateCertificate(endPoint.GenericCertificateName, false);
+                    if (clientSslHelloInfo != null)
+                    {
+                        var sslStream = new SslStream(clientStream);
+                        clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
-                    //Successfully managed to authenticate the client using the fake certificate
-                    await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
+                        string sniHostName = clientSslHelloInfo.Extensions.FirstOrDefault(x => x.Name == "server_name")?.Data;
+
+                        var certificate = CertificateManager.CreateCertificate(sniHostName ?? endPoint.GenericCertificateName, false);
+
+                        //Successfully managed to authenticate the client using the fake certificate
+                        await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
+                    }
 
                     //HTTPS server created - we can now decrypt the client's traffic
                 }
