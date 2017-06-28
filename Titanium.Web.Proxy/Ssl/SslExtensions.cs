@@ -3,149 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Helpers;
 
-namespace Titanium.Web.Proxy.Http
+namespace Titanium.Web.Proxy.Ssl
 {
-    class HttpsTools
+    internal class SslExtensions
     {
-        public static async Task<bool> IsClientHello(CustomBufferedStream clientStream, TunnelConnectSessionEventArgs connectArgs)
-        {
-            //detects the HTTPS ClientHello message as it is described in the following url:
-            //https://stackoverflow.com/questions/3897883/how-to-detect-an-incoming-ssl-https-handshake-ssl-wire-format
-
-            var request = (ConnectRequest)connectArgs.WebSession.Request;
-
-            int recordType = await clientStream.PeekByteAsync(0);
-            if (recordType == 0x80)
-            {
-                var peekStream = new CustomBufferedPeekStream(clientStream, 1);
-
-                //SSL 2
-                int length = peekStream.ReadByte();
-                if (length < 9)
-                {
-                    // Message body too short.
-                    return false;
-                }
-
-                if (peekStream.ReadByte() != 0x01)
-                {
-                    // should be ClientHello
-                    return false;
-                }
-
-                int majorVersion = clientStream.ReadByte();
-                int minorVersion = clientStream.ReadByte();
-                return true;
-            }
-            else if (recordType == 0x16)
-            {
-                var peekStream = new CustomBufferedPeekStream(clientStream, 1);
-
-                //should contain at least 43 bytes
-                // 2 version + 2 length + 1 type + 3 length(?) + 2 version +  32 random + 1 sessionid length
-                if (!await peekStream.EnsureBufferLength(43))
-                {
-                    return false;
-                }
-
-                //SSL 3.0 or TLS 1.0, 1.1 and 1.2
-                int majorVersion = peekStream.ReadByte();
-                int minorVersion = peekStream.ReadByte();
-
-                int length = peekStream.ReadInt16();
-
-                if (peekStream.ReadByte() != 0x01)
-                {
-                    // should be ClientHello
-                    return false;
-                }
-
-                length = peekStream.ReadInt24();
-
-                majorVersion = peekStream.ReadByte();
-                minorVersion = peekStream.ReadByte();
-
-                byte[] random = peekStream.ReadBytes(32);
-                length = peekStream.ReadByte();
-
-                // sessionid + 2 ciphersData length
-                if (!await peekStream.EnsureBufferLength(length + 2))
-                {
-                    return false;
-                }
-
-                byte[] sessionId = peekStream.ReadBytes(length);
-
-                length = peekStream.ReadInt16();
-
-                // ciphersData + compressionData length
-                if (!await peekStream.EnsureBufferLength(length + 1))
-                {
-                    return false;
-                }
-
-                byte[] ciphersData = peekStream.ReadBytes(length);
-
-                length = peekStream.ReadByte();
-                if (length < 1)
-                {
-                    return false;
-                }
-
-                // compressionData
-                if (!await peekStream.EnsureBufferLength(length))
-                {
-                    return false;
-                }
-
-                byte[] compressionData = peekStream.ReadBytes(length);
-
-                List<Extension> extensions = null;
-                if (majorVersion > 3 || majorVersion == 3 && minorVersion >= 1)
-                {
-                    if (await peekStream.EnsureBufferLength(2))
-                    {
-                        length = peekStream.ReadInt16();
-
-                        if (await peekStream.EnsureBufferLength(length))
-                        {
-                            extensions = new List<Extension>();
-                            while (peekStream.Available > 3)
-                            {
-                                int id = peekStream.ReadInt16();
-                                length = peekStream.ReadInt16();
-                                byte[] data = peekStream.ReadBytes(length);
-                                extensions.Add(GetExtension(id, data));
-                            }
-                        }
-                    }
-                }
-
-                request.ClientHelloInfo = new ClientHelloInfo
-                {
-                    MajorVersion = majorVersion,
-                    MinorVersion = minorVersion,
-                    Random = random,
-                    SessionId = sessionId,
-                    CiphersData = ciphersData,
-                    CompressionData = compressionData,
-                    Extensions = extensions,
-                };
-
-                return true;
-            }
-
-            return false;
-        }
-
-        private static Extension GetExtension(int value, byte[] data)
+        internal static SslExtension GetExtension(int value, byte[] data)
         {
             string name = GetExtensionName(value);
             string dataStr = GetExtensionData(value, data);
-            return new Extension(value, name, dataStr);
+            return new SslExtension(value, name, dataStr);
         }
 
         private static string GetExtensionData(int value, byte[] data)
@@ -526,22 +393,6 @@ namespace Titanium.Web.Proxy.Http
         private static string ByteArrayToString(byte[] data)
         {
             return string.Join(" ", data.Select(x => x.ToString("X2")));
-        }
-    }
-
-    public class Extension
-    {
-        public int Value { get; set; }
-
-        public string Name { get; set; }
-
-        public string Data { get; set; }
-
-        public Extension(int value, string name, string data)
-        {
-            Value = value;
-            Name = name;
-            Data = data;
         }
     }
 }
