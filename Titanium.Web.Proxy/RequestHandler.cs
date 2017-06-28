@@ -320,6 +320,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     PrepareRequestHeaders(args.WebSession.Request.RequestHeaders);
+                    args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
 
 #if NET45
                     //if win auth is enabled
