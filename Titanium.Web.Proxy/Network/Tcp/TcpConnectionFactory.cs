@@ -63,36 +63,39 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     await client.ConnectAsync(externalProxy.HostName, externalProxy.Port);
                     stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
 
-                    using (var writer = new StreamWriter(stream, Encoding.ASCII, server.BufferSize, true)
+                    if (isHttps)
                     {
-                        NewLine = ProxyConstants.NewLine
-                    })
-                    {
-                        await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
-                        await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
-                        await writer.WriteLineAsync("Connection: Keep-Alive");
-
-                        if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
+                        using (var writer = new StreamWriter(stream, Encoding.ASCII, server.BufferSize, true)
                         {
-                            await writer.WriteLineAsync("Proxy-Connection: keep-alive");
-                            await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " +
-                                                        Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                                                            externalProxy.UserName + ":" + externalProxy.Password)));
-                        }
-                        await writer.WriteLineAsync();
-                        await writer.FlushAsync();
-                    }
-
-                    using (var reader = new CustomBinaryReader(stream, server.BufferSize))
-                    {
-                        string result = await reader.ReadLineAsync();
-
-                        if (!new[] { "200 OK", "connection established" }.Any(s => result.ContainsIgnoreCase(s)))
+                            NewLine = ProxyConstants.NewLine
+                        })
                         {
-                            throw new Exception("Upstream proxy failed to create a secure tunnel");
+                            await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
+                            await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
+                            await writer.WriteLineAsync("Connection: Keep-Alive");
+
+                            if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
+                            {
+                                await writer.WriteLineAsync("Proxy-Connection: keep-alive");
+                                await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " +
+                                                            Convert.ToBase64String(Encoding.UTF8.GetBytes(
+                                                                externalProxy.UserName + ":" + externalProxy.Password)));
+                            }
+                            await writer.WriteLineAsync();
+                            await writer.FlushAsync();
                         }
 
-                        await reader.ReadAndIgnoreAllLinesAsync();
+                        using (var reader = new CustomBinaryReader(stream, server.BufferSize))
+                        {
+                            string result = await reader.ReadLineAsync();
+
+                            if (!new[] { "200 OK", "connection established" }.Any(s => result.ContainsIgnoreCase(s)))
+                            {
+                                throw new Exception("Upstream proxy failed to create a secure tunnel");
+                            }
+
+                            await reader.ReadAndIgnoreAllLinesAsync();
+                        }
                     }
                 }
                 else

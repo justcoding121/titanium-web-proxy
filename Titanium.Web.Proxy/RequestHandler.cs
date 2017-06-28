@@ -85,6 +85,7 @@ namespace Titanium.Web.Proxy
                     connectRequest = new ConnectRequest
                     {
                         RequestUri = httpRemoteUri,
+                        OriginalRequestUrl = httpUrl,
                         HttpVersion = version,
                         Method = httpMethod,
                     };
@@ -303,6 +304,7 @@ namespace Titanium.Web.Proxy
                         : string.Concat("https://", args.WebSession.Request.Host ?? httpsConnectHostname, httpUrl));
 
                     args.WebSession.Request.RequestUri = httpRemoteUri;
+                    args.WebSession.Request.OriginalRequestUrl = httpUrl;
 
                     args.WebSession.Request.Method = httpMethod;
                     args.WebSession.Request.HttpVersion = version;
@@ -318,7 +320,6 @@ namespace Titanium.Web.Proxy
                     }
 
                     PrepareRequestHeaders(args.WebSession.Request.RequestHeaders);
-                    args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
 
 #if NET45
                     //if win auth is enabled
@@ -572,18 +573,18 @@ namespace Titanium.Web.Proxy
             ExternalProxy customUpStreamHttpProxy = null;
             ExternalProxy customUpStreamHttpsProxy = null;
 
-            if (args.WebSession.Request.RequestUri.Scheme == UriSchemeHttp)
-            {
-                if (GetCustomUpStreamHttpProxyFunc != null)
-                {
-                    customUpStreamHttpProxy = await GetCustomUpStreamHttpProxyFunc(args);
-                }
-            }
-            else
+            if (args.WebSession.Request.IsHttps)
             {
                 if (GetCustomUpStreamHttpsProxyFunc != null)
                 {
                     customUpStreamHttpsProxy = await GetCustomUpStreamHttpsProxyFunc(args);
+                }
+            }
+            else
+            {
+                if (GetCustomUpStreamHttpProxyFunc != null)
+                {
+                    customUpStreamHttpProxy = await GetCustomUpStreamHttpProxyFunc(args);
                 }
             }
 
