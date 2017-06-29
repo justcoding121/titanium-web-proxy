@@ -73,7 +73,7 @@ namespace Titanium.Web.Proxy
                 ResponseStatusDescription = description
             };
 
-            response.ResponseHeaders.AddHeader("Proxy-Authenticate", "Basic realm=\"TitaniumProxy\"");
+            response.ResponseHeaders.AddHeader("Proxy-Authenticate", $"Basic realm=\"{ProxyRealm}\"");
             response.ResponseHeaders.AddHeader("Proxy-Connection", "close");
 
             await WriteResponse(response, clientStreamWriter);
