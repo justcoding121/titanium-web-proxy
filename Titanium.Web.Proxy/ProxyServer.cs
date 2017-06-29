@@ -271,6 +271,10 @@ namespace Titanium.Web.Proxy
         public Func<string, string, Task<bool>> AuthenticateUserFunc { get; set; }
 
         /// <summary>
+        /// Realm used during Proxy Basic Authentication 
+        /// </summary>
+        public string ProxyRealm { get; set; } = "TitaniumProxy";
+        /// <summary>
         /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP requests
         /// return the ExternalProxy object with valid credentials
         /// </summary>

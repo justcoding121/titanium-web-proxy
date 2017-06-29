@@ -81,17 +81,17 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.Start();
 
 
-            //Transparent endpoint is useful for reverse proxying (client is not aware of the existence of proxy)
-            //A transparent endpoint usually requires a network router port forwarding HTTP(S) packets to this endpoint
-            //Currently do not support Server Name Indication (It is not currently supported by SslStream class)
-            //That means that the transparent endpoint will always provide the same Generic Certificate to all HTTPS requests
-            //In this example only google.com will work for HTTPS requests
-            //Other sites will receive a certificate mismatch warning on browser
-            var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 8001, true)
-            {
-                GenericCertificateName = "google.com"
-            };
-            proxyServer.AddEndPoint(transparentEndPoint);
+            //Transparent endpoint is useful for reverse proxy (client is not aware of the existence of proxy)
+            //A transparent endpoint usually requires a network router port forwarding HTTP(S) packets or DNS
+            //to send data to this endPoint
+            //var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 443, true)
+            //{
+            //    //Generic Certificate hostname to use
+            //    //When SNI is disabled by client
+            //    GenericCertificateName = "google.com"
+            //};
+
+            //proxyServer.AddEndPoint(transparentEndPoint);
 
             //proxyServer.UpStreamHttpProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
             //proxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
