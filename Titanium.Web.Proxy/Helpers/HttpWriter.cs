@@ -11,12 +11,7 @@ namespace Titanium.Web.Proxy.Helpers
 {
     abstract class HttpWriter : StreamWriter
     {
-        public HttpWriter(Stream stream) : base(stream, Encoding.ASCII)
-        {
-            NewLine = ProxyConstants.NewLine;
-        }
-
-        public HttpWriter(Stream stream, bool leaveOpen) : base(stream, Encoding.ASCII, 1024, leaveOpen)
+        protected HttpWriter(Stream stream, bool leaveOpen) : base(stream, Encoding.ASCII, 1024, leaveOpen)
         {
             NewLine = ProxyConstants.NewLine;
         }
