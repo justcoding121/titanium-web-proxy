@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
-using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Decompression;
 using Titanium.Web.Proxy.Exceptions;

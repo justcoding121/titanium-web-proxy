@@ -1,13 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -16,7 +13,6 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Shared;
 using Titanium.Web.Proxy.Ssl;
 
 namespace Titanium.Web.Proxy
@@ -40,10 +36,7 @@ namespace Titanium.Web.Proxy
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
             var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-            var clientStreamWriter = new StreamWriter(clientStream)
-            {
-                NewLine = ProxyConstants.NewLine
-            };
+            var clientStreamWriter = new HttpResponseWriter(clientStream);
 
             Uri httpRemoteUri;
 
@@ -96,8 +89,6 @@ namespace Titanium.Web.Proxy
                     connectArgs.WebSession.Request = connectRequest;
                     connectArgs.ProxyClient.TcpClient = tcpClient;
                     connectArgs.ProxyClient.ClientStream = clientStream;
-                    connectArgs.ProxyClient.ClientStreamReader = clientStreamReader;
-                    connectArgs.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                     if (TunnelConnectRequest != null)
                     {
@@ -115,10 +106,10 @@ namespace Titanium.Web.Proxy
                     }
 
                     //write back successfull CONNECT response
-                    connectArgs.WebSession.Response = CreateConnectResponse(version);
-                    await WriteResponse(connectArgs.WebSession.Response, clientStreamWriter);
+                    connectArgs.WebSession.Response = ConnectResponse.CreateSuccessfullConnectResponse(version);
+                    await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response);
 
-                    var clientHelloInfo = await HttpsTools.GetClientHelloInfo(clientStream);
+                    var clientHelloInfo = await SslTools.GetClientHelloInfo(clientStream);
                     bool isClientHello = clientHelloInfo != null;
                     if (isClientHello)
                     {
@@ -153,10 +144,7 @@ namespace Titanium.Web.Proxy
 
                             clientStreamReader.Dispose();
                             clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-                            clientStreamWriter = new StreamWriter(clientStream)
-                            {
-                                NewLine = ProxyConstants.NewLine
-                            };
+                            clientStreamWriter = new HttpResponseWriter(clientStream);
                         }
                         catch
                         {
@@ -167,7 +155,7 @@ namespace Titanium.Web.Proxy
                         //Now read the actual HTTPS request line
                         httpCmd = await clientStreamReader.ReadLineAsync();
                     }
-                    //Sorry cannot do a HTTPS request decrypt to port 80 at this time
+                    //Hostname is excluded or it is not an HTTPS connect
                     else
                     {
                         //create new connection
@@ -212,13 +200,13 @@ namespace Titanium.Web.Proxy
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
             CustomBinaryReader clientStreamReader = null;
-            StreamWriter clientStreamWriter = null;
+            HttpResponseWriter clientStreamWriter = null;
 
             try
             {
                 if (endPoint.EnableSsl)
                 {
-                    var clientSslHelloInfo = await HttpsTools.GetClientHelloInfo(clientStream);
+                    var clientSslHelloInfo = await SslTools.GetClientHelloInfo(clientStream);
 
                     if (clientSslHelloInfo != null)
                     {
@@ -237,10 +225,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-                clientStreamWriter = new StreamWriter(clientStream)
-                {
-                    NewLine = ProxyConstants.NewLine
-                };
+                clientStreamWriter = new HttpResponseWriter(clientStream);
 
                 //now read the request line
                 string httpCmd = await clientStreamReader.ReadLineAsync();
@@ -273,8 +258,8 @@ namespace Titanium.Web.Proxy
         /// <param name="connectRequest"></param>
         /// <param name="isTransparentEndPoint"></param>
         /// <returns></returns>
-        private async Task<bool> HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
-            CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsConnectHostname,
+        private async Task<bool> HandleHttpSessionRequest(TcpClient client, string httpCmd, CustomBufferedStream clientStream,
+            CustomBinaryReader clientStreamReader, HttpResponseWriter clientStreamWriter, string httpsConnectHostname,
             ProxyEndPoint endPoint, ConnectRequest connectRequest, bool isTransparentEndPoint = false)
         {
             bool disposed = false;
@@ -368,26 +353,16 @@ namespace Titanium.Web.Proxy
                     {
                         //prepare the prefix content
                         var requestHeaders = args.WebSession.Request.RequestHeaders;
+                        byte[] requestBytes;
                         using (var ms = new MemoryStream())
-                        using (var writer = new StreamWriter(ms, Encoding.ASCII) { NewLine = ProxyConstants.NewLine })
+                        using (var writer = new HttpRequestWriter(ms))
                         {
                             writer.WriteLine(httpCmd);
-
-                            if (requestHeaders != null)
-                            {
-                                foreach (string header in requestHeaders.Select(t => t.ToString()))
-                                {
-                                    writer.WriteLine(header);
-                                }
-                            }
-
-                            writer.WriteLine();
-                            writer.Flush();
-
-                            var data = ms.ToArray();
-                            await connection.Stream.WriteAsync(data, 0, data.Length);
+                            writer.WriteHeaders(requestHeaders);
+                            requestBytes = ms.ToArray();
                         }
 
+                        await connection.Stream.WriteAsync(requestBytes, 0, requestBytes.Length);
                         string httpStatus = await connection.StreamReader.ReadLineAsync();
 
                         Version responseVersion;
@@ -400,7 +375,7 @@ namespace Titanium.Web.Proxy
 
                         await HeaderParser.ReadHeaders(connection.StreamReader, args.WebSession.Response.ResponseHeaders);
 
-                        await WriteResponse(args.WebSession.Response, clientStreamWriter);
+                        await clientStreamWriter.WriteResponseAsync(args.WebSession.Response);
 
                         //If user requested call back then do it
                         if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
@@ -481,12 +456,12 @@ namespace Titanium.Web.Proxy
                 {
                     if (args.WebSession.Request.Is100Continue)
                     {
-                        await WriteResponseStatus(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.Continue, "Continue", args.ProxyClient.ClientStreamWriter);
+                        await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.Continue, "Continue");
                         await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                     }
                     else if (args.WebSession.Request.ExpectationFailed)
                     {
-                        await WriteResponseStatus(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed", args.ProxyClient.ClientStreamWriter);
+                        await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
                         await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                     }
                 }
@@ -608,25 +583,6 @@ namespace Titanium.Web.Proxy
                 customUpStreamHttpsProxy ?? UpStreamHttpsProxy);
         }
 
-
-        /// <summary>
-        /// Write successfull CONNECT response to client
-        /// </summary>
-        /// <param name="httpVersion"></param>
-        /// <returns></returns>
-        private ConnectResponse CreateConnectResponse(Version httpVersion)
-        {
-            var response = new ConnectResponse
-            {
-                HttpVersion = httpVersion,
-                ResponseStatusCode = (int)HttpStatusCode.OK,
-                ResponseStatusDescription = "Connection established"
-            };
-
-            response.ResponseHeaders.AddHeader("Timestamp", DateTime.Now.ToString());
-            return response;
-        }
-
         /// <summary>
         /// prepare the request headers so that we can avoid encodings not parsable by this proxy
         /// </summary>
@@ -644,7 +600,7 @@ namespace Titanium.Web.Proxy
                 }
             }
 
-            FixProxyHeaders(requestHeaders);
+            requestHeaders.FixProxyHeaders();
         }
 
         /// <summary>
