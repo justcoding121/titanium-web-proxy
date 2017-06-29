@@ -72,18 +72,19 @@ namespace Titanium.Web.Proxy
                 //Write back to client 100-conitinue response if that's what server returned
                 if (response.Is100Continue)
                 {
-                    await WriteResponseStatus(response.HttpVersion, (int)HttpStatusCode.Continue, "Continue", args.ProxyClient.ClientStreamWriter);
+                    await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, (int)HttpStatusCode.Continue, "Continue");
                     await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                 }
                 else if (response.ExpectationFailed)
                 {
-                    await WriteResponseStatus(response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed", args.ProxyClient.ClientStreamWriter);
+                    await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
                     await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                 }
 
                 //Write back response status to client
-                await WriteResponseStatus(response.HttpVersion, response.ResponseStatusCode, response.ResponseStatusDescription, args.ProxyClient.ClientStreamWriter);
+                await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.ResponseStatusCode, response.ResponseStatusDescription);
 
+                response.ResponseHeaders.FixProxyHeaders();
                 if (response.ResponseBodyRead)
                 {
                     bool isChunked = response.IsChunked;
@@ -103,17 +104,17 @@ namespace Titanium.Web.Proxy
                         }
                     }
 
-                    await WriteResponseHeaders(args.ProxyClient.ClientStreamWriter, response);
-                    await args.ProxyClient.ClientStream.WriteResponseBody(response.ResponseBody, isChunked);
+                    await args.ProxyClient.ClientStreamWriter.WriteHeadersAsync(response.ResponseHeaders);
+                    await args.ProxyClient.ClientStreamWriter.WriteResponseBodyAsync(response.ResponseBody, isChunked);
                 }
                 else
                 {
-                    await WriteResponseHeaders(args.ProxyClient.ClientStreamWriter, response);
+                    await args.ProxyClient.ClientStreamWriter.WriteHeadersAsync(response.ResponseHeaders);
 
                     //Write body if exists
                     if (response.HasBody)
                     {
-                        await args.WebSession.ServerConnection.StreamReader.WriteResponseBody(BufferSize, args.ProxyClient.ClientStream,
+                        await args.ProxyClient.ClientStreamWriter.WriteResponseBodyAsync(BufferSize, args.WebSession.ServerConnection.StreamReader,
                             response.IsChunked, response.ContentLength);
                     }
                 }
@@ -143,92 +144,6 @@ namespace Titanium.Web.Proxy
             var compressionFactory = new CompressionFactory();
             var compressor = compressionFactory.Create(encodingType);
             return await compressor.Compress(responseBodyStream);
-        }
-
-        /// <summary>
-        /// Writes the response.
-        /// </summary>
-        /// <param name="response"></param>
-        /// <param name="responseWriter"></param>
-        /// <param name="flush"></param>
-        /// <returns></returns>
-        private async Task WriteResponse(Response response, StreamWriter responseWriter, bool flush = true)
-        {
-            await WriteResponseStatus(response.HttpVersion, response.ResponseStatusCode, response.ResponseStatusDescription, responseWriter);
-            await WriteResponseHeaders(responseWriter, response, flush);
-        }
-
-        /// <summary>
-        /// Write response status
-        /// </summary>
-        /// <param name="version"></param>
-        /// <param name="code"></param>
-        /// <param name="description"></param>
-        /// <param name="responseWriter"></param>
-        /// <returns></returns>
-        private async Task WriteResponseStatus(Version version, int code, string description, StreamWriter responseWriter)
-        {
-            await responseWriter.WriteLineAsync($"HTTP/{version.Major}.{version.Minor} {code} {description}");
-        }
-
-        /// <summary>
-        /// Write response headers to client
-        /// </summary>
-        /// <param name="responseWriter"></param>
-        /// <param name="response"></param>
-        /// <param name="flush"></param>
-        /// <returns></returns>
-        private async Task WriteResponseHeaders(StreamWriter responseWriter, Response response, bool flush = true)
-        {
-            FixProxyHeaders(response.ResponseHeaders);
-
-            foreach (var header in response.ResponseHeaders)
-            {
-                await header.WriteToStream(responseWriter);
-            }
-
-            await responseWriter.WriteLineAsync();
-            if (flush)
-            {
-                await responseWriter.FlushAsync();
-            }
-        }
-
-        /// <summary>
-        /// Fix proxy specific headers
-        /// </summary>
-        /// <param name="headers"></param>
-        private void FixProxyHeaders(HeaderCollection headers)
-        {
-            //If proxy-connection close was returned inform to close the connection
-            string proxyHeader = headers.GetHeaderValueOrNull("proxy-connection");
-            headers.RemoveHeader("proxy-connection");
-
-            if (proxyHeader != null)
-            {
-                headers.SetOrAddHeaderValue("connection", proxyHeader);
-            }
-        }
-
-        /// <summary>
-        ///  Handle dispose of a client/server session
-        /// </summary>
-        /// <param name="clientStream"></param>
-        /// <param name="clientStreamReader"></param>
-        /// <param name="clientStreamWriter"></param>
-        /// <param name="serverConnection"></param>
-        private void Dispose(Stream clientStream, CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, TcpConnection serverConnection)
-        {
-            clientStream?.Dispose();
-
-            clientStreamReader?.Dispose();
-            clientStreamWriter?.Dispose();
-
-            if (serverConnection != null)
-            {
-                serverConnection.Dispose();
-                UpdateServerConnectionCount(false);
-            }
         }
     }
 }

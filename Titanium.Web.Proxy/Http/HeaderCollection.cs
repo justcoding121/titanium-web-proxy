@@ -251,6 +251,21 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
+        /// Fix proxy specific headers
+        /// </summary>
+        internal void FixProxyHeaders()
+        {
+            //If proxy-connection close was returned inform to close the connection
+            string proxyHeader = GetHeaderValueOrNull("proxy-connection");
+            RemoveHeader("proxy-connection");
+
+            if (proxyHeader != null)
+            {
+                SetOrAddHeaderValue("connection", proxyHeader);
+            }
+        }
+
+        /// <summary>
         /// Returns an enumerator that iterates through the collection.
         /// </summary>
         /// <returns>

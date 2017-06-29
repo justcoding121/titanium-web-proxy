@@ -92,9 +92,13 @@
     <Compile Include="Helpers\CustomBufferedPeekStream.cs" />
     <Compile Include="Helpers\CustomBufferedStream.cs" />
     <Compile Include="Helpers\Firefox.cs" />
+    <Compile Include="Helpers\HttpRequestWriter.cs" />
+    <Compile Include="Helpers\HttpResponseWriter.cs" />
+    <Compile Include="Helpers\HttpWriter.cs" />
     <Compile Include="Helpers\HttpHelper.cs" />
     <Compile Include="Helpers\Network.cs" />
     <Compile Include="Helpers\Tcp.cs" />
+    <Compile Include="Ssl\ServerHelloInfo.cs" />
     <Compile Include="Ssl\ClientHelloInfo.cs" />
     <Compile Include="Http\ConnectRequest.cs" />
     <Compile Include="Http\ConnectResponse.cs" />

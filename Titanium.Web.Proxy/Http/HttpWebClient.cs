@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Shared;
@@ -77,35 +78,39 @@ namespace Titanium.Web.Proxy.Http
         {
             var stream = ServerConnection.Stream;
 
-            var requestLines = new StringBuilder();
-
-            //prepare the request & headers
-            requestLines.AppendLine($"{Request.Method} {Request.RequestUri.PathAndQuery} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
-
-
-            //Send Authentication to Upstream proxy if needed
-            if (ServerConnection.UpStreamHttpProxy != null
-                && ServerConnection.IsHttps == false
-                && !string.IsNullOrEmpty(ServerConnection.UpStreamHttpProxy.UserName)
-                && ServerConnection.UpStreamHttpProxy.Password != null)
+            byte[] requestBytes;
+            using (var ms = new MemoryStream())
+            using (var writer = new HttpRequestWriter(ms))
             {
-                requestLines.AppendLine("Proxy-Connection: keep-alive");
-                requestLines.AppendLine("Proxy-Authorization" + ": Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                                            $"{ServerConnection.UpStreamHttpProxy.UserName}:{ServerConnection.UpStreamHttpProxy.Password}")));
-            }
-            //write request headers
-            foreach (var header in Request.RequestHeaders)
-            {
-                if (header.Name != "Proxy-Authorization")
+                //prepare the request & headers
+                writer.WriteLine($"{Request.Method} {Request.RequestUri.PathAndQuery} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
+
+                var upstreamProxy = ServerConnection.UpStreamHttpProxy;
+
+                //Send Authentication to Upstream proxy if needed
+                if (upstreamProxy != null
+                    && ServerConnection.IsHttps == false
+                    && !string.IsNullOrEmpty(upstreamProxy.UserName)
+                    && upstreamProxy.Password != null)
                 {
-                    requestLines.AppendLine($"{header.Name}: {header.Value}");
+                    HttpHeader.ProxyConnectionKeepAlive.WriteToStream(writer);
+                    HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password).WriteToStream(writer);
                 }
+
+                //write request headers
+                foreach (var header in Request.RequestHeaders)
+                {
+                    if (header.Name != "Proxy-Authorization")
+                    {
+                        header.WriteToStream(writer);
+                    }
+                }
+
+                writer.WriteLine();
+                writer.Flush();
+
+                requestBytes = ms.ToArray();
             }
-
-            requestLines.AppendLine();
-
-            string request = requestLines.ToString();
-            var requestBytes = Encoding.ASCII.GetBytes(request);
 
             await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
             await stream.FlushAsync();

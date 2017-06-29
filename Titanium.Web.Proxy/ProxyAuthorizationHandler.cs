@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
@@ -14,7 +15,7 @@ namespace Titanium.Web.Proxy
 {
     public partial class ProxyServer
     {
-        private async Task<bool> CheckAuthorization(StreamWriter clientStreamWriter, SessionEventArgs session)
+        private async Task<bool> CheckAuthorization(HttpResponseWriter clientStreamWriter, SessionEventArgs session)
         {
             if (AuthenticateUserFunc == null)
             {
@@ -64,7 +65,7 @@ namespace Titanium.Web.Proxy
             }
         }
 
-        private async Task<Response> SendAuthentication407Response(StreamWriter clientStreamWriter, string description)
+        private async Task<Response> SendAuthentication407Response(HttpResponseWriter clientStreamWriter, string description)
         {
             var response = new Response
             {
@@ -76,7 +77,7 @@ namespace Titanium.Web.Proxy
             response.ResponseHeaders.AddHeader("Proxy-Authenticate", $"Basic realm=\"{ProxyRealm}\"");
             response.ResponseHeaders.AddHeader("Proxy-Connection", "close");
 
-            await WriteResponse(response, clientStreamWriter);
+            await clientStreamWriter.WriteResponseAsync(response);
             return response;
         }
     }
