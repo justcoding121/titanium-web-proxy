@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Titanium.Web.Proxy.Shared;
+﻿using System.IO;
 
 namespace Titanium.Web.Proxy.Helpers
 {

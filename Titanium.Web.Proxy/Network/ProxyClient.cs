@@ -1,5 +1,4 @@
-﻿using System.IO;
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Network
