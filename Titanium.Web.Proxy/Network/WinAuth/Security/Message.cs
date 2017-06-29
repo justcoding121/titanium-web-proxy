@@ -33,51 +33,38 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-namespace Titanium.Web.Proxy.Network.WinAuth.Security 
+using System;
+using System.Text;
+
+namespace Titanium.Web.Proxy.Network.WinAuth.Security
 {
-    using System;
-    using System.Text;
-
-	internal class Message
+    internal class Message
     {
-        static private byte[] header = { 0x4e, 0x54, 0x4c, 0x4d, 0x53, 0x53, 0x50, 0x00 };
+        private static readonly byte[] header = { 0x4e, 0x54, 0x4c, 0x4d, 0x53, 0x53, 0x50, 0x00 };
 
-		internal Message (byte[] message)
-		{
-            _type = 3;
-			Decode (message);
-		}
-        
-		/// <summary>
-		/// Domain name
-		/// </summary>
-        internal string Domain
+        internal Message(byte[] message)
         {
-            get;
-            private set;
+            type = 3;
+            Decode(message);
         }
-        
+
+        /// <summary>
+        /// Domain name
+        /// </summary>
+        internal string Domain { get; private set; }
+
         /// <summary>
         /// Username
         /// </summary>
-		internal string Username 
+        internal string Username { get; private set; }
+
+        private readonly int type;
+
+        internal Common.NtlmFlags Flags { get; set; }
+
+        // methods
+        private void Decode(byte[] message)
         {
-            get;
-            private set;
-		}
-
-        private int _type;
-        private Common.NtlmFlags _flags;
-
-		internal Common.NtlmFlags Flags 
-        {
-			get { return _flags; }
-			set { _flags = value; }
-		}
-
-		// methods
-		private void Decode (byte[] message)
-		{
             //base.Decode (message);
 
             if (message == null)
@@ -95,11 +82,11 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                 throw new ArgumentException(msg, "message");
             }
 
-			if (LittleEndian.ToUInt16 (message, 56) != message.Length) 
+            if (LittleEndian.ToUInt16(message, 56) != message.Length)
             {
-				string msg = "Invalid Type3 message length.";
-				throw new ArgumentException (msg, "message");
-			}
+                string msg = "Invalid Type3 message length.";
+                throw new ArgumentException(msg, "message");
+            }
 
             if (message.Length >= 64)
             {
@@ -109,28 +96,25 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             {
                 Flags = (Common.NtlmFlags)0x8201;
             }
-		
-			int dom_len = LittleEndian.ToUInt16 (message, 28);
-			int dom_off = LittleEndian.ToUInt16 (message, 32);
 
-			this.Domain = DecodeString (message, dom_off, dom_len);
+            int domLen = LittleEndian.ToUInt16(message, 28);
+            int domOff = LittleEndian.ToUInt16(message, 32);
 
-			int user_len = LittleEndian.ToUInt16 (message, 36);
-			int user_off = LittleEndian.ToUInt16 (message, 40);
+            Domain = DecodeString(message, domOff, domLen);
 
-			this.Username = DecodeString (message, user_off, user_len);
-		}
+            int userLen = LittleEndian.ToUInt16(message, 36);
+            int userOff = LittleEndian.ToUInt16(message, 40);
 
-		string DecodeString (byte[] buffer, int offset, int len)
-		{
+            Username = DecodeString(message, userOff, userLen);
+        }
+
+        string DecodeString(byte[] buffer, int offset, int len)
+        {
             if ((Flags & Common.NtlmFlags.NegotiateUnicode) != 0)
             {
                 return Encoding.Unicode.GetString(buffer, offset, len);
             }
-            else
-            {
-                return Encoding.ASCII.GetString(buffer, offset, len);
-            }
+            return Encoding.ASCII.GetString(buffer, offset, len);
         }
 
         protected bool CheckHeader(byte[] message)
@@ -140,8 +124,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                 if (message[i] != header[i])
                     return false;
             }
-            return (LittleEndian.ToUInt32(message, 8) == _type);
+            return (LittleEndian.ToUInt32(message, 8) == type);
         }
-
     }
 }

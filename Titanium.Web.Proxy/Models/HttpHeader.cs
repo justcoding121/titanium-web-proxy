@@ -9,9 +9,9 @@ namespace Titanium.Web.Proxy.Models
     /// </summary>
     public class HttpHeader
     {
-        internal static Version Version10 = new Version(1, 0);
+        internal static readonly Version Version10 = new Version(1, 0);
 
-        internal static Version Version11 = new Version(1, 1);
+        internal static readonly Version Version11 = new Version(1, 1);
 
         /// <summary>
         /// Constructor.

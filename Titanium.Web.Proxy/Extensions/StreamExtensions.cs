@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+﻿using System;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -30,6 +31,25 @@ namespace Titanium.Web.Proxy.Extensions
             await input.CopyToAsync(output);
         }
 
+        internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy)
+        {
+            byte[] buffer = new byte[81920];
+            while (true)
+            {
+                int num = await input.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+                int bytesRead;
+                if ((bytesRead = num) != 0)
+                {
+                    await output.WriteAsync(buffer, 0, bytesRead).ConfigureAwait(false);
+                    onCopy?.Invoke(buffer, 0, bytesRead);
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+
         /// <summary>
         /// copies the specified bytes to the stream from the input stream
         /// </summary>
@@ -39,7 +59,7 @@ namespace Titanium.Web.Proxy.Extensions
         /// <returns></returns>
         internal static async Task CopyBytesToStream(this CustomBinaryReader streamReader, Stream stream, long totalBytesToRead)
         {
-            byte[] buffer = streamReader.Buffer;
+            var buffer = streamReader.Buffer;
             long remainingBytes = totalBytesToRead;
 
             while (remainingBytes > 0)
@@ -72,8 +92,8 @@ namespace Titanium.Web.Proxy.Extensions
         {
             while (true)
             {
-                var chuchkHead = await clientStreamReader.ReadLineAsync();
-                var chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
+                string chuchkHead = await clientStreamReader.ReadLineAsync();
+                int chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
 
                 if (chunkSize != 0)
                 {
@@ -119,7 +139,8 @@ namespace Titanium.Web.Proxy.Extensions
         /// <param name="isChunked"></param>
         /// <param name="contentLength"></param>
         /// <returns></returns>
-        internal static async Task WriteResponseBody(this CustomBinaryReader inStreamReader, int bufferSize, Stream outStream, bool isChunked, long contentLength)
+        internal static async Task WriteResponseBody(this CustomBinaryReader inStreamReader, int bufferSize, Stream outStream, bool isChunked,
+            long contentLength)
         {
             if (!isChunked)
             {
@@ -147,8 +168,8 @@ namespace Titanium.Web.Proxy.Extensions
         {
             while (true)
             {
-                var chunkHead = await inStreamReader.ReadLineAsync();
-                var chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
+                string chunkHead = await inStreamReader.ReadLineAsync();
+                int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
 
                 if (chunkSize != 0)
                 {
