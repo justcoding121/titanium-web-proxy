@@ -109,7 +109,11 @@ namespace Titanium.Web.Proxy.Ssl
 
                 byte[] compressionData = peekStream.ReadBytes(length);
 
+                int extenstionsStartPosition = peekStream.Position;
+
                 var extensions = await ReadExtensions(majorVersion, minorVersion, peekStream);
+
+                //var rawBytes = new CustomBufferedPeekStream(clientStream).ReadBytes(peekStream.Position);
 
                 var clientHelloInfo = new ClientHelloInfo
                 {
@@ -119,6 +123,8 @@ namespace Titanium.Web.Proxy.Ssl
                     SessionId = sessionId,
                     Ciphers = ciphers,
                     CompressionData = compressionData,
+                    ClientHelloLength = peekStream.Position,
+                    EntensionsStartPosition = extenstionsStartPosition,
                     Extensions = extensions,
                 };
 
