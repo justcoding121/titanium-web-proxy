@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Globalization;
 using System.IO;
-using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Extensions
 {

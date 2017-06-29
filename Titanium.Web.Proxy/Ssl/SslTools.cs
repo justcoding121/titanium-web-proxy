@@ -1,8 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Ssl
 {
