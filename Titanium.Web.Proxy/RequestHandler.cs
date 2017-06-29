@@ -247,7 +247,7 @@ namespace Titanium.Web.Proxy
 
                 //Now create the request
                 disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                    endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null);
+                    endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null, true);
             }
             finally
             {
@@ -271,10 +271,11 @@ namespace Titanium.Web.Proxy
         /// <param name="httpsConnectHostname"></param>
         /// <param name="endPoint"></param>
         /// <param name="connectRequest"></param>
+        /// <param name="isTransparentEndPoint"></param>
         /// <returns></returns>
         private async Task<bool> HandleHttpSessionRequest(TcpClient client, string httpCmd, Stream clientStream,
             CustomBinaryReader clientStreamReader, StreamWriter clientStreamWriter, string httpsConnectHostname,
-            ProxyEndPoint endPoint, ConnectRequest connectRequest)
+            ProxyEndPoint endPoint, ConnectRequest connectRequest, bool isTransparentEndPoint = false)
         {
             bool disposed = false;
 
@@ -306,7 +307,7 @@ namespace Titanium.Web.Proxy
                     await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.RequestHeaders);
 
                     var httpRemoteUri = new Uri(httpsConnectHostname == null
-                        ? httpUrl
+                        ? isTransparentEndPoint ? string.Concat("http://", args.WebSession.Request.Host, httpUrl) : httpUrl
                         : string.Concat("https://", args.WebSession.Request.Host ?? httpsConnectHostname, httpUrl));
 
                     args.WebSession.Request.RequestUri = httpRemoteUri;
