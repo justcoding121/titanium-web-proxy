@@ -109,7 +109,7 @@ namespace Titanium.Web.Proxy
                     connectArgs.WebSession.Response = ConnectResponse.CreateSuccessfullConnectResponse(version);
                     await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response);
 
-                    var clientHelloInfo = await HttpsTools.GetClientHelloInfo(clientStream);
+                    var clientHelloInfo = await SslTools.GetClientHelloInfo(clientStream);
                     bool isClientHello = clientHelloInfo != null;
                     if (isClientHello)
                     {
@@ -206,7 +206,7 @@ namespace Titanium.Web.Proxy
             {
                 if (endPoint.EnableSsl)
                 {
-                    var clientSslHelloInfo = await HttpsTools.GetClientHelloInfo(clientStream);
+                    var clientSslHelloInfo = await SslTools.GetClientHelloInfo(clientStream);
 
                     if (clientSslHelloInfo != null)
                     {

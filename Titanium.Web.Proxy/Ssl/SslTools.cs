@@ -4,7 +4,7 @@ using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Ssl
 {
-    class HttpsTools
+    class SslTools
     {
         public static async Task<bool> IsClientHello(CustomBufferedStream clientStream)
         {
