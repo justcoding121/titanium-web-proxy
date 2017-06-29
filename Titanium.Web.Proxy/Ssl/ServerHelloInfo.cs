@@ -35,9 +35,9 @@ namespace Titanium.Web.Proxy.Ssl
 
         public byte[] SessionId { get; set; }
 
-        public int[] Ciphers { get; set; }
+        public int CipherSuite { get; set; }
 
-        public byte[] CompressionData { get; set; }
+        public byte CompressionMethod { get; set; }
 
         public List<SslExtension> Extensions { get; set; }
 
@@ -83,28 +83,19 @@ namespace Titanium.Web.Proxy.Ssl
                 }
             }
 
-            if (CompressionData.Length > 0)
+            string compression = compressions.Length > CompressionMethod 
+                ? compressions[CompressionMethod] 
+                : $"unknown [0x{CompressionMethod:X2}]";
+            sb.AppendLine($"Compression: {compression}");
+
+            sb.Append("Cipher:");
+            string cipherStr;
+            if (!SslCiphers.Ciphers.TryGetValue(CipherSuite, out cipherStr))
             {
-                int id = CompressionData[0];
-                string compression = null;
-                compression = compressions.Length > id ? compressions[id] : $"unknown [0x{id:X2}]";
-                sb.AppendLine($"Compression: {compression}");
+                cipherStr = "unknown";
             }
 
-            if (Ciphers.Length > 0)
-            {
-                sb.AppendLine($"Ciphers:");
-                foreach (int cipher in Ciphers)
-                {
-                    string cipherStr;
-                    if (!SslCiphers.Ciphers.TryGetValue(cipher, out cipherStr))
-                    {
-                        cipherStr = $"unknown";
-                    }
-
-                    sb.AppendLine($"[0x{cipher:X4}] {cipherStr}");
-                }
-            }
+            sb.AppendLine($"[0x{CipherSuite:X4}] {cipherStr}");
 
             return sb.ToString();
         }
