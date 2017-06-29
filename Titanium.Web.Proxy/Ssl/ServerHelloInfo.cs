@@ -39,6 +39,10 @@ namespace Titanium.Web.Proxy.Ssl
 
         public byte CompressionMethod { get; set; }
 
+        internal int ServerHelloLength { get; set; }
+
+        internal int EntensionsStartPosition { get; set; }
+
         public List<SslExtension> Extensions { get; set; }
 
         private static string SslVersionToString(int major, int minor)
