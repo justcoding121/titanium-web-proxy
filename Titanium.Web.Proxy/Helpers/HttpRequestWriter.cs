@@ -10,11 +10,7 @@ namespace Titanium.Web.Proxy.Helpers
 {
     sealed class HttpRequestWriter : HttpWriter
     {
-        public HttpRequestWriter(Stream stream) : base(stream)
-        {
-        }
-
-        public HttpRequestWriter(Stream stream, bool leaveOpen) : base(stream, leaveOpen)
+        public HttpRequestWriter(Stream stream) : base(stream, true)
         {
         }
     }

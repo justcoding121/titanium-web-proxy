@@ -67,7 +67,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                     if (isHttps)
                     {
-                        using (var writer = new HttpRequestWriter(stream, true))
+                        using (var writer = new HttpRequestWriter(stream))
                         {
                             await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
                             await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
