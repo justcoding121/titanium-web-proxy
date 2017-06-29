@@ -206,7 +206,6 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
 ```
 Future road map (Pull requests are welcome!)
 ============
-* Support Server Name Indication (SNI) for transparent endpoints
 * Support HTTP 2.0 
 * Support SOCKS protocol
 
