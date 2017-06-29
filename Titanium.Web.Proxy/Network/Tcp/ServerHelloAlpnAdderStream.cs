@@ -5,13 +5,13 @@ using Titanium.Web.Proxy.Ssl;
 
 namespace Titanium.Web.Proxy.Network.Tcp
 {
-    internal class ClientHelloAlpnAdderStream : Stream
+    internal class ServerHelloAlpnAdderStream : Stream
     {
         private readonly CustomBufferedStream stream;
 
         private bool called;
 
-        public ClientHelloAlpnAdderStream(CustomBufferedStream stream)
+        public ServerHelloAlpnAdderStream(CustomBufferedStream stream)
         {
             this.stream = stream;
         }
@@ -49,20 +49,19 @@ namespace Titanium.Web.Proxy.Network.Tcp
             var ms = new MemoryStream(buffer, offset, count);
 
             //this can be non async, because reads from a memory stream
-            var clientHello = SslTools.GetClientHelloInfo(new CustomBufferedStream(ms, (int)ms.Length)).Result;
-            if (clientHello != null)
+            var serverHello = SslTools.GetServerHelloInfo(new CustomBufferedStream(ms, (int)ms.Length)).Result;
+            if (serverHello != null)
             {
                 // 0x00 0x10: ALPN identifier
                 // 0x00 0x0e: length of ALPN data
                 // 0x00 0x0c: length of ALPN data again:)
                 var dataToAdd = new byte[]
                 {
-                    0x0, 0x10, 0x0, 0xE, 0x0, 0xC,
-                    2, (byte)'h', (byte)'2',
-                    8, (byte)'h', (byte)'t', (byte)'t', (byte)'p', (byte)'/', (byte)'1', (byte)'.', (byte)'1'
+                    0x0, 0x10, 0x0, 0x5, 0x0, 0x3,
+                    2, (byte)'h', (byte)'2'
                 };
 
-                int newByteCount = clientHello.Extensions == null ? dataToAdd.Length + 2 : dataToAdd.Length;
+                int newByteCount = serverHello.Extensions == null ? dataToAdd.Length + 2 : dataToAdd.Length;
                 var buffer2 = new byte[buffer.Length + newByteCount];
 
                 for (int i = 0; i < buffer.Length; i++)
@@ -82,9 +81,9 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 buffer2[offset + 7] = (byte)(length >> 8);
                 buffer2[offset + 8] = (byte)length;
 
-                int pos = offset + clientHello.EntensionsStartPosition;
-                int endPos = offset + clientHello.ClientHelloLength;
-                if (clientHello.Extensions != null)
+                int pos = offset + serverHello.EntensionsStartPosition;
+                int endPos = offset + serverHello.ServerHelloLength;
+                if (serverHello.Extensions != null)
                 {
                     // update ALPN length
                     length = (buffer[pos] << 8) + buffer[pos + 1];
@@ -107,7 +106,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
 
                 // copy the reamining data if any
-                for (int i = clientHello.ClientHelloLength; i < count; i++)
+                for (int i = serverHello.ServerHelloLength; i < count; i++)
                 {
                     buffer2[offset + newByteCount + i] = buffer[offset + i];
                 }

@@ -105,8 +105,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                 if (isHttps)
                 {
-                    bool alpnEnabled = false;
-                    var alpnStream = alpnEnabled ? (Stream)new ClientHelloAlpnAdderStream(stream) : stream;
+                    var alpnStream = ProxyServer.AlpnEnabled ? (Stream)new ClientHelloAlpnAdderStream(stream) : stream;
                     var sslStream = new SslStream(alpnStream, false, server.ValidateServerCertificate, server.SelectClientCertificate);
                     stream = new CustomBufferedStream(sslStream, server.BufferSize);
 
