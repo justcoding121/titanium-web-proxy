@@ -112,18 +112,16 @@ namespace Titanium.Web.Proxy.Helpers
         /// Usefull for websocket requests
         /// </summary>
         /// <param name="clientStream"></param>
-        /// <param name="connection"></param>
+        /// <param name="serverStream"></param>
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
         /// <returns></returns>
-        internal static async Task SendRaw(Stream clientStream, TcpConnection connection, Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive)
+        internal static async Task SendRaw(Stream clientStream, Stream serverStream, Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive)
         {
-            var tunnelStream = connection.Stream;
-
             //Now async relay all server=>client & client=>server data
-            var sendRelay = clientStream.CopyToAsync(tunnelStream, onDataSend);
+            var sendRelay = clientStream.CopyToAsync(serverStream, onDataSend);
 
-            var receiveRelay = tunnelStream.CopyToAsync(clientStream, onDataReceive);
+            var receiveRelay = serverStream.CopyToAsync(clientStream, onDataReceive);
 
             await Task.WhenAll(sendRelay, receiveRelay);
         }

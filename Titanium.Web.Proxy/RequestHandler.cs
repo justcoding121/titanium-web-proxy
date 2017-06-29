@@ -125,6 +125,7 @@ namespace Titanium.Web.Proxy
                     if (!excluded && isClientHello)
                     {
                         httpRemoteUri = new Uri("https://" + httpUrl);
+                        connectRequest.RequestUri = httpRemoteUri;
 
                         SslStream sslStream = null;
 
@@ -159,9 +160,24 @@ namespace Titanium.Web.Proxy
                     else
                     {
                         //create new connection
-                        using (var connection = await GetServerConnection(connectArgs))
+                        using (var connection = await GetServerConnection(connectArgs, true))
                         {
-                            await TcpHelper.SendRaw(clientStream, connection,
+                            if (isClientHello)
+                            {
+                                if (clientStream.Available > 0)
+                                {
+                                    //send the buffered data
+                                    var data = new byte[clientStream.Available];
+                                    await clientStream.ReadAsync(data, 0, data.Length);
+                                    await connection.Stream.WriteAsync(data, 0, data.Length);
+                                    await connection.Stream.FlushAsync();
+                                }
+
+                                var serverHelloInfo = await SslTools.GetServerHelloInfo(connection.Stream);
+                                ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
+                            }
+
+                            await TcpHelper.SendRaw(clientStream, connection.Stream,
                                 (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); });
                             UpdateServerConnectionCount(false);
                         }
@@ -336,16 +352,17 @@ namespace Titanium.Web.Proxy
                         break;
                     }
 
-                    if (connection == null)
-                    {
-                        connection = await GetServerConnection(args);
-                    }
                     //create a new connection if hostname changes
-                    else if (!connection.HostName.Equals(args.WebSession.Request.RequestUri.Host, StringComparison.OrdinalIgnoreCase))
+                    if (connection != null && !connection.HostName.Equals(args.WebSession.Request.RequestUri.Host, StringComparison.OrdinalIgnoreCase))
                     {
                         connection.Dispose();
                         UpdateServerConnectionCount(false);
-                        connection = await GetServerConnection(args);
+                        connection = null;
+                    }
+
+                    if (connection == null)
+                    {
+                        connection = await GetServerConnection(args, false);
                     }
 
                     //if upgrading to websocket then relay the requet without reading the contents
@@ -383,7 +400,7 @@ namespace Titanium.Web.Proxy
                             await BeforeResponse.InvokeParallelAsync(this, args, ExceptionFunc);
                         }
 
-                        await TcpHelper.SendRaw(clientStream, connection,
+                        await TcpHelper.SendRaw(clientStream, connection.Stream,
                             (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); });
 
                         args.Dispose();
@@ -550,8 +567,9 @@ namespace Titanium.Web.Proxy
         /// Create a Server Connection
         /// </summary>
         /// <param name="args"></param>
+        /// <param name="isConnect"></param>
         /// <returns></returns>
-        private async Task<TcpConnection> GetServerConnection(SessionEventArgs args)
+        private async Task<TcpConnection> GetServerConnection(SessionEventArgs args, bool isConnect)
         {
             ExternalProxy customUpStreamHttpProxy = null;
             ExternalProxy customUpStreamHttpsProxy = null;
@@ -578,7 +596,7 @@ namespace Titanium.Web.Proxy
                 args.WebSession.Request.RequestUri.Host,
                 args.WebSession.Request.RequestUri.Port,
                 args.WebSession.Request.HttpVersion,
-                args.IsHttps,
+                args.IsHttps, isConnect,
                 customUpStreamHttpProxy ?? UpStreamHttpProxy,
                 customUpStreamHttpsProxy ?? UpStreamHttpsProxy);
         }
