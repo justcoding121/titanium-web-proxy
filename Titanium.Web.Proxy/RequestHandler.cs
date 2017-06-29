@@ -131,7 +131,8 @@ namespace Titanium.Web.Proxy
 
                         try
                         {
-                            sslStream = new SslStream(clientStream);
+                            var alpnStream = AlpnEnabled ? (Stream)new ServerHelloAlpnAdderStream(clientStream) : clientStream;
+                            sslStream = new SslStream(alpnStream);
 
                             string certName = HttpHelper.GetWildCardDomainName(httpRemoteUri.Host);
 

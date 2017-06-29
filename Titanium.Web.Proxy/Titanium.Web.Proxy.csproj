@@ -98,6 +98,7 @@
     <Compile Include="Helpers\HttpHelper.cs" />
     <Compile Include="Helpers\Network.cs" />
     <Compile Include="Helpers\Tcp.cs" />
+    <Compile Include="Network\Tcp\ServerHelloAlpnAdderStream.cs" />
     <Compile Include="Network\Tcp\ClientHelloAlpnAdderStream.cs" />
     <Compile Include="Ssl\ServerHelloInfo.cs" />
     <Compile Include="Ssl\ClientHelloInfo.cs" />
