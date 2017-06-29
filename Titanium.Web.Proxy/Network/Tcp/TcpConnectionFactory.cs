@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -104,7 +105,9 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                 if (isHttps)
                 {
-                    var sslStream = new SslStream(stream, false, server.ValidateServerCertificate, server.SelectClientCertificate);
+                    bool alpnEnabled = false;
+                    var alpnStream = alpnEnabled ? (Stream)new ClientHelloAlpnAdderStream(stream) : stream;
+                    var sslStream = new SslStream(alpnStream, false, server.ValidateServerCertificate, server.SelectClientCertificate);
                     stream = new CustomBufferedStream(sslStream, server.BufferSize);
 
                     await sslStream.AuthenticateAsClientAsync(remoteHostName, null, server.SupportedSslProtocols, server.CheckCertificateRevocation);
