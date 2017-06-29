@@ -92,8 +92,6 @@ namespace Titanium.Web.Proxy
                     connectArgs.WebSession.Request = connectRequest;
                     connectArgs.ProxyClient.TcpClient = tcpClient;
                     connectArgs.ProxyClient.ClientStream = clientStream;
-                    connectArgs.ProxyClient.ClientStreamReader = clientStreamReader;
-                    connectArgs.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                     if (TunnelConnectRequest != null)
                     {

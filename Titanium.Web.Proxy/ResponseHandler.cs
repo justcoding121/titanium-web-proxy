@@ -69,20 +69,22 @@ namespace Titanium.Web.Proxy
 
                 response.ResponseLocked = true;
 
+                var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
+
                 //Write back to client 100-conitinue response if that's what server returned
                 if (response.Is100Continue)
                 {
-                    await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, (int)HttpStatusCode.Continue, "Continue");
-                    await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
+                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, (int)HttpStatusCode.Continue, "Continue");
+                    await clientStreamWriter.WriteLineAsync();
                 }
                 else if (response.ExpectationFailed)
                 {
-                    await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
-                    await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
+                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
+                    await clientStreamWriter.WriteLineAsync();
                 }
 
                 //Write back response status to client
-                await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.ResponseStatusCode, response.ResponseStatusDescription);
+                await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.ResponseStatusCode, response.ResponseStatusDescription);
 
                 response.ResponseHeaders.FixProxyHeaders();
                 if (response.ResponseBodyRead)
@@ -104,22 +106,22 @@ namespace Titanium.Web.Proxy
                         }
                     }
 
-                    await args.ProxyClient.ClientStreamWriter.WriteHeadersAsync(response.ResponseHeaders);
-                    await args.ProxyClient.ClientStreamWriter.WriteResponseBodyAsync(response.ResponseBody, isChunked);
+                    await clientStreamWriter.WriteHeadersAsync(response.ResponseHeaders);
+                    await clientStreamWriter.WriteResponseBodyAsync(response.ResponseBody, isChunked);
                 }
                 else
                 {
-                    await args.ProxyClient.ClientStreamWriter.WriteHeadersAsync(response.ResponseHeaders);
+                    await clientStreamWriter.WriteHeadersAsync(response.ResponseHeaders);
 
                     //Write body if exists
                     if (response.HasBody)
                     {
-                        await args.ProxyClient.ClientStreamWriter.WriteResponseBodyAsync(BufferSize, args.WebSession.ServerConnection.StreamReader,
+                        await clientStreamWriter.WriteResponseBodyAsync(BufferSize, args.WebSession.ServerConnection.StreamReader,
                             response.IsChunked, response.ContentLength);
                     }
                 }
 
-                await args.ProxyClient.ClientStream.FlushAsync();
+                await clientStreamWriter.FlushAsync();
             }
             catch (Exception e)
             {
