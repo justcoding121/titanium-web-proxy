@@ -1,5 +1,4 @@
-﻿using System.IO;
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Network
@@ -17,7 +16,7 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// holds the stream to client
         /// </summary>
-        internal Stream ClientStream { get; set; }
+        internal CustomBufferedStream ClientStream { get; set; }
 
         /// <summary>
         /// Used to read line by line from client
@@ -27,6 +26,6 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// used to write line by line to client
         /// </summary>
-        internal StreamWriter ClientStreamWriter { get; set; }
+        internal HttpResponseWriter ClientStreamWriter { get; set; }
     }
 }
