@@ -213,9 +213,9 @@ namespace Titanium.Web.Proxy
                         var sslStream = new SslStream(clientStream);
                         clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
-                        string sniHostName = clientSslHelloInfo.Extensions.FirstOrDefault(x => x.Name == "server_name")?.Data;
-
-                        var certificate = CertificateManager.CreateCertificate(sniHostName ?? endPoint.GenericCertificateName, false);
+                        string sniHostName = clientSslHelloInfo.Extensions?.FirstOrDefault(x => x.Name == "server_name")?.Data;
+                        string certName = HttpHelper.GetWildCardDomainName(sniHostName ?? endPoint.GenericCertificateName);
+                        var certificate = CertificateManager.CreateCertificate(certName, false);
 
                         //Successfully managed to authenticate the client using the fake certificate
                         await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
