@@ -85,24 +85,25 @@ namespace Titanium.Web.Proxy.Ssl
 
             if (CompressionData.Length > 0)
             {
-                int id = CompressionData[0];
-                string compression = null;
-                compression = compressions.Length > id ? compressions[id] : $"unknown [0x{id:X2}]";
+                int compressionMethod = CompressionData[0];
+                string compression = compressions.Length > compressionMethod 
+                    ? compressions[compressionMethod] 
+                    : $"unknown [0x{compressionMethod:X2}]";
                 sb.AppendLine($"Compression: {compression}");
             }
 
             if (Ciphers.Length > 0)
             {
-                sb.AppendLine($"Ciphers:");
-                foreach (int cipher in Ciphers)
+                sb.AppendLine("Ciphers:");
+                foreach (int cipherSuite in Ciphers)
                 {
                     string cipherStr;
-                    if (!SslCiphers.Ciphers.TryGetValue(cipher, out cipherStr))
+                    if (!SslCiphers.Ciphers.TryGetValue(cipherSuite, out cipherStr))
                     {
-                        cipherStr = $"unknown";
+                        cipherStr = "unknown";
                     }
 
-                    sb.AppendLine($"[0x{cipher:X4}] {cipherStr}");
+                    sb.AppendLine($"[0x{cipherSuite:X4}] {cipherStr}");
                 }
             }
 
