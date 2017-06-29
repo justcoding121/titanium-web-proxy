@@ -36,6 +36,11 @@ namespace Titanium.Web.Proxy
 #endif
 
         /// <summary>
+        /// Enable the experimental ALPN adder streams
+        /// </summary>
+        internal static bool AlpnEnabled = false;
+
+        /// <summary>
         /// Is the proxy currently running
         /// </summary>
         private bool proxyRunning { get; set; }
