@@ -41,7 +41,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         /// Server stream
         /// </summary>
-        internal Stream Stream { get; set; }
+        internal CustomBufferedStream Stream { get; set; }
 
         /// <summary>
         /// Last time this connection was used
