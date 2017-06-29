@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Security;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Examples.Basic
@@ -12,6 +14,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
     public class ProxyTestController
     {
         private readonly ProxyServer proxyServer;
+
+
+        //keep track of request headers
+        private readonly IDictionary<Guid, HeaderCollection> requestHeaderHistory = new ConcurrentDictionary<Guid, HeaderCollection>();
+
+        //keep track of response headers
+        private readonly IDictionary<Guid, HeaderCollection> responseHeaderHistory = new ConcurrentDictionary<Guid, HeaderCollection>();
 
         //share requestBody outside handlers
         //Using a dictionary is not a good idea since it can cause memory overflow
@@ -136,7 +145,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             Console.WriteLine(e.WebSession.Request.Url);
 
             //read request headers
-            var requestHeaders = e.WebSession.Request.RequestHeaders;
+            requestHeaderHistory[e.Id] = e.WebSession.Request.RequestHeaders;
 
             if (e.WebSession.Request.HasBody)
             {
@@ -183,7 +192,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //}
 
             //read response headers
-            var responseHeaders = e.WebSession.Response.ResponseHeaders;
+            responseHeaderHistory[e.Id] = e.WebSession.Response.ResponseHeaders;
 
             // print out process id of current session
             //Console.WriteLine($"PID: {e.WebSession.ProcessId.Value}");
