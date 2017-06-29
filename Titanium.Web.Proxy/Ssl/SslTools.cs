@@ -207,10 +207,6 @@ namespace Titanium.Web.Proxy.Ssl
 
                 int length = peekStream.ReadInt16();
 
-                var ps0 = new CustomBufferedPeekStream(serverStream, 5);
-                var data0 = ps0.ReadBytes(length);
-                var str = string.Join(" ", data0.Select(x=>x.ToString("X2")));
-
                 if (peekStream.ReadByte() != 0x02)
                 {
                     // should be ServerHello
