@@ -5,25 +5,26 @@ namespace Titanium.Web.Proxy.Helpers
     class CustomBufferedPeekStream
     {
         private readonly CustomBufferedStream baseStream;
-        private int position;
+
+        public int Position { get; private set; }
 
         public CustomBufferedPeekStream(CustomBufferedStream baseStream, int startPosition = 0)
         {
             this.baseStream = baseStream;
-            position = startPosition;
+            Position = startPosition;
         }
 
-        public int Available => baseStream.Available - position;
+        public int Available => baseStream.Available - Position;
 
         public async Task<bool> EnsureBufferLength(int length)
         {
-            var val = await baseStream.PeekByteAsync(position + length - 1);
+            var val = await baseStream.PeekByteAsync(Position + length - 1);
             return val != -1;
         }
 
         public byte ReadByte()
         {
-            return baseStream.PeekByteFromBuffer(position++);
+            return baseStream.PeekByteFromBuffer(Position++);
         }
 
         public int ReadInt16()
