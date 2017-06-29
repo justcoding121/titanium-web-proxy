@@ -13,12 +13,13 @@ namespace Titanium.Web.Proxy.IntegrationTests
     [TestClass]
     public class SslTests
     {
-        [TestMethod]
+        //[TestMethod]
+        //disable this test until CI is prepared to handle
         public void TestSsl()
         {
             //expand this to stress test to find
             //why in long run proxy becomes unresponsive as per issue #184
-            var testUrl = "https://google.com";
+            string testUrl = "https://google.com";
             int proxyPort = 8086;
             var proxy = new ProxyTestController();
             proxy.StartProxy(proxyPort);

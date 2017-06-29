@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.Remoting;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,7 +13,9 @@ namespace Titanium.Web.Proxy.Helpers
     /// <seealso cref="System.IO.Stream" />
     internal class CustomBufferedStream : Stream
     {
+#if NET45
         private AsyncCallback readCallback;
+#endif
 
         private readonly Stream baseStream;
 
@@ -35,7 +36,9 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="bufferSize">Size of the buffer.</param>
         public CustomBufferedStream(Stream baseStream, int bufferSize)
         {
-            readCallback = new AsyncCallback(ReadCallback);
+#if NET45
+            readCallback = ReadCallback;
+#endif
             this.baseStream = baseStream;
             streamBuffer = BufferPool.GetBuffer(bufferSize);
         }
@@ -111,6 +114,7 @@ namespace Titanium.Web.Proxy.Helpers
             baseStream.Write(buffer, offset, count);
         }
 
+#if NET45
         /// <summary>
         /// Begins an asynchronous read operation. (Consider using <see cref="M:System.IO.Stream.ReadAsync(System.Byte[],System.Int32,System.Int32)" /> instead; see the Remarks section.)
         /// </summary>
@@ -163,6 +167,7 @@ namespace Titanium.Web.Proxy.Helpers
             OnDataSent(buffer, offset, count);
             return baseStream.BeginWrite(buffer, offset, count, callback, state);
         }
+#endif
 
         /// <summary>
         /// Asynchronously reads the bytes from the current stream and writes them to another stream, using a specified buffer size and cancellation token.
@@ -184,18 +189,7 @@ namespace Titanium.Web.Proxy.Helpers
             await base.CopyToAsync(destination, bufferSize, cancellationToken);
         }
 
-        /// <summary>
-        /// Creates an object that contains all the relevant information required to generate a proxy used to communicate with a remote object.
-        /// </summary>
-        /// <param name="requestedType">The <see cref="T:System.Type" /> of the object that the new <see cref="T:System.Runtime.Remoting.ObjRef" /> will reference.</param>
-        /// <returns>
-        /// Information required to generate a proxy.
-        /// </returns>
-        public override ObjRef CreateObjRef(Type requestedType)
-        {
-            return baseStream.CreateObjRef(requestedType);
-        }
-
+#if NET45
         /// <summary>
         /// Waits for the pending asynchronous read to complete. (Consider using <see cref="M:System.IO.Stream.ReadAsync(System.Byte[],System.Int32,System.Int32)" /> instead; see the Remarks section.)
         /// </summary>
@@ -222,6 +216,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             baseStream.EndWrite(asyncResult);
         }
+#endif
 
         /// <summary>
         /// Asynchronously clears all buffers for this stream, causes any buffered data to be written to the underlying device, and monitors cancellation requests.
@@ -233,17 +228,6 @@ namespace Titanium.Web.Proxy.Helpers
         public override Task FlushAsync(CancellationToken cancellationToken)
         {
             return baseStream.FlushAsync(cancellationToken);
-        }
-
-        /// <summary>
-        /// Obtains a lifetime service object to control the lifetime policy for this instance.
-        /// </summary>
-        /// <returns>
-        /// An object of type <see cref="T:System.Runtime.Remoting.Lifetime.ILease" /> used to control the lifetime policy for this instance. This is the current lifetime service object for this instance if one exists; otherwise, a new lifetime service object initialized to the value of the <see cref="P:System.Runtime.Remoting.Lifetime.LifetimeServices.LeaseManagerPollTime" /> property.
-        /// </returns>
-        public override object InitializeLifetimeService()
-        {
-            return baseStream.InitializeLifetimeService();
         }
 
         /// <summary>
@@ -306,6 +290,31 @@ namespace Titanium.Web.Proxy.Helpers
             return streamBuffer[bufferPos++];
         }
 
+        public async Task<int> PeekByteAsync(int index)
+        {
+            if (Available <= index)
+            {
+                await FillBufferAsync();
+            }
+
+            if (Available <= index)
+            {
+                return -1;
+            }
+
+            return streamBuffer[bufferPos + index];
+        }
+
+        public byte PeekByteFromBuffer(int index)
+        {
+            if (bufferLength <= index)
+            {
+                throw new Exception("Index is out of buffer size");
+            }
+
+            return streamBuffer[bufferPos + index];
+        }
+
         public byte ReadByteFromBuffer()
         {
             if (bufferLength == 0)
@@ -359,15 +368,16 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
         protected override void Dispose(bool disposing)
         {
-            if(!disposed)
+            if (!disposed)
             {
                 disposed = true;
                 baseStream.Dispose();
                 BufferPool.ReturnBuffer(streamBuffer);
                 streamBuffer = null;
+#if NET45
                 readCallback = null;
+#endif
             }
-         
         }
 
         /// <summary>
@@ -396,6 +406,8 @@ namespace Titanium.Web.Proxy.Helpers
         public override long Length => baseStream.Length;
 
         public bool DataAvailable => bufferLength > 0;
+
+        public int Available => bufferLength;
 
         /// <summary>
         /// When overridden in a derived class, gets or sets the position within the current stream.
@@ -429,14 +441,22 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         public bool FillBuffer()
         {
-            bufferLength = baseStream.Read(streamBuffer, 0, streamBuffer.Length);
-            bufferPos = 0;
             if (bufferLength > 0)
             {
-                OnDataReceived(streamBuffer, 0, bufferLength);
+                //normally we fill the buffer only when it is empty, but sometimes we need more data
+                //move the remanining data to the beginning of the buffer 
+                Buffer.BlockCopy(streamBuffer, bufferPos, streamBuffer, 0, bufferLength);
             }
 
-            return bufferLength > 0;
+            bufferPos = 0;
+            int readBytes = baseStream.Read(streamBuffer, bufferLength, streamBuffer.Length - bufferLength);
+            if (readBytes > 0)
+            {
+                OnDataReceived(streamBuffer, bufferLength, readBytes);
+                bufferLength += readBytes;
+            }
+
+            return readBytes > 0;
         }
 
         /// <summary>
@@ -455,14 +475,22 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         public async Task<bool> FillBufferAsync(CancellationToken cancellationToken)
         {
-            bufferLength = await baseStream.ReadAsync(streamBuffer, 0, streamBuffer.Length, cancellationToken);
-            bufferPos = 0;
             if (bufferLength > 0)
             {
-                OnDataReceived(streamBuffer, 0, bufferLength);
+                //normally we fill the buffer only when it is empty, but sometimes we need more data
+                //move the remanining data to the beginning of the buffer 
+                Buffer.BlockCopy(streamBuffer, bufferPos, streamBuffer, 0, bufferLength);
             }
 
-            return bufferLength > 0;
+            bufferPos = 0;
+            int readBytes = await baseStream.ReadAsync(streamBuffer, bufferLength, streamBuffer.Length - bufferLength, cancellationToken);
+            if (readBytes > 0)
+            {
+                OnDataReceived(streamBuffer, bufferLength, readBytes);
+                bufferLength += readBytes;
+            }
+
+            return readBytes > 0;
         }
 
         private class ReadAsyncResult : IAsyncResult

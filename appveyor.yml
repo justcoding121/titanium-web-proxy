@@ -33,7 +33,7 @@ assembly_info:
   assembly_informational_version: "{version}"
 
 # to disable automatic tests 
-test: off
+test: on
 
 # skip building commits that add tags (such as release tag)
 skip_tags: true

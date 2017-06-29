@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Models;
@@ -27,7 +28,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Headers passed with Connect.
         /// </summary>
-        public List<HttpHeader> ConnectHeaders { get; set; }
+        public ConnectRequest ConnectRequest { get; set; }
 
         /// <summary>
         /// Web Request.
@@ -48,8 +49,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Is Https?
         /// </summary>
-        public bool IsHttps => Request.RequestUri.Scheme == Uri.UriSchemeHttps;
-
+        public bool IsHttps => Request.IsHttps;
 
         internal HttpWebClient()
         {
@@ -84,8 +84,8 @@ namespace Titanium.Web.Proxy.Http
 
 
             //Send Authentication to Upstream proxy if needed
-            if (ServerConnection.UpStreamHttpProxy != null 
-                && ServerConnection.IsHttps == false 
+            if (ServerConnection.UpStreamHttpProxy != null
+                && ServerConnection.IsHttps == false
                 && !string.IsNullOrEmpty(ServerConnection.UpStreamHttpProxy.UserName)
                 && ServerConnection.UpStreamHttpProxy.Password != null)
             {
@@ -94,31 +94,17 @@ namespace Titanium.Web.Proxy.Http
                                             $"{ServerConnection.UpStreamHttpProxy.UserName}:{ServerConnection.UpStreamHttpProxy.Password}")));
             }
             //write request headers
-            foreach (var headerItem in Request.RequestHeaders)
+            foreach (var header in Request.RequestHeaders)
             {
-                var header = headerItem.Value;
-                if (headerItem.Key != "Proxy-Authorization")
+                if (header.Name != "Proxy-Authorization")
                 {
                     requestLines.AppendLine($"{header.Name}: {header.Value}");
                 }
             }
 
-            //write non unique request headers
-            foreach (var headerItem in Request.NonUniqueRequestHeaders)
-            {
-                var headers = headerItem.Value;
-                foreach (var header in headers)
-                {
-                    if (headerItem.Key != "Proxy-Authorization")
-                    {
-                        requestLines.AppendLine($"{header.Name}: {header.Value}");
-                    }
-                }
-            }
-
             requestLines.AppendLine();
 
-            var request = requestLines.ToString();
+            string request = requestLines.ToString();
             var requestBytes = Encoding.ASCII.GetBytes(request);
 
             await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
@@ -128,18 +114,21 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (Request.ExpectContinue)
                 {
-                    var httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
-                    var responseStatusCode = httpResult[1].Trim();
-                    var responseStatusDescription = httpResult[2].Trim();
+                    string httpStatus = await ServerConnection.StreamReader.ReadLineAsync();
+
+                    Version version;
+                    int responseStatusCode;
+                    string responseStatusDescription;
+                    Response.ParseResponseLine(httpStatus, out version, out responseStatusCode, out responseStatusDescription);
 
                     //find if server is willing for expect continue
-                    if (responseStatusCode.Equals("100")
+                    if (responseStatusCode == (int)HttpStatusCode.Continue
                         && responseStatusDescription.Equals("continue", StringComparison.CurrentCultureIgnoreCase))
                     {
                         Request.Is100Continue = true;
                         await ServerConnection.StreamReader.ReadLineAsync();
                     }
-                    else if (responseStatusCode.Equals("417")
+                    else if (responseStatusCode == (int)HttpStatusCode.ExpectationFailed
                              && responseStatusDescription.Equals("expectation failed", StringComparison.CurrentCultureIgnoreCase))
                     {
                         Request.ExpectationFailed = true;
@@ -156,53 +145,49 @@ namespace Titanium.Web.Proxy.Http
         internal async Task ReceiveResponse()
         {
             //return if this is already read
-            if (Response.ResponseStatusCode != null) return;
+            if (Response.ResponseStatusCode != 0)
+                return;
 
-            string line = await ServerConnection.StreamReader.ReadLineAsync();
-            if (line == null)
+            string httpStatus = await ServerConnection.StreamReader.ReadLineAsync();
+            if (httpStatus == null)
             {
                 throw new IOException();
             }
 
-            var httpResult = line.Split(ProxyConstants.SpaceSplit, 3);
-
-            if (string.IsNullOrEmpty(httpResult[0]))
+            if (httpStatus == string.Empty)
             {
                 //Empty content in first-line, try again
-                httpResult = (await ServerConnection.StreamReader.ReadLineAsync()).Split(ProxyConstants.SpaceSplit, 3);
+                httpStatus = await ServerConnection.StreamReader.ReadLineAsync();
             }
 
-            var httpVersion = httpResult[0];
-
-            var version = HttpHeader.Version11;
-            if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
-            {
-                version = HttpHeader.Version10;
-            }
+            Version version;
+            int statusCode;
+            string statusDescription;
+            Response.ParseResponseLine(httpStatus, out version, out statusCode, out statusDescription);
 
             Response.HttpVersion = version;
-            Response.ResponseStatusCode = httpResult[1].Trim();
-            Response.ResponseStatusDescription = httpResult[2].Trim();
+            Response.ResponseStatusCode = statusCode;
+            Response.ResponseStatusDescription = statusDescription;
 
             //For HTTP 1.1 comptibility server may send expect-continue even if not asked for it in request
-            if (Response.ResponseStatusCode.Equals("100")
+            if (Response.ResponseStatusCode == (int)HttpStatusCode.Continue
                 && Response.ResponseStatusDescription.Equals("continue", StringComparison.CurrentCultureIgnoreCase))
             {
                 //Read the next line after 100-continue 
                 Response.Is100Continue = true;
-                Response.ResponseStatusCode = null;
+                Response.ResponseStatusCode = 0;
                 await ServerConnection.StreamReader.ReadLineAsync();
                 //now receive response
                 await ReceiveResponse();
                 return;
             }
 
-            if (Response.ResponseStatusCode.Equals("417")
+            if (Response.ResponseStatusCode == (int)HttpStatusCode.ExpectationFailed
                 && Response.ResponseStatusDescription.Equals("expectation failed", StringComparison.CurrentCultureIgnoreCase))
             {
                 //read next line after expectation failed response
                 Response.ExpectationFailed = true;
-                Response.ResponseStatusCode = null;
+                Response.ResponseStatusCode = 0;
                 await ServerConnection.StreamReader.ReadLineAsync();
                 //now receive response 
                 await ReceiveResponse();
@@ -210,7 +195,7 @@ namespace Titanium.Web.Proxy.Http
             }
 
             //Read the response headers in to unique and non-unique header collections
-            await HeaderParser.ReadHeaders(ServerConnection.StreamReader, Response.NonUniqueResponseHeaders, Response.ResponseHeaders);
+            await HeaderParser.ReadHeaders(ServerConnection.StreamReader, Response.ResponseHeaders);
         }
 
         /// <summary>
@@ -218,7 +203,7 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public void Dispose()
         {
-            ConnectHeaders = null;
+            ConnectRequest = null;
 
             Request.Dispose();
             Response.Dispose();

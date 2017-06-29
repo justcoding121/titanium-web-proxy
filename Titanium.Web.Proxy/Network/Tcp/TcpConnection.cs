@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net.Sockets;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
@@ -15,11 +16,15 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         internal ExternalProxy UpStreamHttpsProxy { get; set; }
 
+        internal ExternalProxy UpStreamProxy => UseUpstreamProxy ? IsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy : null;
+
         internal string HostName { get; set; }
 
         internal int Port { get; set; }
 
         internal bool IsHttps { get; set; }
+
+        internal bool UseUpstreamProxy { get; set; }
 
         /// <summary>
         /// Http version
@@ -53,7 +58,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         public void Dispose()
         {
-            Stream?.Close();
+            Stream?.Dispose();
 
             StreamReader?.Dispose();
 
@@ -66,7 +71,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
                     //due to default TCP CLOSE_WAIT timeout for 4 minutes
                     TcpClient.LingerState = new LingerOption(true, 0);
-                    TcpClient.Close();
+                    TcpClient.Dispose();
                 }
             }
             catch

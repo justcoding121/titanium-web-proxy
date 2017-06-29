@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -37,14 +36,14 @@ namespace Titanium.Web.Proxy.Helpers
 
             if (proxyServer != null)
             {
-                Proxies = GetSystemProxyValues(proxyServer).ToDictionary(x=>x.ProtocolType);
+                Proxies = GetSystemProxyValues(proxyServer).ToDictionary(x => x.ProtocolType);
             }
 
             if (proxyOverride != null)
             {
                 var overrides = proxyOverride.Split(';');
                 var overrides2 = new List<string>();
-                foreach (var overrideHost in overrides)
+                foreach (string overrideHost in overrides)
                 {
                     if (overrideHost == "<-loopback>")
                     {
@@ -71,7 +70,8 @@ namespace Titanium.Web.Proxy.Helpers
 
         private static string BypassStringEscape(string rawString)
         {
-            Match match = new Regex("^(?<scheme>.*://)?(?<host>[^:]*)(?<port>:[0-9]{1,5})?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Match(rawString);
+            var match =
+                new Regex("^(?<scheme>.*://)?(?<host>[^:]*)(?<port>:[0-9]{1,5})?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Match(rawString);
             string empty1;
             string rawString1;
             string empty2;
@@ -127,11 +127,11 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             ProxyProtocolType? protocolType = null;
-            if (protocolTypeStr.Equals("http", StringComparison.InvariantCultureIgnoreCase))
+            if (protocolTypeStr.Equals(Proxy.ProxyServer.UriSchemeHttp, StringComparison.InvariantCultureIgnoreCase))
             {
                 protocolType = ProxyProtocolType.Http;
             }
-            else if (protocolTypeStr.Equals("https", StringComparison.InvariantCultureIgnoreCase))
+            else if (protocolTypeStr.Equals(Proxy.ProxyServer.UriSchemeHttps, StringComparison.InvariantCultureIgnoreCase))
             {
                 protocolType = ProxyProtocolType.Https;
             }
@@ -174,7 +174,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         private static HttpSystemProxyValue ParseProxyValue(string value)
         {
-            var tmp = Regex.Replace(value, @"\s+", " ").Trim();
+            string tmp = Regex.Replace(value, @"\s+", " ").Trim();
 
             int equalsIndex = tmp.IndexOf("=", StringComparison.InvariantCulture);
             if (equalsIndex >= 0)

@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 //extract the encoding by finding the charset
                 var parameters = contentType.Split(ProxyConstants.SemiColonSplit);
-                foreach (var parameter in parameters)
+                foreach (string parameter in parameters)
                 {
                     var encodingSplit = parameter.Split(ProxyConstants.EqualSplit, 2);
                     if (encodingSplit.Length == 2 && encodingSplit[0].Trim().Equals("charset", StringComparison.CurrentCultureIgnoreCase))
@@ -66,9 +66,8 @@ namespace Titanium.Web.Proxy.Helpers
             if (hostname.Split(ProxyConstants.DotSplit).Length > 2)
             {
                 int idx = hostname.IndexOf(ProxyConstants.DotSplit);
-                var rootDomain = hostname.Substring(idx + 1);
+                string rootDomain = hostname.Substring(idx + 1);
                 return "*." + rootDomain;
-
             }
 
             //return as it is
