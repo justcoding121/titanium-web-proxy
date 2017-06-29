@@ -50,10 +50,6 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private Action<Exception> exceptionFunc;
 
-#if NET45
-        private WinHttpWebProxyFinder systemProxyResolver;
-#endif
-
         /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
@@ -75,6 +71,8 @@ namespace Titanium.Web.Proxy
         private TcpConnectionFactory tcpConnectionFactory { get; }
 
 #if NET45
+        private WinHttpWebProxyFinder systemProxyResolver;
+
         /// <summary>
         /// Manage system proxy settings
         /// </summary>
@@ -274,6 +272,7 @@ namespace Titanium.Web.Proxy
         /// Realm used during Proxy Basic Authentication 
         /// </summary>
         public string ProxyRealm { get; set; } = "TitaniumProxy";
+
         /// <summary>
         /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP requests
         /// return the ExternalProxy object with valid credentials
@@ -631,6 +630,27 @@ namespace Titanium.Web.Proxy
             CertificateManager?.StopClearIdleCertificates();
 
             proxyRunning = false;
+        }
+
+        /// <summary>
+        ///  Handle dispose of a client/server session
+        /// </summary>
+        /// <param name="clientStream"></param>
+        /// <param name="clientStreamReader"></param>
+        /// <param name="clientStreamWriter"></param>
+        /// <param name="serverConnection"></param>
+        private void Dispose(CustomBufferedStream clientStream, CustomBinaryReader clientStreamReader, HttpResponseWriter clientStreamWriter, TcpConnection serverConnection)
+        {
+            clientStream?.Dispose();
+
+            clientStreamReader?.Dispose();
+            clientStreamWriter?.Dispose();
+
+            if (serverConnection != null)
+            {
+                serverConnection.Dispose();
+                UpdateServerConnectionCount(false);
+            }
         }
 
         /// <summary>

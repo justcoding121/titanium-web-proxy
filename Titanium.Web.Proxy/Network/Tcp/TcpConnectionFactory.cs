@@ -1,15 +1,12 @@
 ﻿using System;
-using System.IO;
 using System.Linq;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Network.Tcp
 {
@@ -52,23 +49,22 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             try
             {
+#if NET45
+                client = new TcpClient(server.UpStreamEndPoint);
+#else
+                // probably this is not correct, but at least it compiles
+                client = new TcpClient(server.UpStreamEndPoint.AddressFamily);
+#endif
+
                 //If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections
                 if (useUpstreamProxy)
                 {
-#if NET45
-                    client = new TcpClient(server.UpStreamEndPoint);
-#else
-                    client = new TcpClient(server.UpStreamEndPoint.AddressFamily);
-#endif
                     await client.ConnectAsync(externalProxy.HostName, externalProxy.Port);
                     stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
 
                     if (isHttps)
                     {
-                        using (var writer = new StreamWriter(stream, Encoding.ASCII, server.BufferSize, true)
-                        {
-                            NewLine = ProxyConstants.NewLine
-                        })
+                        using (var writer = new HttpRequestWriter(stream))
                         {
                             await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
                             await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
@@ -76,7 +72,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                             if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
                             {
-                                await writer.WriteLineAsync("Proxy-Connection: keep-alive");
+                                await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer);
                                 await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " +
                                                             Convert.ToBase64String(Encoding.UTF8.GetBytes(
                                                                 externalProxy.UserName + ":" + externalProxy.Password)));
@@ -100,11 +96,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
                 else
                 {
-#if NET45
-                    client = new TcpClient(server.UpStreamEndPoint);
-#else
-                    client = new TcpClient(server.UpStreamEndPoint.AddressFamily);
-#endif
                     await client.ConnectAsync(remoteHostName, remotePort);
                     stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
                 }
