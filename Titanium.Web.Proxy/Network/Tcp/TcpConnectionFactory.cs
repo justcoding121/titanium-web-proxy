@@ -54,8 +54,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
 #if NET45
                 client = new TcpClient(server.UpStreamEndPoint);
 #else
-                // probably this is not correct, but at least it compiles
-                client = new TcpClient(server.UpStreamEndPoint.AddressFamily);
+                client = new TcpClient();
+                client.Client.Bind(server.UpStreamEndPoint);
 #endif
 
                 //If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections
