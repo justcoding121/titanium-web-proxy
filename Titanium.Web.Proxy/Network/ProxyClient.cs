@@ -1,4 +1,5 @@
-﻿using System.Net.Sockets;
+﻿using StreamExtended.Network;
+using System.Net.Sockets;
 using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Network

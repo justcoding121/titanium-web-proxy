@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using StreamExtended.Helpers;
+using System.IO;
 using System.IO.Compression;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Helpers;
