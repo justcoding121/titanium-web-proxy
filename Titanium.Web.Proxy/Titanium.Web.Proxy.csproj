@@ -50,6 +50,10 @@
       <HintPath>..\packages\BouncyCastle.1.8.1\lib\BouncyCastle.Crypto.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="StreamExtended, Version=1.0.13.0, Culture=neutral, PublicKeyToken=bbfa0f1d54f50043, processorArchitecture=MSIL">
+      <HintPath>..\packages\StreamExtended.1.0.13\lib\net45\StreamExtended.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
@@ -87,10 +91,6 @@
     <Compile Include="Extensions\StreamExtensions.cs" />
     <Compile Include="Extensions\StringExtensions.cs" />
     <Compile Include="Extensions\TcpExtensions.cs" />
-    <Compile Include="Helpers\BufferPool.cs" />
-    <Compile Include="Helpers\CustomBinaryReader.cs" />
-    <Compile Include="Helpers\CustomBufferedPeekStream.cs" />
-    <Compile Include="Helpers\CustomBufferedStream.cs" />
     <Compile Include="Helpers\Firefox.cs" />
     <Compile Include="Helpers\HttpRequestWriter.cs" />
     <Compile Include="Helpers\HttpResponseWriter.cs" />
@@ -98,18 +98,10 @@
     <Compile Include="Helpers\HttpHelper.cs" />
     <Compile Include="Helpers\Network.cs" />
     <Compile Include="Helpers\Tcp.cs" />
-    <Compile Include="Network\Tcp\ServerHelloAlpnAdderStream.cs" />
-    <Compile Include="Network\Tcp\ClientHelloAlpnAdderStream.cs" />
-    <Compile Include="Ssl\ServerHelloInfo.cs" />
-    <Compile Include="Ssl\ClientHelloInfo.cs" />
     <Compile Include="Http\ConnectRequest.cs" />
     <Compile Include="Http\ConnectResponse.cs" />
     <Compile Include="Http\HeaderCollection.cs" />
     <Compile Include="Http\HeaderParser.cs" />
-    <Compile Include="Ssl\SslCiphers.cs" />
-    <Compile Include="Ssl\SslExtension.cs" />
-    <Compile Include="Ssl\SslExtensions.cs" />
-    <Compile Include="Ssl\SslTools.cs" />
     <Compile Include="Http\HttpWebClient.cs" />
     <Compile Include="Http\Request.cs" />
     <Compile Include="Http\Response.cs" />
