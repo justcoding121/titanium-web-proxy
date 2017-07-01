@@ -1,4 +1,6 @@
-﻿using System;
+﻿using StreamExtended;
+using StreamExtended.Network;
+using System;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -13,7 +15,6 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Ssl;
 
 namespace Titanium.Web.Proxy
 {

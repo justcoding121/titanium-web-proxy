@@ -1,6 +1,6 @@
-﻿using System;
+﻿using StreamExtended;
+using System;
 using System.Net;
-using Titanium.Web.Proxy.Ssl;
 
 namespace Titanium.Web.Proxy.Http
 {
