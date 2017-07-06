@@ -110,7 +110,7 @@ namespace Titanium.Web.Proxy
                     connectArgs.WebSession.Response = ConnectResponse.CreateSuccessfullConnectResponse(version);
                     await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response);
 
-                    var clientHelloInfo = await SslTools.GetClientHelloInfo(clientStream);
+                    var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
                     bool isClientHello = clientHelloInfo != null;
                     if (isClientHello)
                     {
@@ -132,8 +132,8 @@ namespace Titanium.Web.Proxy
 
                         try
                         {
-                            var alpnStream = AlpnEnabled ? (Stream)new ServerHelloAlpnAdderStream(clientStream) : clientStream;
-                            sslStream = new SslStream(alpnStream);
+
+                            sslStream = new SslStream(clientStream);
 
                             string certName = HttpHelper.GetWildCardDomainName(httpRemoteUri.Host);
 
@@ -175,7 +175,7 @@ namespace Titanium.Web.Proxy
                                     await connection.Stream.FlushAsync();
                                 }
 
-                                var serverHelloInfo = await SslTools.GetServerHelloInfo(connection.Stream);
+                                var serverHelloInfo = await SslTools.PeekServerHello(connection.Stream);
                                 ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
                             }
 
@@ -224,7 +224,7 @@ namespace Titanium.Web.Proxy
             {
                 if (endPoint.EnableSsl)
                 {
-                    var clientSslHelloInfo = await SslTools.GetClientHelloInfo(clientStream);
+                    var clientSslHelloInfo = await SslTools.PeekClientHello(clientStream);
 
                     if (clientSslHelloInfo != null)
                     {
