@@ -34,7 +34,7 @@
 
   <ItemGroup>
     <PackageReference Include="Portable.BouncyCastle" Version="1.8.1.2" />
-    <PackageReference Include="StreamExtended" Version="1.0.17" />
+    <PackageReference Include="StreamExtended" Version="1.0.18" />
     <PackageReference Include="System.Net.NameResolution" Version="4.3.0" />
     <PackageReference Include="System.Net.Security" Version="4.3.1" />
     <PackageReference Include="System.Runtime.Serialization.Formatters" Version="4.3.0" />
