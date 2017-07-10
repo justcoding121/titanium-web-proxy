@@ -51,7 +51,7 @@ Task Package -depends Build {
 Task Clean -depends Install-BuildTools {
 	Get-ChildItem .\ -include bin,obj -Recurse | foreach ($_) { Remove-Item $_.fullname -Force -Recurse }
     exec { . $MSBuild14 $SolutionFile14 /t:Clean /v:quiet }
-	exec { . $MSBuild $SolutionFile /t:Clean /v:quiet }
+	 & $MSBuild $SolutionFile /t:Clean /v:quiet 
 
 }
 
