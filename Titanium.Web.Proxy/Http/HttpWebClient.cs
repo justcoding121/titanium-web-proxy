@@ -79,10 +79,20 @@ namespace Titanium.Web.Proxy.Http
             using (var ms = new MemoryStream())
             using (var writer = new HttpRequestWriter(ms))
             {
-                //prepare the request & headers
-                writer.WriteLine($"{Request.Method} {Request.RequestUri.PathAndQuery} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
-
                 var upstreamProxy = ServerConnection.UpStreamHttpProxy;
+
+                bool useUpstreamProxy = upstreamProxy != null && ServerConnection.IsHttps == false;
+
+                //prepare the request & headers
+                if (useUpstreamProxy)
+                {
+                    writer.WriteLine($"{Request.Method} {Request.OriginalRequestUrl} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
+                }
+                else
+                {
+                    writer.WriteLine($"{Request.Method} {Request.RequestUri.PathAndQuery} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
+                }
+
 
                 //Send Authentication to Upstream proxy if needed
                 if (upstreamProxy != null
