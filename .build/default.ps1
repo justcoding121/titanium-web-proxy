@@ -57,6 +57,7 @@ Task Clean -depends Install-BuildTools {
 
 Task Restore-Packages  {
 	exec { . $NuGet restore $SolutionFile14 }
+    exec { . $NuGet restore $SolutionFile }
 }
 
 Task Install-MSBuild {
