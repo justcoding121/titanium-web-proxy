@@ -27,7 +27,7 @@ Usage
 
 Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. 
 
-Install by nuget:
+Install by [nuget](https://www.nuget.org/packages/Titanium.Web.Proxy)
 
 For beta releases on [beta branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/beta)
 
