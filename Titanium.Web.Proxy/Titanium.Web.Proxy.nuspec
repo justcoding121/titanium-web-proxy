@@ -14,13 +14,12 @@
     <copyright>Copyright &#x00A9; Titanium.  All rights reserved.</copyright>
     <tags></tags>
 	 <dependencies>
-	  <group>
-		<dependency id="StreamExtended" version="1.0.18" />
-	  </group>
 	  <group targetFramework="net45">
+	    <dependency id="StreamExtended" version="1.0.18" />
         <dependency id="BouncyCastle" version="1.8.1" />
 	  </group>
       <group targetFramework="netstandard1.6">
+	   <dependency id="StreamExtended" version="1.0.18" />
 	   <dependency id="Portable.BouncyCastle" version="1.8.1.2" />
       </group>	
     </dependencies>
