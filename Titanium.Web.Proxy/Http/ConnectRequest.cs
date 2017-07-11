@@ -1,5 +1,4 @@
-﻿using System.Threading.Tasks;
-using Titanium.Web.Proxy.Ssl;
+﻿using StreamExtended;
 
 namespace Titanium.Web.Proxy.Http
 {

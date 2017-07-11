@@ -6,39 +6,42 @@ $SolutionRoot = (Split-Path -parent $Here)
 
 $ProjectName = "Titanium.Web.Proxy"
 
-$SolutionFile = "$SolutionRoot\$ProjectName.sln"
+$SolutionFile14 = "$SolutionRoot\$ProjectName.sln"
+$SolutionFile = "$SolutionRoot\$ProjectName.Standard.sln"
 
 ## This comes from the build server iteration
 if(!$BuildNumber) { $BuildNumber = $env:APPVEYOR_BUILD_NUMBER }
 if(!$BuildNumber) { $BuildNumber = "1"}
-
-## This comes from the Hg commit hash used to build
-if(!$CommitHash) { $CommitHash = $env:APPVEYOR_REPO_COMMIT }
-if(!$CommitHash) { $CommitHash = "local-build" }
 
 ## The build configuration, i.e. Debug/Release
 if(!$Configuration) { $Configuration = $env:Configuration }
 if(!$Configuration) { $Configuration = "Release" }
 
 if(!$Version) { $Version = $env:APPVEYOR_BUILD_VERSION }
-if(!$Version) { $Version = "2.0.$BuildNumber" }
+if(!$Version) { $Version = "1.0.$BuildNumber" }
 
 if(!$Branch) { $Branch = $env:APPVEYOR_REPO_BRANCH }
 if(!$Branch) { $Branch = "local" }
+
 if($Branch -eq "beta" ) { $Version = "$Version-beta" }
 
 Import-Module "$Here\Common" -DisableNameChecking
 
 $NuGet = Join-Path $SolutionRoot ".nuget\nuget.exe"
 
-$MSBuild ="${env:ProgramFiles(x86)}\MSBuild\14.0\Bin\msbuild.exe"
+$MSBuild14 = "${env:ProgramFiles(x86)}\MSBuild\14.0\Bin\msbuild.exe"
+
+$MSBuild = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin\msbuild.exe"
+$MSBuild -replace ' ', '` '
+
 
 FormatTaskName (("-"*25) + "[{0}]" + ("-"*25))
 
 Task default -depends Clean, Build, Package
 
-Task Build -depends Restore-Packages {
-	exec { . $MSBuild $SolutionFile /t:Build /v:normal /p:Configuration=$Configuration }
+Task Build -depends Restore-Packages{
+	exec { . $MSBuild14 $SolutionFile14 /t:Build /v:normal /p:Configuration=$Configuration  }
+    exec { . $MSBuild $SolutionFile /t:Build /v:normal /p:Configuration=$Configuration /t:restore }
 }
 
 Task Package -depends Build {
@@ -46,17 +49,20 @@ Task Package -depends Build {
 }
 
 Task Clean -depends Install-BuildTools {
-	Remove-Item -Path "$SolutionRoot\packages\*" -Exclude repositories.config -Recurse -Force 
 	Get-ChildItem .\ -include bin,obj -Recurse | foreach ($_) { Remove-Item $_.fullname -Force -Recurse }
+    exec { . $MSBuild14 $SolutionFile14 /t:Clean /v:quiet }
 	exec { . $MSBuild $SolutionFile /t:Clean /v:quiet }
+
 }
 
 Task Restore-Packages  {
-	exec { . $NuGet restore $SolutionFile }
+	exec { . dotnet restore "$SolutionRoot\Titanium.Web.Proxy.sln" }
+    exec { . dotnet restore "$SolutionRoot\Titanium.Web.Proxy.Standard.sln" }
+
 }
 
 Task Install-MSBuild {
-    if(!(Test-Path "${env:ProgramFiles(x86)}\MSBuild\14.0\Bin\msbuild.exe")) 
+    if(!(Test-Path $MSBuild14)) 
 	{ 
 		cinst microsoft-build-tools -y
 	}

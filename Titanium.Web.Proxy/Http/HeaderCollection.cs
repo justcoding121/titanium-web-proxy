@@ -2,8 +2,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http
@@ -248,6 +246,21 @@ namespace Titanium.Web.Proxy.Http
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Fix proxy specific headers
+        /// </summary>
+        internal void FixProxyHeaders()
+        {
+            //If proxy-connection close was returned inform to close the connection
+            string proxyHeader = GetHeaderValueOrNull("proxy-connection");
+            RemoveHeader("proxy-connection");
+
+            if (proxyHeader != null)
+            {
+                SetOrAddHeaderValue("connection", proxyHeader);
+            }
         }
 
         /// <summary>
