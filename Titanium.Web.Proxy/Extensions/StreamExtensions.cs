@@ -3,7 +3,6 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Extensions
 {

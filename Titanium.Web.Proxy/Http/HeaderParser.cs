@@ -1,7 +1,6 @@
 ﻿using StreamExtended.Network;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 
