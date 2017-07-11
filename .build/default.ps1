@@ -56,8 +56,9 @@ Task Clean -depends Install-BuildTools {
 }
 
 Task Restore-Packages  {
-	exec { . dotnet restore "$SolutionRoot\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" }
-    exec { . dotnet restore "$SolutionRoot\Titanium.Web.Proxy\Titanium.Web.Proxy.Standard.csproj" }
+	exec { . dotnet restore "$SolutionRoot\Titanium.Web.Proxy.sln" }
+    exec { . dotnet restore "$SolutionRoot\Titanium.Web.Proxy.Standard.sln" }
+
 }
 
 Task Install-MSBuild {
