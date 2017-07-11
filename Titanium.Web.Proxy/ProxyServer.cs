@@ -1,4 +1,5 @@
-﻿using System;
+﻿using StreamExtended.Network;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -36,6 +37,11 @@ namespace Titanium.Web.Proxy
 #endif
 
         /// <summary>
+        /// Enable the experimental ALPN adder streams
+        /// </summary>
+        internal static bool AlpnEnabled = false;
+
+        /// <summary>
         /// Is the proxy currently running
         /// </summary>
         private bool proxyRunning { get; set; }
@@ -49,10 +55,6 @@ namespace Titanium.Web.Proxy
         /// backing exception func for exposed public property
         /// </summary>
         private Action<Exception> exceptionFunc;
-
-#if NET45
-        private WinHttpWebProxyFinder systemProxyResolver;
-#endif
 
         /// <summary>
         /// Backing field for corresponding public property
@@ -75,6 +77,8 @@ namespace Titanium.Web.Proxy
         private TcpConnectionFactory tcpConnectionFactory { get; }
 
 #if NET45
+        private WinHttpWebProxyFinder systemProxyResolver;
+
         /// <summary>
         /// Manage system proxy settings
         /// </summary>
@@ -274,6 +278,7 @@ namespace Titanium.Web.Proxy
         /// Realm used during Proxy Basic Authentication 
         /// </summary>
         public string ProxyRealm { get; set; } = "TitaniumProxy";
+
         /// <summary>
         /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP requests
         /// return the ExternalProxy object with valid credentials
@@ -294,7 +299,11 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// List of supported Ssl versions
         /// </summary>
+#if NET45
         public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Ssl3;
+#else
+        public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12;
+#endif
 
         /// <summary>
         /// Total number of active client connections
@@ -631,6 +640,27 @@ namespace Titanium.Web.Proxy
             CertificateManager?.StopClearIdleCertificates();
 
             proxyRunning = false;
+        }
+
+        /// <summary>
+        ///  Handle dispose of a client/server session
+        /// </summary>
+        /// <param name="clientStream"></param>
+        /// <param name="clientStreamReader"></param>
+        /// <param name="clientStreamWriter"></param>
+        /// <param name="serverConnection"></param>
+        private void Dispose(CustomBufferedStream clientStream, CustomBinaryReader clientStreamReader, HttpResponseWriter clientStreamWriter, TcpConnection serverConnection)
+        {
+            clientStream?.Dispose();
+
+            clientStreamReader?.Dispose();
+            clientStreamWriter?.Dispose();
+
+            if (serverConnection != null)
+            {
+                serverConnection.Dispose();
+                UpdateServerConnectionCount(false);
+            }
         }
 
         /// <summary>

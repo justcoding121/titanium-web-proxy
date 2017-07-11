@@ -1,8 +1,7 @@
-﻿using System;
-using System.IO;
+﻿using StreamExtended.Network;
+using System;
 using System.Net.Sockets;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Network.Tcp
@@ -41,7 +40,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         /// Server stream
         /// </summary>
-        internal Stream Stream { get; set; }
+        internal CustomBufferedStream Stream { get; set; }
 
         /// <summary>
         /// Last time this connection was used

@@ -1,12 +1,10 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Security;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Examples.Basic
@@ -14,13 +12,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
     public class ProxyTestController
     {
         private readonly ProxyServer proxyServer;
-
-
-        //keep track of request headers
-        private readonly IDictionary<Guid, HeaderCollection> requestHeaderHistory = new ConcurrentDictionary<Guid, HeaderCollection>();
-
-        //keep track of response headers
-        private readonly IDictionary<Guid, HeaderCollection> responseHeaderHistory = new ConcurrentDictionary<Guid, HeaderCollection>();
 
         //share requestBody outside handlers
         //Using a dictionary is not a good idea since it can cause memory overflow
@@ -107,11 +98,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             foreach (var endPoint in proxyServer.ProxyEndPoints)
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
-
-            //Only explicit proxies can be set as system proxy!
-            //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
-            //proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
-            proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
         }
 
         public void Stop()
@@ -145,7 +131,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             Console.WriteLine(e.WebSession.Request.Url);
 
             //read request headers
-            requestHeaderHistory[e.Id] = e.WebSession.Request.RequestHeaders;
+            var requestHeaders = e.WebSession.Request.RequestHeaders;
 
             if (e.WebSession.Request.HasBody)
             {
@@ -192,7 +178,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //}
 
             //read response headers
-            responseHeaderHistory[e.Id] = e.WebSession.Response.ResponseHeaders;
+            var responseHeaders = e.WebSession.Response.ResponseHeaders;
 
             // print out process id of current session
             //Console.WriteLine($"PID: {e.WebSession.ProcessId.Value}");
