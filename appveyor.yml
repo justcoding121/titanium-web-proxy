@@ -8,6 +8,7 @@
 
 # version format
 version: 3.0.{build}
+image: Visual Studio 2017
 
 shallow_clone: true
 
@@ -33,7 +34,7 @@ assembly_info:
   assembly_informational_version: "{version}"
 
 # to disable automatic tests 
-test: off
+test: on
 
 # skip building commits that add tags (such as release tag)
 skip_tags: true

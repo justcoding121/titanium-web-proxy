@@ -1,6 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using StreamExtended.Network;
+using System.Collections.Generic;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 
@@ -8,10 +8,11 @@ namespace Titanium.Web.Proxy.Http
 {
     internal static class HeaderParser
     {
-        internal static async Task ReadHeaders(CustomBinaryReader reader,
-            Dictionary<string, List<HttpHeader>> nonUniqueResponseHeaders,
-            Dictionary<string, HttpHeader> headers)
+        internal static async Task ReadHeaders(CustomBinaryReader reader, HeaderCollection headerCollection)
         {
+            var nonUniqueResponseHeaders = headerCollection.NonUniqueHeaders;
+            var headers = headerCollection.Headers;
+
             string tmpLine;
             while (!string.IsNullOrEmpty(tmpLine = await reader.ReadLineAsync()))
             {
@@ -29,7 +30,11 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var existing = headers[newHeader.Name];
 
-                    var nonUniqueHeaders = new List<HttpHeader> { existing, newHeader };
+                    var nonUniqueHeaders = new List<HttpHeader>
+                    {
+                        existing,
+                        newHeader
+                    };
 
                     nonUniqueResponseHeaders.Add(newHeader.Name, nonUniqueHeaders);
                     headers.Remove(newHeader.Name);

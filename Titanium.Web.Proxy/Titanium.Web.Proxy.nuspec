@@ -14,10 +14,18 @@
     <copyright>Copyright &#x00A9; Titanium.  All rights reserved.</copyright>
     <tags></tags>
 	 <dependencies>
-		 <dependency id="BouncyCastle" version="1.8.1" />
+	  <group targetFramework="net45">
+	    <dependency id="StreamExtended" version="1.0.18" />
+        <dependency id="BouncyCastle" version="1.8.1" />
+	  </group>
+      <group targetFramework="netstandard1.6">
+	   <dependency id="StreamExtended" version="1.0.18" />
+	   <dependency id="Portable.BouncyCastle" version="1.8.1.2" />
+      </group>	
     </dependencies>
   </metadata>
   <files>
 	<file src="bin\$configuration$\Titanium.Web.Proxy.dll" target="lib\net45"  />
+		<file src="bin\$configuration$\netstandard1.6\Titanium.Web.Proxy.*" target="lib\netstandard1.6"  />
   </files>
 </package>

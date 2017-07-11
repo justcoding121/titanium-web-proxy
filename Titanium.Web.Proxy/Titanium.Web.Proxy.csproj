@@ -50,18 +50,21 @@
       <HintPath>..\packages\BouncyCastle.1.8.1\lib\BouncyCastle.Crypto.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="StreamExtended, Version=1.0.1.0, Culture=neutral, PublicKeyToken=bbfa0f1d54f50043, processorArchitecture=MSIL">
+      <HintPath>..\packages\StreamExtended.1.0.18\lib\net45\StreamExtended.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System" />
-    <Reference Include="System.Net" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Net" />
     <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CertificateHandler.cs" />
     <Compile Include="Compression\CompressionFactory.cs" />
     <Compile Include="Compression\DeflateCompression.cs" />
     <Compile Include="Compression\GZipCompression.cs" />
@@ -73,64 +76,75 @@
     <Compile Include="Decompression\IDecompression.cs" />
     <Compile Include="EventArguments\CertificateSelectionEventArgs.cs" />
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
-    <Compile Include="Extensions\ByteArrayExtensions.cs" />
-    <Compile Include="Extensions\FuncExtensions.cs" />
-    <Compile Include="Helpers\HttpHelper.cs" />
-    <Compile Include="Extensions\StringExtensions.cs" />
-    <Compile Include="Helpers\BufferPool.cs" />
-    <Compile Include="Helpers\CustomBufferedStream.cs" />
-    <Compile Include="Helpers\ProxyInfo.cs" />
-    <Compile Include="Helpers\WinHttp\NativeMethods.WinHttp.cs" />
-    <Compile Include="Helpers\Network.cs" />
-    <Compile Include="Helpers\RunTime.cs" />
-    <Compile Include="Helpers\WinHttp\WinHttpHandle.cs" />
-    <Compile Include="Helpers\WinHttp\WinHttpWebProxyFinder.cs" />
-    <Compile Include="Http\HeaderParser.cs" />
-    <Compile Include="Http\Responses\GenericResponse.cs" />
-    <Compile Include="Network\CachedCertificate.cs" />
-    <Compile Include="Network\Certificate\WinCertificateMaker.cs" />
-    <Compile Include="Network\Certificate\BCCertificateMaker.cs" />
-    <Compile Include="Network\Certificate\ICertificateMaker.cs" />
-    <Compile Include="Network\ProxyClient.cs" />
+    <Compile Include="EventArguments\DataEventArgs.cs" />
+    <Compile Include="EventArguments\SessionEventArgs.cs" />
+    <Compile Include="EventArguments\TunnelConnectEventArgs.cs" />
     <Compile Include="Exceptions\BodyNotFoundException.cs" />
     <Compile Include="Exceptions\ProxyAuthorizationException.cs" />
     <Compile Include="Exceptions\ProxyException.cs" />
     <Compile Include="Exceptions\ProxyHttpException.cs" />
-    <Compile Include="Extensions\HttpWebResponseExtensions.cs" />
+    <Compile Include="Extensions\ByteArrayExtensions.cs" />
+    <Compile Include="Extensions\DotNetStandardExtensions.cs" />
+    <Compile Include="Extensions\FuncExtensions.cs" />
     <Compile Include="Extensions\HttpWebRequestExtensions.cs" />
-    <Compile Include="Network\CertificateManager.cs" />
-    <Compile Include="Helpers\Firefox.cs" />
-    <Compile Include="Helpers\SystemProxy.cs" />
-    <Compile Include="Models\EndPoint.cs" />
+    <Compile Include="Extensions\HttpWebResponseExtensions.cs" />
+    <Compile Include="Extensions\StreamExtensions.cs" />
+    <Compile Include="Extensions\StringExtensions.cs" />
     <Compile Include="Extensions\TcpExtensions.cs" />
+    <Compile Include="Helpers\Firefox.cs" />
+    <Compile Include="Helpers\HttpRequestWriter.cs" />
+    <Compile Include="Helpers\HttpResponseWriter.cs" />
+    <Compile Include="Helpers\HttpWriter.cs" />
+    <Compile Include="Helpers\HttpHelper.cs" />
+    <Compile Include="Helpers\Network.cs" />
+    <Compile Include="Helpers\Tcp.cs" />
+    <Compile Include="Http\ConnectRequest.cs" />
+    <Compile Include="Http\ConnectResponse.cs" />
+    <Compile Include="Http\HeaderCollection.cs" />
+    <Compile Include="Http\HeaderParser.cs" />
+    <Compile Include="Http\HttpWebClient.cs" />
     <Compile Include="Http\Request.cs" />
     <Compile Include="Http\Response.cs" />
+    <Compile Include="Http\Responses\GenericResponse.cs" />
+    <Compile Include="Http\Responses\OkResponse.cs" />
+    <Compile Include="Http\Responses\RedirectResponse.cs" />
+    <Compile Include="Models\EndPoint.cs" />
     <Compile Include="Models\ExternalProxy.cs" />
+    <Compile Include="Models\HttpHeader.cs" />
+    <Compile Include="Network\CachedCertificate.cs" />
+    <Compile Include="Network\Certificate\BCCertificateMaker.cs" />
+    <Compile Include="Network\Certificate\ICertificateMaker.cs" />
+    <Compile Include="Network\Certificate\WinCertificateMaker.cs" />
+    <Compile Include="Network\CertificateManager.cs" />
+    <Compile Include="Network\ProxyClient.cs" />
     <Compile Include="Network\Tcp\TcpConnection.cs" />
     <Compile Include="Network\Tcp\TcpConnectionFactory.cs" />
-    <Compile Include="Models\HttpHeader.cs" />
-    <Compile Include="Http\HttpWebClient.cs" />
     <Compile Include="Network\WinAuth\Security\Common.cs" />
-    <Compile Include="Network\WinAuth\Security\WinAuthEndPoint.cs" />
     <Compile Include="Network\WinAuth\Security\LittleEndian.cs" />
     <Compile Include="Network\WinAuth\Security\Message.cs" />
     <Compile Include="Network\WinAuth\Security\State.cs" />
+    <Compile Include="Network\WinAuth\Security\WinAuthEndPoint.cs" />
     <Compile Include="Network\WinAuth\WinAuthHandler.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Shared\ProxyConstants.cs" />
+    <Compile Include="WinAuthHandler.cs" />
+    <Compile Include="CertificateHandler.cs" />
     <Compile Include="ProxyAuthorizationHandler.cs" />
+    <Compile Include="ProxyServer.cs" />
     <Compile Include="RequestHandler.cs" />
     <Compile Include="ResponseHandler.cs" />
-    <Compile Include="Helpers\CustomBinaryReader.cs" />
-    <Compile Include="ProxyServer.cs" />
-    <Compile Include="EventArguments\SessionEventArgs.cs" />
-    <Compile Include="Helpers\Tcp.cs" />
-    <Compile Include="Extensions\StreamExtensions.cs" />
-    <Compile Include="Http\Responses\OkResponse.cs" />
-    <Compile Include="Http\Responses\RedirectResponse.cs" />
-    <Compile Include="Shared\ProxyConstants.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Helpers\WinHttp\NativeMethods.WinHttp.cs" />
+    <Compile Include="Helpers\WinHttp\WinHttpHandle.cs" />
+    <Compile Include="Helpers\WinHttp\WinHttpWebProxyFinder.cs" />
+    <Compile Include="Helpers\NativeMethods.SystemProxy.cs" />
+    <Compile Include="Helpers\NativeMethods.Tcp.cs" />
+    <Compile Include="Helpers\ProxyInfo.cs" />
+    <Compile Include="Helpers\RunTime.cs" />
+    <Compile Include="Helpers\SystemProxy.cs" />
     <Compile Include="Network\Tcp\TcpRow.cs" />
     <Compile Include="Network\Tcp\TcpTable.cs" />
-    <Compile Include="WinAuthHandler.cs" />
   </ItemGroup>
   <ItemGroup>
     <COMReference Include="CERTENROLLLib" Condition="'$(OS)' != 'Unix'">
@@ -148,6 +162,7 @@
     <None Include="packages.config" />
     <None Include="StrongNameKey.snk" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">

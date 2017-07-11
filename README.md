@@ -2,9 +2,11 @@ Titanium
 ========
 A light weight HTTP(S) proxy server written in C#
 
-![Build Status](https://ci.appveyor.com/api/projects/status/rvlxv8xgj0m7lkr4?svg=true)
+<a href="https://ci.appveyor.com/project/justcoding121/titanium-web-proxy">![Build Status](https://ci.appveyor.com/api/projects/status/rvlxv8xgj0m7lkr4?svg=true)</a>
 
 Kindly report only issues/bugs here . For programming help or questions use [StackOverflow](http://stackoverflow.com/questions/tagged/titanium-web-proxy) with the tag Titanium-Web-Proxy.
+
+([Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki))
 
 ![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/develop/Examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
 
@@ -23,9 +25,9 @@ Features
 Usage
 =====
 
-Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. ([Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki))
+Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. 
 
-Install by nuget:
+Install by [nuget](https://www.nuget.org/packages/Titanium.Web.Proxy)
 
 For beta releases on [beta branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/beta)
 
@@ -35,6 +37,11 @@ For stable releases on [stable branch](https://github.com/justcoding121/Titanium
 
     Install-Package Titanium.Web.Proxy
 
+Supports
+
+ * .Net Standard 1.6 or above
+ * .Net Framework 4.5 or above
+ 
 Setup HTTP proxy:
 
 ```csharp
@@ -71,17 +78,16 @@ var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
 proxyServer.AddEndPoint(explicitEndPoint);
 proxyServer.Start();
 
-//Warning! Transparent endpoint is not tested end to end 
 //Transparent endpoint is useful for reverse proxy (client is not aware of the existence of proxy)
-//A transparent endpoint usually requires a network router port forwarding HTTP(S) packets to this endpoint
-//Currently do not support Server Name Indication (It is not currently supported by SslStream class)
-//That means that the transparent endpoint will always provide the same Generic Certificate to all HTTPS requests
-//In this example only google.com will work for HTTPS requests
-//Other sites will receive a certificate mismatch warning on browser
+//A transparent endpoint usually requires a network router port forwarding HTTP(S) packets or DNS
+//to send data to this endPoint
 var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 8001, true)
 {
-GenericCertificateName = "google.com"
+	//Generic Certificate hostname to use
+	//when SNI is disabled by client
+	GenericCertificateName = "google.com"
 };
+
 proxyServer.AddEndPoint(transparentEndPoint);
 
 //proxyServer.UpStreamHttpProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
@@ -205,7 +211,6 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
 ```
 Future road map (Pull requests are welcome!)
 ============
-* Support Server Name Indication (SNI) for transparent endpoints
 * Support HTTP 2.0 
 * Support SOCKS protocol
 

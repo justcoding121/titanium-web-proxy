@@ -1,0 +1,44 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard1.6</TargetFramework>
+    <RootNamespace>Titanium.Web.Proxy</RootNamespace>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Properties\AssemblyInfo.cs" />
+    <Compile Remove="Helpers\WinHttp\NativeMethods.WinHttp.cs" />
+    <Compile Remove="Helpers\WinHttp\WinHttpHandle.cs" />
+    <Compile Remove="Helpers\WinHttp\WinHttpWebProxyFinder.cs" />
+    <Compile Remove="Helpers\NativeMethods.SystemProxy.cs" />
+    <Compile Remove="Helpers\NativeMethods.Tcp.cs" />
+    <Compile Remove="Helpers\Firefox.cs" />
+    <Compile Remove="Helpers\ProxyInfo.cs" />
+    <Compile Remove="Helpers\RunTime.cs" />
+    <Compile Remove="Helpers\SystemProxy.cs" />
+    <Compile Remove="Network\Certificate\WinCertificateMaker.cs" />
+    <Compile Remove="Network\Tcp\TcpRow.cs" />
+    <Compile Remove="Network\Tcp\TcpTable.cs" />
+    <Compile Remove="Network\WinAuth\Security\Common.cs" />
+    <Compile Remove="Network\WinAuth\Security\LittleEndian.cs" />
+    <Compile Remove="Network\WinAuth\Security\Message.cs" />
+    <Compile Remove="Network\WinAuth\Security\State.cs" />
+    <Compile Remove="Network\WinAuth\Security\WinAuthEndPoint.cs" />
+    <Compile Remove="Network\WinAuth\WinAuthHandler.cs" />
+    <Compile Remove="WinAuthHandler.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Portable.BouncyCastle" Version="1.8.1.2" />
+    <PackageReference Include="StreamExtended" Version="1.0.18" />
+    <PackageReference Include="System.Net.NameResolution" Version="4.3.0" />
+    <PackageReference Include="System.Net.Security" Version="4.3.1" />
+    <PackageReference Include="System.Runtime.Serialization.Formatters" Version="4.3.0" />
+    <PackageReference Include="System.Security.SecureString" Version="4.3.0" />
+  </ItemGroup>
+
+</Project>

@@ -16,9 +16,9 @@ namespace Titanium.Web.Proxy.Helpers
             try
             {
                 var myProfileDirectory =
-                    new DirectoryInfo(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) +
-                                      "\\Mozilla\\Firefox\\Profiles\\").GetDirectories("*.default");
-                var myFfPrefFile = myProfileDirectory[0].FullName + "\\prefs.js";
+                    new DirectoryInfo(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\Mozilla\\Firefox\\Profiles\\")
+                        .GetDirectories("*.default");
+                string myFfPrefFile = myProfileDirectory[0].FullName + "\\prefs.js";
                 if (!File.Exists(myFfPrefFile))
                 {
                     return;
@@ -26,18 +26,17 @@ namespace Titanium.Web.Proxy.Helpers
 
                 // We have a pref file so let''s make sure it has the proxy setting
                 var myReader = new StreamReader(myFfPrefFile);
-                var myPrefContents = myReader.ReadToEnd();
+                string myPrefContents = myReader.ReadToEnd();
                 myReader.Close();
 
                 for (int i = 0; i <= 4; i++)
                 {
-                    var searchStr = $"user_pref(\"network.proxy.type\", {i});";
+                    string searchStr = $"user_pref(\"network.proxy.type\", {i});";
 
                     if (myPrefContents.Contains(searchStr))
                     {
                         // Add the proxy enable line and write it back to the file
-                        myPrefContents = myPrefContents.Replace(searchStr,
-                            "user_pref(\"network.proxy.type\", 5);");
+                        myPrefContents = myPrefContents.Replace(searchStr, "user_pref(\"network.proxy.type\", 5);");
                     }
                 }
 

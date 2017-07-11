@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Extensions
         internal static bool IsConnected(this Socket client)
         {
             // This is how you can determine whether a socket is still connected.
-            var blockingState = client.Blocking;
+            bool blockingState = client.Blocking;
 
             try
             {
@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.Extensions
             catch (SocketException e)
             {
                 // 10035 == WSAEWOULDBLOCK
-                return e.NativeErrorCode.Equals(10035);
+                return e.SocketErrorCode == SocketError.WouldBlock;
             }
             finally
             {
@@ -34,6 +34,7 @@ namespace Titanium.Web.Proxy.Extensions
             }
         }
 
+#if NET45
         /// <summary>
         /// Gets the local port from a native TCP row object.
         /// </summary>
@@ -53,5 +54,6 @@ namespace Titanium.Web.Proxy.Extensions
         {
             return (tcpRow.remotePort1 << 8) + tcpRow.remotePort2 + (tcpRow.remotePort3 << 24) + (tcpRow.remotePort4 << 16);
         }
+#endif
     }
 }

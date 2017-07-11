@@ -1,10 +1,8 @@
 ﻿using System;
-using System.Linq;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -16,7 +14,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Response Status Code.
         /// </summary>
-        public string ResponseStatusCode { get; set; }
+        public int ResponseStatusCode { get; set; }
 
         /// <summary>
         /// Response Status description.
@@ -31,23 +29,37 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Content encoding for this response
         /// </summary>
-        public string ContentEncoding
-        {
-            get
-            {
-                var hasHeader = ResponseHeaders.ContainsKey("content-encoding");
-
-                if (!hasHeader) return null;
-                var header = ResponseHeaders["content-encoding"];
-
-                return header.Value.Trim();
-            }
-        }
+        public string ContentEncoding => ResponseHeaders.GetHeaderValueOrNull("content-encoding")?.Trim();
 
         /// <summary>
         /// Http version
         /// </summary>
         public Version HttpVersion { get; set; }
+
+        /// <summary>
+        /// Has response body?
+        /// </summary>
+        public bool HasBody
+        {
+            get
+            {
+                //Has body only if response is chunked or content length >0
+                //If none are true then check if connection:close header exist, if so write response until server or client terminates the connection
+                if (IsChunked || ContentLength > 0 || !ResponseKeepAlive)
+                {
+                    return true;
+                }
+
+                //has response if connection:keep-alive header exist and when version is http/1.0
+                //Because in Http 1.0 server can return a response without content-length (expectation being client would read until end of stream)
+                if (ResponseKeepAlive && HttpVersion.Minor == 0)
+                {
+                    return true;
+                }
+
+                return false;
+            }
+        }
 
         /// <summary>
         /// Keep the connection alive?
@@ -56,13 +68,11 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = ResponseHeaders.ContainsKey("connection");
+                string headerValue = ResponseHeaders.GetHeaderValueOrNull("connection");
 
-                if (hasHeader)
+                if (headerValue != null)
                 {
-                    var header = ResponseHeaders["connection"];
-
-                    if (header.Value.ContainsIgnoreCase("close"))
+                    if (headerValue.ContainsIgnoreCase("close"))
                     {
                         return false;
                     }
@@ -75,22 +85,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Content type of this response
         /// </summary>
-        public string ContentType
-        {
-            get
-            {
-                var hasHeader = ResponseHeaders.ContainsKey("content-type");
-
-                if (hasHeader)
-                {
-                    var header = ResponseHeaders["content-type"];
-
-                    return header.Value;
-                }
-
-                return null;
-            }
-        }
+        public string ContentType => ResponseHeaders.GetHeaderValueOrNull("content-type");
 
         /// <summary>
         /// Length of response body
@@ -99,17 +94,15 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = ResponseHeaders.ContainsKey("content-length");
+                string headerValue = ResponseHeaders.GetHeaderValueOrNull("content-length");
 
-                if (hasHeader == false)
+                if (headerValue == null)
                 {
                     return -1;
                 }
 
-                var header = ResponseHeaders["content-length"];
-
                 long contentLen;
-                long.TryParse(header.Value, out contentLen);
+                long.TryParse(headerValue, out contentLen);
                 if (contentLen >= 0)
                 {
                     return contentLen;
@@ -119,28 +112,14 @@ namespace Titanium.Web.Proxy.Http
             }
             set
             {
-                var hasHeader = ResponseHeaders.ContainsKey("content-length");
-
                 if (value >= 0)
                 {
-                    if (hasHeader)
-                    {
-                        var header = ResponseHeaders["content-length"];
-                        header.Value = value.ToString();
-                    }
-                    else
-                    {
-                        ResponseHeaders.Add("content-length", new HttpHeader("content-length", value.ToString()));
-                    }
-
+                    ResponseHeaders.SetOrAddHeaderValue("content-length", value.ToString());
                     IsChunked = false;
                 }
                 else
                 {
-                    if (hasHeader)
-                    {
-                        ResponseHeaders.Remove("content-length");
-                    }
+                    ResponseHeaders.RemoveHeader("content-length");
                 }
             }
         }
@@ -152,44 +131,19 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var hasHeader = ResponseHeaders.ContainsKey("transfer-encoding");
-
-                if (hasHeader)
-                {
-                    var header = ResponseHeaders["transfer-encoding"];
-
-                    if (header.Value.ContainsIgnoreCase("chunked"))
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
+                string headerValue = ResponseHeaders.GetHeaderValueOrNull("transfer-encoding");
+                return headerValue != null && headerValue.ContainsIgnoreCase("chunked");
             }
             set
             {
-                var hasHeader = ResponseHeaders.ContainsKey("transfer-encoding");
-
                 if (value)
                 {
-                    if (hasHeader)
-                    {
-                        var header = ResponseHeaders["transfer-encoding"];
-                        header.Value = "chunked";
-                    }
-                    else
-                    {
-                        ResponseHeaders.Add("transfer-encoding", new HttpHeader("transfer-encoding", "chunked"));
-                    }
-
+                    ResponseHeaders.SetOrAddHeaderValue("transfer-encoding", "chunked");
                     ContentLength = -1;
                 }
                 else
                 {
-                    if (hasHeader)
-                    {
-                        ResponseHeaders.Remove("transfer-encoding");
-                    }
+                    ResponseHeaders.RemoveHeader("transfer-encoding");
                 }
             }
         }
@@ -197,20 +151,15 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Collection of all response headers
         /// </summary>
-        public Dictionary<string, HttpHeader> ResponseHeaders { get; set; }
+        public HeaderCollection ResponseHeaders { get; private set; } = new HeaderCollection();
 
         /// <summary>
-        /// Non Unique headers
-        /// </summary>
-        public Dictionary<string, List<HttpHeader>> NonUniqueResponseHeaders { get; set; }
-
-        /// <summary>
-        /// response body content as byte array
+        /// Response body content as byte array
         /// </summary>
         internal byte[] ResponseBody { get; set; }
 
         /// <summary>
-        /// response body as string
+        /// Response body as string
         /// </summary>
         internal string ResponseBodyString { get; set; }
 
@@ -235,147 +184,54 @@ namespace Titanium.Web.Proxy.Http
         public bool ExpectationFailed { get; internal set; }
 
         /// <summary>
+        /// Gets the resposne status.
+        /// </summary>
+        public string ResponseStatus => $"HTTP/{HttpVersion?.Major}.{HttpVersion?.Minor} {ResponseStatusCode} {ResponseStatusDescription}";
+
+        /// <summary>
+        /// Gets the header text.
+        /// </summary>
+        public string HeaderText
+        {
+            get
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine(ResponseStatus);
+                foreach (var header in ResponseHeaders)
+                {
+                    sb.AppendLine(header.ToString());
+                }
+
+                sb.AppendLine();
+                return sb.ToString();
+            }
+        }
+
+        internal static void ParseResponseLine(string httpStatus, out Version version, out int statusCode, out string statusDescription)
+        {
+            var httpResult = httpStatus.Split(ProxyConstants.SpaceSplit, 3);
+            if (httpResult.Length != 3)
+            {
+                throw new Exception("Invalid HTTP status line: " + httpStatus);
+            }
+
+            string httpVersion = httpResult[0];
+
+            version = HttpHeader.Version11;
+            if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
+            {
+                version = HttpHeader.Version10;
+            }
+
+            statusCode = int.Parse(httpResult[1]);
+            statusDescription = httpResult[2];
+        }
+
+        /// <summary>
         /// Constructor.
         /// </summary>
         public Response()
         {
-            ResponseHeaders = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
-            NonUniqueResponseHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        /// <summary>
-        /// True if header exists
-        /// </summary>
-        /// <param name="name"></param>
-        /// <returns></returns>
-        public bool HeaderExists(string name)
-        {
-            if(ResponseHeaders.ContainsKey(name)
-                || NonUniqueResponseHeaders.ContainsKey(name))
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Returns all headers with given name if exists
-        /// Returns null if does'nt exist
-        /// </summary>
-        /// <param name="name"></param>
-        /// <returns></returns>
-        public List<HttpHeader> GetHeaders(string name)
-        {
-            if (ResponseHeaders.ContainsKey(name))
-            {
-                return new List<HttpHeader>() { ResponseHeaders[name] };
-            }
-            else if (NonUniqueResponseHeaders.ContainsKey(name))
-            {
-                return new List<HttpHeader>(NonUniqueResponseHeaders[name]);
-            }
-
-            return null;
-        }
-
-        /// <summary>
-        /// Returns all headers 
-        /// </summary>
-        /// <returns></returns>
-        public List<HttpHeader> GetAllHeaders()
-        {
-            var result = new List<HttpHeader>();
-
-            result.AddRange(ResponseHeaders.Select(x => x.Value));
-            result.AddRange(NonUniqueResponseHeaders.SelectMany(x => x.Value));
-
-            return result;
-        }
-
-        /// <summary>
-        /// Add a new header with given name and value
-        /// </summary>
-        /// <param name="name"></param>
-        /// <param name="value"></param>
-        public void AddHeader(string name, string value)
-        {
-            AddHeader(new HttpHeader(name, value));
-        }
-
-        /// <summary>
-        /// Adds the given header object to Response
-        /// </summary>
-        /// <param name="newHeader"></param>
-        public void AddHeader(HttpHeader newHeader)
-        {
-            if (NonUniqueResponseHeaders.ContainsKey(newHeader.Name))
-            {
-                NonUniqueResponseHeaders[newHeader.Name].Add(newHeader);
-                return;
-            }
-
-            if (ResponseHeaders.ContainsKey(newHeader.Name))
-            {
-                var existing = ResponseHeaders[newHeader.Name];
-                ResponseHeaders.Remove(newHeader.Name);
-
-                NonUniqueResponseHeaders.Add(newHeader.Name,
-                    new List<HttpHeader>() { existing, newHeader });
-            }
-            else
-            {
-                ResponseHeaders.Add(newHeader.Name, newHeader);
-            }
-        }
-
-        /// <summary>
-        ///  removes all headers with given name
-        /// </summary>
-        /// <param name="headerName"></param>
-        /// <returns>True if header was removed
-        /// False if no header exists with given name</returns>
-        public bool RemoveHeader(string headerName)
-        {
-            if(ResponseHeaders.ContainsKey(headerName))
-            {
-                ResponseHeaders.Remove(headerName);
-                return true;
-            }
-            else if (NonUniqueResponseHeaders.ContainsKey(headerName))
-            {
-                NonUniqueResponseHeaders.Remove(headerName);
-                return true;
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Removes given header object if it exist
-        /// </summary>
-        /// <param name="header">Returns true if header exists and was removed </param>
-        public bool RemoveHeader(HttpHeader header)
-        {
-            if (ResponseHeaders.ContainsKey(header.Name))
-            {
-                if (ResponseHeaders[header.Name].Equals(header))
-                {
-                    ResponseHeaders.Remove(header.Name);
-                    return true;
-                }
-
-            }
-            else if (NonUniqueResponseHeaders.ContainsKey(header.Name))
-            {
-                if (NonUniqueResponseHeaders[header.Name]
-                    .RemoveAll(x => x.Equals(header)) > 0)
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         /// <summary>
@@ -387,7 +243,6 @@ namespace Titanium.Web.Proxy.Http
             //but just to be on safe side
 
             ResponseHeaders = null;
-            NonUniqueResponseHeaders = null;
 
             ResponseBody = null;
             ResponseBodyString = null;
