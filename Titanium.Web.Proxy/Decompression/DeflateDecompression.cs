@@ -2,7 +2,6 @@
 using System.IO;
 using System.IO.Compression;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Decompression
 {
