@@ -126,7 +126,7 @@ namespace Titanium.Web.Proxy.Network
         internal CertificateManager(Action<Exception> exceptionFunc)
         {
             this.exceptionFunc = exceptionFunc;
-            Engine = CertificateEngine.DefaultWindows;
+            Engine = CertificateEngine.BouncyCastle;
 
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
         }

@@ -42,7 +42,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             //optionally set the Certificate Engine
             //Under Mono only BouncyCastle will be supported
-            //proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
+            //proxyServer.CertificateEngine = Network.CertificateEngine.DefaultWindows;
 
             //optionally set the Root Certificate
             //proxyServer.RootCertificate = new X509Certificate2("myCert.pfx", string.Empty, X509KeyStorageFlags.Exportable);
