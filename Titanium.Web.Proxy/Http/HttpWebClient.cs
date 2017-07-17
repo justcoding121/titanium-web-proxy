@@ -13,6 +13,8 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class HttpWebClient : IDisposable
     {
+        private int bufferSize;
+
         /// <summary>
         /// Connection to server
         /// </summary>
@@ -49,8 +51,10 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public bool IsHttps => Request.IsHttps;
 
-        internal HttpWebClient()
+        internal HttpWebClient(int bufferSize)
         {
+            this.bufferSize = bufferSize;
+
             RequestId = Guid.NewGuid();
             Request = new Request();
             Response = new Response();
@@ -77,7 +81,7 @@ namespace Titanium.Web.Proxy.Http
 
             byte[] requestBytes;
             using (var ms = new MemoryStream())
-            using (var writer = new HttpRequestWriter(ms))
+            using (var writer = new HttpRequestWriter(ms, bufferSize))
             {
                 var upstreamProxy = ServerConnection.UpStreamHttpProxy;
 

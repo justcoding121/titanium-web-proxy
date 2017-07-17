@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
             var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-            var clientStreamWriter = new HttpResponseWriter(clientStream);
+            var clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
 
             Uri httpRemoteUri;
 
@@ -147,7 +147,7 @@ namespace Titanium.Web.Proxy
 
                             clientStreamReader.Dispose();
                             clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-                            clientStreamWriter = new HttpResponseWriter(clientStream);
+                            clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
                         }
                         catch
                         {
@@ -179,7 +179,7 @@ namespace Titanium.Web.Proxy
                                 ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
                             }
 
-                            await TcpHelper.SendRaw(clientStream, connection.Stream,
+                            await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
                                 (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); });
                             UpdateServerConnectionCount(false);
                         }
@@ -243,7 +243,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-                clientStreamWriter = new HttpResponseWriter(clientStream);
+                clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
 
                 //now read the request line
                 string httpCmd = await clientStreamReader.ReadLineAsync();
@@ -374,7 +374,7 @@ namespace Titanium.Web.Proxy
                         var requestHeaders = args.WebSession.Request.RequestHeaders;
                         byte[] requestBytes;
                         using (var ms = new MemoryStream())
-                        using (var writer = new HttpRequestWriter(ms))
+                        using (var writer = new HttpRequestWriter(ms, BufferSize))
                         {
                             writer.WriteLine(httpCmd);
                             writer.WriteHeaders(requestHeaders);
@@ -402,7 +402,7 @@ namespace Titanium.Web.Proxy
                             await BeforeResponse.InvokeParallelAsync(this, args, ExceptionFunc);
                         }
 
-                        await TcpHelper.SendRaw(clientStream, connection.Stream,
+                        await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
                             (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); });
 
                         args.Dispose();

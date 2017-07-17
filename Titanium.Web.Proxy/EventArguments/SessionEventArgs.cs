@@ -104,7 +104,7 @@ namespace Titanium.Web.Proxy.EventArguments
             this.httpResponseHandler = httpResponseHandler;
 
             ProxyClient = new ProxyClient();
-            WebSession = new HttpWebClient();
+            WebSession = new HttpWebClient(bufferSize);
 
             WebSession.ProcessId = new Lazy<int>(() =>
             {
