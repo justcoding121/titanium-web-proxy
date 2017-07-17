@@ -84,7 +84,7 @@
     <Compile Include="Exceptions\ProxyException.cs" />
     <Compile Include="Exceptions\ProxyHttpException.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
-    <Compile Include="Extensions\DotNetStandardExtensions.cs" />
+    <Compile Include="Extensions\DotNet45Extensions.cs" />
     <Compile Include="Extensions\FuncExtensions.cs" />
     <Compile Include="Extensions\HttpWebRequestExtensions.cs" />
     <Compile Include="Extensions\HttpWebResponseExtensions.cs" />
