@@ -547,8 +547,8 @@ namespace Titanium.Web.Proxy
             }
 
 #if NET45
-            //clear any system proxy settings which is pointing to our own endpoint
-            //due to non gracious proxy shutdown before
+            //clear any system proxy settings which is pointing to our own endpoint (causing a cycle)
+            //due to non gracious proxy shutdown before or something else
             if (systemProxySettingsManager != null)
             {
                 var proxyInfo = systemProxySettingsManager.GetProxyInfoFromRegistry();
@@ -557,7 +557,9 @@ namespace Titanium.Web.Proxy
                     var protocolToRemove = ProxyProtocolType.None;
                     foreach (var proxy in proxyInfo.Proxies.Values)
                     {
-                        if (proxy.HostName == "127.0.0.1" && ProxyEndPoints.Any(x => x.Port == proxy.Port))
+                        if ((proxy.HostName == "127.0.0.1"
+                            || proxy.HostName.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+                            && ProxyEndPoints.Any(x => x.Port == proxy.Port))
                         {
                             protocolToRemove |= proxy.ProtocolType;
                         }
@@ -654,6 +656,7 @@ namespace Titanium.Web.Proxy
             if (serverConnection != null)
             {
                 serverConnection.Dispose();
+                serverConnection = null;
                 UpdateServerConnectionCount(false);
             }
         }
