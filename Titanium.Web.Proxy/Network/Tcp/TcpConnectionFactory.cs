@@ -58,7 +58,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 client = new TcpClient(upStreamEndPoint);
 #else
                 client = new TcpClient();
-                client.Client.Bind(server.UpStreamEndPoint);
+                client.Client.Bind(upStreamEndPoint);
 #endif
 
                 //If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections

@@ -164,24 +164,30 @@ namespace Titanium.Web.Proxy
                         //create new connection
                         using (var connection = await GetServerConnection(connectArgs, true))
                         {
-                            if (isClientHello)
+                            try
                             {
-                                if (clientStream.Available > 0)
+                                if (isClientHello)
                                 {
-                                    //send the buffered data
-                                    var data = new byte[clientStream.Available];
-                                    await clientStream.ReadAsync(data, 0, data.Length);
-                                    await connection.Stream.WriteAsync(data, 0, data.Length);
-                                    await connection.Stream.FlushAsync();
+                                    if (clientStream.Available > 0)
+                                    {
+                                        //send the buffered data
+                                        var data = new byte[clientStream.Available];
+                                        await clientStream.ReadAsync(data, 0, data.Length);
+                                        await connection.Stream.WriteAsync(data, 0, data.Length);
+                                        await connection.Stream.FlushAsync();
+                                    }
+
+                                    var serverHelloInfo = await SslTools.PeekServerHello(connection.Stream);
+                                    ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
                                 }
 
-                                var serverHelloInfo = await SslTools.PeekServerHello(connection.Stream);
-                                ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
+                                await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
+                                    (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); });
                             }
-
-                            await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
-                                (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); });
-                            UpdateServerConnectionCount(false);
+                            finally
+                            {
+                                UpdateServerConnectionCount(false);
+                            }
                         }
 
                         return;
@@ -361,8 +367,8 @@ namespace Titanium.Web.Proxy
                            && !args.WebSession.UpStreamEndPoint.Equals(connection.UpStreamEndPoint))))
                     {
                         connection.Dispose();
-                        UpdateServerConnectionCount(false);
                         connection = null;
+                        UpdateServerConnectionCount(false);
                     }
 
                     if (connection == null)
