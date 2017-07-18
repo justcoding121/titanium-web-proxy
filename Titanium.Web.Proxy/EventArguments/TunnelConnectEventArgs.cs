@@ -7,8 +7,8 @@ namespace Titanium.Web.Proxy.EventArguments
     {
         public bool IsHttpsConnect { get; set; }
 
-        public TunnelConnectSessionEventArgs(int bufferSize, ProxyEndPoint endPoint, IPEndPoint upStreamEndPoint) 
-            : base(bufferSize, endPoint, upStreamEndPoint,  null)
+        public TunnelConnectSessionEventArgs(int bufferSize, ProxyEndPoint endPoint) 
+            : base(bufferSize, endPoint, null)
         {
             
         }
