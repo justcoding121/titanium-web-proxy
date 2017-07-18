@@ -1,6 +1,7 @@
 ﻿using StreamExtended.Network;
 using System;
 using System.Linq;
+using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
@@ -17,19 +18,21 @@ namespace Titanium.Web.Proxy.Network.Tcp
     internal class TcpConnectionFactory
     {
         /// <summary>
-        /// Creates a TCP connection to server
+        ///  Creates a TCP connection to server
         /// </summary>
         /// <param name="server"></param>
         /// <param name="remoteHostName"></param>
         /// <param name="remotePort"></param>
         /// <param name="httpVersion"></param>
-        /// <param name="isConnect"></param>
         /// <param name="isHttps"></param>
+        /// <param name="isConnect"></param>
+        /// <param name="upStreamEndPoint"></param>
         /// <param name="externalHttpProxy"></param>
         /// <param name="externalHttpsProxy"></param>
         /// <returns></returns>
-        internal async Task<TcpConnection> CreateClient(ProxyServer server, string remoteHostName, int remotePort, Version httpVersion, bool isHttps,
-            bool isConnect, ExternalProxy externalHttpProxy, ExternalProxy externalHttpsProxy)
+        internal async Task<TcpConnection> CreateClient(ProxyServer server, 
+            string remoteHostName, int remotePort, Version httpVersion, bool isHttps,
+            bool isConnect, IPEndPoint upStreamEndPoint, ExternalProxy externalHttpProxy, ExternalProxy externalHttpsProxy)
         {
             bool useUpstreamProxy = false;
             var externalProxy = isHttps ? externalHttpsProxy : externalHttpProxy;
@@ -52,7 +55,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             try
             {
 #if NET45
-                client = new TcpClient(server.UpStreamEndPoint);
+                client = new TcpClient(upStreamEndPoint??server.UpStreamEndPoint);
 #else
                 client = new TcpClient();
                 client.Client.Bind(server.UpStreamEndPoint);

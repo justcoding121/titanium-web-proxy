@@ -1,5 +1,6 @@
 ﻿using StreamExtended.Network;
 using System;
+using System.Net;
 using System.Net.Sockets;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
@@ -24,6 +25,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal bool IsHttps { get; set; }
 
         internal bool UseUpstreamProxy { get; set; }
+
+        /// <summary>
+        /// Local NIC via connection is made
+        /// </summary>
+        internal IPEndPoint UpStreamEndPoint { get; set; }
 
         /// <summary>
         /// Http version

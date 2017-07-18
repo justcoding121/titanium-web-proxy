@@ -98,13 +98,15 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgs(int bufferSize, ProxyEndPoint endPoint, Func<SessionEventArgs, Task> httpResponseHandler)
+        internal SessionEventArgs(int bufferSize, 
+            ProxyEndPoint endPoint, IPEndPoint upStreamEndPoint,
+            Func<SessionEventArgs, Task> httpResponseHandler)
         {
             this.bufferSize = bufferSize;
             this.httpResponseHandler = httpResponseHandler;
 
             ProxyClient = new ProxyClient();
-            WebSession = new HttpWebClient(bufferSize);
+            WebSession = new HttpWebClient(bufferSize, upStreamEndPoint);
 
             WebSession.ProcessId = new Lazy<int>(() =>
             {
