@@ -56,10 +56,9 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public bool IsHttps => Request.IsHttps;
 
-        internal HttpWebClient(int bufferSize, IPEndPoint upStreamEndPoint)
+        internal HttpWebClient(int bufferSize)
         {
             this.bufferSize = bufferSize;
-            UpStreamEndPoint = upStreamEndPoint;
 
             RequestId = Guid.NewGuid();
             Request = new Request();
