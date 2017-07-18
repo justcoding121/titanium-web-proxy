@@ -86,7 +86,7 @@ namespace Titanium.Web.Proxy
 
                     await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.RequestHeaders);
 
-                    var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, UpStreamEndPoint);
+                    var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint);
                     connectArgs.WebSession.Request = connectRequest;
                     connectArgs.ProxyClient.TcpClient = tcpClient;
                     connectArgs.ProxyClient.ClientStream = clientStream;
@@ -293,7 +293,7 @@ namespace Titanium.Web.Proxy
                     break;
                 }
 
-                var args = new SessionEventArgs(BufferSize, endPoint, UpStreamEndPoint, HandleHttpSessionResponse)
+                var args = new SessionEventArgs(BufferSize, endPoint, HandleHttpSessionResponse)
                 {
                     ProxyClient = { TcpClient = client },
                     WebSession = { ConnectRequest = connectRequest }
@@ -355,9 +355,10 @@ namespace Titanium.Web.Proxy
                     }
 
                     //create a new connection if hostname/upstream end point changes
-                    if (connection != null 
+                    if (connection != null
                         && (!connection.HostName.Equals(args.WebSession.Request.RequestUri.Host, StringComparison.OrdinalIgnoreCase)
-                           || args.WebSession.UpStreamEndPoint != connection.UpStreamEndPoint))
+                           || (args.WebSession.UpStreamEndPoint != null
+                           && !args.WebSession.UpStreamEndPoint.Equals(connection.UpStreamEndPoint))))
                     {
                         connection.Dispose();
                         UpdateServerConnectionCount(false);
@@ -573,7 +574,7 @@ namespace Titanium.Web.Proxy
         /// <param name="args"></param>
         /// <param name="isConnect"></param>
         /// <returns></returns>
-        private async Task<TcpConnection> GetServerConnection(SessionEventArgs args,  bool isConnect)
+        private async Task<TcpConnection> GetServerConnection(SessionEventArgs args, bool isConnect)
         {
             ExternalProxy customUpStreamHttpProxy = null;
             ExternalProxy customUpStreamHttpsProxy = null;
@@ -601,7 +602,7 @@ namespace Titanium.Web.Proxy
                 args.WebSession.Request.RequestUri.Port,
                 args.WebSession.Request.HttpVersion,
                 args.IsHttps, isConnect,
-                args.WebSession.UpStreamEndPoint,
+                args.WebSession.UpStreamEndPoint ?? UpStreamEndPoint,
                 customUpStreamHttpProxy ?? UpStreamHttpProxy,
                 customUpStreamHttpsProxy ?? UpStreamHttpsProxy);
         }

@@ -55,7 +55,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             try
             {
 #if NET45
-                client = new TcpClient(upStreamEndPoint??server.UpStreamEndPoint);
+                client = new TcpClient(upStreamEndPoint);
 #else
                 client = new TcpClient();
                 client.Client.Bind(server.UpStreamEndPoint);
@@ -131,6 +131,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 UpStreamHttpProxy = externalHttpProxy,
                 UpStreamHttpsProxy = externalHttpsProxy,
+                UpStreamEndPoint = upStreamEndPoint,
                 HostName = remoteHostName,
                 Port = remotePort,
                 IsHttps = isHttps,
