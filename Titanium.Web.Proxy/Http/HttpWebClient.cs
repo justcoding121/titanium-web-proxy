@@ -26,6 +26,11 @@ namespace Titanium.Web.Proxy.Http
         public Guid RequestId { get; }
 
         /// <summary>
+        /// Override UpStreamEndPoint for this request; Local NIC via request is made
+        /// </summary>
+        public IPEndPoint UpStreamEndPoint { get; set; }
+
+        /// <summary>
         /// Headers passed with Connect.
         /// </summary>
         public ConnectRequest ConnectRequest { get; set; }
@@ -51,9 +56,10 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public bool IsHttps => Request.IsHttps;
 
-        internal HttpWebClient(int bufferSize)
+        internal HttpWebClient(int bufferSize, IPEndPoint upStreamEndPoint)
         {
             this.bufferSize = bufferSize;
+            UpStreamEndPoint = upStreamEndPoint;
 
             RequestId = Guid.NewGuid();
             Request = new Request();
