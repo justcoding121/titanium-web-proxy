@@ -3,6 +3,10 @@
   <PropertyGroup>
     <TargetFramework>netstandard1.6</TargetFramework>
     <RootNamespace>Titanium.Web.Proxy</RootNamespace>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <SignAssembly>True</SignAssembly>
+    <AssemblyOriginatorKeyFile>StrongNameKey.snk</AssemblyOriginatorKeyFile>
+    <DelaySign>False</DelaySign>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -10,7 +14,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Properties\AssemblyInfo.cs" />
     <Compile Remove="Helpers\WinHttp\NativeMethods.WinHttp.cs" />
     <Compile Remove="Helpers\WinHttp\WinHttpHandle.cs" />
     <Compile Remove="Helpers\WinHttp\WinHttpWebProxyFinder.cs" />
