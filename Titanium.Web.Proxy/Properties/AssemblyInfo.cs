@@ -6,11 +6,11 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 
-[assembly: AssemblyTitle("Titanium.Web.Proxy.Properties")]
+[assembly: AssemblyTitle("Titanium.Web.Proxy")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("Titanium.Web.Proxy.Properties")]
+[assembly: AssemblyProduct("Titanium.Web.Proxy")]
 [assembly: AssemblyCopyright("Copyright © Titanium 2015-2017")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]

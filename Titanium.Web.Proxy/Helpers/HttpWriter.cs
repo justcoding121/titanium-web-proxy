@@ -8,7 +8,8 @@ namespace Titanium.Web.Proxy.Helpers
 {
     abstract class HttpWriter : StreamWriter
     {
-        protected HttpWriter(Stream stream, bool leaveOpen) : base(stream, Encoding.ASCII, 1024, leaveOpen)
+        protected HttpWriter(Stream stream, int bufferSize, bool leaveOpen) 
+            : base(stream, Encoding.ASCII, bufferSize, leaveOpen)
         {
             NewLine = ProxyConstants.NewLine;
         }

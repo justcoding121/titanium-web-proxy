@@ -116,12 +116,13 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
         /// <returns></returns>
-        internal static async Task SendRaw(Stream clientStream, Stream serverStream, Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive)
+        internal static async Task SendRaw(Stream clientStream, Stream serverStream, int bufferSize,
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive)
         {
             //Now async relay all server=>client & client=>server data
-            var sendRelay = clientStream.CopyToAsync(serverStream, onDataSend);
+            var sendRelay = clientStream.CopyToAsync(serverStream, onDataSend, bufferSize);
 
-            var receiveRelay = serverStream.CopyToAsync(clientStream, onDataReceive);
+            var receiveRelay = serverStream.CopyToAsync(clientStream, onDataReceive, bufferSize);
 
             await Task.WhenAll(sendRelay, receiveRelay);
         }
