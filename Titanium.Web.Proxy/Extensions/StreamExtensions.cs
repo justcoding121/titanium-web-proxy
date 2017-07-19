@@ -17,9 +17,9 @@ namespace Titanium.Web.Proxy.Extensions
         /// <param name="input"></param>
         /// <param name="output"></param>
         /// <param name="onCopy"></param>
-        internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy)
+        internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy, int bufferSize)
         {
-            byte[] buffer = new byte[81920];
+            byte[] buffer = new byte[bufferSize];
             while (true)
             {
                 int num = await input.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);

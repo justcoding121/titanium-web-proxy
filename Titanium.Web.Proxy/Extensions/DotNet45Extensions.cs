@@ -3,7 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Titanium.Web.Proxy.Extensions
 {
-    internal static class DotNetStandardExtensions
+    internal static class DotNet45Extensions
     {
 #if NET45
         /// <summary>
