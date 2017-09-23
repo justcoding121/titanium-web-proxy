@@ -1,3 +1,4 @@
+#if NET45
 //
 // Nancy.Authentication.Ntlm.Protocol.Type3Message - Authentication
 //
@@ -128,3 +129,4 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         }
     }
 }
+#endif

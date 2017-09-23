@@ -45,7 +45,7 @@ For stable releases on [stable branch](https://github.com/justcoding121/Titanium
 
 Supports
 
- * .Net Standard 1.6 or above
+ * .Net Standard 2.0 or above
  * .Net Framework 4.5 or above
  
 Setup HTTP proxy:
