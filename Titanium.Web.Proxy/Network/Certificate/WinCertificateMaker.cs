@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if NET45
+using System;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -296,3 +297,4 @@ namespace Titanium.Web.Proxy.Network.Certificate
         }
     }
 }
+#endif
