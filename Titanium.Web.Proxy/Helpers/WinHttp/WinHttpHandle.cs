@@ -1,3 +1,4 @@
+#if NET45
 using System;
 using System.Runtime.InteropServices;
 
@@ -17,3 +18,4 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
         public override bool IsInvalid => handle == IntPtr.Zero;
     }
 }
+#endif
