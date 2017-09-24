@@ -1,11 +1,11 @@
-﻿using System.Net.Sockets;
+﻿#if NET45
+using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Titanium.Web.Proxy.Extensions
 {
     internal static class DotNet45Extensions
     {
-#if NET45
         /// <summary>
         /// Disposes the specified client.
         /// Int .NET framework 4.5 the TcpClient class has no Dispose method, 
@@ -30,6 +30,6 @@ namespace Titanium.Web.Proxy.Extensions
         {
             store.Close();
         }
-#endif
     }
 }
+#endif
