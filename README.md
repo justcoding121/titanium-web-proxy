@@ -8,7 +8,13 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 
 ([Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki))
 
+**Console example application screenshot**
+
 ![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/develop/Examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
+
+**GUI example application screenshot**
+
+![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/develop/Examples/Titanium.Web.Proxy.Examples.Wpf/Capture.PNG)
 
 Features
 ========
@@ -39,7 +45,7 @@ For stable releases on [stable branch](https://github.com/justcoding121/Titanium
 
 Supports
 
- * .Net Standard 1.6 or above
+ * .Net Standard 2.0 or above
  * .Net Framework 4.5 or above
  
 Setup HTTP proxy:
