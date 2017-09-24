@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <PackageReference Include="Portable.BouncyCastle" Version="1.8.1.2" />
-    <PackageReference Include="StreamExtended" Version="1.0.18" />
+    <PackageReference Include="StreamExtended" Version="1.0.81" />
   </ItemGroup>
 
 </Project>
