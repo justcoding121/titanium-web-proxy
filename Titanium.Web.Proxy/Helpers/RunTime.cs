@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.Helpers
         internal static bool IsRunningOnMono => isRunningOnMono.Value;
 
 #if NETSTANDARD2_0
-        internal static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        internal static bool IsWindows => isRunningOnWindows.Value;
 #else
         internal static bool IsWindows => true;
 #endif
