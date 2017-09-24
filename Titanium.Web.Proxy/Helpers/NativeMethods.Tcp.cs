@@ -1,3 +1,4 @@
+#if NET45
 using System;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
@@ -59,3 +60,4 @@ namespace Titanium.Web.Proxy.Helpers
         internal static extern uint GetExtendedTcpTable(IntPtr tcpTable, ref int size, bool sort, int ipVersion, int tableClass, int reserved);
     }
 }
+#endif

@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿#if NET45
+using System.Net;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 
@@ -61,3 +62,4 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal int ProcessId { get; }
     }
 }
+#endif

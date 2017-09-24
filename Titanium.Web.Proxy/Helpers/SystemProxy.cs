@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if NET45
+using System;
 using System.Linq;
 using Microsoft.Win32;
 
@@ -327,3 +328,4 @@ namespace Titanium.Web.Proxy.Helpers
         }
     }
 }
+#endif

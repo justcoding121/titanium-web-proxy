@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if NET45
+using System;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -19,3 +20,4 @@ namespace Titanium.Web.Proxy.Helpers
         internal static bool IsRunningOnMono => isRunningOnMono.Value;
     }
 }
+#endif

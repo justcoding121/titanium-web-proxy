@@ -132,7 +132,6 @@ namespace Titanium.Web.Proxy
 
                         try
                         {
-
                             sslStream = new SslStream(clientStream);
 
                             string certName = HttpHelper.GetWildCardDomainName(httpRemoteUri.Host);
