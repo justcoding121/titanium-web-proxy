@@ -1,5 +1,4 @@
-﻿#if NET45
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 
 namespace Titanium.Web.Proxy.Network.Tcp
@@ -45,4 +44,3 @@ namespace Titanium.Web.Proxy.Network.Tcp
         }
     }
 }
-#endif

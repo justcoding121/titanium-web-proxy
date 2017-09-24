@@ -1,4 +1,3 @@
-#if NET45
 //
 // Mono.Security.BitConverterLE.cs
 //  Like System.BitConverter but always little endian
@@ -251,4 +250,3 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         }
     }
 }
-#endif

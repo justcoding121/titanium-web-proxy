@@ -17,9 +17,7 @@ using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
-#if NET45
 using Titanium.Web.Proxy.Network.WinAuth.Security;
-#endif
 
 namespace Titanium.Web.Proxy
 {
@@ -593,13 +591,11 @@ namespace Titanium.Web.Proxy
 
             CertificateManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
 
-#if NET45
-            if (!RunTime.IsRunningOnMono)
+            if (RunTime.IsWindows && !RunTime.IsRunningOnMono)
             {
                 //clear orphaned windows auth states every 2 minutes
                 WinAuthEndPoint.ClearIdleStates(2);
             }
-#endif
 
             proxyRunning = true;
         }

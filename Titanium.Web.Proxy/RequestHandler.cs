@@ -23,6 +23,8 @@ namespace Titanium.Web.Proxy
     /// </summary>
     partial class ProxyServer
     {
+        private bool IsWindowsAuthenticationEnabledAndSupported => EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
+
         /// <summary>
         /// This is called when client is aware of proxy
         /// So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
@@ -337,15 +339,13 @@ namespace Titanium.Web.Proxy
                     PrepareRequestHeaders(args.WebSession.Request.RequestHeaders);
                     args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
 
-#if NET45
                     //if win auth is enabled
                     //we need a cache of request body
                     //so that we can send it after authentication in WinAuthHandler.cs
-                    if (EnableWinAuth && !RunTime.IsRunningOnMono && args.WebSession.Request.HasBody)
+                    if (IsWindowsAuthenticationEnabledAndSupported && args.WebSession.Request.HasBody)
                     {
                         await args.GetRequestBody();
                     }
-#endif
 
                     //If user requested interception do it
                     if (BeforeRequest != null)

@@ -16,7 +16,6 @@ namespace Titanium.Web.Proxy.Helpers
 
     internal class TcpHelper
     {
-#if NET45
         /// <summary>
         /// Gets the extended TCP table.
         /// </summary>
@@ -105,7 +104,6 @@ namespace Titanium.Web.Proxy.Helpers
 
             return null;
         }
-#endif
 
         /// <summary>
         /// relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers as prefix
