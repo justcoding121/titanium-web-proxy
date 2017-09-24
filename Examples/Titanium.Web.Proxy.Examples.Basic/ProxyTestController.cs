@@ -41,7 +41,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.ForwardToUpstreamGateway = true;
 
             //optionally set the Certificate Engine
-            //Under Mono only BouncyCastle will be supported
+            //Under Mono or Non-Windows runtimes only BouncyCastle will be supported
             //proxyServer.CertificateEngine = Network.CertificateEngine.DefaultWindows;
 
             //optionally set the Root Certificate
@@ -108,10 +108,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
             foreach (var endPoint in proxyServer.ProxyEndPoints)
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
+#if NET45
             //Only explicit proxies can be set as system proxy!
             //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
             //proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
             proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
+#endif
         }
 
         public void Stop()

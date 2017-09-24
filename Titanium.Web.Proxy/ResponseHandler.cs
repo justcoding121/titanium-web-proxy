@@ -28,11 +28,8 @@ namespace Titanium.Web.Proxy
 
                 var response = args.WebSession.Response;
 
-#if NET45
                 //check for windows authentication
-                if (EnableWinAuth
-                    && !RunTime.IsRunningOnMono
-                    && response.ResponseStatusCode == (int)HttpStatusCode.Unauthorized)
+                if (IsWindowsAuthenticationEnabledAndSupported && response.ResponseStatusCode == (int)HttpStatusCode.Unauthorized)
                 {
                     bool disposed = await Handle401UnAuthorized(args);
 
@@ -41,7 +38,6 @@ namespace Titanium.Web.Proxy
                         return true;
                     }
                 }
-#endif
 
                 args.ReRequest = false;
 
