@@ -1,5 +1,4 @@
-﻿#if NET45
-using System;
+﻿using System;
 
 namespace Titanium.Web.Proxy.Network.WinAuth.Security
 {
@@ -43,4 +42,3 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         }
     }
 }
-#endif

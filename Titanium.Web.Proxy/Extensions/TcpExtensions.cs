@@ -6,7 +6,6 @@ namespace Titanium.Web.Proxy.Extensions
     internal static class TcpExtensions
     {
 
-#if NET45
         /// <summary>
         /// Gets the local port from a native TCP row object.
         /// </summary>
@@ -26,6 +25,5 @@ namespace Titanium.Web.Proxy.Extensions
         {
             return (tcpRow.remotePort1 << 8) + tcpRow.remotePort2 + (tcpRow.remotePort3 << 24) + (tcpRow.remotePort4 << 16);
         }
-#endif
     }
 }

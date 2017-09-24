@@ -110,20 +110,21 @@ namespace Titanium.Web.Proxy.EventArguments
 
             WebSession.ProcessId = new Lazy<int>(() =>
             {
-#if NET45
-                var remoteEndPoint = (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
-
-                //If client is localhost get the process id
-                if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
+                if (RunTime.IsWindows)
                 {
-                    return NetworkHelper.GetProcessIdFromPort(remoteEndPoint.Port, endPoint.IpV6Enabled);
+                    var remoteEndPoint = (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
+
+                    //If client is localhost get the process id
+                    if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
+                    {
+                        return NetworkHelper.GetProcessIdFromPort(remoteEndPoint.Port, endPoint.IpV6Enabled);
+                    }
+
+                    //can't access process Id of remote request from remote machine
+                    return -1;
                 }
 
-                //can't access process Id of remote request from remote machine
-                return -1;
-#else
                 throw new PlatformNotSupportedException();
-#endif
             });
         }
 
