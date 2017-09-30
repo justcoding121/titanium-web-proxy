@@ -39,13 +39,11 @@ namespace Titanium.Web.Proxy.Network
             get { return engine; }
             set
             {
-#if NET45
-                //For Mono only Bouncy Castle is supported
-                if (RunTime.IsRunningOnMono)
+                //For Mono (or Non-Windows) only Bouncy Castle is supported
+                if (!RunTime.IsWindows || RunTime.IsRunningOnMono)
                 {
                     value = CertificateEngine.BouncyCastle;
                 }
-#endif
 
                 if (value != engine)
                 {
@@ -55,11 +53,7 @@ namespace Titanium.Web.Proxy.Network
 
                 if (certEngine == null)
                 {
-#if NET45
                     certEngine = engine == CertificateEngine.BouncyCastle ? (ICertificateMaker)new BCCertificateMaker() : new WinCertificateMaker();
-#else
-                    certEngine = new BCCertificateMaker();
-#endif
                 }
             }
         }
@@ -139,11 +133,7 @@ namespace Titanium.Web.Proxy.Network
 
         private string GetRootCertificatePath()
         {
-#if NET45
             string assemblyLocation = Assembly.GetExecutingAssembly().Location;
-#else
-            string assemblyLocation = string.Empty;
-#endif
 
             // dynamically loaded assemblies returns string.Empty location
             if (assemblyLocation == string.Empty)
@@ -230,7 +220,6 @@ namespace Titanium.Web.Proxy.Network
             TrustRootCertificate(StoreLocation.LocalMachine);
         }
 
-#if NET45
         /// <summary>
         /// Puts the certificate to the local machine's certificate store. 
         /// Needs elevated permission. Works only on Windows.
@@ -238,7 +227,7 @@ namespace Titanium.Web.Proxy.Network
         /// <returns></returns>
         public bool TrustRootCertificateAsAdministrator()
         {
-            if (RunTime.IsRunningOnMono)
+            if (!RunTime.IsWindows || RunTime.IsRunningOnMono)
             {
                 return false;
             }
@@ -275,7 +264,6 @@ namespace Titanium.Web.Proxy.Network
 
             return true;
         }
-#endif
 
         /// <summary>
         /// Removes the trusted certificates.
@@ -289,7 +277,6 @@ namespace Titanium.Web.Proxy.Network
             RemoveTrustedRootCertificates(StoreLocation.LocalMachine);
         }
 
-#if NET45
         /// <summary>
         /// Removes the trusted certificates from the local machine's certificate store. 
         /// Needs elevated permission. Works only on Windows.
@@ -297,7 +284,7 @@ namespace Titanium.Web.Proxy.Network
         /// <returns></returns>
         public bool RemoveTrustedRootCertificatesAsAdministrator()
         {
-            if (RunTime.IsRunningOnMono)
+            if (!RunTime.IsWindows || RunTime.IsRunningOnMono)
             {
                 return false;
             }
@@ -329,7 +316,6 @@ namespace Titanium.Web.Proxy.Network
 
             return true;
         }
-#endif
 
         /// <summary>
         /// Determines whether the root certificate is trusted.
@@ -383,11 +369,8 @@ namespace Titanium.Web.Proxy.Network
             }
 
             X509Certificate2 certificate = null;
-            // todo: lock in netstandard, too
-#if NET45
             lock (string.Intern(certificateName))
             {
-#endif
                 if (certificateCache.ContainsKey(certificateName) == false)
                 {
                     try
@@ -420,9 +403,7 @@ namespace Titanium.Web.Proxy.Network
                         return cached.Certificate;
                     }
                 }
-#if NET45
         }
-#endif
 
             return certificate;
         }

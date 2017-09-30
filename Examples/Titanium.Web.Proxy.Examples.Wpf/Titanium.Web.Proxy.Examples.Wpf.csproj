@@ -51,9 +51,8 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="StreamExtended, Version=1.0.1.0, Culture=neutral, PublicKeyToken=bbfa0f1d54f50043, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\StreamExtended.1.0.18\lib\net45\StreamExtended.dll</HintPath>
-      <Private>True</Private>
+    <Reference Include="StreamExtended, Version=1.0.81.0, Culture=neutral, PublicKeyToken=bbfa0f1d54f50043, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\StreamExtended.1.0.81\lib\net45\StreamExtended.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />

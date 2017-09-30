@@ -6,7 +6,6 @@ namespace Titanium.Web.Proxy.Helpers
 {
     internal class NetworkHelper
     {
-#if NET45
         private static int FindProcessIdFromLocalPort(int port, IpVersion ipVersion)
         {
             var tcpRow = TcpHelper.GetTcpRowByLocalPort(ipVersion, port);
@@ -26,6 +25,7 @@ namespace Titanium.Web.Proxy.Helpers
             return FindProcessIdFromLocalPort(port, IpVersion.Ipv6);
         }
 
+#if NET45
         /// <summary>
         /// Adapated from below link
         /// http://stackoverflow.com/questions/11834091/how-to-check-if-localhost
