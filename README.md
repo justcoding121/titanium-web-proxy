@@ -24,7 +24,7 @@ Features
 * Supports updating response
 * Safely relays Web Socket requests over HTTP
 * Support mutual SSL authentication
-* Fully asynchronous proxy
+* Multithreaded & fully asynchronous proxy
 * Supports proxy authentication & automatic proxy detection
 * Kerberos/NTLM authentication over HTTP protocols for windows domain
 
