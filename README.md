@@ -215,11 +215,13 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
     return Task.FromResult(0);
 }
 ```
-Future road map (Pull requests are welcome!)
-============
+###  Note for Contributors
+
+#### Roadmap
+
 * Support HTTP 2.0 
 * Support SOCKS protocol
 
-Collaborators
-=============
+#### Collaborators
+
 * [honfika](https://github.com/honfika)
