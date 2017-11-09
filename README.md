@@ -213,7 +213,7 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
     return Task.FromResult(0);
 }
 ```
-###  Note to Contributors
+###  Note to contributors
 
 #### Roadmap
 
