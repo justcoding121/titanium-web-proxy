@@ -220,3 +220,6 @@ Future road map (Pull requests are welcome!)
 * Support HTTP 2.0 
 * Support SOCKS protocol
 
+Collaborators
+=============
+* [honfika](https://github.com/honfika)
