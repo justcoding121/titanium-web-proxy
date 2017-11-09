@@ -1,4 +1,4 @@
-### Titanium Web Proxy
+## Titanium Web Proxy
 
 A light weight HTTP(S) proxy server written in C#
 
@@ -16,7 +16,7 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 
 ![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/develop/Examples/Titanium.Web.Proxy.Examples.Wpf/Capture.PNG)
 
-#### Features
+### Features
 
 * Multithreaded & fully asynchronous proxy
 * Supports HTTP(S) and most features of HTTP 1.1 
@@ -26,7 +26,7 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 * Supports proxy authentication & automatic proxy detection
 * Kerberos/NTLM authentication over HTTP protocols for windows domain
 
-#### Usage
+### Usage
 
 
 Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. 
@@ -213,7 +213,7 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
     return Task.FromResult(0);
 }
 ```
-###  Note for Contributors
+###  Note to Contributors
 
 #### Roadmap
 
