@@ -1,5 +1,5 @@
-Titanium
-========
+### Titanium Web Proxy
+
 A light weight HTTP(S) proxy server written in C#
 
 <a href="https://ci.appveyor.com/project/justcoding121/titanium-web-proxy">![Build Status](https://ci.appveyor.com/api/projects/status/rvlxv8xgj0m7lkr4?svg=true)</a>
@@ -16,20 +16,18 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 
 ![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/develop/Examples/Titanium.Web.Proxy.Examples.Wpf/Capture.PNG)
 
-Features
-========
+#### Features
 
-* Supports HTTP(S) and most features of HTTP 1.1 
-* Support redirect/block/update requests
-* Supports updating response
-* Safely relays Web Socket requests over HTTP
-* Support mutual SSL authentication
 * Multithreaded & fully asynchronous proxy
+* Supports HTTP(S) and most features of HTTP 1.1 
+* Supports redirect/block/update requests and modifying responses
+* Safely relays Web Socket requests over HTTP
+* Supports mutual SSL authentication
 * Supports proxy authentication & automatic proxy detection
 * Kerberos/NTLM authentication over HTTP protocols for windows domain
 
-Usage
-=====
+#### Usage
+
 
 Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. 
 
