@@ -33,17 +33,17 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Headers passed with Connect.
         /// </summary>
-        public ConnectRequest ConnectRequest { get; set; }
+        public ConnectRequest ConnectRequest { get; internal set; }
 
         /// <summary>
         /// Web Request.
         /// </summary>
-        public Request Request { get; set; }
+        public Request Request { get; internal set; }
 
         /// <summary>
         /// Web Response.
         /// </summary>
-        public Response Response { get; set; }
+        public Response Response { get; internal set; }
 
         /// <summary>
         /// PID of the process that is created the current session when client is running in this machine
@@ -74,8 +74,7 @@ namespace Titanium.Web.Proxy.Http
             connection.LastAccess = DateTime.Now;
             ServerConnection = connection;
         }
-
-
+        
         /// <summary>
         /// Prepare and send the http(s) request
         /// </summary>

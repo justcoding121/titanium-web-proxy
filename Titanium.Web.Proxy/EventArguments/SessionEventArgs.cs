@@ -79,17 +79,17 @@ namespace Titanium.Web.Proxy.EventArguments
         /// A web session corresponding to a single request/response sequence
         /// within a proxy connection
         /// </summary>
-        public HttpWebClient WebSession { get; set; }
+        public HttpWebClient WebSession { get; }
 
         /// <summary>
         /// Are we using a custom upstream HTTP proxy?
         /// </summary>
-        public ExternalProxy CustomUpStreamHttpProxyUsed { get; set; }
+        public ExternalProxy CustomUpStreamHttpProxyUsed { get; internal set; }
 
         /// <summary>
         /// Are we using a custom upstream HTTPS proxy?
         /// </summary>
-        public ExternalProxy CustomUpStreamHttpsProxyUsed { get; set; }
+        public ExternalProxy CustomUpStreamHttpsProxyUsed { get; internal set; }
 
         public event EventHandler<DataEventArgs> DataSent;
 
