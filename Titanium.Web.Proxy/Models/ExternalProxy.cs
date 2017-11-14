@@ -66,5 +66,10 @@ namespace Titanium.Web.Proxy.Models
         /// Port.
         /// </summary>
         public int Port { get; set; }
+
+        public override string ToString()
+        {
+            return $"{HostName}:{Port}";
+        }
     }
 }

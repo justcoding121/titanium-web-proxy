@@ -83,7 +83,6 @@ namespace Titanium.Web.Proxy
                         RequestUri = httpRemoteUri,
                         OriginalRequestUrl = httpUrl,
                         HttpVersion = version,
-                        Method = httpMethod,
                     };
 
                     await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.RequestHeaders);
