@@ -12,6 +12,16 @@ namespace Titanium.Web.Proxy.Http
     public class Response
     {
         /// <summary>
+        /// Cached response body content as byte array
+        /// </summary>
+        private byte[] responseBody;
+
+        /// <summary>
+        /// Cached response body as string
+        /// </summary>
+        private string responseBodyString;
+
+        /// <summary>
         /// Response Status Code.
         /// </summary>
         public int ResponseStatusCode { get; set; }
@@ -159,16 +169,6 @@ namespace Titanium.Web.Proxy.Http
         public HeaderCollection ResponseHeaders { get; } = new HeaderCollection();
 
         /// <summary>
-        /// Cached response body content as byte array
-        /// </summary>
-        private byte[] responseBody;
-
-        /// <summary>
-        /// Cached response body as string
-        /// </summary>
-        private string responseBodyString;
-
-        /// <summary>
         /// Response body as byte array
         /// </summary>
         public byte[] ResponseBody
@@ -195,7 +195,7 @@ namespace Titanium.Web.Proxy.Http
         /// Response body as string
         /// Use the encoding specified in response to decode the byte[] data to string
         /// </summary>
-        internal string ResponseBodyString => responseBodyString ?? (responseBodyString = Encoding.GetString(ResponseBody));
+        public string ResponseBodyString => responseBodyString ?? (responseBodyString = Encoding.GetString(ResponseBody));
 
         /// <summary>
         /// Was response body read by user
