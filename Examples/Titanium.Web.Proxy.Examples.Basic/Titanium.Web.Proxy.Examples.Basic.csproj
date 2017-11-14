@@ -4,6 +4,7 @@
     <OutputType>Exe</OutputType>
     <TargetFrameworks>net45;netcoreapp2.0</TargetFrameworks>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <LangVersion>6</LangVersion>
   </PropertyGroup>
 
   <PropertyGroup>

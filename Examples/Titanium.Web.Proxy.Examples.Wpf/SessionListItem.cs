@@ -70,17 +70,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             set { SetField(ref sentDataCount, value); }
         }
 
-        public byte[] RequestBody { get; set; }
-
-        public byte[] ResponseBody { get; set; }
-
-        public Request Request { get; set; }
-
-        public Response Response { get; set; }
-
-        public HeaderCollection RequestHeaders { get; set; }
-
-        public HeaderCollection ResponseHeaders { get; set; }
+        public HttpWebClient WebSession { get; set; }
 
         public event PropertyChangedEventHandler PropertyChanged;
 

@@ -107,7 +107,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 SessionListItem item;
                 if (sessionDictionary.TryGetValue(e, out item))
                 {
-                    item.Response = e.WebSession.Response;
                     item.Update();
                 }
             });
@@ -123,7 +122,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             if (e.WebSession.Request.HasBody)
             {
-                item.RequestBody = await e.GetRequestBody();
+                e.WebSession.Request.KeepRequestBody = true;
+                await e.GetRequestBody();
             }
         }
 
@@ -135,7 +135,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 SessionListItem item2;
                 if (sessionDictionary.TryGetValue(e, out item2))
                 {
-                    item2.Response = e.WebSession.Response;
                     item2.Update();
                     item = item2;
                 }
@@ -145,7 +144,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 if (e.WebSession.Response.HasBody)
                 {
-                    item.ResponseBody = await e.GetResponseBody();
+                    e.WebSession.Response.KeepResponseBody = true;
+                    await e.GetResponseBody();
                 }
             }
         }
@@ -165,11 +165,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 Number = lastSessionNumber,
                 SessionArgs = e,
-                // save the headers because TWP will set it to null in Dispose
-                RequestHeaders = e.WebSession.Request.RequestHeaders,
-                ResponseHeaders = e.WebSession.Response.ResponseHeaders,
-                Request = e.WebSession.Request,
-                Response = e.WebSession.Response,
+                WebSession = e.WebSession,
             };
 
             if (e is TunnelConnectSessionEventArgs || e.WebSession.Request.UpgradeToWebSocket)
@@ -221,24 +217,22 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             const int truncateLimit = 1024;
 
-            var session = SelectedSession;
-            var data = session.RequestBody ?? new byte[0];
+            var session = SelectedSession.WebSession;
+            var request = session.Request;
+            var data = (request.RequestBodyRead ? request.RequestBody : null) ?? new byte[0];
             bool truncated = data.Length > truncateLimit;
             if (truncated)
             {
                 data = data.Take(truncateLimit).ToArray();
             }
 
-            //restore the headers
-            typeof(Request).GetProperty(nameof(Request.RequestHeaders)).SetValue(session.Request, session.RequestHeaders);
-            typeof(Response).GetProperty(nameof(Response.ResponseHeaders)).SetValue(session.Response, session.ResponseHeaders);
-
             //string hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
-            TextBoxRequest.Text = session.Request.HeaderText + session.Request.Encoding.GetString(data) +
+            TextBoxRequest.Text = request.HeaderText + request.Encoding.GetString(data) +
                                   (truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null) +
-                                  (session.Request as ConnectRequest)?.ClientHelloInfo;
+                                  (request as ConnectRequest)?.ClientHelloInfo;
 
-            data = session.ResponseBody ?? new byte[0];
+            var response = session.Response;
+            data = (response.ResponseBodyRead ? response.ResponseBody : null) ?? new byte[0];
             truncated = data.Length > truncateLimit;
             if (truncated)
             {
