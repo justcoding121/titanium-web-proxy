@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.Http
     /// <summary>
     /// A HTTP(S) request object
     /// </summary>
-    public class Request : IDisposable
+    public class Request
     {
         /// <summary>
         /// Request Method
@@ -35,6 +35,11 @@ namespace Titanium.Web.Proxy.Http
         /// Request Http Version
         /// </summary>
         public Version HttpVersion { get; set; }
+
+        /// <summary>
+        /// Keeps the response body data after the session is finished
+        /// </summary>
+        public bool KeepRequestBody { get; set; }
 
         /// <summary>
         /// Has request body?
@@ -167,19 +172,53 @@ namespace Titanium.Web.Proxy.Http
         internal bool CancelRequest { get; set; }
 
         /// <summary>
+        /// Cached request body as byte array
+        /// </summary>
+        private byte[] requestBody;
+
+        /// <summary>
+        /// Cached request body as string
+        /// </summary>
+        private string requestBodyString;
+
+        /// <summary>
         /// Request body as byte array
         /// </summary>
-        internal byte[] RequestBody { get; set; }
+        public byte[] RequestBody
+        {
+            get
+            {
+                if (!RequestBodyRead)
+                {
+                    if (RequestLocked)
+                    {
+                        throw new Exception("You cannot get the request body after request is made to server.");
+                    }
+
+                    throw new Exception("Request body is not read yet. " +
+                                        "Use SessionEventArgs.GetRequestBody() or SessionEventArgs.GetRequestBodyAsString() " +
+                                        "method to read the request body.");
+                }
+
+                return requestBody;
+            }
+            internal set
+            {
+                requestBody = value;
+                requestBodyString = null;
+            }
+        }
 
         /// <summary>
         /// Request body as string
+        /// Use the encoding specified in request to decode the byte[] data to string
         /// </summary>
-        internal string RequestBodyString { get; set; }
+        internal string RequestBodyString => requestBodyString ?? (requestBodyString = Encoding.GetString(RequestBody));
 
         /// <summary>
         /// Request body was read by user?
         /// </summary>
-        internal bool RequestBodyRead { get; set; }
+        public bool RequestBodyRead { get; internal set; }
 
         /// <summary>
         /// Request is ready to be sent (user callbacks are complete?)
@@ -207,7 +246,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Request header collection
         /// </summary>
-        public HeaderCollection RequestHeaders { get; private set; } = new HeaderCollection();
+        public HeaderCollection RequestHeaders { get; } = new HeaderCollection();
 
         /// <summary>
         /// Does server responsed positively for 100 continue request
@@ -297,17 +336,15 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Dispose off 
+        /// Finish the session
         /// </summary>
-        public void Dispose()
+        public void FinishSession()
         {
-            //not really needed since GC will collect it
-            //but just to be on safe side
-
-            RequestHeaders = null;
-
-            RequestBody = null;
-            RequestBodyString = null;
+            if (!KeepRequestBody)
+            {
+                requestBody = null;
+                requestBodyString = null;
+            }
         }
     }
 }

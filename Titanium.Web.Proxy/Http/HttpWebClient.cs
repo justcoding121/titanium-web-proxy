@@ -11,9 +11,9 @@ namespace Titanium.Web.Proxy.Http
     /// <summary>
     /// Used to communicate with the server over HTTP(S)
     /// </summary>
-    public class HttpWebClient : IDisposable
+    public class HttpWebClient
     {
-        private int bufferSize;
+        private readonly int bufferSize;
 
         /// <summary>
         /// Connection to server
@@ -222,12 +222,13 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
         /// </summary>
-        public void Dispose()
+        internal void FinishSession()
         {
-            ConnectRequest = null;
+            ServerConnection = null;
 
-            Request.Dispose();
-            Response.Dispose();
+            ConnectRequest?.FinishSession();
+            Request?.FinishSession();
+            Response?.FinishSession();
         }
     }
 }

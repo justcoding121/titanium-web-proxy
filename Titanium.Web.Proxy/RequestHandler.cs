@@ -512,11 +512,13 @@ namespace Titanium.Web.Proxy
                                 await GetCompressedResponseBody(args.WebSession.Request.ContentEncoding, args.WebSession.Request.RequestBody);
                         }
 
+                        var body = args.WebSession.Request.RequestBody;
+
                         //chunked send is not supported as of now
-                        args.WebSession.Request.ContentLength = args.WebSession.Request.RequestBody.Length;
+                        args.WebSession.Request.ContentLength = body.Length;
 
                         var newStream = args.WebSession.ServerConnection.Stream;
-                        await newStream.WriteAsync(args.WebSession.Request.RequestBody, 0, args.WebSession.Request.RequestBody.Length);
+                        await newStream.WriteAsync(body, 0, body.Length);
                     }
                     else
                     {
