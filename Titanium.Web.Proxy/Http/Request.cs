@@ -12,6 +12,16 @@ namespace Titanium.Web.Proxy.Http
     public class Request
     {
         /// <summary>
+        /// Cached request body as byte array
+        /// </summary>
+        private byte[] requestBody;
+
+        /// <summary>
+        /// Cached request body as string
+        /// </summary>
+        private string requestBodyString;
+
+        /// <summary>
         /// Request Method
         /// </summary>
         public string Method { get; set; }
@@ -37,7 +47,7 @@ namespace Titanium.Web.Proxy.Http
         public Version HttpVersion { get; set; }
 
         /// <summary>
-        /// Keeps the response body data after the session is finished
+        /// Keeps the request body data after the session is finished
         /// </summary>
         public bool KeepRequestBody { get; set; }
 
@@ -172,16 +182,6 @@ namespace Titanium.Web.Proxy.Http
         internal bool CancelRequest { get; set; }
 
         /// <summary>
-        /// Cached request body as byte array
-        /// </summary>
-        private byte[] requestBody;
-
-        /// <summary>
-        /// Cached request body as string
-        /// </summary>
-        private string requestBodyString;
-
-        /// <summary>
         /// Request body as byte array
         /// </summary>
         public byte[] RequestBody
@@ -213,7 +213,7 @@ namespace Titanium.Web.Proxy.Http
         /// Request body as string
         /// Use the encoding specified in request to decode the byte[] data to string
         /// </summary>
-        internal string RequestBodyString => requestBodyString ?? (requestBodyString = Encoding.GetString(RequestBody));
+        public string RequestBodyString => requestBodyString ?? (requestBodyString = Encoding.GetString(RequestBody));
 
         /// <summary>
         /// Request body was read by user?
