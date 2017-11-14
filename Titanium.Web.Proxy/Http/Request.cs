@@ -329,13 +329,6 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Constructor.
-        /// </summary>
-        public Request()
-        {
-        }
-
-        /// <summary>
         /// Finish the session
         /// </summary>
         public void FinishSession()
@@ -345,6 +338,11 @@ namespace Titanium.Web.Proxy.Http
                 requestBody = null;
                 requestBodyString = null;
             }
+        }
+
+        public override string ToString()
+        {
+            return HeaderText;
         }
     }
 }
