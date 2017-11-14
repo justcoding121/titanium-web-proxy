@@ -56,7 +56,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             set { SetValue(ServerConnectionCountProperty, value); }
         }
 
-        private readonly Dictionary<SessionEventArgs, SessionListItem> sessionDictionary = new Dictionary<SessionEventArgs, SessionListItem>();
+        private readonly Dictionary<HttpWebClient, SessionListItem> sessionDictionary = new Dictionary<HttpWebClient, SessionListItem>();
         private SessionListItem selectedSession;
 
         public MainWindow()
@@ -105,7 +105,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             await Dispatcher.InvokeAsync(() =>
             {
                 SessionListItem item;
-                if (sessionDictionary.TryGetValue(e, out item))
+                if (sessionDictionary.TryGetValue(e.WebSession, out item))
                 {
                     item.Update();
                 }
@@ -133,7 +133,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             await Dispatcher.InvokeAsync(() =>
             {
                 SessionListItem item2;
-                if (sessionDictionary.TryGetValue(e, out item2))
+                if (sessionDictionary.TryGetValue(e.WebSession, out item2))
                 {
                     item2.Update();
                     item = item2;
@@ -154,27 +154,28 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             var item = CreateSessionListItem(e);
             Sessions.Add(item);
-            sessionDictionary.Add(e, item);
+            sessionDictionary.Add(e.WebSession, item);
             return item;
         }
 
         private SessionListItem CreateSessionListItem(SessionEventArgs e)
         {
             lastSessionNumber++;
+            bool isTunnelConnect = e is TunnelConnectSessionEventArgs;
             var item = new SessionListItem
             {
                 Number = lastSessionNumber,
-                SessionArgs = e,
                 WebSession = e.WebSession,
+                IsTunnelConnect = isTunnelConnect,
             };
 
-            if (e is TunnelConnectSessionEventArgs || e.WebSession.Request.UpgradeToWebSocket)
+            if (isTunnelConnect || e.WebSession.Request.UpgradeToWebSocket)
             {
                 e.DataReceived += (sender, args) =>
                 {
                     var session = (SessionEventArgs)sender;
                     SessionListItem li;
-                    if (sessionDictionary.TryGetValue(session, out li))
+                    if (sessionDictionary.TryGetValue(session.WebSession, out li))
                     {
                         li.ReceivedDataCount += args.Count;
                     }
@@ -184,7 +185,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 {
                     var session = (SessionEventArgs)sender;
                     SessionListItem li;
-                    if (sessionDictionary.TryGetValue(session, out li))
+                    if (sessionDictionary.TryGetValue(session.WebSession, out li))
                     {
                         li.SentDataCount += args.Count;
                     }
@@ -203,7 +204,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 foreach (var item in selectedItems.Cast<SessionListItem>().ToArray())
                 {
                     Sessions.Remove(item);
-                    sessionDictionary.Remove(item.SessionArgs);
+                    sessionDictionary.Remove(item.WebSession);
                 }
             }
         }

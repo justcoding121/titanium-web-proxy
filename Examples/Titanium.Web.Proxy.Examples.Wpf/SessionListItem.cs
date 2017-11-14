@@ -20,7 +20,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         public int Number { get; set; }
 
-        public SessionEventArgs SessionArgs { get; set; }
+        public HttpWebClient WebSession { get; set; }
+
+        public bool IsTunnelConnect { get; set; }
 
         public string StatusCode
         {
@@ -70,8 +72,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             set { SetField(ref sentDataCount, value); }
         }
 
-        public HttpWebClient WebSession { get; set; }
-
         public event PropertyChangedEventHandler PropertyChanged;
 
         protected void SetField<T>(ref T field, T value,[CallerMemberName] string propertyName = null)
@@ -88,13 +88,13 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         public void Update()
         {
-            var request = SessionArgs.WebSession.Request;
-            var response = SessionArgs.WebSession.Response;
+            var request = WebSession.Request;
+            var response = WebSession.Response;
             int statusCode = response?.ResponseStatusCode ?? 0;
             StatusCode = statusCode == 0 ? "-" : statusCode.ToString();
             Protocol = request.RequestUri.Scheme;
 
-            if (SessionArgs is TunnelConnectSessionEventArgs)
+            if (IsTunnelConnect)
             {
                 Host = "Tunnel to";
                 Url = request.RequestUri.Host + ":" + request.RequestUri.Port;
@@ -106,7 +106,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             }
 
             BodySize = response?.ContentLength ?? -1;
-            Process = GetProcessDescription(SessionArgs.WebSession.ProcessId.Value);
+            Process = GetProcessDescription(WebSession.ProcessId.Value);
         }
 
         private string GetProcessDescription(int processId)
