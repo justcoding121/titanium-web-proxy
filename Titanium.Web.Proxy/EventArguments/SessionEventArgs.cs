@@ -95,6 +95,8 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public event EventHandler<DataEventArgs> DataReceived;
 
+        public ProxyEndPoint LocalEndPoint;
+
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
@@ -107,6 +109,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             ProxyClient = new ProxyClient();
             WebSession = new HttpWebClient(bufferSize);
+            LocalEndPoint = endPoint;
 
             WebSession.ProcessId = new Lazy<int>(() =>
             {
