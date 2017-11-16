@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy
                 var response = args.WebSession.Response;
 
                 //check for windows authentication
-                if (IsWindowsAuthenticationEnabledAndSupported && response.ResponseStatusCode == (int)HttpStatusCode.Unauthorized)
+                if (IsWindowsAuthenticationEnabledAndSupported && response.StatusCode == (int)HttpStatusCode.Unauthorized)
                 {
                     bool disposed = await Handle401UnAuthorized(args);
 
@@ -74,21 +74,21 @@ namespace Titanium.Web.Proxy
                 }
 
                 //Write back response status to client
-                await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.ResponseStatusCode, response.ResponseStatusDescription);
+                await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.StatusCode, response.StatusDescription);
 
-                response.ResponseHeaders.FixProxyHeaders();
-                if (response.ResponseBodyRead)
+                response.Headers.FixProxyHeaders();
+                if (response.IsBodyRead)
                 {
                     bool isChunked = response.IsChunked;
                     string contentEncoding = response.ContentEncoding;
 
                     if (contentEncoding != null)
                     {
-                        response.ResponseBody = await GetCompressedResponseBody(contentEncoding, response.ResponseBody);
+                        response.Body = await GetCompressedResponseBody(contentEncoding, response.Body);
 
                         if (isChunked == false)
                         {
-                            response.ContentLength = response.ResponseBody.Length;
+                            response.ContentLength = response.Body.Length;
                         }
                         else
                         {
@@ -96,12 +96,12 @@ namespace Titanium.Web.Proxy
                         }
                     }
 
-                    await clientStreamWriter.WriteHeadersAsync(response.ResponseHeaders);
-                    await clientStreamWriter.WriteResponseBodyAsync(response.ResponseBody, isChunked);
+                    await clientStreamWriter.WriteHeadersAsync(response.Headers);
+                    await clientStreamWriter.WriteResponseBodyAsync(response.Body, isChunked);
                 }
                 else
                 {
-                    await clientStreamWriter.WriteHeadersAsync(response.ResponseHeaders);
+                    await clientStreamWriter.WriteHeadersAsync(response.Headers);
 
                     //Write body if exists
                     if (response.HasBody)

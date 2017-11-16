@@ -122,7 +122,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             if (e.WebSession.Request.HasBody)
             {
-                e.WebSession.Request.KeepRequestBody = true;
+                e.WebSession.Request.KeepBody = true;
                 await e.GetRequestBody();
             }
         }
@@ -144,7 +144,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 if (e.WebSession.Response.HasBody)
                 {
-                    e.WebSession.Response.KeepResponseBody = true;
+                    e.WebSession.Response.KeepBody = true;
                     await e.GetResponseBody();
                 }
             }
@@ -220,7 +220,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             var session = SelectedSession.WebSession;
             var request = session.Request;
-            var data = (request.RequestBodyRead ? request.RequestBody : null) ?? new byte[0];
+            var data = (request.IsBodyRead ? request.Body : null) ?? new byte[0];
             bool truncated = data.Length > truncateLimit;
             if (truncated)
             {
@@ -233,7 +233,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                                   (request as ConnectRequest)?.ClientHelloInfo;
 
             var response = session.Response;
-            data = (response.ResponseBodyRead ? response.ResponseBody : null) ?? new byte[0];
+            data = (response.IsBodyRead ? response.Body : null) ?? new byte[0];
             truncated = data.Length > truncateLimit;
             if (truncated)
             {

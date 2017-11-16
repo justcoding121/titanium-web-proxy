@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy
                 return true;
             }
 
-            var httpHeaders = session.WebSession.Request.RequestHeaders.ToArray();
+            var httpHeaders = session.WebSession.Request.Headers.ToArray();
 
             try
             {
@@ -68,12 +68,12 @@ namespace Titanium.Web.Proxy
             var response = new Response
             {
                 HttpVersion = HttpHeader.Version11,
-                ResponseStatusCode = (int)HttpStatusCode.ProxyAuthenticationRequired,
-                ResponseStatusDescription = description
+                StatusCode = (int)HttpStatusCode.ProxyAuthenticationRequired,
+                StatusDescription = description
             };
 
-            response.ResponseHeaders.AddHeader("Proxy-Authenticate", $"Basic realm=\"{ProxyRealm}\"");
-            response.ResponseHeaders.AddHeader("Proxy-Connection", "close");
+            response.Headers.AddHeader("Proxy-Authenticate", $"Basic realm=\"{ProxyRealm}\"");
+            response.Headers.AddHeader("Proxy-Connection", "close");
 
             await clientStreamWriter.WriteResponseAsync(response);
             return response;

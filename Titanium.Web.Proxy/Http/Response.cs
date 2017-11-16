@@ -14,22 +14,22 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Cached response body content as byte array
         /// </summary>
-        private byte[] responseBody;
+        private byte[] body;
 
         /// <summary>
         /// Cached response body as string
         /// </summary>
-        private string responseBodyString;
+        private string bodyString;
 
         /// <summary>
         /// Response Status Code.
         /// </summary>
-        public int ResponseStatusCode { get; set; }
+        public int StatusCode { get; set; }
 
         /// <summary>
         /// Response Status description.
         /// </summary>
-        public string ResponseStatusDescription { get; set; }
+        public string StatusDescription { get; set; }
 
         /// <summary>
         /// Encoding used in response
@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Content encoding for this response
         /// </summary>
-        public string ContentEncoding => ResponseHeaders.GetHeaderValueOrNull("content-encoding")?.Trim();
+        public string ContentEncoding => Headers.GetHeaderValueOrNull("content-encoding")?.Trim();
 
         /// <summary>
         /// Http version
@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Keeps the response body data after the session is finished
         /// </summary>
-        public bool KeepResponseBody { get; set; }
+        public bool KeepBody { get; set; }
 
         /// <summary>
         /// Has response body?
@@ -60,14 +60,14 @@ namespace Titanium.Web.Proxy.Http
             {
                 //Has body only if response is chunked or content length >0
                 //If none are true then check if connection:close header exist, if so write response until server or client terminates the connection
-                if (IsChunked || ContentLength > 0 || !ResponseKeepAlive)
+                if (IsChunked || ContentLength > 0 || !KeepAlive)
                 {
                     return true;
                 }
 
                 //has response if connection:keep-alive header exist and when version is http/1.0
                 //Because in Http 1.0 server can return a response without content-length (expectation being client would read until end of stream)
-                if (ResponseKeepAlive && HttpVersion.Minor == 0)
+                if (KeepAlive && HttpVersion.Minor == 0)
                 {
                     return true;
                 }
@@ -79,11 +79,11 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Keep the connection alive?
         /// </summary>
-        public bool ResponseKeepAlive
+        public bool KeepAlive
         {
             get
             {
-                string headerValue = ResponseHeaders.GetHeaderValueOrNull("connection");
+                string headerValue = Headers.GetHeaderValueOrNull("connection");
 
                 if (headerValue != null)
                 {
@@ -100,7 +100,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Content type of this response
         /// </summary>
-        public string ContentType => ResponseHeaders.GetHeaderValueOrNull("content-type");
+        public string ContentType => Headers.GetHeaderValueOrNull("content-type");
 
         /// <summary>
         /// Length of response body
@@ -109,7 +109,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = ResponseHeaders.GetHeaderValueOrNull("content-length");
+                string headerValue = Headers.GetHeaderValueOrNull("content-length");
 
                 if (headerValue == null)
                 {
@@ -129,12 +129,12 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (value >= 0)
                 {
-                    ResponseHeaders.SetOrAddHeaderValue("content-length", value.ToString());
+                    Headers.SetOrAddHeaderValue("content-length", value.ToString());
                     IsChunked = false;
                 }
                 else
                 {
-                    ResponseHeaders.RemoveHeader("content-length");
+                    Headers.RemoveHeader("content-length");
                 }
             }
         }
@@ -146,19 +146,19 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = ResponseHeaders.GetHeaderValueOrNull("transfer-encoding");
+                string headerValue = Headers.GetHeaderValueOrNull("transfer-encoding");
                 return headerValue != null && headerValue.ContainsIgnoreCase("chunked");
             }
             set
             {
                 if (value)
                 {
-                    ResponseHeaders.SetOrAddHeaderValue("transfer-encoding", "chunked");
+                    Headers.SetOrAddHeaderValue("transfer-encoding", "chunked");
                     ContentLength = -1;
                 }
                 else
                 {
-                    ResponseHeaders.RemoveHeader("transfer-encoding");
+                    Headers.RemoveHeader("transfer-encoding");
                 }
             }
         }
@@ -166,28 +166,28 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Collection of all response headers
         /// </summary>
-        public HeaderCollection ResponseHeaders { get; } = new HeaderCollection();
+        public HeaderCollection Headers { get; } = new HeaderCollection();
 
         /// <summary>
         /// Response body as byte array
         /// </summary>
-        public byte[] ResponseBody
+        public byte[] Body
         {
             get
             {
-                if (!ResponseBodyRead)
+                if (!IsBodyRead)
                 {
                     throw new Exception("Response body is not read yet. " +
                                         "Use SessionEventArgs.GetResponseBody() or SessionEventArgs.GetResponseBodyAsString() " +
                                         "method to read the response body.");
                 }
 
-                return responseBody;
+                return body;
             }
             internal set
             {
-                responseBody = value;
-                responseBodyString = null;
+                body = value;
+                bodyString = null;
             }
         }
 
@@ -195,12 +195,12 @@ namespace Titanium.Web.Proxy.Http
         /// Response body as string
         /// Use the encoding specified in response to decode the byte[] data to string
         /// </summary>
-        public string ResponseBodyString => responseBodyString ?? (responseBodyString = Encoding.GetString(ResponseBody));
+        public string BodyString => bodyString ?? (bodyString = Encoding.GetString(Body));
 
         /// <summary>
         /// Was response body read by user
         /// </summary>
-        public bool ResponseBodyRead { get; internal set; }
+        public bool IsBodyRead { get; internal set; }
 
         /// <summary>
         /// Is response is no more modifyable by user (user callbacks complete?)
@@ -220,7 +220,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Gets the resposne status.
         /// </summary>
-        public string ResponseStatus => $"HTTP/{HttpVersion?.Major}.{HttpVersion?.Minor} {ResponseStatusCode} {ResponseStatusDescription}";
+        public string Status => $"HTTP/{HttpVersion?.Major}.{HttpVersion?.Minor} {StatusCode} {StatusDescription}";
 
         /// <summary>
         /// Gets the header text.
@@ -230,8 +230,8 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 var sb = new StringBuilder();
-                sb.AppendLine(ResponseStatus);
-                foreach (var header in ResponseHeaders)
+                sb.AppendLine(Status);
+                foreach (var header in Headers)
                 {
                     sb.AppendLine(header.ToString());
                 }
@@ -266,10 +266,10 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         internal void FinishSession()
         {
-            if (!KeepResponseBody)
+            if (!KeepBody)
             {
-                responseBody = null;
-                responseBodyString = null;
+                body = null;
+                bodyString = null;
             }
         }
 

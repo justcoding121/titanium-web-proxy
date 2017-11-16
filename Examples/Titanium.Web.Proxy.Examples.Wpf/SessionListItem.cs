@@ -90,7 +90,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             var request = WebSession.Request;
             var response = WebSession.Response;
-            int statusCode = response?.ResponseStatusCode ?? 0;
+            int statusCode = response?.StatusCode ?? 0;
             StatusCode = statusCode == 0 ? "-" : statusCode.ToString();
             Protocol = request.RequestUri.Scheme;
 

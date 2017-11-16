@@ -13,11 +13,11 @@ namespace Titanium.Web.Proxy.Http.Responses
         /// <param name="status"></param>
         public GenericResponse(HttpStatusCode status)
         {
-            ResponseStatusCode = (int)status;
+            StatusCode = (int)status;
 
             //todo: this is not really correct, status description should contain spaces, too
             //see: https://tools.ietf.org/html/rfc7231#section-6.1
-            ResponseStatusDescription = status.ToString();
+            StatusDescription = status.ToString();
         }
 
         /// <summary>
@@ -27,8 +27,8 @@ namespace Titanium.Web.Proxy.Http.Responses
         /// <param name="statusDescription"></param>
         public GenericResponse(int statusCode, string statusDescription)
         {
-            ResponseStatusCode = statusCode;
-            ResponseStatusDescription = statusDescription;
+            StatusCode = statusCode;
+            StatusDescription = statusDescription;
         }
     }
 }

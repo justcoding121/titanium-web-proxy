@@ -12,8 +12,8 @@ namespace Titanium.Web.Proxy.Http.Responses
         /// </summary>
         public RedirectResponse()
         {
-            ResponseStatusCode = (int)HttpStatusCode.Found;
-            ResponseStatusDescription = "Found";
+            StatusCode = (int)HttpStatusCode.Found;
+            StatusDescription = "Found";
         }
     }
 }

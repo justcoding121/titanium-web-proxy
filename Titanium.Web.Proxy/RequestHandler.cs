@@ -81,11 +81,11 @@ namespace Titanium.Web.Proxy
                     connectRequest = new ConnectRequest
                     {
                         RequestUri = httpRemoteUri,
-                        OriginalRequestUrl = httpUrl,
+                        OriginalUrl = httpUrl,
                         HttpVersion = version,
                     };
 
-                    await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.RequestHeaders);
+                    await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.Headers);
 
                     var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest);
                     connectArgs.ProxyClient.TcpClient = tcpClient;
@@ -312,14 +312,14 @@ namespace Titanium.Web.Proxy
                     Request.ParseRequestLine(httpCmd, out httpMethod, out httpUrl, out version);
 
                     //Read the request headers in to unique and non-unique header collections
-                    await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.RequestHeaders);
+                    await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.Headers);
 
                     var httpRemoteUri = new Uri(httpsConnectHostname == null
                         ? isTransparentEndPoint ? string.Concat("http://", args.WebSession.Request.Host, httpUrl) : httpUrl
                         : string.Concat("https://", args.WebSession.Request.Host ?? httpsConnectHostname, httpUrl));
 
                     args.WebSession.Request.RequestUri = httpRemoteUri;
-                    args.WebSession.Request.OriginalRequestUrl = httpUrl;
+                    args.WebSession.Request.OriginalUrl = httpUrl;
 
                     args.WebSession.Request.Method = httpMethod;
                     args.WebSession.Request.HttpVersion = version;
@@ -334,7 +334,7 @@ namespace Titanium.Web.Proxy
                         break;
                     }
 
-                    PrepareRequestHeaders(args.WebSession.Request.RequestHeaders);
+                    PrepareRequestHeaders(args.WebSession.Request.Headers);
                     args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
 
                     //if win auth is enabled
@@ -377,7 +377,7 @@ namespace Titanium.Web.Proxy
                     if (args.WebSession.Request.UpgradeToWebSocket)
                     {
                         //prepare the prefix content
-                        var requestHeaders = args.WebSession.Request.RequestHeaders;
+                        var requestHeaders = args.WebSession.Request.Headers;
                         byte[] requestBytes;
                         using (var ms = new MemoryStream())
                         using (var writer = new HttpRequestWriter(ms, BufferSize))
@@ -395,10 +395,10 @@ namespace Titanium.Web.Proxy
                         string responseStatusDescription;
                         Response.ParseResponseLine(httpStatus, out responseVersion, out responseStatusCode, out responseStatusDescription);
                         args.WebSession.Response.HttpVersion = responseVersion;
-                        args.WebSession.Response.ResponseStatusCode = responseStatusCode;
-                        args.WebSession.Response.ResponseStatusDescription = responseStatusDescription;
+                        args.WebSession.Response.StatusCode = responseStatusCode;
+                        args.WebSession.Response.StatusDescription = responseStatusDescription;
 
-                        await HeaderParser.ReadHeaders(connection.StreamReader, args.WebSession.Response.ResponseHeaders);
+                        await HeaderParser.ReadHeaders(connection.StreamReader, args.WebSession.Response.Headers);
 
                         await clientStreamWriter.WriteResponseAsync(args.WebSession.Response);
 
@@ -426,7 +426,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     //if connection is closing exit
-                    if (args.WebSession.Response.ResponseKeepAlive == false)
+                    if (args.WebSession.Response.KeepAlive == false)
                     {
                         args.Dispose();
                         break;
@@ -502,15 +502,15 @@ namespace Titanium.Web.Proxy
                 if (args.WebSession.Request.ContentLength > 0)
                 {
                     //If request was modified by user
-                    if (args.WebSession.Request.RequestBodyRead)
+                    if (args.WebSession.Request.IsBodyRead)
                     {
                         if (args.WebSession.Request.ContentEncoding != null)
                         {
-                            args.WebSession.Request.RequestBody =
-                                await GetCompressedResponseBody(args.WebSession.Request.ContentEncoding, args.WebSession.Request.RequestBody);
+                            args.WebSession.Request.Body =
+                                await GetCompressedResponseBody(args.WebSession.Request.ContentEncoding, args.WebSession.Request.Body);
                         }
 
-                        var body = args.WebSession.Request.RequestBody;
+                        var body = args.WebSession.Request.Body;
 
                         //chunked send is not supported as of now
                         args.WebSession.Request.ContentLength = body.Length;
@@ -544,7 +544,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 //if connection is closing exit
-                if (args.WebSession.Response.ResponseKeepAlive == false)
+                if (args.WebSession.Response.KeepAlive == false)
                 {
                     return true;
                 }

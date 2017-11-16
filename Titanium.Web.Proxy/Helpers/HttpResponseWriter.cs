@@ -25,9 +25,9 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         public async Task WriteResponseAsync(Response response, bool flush = true)
         {
-            await WriteResponseStatusAsync(response.HttpVersion, response.ResponseStatusCode, response.ResponseStatusDescription);
-            response.ResponseHeaders.FixProxyHeaders();
-            await WriteHeadersAsync(response.ResponseHeaders, flush);
+            await WriteResponseStatusAsync(response.HttpVersion, response.StatusCode, response.StatusDescription);
+            response.Headers.FixProxyHeaders();
+            await WriteHeadersAsync(response.Headers, flush);
         }
 
         /// <summary>
