@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
@@ -9,6 +10,7 @@ namespace Titanium.Web.Proxy.Http
     /// <summary>
     /// Http(s) response object
     /// </summary>
+    [TypeConverter(typeof(ExpandableObjectConverter))]
     public class Response
     {
         /// <summary>
@@ -181,6 +183,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Response body as byte array
         /// </summary>
+        [Browsable(false)]
         public byte[] Body
         {
             get
@@ -199,6 +202,7 @@ namespace Titanium.Web.Proxy.Http
         /// Response body as string
         /// Use the encoding specified in response to decode the byte[] data to string
         /// </summary>
+        [Browsable(false)]
         public string BodyString => bodyString ?? (bodyString = Encoding.GetString(Body));
 
         /// <summary>
