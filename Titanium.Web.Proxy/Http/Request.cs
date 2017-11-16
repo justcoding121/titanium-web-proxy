@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Text;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
@@ -181,6 +182,31 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         internal bool CancelRequest { get; set; }
 
+        internal void EnsureBodyAvailable(bool throwWhenNotReadYet = true)
+        {
+            //GET request don't have a request body to read
+            if (!HasBody)
+            {
+                throw new BodyNotFoundException("Request don't have a body. " + "Please verify that this request is a Http POST/PUT/PATCH and request " +
+                                                "content length is greater than zero before accessing the body.");
+            }
+
+            if (!IsBodyRead)
+            {
+                if (RequestLocked)
+                {
+                    throw new Exception("You cannot get the request body after request is made to server.");
+                }
+
+                if (throwWhenNotReadYet)
+                {
+                    throw new Exception("Request body is not read yet. " +
+                                        "Use SessionEventArgs.GetRequestBody() or SessionEventArgs.GetRequestBodyAsString() " +
+                                        "method to read the request body.");
+                }
+            }
+        }
+
         /// <summary>
         /// Request body as byte array
         /// </summary>
@@ -188,18 +214,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                if (!IsBodyRead)
-                {
-                    if (RequestLocked)
-                    {
-                        throw new Exception("You cannot get the request body after request is made to server.");
-                    }
-
-                    throw new Exception("Request body is not read yet. " +
-                                        "Use SessionEventArgs.GetRequestBody() or SessionEventArgs.GetRequestBodyAsString() " +
-                                        "method to read the request body.");
-                }
-
+                EnsureBodyAvailable();
                 return body;
             }
             internal set

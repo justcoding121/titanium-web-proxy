@@ -168,6 +168,16 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public HeaderCollection Headers { get; } = new HeaderCollection();
 
+        internal void EnsureBodyAvailable()
+        {
+            if (!IsBodyRead)
+            {
+                throw new Exception("Response body is not read yet. " +
+                                    "Use SessionEventArgs.GetResponseBody() or SessionEventArgs.GetResponseBodyAsString() " +
+                                    "method to read the response body.");
+            }
+        }
+
         /// <summary>
         /// Response body as byte array
         /// </summary>
@@ -175,13 +185,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                if (!IsBodyRead)
-                {
-                    throw new Exception("Response body is not read yet. " +
-                                        "Use SessionEventArgs.GetResponseBody() or SessionEventArgs.GetResponseBodyAsString() " +
-                                        "method to read the response body.");
-                }
-
+                EnsureBodyAvailable();
                 return body;
             }
             internal set
