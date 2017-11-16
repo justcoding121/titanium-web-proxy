@@ -1,22 +1,24 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http
 {
+    [TypeConverter(typeof(ExpandableObjectConverter))]
     public class HeaderCollection : IEnumerable<HttpHeader>
     {
         /// <summary>
         /// Unique Request header collection
         /// </summary>
-        public Dictionary<string, HttpHeader> Headers { get; set; }
+        public Dictionary<string, HttpHeader> Headers { get; }
 
         /// <summary>
         /// Non Unique headers
         /// </summary>
-        public Dictionary<string, List<HttpHeader>> NonUniqueHeaders { get; set; }
+        public Dictionary<string, List<HttpHeader>> NonUniqueHeaders { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="HeaderCollection"/> class.
@@ -52,6 +54,7 @@ namespace Titanium.Web.Proxy.Http
                     Headers[name]
                 };
             }
+
             if (NonUniqueHeaders.ContainsKey(name))
             {
                 return new List<HttpHeader>(NonUniqueHeaders[name]);
