@@ -147,7 +147,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             Console.WriteLine(e.WebSession.Request.Url);
 
             //read request headers
-            requestHeaderHistory[e.Id] = e.WebSession.Request.RequestHeaders;
+            requestHeaderHistory[e.Id] = e.WebSession.Request.Headers;
 
             if (e.WebSession.Request.HasBody)
             {
@@ -194,7 +194,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //}
 
             //read response headers
-            responseHeaderHistory[e.Id] = e.WebSession.Response.ResponseHeaders;
+            responseHeaderHistory[e.Id] = e.WebSession.Response.Headers;
 
             // print out process id of current session
             //Console.WriteLine($"PID: {e.WebSession.ProcessId.Value}");
@@ -202,7 +202,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
             if (e.WebSession.Request.Method == "GET" || e.WebSession.Request.Method == "POST")
             {
-                if (e.WebSession.Response.ResponseStatusCode == (int)HttpStatusCode.OK)
+                if (e.WebSession.Response.StatusCode == (int)HttpStatusCode.OK)
                 {
                     if (e.WebSession.Response.ContentType != null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
                     {

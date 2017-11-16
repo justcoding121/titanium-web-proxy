@@ -14,12 +14,12 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Cached request body as byte array
         /// </summary>
-        private byte[] requestBody;
+        private byte[] body;
 
         /// <summary>
         /// Cached request body as string
         /// </summary>
-        private string requestBodyString;
+        private string bodyString;
 
         /// <summary>
         /// Request Method
@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// The original request Url.
         /// </summary>
-        public string OriginalRequestUrl { get; set; }
+        public string OriginalUrl { get; set; }
 
         /// <summary>
         /// Request Http Version
@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Keeps the request body data after the session is finished
         /// </summary>
-        public bool KeepRequestBody { get; set; }
+        public bool KeepBody { get; set; }
 
         /// <summary>
         /// Has request body?
@@ -65,18 +65,18 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                return RequestHeaders.GetHeaderValueOrNull("host");
+                return Headers.GetHeaderValueOrNull("host");
             }
             set
             {
-                RequestHeaders.SetOrAddHeaderValue("host", value);
+                Headers.SetOrAddHeaderValue("host", value);
             }
         }
 
         /// <summary>
         /// Content encoding header value
         /// </summary>
-        public string ContentEncoding => RequestHeaders.GetHeaderValueOrNull("content-encoding");
+        public string ContentEncoding => Headers.GetHeaderValueOrNull("content-encoding");
 
         /// <summary>
         /// Request content-length
@@ -85,7 +85,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = RequestHeaders.GetHeaderValueOrNull("content-length");
+                string headerValue = Headers.GetHeaderValueOrNull("content-length");
 
                 if (headerValue == null)
                 {
@@ -105,12 +105,12 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (value >= 0)
                 {
-                    RequestHeaders.SetOrAddHeaderValue("content-length", value.ToString());
+                    Headers.SetOrAddHeaderValue("content-length", value.ToString());
                     IsChunked = false;
                 }
                 else
                 {
-                    RequestHeaders.RemoveHeader("content-length");
+                    Headers.RemoveHeader("content-length");
                 }
             }
         }
@@ -122,11 +122,11 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                return RequestHeaders.GetHeaderValueOrNull("content-type");
+                return Headers.GetHeaderValueOrNull("content-type");
             }
             set
             {
-                RequestHeaders.SetOrAddHeaderValue("content-type", value);
+                Headers.SetOrAddHeaderValue("content-type", value);
             }
         }
 
@@ -137,19 +137,19 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = RequestHeaders.GetHeaderValueOrNull("transfer-encoding");
+                string headerValue = Headers.GetHeaderValueOrNull("transfer-encoding");
                 return headerValue != null && headerValue.ContainsIgnoreCase("chunked");
             }
             set
             {
                 if (value)
                 {
-                    RequestHeaders.SetOrAddHeaderValue("transfer-encoding", "chunked");
+                    Headers.SetOrAddHeaderValue("transfer-encoding", "chunked");
                     ContentLength = -1;
                 }
                 else
                 {
-                    RequestHeaders.RemoveHeader("transfer-encoding");
+                    Headers.RemoveHeader("transfer-encoding");
                 }
             }
         }
@@ -161,7 +161,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = RequestHeaders.GetHeaderValueOrNull("expect");
+                string headerValue = Headers.GetHeaderValueOrNull("expect");
                 return headerValue != null && headerValue.Equals("100-continue");
             }
         }
@@ -184,11 +184,11 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Request body as byte array
         /// </summary>
-        public byte[] RequestBody
+        public byte[] Body
         {
             get
             {
-                if (!RequestBodyRead)
+                if (!IsBodyRead)
                 {
                     if (RequestLocked)
                     {
@@ -200,12 +200,12 @@ namespace Titanium.Web.Proxy.Http
                                         "method to read the request body.");
                 }
 
-                return requestBody;
+                return body;
             }
             internal set
             {
-                requestBody = value;
-                requestBodyString = null;
+                body = value;
+                bodyString = null;
             }
         }
 
@@ -213,12 +213,12 @@ namespace Titanium.Web.Proxy.Http
         /// Request body as string
         /// Use the encoding specified in request to decode the byte[] data to string
         /// </summary>
-        public string RequestBodyString => requestBodyString ?? (requestBodyString = Encoding.GetString(RequestBody));
+        public string BodyString => bodyString ?? (bodyString = Encoding.GetString(Body));
 
         /// <summary>
         /// Request body was read by user?
         /// </summary>
-        public bool RequestBodyRead { get; internal set; }
+        public bool IsBodyRead { get; internal set; }
 
         /// <summary>
         /// Request is ready to be sent (user callbacks are complete?)
@@ -232,7 +232,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = RequestHeaders.GetHeaderValueOrNull("upgrade");
+                string headerValue = Headers.GetHeaderValueOrNull("upgrade");
 
                 if (headerValue == null)
                 {
@@ -246,7 +246,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Request header collection
         /// </summary>
-        public HeaderCollection RequestHeaders { get; } = new HeaderCollection();
+        public HeaderCollection Headers { get; } = new HeaderCollection();
 
         /// <summary>
         /// Does server responsed positively for 100 continue request
@@ -266,8 +266,8 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 var sb = new StringBuilder();
-                sb.AppendLine($"{Method} {OriginalRequestUrl} HTTP/{HttpVersion.Major}.{HttpVersion.Minor}");
-                foreach (var header in RequestHeaders)
+                sb.AppendLine($"{Method} {OriginalUrl} HTTP/{HttpVersion.Major}.{HttpVersion.Minor}");
+                foreach (var header in Headers)
                 {
                     sb.AppendLine(header.ToString());
                 }
@@ -333,10 +333,10 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public void FinishSession()
         {
-            if (!KeepRequestBody)
+            if (!KeepBody)
             {
-                requestBody = null;
-                requestBodyString = null;
+                body = null;
+                bodyString = null;
             }
         }
 

@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy
 
             //check in non-unique headers first
             var header =
-                args.WebSession.Response.ResponseHeaders.NonUniqueHeaders.FirstOrDefault(
+                args.WebSession.Response.Headers.NonUniqueHeaders.FirstOrDefault(
                     x => authHeaderNames.Any(y => x.Key.Equals(y, StringComparison.OrdinalIgnoreCase)));
 
             if (!header.Equals(new KeyValuePair<string, List<HttpHeader>>()))
@@ -54,7 +54,7 @@ namespace Titanium.Web.Proxy
 
             if (headerName != null)
             {
-                authHeader = args.WebSession.Response.ResponseHeaders.NonUniqueHeaders[headerName]
+                authHeader = args.WebSession.Response.Headers.NonUniqueHeaders[headerName]
                     .FirstOrDefault(x => authSchemes.Any(y => x.Value.StartsWith(y, StringComparison.OrdinalIgnoreCase)));
             }
 
@@ -63,7 +63,7 @@ namespace Titanium.Web.Proxy
             {
                 //check in non-unique headers first
                 var uHeader =
-                    args.WebSession.Response.ResponseHeaders.Headers.FirstOrDefault(x => authHeaderNames.Any(y => x.Key.Equals(y, StringComparison.OrdinalIgnoreCase)));
+                    args.WebSession.Response.Headers.Headers.FirstOrDefault(x => authHeaderNames.Any(y => x.Key.Equals(y, StringComparison.OrdinalIgnoreCase)));
 
                 if (!uHeader.Equals(new KeyValuePair<string, HttpHeader>()))
                 {
@@ -72,9 +72,9 @@ namespace Titanium.Web.Proxy
 
                 if (headerName != null)
                 {
-                    authHeader = authSchemes.Any(x => args.WebSession.Response.ResponseHeaders.Headers[headerName].Value
+                    authHeader = authSchemes.Any(x => args.WebSession.Response.Headers.Headers[headerName].Value
                         .StartsWith(x, StringComparison.OrdinalIgnoreCase))
-                        ? args.WebSession.Response.ResponseHeaders.Headers[headerName]
+                        ? args.WebSession.Response.Headers.Headers[headerName]
                         : null;
                 }
             }
@@ -84,9 +84,9 @@ namespace Titanium.Web.Proxy
                 string scheme = authSchemes.FirstOrDefault(x => authHeader.Value.Equals(x, StringComparison.OrdinalIgnoreCase));
 
                 //clear any existing headers to avoid confusing bad servers
-                if (args.WebSession.Request.RequestHeaders.NonUniqueHeaders.ContainsKey("Authorization"))
+                if (args.WebSession.Request.Headers.NonUniqueHeaders.ContainsKey("Authorization"))
                 {
-                    args.WebSession.Request.RequestHeaders.NonUniqueHeaders.Remove("Authorization");
+                    args.WebSession.Request.Headers.NonUniqueHeaders.Remove("Authorization");
                 }
 
                 //initial value will match exactly any of the schemes
@@ -97,13 +97,13 @@ namespace Titanium.Web.Proxy
                     var auth = new HttpHeader("Authorization", string.Concat(scheme, clientToken));
 
                     //replace existing authorization header if any
-                    if (args.WebSession.Request.RequestHeaders.Headers.ContainsKey("Authorization"))
+                    if (args.WebSession.Request.Headers.Headers.ContainsKey("Authorization"))
                     {
-                        args.WebSession.Request.RequestHeaders.Headers["Authorization"] = auth;
+                        args.WebSession.Request.Headers.Headers["Authorization"] = auth;
                     }
                     else
                     {
-                        args.WebSession.Request.RequestHeaders.Headers.Add("Authorization", auth);
+                        args.WebSession.Request.Headers.Headers.Add("Authorization", auth);
                     }
 
                     //don't need to send body for Authorization request
@@ -122,12 +122,12 @@ namespace Titanium.Web.Proxy
                     string clientToken = WinAuthHandler.GetFinalAuthToken(args.WebSession.Request.Host, serverToken, args.Id);
 
                     //there will be an existing header from initial client request 
-                    args.WebSession.Request.RequestHeaders.Headers["Authorization"] = new HttpHeader("Authorization", string.Concat(scheme, clientToken));
+                    args.WebSession.Request.Headers.Headers["Authorization"] = new HttpHeader("Authorization", string.Concat(scheme, clientToken));
 
                     //send body for final auth request
                     if (args.WebSession.Request.HasBody)
                     {
-                        args.WebSession.Request.ContentLength = args.WebSession.Request.RequestBody.Length;
+                        args.WebSession.Request.ContentLength = args.WebSession.Request.Body.Length;
                     }
                 }
 

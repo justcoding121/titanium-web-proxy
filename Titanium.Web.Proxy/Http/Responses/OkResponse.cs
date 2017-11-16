@@ -12,8 +12,8 @@ namespace Titanium.Web.Proxy.Http.Responses
         /// </summary>
         public OkResponse()
         {
-            ResponseStatusCode = (int)HttpStatusCode.OK;
-            ResponseStatusDescription = "OK";
+            StatusCode = (int)HttpStatusCode.OK;
+            StatusDescription = "OK";
         }
     }
 }

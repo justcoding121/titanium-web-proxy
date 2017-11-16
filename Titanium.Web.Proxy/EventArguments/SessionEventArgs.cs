@@ -56,7 +56,7 @@ namespace Titanium.Web.Proxy.EventArguments
             get { return reRequest; }
             set
             {
-                if (WebSession.Response.ResponseStatusCode == 0)
+                if (WebSession.Response.StatusCode == 0)
                 {
                     throw new Exception("Response status code is empty. Cannot request again a request " + "which was never send to server.");
                 }
@@ -149,7 +149,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             //Caching check
-            if (!WebSession.Request.RequestBodyRead)
+            if (!WebSession.Request.IsBodyRead)
             {
                 //If chunked then its easy just read the whole body with the content length mentioned in the request header
                 using (var requestBodyStream = new MemoryStream())
@@ -173,13 +173,13 @@ namespace Titanium.Web.Proxy.EventArguments
                         }
                     }
 
-                    WebSession.Request.RequestBody = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding, requestBodyStream.ToArray());
+                    WebSession.Request.Body = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding, requestBodyStream.ToArray());
                 }
 
                 //Now set the flag to true
                 //So that next time we can deliver body from cache
-                WebSession.Request.RequestBodyRead = true;
-                var body = WebSession.Request.RequestBody;
+                WebSession.Request.IsBodyRead = true;
+                var body = WebSession.Request.Body;
                 OnDataSent(body, 0, body.Length);
             }
         }
@@ -215,7 +215,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             //If not already read (not cached yet)
-            if (!WebSession.Response.ResponseBodyRead)
+            if (!WebSession.Response.IsBodyRead)
             {
                 if (WebSession.Response.HasBody)
                 {
@@ -240,17 +240,17 @@ namespace Titanium.Web.Proxy.EventArguments
                             }
                         }
 
-                        WebSession.Response.ResponseBody = await GetDecompressedResponseBody(WebSession.Response.ContentEncoding, responseBodyStream.ToArray());
+                        WebSession.Response.Body = await GetDecompressedResponseBody(WebSession.Response.ContentEncoding, responseBodyStream.ToArray());
                     }
                 }
                 else
                 {
-                    WebSession.Response.ResponseBody = new byte[0];
+                    WebSession.Response.Body = new byte[0];
                 }
 
                 //set this to true for caching
-                WebSession.Response.ResponseBodyRead = true;
-                var body = WebSession.Response.ResponseBody;
+                WebSession.Response.IsBodyRead = true;
+                var body = WebSession.Response.Body;
                 OnDataReceived(body, 0, body.Length);
             }
         }
@@ -261,12 +261,12 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <returns></returns>
         public async Task<byte[]> GetRequestBody()
         {
-            if (!WebSession.Request.RequestBodyRead)
+            if (!WebSession.Request.IsBodyRead)
             {
                 await ReadRequestBody();
             }
 
-            return WebSession.Request.RequestBody;
+            return WebSession.Request.Body;
         }
 
         /// <summary>
@@ -275,12 +275,12 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <returns></returns>
         public async Task<string> GetRequestBodyAsString()
         {
-            if (!WebSession.Request.RequestBodyRead)
+            if (!WebSession.Request.IsBodyRead)
             {
                 await ReadRequestBody();
             }
 
-            return WebSession.Request.RequestBodyString;
+            return WebSession.Request.BodyString;
         }
 
         /// <summary>
@@ -295,12 +295,12 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             //syphon out the request body from client before setting the new body
-            if (!WebSession.Request.RequestBodyRead)
+            if (!WebSession.Request.IsBodyRead)
             {
                 await ReadRequestBody();
             }
 
-            WebSession.Request.RequestBody = body;
+            WebSession.Request.Body = body;
             WebSession.Request.ContentLength = WebSession.Request.IsChunked ? -1 : body.Length;
         }
 
@@ -316,7 +316,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             //syphon out the request body from client before setting the new body
-            if (!WebSession.Request.RequestBodyRead)
+            if (!WebSession.Request.IsBodyRead)
             {
                 await ReadRequestBody();
             }
@@ -330,12 +330,12 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <returns></returns>
         public async Task<byte[]> GetResponseBody()
         {
-            if (!WebSession.Response.ResponseBodyRead)
+            if (!WebSession.Response.IsBodyRead)
             {
                 await ReadResponseBody();
             }
 
-            return WebSession.Response.ResponseBody;
+            return WebSession.Response.Body;
         }
 
         /// <summary>
@@ -344,12 +344,12 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <returns></returns>
         public async Task<string> GetResponseBodyAsString()
         {
-            if (!WebSession.Response.ResponseBodyRead)
+            if (!WebSession.Response.IsBodyRead)
             {
                 await ReadResponseBody();
             }
 
-            return WebSession.Response.ResponseBodyString;
+            return WebSession.Response.BodyString;
         }
 
         /// <summary>
@@ -364,12 +364,12 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             //syphon out the response body from server before setting the new body
-            if (WebSession.Response.ResponseBody == null)
+            if (WebSession.Response.Body == null)
             {
                 await GetResponseBody();
             }
 
-            WebSession.Response.ResponseBody = body;
+            WebSession.Response.Body = body;
 
             //If there is a content length header update it
             if (WebSession.Response.IsChunked == false)
@@ -394,7 +394,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             //syphon out the response body from server before setting the new body
-            if (!WebSession.Response.ResponseBodyRead)
+            if (!WebSession.Response.IsBodyRead)
             {
                 await GetResponseBody();
             }
@@ -422,9 +422,9 @@ namespace Titanium.Web.Proxy.EventArguments
         public async Task Ok(string html, Dictionary<string, HttpHeader> headers)
         {
             var response = new OkResponse();
-            response.ResponseHeaders.AddHeaders(headers);
+            response.Headers.AddHeaders(headers);
             response.HttpVersion = WebSession.Request.HttpVersion;
-            response.ResponseBody = response.Encoding.GetBytes(html ?? string.Empty);
+            response.Body = response.Encoding.GetBytes(html ?? string.Empty);
 
             await Respond(response);
 
@@ -441,9 +441,9 @@ namespace Titanium.Web.Proxy.EventArguments
         public async Task Ok(byte[] result, Dictionary<string, HttpHeader> headers = null)
         {
             var response = new OkResponse();
-            response.ResponseHeaders.AddHeaders(headers);
+            response.Headers.AddHeaders(headers);
             response.HttpVersion = WebSession.Request.HttpVersion;
-            response.ResponseBody = result;
+            response.Body = result;
 
             await Respond(response);
         }
@@ -462,8 +462,8 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             var response = new GenericResponse(status);
             response.HttpVersion = WebSession.Request.HttpVersion;
-            response.ResponseHeaders.AddHeaders(headers);
-            response.ResponseBody = response.Encoding.GetBytes(html ?? string.Empty);
+            response.Headers.AddHeaders(headers);
+            response.Body = response.Encoding.GetBytes(html ?? string.Empty);
 
             await Respond(response);
         }
@@ -482,8 +482,8 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             var response = new GenericResponse(status);
             response.HttpVersion = WebSession.Request.HttpVersion;
-            response.ResponseHeaders.AddHeaders(headers);
-            response.ResponseBody = result;
+            response.Headers.AddHeaders(headers);
+            response.Body = result;
 
             await Respond(response);
         }
@@ -497,8 +497,8 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             var response = new RedirectResponse();
             response.HttpVersion = WebSession.Request.HttpVersion;
-            response.ResponseHeaders.AddHeader("Location", url);
-            response.ResponseBody = new byte[0];
+            response.Headers.AddHeader("Location", url);
+            response.Body = new byte[0];
 
             await Respond(response);
         }
@@ -514,7 +514,7 @@ namespace Titanium.Web.Proxy.EventArguments
             WebSession.Request.RequestLocked = true;
 
             response.ResponseLocked = true;
-            response.ResponseBodyRead = true;
+            response.IsBodyRead = true;
 
             WebSession.Response = response;
 

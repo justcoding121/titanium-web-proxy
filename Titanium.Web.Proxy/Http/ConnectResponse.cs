@@ -18,11 +18,11 @@ namespace Titanium.Web.Proxy.Http
             var response = new ConnectResponse
             {
                 HttpVersion = httpVersion,
-                ResponseStatusCode = (int)HttpStatusCode.OK,
-                ResponseStatusDescription = "Connection Established"
+                StatusCode = (int)HttpStatusCode.OK,
+                StatusDescription = "Connection Established"
             };
 
-            response.ResponseHeaders.AddHeader("Timestamp", DateTime.Now.ToString());
+            response.Headers.AddHeader("Timestamp", DateTime.Now.ToString());
             return response;
         }
     }
