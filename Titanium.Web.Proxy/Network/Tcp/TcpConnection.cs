@@ -12,11 +12,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpConnection : IDisposable
     {
-        internal ExternalProxy UpStreamHttpProxy { get; set; }
-
-        internal ExternalProxy UpStreamHttpsProxy { get; set; }
-
-        internal ExternalProxy UpStreamProxy => UseUpstreamProxy ? IsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy : null;
+        internal ExternalProxy UpStreamProxy { get; set; }
 
         internal string HostName { get; set; }
 

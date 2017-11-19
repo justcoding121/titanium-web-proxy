@@ -82,14 +82,9 @@ namespace Titanium.Web.Proxy.EventArguments
         public HttpWebClient WebSession { get; }
 
         /// <summary>
-        /// Are we using a custom upstream HTTP proxy?
+        /// Are we using a custom upstream HTTP(S) proxy?
         /// </summary>
-        public ExternalProxy CustomUpStreamHttpProxyUsed { get; internal set; }
-
-        /// <summary>
-        /// Are we using a custom upstream HTTPS proxy?
-        /// </summary>
-        public ExternalProxy CustomUpStreamHttpsProxyUsed { get; internal set; }
+        public ExternalProxy CustomUpStreamProxyUsed { get; internal set; }
 
         public event EventHandler<DataEventArgs> DataSent;
 
@@ -519,8 +514,7 @@ namespace Titanium.Web.Proxy.EventArguments
         public void Dispose()
         {
             httpResponseHandler = null;
-            CustomUpStreamHttpProxyUsed = null;
-            CustomUpStreamHttpsProxyUsed = null;
+            CustomUpStreamProxyUsed = null;
 
             WebSession.FinishSession();
         }
