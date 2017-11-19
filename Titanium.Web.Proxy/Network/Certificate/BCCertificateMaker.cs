@@ -126,7 +126,14 @@ namespace Titanium.Web.Proxy.Network.Certificate
             // Set private key onto certificate instance
             var x509Certificate = new X509Certificate2(certificate.GetEncoded());
             x509Certificate.PrivateKey = DotNetUtilities.ToRSA(rsaparams);
-            x509Certificate.FriendlyName = subjectName;
+            try
+            {
+                x509Certificate.FriendlyName = subjectName;
+            }
+            catch (PlatformNotSupportedException)
+            {
+                // The FriendlyName value cannot be set on Unix.
+            }
 
             return x509Certificate;
         }
