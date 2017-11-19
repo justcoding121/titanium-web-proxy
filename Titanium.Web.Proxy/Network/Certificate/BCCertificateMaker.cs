@@ -1,5 +1,6 @@
-﻿#if NET45
-using System;
+﻿using System;
+using System.IO;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using Org.BouncyCastle.Asn1;
@@ -102,7 +103,6 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             // Self-sign the certificate
             var certificate = certificateGenerator.Generate(signatureFactory);
-            var x509Certificate = new X509Certificate2(certificate.GetEncoded());
 
             // Corresponding private key
             var privateKeyInfo = PrivateKeyInfoFactory.CreatePrivateKeyInfo(subjectKeyPair.Private);
@@ -118,11 +118,33 @@ namespace Titanium.Web.Proxy.Network.Certificate
             var rsaparams = new RsaPrivateCrtKeyParameters(rsa.Modulus, rsa.PublicExponent, rsa.PrivateExponent, rsa.Prime1, rsa.Prime2, rsa.Exponent1,
                 rsa.Exponent2, rsa.Coefficient);
 
+#if NET45
             // Set private key onto certificate instance
+            var x509Certificate = new X509Certificate2(certificate.GetEncoded());
             x509Certificate.PrivateKey = DotNetUtilities.ToRSA(rsaparams);
             x509Certificate.FriendlyName = subjectName;
+#else
+            var x509Certificate = WithPrivateKey(certificate, rsaparams);
+            x509Certificate.FriendlyName = subjectName;
+#endif
 
             return x509Certificate;
+        }
+
+        private static X509Certificate2 WithPrivateKey(Org.BouncyCastle.X509.X509Certificate certificate, AsymmetricKeyParameter privateKey)
+        {
+            const string password = "password";
+            var store = new Pkcs12Store();
+            var entry = new X509CertificateEntry(certificate);
+            store.SetCertificateEntry(certificate.SubjectDN.ToString(), entry);
+
+            store.SetKeyEntry(certificate.SubjectDN.ToString(), new AsymmetricKeyEntry(privateKey), new[] { entry });
+            using (var ms = new MemoryStream())
+            {
+                store.Save(ms, password.ToCharArray(), new SecureRandom(new CryptoApiRandomGenerator()));
+
+                return new X509Certificate2(ms.ToArray(), password, X509KeyStorageFlags.Exportable);
+            }
         }
 
         /// <summary>
@@ -136,18 +158,52 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="signingCertificate">The signing certificate.</param>
         /// <returns>X509Certificate2 instance.</returns>
         /// <exception cref="System.ArgumentException">You must specify a Signing Certificate if and only if you are not creating a root.</exception>
-        private X509Certificate2 MakeCertificateInternal(bool isRoot, string hostName, string subjectName, DateTime validFrom, DateTime validTo,
-            X509Certificate2 signingCertificate)
+        private X509Certificate2 MakeCertificateInternal(bool isRoot,
+            string hostName, string subjectName,
+            DateTime validFrom, DateTime validTo, X509Certificate2 signingCertificate)
         {
             if (isRoot != (null == signingCertificate))
             {
                 throw new ArgumentException("You must specify a Signing Certificate if and only if you are not creating a root.", nameof(signingCertificate));
             }
 
-            return isRoot
-                ? GenerateCertificate(null, subjectName, subjectName, validFrom, validTo)
-                : GenerateCertificate(hostName, subjectName, signingCertificate.Subject, validFrom, validTo,
-                    issuerPrivateKey: DotNetUtilities.GetKeyPair(signingCertificate.PrivateKey).Private);
+            if (isRoot)
+            {
+                return GenerateCertificate(null, subjectName, subjectName, validFrom, validTo);
+            }
+            else
+            {
+#if NET45
+                var kp = DotNetUtilities.GetKeyPair(signingCertificate.PrivateKey);
+#else
+                var rsa = signingCertificate.GetRSAPrivateKey();
+                var kp = GetRsaKeyPair(rsa.ExportParameters(true));
+#endif
+                return GenerateCertificate(hostName, subjectName, signingCertificate.Subject, validFrom, validTo, issuerPrivateKey: kp.Private);
+            }
+        }
+
+        static AsymmetricCipherKeyPair GetRsaKeyPair(RSAParameters rp)
+        {
+            BigInteger modulus = new BigInteger(1, rp.Modulus);
+            BigInteger pubExp = new BigInteger(1, rp.Exponent);
+
+            RsaKeyParameters pubKey = new RsaKeyParameters(
+                false,
+                modulus,
+                pubExp);
+
+            RsaPrivateCrtKeyParameters privKey = new RsaPrivateCrtKeyParameters(
+                modulus,
+                pubExp,
+                new BigInteger(1, rp.D),
+                new BigInteger(1, rp.P),
+                new BigInteger(1, rp.Q),
+                new BigInteger(1, rp.DP),
+                new BigInteger(1, rp.DQ),
+                new BigInteger(1, rp.InverseQ));
+
+            return new AsymmetricCipherKeyPair(pubKey, privKey);
         }
 
         /// <summary>
@@ -163,10 +219,10 @@ namespace Titanium.Web.Proxy.Network.Certificate
             bool switchToMtaIfNeeded, X509Certificate2 signingCert = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            X509Certificate2 certificate = null;
-
+#if NET45
             if (switchToMtaIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
             {
+                X509Certificate2 certificate = null;
                 using (var manualResetEvent = new ManualResetEventSlim(false))
                 {
                     ThreadPool.QueueUserWorkItem(o =>
@@ -184,10 +240,45 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
                 return certificate;
             }
+#endif
 
-            return MakeCertificateInternal(isRoot, subject, $"CN={subject}", DateTime.UtcNow.AddDays(-certificateGraceDays),
-                DateTime.UtcNow.AddDays(certificateValidDays), isRoot ? null : signingCert);
+            return MakeCertificateInternal(isRoot, subject, $"CN={subject}", DateTime.UtcNow.AddDays(-certificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays), isRoot ? null : signingCert);
+        }
+
+        class CryptoApiRandomGenerator : IRandomGenerator
+        {
+            readonly RandomNumberGenerator rndProv;
+            public CryptoApiRandomGenerator()
+            {
+                rndProv = RandomNumberGenerator.Create();
+            }
+            public void AddSeedMaterial(byte[] seed) { }
+
+            public void AddSeedMaterial(long seed) { }
+
+            public void NextBytes(byte[] bytes)
+            {
+                rndProv.GetBytes(bytes);
+            }
+
+            public void NextBytes(byte[] bytes, int start, int len)
+            {
+                if (start < 0)
+                    throw new ArgumentException("Start offset cannot be negative", "start");
+                if (bytes.Length < (start + len))
+                    throw new ArgumentException("Byte array too small for requested offset and length");
+
+                if (bytes.Length == len && start == 0)
+                {
+                    NextBytes(bytes);
+                }
+                else
+                {
+                    byte[] tmpBuf = new byte[len];
+                    NextBytes(tmpBuf);
+                    Array.Copy(tmpBuf, 0, bytes, start, len);
+                }
+            }
         }
     }
 }
-#endif
