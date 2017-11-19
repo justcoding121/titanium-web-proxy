@@ -692,13 +692,19 @@ namespace Titanium.Web.Proxy
 
             endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
 
-            while (true)
+            while (proxyRunning)
             {
-                TcpClient tcpClient = await endPoint.Listener.AcceptTcpClientAsync();
-                if (tcpClient != null)
-                    Task.Run(async () => HandleClient(tcpClient, endPoint));
+                try
+                {
+                    TcpClient tcpClient = await endPoint.Listener.AcceptTcpClientAsync();
+                    if (tcpClient != null)
+                        Task.Run(async () => HandleClient(tcpClient, endPoint));
+                }
+                catch (ObjectDisposedException)
+                {
+                    // proxy was stopped
+                }
             }
-
         }
 #endif
 
