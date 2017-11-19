@@ -5,7 +5,6 @@ using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy
 {
@@ -29,7 +28,7 @@ namespace Titanium.Web.Proxy
                 var response = args.WebSession.Response;
 
                 //check for windows authentication
-                if (IsWindowsAuthenticationEnabledAndSupported && response.StatusCode == (int)HttpStatusCode.Unauthorized)
+                if (isWindowsAuthenticationEnabledAndSupported && response.StatusCode == (int)HttpStatusCode.Unauthorized)
                 {
                     bool disposed = await Handle401UnAuthorized(args);
 
