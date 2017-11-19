@@ -28,6 +28,10 @@ namespace Titanium.Web.Proxy.Network.Certificate
         private const int certificateValidDays = 1825;
         private const int certificateGraceDays = 366;
 
+        // The FriendlyName value cannot be set on Unix.
+        // Set this flag to true when exception detected to avoid further exceptions
+        private static bool doNotSetFriendlyName;
+
         /// <summary>
         /// Makes the certificate.
         /// </summary>
@@ -126,13 +130,17 @@ namespace Titanium.Web.Proxy.Network.Certificate
             // Set private key onto certificate instance
             var x509Certificate = new X509Certificate2(certificate.GetEncoded());
             x509Certificate.PrivateKey = DotNetUtilities.ToRSA(rsaparams);
-            try
+
+            if (!doNotSetFriendlyName)
             {
-                x509Certificate.FriendlyName = subjectName;
-            }
-            catch (PlatformNotSupportedException)
-            {
-                // The FriendlyName value cannot be set on Unix.
+                try
+                {
+                    x509Certificate.FriendlyName = subjectName;
+                }
+                catch (PlatformNotSupportedException)
+                {
+                    doNotSetFriendlyName = true;
+                }
             }
 
             return x509Certificate;
