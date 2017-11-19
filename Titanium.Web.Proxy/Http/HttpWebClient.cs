@@ -87,7 +87,7 @@ namespace Titanium.Web.Proxy.Http
             using (var ms = new MemoryStream())
             using (var writer = new HttpRequestWriter(ms, bufferSize))
             {
-                var upstreamProxy = ServerConnection.UpStreamHttpProxy;
+                var upstreamProxy = ServerConnection.UpStreamProxy;
 
                 bool useUpstreamProxy = upstreamProxy != null && ServerConnection.IsHttps == false;
 

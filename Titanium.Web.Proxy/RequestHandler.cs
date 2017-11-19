@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy
     /// </summary>
     partial class ProxyServer
     {
-        private bool IsWindowsAuthenticationEnabledAndSupported => EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
+        private bool isWindowsAuthenticationEnabledAndSupported => EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
 
         /// <summary>
         /// This is called when client is aware of proxy
@@ -340,7 +340,7 @@ namespace Titanium.Web.Proxy
                     //if win auth is enabled
                     //we need a cache of request body
                     //so that we can send it after authentication in WinAuthHandler.cs
-                    if (IsWindowsAuthenticationEnabledAndSupported && args.WebSession.Request.HasBody)
+                    if (isWindowsAuthenticationEnabledAndSupported && args.WebSession.Request.HasBody)
                     {
                         await args.GetRequestBody();
                     }
@@ -581,35 +581,23 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         private async Task<TcpConnection> GetServerConnection(SessionEventArgs args, bool isConnect)
         {
-            ExternalProxy customUpStreamHttpProxy = null;
-            ExternalProxy customUpStreamHttpsProxy = null;
+            ExternalProxy customUpStreamProxy = null;
 
-            if (args.WebSession.Request.IsHttps)
+            bool isHttps = args.IsHttps;
+            if (GetCustomUpStreamProxyFunc != null)
             {
-                if (GetCustomUpStreamHttpsProxyFunc != null)
-                {
-                    customUpStreamHttpsProxy = await GetCustomUpStreamHttpsProxyFunc(args);
-                }
-            }
-            else
-            {
-                if (GetCustomUpStreamHttpProxyFunc != null)
-                {
-                    customUpStreamHttpProxy = await GetCustomUpStreamHttpProxyFunc(args);
-                }
+                customUpStreamProxy = await GetCustomUpStreamProxyFunc(args);
             }
 
-            args.CustomUpStreamHttpProxyUsed = customUpStreamHttpProxy;
-            args.CustomUpStreamHttpsProxyUsed = customUpStreamHttpsProxy;
+            args.CustomUpStreamProxyUsed = customUpStreamProxy;
 
             return await tcpConnectionFactory.CreateClient(this,
                 args.WebSession.Request.RequestUri.Host,
                 args.WebSession.Request.RequestUri.Port,
                 args.WebSession.Request.HttpVersion,
-                args.IsHttps, isConnect,
+                isHttps, isConnect,
                 args.WebSession.UpStreamEndPoint ?? UpStreamEndPoint,
-                customUpStreamHttpProxy ?? UpStreamHttpProxy,
-                customUpStreamHttpsProxy ?? UpStreamHttpsProxy);
+                customUpStreamProxy ?? (isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy));
         }
 
         /// <summary>
