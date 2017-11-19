@@ -581,35 +581,23 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         private async Task<TcpConnection> GetServerConnection(SessionEventArgs args, bool isConnect)
         {
-            ExternalProxy customUpStreamHttpProxy = null;
-            ExternalProxy customUpStreamHttpsProxy = null;
+            ExternalProxy customUpStreamProxy = null;
 
-            if (args.WebSession.Request.IsHttps)
+            bool isHttps = args.IsHttps;
+            if (GetCustomUpStreamProxyFunc != null)
             {
-                if (GetCustomUpStreamHttpsProxyFunc != null)
-                {
-                    customUpStreamHttpsProxy = await GetCustomUpStreamHttpsProxyFunc(args);
-                }
-            }
-            else
-            {
-                if (GetCustomUpStreamHttpProxyFunc != null)
-                {
-                    customUpStreamHttpProxy = await GetCustomUpStreamHttpProxyFunc(args);
-                }
+                customUpStreamProxy = await GetCustomUpStreamProxyFunc(args);
             }
 
-            args.CustomUpStreamHttpProxyUsed = customUpStreamHttpProxy;
-            args.CustomUpStreamHttpsProxyUsed = customUpStreamHttpsProxy;
+            args.CustomUpStreamProxyUsed = customUpStreamProxy;
 
             return await tcpConnectionFactory.CreateClient(this,
                 args.WebSession.Request.RequestUri.Host,
                 args.WebSession.Request.RequestUri.Port,
                 args.WebSession.Request.HttpVersion,
-                args.IsHttps, isConnect,
+                isHttps, isConnect,
                 args.WebSession.UpStreamEndPoint ?? UpStreamEndPoint,
-                customUpStreamHttpProxy ?? UpStreamHttpProxy,
-                customUpStreamHttpsProxy ?? UpStreamHttpsProxy);
+                customUpStreamProxy ?? (isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy));
         }
 
         /// <summary>
