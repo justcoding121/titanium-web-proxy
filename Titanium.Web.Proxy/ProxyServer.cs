@@ -273,16 +273,10 @@ namespace Titanium.Web.Proxy
         public string ProxyRealm { get; set; } = "TitaniumProxy";
 
         /// <summary>
-        /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP requests
+        /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP(S) requests
         /// return the ExternalProxy object with valid credentials
         /// </summary>
-        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpProxyFunc { get; set; }
-
-        /// <summary>
-        /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTPS requests
-        /// return the ExternalProxy object with valid credentials
-        /// </summary>
-        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamHttpsProxyFunc { get; set; }
+        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamProxyFunc { get; set; }
 
         /// <summary>
         /// A list of IpAddress and port this proxy is listening to
@@ -571,16 +565,13 @@ namespace Titanium.Web.Proxy
                 }
             }
 
-            if (ForwardToUpstreamGateway
-                && GetCustomUpStreamHttpProxyFunc == null && GetCustomUpStreamHttpsProxyFunc == null
-                && systemProxySettingsManager != null)
+            if (ForwardToUpstreamGateway && GetCustomUpStreamProxyFunc == null && systemProxySettingsManager != null)
             {
                 // Use WinHttp to handle PAC/WAPD scripts.
                 systemProxyResolver = new WinHttpWebProxyFinder();
                 systemProxyResolver.LoadFromIE();
 
-                GetCustomUpStreamHttpProxyFunc = GetSystemUpStreamProxy;
-                GetCustomUpStreamHttpsProxyFunc = GetSystemUpStreamProxy;
+                GetCustomUpStreamProxyFunc = GetSystemUpStreamProxy;
             }
 #endif
 
@@ -692,13 +683,19 @@ namespace Titanium.Web.Proxy
 
             endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
 
-            while (true)
+            while (proxyRunning)
             {
-                TcpClient tcpClient = await endPoint.Listener.AcceptTcpClientAsync();
-                if (tcpClient != null)
-                    Task.Run(async () => HandleClient(tcpClient, endPoint));
+                try
+                {
+                    TcpClient tcpClient = await endPoint.Listener.AcceptTcpClientAsync();
+                    if (tcpClient != null)
+                        Task.Run(async () => HandleClient(tcpClient, endPoint));
+                }
+                catch (ObjectDisposedException)
+                {
+                    // proxy was stopped
+                }
             }
-
         }
 #endif
 

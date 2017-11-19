@@ -27,15 +27,13 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="isHttps"></param>
         /// <param name="isConnect"></param>
         /// <param name="upStreamEndPoint"></param>
-        /// <param name="externalHttpProxy"></param>
-        /// <param name="externalHttpsProxy"></param>
+        /// <param name="externalProxy"></param>
         /// <returns></returns>
         internal async Task<TcpConnection> CreateClient(ProxyServer server, 
             string remoteHostName, int remotePort, Version httpVersion, bool isHttps,
-            bool isConnect, IPEndPoint upStreamEndPoint, ExternalProxy externalHttpProxy, ExternalProxy externalHttpsProxy)
+            bool isConnect, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy)
         {
             bool useUpstreamProxy = false;
-            var externalProxy = isHttps ? externalHttpsProxy : externalHttpProxy;
 
             //check if external proxy is set for HTTP/HTTPS
             if (externalProxy != null && !(externalProxy.HostName == remoteHostName && externalProxy.Port == remotePort))
@@ -129,8 +127,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             return new TcpConnection
             {
-                UpStreamHttpProxy = externalHttpProxy,
-                UpStreamHttpsProxy = externalHttpsProxy,
+                UpStreamProxy = externalProxy,
                 UpStreamEndPoint = upStreamEndPoint,
                 HostName = remoteHostName,
                 Port = remotePort,
