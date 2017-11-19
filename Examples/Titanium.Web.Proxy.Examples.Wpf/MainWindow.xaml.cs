@@ -11,6 +11,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.Examples.Wpf
 {
@@ -62,7 +63,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         public MainWindow()
         {
             proxyServer = new ProxyServer();
+            proxyServer.CertificateEngine = CertificateEngine.DefaultWindows;
             proxyServer.TrustRootCertificate = true;
+            proxyServer.CertificateManager.TrustRootCertificateAsAdministrator();
             proxyServer.ForwardToUpstreamGateway = true;
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
