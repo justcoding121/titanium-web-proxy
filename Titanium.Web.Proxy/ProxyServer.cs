@@ -35,11 +35,6 @@ namespace Titanium.Web.Proxy
 #endif
 
         /// <summary>
-        /// Is the proxy currently running
-        /// </summary>
-        private bool proxyRunning { get; set; }
-
-        /// <summary>
         /// An default exception log func
         /// </summary>
         private readonly Lazy<Action<Exception>> defaultExceptionFunc = new Lazy<Action<Exception>>(() => (e => { }));
@@ -225,7 +220,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Is the proxy currently running
         /// </summary>
-        public bool ProxyRunning => proxyRunning;
+        public bool ProxyRunning { get; private set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether requests will be chained to upstream gateway.
@@ -354,7 +349,7 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints.Add(endPoint);
 
-            if (proxyRunning)
+            if (ProxyRunning)
             {
                 Listen(endPoint);
             }
@@ -374,7 +369,7 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints.Remove(endPoint);
 
-            if (proxyRunning)
+            if (ProxyRunning)
             {
                 QuitListen(endPoint);
             }
@@ -533,7 +528,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void Start()
         {
-            if (proxyRunning)
+            if (ProxyRunning)
             {
                 throw new Exception("Proxy is already running.");
             }
@@ -575,6 +570,8 @@ namespace Titanium.Web.Proxy
             }
 #endif
 
+            ProxyRunning = true;
+
             foreach (var endPoint in ProxyEndPoints)
             {
                 Listen(endPoint);
@@ -587,8 +584,6 @@ namespace Titanium.Web.Proxy
                 //clear orphaned windows auth states every 2 minutes
                 WinAuthEndPoint.ClearIdleStates(2);
             }
-
-            proxyRunning = true;
         }
 
 
@@ -597,7 +592,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void Stop()
         {
-            if (!proxyRunning)
+            if (!ProxyRunning)
             {
                 throw new Exception("Proxy is not running.");
             }
@@ -623,7 +618,7 @@ namespace Titanium.Web.Proxy
 
             CertificateManager?.StopClearIdleCertificates();
 
-            proxyRunning = false;
+            ProxyRunning = false;
         }
 
         /// <summary>
@@ -653,7 +648,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void Dispose()
         {
-            if (proxyRunning)
+            if (ProxyRunning)
             {
                 Stop();
             }
@@ -683,7 +678,7 @@ namespace Titanium.Web.Proxy
 
             endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
 
-            while (proxyRunning)
+            while (ProxyRunning)
             {
                 try
                 {
@@ -712,7 +707,7 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Cannot set endPoints not added to proxy as system proxy");
             }
 
-            if (!proxyRunning)
+            if (!ProxyRunning)
             {
                 throw new Exception("Cannot set system proxy settings before proxy has been started.");
             }
