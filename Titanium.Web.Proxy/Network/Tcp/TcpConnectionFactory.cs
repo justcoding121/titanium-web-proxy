@@ -52,12 +52,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             try
             {
-#if NET45
                 client = new TcpClient(upStreamEndPoint);
-#else
-                client = new TcpClient();
-                client.Client.Bind(upStreamEndPoint);
-#endif
 
                 //If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections
                 if (useUpstreamProxy)
@@ -119,7 +114,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             catch (Exception)
             {
                 stream?.Dispose();
-                client?.Dispose();
+                client?.Close();
                 throw;
             }
 

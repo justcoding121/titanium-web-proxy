@@ -1,4 +1,3 @@
-#if NET45
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -331,4 +330,3 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
         }
     }
 }
-#endif
