@@ -1,5 +1,4 @@
-﻿#if NET45
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 
 // Helper classes for setting system proxy settings
@@ -131,4 +130,3 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
         }
     }
 }
-#endif
