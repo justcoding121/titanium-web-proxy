@@ -265,6 +265,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             X509Certificate2 signingCert = null)
         {
             X509Certificate2 rCert = null;
+#if NET45
             if (switchToMTAIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
             {
                 var manualResetEvent = new ManualResetEvent(false);
@@ -277,6 +278,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 manualResetEvent.Close();
                 return rCert;
             }
+#endif
 
             //Subject
             string fullSubject = $"CN={sSubjectCN}";

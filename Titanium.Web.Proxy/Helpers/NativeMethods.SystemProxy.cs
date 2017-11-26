@@ -1,5 +1,4 @@
-﻿#if NET45
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 
 namespace Titanium.Web.Proxy.Helpers
@@ -22,4 +21,3 @@ namespace Titanium.Web.Proxy.Helpers
         internal delegate bool ConsoleEventDelegate(int eventType);
     }
 }
-#endif
