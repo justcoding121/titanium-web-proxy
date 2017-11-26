@@ -14,7 +14,7 @@ Install-Psake
 
 $psakeDirectory = (Resolve-Path $env:ChocolateyInstall\lib\Psake*)
 
-Import-Module (Join-Path $psakeDirectory "tools\Psake.psm1")
+Import-Module (Join-Path $psakeDirectory "tools\Psake\Psake.psm1")
 
 if($Help)
 { 
