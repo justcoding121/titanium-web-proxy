@@ -54,7 +54,7 @@ Task Restore-Packages  {
 }
 
 Task Install-MSBuild {
-    if(!(Test-Path $MSBuild14)) 
+    if(!(Test-Path $MSBuild)) 
     { 
         cinst microsoft-build-tools -y
     }
