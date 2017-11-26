@@ -349,7 +349,7 @@ namespace Titanium.Web.Proxy.Network
             }
             finally
             {
-                x509Store.Dispose();
+                x509Store.Close();
             }
         }
 
@@ -471,8 +471,8 @@ namespace Titanium.Web.Proxy.Network
             }
             finally
             {
-                x509RootStore.Dispose();
-                x509PersonalStore.Dispose();
+                x509RootStore.Close();
+                x509PersonalStore.Close();
             }
         }
 
@@ -511,8 +511,8 @@ namespace Titanium.Web.Proxy.Network
             }
             finally
             {
-                x509RootStore.Dispose();
-                x509PersonalStore.Dispose();
+                x509RootStore.Close();
+                x509PersonalStore.Close();
             }
         }
 
