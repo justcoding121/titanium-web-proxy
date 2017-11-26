@@ -24,7 +24,7 @@ function Install-Chocolatey()
 
 function Install-Psake()
 {
-	if(!(Test-Path $env:ChocolateyInstall\lib\Psake*)) 
+	if(!(Test-Path $env:ChocolateyInstall\lib\Psake\tools\Psake*)) 
 	{ 
 		choco install psake -y
 	}
