@@ -32,6 +32,13 @@ namespace Titanium.Web.Proxy.Network.Certificate
         // Set this flag to true when exception detected to avoid further exceptions
         private static bool doNotSetFriendlyName;
 
+        private readonly Action<Exception> exceptionFunc;
+
+        internal BCCertificateMaker(Action<Exception> exceptionFunc)
+        {
+            this.exceptionFunc = exceptionFunc;
+        }
+
         /// <summary>
         /// Makes the certificate.
         /// </summary>
@@ -198,11 +205,18 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 {
                     ThreadPool.QueueUserWorkItem(o =>
                     {
-                        certificate = MakeCertificateInternal(subject, isRoot, false, signingCert);
+                        try
+                        {
+                            certificate = MakeCertificateInternal(subject, isRoot, false, signingCert);
+                        }
+                        catch (Exception ex)
+                        {
+                            exceptionFunc.Invoke(new Exception("Failed to create BC certificate", ex));
+                        }
 
                         if (!cancellationToken.IsCancellationRequested)
                         {
-                            manualResetEvent?.Set();
+                            manualResetEvent.Set();
                         }
                     });
 
