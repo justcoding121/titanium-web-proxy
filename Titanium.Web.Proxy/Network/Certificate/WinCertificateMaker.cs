@@ -43,11 +43,14 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
         private object sharedPrivateKey;
 
+        private readonly Action<Exception> exceptionFunc;
+
         /// <summary>
         /// Constructor.
         /// </summary>
-        internal WinCertificateMaker()
+        internal WinCertificateMaker(Action<Exception> exceptionFunc)
         {
+            this.exceptionFunc = exceptionFunc;
             typeX500DN = Type.GetTypeFromProgID("X509Enrollment.CX500DistinguishedName", true);
             typeX509PrivateKey = Type.GetTypeFromProgID("X509Enrollment.CX509PrivateKey", true);
             typeOID = Type.GetTypeFromProgID("X509Enrollment.CObjectId", true);
@@ -261,24 +264,36 @@ namespace Titanium.Web.Proxy.Network.Certificate
         }
 
         private X509Certificate2 MakeCertificateInternal(string sSubjectCN, bool isRoot,
-            bool switchToMTAIfNeeded,
-            X509Certificate2 signingCert = null)
+            bool switchToMTAIfNeeded, X509Certificate2 signingCert = null,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
-            X509Certificate2 rCert = null;
-#if NET45
+            X509Certificate2 certificate = null;
             if (switchToMTAIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
             {
-                var manualResetEvent = new ManualResetEvent(false);
-                ThreadPool.QueueUserWorkItem(o =>
+                using (var manualResetEvent = new ManualResetEventSlim(false))
                 {
-                    rCert = MakeCertificateInternal(sSubjectCN, isRoot, false, signingCert);
-                    manualResetEvent.Set();
-                });
-                manualResetEvent.WaitOne();
-                manualResetEvent.Close();
-                return rCert;
+                    ThreadPool.QueueUserWorkItem(o =>
+                    {
+                        try
+                        {
+                            certificate = MakeCertificateInternal(sSubjectCN, isRoot, false, signingCert);
+                        }
+                        catch (Exception ex)
+                        {
+                            exceptionFunc.Invoke(new Exception("Failed to create Win certificate", ex));
+                        }
+
+                        if (!cancellationToken.IsCancellationRequested)
+                        {
+                            manualResetEvent.Set();
+                        }
+                    });
+
+                    manualResetEvent.Wait(TimeSpan.FromMinutes(1), cancellationToken);
+                }
+
+                return certificate;
             }
-#endif
 
             //Subject
             string fullSubject = $"CN={sSubjectCN}";
@@ -293,8 +308,8 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             var graceTime = DateTime.Now.AddDays(GraceDays);
             var now = DateTime.Now;
-            rCert = MakeCertificate(isRoot, sSubjectCN, fullSubject, keyLength, HashAlgo, graceTime, now.AddDays(ValidDays), isRoot ? null : signingCert);
-            return rCert;
+            certificate = MakeCertificate(isRoot, sSubjectCN, fullSubject, keyLength, HashAlgo, graceTime, now.AddDays(ValidDays), isRoot ? null : signingCert);
+            return certificate;
         }
     }
 }
