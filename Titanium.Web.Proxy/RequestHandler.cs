@@ -96,7 +96,7 @@ namespace Titanium.Web.Proxy
                         await TunnelConnectRequest.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
                     }
 
-                    if (!excluded && await CheckAuthorization(clientStreamWriter, connectArgs) == false)
+                    if (await CheckAuthorization(clientStreamWriter, connectArgs) == false)
                     {
                         if (TunnelConnectResponse != null)
                         {
