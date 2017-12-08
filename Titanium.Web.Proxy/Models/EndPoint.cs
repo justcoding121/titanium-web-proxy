@@ -25,8 +25,7 @@ namespace Titanium.Web.Proxy.Models
             Port = port;
             EnableSsl = enableSsl;
         }
-
-
+        
         /// <summary>
         /// underlying TCP Listener object
         /// </summary>
@@ -53,7 +52,6 @@ namespace Titanium.Web.Proxy.Models
         public bool IpV6Enabled => Equals(IpAddress, IPAddress.IPv6Any)
                                    || Equals(IpAddress, IPAddress.IPv6Loopback)
                                    || Equals(IpAddress, IPAddress.IPv6None);
-
     }
 
     /// <summary>
