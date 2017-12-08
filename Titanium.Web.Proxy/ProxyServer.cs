@@ -646,11 +646,22 @@ namespace Titanium.Web.Proxy
         private void Listen(ProxyEndPoint endPoint)
         {
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
-            endPoint.Listener.Start();
+            try
+            {
+                endPoint.Listener.Start();
 
-            endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
-            // accept clients asynchronously
-            endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
+                endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
+
+                // accept clients asynchronously
+                endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
+            }
+            catch (SocketException ex)
+            {
+                var pex = new Exception($"Endpoint {endPoint} failed to start. Check inner exception and exception data for details.", ex);
+                pex.Data.Add("ipAddress", endPoint.IpAddress);
+                pex.Data.Add("port", endPoint.Port);
+                throw pex;
+            }
         }
 
         /// <summary>
