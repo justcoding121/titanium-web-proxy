@@ -88,7 +88,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //So client sends request in a proxy friendly manner
             proxyServer.AddEndPoint(explicitEndPoint);
             proxyServer.Start();
-                
 
             //Transparent endpoint is useful for reverse proxy (client is not aware of the existence of proxy)
             //A transparent endpoint usually requires a network router port forwarding HTTP(S) packets or DNS
