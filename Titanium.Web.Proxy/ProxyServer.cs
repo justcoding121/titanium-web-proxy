@@ -84,8 +84,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public X509Certificate2 RootCertificate
         {
-            get { return CertificateManager.RootCertificate; }
-            set { CertificateManager.RootCertificate = value; }
+            get => CertificateManager.RootCertificate;
+            set => CertificateManager.RootCertificate = value;
         }
 
         /// <summary>
@@ -94,8 +94,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public string RootCertificateIssuerName
         {
-            get { return CertificateManager.Issuer; }
-            set { CertificateManager.Issuer = value; }
+            get => CertificateManager.Issuer;
+            set => CertificateManager.Issuer = value;
         }
 
         /// <summary>
@@ -107,8 +107,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public string RootCertificateName
         {
-            get { return CertificateManager.RootCertificateName; }
-            set { CertificateManager.RootCertificateName = value; }
+            get => CertificateManager.RootCertificateName;
+            set => CertificateManager.RootCertificateName = value;
         }
 
         /// <summary>
@@ -118,7 +118,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public bool TrustRootCertificate
         {
-            get { return trustRootCertificate; }
+            get => trustRootCertificate;
             set
             {
                 trustRootCertificate = value;
@@ -136,8 +136,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public CertificateEngine CertificateEngine
         {
-            get { return CertificateManager.Engine; }
-            set { CertificateManager.Engine = value; }
+            get => CertificateManager.Engine;
+            set => CertificateManager.Engine = value;
         }
 
         /// <summary>
@@ -242,8 +242,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public Action<Exception> ExceptionFunc
         {
-            get { return exceptionFunc ?? defaultExceptionFunc.Value; }
-            set { exceptionFunc = value; }
+            get => exceptionFunc ?? defaultExceptionFunc.Value;
+            set => exceptionFunc = value;
         }
 
         /// <summary>

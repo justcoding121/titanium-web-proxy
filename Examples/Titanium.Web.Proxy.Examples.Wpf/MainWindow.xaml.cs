@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         public SessionListItem SelectedSession
         {
-            get { return selectedSession; }
+            get => selectedSession;
             set
             {
                 if (value != selectedSession)
@@ -44,8 +44,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         public int ClientConnectionCount
         {
-            get { return (int)GetValue(ClientConnectionCountProperty); }
-            set { SetValue(ClientConnectionCountProperty, value); }
+            get => (int)GetValue(ClientConnectionCountProperty);
+            set => SetValue(ClientConnectionCountProperty, value);
         }
 
         public static readonly DependencyProperty ServerConnectionCountProperty = DependencyProperty.Register(
@@ -53,8 +53,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         public int ServerConnectionCount
         {
-            get { return (int)GetValue(ServerConnectionCountProperty); }
-            set { SetValue(ServerConnectionCountProperty, value); }
+            get => (int)GetValue(ServerConnectionCountProperty);
+            set => SetValue(ServerConnectionCountProperty, value);
         }
 
         private readonly Dictionary<HttpWebClient, SessionListItem> sessionDictionary = new Dictionary<HttpWebClient, SessionListItem>();
@@ -107,8 +107,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             await Dispatcher.InvokeAsync(() =>
             {
-                SessionListItem item;
-                if (sessionDictionary.TryGetValue(e.WebSession, out item))
+                if (sessionDictionary.TryGetValue(e.WebSession, out var item))
                 {
                     item.Update();
                 }
@@ -135,8 +134,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() =>
             {
-                SessionListItem item2;
-                if (sessionDictionary.TryGetValue(e.WebSession, out item2))
+                if (sessionDictionary.TryGetValue(e.WebSession, out var item2))
                 {
                     item2.Update();
                     item = item2;
@@ -177,8 +175,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 e.DataReceived += (sender, args) =>
                 {
                     var session = (SessionEventArgs)sender;
-                    SessionListItem li;
-                    if (sessionDictionary.TryGetValue(session.WebSession, out li))
+                    if (sessionDictionary.TryGetValue(session.WebSession, out var li))
                     {
                         li.ReceivedDataCount += args.Count;
                     }
@@ -187,8 +184,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 e.DataSent += (sender, args) =>
                 {
                     var session = (SessionEventArgs)sender;
-                    SessionListItem li;
-                    if (sessionDictionary.TryGetValue(session.WebSession, out li))
+                    if (sessionDictionary.TryGetValue(session.WebSession, out var li))
                     {
                         li.SentDataCount += args.Count;
                     }

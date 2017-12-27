@@ -53,10 +53,7 @@ namespace Titanium.Web.Proxy
                     return;
                 }
 
-                string httpMethod;
-                string httpUrl;
-                Version version;
-                Request.ParseRequestLine(httpCmd, out httpMethod, out httpUrl, out version);
+                Request.ParseRequestLine(httpCmd, out string httpMethod, out string httpUrl, out var version);
 
                 httpRemoteUri = httpMethod == "CONNECT" ? new Uri("http://" + httpUrl) : new Uri(httpUrl);
 
@@ -306,10 +303,7 @@ namespace Titanium.Web.Proxy
 
                 try
                 {
-                    string httpMethod;
-                    string httpUrl;
-                    Version version;
-                    Request.ParseRequestLine(httpCmd, out httpMethod, out httpUrl, out version);
+                    Request.ParseRequestLine(httpCmd, out string httpMethod, out string httpUrl, out var version);
 
                     //Read the request headers in to unique and non-unique header collections
                     await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.Headers);
@@ -390,10 +384,7 @@ namespace Titanium.Web.Proxy
                         await connection.Stream.WriteAsync(requestBytes, 0, requestBytes.Length);
                         string httpStatus = await connection.StreamReader.ReadLineAsync();
 
-                        Version responseVersion;
-                        int responseStatusCode;
-                        string responseStatusDescription;
-                        Response.ParseResponseLine(httpStatus, out responseVersion, out responseStatusCode, out responseStatusDescription);
+                        Response.ParseResponseLine(httpStatus, out var responseVersion, out int responseStatusCode, out string responseStatusDescription);
                         args.WebSession.Response.HttpVersion = responseVersion;
                         args.WebSession.Response.StatusCode = responseStatusCode;
                         args.WebSession.Response.StatusDescription = responseStatusDescription;

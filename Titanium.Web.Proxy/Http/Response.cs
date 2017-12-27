@@ -118,8 +118,7 @@ namespace Titanium.Web.Proxy.Http
                     return -1;
                 }
 
-                long contentLen;
-                long.TryParse(headerValue, out contentLen);
+                long.TryParse(headerValue, out long contentLen);
                 if (contentLen >= 0)
                 {
                     return contentLen;
