@@ -26,50 +26,50 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         public string StatusCode
         {
-            get { return statusCode; }
-            set { SetField(ref statusCode, value);}
+            get => statusCode;
+            set => SetField(ref statusCode, value);
         }
 
         public string Protocol
         {
-            get { return protocol; }
-            set { SetField(ref protocol, value); }
+            get => protocol;
+            set => SetField(ref protocol, value);
         }
 
         public string Host
         {
-            get { return host; }
-            set { SetField(ref host, value); }
+            get => host;
+            set => SetField(ref host, value);
         }
 
         public string Url
         {
-            get { return url; }
-            set { SetField(ref url, value); }
+            get => url;
+            set => SetField(ref url, value);
         }
 
         public long BodySize
         {
-            get { return bodySize; }
-            set { SetField(ref bodySize, value); }
+            get => bodySize;
+            set => SetField(ref bodySize, value);
         }
 
         public string Process
         {
-            get { return process; }
-            set { SetField(ref process, value); }
+            get => process;
+            set => SetField(ref process, value);
         }
 
         public long ReceivedDataCount
         {
-            get { return receivedDataCount; }
-            set { SetField(ref receivedDataCount, value); }
+            get => receivedDataCount;
+            set => SetField(ref receivedDataCount, value);
         }
 
         public long SentDataCount
         {
-            get { return sentDataCount; }
-            set { SetField(ref sentDataCount, value); }
+            get => sentDataCount;
+            set => SetField(ref sentDataCount, value);
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

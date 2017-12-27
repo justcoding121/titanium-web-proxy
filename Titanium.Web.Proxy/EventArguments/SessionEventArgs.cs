@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public bool ReRequest
         {
-            get { return reRequest; }
+            get => reRequest;
             set
             {
                 if (WebSession.Response.StatusCode == 0)

@@ -136,10 +136,7 @@ namespace Titanium.Web.Proxy.Http
                 {
                     string httpStatus = await ServerConnection.StreamReader.ReadLineAsync();
 
-                    Version version;
-                    int responseStatusCode;
-                    string responseStatusDescription;
-                    Response.ParseResponseLine(httpStatus, out version, out responseStatusCode, out responseStatusDescription);
+                    Response.ParseResponseLine(httpStatus, out _, out int responseStatusCode, out string responseStatusDescription);
 
                     //find if server is willing for expect continue
                     if (responseStatusCode == (int)HttpStatusCode.Continue
@@ -180,10 +177,7 @@ namespace Titanium.Web.Proxy.Http
                 httpStatus = await ServerConnection.StreamReader.ReadLineAsync();
             }
 
-            Version version;
-            int statusCode;
-            string statusDescription;
-            Response.ParseResponseLine(httpStatus, out version, out statusCode, out statusDescription);
+            Response.ParseResponseLine(httpStatus, out var version, out int statusCode, out string statusDescription);
 
             Response.HttpVersion = version;
             Response.StatusCode = statusCode;

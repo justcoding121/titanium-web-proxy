@@ -227,8 +227,7 @@ namespace Titanium.Web.Proxy.Http
 
         internal string GetHeaderValueOrNull(string headerName)
         {
-            HttpHeader header;
-            if (Headers.TryGetValue(headerName, out header))
+            if (Headers.TryGetValue(headerName, out var header))
             {
                 return header.Value;
             }
@@ -238,8 +237,7 @@ namespace Titanium.Web.Proxy.Http
 
         internal string SetOrAddHeaderValue(string headerName, string value)
         {
-            HttpHeader header;
-            if (Headers.TryGetValue(headerName, out header))
+            if (Headers.TryGetValue(headerName, out var header))
             {
                 header.Value = value;
             }

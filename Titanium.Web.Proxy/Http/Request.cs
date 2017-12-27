@@ -66,14 +66,8 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public string Host
         {
-            get
-            {
-                return Headers.GetHeaderValueOrNull("host");
-            }
-            set
-            {
-                Headers.SetOrAddHeaderValue("host", value);
-            }
+            get => Headers.GetHeaderValueOrNull("host");
+            set => Headers.SetOrAddHeaderValue("host", value);
         }
 
         /// <summary>
@@ -95,8 +89,7 @@ namespace Titanium.Web.Proxy.Http
                     return -1;
                 }
 
-                long contentLen;
-                long.TryParse(headerValue, out contentLen);
+                long.TryParse(headerValue, out long contentLen);
                 if (contentLen >= 0)
                 {
                     return contentLen;
@@ -123,14 +116,8 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public string ContentType
         {
-            get
-            {
-                return Headers.GetHeaderValueOrNull("content-type");
-            }
-            set
-            {
-                Headers.SetOrAddHeaderValue("content-type", value);
-            }
+            get => Headers.GetHeaderValueOrNull("content-type");
+            set => Headers.SetOrAddHeaderValue("content-type", value);
         }
 
         /// <summary>
