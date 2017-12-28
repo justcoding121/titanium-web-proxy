@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Text;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 
@@ -156,6 +157,8 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        public bool IsMultipartFormData => ContentType?.StartsWith("multipart/form-data") == true;
+
         /// <summary>
         /// Request Url
         /// </summary>
@@ -164,7 +167,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Encoding for this request
         /// </summary>
-        public Encoding Encoding => this.GetEncoding();
+        public Encoding Encoding => HttpHelper.GetEncodingFromContentType(ContentType);
 
         /// <summary>
         /// Terminates the underlying Tcp Connection to client after current request

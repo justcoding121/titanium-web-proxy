@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 
@@ -36,7 +37,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Encoding used in response
         /// </summary>
-        public Encoding Encoding => this.GetResponseCharacterEncoding();
+        public Encoding Encoding => HttpHelper.GetEncodingFromContentType(ContentType);
 
         /// <summary>
         /// Content encoding for this response

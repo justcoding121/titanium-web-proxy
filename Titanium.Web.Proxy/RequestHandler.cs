@@ -457,11 +457,12 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                args.WebSession.Request.RequestLocked = true;
+                var request = args.WebSession.Request;
+                request.RequestLocked = true;
 
                 //if expect continue is enabled then send the headers first 
                 //and see if server would return 100 conitinue
-                if (args.WebSession.Request.ExpectContinue)
+                if (request.ExpectContinue)
                 {
                     args.WebSession.SetConnection(connection);
                     await args.WebSession.SendRequest(Enable100ContinueBehaviour);
@@ -470,12 +471,12 @@ namespace Titanium.Web.Proxy
                 //If 100 continue was the response inform that to the client
                 if (Enable100ContinueBehaviour)
                 {
-                    if (args.WebSession.Request.Is100Continue)
+                    if (request.Is100Continue)
                     {
                         await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.Continue, "Continue");
                         await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
                     }
-                    else if (args.WebSession.Request.ExpectationFailed)
+                    else if (request.ExpectationFailed)
                     {
                         await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
                         await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
@@ -483,38 +484,37 @@ namespace Titanium.Web.Proxy
                 }
 
                 //If expect continue is not enabled then set the connectio and send request headers
-                if (!args.WebSession.Request.ExpectContinue)
+                if (!request.ExpectContinue)
                 {
                     args.WebSession.SetConnection(connection);
                     await args.WebSession.SendRequest(Enable100ContinueBehaviour);
                 }
 
                 //check if content-length is > 0
-                if (args.WebSession.Request.ContentLength > 0)
+                if (request.ContentLength > 0)
                 {
                     //If request was modified by user
-                    if (args.WebSession.Request.IsBodyRead)
+                    if (request.IsBodyRead)
                     {
-                        if (args.WebSession.Request.ContentEncoding != null)
+                        if (request.ContentEncoding != null)
                         {
-                            args.WebSession.Request.Body =
-                                await GetCompressedResponseBody(args.WebSession.Request.ContentEncoding, args.WebSession.Request.Body);
+                            request.Body = await GetCompressedResponseBody(request.ContentEncoding, request.Body);
                         }
 
-                        var body = args.WebSession.Request.Body;
+                        var body = request.Body;
 
                         //chunked send is not supported as of now
-                        args.WebSession.Request.ContentLength = body.Length;
+                        request.ContentLength = body.Length;
 
                         var newStream = args.WebSession.ServerConnection.Stream;
                         await newStream.WriteAsync(body, 0, body.Length);
                     }
                     else
                     {
-                        if (!args.WebSession.Request.ExpectationFailed)
+                        if (!request.ExpectationFailed)
                         {
                             //If its a post/put/patch request, then read the client html body and send it to server
-                            if (args.WebSession.Request.HasBody)
+                            if (request.HasBody)
                             {
                                 await SendClientRequestBody(args);
                             }
@@ -523,7 +523,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 //If not expectation failed response was returned by server then parse response
-                if (!args.WebSession.Request.ExpectationFailed)
+                if (!request.ExpectationFailed)
                 {
                     disposed = await HandleHttpSessionResponse(args);
 
@@ -624,7 +624,18 @@ namespace Titanium.Web.Proxy
             //send the request body bytes to server
             if (args.WebSession.Request.ContentLength > 0)
             {
-                await args.ProxyClient.ClientStreamReader.CopyBytesToStream(postStream, args.WebSession.Request.ContentLength);
+                var request = args.WebSession.Request;
+                if (args.HasMulipartEventSubscribers && request.IsMultipartFormData)
+                {
+                    string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
+                    args.OnMultipartRequestPartSent(boundary);
+                    // todo
+                    await args.ProxyClient.ClientStreamReader.CopyBytesToStream(postStream, args.WebSession.Request.ContentLength);
+                }
+                else
+                {
+                    await args.ProxyClient.ClientStreamReader.CopyBytesToStream(postStream, args.WebSession.Request.ContentLength);
+                }
             }
             //Need to revist, find any potential bugs
             //send the request body bytes to server in chunks

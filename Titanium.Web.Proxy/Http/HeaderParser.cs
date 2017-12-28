@@ -1,4 +1,5 @@
-﻿using StreamExtended.Network;
+﻿using System;
+using StreamExtended.Network;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Models;
@@ -25,7 +26,7 @@ namespace Titanium.Web.Proxy.Http
                 {
                     nonUniqueResponseHeaders[newHeader.Name].Add(newHeader);
                 }
-                //if header is alread in unique header collection then move both to non-unique collection
+                //if header is already in unique header collection then move both to non-unique collection
                 else if (headers.ContainsKey(newHeader.Name))
                 {
                     var existing = headers[newHeader.Name];
@@ -45,6 +46,18 @@ namespace Titanium.Web.Proxy.Http
                     headers.Add(newHeader.Name, newHeader);
                 }
             }
+        }
+
+        /// <summary>
+        /// Increase size of buffer and copy existing content to new buffer
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="size"></param>
+        private static void ResizeBuffer(ref byte[] buffer, long size)
+        {
+            var newBuffer = new byte[size];
+            Buffer.BlockCopy(buffer, 0, newBuffer, 0, buffer.Length);
+            buffer = newBuffer;
         }
     }
 }
