@@ -4,7 +4,6 @@ using System.IO;
 using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Decompression;
-using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -42,6 +41,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         internal ProxyClient ProxyClient { get; set; }
 
+        internal bool HasMulipartEventSubscribers => MultipartRequestPartSent != null;
+
         /// <summary>
         /// Returns a unique Id for this request/response session
         /// same as RequestId of WebSession
@@ -53,7 +54,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public bool ReRequest
         {
-            get { return reRequest; }
+            get => reRequest;
             set
             {
                 if (WebSession.Response.StatusCode == 0)
@@ -89,6 +90,11 @@ namespace Titanium.Web.Proxy.EventArguments
         public event EventHandler<DataEventArgs> DataSent;
 
         public event EventHandler<DataEventArgs> DataReceived;
+
+        /// <summary>
+        /// Occurs when multipart request part sent.
+        /// </summary>
+        public event EventHandler<MultipartRequestPartSentEventArgs> MultipartRequestPartSent;
 
         public ProxyEndPoint LocalEndPoint;
 
@@ -187,6 +193,11 @@ namespace Titanium.Web.Proxy.EventArguments
         internal void OnDataReceived(byte[] buffer, int offset, int count)
         {
             DataReceived?.Invoke(this, new DataEventArgs(buffer, offset, count));
+        }
+
+        internal void OnMultipartRequestPartSent(string boundary, HeaderCollection headers)
+        {
+            MultipartRequestPartSent?.Invoke(this, new MultipartRequestPartSentEventArgs(boundary, headers));
         }
 
         /// <summary>

@@ -7,7 +7,6 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network.Certificate;
 
@@ -36,7 +35,7 @@ namespace Titanium.Web.Proxy.Network
     {
         internal CertificateEngine Engine
         {
-            get { return engine; }
+            get => engine;
             set
             {
                 //For Mono (or Non-Windows) only Bouncy Castle is supported
@@ -83,7 +82,7 @@ namespace Titanium.Web.Proxy.Network
 
         internal string Issuer
         {
-            get { return issuer ?? defaultRootCertificateIssuer; }
+            get => issuer ?? defaultRootCertificateIssuer;
             set
             {
                 issuer = value;
@@ -93,7 +92,7 @@ namespace Titanium.Web.Proxy.Network
 
         internal string RootCertificateName
         {
-            get { return rootCertificateName ?? defaultRootRootCertificateName; }
+            get => rootCertificateName ?? defaultRootRootCertificateName;
             set
             {
                 rootCertificateName = value;
@@ -103,7 +102,7 @@ namespace Titanium.Web.Proxy.Network
 
         internal X509Certificate2 RootCertificate
         {
-            get { return rootCertificate; }
+            get => rootCertificate;
             set
             {
                 ClearRootCertificate();

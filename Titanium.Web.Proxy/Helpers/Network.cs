@@ -54,9 +54,7 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 localhost = Dns.GetHostEntry(Dns.GetHostName());
 
-                IPAddress ipAddress;
-
-                if (IPAddress.TryParse(hostName, out ipAddress))
+                if (IPAddress.TryParse(hostName, out var ipAddress))
                     isLocalhost = localhost.AddressList.Any(x => x.Equals(ipAddress));
 
                 if (!isLocalhost)
