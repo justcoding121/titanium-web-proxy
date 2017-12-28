@@ -1,5 +1,4 @@
-﻿using System.Net;
-using Titanium.Web.Proxy.Http;
+﻿using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.EventArguments
