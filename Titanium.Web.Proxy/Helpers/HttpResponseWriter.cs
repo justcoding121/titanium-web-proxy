@@ -3,9 +3,9 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
