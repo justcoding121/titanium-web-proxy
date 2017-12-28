@@ -81,8 +81,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
 
         public ExternalProxy GetProxy(Uri destination)
         {
-            IList<string> proxies;
-            if (GetAutoProxies(destination, out proxies))
+            if (GetAutoProxies(destination, out var proxies))
             {
                 if (proxies == null)
                 {

@@ -1,8 +1,8 @@
-﻿using StreamExtended.Network;
-using System;
+﻿using System;
 using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
+using StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Extensions
 {
@@ -17,6 +17,7 @@ namespace Titanium.Web.Proxy.Extensions
         /// <param name="input"></param>
         /// <param name="output"></param>
         /// <param name="onCopy"></param>
+        /// <param name="bufferSize"></param>
         internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy, int bufferSize)
         {
             byte[] buffer = new byte[bufferSize];
