@@ -164,22 +164,22 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Intercept request to server
         /// </summary>
-        public event Func<object, SessionEventArgs, Task> BeforeRequest;
+        public event AsyncEventHandler<SessionEventArgs> BeforeRequest;
 
         /// <summary>
         /// Intercept response from server
         /// </summary>
-        public event Func<object, SessionEventArgs, Task> BeforeResponse;
+        public event AsyncEventHandler<SessionEventArgs> BeforeResponse;
 
         /// <summary>
         /// Intercept tunnel connect reques
         /// </summary>
-        public event Func<object, TunnelConnectSessionEventArgs, Task> TunnelConnectRequest;
+        public event AsyncEventHandler<TunnelConnectSessionEventArgs> TunnelConnectRequest;
 
         /// <summary>
         /// Intercept tunnel connect response
         /// </summary>
-        public event Func<object, TunnelConnectSessionEventArgs, Task> TunnelConnectResponse;
+        public event AsyncEventHandler<TunnelConnectSessionEventArgs> TunnelConnectResponse;
 
         /// <summary>
         /// Occurs when client connection count changed.
@@ -229,12 +229,12 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
         /// </summary>
-        public event Func<object, CertificateValidationEventArgs, Task> ServerCertificateValidationCallback;
+        public event AsyncEventHandler<CertificateValidationEventArgs> ServerCertificateValidationCallback;
 
         /// <summary>
         /// Callback tooverride client certificate during SSL mutual authentication
         /// </summary>
-        public event Func<object, CertificateSelectionEventArgs, Task> ClientCertificateSelectionCallback;
+        public event AsyncEventHandler<CertificateSelectionEventArgs> ClientCertificateSelectionCallback;
 
         /// <summary>
         /// Callback for error events in proxy

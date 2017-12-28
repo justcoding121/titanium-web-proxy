@@ -92,14 +92,14 @@ namespace Titanium.Web.Proxy
 
                     if (TunnelConnectRequest != null)
                     {
-                        await TunnelConnectRequest.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
+                        await TunnelConnectRequest.InvokeAsync(this, connectArgs, ExceptionFunc);
                     }
 
                     if (await CheckAuthorization(clientStreamWriter, connectArgs) == false)
                     {
                         if (TunnelConnectResponse != null)
                         {
-                            await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
+                            await TunnelConnectResponse.InvokeAsync(this, connectArgs, ExceptionFunc);
                         }
 
                         return;
@@ -119,7 +119,7 @@ namespace Titanium.Web.Proxy
                     if (TunnelConnectResponse != null)
                     {
                         connectArgs.IsHttpsConnect = isClientHello;
-                        await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
+                        await TunnelConnectResponse.InvokeAsync(this, connectArgs, ExceptionFunc);
                     }
 
                     if (!excluded && isClientHello)
@@ -349,7 +349,7 @@ namespace Titanium.Web.Proxy
                     //If user requested interception do it
                     if (BeforeRequest != null)
                     {
-                        await BeforeRequest.InvokeParallelAsync(this, args, ExceptionFunc);
+                        await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);
                     }
 
                     if (args.WebSession.Request.CancelRequest)
@@ -403,7 +403,7 @@ namespace Titanium.Web.Proxy
                         //If user requested call back then do it
                         if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
                         {
-                            await BeforeResponse.InvokeParallelAsync(this, args, ExceptionFunc);
+                            await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
                         }
 
                         await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
