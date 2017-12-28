@@ -527,6 +527,10 @@ namespace Titanium.Web.Proxy.EventArguments
             httpResponseHandler = null;
             CustomUpStreamProxyUsed = null;
 
+            DataSent = null;
+            DataReceived = null;
+            MultipartRequestPartSent = null;
+
             WebSession.FinishSession();
         }
     }
