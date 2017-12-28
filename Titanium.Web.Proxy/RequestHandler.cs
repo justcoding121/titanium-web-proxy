@@ -1,6 +1,4 @@
-﻿using StreamExtended;
-using StreamExtended.Network;
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -8,12 +6,14 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Threading.Tasks;
+using StreamExtended.Helpers;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy
@@ -233,7 +233,12 @@ namespace Titanium.Web.Proxy
                         var sslStream = new SslStream(clientStream);
                         clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
-                        string sniHostName = clientSslHelloInfo.Extensions?.FirstOrDefault(x => x.Name == "server_name")?.Data;
+                        string sniHostName = null;
+                        if (clientSslHelloInfo.Extensions != null && clientSslHelloInfo.Extensions.TryGetValue("server_name", out var serverNameExtension))
+                        {
+                            sniHostName = serverNameExtension.Data;
+                        }
+                        
                         string certName = HttpHelper.GetWildCardDomainName(sniHostName ?? endPoint.GenericCertificateName);
                         var certificate = CertificateManager.CreateCertificate(certName, false);
 
@@ -628,9 +633,25 @@ namespace Titanium.Web.Proxy
                 if (args.HasMulipartEventSubscribers && request.IsMultipartFormData)
                 {
                     string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
-                    args.OnMultipartRequestPartSent(boundary);
-                    // todo
-                    await args.ProxyClient.ClientStreamReader.CopyBytesToStream(postStream, args.WebSession.Request.ContentLength);
+
+                    long bytesToSend = args.WebSession.Request.ContentLength;
+                    while (bytesToSend > 0)
+                    {
+                        long read = await SendUntilBoundaryAsync(args.ProxyClient.ClientStream, postStream, bytesToSend, boundary);
+                        if (read == 0)
+                        {
+                            break;
+                        }
+
+                        bytesToSend -= read;
+                        if (bytesToSend > 0)
+                        {
+                            var headers = new HeaderCollection();
+                            var stream = new CustomBufferedPeekStream(args.ProxyClient.ClientStream);
+                            await HeaderParser.ReadHeaders(new CustomBinaryReader(stream, BufferSize), headers);
+                            args.OnMultipartRequestPartSent(boundary, headers);
+                        }
+                    }
                 }
                 else
                 {
@@ -643,6 +664,69 @@ namespace Titanium.Web.Proxy
             {
                 await args.ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(postStream);
             }
+        }
+
+        /// <summary>
+        /// Read a line from the byte stream
+        /// </summary>
+        /// <returns></returns>
+        public async Task<long> SendUntilBoundaryAsync(CustomBufferedStream inputStream, CustomBufferedStream outputStream, long totalBytesToRead, string boundary)
+        {
+            int bufferDataLength = 0;
+
+            // try to use the thread static buffer
+            var buffer = BufferPool.GetBuffer(BufferSize);
+            int boundaryLength = boundary.Length + 4;
+            long bytesRead = 0;
+
+            while (bytesRead < totalBytesToRead && (inputStream.DataAvailable || await inputStream.FillBufferAsync()))
+            {
+                byte newChar = inputStream.ReadByteFromBuffer();
+                buffer[bufferDataLength] = newChar;
+
+                bufferDataLength++;
+                bytesRead++;
+
+                if (bufferDataLength >= boundaryLength)
+                {
+                    int startIdx = bufferDataLength - boundaryLength;
+                    if (buffer[startIdx] == '-' && buffer[startIdx + 1] == '-'
+                        && buffer[bufferDataLength - 2] == '\r' && buffer[bufferDataLength - 1] == '\n')
+                    {
+                        startIdx += 2;
+                        bool ok = true;
+                        for (int i = 0; i < boundary.Length; i++)
+                        {
+                            if (buffer[startIdx + i] != boundary[i])
+                            {
+                                ok = false;
+                                break;
+                            }
+                        }
+
+                        if (ok)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                if (bufferDataLength == buffer.Length)
+                {
+                    //boundary is not longer than 70 bytes accounrding to the specification, so keeping the last 100 (minimum 74) bytes is enough
+                    const int bytesToKeep = 100;
+                    await outputStream.WriteAsync(buffer, 0, buffer.Length - bytesToKeep);
+                    Buffer.BlockCopy(buffer, buffer.Length - bytesToKeep, buffer, 0, bytesToKeep);
+                    bufferDataLength = bytesToKeep;
+                }
+            }
+
+            if (bytesRead > 0)
+            {
+                await outputStream.WriteAsync(buffer, 0, bufferDataLength);
+            }
+
+            return bytesRead;
         }
     }
 }
