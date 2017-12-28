@@ -8,7 +8,12 @@ namespace Titanium.Web.Proxy.Helpers
     {
         private static readonly Encoding defaultEncoding = Encoding.GetEncoding("ISO-8859-1");
 
-        public static Encoding GetEncodingFromContentType(string contentType)
+        /// <summary>
+        /// Gets the character encoding of request/response from content-type header
+        /// </summary>
+        /// <param name="contentType"></param>
+        /// <returns></returns>
+        internal static Encoding GetEncodingFromContentType(string contentType)
         {
             try
             {
@@ -22,10 +27,10 @@ namespace Titanium.Web.Proxy.Helpers
                 var parameters = contentType.Split(ProxyConstants.SemiColonSplit);
                 foreach (string parameter in parameters)
                 {
-                    var encodingSplit = parameter.Split(ProxyConstants.EqualSplit, 2);
-                    if (encodingSplit.Length == 2 && encodingSplit[0].Trim().Equals("charset", StringComparison.CurrentCultureIgnoreCase))
+                    var split = parameter.Split(ProxyConstants.EqualSplit, 2);
+                    if (split.Length == 2 && split[0].Trim().Equals("charset", StringComparison.CurrentCultureIgnoreCase))
                     {
-                        string value = encodingSplit[1];
+                        string value = split[1];
                         if (value.Equals("x-user-defined", StringComparison.OrdinalIgnoreCase))
                         {
                             //todo: what is this?
@@ -49,6 +54,32 @@ namespace Titanium.Web.Proxy.Helpers
 
             //return default if not specified
             return defaultEncoding;
+        }
+
+        internal static string GetBoundaryFromContentType(string contentType)
+        {
+            if (contentType != null)
+            {
+                //extract the boundary
+                var parameters = contentType.Split(ProxyConstants.SemiColonSplit);
+                foreach (string parameter in parameters)
+                {
+                    var split = parameter.Split(ProxyConstants.EqualSplit, 2);
+                    if (split.Length == 2 && split[0].Trim().Equals("boundary", StringComparison.CurrentCultureIgnoreCase))
+                    {
+                        string value = split[1];
+                        if (value.Length > 2 && value[0] == '"' && value[value.Length - 1] == '"')
+                        {
+                            value = value.Substring(1, value.Length - 2);
+                        }
+
+                        return value;
+                    }
+                }
+            }
+
+            //return null if not specified
+            return null;
         }
 
         /// <summary>
