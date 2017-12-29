@@ -72,26 +72,26 @@ namespace Titanium.Web.Proxy.Extensions
         /// <summary>
         /// Copies the stream chunked
         /// </summary>
-        /// <param name="clientStreamReader"></param>
+        /// <param name="reader"></param>
         /// <param name="stream"></param>
         /// <returns></returns>
-        internal static async Task CopyBytesToStreamChunked(this CustomBinaryReader clientStreamReader, Stream stream)
+        internal static async Task CopyBytesToStreamChunked(this CustomBinaryReader reader, Stream stream)
         {
             while (true)
             {
-                string chuchkHead = await clientStreamReader.ReadLineAsync();
-                int chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
+                string chunkHead = await reader.ReadLineAsync();
+                int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
 
                 if (chunkSize != 0)
                 {
-                    await CopyBytesToStream(clientStreamReader, stream, chunkSize);
-
-                    //chunk trail
-                    await clientStreamReader.ReadLineAsync();
+                    await CopyBytesToStream(reader, stream, chunkSize);
                 }
-                else
+
+                //chunk trail
+                await reader.ReadLineAsync();
+
+                if (chunkSize == 0)
                 {
-                    await clientStreamReader.ReadLineAsync();
                     break;
                 }
             }

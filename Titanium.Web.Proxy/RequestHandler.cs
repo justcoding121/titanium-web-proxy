@@ -171,8 +171,7 @@ namespace Titanium.Web.Proxy
                                         //send the buffered data
                                         var data = new byte[clientStream.Available];
                                         await clientStream.ReadAsync(data, 0, data.Length);
-                                        await connection.Stream.WriteAsync(data, 0, data.Length);
-                                        await connection.Stream.FlushAsync();
+                                        await connection.StreamWriter.WriteAsync(data, true);
                                     }
 
                                     var serverHelloInfo = await SslTools.PeekServerHello(connection.Stream);
@@ -388,7 +387,7 @@ namespace Titanium.Web.Proxy
                             requestBytes = ms.ToArray();
                         }
 
-                        await connection.Stream.WriteAsync(requestBytes, 0, requestBytes.Length);
+                        await connection.StreamWriter.WriteAsync(requestBytes);
                         string httpStatus = await connection.StreamReader.ReadLineAsync();
 
                         Response.ParseResponseLine(httpStatus, out var responseVersion, out int responseStatusCode, out string responseStatusDescription);
@@ -478,15 +477,17 @@ namespace Titanium.Web.Proxy
                 //If 100 continue was the response inform that to the client
                 if (Enable100ContinueBehaviour)
                 {
+                    var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
+
                     if (request.Is100Continue)
                     {
-                        await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.Continue, "Continue");
-                        await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
+                        await clientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.Continue, "Continue");
+                        await clientStreamWriter.WriteLineAsync();
                     }
                     else if (request.ExpectationFailed)
                     {
-                        await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
-                        await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
+                        await clientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
+                        await clientStreamWriter.WriteLineAsync();
                     }
                 }
 
@@ -513,8 +514,7 @@ namespace Titanium.Web.Proxy
                         //chunked send is not supported as of now
                         request.ContentLength = body.Length;
 
-                        var newStream = args.WebSession.ServerConnection.Stream;
-                        await newStream.WriteAsync(body, 0, body.Length);
+                        await args.WebSession.ServerConnection.StreamWriter.WriteAsync(body);
                     }
                     else
                     {
@@ -626,45 +626,37 @@ namespace Titanium.Web.Proxy
         private async Task SendClientRequestBody(SessionEventArgs args)
         {
             // End the operation
-            var postStream = args.WebSession.ServerConnection.Stream;
+            var request = args.WebSession.Request;
 
             //send the request body bytes to server
-            if (args.WebSession.Request.ContentLength > 0)
+            if (request.ContentLength > 0 && args.HasMulipartEventSubscribers && request.IsMultipartFormData)
             {
-                var request = args.WebSession.Request;
-                if (args.HasMulipartEventSubscribers && request.IsMultipartFormData)
+                string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
+
+                long bytesToSend = request.ContentLength;
+                while (bytesToSend > 0)
                 {
-                    string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
-
-                    long bytesToSend = args.WebSession.Request.ContentLength;
-                    while (bytesToSend > 0)
+                    var outputStream = args.WebSession.ServerConnection.StreamWriter;
+                    long read = await SendUntilBoundaryAsync(args.ProxyClient.ClientStream, outputStream, bytesToSend, boundary);
+                    if (read == 0)
                     {
-                        long read = await SendUntilBoundaryAsync(args.ProxyClient.ClientStream, postStream, bytesToSend, boundary);
-                        if (read == 0)
-                        {
-                            break;
-                        }
+                        break;
+                    }
 
-                        bytesToSend -= read;
-                        if (bytesToSend > 0)
-                        {
-                            var headers = new HeaderCollection();
-                            var stream = new CustomBufferedPeekStream(args.ProxyClient.ClientStream);
-                            await HeaderParser.ReadHeaders(new CustomBinaryReader(stream, BufferSize), headers);
-                            args.OnMultipartRequestPartSent(boundary, headers);
-                        }
+                    bytesToSend -= read;
+                    if (bytesToSend > 0)
+                    {
+                        var headers = new HeaderCollection();
+                        var stream = new CustomBufferedPeekStream(args.ProxyClient.ClientStream);
+                        await HeaderParser.ReadHeaders(new CustomBinaryReader(stream, BufferSize), headers);
+                        args.OnMultipartRequestPartSent(boundary, headers);
                     }
                 }
-                else
-                {
-                    await args.ProxyClient.ClientStreamReader.CopyBytesToStream(postStream, args.WebSession.Request.ContentLength);
-                }
             }
-            //Need to revist, find any potential bugs
-            //send the request body bytes to server in chunks
-            else if (args.WebSession.Request.IsChunked)
+            else
             {
-                await args.ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(postStream);
+                await args.WebSession.ServerConnection.StreamWriter.CopyBodyAsync(args.ProxyClient.ClientStreamReader,
+                    request.IsChunked, request.ContentLength);
             }
         }
 
@@ -672,7 +664,7 @@ namespace Titanium.Web.Proxy
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        public async Task<long> SendUntilBoundaryAsync(CustomBufferedStream inputStream, CustomBufferedStream outputStream, long totalBytesToRead, string boundary)
+        private async Task<long> SendUntilBoundaryAsync(CustomBufferedStream inputStream, HttpRequestWriter outputStream, long totalBytesToRead, string boundary)
         {
             int bufferDataLength = 0;
 

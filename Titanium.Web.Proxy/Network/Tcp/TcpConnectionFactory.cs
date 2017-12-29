@@ -130,6 +130,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 UseUpstreamProxy = useUpstreamProxy,
                 TcpClient = client,
                 StreamReader = new CustomBinaryReader(stream, server.BufferSize),
+                StreamWriter = new HttpRequestWriter(stream, server.BufferSize),
                 Stream = stream,
                 Version = httpVersion
             };

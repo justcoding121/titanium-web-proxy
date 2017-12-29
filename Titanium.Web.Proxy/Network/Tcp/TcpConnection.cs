@@ -2,6 +2,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Network.Tcp
@@ -38,6 +39,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         internal CustomBinaryReader StreamReader { get; set; }
 
+        internal HttpRequestWriter StreamWriter { get; set; }
+
         /// <summary>
         /// Server stream
         /// </summary>
@@ -61,6 +64,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             Stream?.Dispose();
 
             StreamReader?.Dispose();
+            StreamWriter?.Dispose();
 
             try
             {
