@@ -81,8 +81,6 @@ namespace Titanium.Web.Proxy.Http
         /// <returns></returns>
         internal async Task SendRequest(bool enable100ContinueBehaviour)
         {
-            var stream = ServerConnection.Stream;
-
             byte[] requestBytes;
             using (var ms = new MemoryStream())
             using (var writer = new HttpRequestWriter(ms, bufferSize))
@@ -127,6 +125,7 @@ namespace Titanium.Web.Proxy.Http
                 requestBytes = ms.ToArray();
             }
 
+            var stream = ServerConnection.Stream;
             await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
             await stream.FlushAsync();
 

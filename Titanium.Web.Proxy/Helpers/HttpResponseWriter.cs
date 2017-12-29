@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -64,13 +63,11 @@ namespace Titanium.Web.Proxy.Helpers
         /// Copies the specified content length number of bytes to the output stream from the given inputs stream
         /// optionally chunked
         /// </summary>
-        /// <param name="bufferSize"></param>
         /// <param name="inStreamReader"></param>
         /// <param name="isChunked"></param>
         /// <param name="contentLength"></param>
         /// <returns></returns>
-        internal async Task WriteResponseBodyAsync(int bufferSize, CustomBinaryReader inStreamReader, bool isChunked,
-            long contentLength)
+        internal async Task CopyBodyAsync(CustomBinaryReader inStreamReader, bool isChunked, long contentLength)
         {
             if (!isChunked)
             {
@@ -84,39 +81,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
             else
             {
-                await WriteResponseBodyChunkedAsync(inStreamReader);
-            }
-        }
-
-        /// <summary>
-        /// Copies the streams chunked
-        /// </summary>
-        /// <param name="inStreamReader"></param>
-        /// <returns></returns>
-        internal async Task WriteResponseBodyChunkedAsync(CustomBinaryReader inStreamReader)
-        {
-            while (true)
-            {
-                string chunkHead = await inStreamReader.ReadLineAsync();
-                int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
-
-                if (chunkSize != 0)
-                {
-                    var chunkHeadBytes = Encoding.ASCII.GetBytes(chunkSize.ToString("x2"));
-                    await BaseStream.WriteAsync(chunkHeadBytes, 0, chunkHeadBytes.Length);
-                    await BaseStream.WriteAsync(ProxyConstants.NewLineBytes, 0, ProxyConstants.NewLineBytes.Length);
-
-                    await inStreamReader.CopyBytesToStream(BaseStream, chunkSize);
-                    await BaseStream.WriteAsync(ProxyConstants.NewLineBytes, 0, ProxyConstants.NewLineBytes.Length);
-
-                    await inStreamReader.ReadLineAsync();
-                }
-                else
-                {
-                    await inStreamReader.ReadLineAsync();
-                    await BaseStream.WriteAsync(ProxyConstants.ChunkEnd, 0, ProxyConstants.ChunkEnd.Length);
-                    break;
-                }
+                await CopyBodyChunkedAsync(inStreamReader);
             }
         }
 
@@ -125,16 +90,46 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="data"></param>
         /// <returns></returns>
-        internal async Task WriteResponseBodyChunkedAsync(byte[] data)
+        private async Task WriteResponseBodyChunkedAsync(byte[] data)
         {
             var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
 
-            await BaseStream.WriteAsync(chunkHead, 0, chunkHead.Length);
-            await BaseStream.WriteAsync(ProxyConstants.NewLineBytes, 0, ProxyConstants.NewLineBytes.Length);
-            await BaseStream.WriteAsync(data, 0, data.Length);
-            await BaseStream.WriteAsync(ProxyConstants.NewLineBytes, 0, ProxyConstants.NewLineBytes.Length);
+            await WriteAsync(chunkHead);
+            await WriteLineAsync();
+            await WriteAsync(data);
+            await WriteLineAsync();
 
-            await BaseStream.WriteAsync(ProxyConstants.ChunkEnd, 0, ProxyConstants.ChunkEnd.Length);
+            await WriteLineAsync("0");
+            await WriteLineAsync();
+        }
+
+        /// <summary>
+        /// Copies the streams chunked
+        /// </summary>
+        /// <param name="inStreamReader"></param>
+        /// <returns></returns>
+        private async Task CopyBodyChunkedAsync(CustomBinaryReader inStreamReader)
+        {
+            while (true)
+            {
+                string chunkHead = await inStreamReader.ReadLineAsync();
+                int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
+
+                await WriteLineAsync(chunkHead);
+
+                if (chunkSize != 0)
+                {
+                    await inStreamReader.CopyBytesToStream(BaseStream, chunkSize);
+                }
+
+                await WriteLineAsync();
+                await inStreamReader.ReadLineAsync();
+
+                if (chunkSize == 0)
+                {
+                    break;
+                }
+            }
         }
     }
 }

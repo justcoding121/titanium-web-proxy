@@ -53,5 +53,16 @@ namespace Titanium.Web.Proxy.Helpers
                 await FlushAsync();
             }
         }
+
+        public async Task WriteAsync(byte[] data, bool flush = false)
+        {
+            await FlushAsync();
+            await BaseStream.WriteAsync(data, 0, data.Length);
+            if (flush)
+            {
+                // flush the stream and the encoder, too
+                await FlushAsync();
+            }
+        }
     }
 }
