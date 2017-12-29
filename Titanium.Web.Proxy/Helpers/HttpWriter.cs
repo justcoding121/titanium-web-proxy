@@ -1,6 +1,9 @@
-﻿using System.IO;
+﻿using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using StreamExtended.Network;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Shared;
 
@@ -62,6 +65,112 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 // flush the stream and the encoder, too
                 await FlushAsync();
+            }
+        }
+
+        public async Task WriteAsync(byte[] data, int offset, int count, bool flush = false)
+        {
+            await FlushAsync();
+            await BaseStream.WriteAsync(data, offset, count);
+            if (flush)
+            {
+                // flush the stream and the encoder, too
+                await FlushAsync();
+            }
+        }
+
+        /// <summary>
+        /// Writes the byte array body to the stream; optionally chunked
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="isChunked"></param>
+        /// <returns></returns>
+        internal async Task WriteBodyAsync(byte[] data, bool isChunked)
+        {
+            if (!isChunked)
+            {
+                await BaseStream.WriteAsync(data, 0, data.Length);
+            }
+            else
+            {
+                await WriteBodyChunkedAsync(data);
+            }
+        }
+
+        /// <summary>
+        /// Copies the specified content length number of bytes to the output stream from the given inputs stream
+        /// optionally chunked
+        /// </summary>
+        /// <param name="streamReader"></param>
+        /// <param name="isChunked"></param>
+        /// <param name="contentLength"></param>
+        /// <returns></returns>
+        internal async Task CopyBodyAsync(CustomBinaryReader streamReader, bool isChunked, long contentLength)
+        {
+            if (!isChunked)
+            {
+                //http 1.0
+                if (contentLength == -1)
+                {
+                    contentLength = long.MaxValue;
+                }
+
+                await streamReader.CopyBytesToStream(BaseStream, contentLength);
+            }
+            else
+            {
+                //Need to revist, find any potential bugs
+                //send the body bytes to server in chunks
+                await CopyBodyChunkedAsync(streamReader);
+            }
+        }
+
+        /// <summary>
+        /// Copies the given input bytes to output stream chunked
+        /// </summary>
+        /// <param name="data"></param>
+        /// <returns></returns>
+        private async Task WriteBodyChunkedAsync(byte[] data)
+        {
+            var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
+
+            await WriteAsync(chunkHead);
+            await WriteLineAsync();
+            await WriteAsync(data);
+            await WriteLineAsync();
+
+            await WriteLineAsync("0");
+            await WriteLineAsync();
+        }
+
+        /// <summary>
+        /// Copies the streams chunked
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <returns></returns>
+        private async Task CopyBodyChunkedAsync(CustomBinaryReader reader)
+        {
+            while (true)
+            {
+                string chunkHead = await reader.ReadLineAsync();
+                int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
+
+                await WriteLineAsync(chunkHead);
+
+                if (chunkSize != 0)
+                {
+                    await reader.CopyBytesToStream(BaseStream, chunkSize);
+                }
+
+                await WriteLineAsync();
+
+                //chunk trail
+                await reader.ReadLineAsync();
+
+                if (chunkSize == 0)
+                {
+                    break;
+                }
             }
         }
     }

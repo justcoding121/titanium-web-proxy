@@ -125,9 +125,7 @@ namespace Titanium.Web.Proxy.Http
                 requestBytes = ms.ToArray();
             }
 
-            var stream = ServerConnection.Stream;
-            await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
-            await stream.FlushAsync();
+            await ServerConnection.StreamWriter.WriteAsync(requestBytes, true);
 
             if (enable100ContinueBehaviour)
             {

@@ -96,7 +96,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     await clientStreamWriter.WriteHeadersAsync(response.Headers);
-                    await clientStreamWriter.WriteResponseBodyAsync(response.Body, isChunked);
+                    await clientStreamWriter.WriteBodyAsync(response.Body, isChunked);
                 }
                 else
                 {
