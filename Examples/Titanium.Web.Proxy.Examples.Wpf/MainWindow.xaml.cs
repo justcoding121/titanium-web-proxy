@@ -70,6 +70,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
             {
+                ExcludedHttpsHostNameRegex = new[] { "ssllabs.com" },
                 //IncludedHttpsHostNameRegex = new string[0],
             };
 
