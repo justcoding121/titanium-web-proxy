@@ -89,7 +89,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             if (!isChunked)
             {
-                await BaseStream.WriteAsync(data, 0, data.Length);
+                await WriteAsync(data);
             }
             else
             {
@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy.Helpers
                     contentLength = long.MaxValue;
                 }
 
-                await streamReader.CopyBytesToStream(BaseStream, contentLength);
+                await CopyBytesFromStream(streamReader, contentLength);
             }
             else
             {
@@ -156,10 +156,11 @@ namespace Titanium.Web.Proxy.Helpers
                 int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
 
                 await WriteLineAsync(chunkHead);
+                
 
                 if (chunkSize != 0)
                 {
-                    await reader.CopyBytesToStream(BaseStream, chunkSize);
+                    await CopyBytesFromStream(reader, chunkSize);
                 }
 
                 await WriteLineAsync();
@@ -172,6 +173,12 @@ namespace Titanium.Web.Proxy.Helpers
                     break;
                 }
             }
+        }
+
+        private async Task CopyBytesFromStream(CustomBinaryReader reader, long count)
+        {
+            await FlushAsync();
+            await reader.CopyBytesToStream(BaseStream, count);
         }
     }
 }

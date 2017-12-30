@@ -1,10 +1,6 @@
 ﻿using System;
-using System.Globalization;
 using System.IO;
-using System.Text;
 using System.Threading.Tasks;
-using StreamExtended.Network;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Helpers
@@ -38,7 +34,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         public Task WriteResponseStatusAsync(Version version, int code, string description)
         {
-            return WriteLineAsync($"HTTP/{version.Major}.{version.Minor} {code} {description}");
+            return WriteLineAsync(Response.CreateResponseLine(version, code, description));
         }
     }
 }
