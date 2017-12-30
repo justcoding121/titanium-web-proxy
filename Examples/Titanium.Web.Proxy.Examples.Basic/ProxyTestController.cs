@@ -143,13 +143,21 @@ namespace Titanium.Web.Proxy.Examples.Basic
         }
 
         //intecept & cancel redirect or update requests
-        public async Task OnRequest(object sender, SessionEventArgs e)
+        private async Task OnRequest(object sender, SessionEventArgs e)
         {
             Console.WriteLine("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
             Console.WriteLine(e.WebSession.Request.Url);
 
             //read request headers
             requestHeaderHistory[e.Id] = e.WebSession.Request.Headers;
+
+            ////This sample shows how to get the multipart form data headers
+            ////Do not read the body (GetRequestBody or GetResponseBodyAsString) in this case 
+            ////otherwise you have to parse the headers from the returned body data
+            //if (e.WebSession.Request.Host == "mail.yahoo.com" && e.WebSession.Request.IsMultipartFormData)
+            //{
+            //    e.MultipartRequestPartSent += MultipartRequestPartSent;
+            //}
 
             if (e.WebSession.Request.HasBody)
             {
@@ -185,7 +193,17 @@ namespace Titanium.Web.Proxy.Examples.Basic
         }
 
         //Modify response
-        public async Task OnResponse(object sender, SessionEventArgs e)
+        private void MultipartRequestPartSent(object sender, MultipartRequestPartSentEventArgs e)
+        {
+            var session = (SessionEventArgs)sender;
+            Console.WriteLine("Multipart form data headers:");
+            foreach (var header in e.Headers)
+            {
+                Console.WriteLine(header);
+            }
+        }
+
+        private async Task OnResponse(object sender, SessionEventArgs e)
         {
             Console.WriteLine("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
