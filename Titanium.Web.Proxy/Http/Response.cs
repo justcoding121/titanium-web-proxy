@@ -47,7 +47,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Http version
         /// </summary>
-        public Version HttpVersion { get; set; }
+        public Version HttpVersion { get; set; } = HttpHeader.VersionUnknown;
 
         /// <summary>
         /// Keeps the response body data after the session is finished
@@ -70,7 +70,7 @@ namespace Titanium.Web.Proxy.Http
 
                 //has response if connection:keep-alive header exist and when version is http/1.0
                 //Because in Http 1.0 server can return a response without content-length (expectation being client would read until end of stream)
-                if (KeepAlive && HttpVersion.Minor == 0)
+                if (KeepAlive && HttpVersion == HttpHeader.Version10)
                 {
                     return true;
                 }
@@ -228,7 +228,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Gets the resposne status.
         /// </summary>
-        public string Status => $"HTTP/{HttpVersion?.Major}.{HttpVersion?.Minor} {StatusCode} {StatusDescription}";
+        public string Status => CreateResponseLine(HttpVersion, StatusCode, StatusDescription);
 
         /// <summary>
         /// Gets the header text.
@@ -247,6 +247,11 @@ namespace Titanium.Web.Proxy.Http
                 sb.AppendLine();
                 return sb.ToString();
             }
+        }
+
+        internal static string CreateResponseLine(Version version, int statusCode, string statusDescription)
+        {
+            return $"HTTP/{version.Major}.{version.Minor} {statusCode} {statusDescription}";
         }
 
         internal static void ParseResponseLine(string httpStatus, out Version version, out int statusCode, out string statusDescription)

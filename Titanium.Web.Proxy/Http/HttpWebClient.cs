@@ -90,14 +90,9 @@ namespace Titanium.Web.Proxy.Http
                 bool useUpstreamProxy = upstreamProxy != null && ServerConnection.IsHttps == false;
 
                 //prepare the request & headers
-                if (useUpstreamProxy)
-                {
-                    writer.WriteLine($"{Request.Method} {Request.OriginalUrl} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
-                }
-                else
-                {
-                    writer.WriteLine($"{Request.Method} {Request.RequestUri.PathAndQuery} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
-                }
+                writer.WriteLine(Request.CreateRequestLine(Request.Method,
+                    useUpstreamProxy ? Request.OriginalUrl : Request.RequestUri.PathAndQuery,
+                    Request.HttpVersion));
 
 
                 //Send Authentication to Upstream proxy if needed

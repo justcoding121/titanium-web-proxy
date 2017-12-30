@@ -162,7 +162,7 @@ namespace Titanium.Web.Proxy.EventArguments
                             //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
                             await streamReader.CopyBytesToStream(bodyStream, request.ContentLength);
                         }
-                        else if (request.HttpVersion.Major == 1 && request.HttpVersion.Minor == 0)
+                        else if (request.HttpVersion == HttpHeader.Version10)
                         {
                             await streamReader.CopyBytesToStream(bodyStream, long.MaxValue);
                         }
@@ -238,8 +238,7 @@ namespace Titanium.Web.Proxy.EventArguments
                                 //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
                                 await streamReader.CopyBytesToStream(bodyStream, response.ContentLength);
                             }
-                            else if (response.HttpVersion.Major == 1 && response.HttpVersion.Minor == 0 || 
-                                     response.ContentLength == -1)
+                            else if (response.HttpVersion == HttpHeader.Version10 || response.ContentLength == -1)
                             {
                                 await streamReader.CopyBytesToStream(bodyStream, long.MaxValue);
                             }

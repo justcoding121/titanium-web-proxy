@@ -275,7 +275,7 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 var sb = new StringBuilder();
-                sb.AppendLine($"{Method} {OriginalUrl} HTTP/{HttpVersion.Major}.{HttpVersion.Minor}");
+                sb.AppendLine(CreateRequestLine(Method, OriginalUrl, HttpVersion));
                 foreach (var header in Headers)
                 {
                     sb.AppendLine(header.ToString());
@@ -284,6 +284,11 @@ namespace Titanium.Web.Proxy.Http
                 sb.AppendLine();
                 return sb.ToString();
             }
+        }
+
+        internal static string CreateRequestLine(string httpMethod, string httpUrl, Version version)
+        {
+            return $"{httpMethod} {httpUrl} HTTP/{version.Major}.{version.Minor}";
         }
 
         internal static void ParseRequestLine(string httpCmd, out string httpMethod, out string httpUrl, out Version version)

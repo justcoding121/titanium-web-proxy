@@ -707,7 +707,7 @@ namespace Titanium.Web.Proxy
 
                 if (bufferDataLength == buffer.Length)
                 {
-                    //boundary is not longer than 70 bytes accounrding to the specification, so keeping the last 100 (minimum 74) bytes is enough
+                    //boundary is not longer than 70 bytes according to the specification, so keeping the last 100 (minimum 74) bytes is enough
                     const int bytesToKeep = 100;
                     await outputStream.WriteAsync(buffer, 0, buffer.Length - bytesToKeep);
                     Buffer.BlockCopy(buffer, buffer.Length - bytesToKeep, buffer, 0, bytesToKeep);
