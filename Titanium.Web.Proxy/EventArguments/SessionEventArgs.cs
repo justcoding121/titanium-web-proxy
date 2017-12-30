@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Threading.Tasks;
+using StreamExtended.Network;
 using Titanium.Web.Proxy.Decompression;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -21,6 +22,8 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public class SessionEventArgs : EventArgs, IDisposable
     {
+        private static readonly byte[] emptyData = new byte[0];
+
         /// <summary>
         /// Size of Buffers used by this object
         /// </summary>
@@ -144,37 +147,12 @@ namespace Titanium.Web.Proxy.EventArguments
             //If not already read (not cached yet)
             if (!request.IsBodyRead)
             {
-                //If chunked then its easy just read the whole body with the content length mentioned in the request header
-                using (var bodyStream = new MemoryStream())
-                {
-                    var streamReader = ProxyClient.ClientStreamReader;
-
-                    //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
-                    if (request.IsChunked)
-                    {
-                        await streamReader.CopyBytesToStreamChunked(bodyStream);
-                    }
-                    else
-                    {
-                        //If not chunked then its easy just read the whole body with the content length mentioned in the request header
-                        if (request.ContentLength > 0)
-                        {
-                            //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await streamReader.CopyBytesToStream(bodyStream, request.ContentLength);
-                        }
-                        else if (request.HttpVersion == HttpHeader.Version10)
-                        {
-                            await streamReader.CopyBytesToStream(bodyStream, long.MaxValue);
-                        }
-                    }
-
-                    request.Body = await GetDecompressedResponseBody(request.ContentEncoding, bodyStream.ToArray());
-                }
+                var body = await ReadBody(ProxyClient.ClientStreamReader, request.IsChunked, request.ContentLength, request.ContentEncoding);
+                request.Body = body;
 
                 //Now set the flag to true
                 //So that next time we can deliver body from cache
                 request.IsBodyRead = true;
-                var body = request.Body;
                 OnDataSent(body, 0, body.Length);
             }
         }
@@ -215,48 +193,47 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             var response = WebSession.Response;
+            if (!response.HasBody)
+            {
+                return;
+            }
 
             //If not already read (not cached yet)
             if (!response.IsBodyRead)
             {
-                if (response.HasBody)
-                {
-                    using (var bodyStream = new MemoryStream())
-                    {
-                        var streamReader = WebSession.ServerConnection.StreamReader;
-
-                        //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
-                        if (response.IsChunked)
-                        {
-                            await streamReader.CopyBytesToStreamChunked(bodyStream);
-                        }
-                        else
-                        {
-                            //If not chunked then its easy just read the whole body with the content length mentioned in the request header
-                            if (response.ContentLength > 0)
-                            {
-                                //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                                await streamReader.CopyBytesToStream(bodyStream, response.ContentLength);
-                            }
-                            else if (response.HttpVersion == HttpHeader.Version10 || response.ContentLength == -1)
-                            {
-                                await streamReader.CopyBytesToStream(bodyStream, long.MaxValue);
-                            }
-                        }
-
-                        response.Body = await GetDecompressedResponseBody(response.ContentEncoding, bodyStream.ToArray());
-                    }
-                }
-                else
-                {
-                    response.Body = new byte[0];
-                }
+                var body = await ReadBody(WebSession.ServerConnection.StreamReader, response.IsChunked, response.ContentLength, response.ContentEncoding);
+                response.Body = body;
 
                 //Now set the flag to true
                 //So that next time we can deliver body from cache
                 response.IsBodyRead = true;
-                var body = response.Body;
                 OnDataReceived(body, 0, body.Length);
+            }
+        }
+
+        private async Task<byte[]> ReadBody(CustomBinaryReader streamReader, bool isChunked, long contentLength, string contentEncoding)
+        {
+            //If chunked then its easy just read the whole body with the content length mentioned in the header
+            using (var bodyStream = new MemoryStream())
+            {
+                //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
+                if (isChunked)
+                {
+                    await streamReader.CopyBytesToStreamChunked(bodyStream);
+                }
+                else
+                {
+                    //http 1.0
+                    if (contentLength == -1)
+                    {
+                        contentLength = long.MaxValue;
+                    }
+
+                    //If not chunked then its easy just read the amount of bytes mentioned in content length header
+                    await streamReader.CopyBytesToStream(bodyStream, contentLength);
+                }
+
+                return await GetDecompressedBody(contentEncoding, bodyStream.ToArray());
             }
         }
 
@@ -409,12 +386,12 @@ namespace Titanium.Web.Proxy.EventArguments
             await SetResponseBody(bodyBytes);
         }
 
-        private async Task<byte[]> GetDecompressedResponseBody(string encodingType, byte[] responseBodyStream)
+        private async Task<byte[]> GetDecompressedBody(string encodingType, byte[] bodyStream)
         {
             var decompressionFactory = new DecompressionFactory();
             var decompressor = decompressionFactory.Create(encodingType);
 
-            return await decompressor.Decompress(responseBodyStream, bufferSize);
+            return await decompressor.Decompress(bodyStream, bufferSize);
         }
 
         /// <summary>
@@ -503,7 +480,7 @@ namespace Titanium.Web.Proxy.EventArguments
             var response = new RedirectResponse();
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Headers.AddHeader("Location", url);
-            response.Body = new byte[0];
+            response.Body = emptyData;
 
             await Respond(response);
         }

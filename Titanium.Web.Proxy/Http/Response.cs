@@ -61,9 +61,17 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
+                long contentLength = ContentLength;
+
+                //If content length is set to 0 the response has no body
+                if (contentLength == 0)
+                {
+                    return false;
+                }
+
                 //Has body only if response is chunked or content length >0
                 //If none are true then check if connection:close header exist, if so write response until server or client terminates the connection
-                if (IsChunked || ContentLength > 0 || !KeepAlive)
+                if (IsChunked || contentLength > 0 || !KeepAlive)
                 {
                     return true;
                 }
@@ -119,8 +127,7 @@ namespace Titanium.Web.Proxy.Http
                     return -1;
                 }
 
-                long.TryParse(headerValue, out long contentLen);
-                if (contentLen >= 0)
+                if (long.TryParse(headerValue, out long contentLen))
                 {
                     return contentLen;
                 }
