@@ -1,6 +1,4 @@
-﻿using System.Text;
-
-namespace Titanium.Web.Proxy.Shared
+﻿namespace Titanium.Web.Proxy.Shared
 {
     /// <summary>
     /// Literals shared by Proxy Server

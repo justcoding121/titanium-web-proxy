@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Net;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 
