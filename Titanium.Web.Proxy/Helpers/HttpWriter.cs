@@ -87,13 +87,13 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         internal async Task WriteBodyAsync(byte[] data, bool isChunked)
         {
-            if (!isChunked)
+            if (isChunked)
             {
-                await WriteAsync(data);
+                await WriteBodyChunkedAsync(data);
             }
             else
             {
-                await WriteBodyChunkedAsync(data);
+                await WriteAsync(data);
             }
         }
 
@@ -107,7 +107,13 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         internal async Task CopyBodyAsync(CustomBinaryReader streamReader, bool isChunked, long contentLength)
         {
-            if (!isChunked)
+            if (isChunked)
+            {
+                //Need to revist, find any potential bugs
+                //send the body bytes to server in chunks
+                await CopyBodyChunkedAsync(streamReader);
+            }
+            else
             {
                 //http 1.0
                 if (contentLength == -1)
@@ -116,12 +122,6 @@ namespace Titanium.Web.Proxy.Helpers
                 }
 
                 await CopyBytesFromStream(streamReader, contentLength);
-            }
-            else
-            {
-                //Need to revist, find any potential bugs
-                //send the body bytes to server in chunks
-                await CopyBodyChunkedAsync(streamReader);
             }
         }
 
