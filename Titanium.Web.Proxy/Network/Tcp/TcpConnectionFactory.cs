@@ -68,23 +68,20 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                 if (useUpstreamProxy && (isConnect || isHttps))
                 {
-                    using (var writer = new HttpRequestWriter(stream, server.BufferSize))
+                    var writer = new HttpRequestWriter(stream, server.BufferSize);
+                    await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
+                    await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
+                    await writer.WriteLineAsync("Connection: Keep-Alive");
+
+                    if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
                     {
-                        await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
-                        await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
-                        await writer.WriteLineAsync("Connection: Keep-Alive");
-
-                        if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
-                        {
-                            await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer);
-                            await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " +
-                                                        Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                                                            externalProxy.UserName + ":" + externalProxy.Password)));
-                        }
-
-                        await writer.WriteLineAsync();
-                        await writer.FlushAsync();
+                        await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer);
+                        await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " +
+                                                    Convert.ToBase64String(Encoding.UTF8.GetBytes(
+                                                        externalProxy.UserName + ":" + externalProxy.Password)));
                     }
+
+                    await writer.WriteLineAsync();
 
                     using (var reader = new CustomBinaryReader(stream, server.BufferSize))
                     {

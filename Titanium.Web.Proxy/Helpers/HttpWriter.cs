@@ -1,7 +1,9 @@
-﻿using System.Globalization;
+﻿using System;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using StreamExtended.Helpers;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
@@ -9,29 +11,62 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    abstract class HttpWriter : StreamWriter
+    abstract class HttpWriter
     {
-        protected HttpWriter(Stream stream, int bufferSize, bool leaveOpen) 
-            : base(stream, Encoding.ASCII, bufferSize, leaveOpen)
+        public int BufferSize { get; }
+
+        private readonly Stream stream;
+
+        private readonly char[] charBuffer;
+
+        private static readonly byte[] newLine = ProxyConstants.NewLine;
+        
+        private static readonly Encoder encoder = Encoding.ASCII.GetEncoder();
+
+        protected HttpWriter(Stream stream, int bufferSize) 
         {
-            NewLine = ProxyConstants.NewLine;
+            BufferSize = bufferSize;
+
+            // ASCII encoder max byte count is char count + 1
+            charBuffer = new char[BufferSize - 1];
+            this.stream = stream;
         }
 
-        public void WriteHeaders(HeaderCollection headers, bool flush = true)
+        public Task WriteLineAsync()
         {
-            if (headers != null)
+            return WriteAsync(newLine);
+        }
+
+        public async Task WriteAsync(string value)
+        {
+            int charCount = value.Length;
+            value.CopyTo(0, charBuffer, 0, charCount);
+
+            if (charCount < BufferSize)
             {
-                foreach (var header in headers)
+                var buffer = BufferPool.GetBuffer(BufferSize);
+                try
                 {
-                    header.WriteToStream(this);
+                    int idx = encoder.GetBytes(charBuffer, 0, charCount, buffer, 0, true);
+                    await WriteAsync(buffer, 0, idx);
+                }
+                finally
+                {
+                    BufferPool.ReturnBuffer(buffer);
                 }
             }
-
-            WriteLine();
-            if (flush)
+            else
             {
-                Flush();
+                var buffer = new byte[charCount + 1];
+                int idx = encoder.GetBytes(charBuffer, 0, charCount, buffer, 0, true);
+                await WriteAsync(buffer, 0, idx);
             }
+        }
+
+        public async Task WriteLineAsync(string value)
+        {
+            await WriteAsync(value);
+            await WriteLineAsync();
         }
 
         /// <summary>
@@ -53,29 +88,28 @@ namespace Titanium.Web.Proxy.Helpers
             await WriteLineAsync();
             if (flush)
             {
-                await FlushAsync();
+                // flush the stream
+                await stream.FlushAsync();
             }
         }
 
         public async Task WriteAsync(byte[] data, bool flush = false)
         {
-            await FlushAsync();
-            await BaseStream.WriteAsync(data, 0, data.Length);
+            await stream.WriteAsync(data, 0, data.Length);
             if (flush)
             {
-                // flush the stream and the encoder, too
-                await FlushAsync();
+                // flush the stream
+                await stream.FlushAsync();
             }
         }
 
         public async Task WriteAsync(byte[] data, int offset, int count, bool flush = false)
         {
-            await FlushAsync();
-            await BaseStream.WriteAsync(data, offset, count);
+            await stream.WriteAsync(data, offset, count);
             if (flush)
             {
-                // flush the stream and the encoder, too
-                await FlushAsync();
+                // flush the stream
+                await stream.FlushAsync();
             }
         }
 
@@ -85,16 +119,14 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="data"></param>
         /// <param name="isChunked"></param>
         /// <returns></returns>
-        internal async Task WriteBodyAsync(byte[] data, bool isChunked)
+        internal Task WriteBodyAsync(byte[] data, bool isChunked)
         {
             if (isChunked)
             {
-                await WriteBodyChunkedAsync(data);
+                return WriteBodyChunkedAsync(data);
             }
-            else
-            {
-                await WriteAsync(data);
-            }
+
+            return WriteAsync(data);
         }
 
         /// <summary>
@@ -105,24 +137,22 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="isChunked"></param>
         /// <param name="contentLength"></param>
         /// <returns></returns>
-        internal async Task CopyBodyAsync(CustomBinaryReader streamReader, bool isChunked, long contentLength)
+        internal Task CopyBodyAsync(CustomBinaryReader streamReader, bool isChunked, long contentLength)
         {
             if (isChunked)
             {
                 //Need to revist, find any potential bugs
                 //send the body bytes to server in chunks
-                await CopyBodyChunkedAsync(streamReader);
+                return CopyBodyChunkedAsync(streamReader);
             }
-            else
+            
+            //http 1.0
+            if (contentLength == -1)
             {
-                //http 1.0
-                if (contentLength == -1)
-                {
-                    contentLength = long.MaxValue;
-                }
-
-                await CopyBytesFromStream(streamReader, contentLength);
+                contentLength = long.MaxValue;
             }
+
+            return CopyBytesFromStream(streamReader, contentLength);
         }
 
         /// <summary>
@@ -175,10 +205,9 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        private async Task CopyBytesFromStream(CustomBinaryReader reader, long count)
+        private Task CopyBytesFromStream(CustomBinaryReader reader, long count)
         {
-            await FlushAsync();
-            await reader.CopyBytesToStream(BaseStream, count);
+            return reader.CopyBytesToStream(stream, count);
         }
     }
 }

@@ -2,6 +2,7 @@
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Models
 {
@@ -61,14 +62,7 @@ namespace Titanium.Web.Proxy.Models
             return result;
         }
 
-        internal void WriteToStream(StreamWriter writer)
-        {
-            writer.Write(Name);
-            writer.Write(": ");
-            writer.WriteLine(Value);
-        }
-
-        internal async Task WriteToStreamAsync(StreamWriter writer)
+        internal async Task WriteToStreamAsync(HttpWriter writer)
         {
             await writer.WriteAsync(Name);
             await writer.WriteAsync(": ");

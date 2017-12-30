@@ -613,7 +613,6 @@ namespace Titanium.Web.Proxy
         private void Dispose(CustomBufferedStream clientStream, CustomBinaryReader clientStreamReader, HttpResponseWriter clientStreamWriter, TcpConnection serverConnection)
         {
             clientStreamReader?.Dispose();
-            clientStreamWriter?.Dispose();
 
             clientStream?.Dispose();
 
