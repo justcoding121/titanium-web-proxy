@@ -35,10 +35,13 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal TcpClient TcpClient { private get; set; }
 
         /// <summary>
-        /// used to read lines from server
+        /// Used to read lines from server
         /// </summary>
         internal CustomBinaryReader StreamReader { get; set; }
 
+        /// <summary>
+        /// Used to write lines to server
+        /// </summary>
         internal HttpRequestWriter StreamWriter { get; set; }
 
         /// <summary>
@@ -61,10 +64,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         public void Dispose()
         {
-            Stream?.Dispose();
-
             StreamReader?.Dispose();
             StreamWriter?.Dispose();
+
+            Stream?.Dispose();
 
             try
             {
