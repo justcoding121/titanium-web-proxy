@@ -109,8 +109,6 @@ namespace Titanium.Web.Proxy
                             response.IsChunked, response.ContentLength);
                     }
                 }
-
-                await clientStreamWriter.FlushAsync();
             }
             catch (Exception e)
             {

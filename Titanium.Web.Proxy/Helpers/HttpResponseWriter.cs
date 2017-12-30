@@ -7,8 +7,7 @@ namespace Titanium.Web.Proxy.Helpers
 {
     sealed class HttpResponseWriter : HttpWriter
     {
-        public HttpResponseWriter(Stream stream, int bufferSize) 
-            : base(stream, bufferSize, true)
+        public HttpResponseWriter(Stream stream, int bufferSize) : base(stream, bufferSize)
         {
         }
 

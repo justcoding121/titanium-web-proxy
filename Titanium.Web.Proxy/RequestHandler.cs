@@ -378,16 +378,8 @@ namespace Titanium.Web.Proxy
                     {
                         //prepare the prefix content
                         var requestHeaders = args.WebSession.Request.Headers;
-                        byte[] requestBytes;
-                        using (var ms = new MemoryStream())
-                        using (var writer = new HttpRequestWriter(ms, BufferSize))
-                        {
-                            writer.WriteLine(httpCmd);
-                            writer.WriteHeaders(requestHeaders);
-                            requestBytes = ms.ToArray();
-                        }
-
-                        await connection.StreamWriter.WriteAsync(requestBytes);
+                        await connection.StreamWriter.WriteLineAsync(httpCmd);
+                        await connection.StreamWriter.WriteHeadersAsync(requestHeaders);
                         string httpStatus = await connection.StreamReader.ReadLineAsync();
 
                         Response.ParseResponseLine(httpStatus, out var responseVersion, out int responseStatusCode, out string responseStatusDescription);
@@ -670,57 +662,64 @@ namespace Titanium.Web.Proxy
 
             // try to use the thread static buffer
             var buffer = BufferPool.GetBuffer(BufferSize);
-            int boundaryLength = boundary.Length + 4;
-            long bytesRead = 0;
-
-            while (bytesRead < totalBytesToRead && (inputStream.DataAvailable || await inputStream.FillBufferAsync()))
+            try
             {
-                byte newChar = inputStream.ReadByteFromBuffer();
-                buffer[bufferDataLength] = newChar;
+                int boundaryLength = boundary.Length + 4;
+                long bytesRead = 0;
 
-                bufferDataLength++;
-                bytesRead++;
-
-                if (bufferDataLength >= boundaryLength)
+                while (bytesRead < totalBytesToRead && (inputStream.DataAvailable || await inputStream.FillBufferAsync()))
                 {
-                    int startIdx = bufferDataLength - boundaryLength;
-                    if (buffer[startIdx] == '-' && buffer[startIdx + 1] == '-'
-                        && buffer[bufferDataLength - 2] == '\r' && buffer[bufferDataLength - 1] == '\n')
+                    byte newChar = inputStream.ReadByteFromBuffer();
+                    buffer[bufferDataLength] = newChar;
+
+                    bufferDataLength++;
+                    bytesRead++;
+
+                    if (bufferDataLength >= boundaryLength)
                     {
-                        startIdx += 2;
-                        bool ok = true;
-                        for (int i = 0; i < boundary.Length; i++)
+                        int startIdx = bufferDataLength - boundaryLength;
+                        if (buffer[startIdx] == '-' && buffer[startIdx + 1] == '-'
+                            && buffer[bufferDataLength - 2] == '\r' && buffer[bufferDataLength - 1] == '\n')
                         {
-                            if (buffer[startIdx + i] != boundary[i])
+                            startIdx += 2;
+                            bool ok = true;
+                            for (int i = 0; i < boundary.Length; i++)
                             {
-                                ok = false;
+                                if (buffer[startIdx + i] != boundary[i])
+                                {
+                                    ok = false;
+                                    break;
+                                }
+                            }
+
+                            if (ok)
+                            {
                                 break;
                             }
                         }
+                    }
 
-                        if (ok)
-                        {
-                            break;
-                        }
+                    if (bufferDataLength == buffer.Length)
+                    {
+                        //boundary is not longer than 70 bytes according to the specification, so keeping the last 100 (minimum 74) bytes is enough
+                        const int bytesToKeep = 100;
+                        await outputStream.WriteAsync(buffer, 0, buffer.Length - bytesToKeep);
+                        Buffer.BlockCopy(buffer, buffer.Length - bytesToKeep, buffer, 0, bytesToKeep);
+                        bufferDataLength = bytesToKeep;
                     }
                 }
 
-                if (bufferDataLength == buffer.Length)
+                if (bytesRead > 0)
                 {
-                    //boundary is not longer than 70 bytes according to the specification, so keeping the last 100 (minimum 74) bytes is enough
-                    const int bytesToKeep = 100;
-                    await outputStream.WriteAsync(buffer, 0, buffer.Length - bytesToKeep);
-                    Buffer.BlockCopy(buffer, buffer.Length - bytesToKeep, buffer, 0, bytesToKeep);
-                    bufferDataLength = bytesToKeep;
+                    await outputStream.WriteAsync(buffer, 0, bufferDataLength);
                 }
-            }
 
-            if (bytesRead > 0)
+                return bytesRead;
+            }
+            finally
             {
-                await outputStream.WriteAsync(buffer, 0, bufferDataLength);
+                BufferPool.ReturnBuffer(buffer);
             }
-
-            return bytesRead;
         }
     }
 }

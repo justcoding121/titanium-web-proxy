@@ -65,7 +65,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
         public void Dispose()
         {
             StreamReader?.Dispose();
-            StreamWriter?.Dispose();
 
             Stream?.Dispose();
 

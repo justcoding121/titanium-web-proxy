@@ -14,6 +14,6 @@ namespace Titanium.Web.Proxy.Shared
         internal static readonly char[] SemiColonSplit = { ';' };
         internal static readonly char[] EqualSplit = { '=' };
 
-        internal const string NewLine = "\r\n";
+        internal static readonly byte[] NewLine = {(byte)'\r', (byte)'\n' };
     }
 }
