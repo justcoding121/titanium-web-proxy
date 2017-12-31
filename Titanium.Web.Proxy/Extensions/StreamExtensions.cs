@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
-using StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Extensions
 {

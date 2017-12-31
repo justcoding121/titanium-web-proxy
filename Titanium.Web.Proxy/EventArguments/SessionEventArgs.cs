@@ -41,7 +41,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Holds a reference to client
         /// </summary>
-        internal ProxyClient ProxyClient { get; set; }
+        internal ProxyClient ProxyClient { get; }
 
         internal bool HasMulipartEventSubscribers => MultipartRequestPartSent != null;
 

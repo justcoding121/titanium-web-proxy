@@ -10,11 +10,9 @@ using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    internal class HttpWriter
+    internal class HttpWriter : CustomBinaryWriter
     {
         public int BufferSize { get; }
-
-        private readonly Stream stream;
 
         private readonly char[] charBuffer;
 
@@ -22,13 +20,12 @@ namespace Titanium.Web.Proxy.Helpers
         
         private static readonly Encoder encoder = Encoding.ASCII.GetEncoder();
 
-        internal HttpWriter(Stream stream, int bufferSize) 
+        internal HttpWriter(Stream stream, int bufferSize) : base(stream)
         {
             BufferSize = bufferSize;
 
             // ASCII encoder max byte count is char count + 1
             charBuffer = new char[BufferSize - 1];
-            this.stream = stream;
         }
 
         public Task WriteLineAsync()
@@ -88,27 +85,27 @@ namespace Titanium.Web.Proxy.Helpers
             if (flush)
             {
                 // flush the stream
-                await stream.FlushAsync();
+                await FlushAsync();
             }
         }
 
         public async Task WriteAsync(byte[] data, bool flush = false)
         {
-            await stream.WriteAsync(data, 0, data.Length);
+            await WriteAsync(data, 0, data.Length);
             if (flush)
             {
                 // flush the stream
-                await stream.FlushAsync();
+                await FlushAsync();
             }
         }
 
-        public async Task WriteAsync(byte[] data, int offset, int count, bool flush = false)
+        public async Task WriteAsync(byte[] data, int offset, int count, bool flush)
         {
-            await stream.WriteAsync(data, offset, count);
+            await WriteAsync(data, offset, count);
             if (flush)
             {
                 // flush the stream
-                await stream.FlushAsync();
+                await FlushAsync();
             }
         }
 
@@ -240,7 +237,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 remainingBytes -= bytesRead;
 
-                await stream.WriteAsync(buffer, 0, bytesRead);
+                await WriteAsync(buffer, 0, bytesRead);
             }
         }
     }
