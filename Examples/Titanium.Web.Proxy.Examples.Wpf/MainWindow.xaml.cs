@@ -62,7 +62,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         public MainWindow()
         {
             proxyServer = new ProxyServer();
-            //proxyServer.CertificateEngine = CertificateEngine.BouncyCastle;
+            //proxyServer.CertificateEngine = CertificateEngine.DefaultWindows;
             proxyServer.TrustRootCertificate = true;
             proxyServer.CertificateManager.TrustRootCertificateAsAdministrator();
             proxyServer.ForwardToUpstreamGateway = true;

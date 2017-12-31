@@ -106,7 +106,7 @@ namespace Titanium.Web.Proxy
                     if (response.HasBody)
                     {
                         await clientStreamWriter.CopyBodyAsync(args.WebSession.ServerConnection.StreamReader, 
-                            response.IsChunked, response.ContentLength);
+                            response.IsChunked, response.ContentLength, false);
                     }
                 }
             }

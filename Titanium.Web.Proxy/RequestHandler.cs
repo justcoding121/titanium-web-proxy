@@ -226,18 +226,14 @@ namespace Titanium.Web.Proxy
             {
                 if (endPoint.EnableSsl)
                 {
-                    var clientSslHelloInfo = await SslTools.PeekClientHello(clientStream);
+                    var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
 
-                    if (clientSslHelloInfo != null)
+                    if (clientHelloInfo != null)
                     {
                         var sslStream = new SslStream(clientStream);
                         clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
-                        string sniHostName = null;
-                        if (clientSslHelloInfo.Extensions != null && clientSslHelloInfo.Extensions.TryGetValue("server_name", out var serverNameExtension))
-                        {
-                            sniHostName = serverNameExtension.Data;
-                        }
+                        string sniHostName = clientHelloInfo.GetServerName();
                         
                         string certName = HttpHelper.GetWildCardDomainName(sniHostName ?? endPoint.GenericCertificateName);
                         var certificate = CertificateManager.CreateCertificate(certName, false);
@@ -647,7 +643,7 @@ namespace Titanium.Web.Proxy
             else
             {
                 await args.WebSession.ServerConnection.StreamWriter.CopyBodyAsync(args.ProxyClient.ClientStreamReader,
-                    request.IsChunked, request.ContentLength);
+                    request.IsChunked, request.ContentLength, false);
             }
         }
 
