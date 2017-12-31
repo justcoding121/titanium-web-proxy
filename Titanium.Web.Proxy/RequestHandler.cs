@@ -620,29 +620,28 @@ namespace Titanium.Web.Proxy
             //send the request body bytes to server
             if (request.ContentLength > 0 && args.HasMulipartEventSubscribers && request.IsMultipartFormData)
             {
-                var inputStream = args.ProxyClient.ClientStream;
                 string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
 
                 long bytesToSend = request.ContentLength;
-                while (bytesToSend > 0)
+                var copyStream = new CopyStream(reader, writer, BufferSize);
+                var copyStreamReader = new CustomBinaryReader(copyStream, BufferSize);
+                while (bytesToSend > copyStream.ReadBytes)
                 {
-                    long read = await SendUntilBoundaryAsync(reader, writer, bytesToSend, boundary);
+                    long read = await ReadUntilBoundaryAsync(copyStreamReader, bytesToSend, boundary);
                     if (read == 0)
                     {
                         break;
                     }
 
-                    bytesToSend -= read;
-                    if (bytesToSend > 0)
+                    if (bytesToSend > copyStream.ReadBytes)
                     {
                         var headers = new HeaderCollection();
-                        //var stream = new CustomBufferedPeekStream(inputStream);
-                        //await HeaderParser.ReadHeaders(new CustomBinaryReader(stream, BufferSize), headers);
-                        var stream = new CopyStream(reader, writer, BufferSize);
-                        await HeaderParser.ReadHeaders(new CustomBinaryReader(stream, BufferSize), headers);
+                        await HeaderParser.ReadHeaders(copyStreamReader, headers);
                         args.OnMultipartRequestPartSent(boundary, headers);
                     }
                 }
+
+                await copyStream.FlushAsync();
             }
             else
             {
@@ -654,11 +653,10 @@ namespace Titanium.Web.Proxy
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        private async Task<long> SendUntilBoundaryAsync(CustomBinaryReader reader, HttpRequestWriter writer, long totalBytesToRead, string boundary)
+        private async Task<long> ReadUntilBoundaryAsync(CustomBinaryReader reader, long totalBytesToRead, string boundary)
         {
             int bufferDataLength = 0;
 
-            // try to use the thread static buffer
             var buffer = BufferPool.GetBuffer(BufferSize);
             try
             {
@@ -676,8 +674,7 @@ namespace Titanium.Web.Proxy
                     if (bufferDataLength >= boundaryLength)
                     {
                         int startIdx = bufferDataLength - boundaryLength;
-                        if (buffer[startIdx] == '-' && buffer[startIdx + 1] == '-'
-                            && buffer[bufferDataLength - 2] == '\r' && buffer[bufferDataLength - 1] == '\n')
+                        if (buffer[startIdx] == '-' && buffer[startIdx + 1] == '-')
                         {
                             startIdx += 2;
                             bool ok = true;
@@ -701,15 +698,9 @@ namespace Titanium.Web.Proxy
                     {
                         //boundary is not longer than 70 bytes according to the specification, so keeping the last 100 (minimum 74) bytes is enough
                         const int bytesToKeep = 100;
-                        await writer.WriteAsync(buffer, 0, buffer.Length - bytesToKeep);
                         Buffer.BlockCopy(buffer, buffer.Length - bytesToKeep, buffer, 0, bytesToKeep);
                         bufferDataLength = bytesToKeep;
                     }
-                }
-
-                if (bytesRead > 0)
-                {
-                    await writer.WriteAsync(buffer, 0, bufferDataLength);
                 }
 
                 return bytesRead;
