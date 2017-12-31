@@ -97,6 +97,13 @@ namespace Titanium.Web.Proxy.Helpers
             if (hostname.Split(ProxyConstants.DotSplit).Length > 2)
             {
                 int idx = hostname.IndexOf(ProxyConstants.DotSplit);
+
+                //issue #352
+                if(hostname.Substring(0, idx).Contains("-"))
+                {
+                    return hostname;
+                }
+
                 string rootDomain = hostname.Substring(idx + 1);
                 return "*." + rootDomain;
             }
