@@ -152,8 +152,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
             requestHeaderHistory[e.Id] = e.WebSession.Request.Headers;
 
             ////This sample shows how to get the multipart form data headers
-            ////Do not read the body (GetRequestBody or GetResponseBodyAsString) in this case 
-            ////otherwise you have to parse the headers from the returned body data
             //if (e.WebSession.Request.Host == "mail.yahoo.com" && e.WebSession.Request.IsMultipartFormData)
             //{
             //    e.MultipartRequestPartSent += MultipartRequestPartSent;

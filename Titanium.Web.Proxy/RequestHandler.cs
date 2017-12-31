@@ -510,7 +510,8 @@ namespace Titanium.Web.Proxy
                             //If its a post/put/patch request, then read the client html body and send it to server
                             if (request.HasBody)
                             {
-                                await SendClientRequestBody(args);
+                                HttpWriter writer = args.WebSession.ServerConnection.StreamWriter;
+                                await args.CopyRequestBodyAsync(writer, false);
                             }
                         }
                     }
@@ -603,112 +604,6 @@ namespace Titanium.Web.Proxy
             }
 
             requestHeaders.FixProxyHeaders();
-        }
-
-        /// <summary>
-        ///  This is called when the request is PUT/POST/PATCH to read the body
-        /// </summary>
-        /// <param name="args"></param>
-        /// <returns></returns>
-        private async Task SendClientRequestBody(SessionEventArgs args)
-        {
-            // End the operation
-            var request = args.WebSession.Request;
-            var reader = args.ProxyClient.ClientStreamReader;
-            var writer = args.WebSession.ServerConnection.StreamWriter;
-            
-            //send the request body bytes to server
-            if (request.ContentLength > 0 && args.HasMulipartEventSubscribers && request.IsMultipartFormData)
-            {
-                string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
-
-                long bytesToSend = request.ContentLength;
-                var copyStream = new CopyStream(reader, writer, BufferSize);
-                var copyStreamReader = new CustomBinaryReader(copyStream, BufferSize);
-                while (bytesToSend > copyStream.ReadBytes)
-                {
-                    long read = await ReadUntilBoundaryAsync(copyStreamReader, bytesToSend, boundary);
-                    if (read == 0)
-                    {
-                        break;
-                    }
-
-                    if (bytesToSend > copyStream.ReadBytes)
-                    {
-                        var headers = new HeaderCollection();
-                        await HeaderParser.ReadHeaders(copyStreamReader, headers);
-                        args.OnMultipartRequestPartSent(boundary, headers);
-                    }
-                }
-
-                await copyStream.FlushAsync();
-            }
-            else
-            {
-                await writer.CopyBodyAsync(args.ProxyClient.ClientStreamReader, request.IsChunked, request.ContentLength, false);
-            }
-        }
-
-        /// <summary>
-        /// Read a line from the byte stream
-        /// </summary>
-        /// <returns></returns>
-        private async Task<long> ReadUntilBoundaryAsync(CustomBinaryReader reader, long totalBytesToRead, string boundary)
-        {
-            int bufferDataLength = 0;
-
-            var buffer = BufferPool.GetBuffer(BufferSize);
-            try
-            {
-                int boundaryLength = boundary.Length + 4;
-                long bytesRead = 0;
-
-                while (bytesRead < totalBytesToRead && (reader.DataAvailable || await reader.FillBufferAsync()))
-                {
-                    byte newChar = reader.ReadByteFromBuffer();
-                    buffer[bufferDataLength] = newChar;
-
-                    bufferDataLength++;
-                    bytesRead++;
-
-                    if (bufferDataLength >= boundaryLength)
-                    {
-                        int startIdx = bufferDataLength - boundaryLength;
-                        if (buffer[startIdx] == '-' && buffer[startIdx + 1] == '-')
-                        {
-                            startIdx += 2;
-                            bool ok = true;
-                            for (int i = 0; i < boundary.Length; i++)
-                            {
-                                if (buffer[startIdx + i] != boundary[i])
-                                {
-                                    ok = false;
-                                    break;
-                                }
-                            }
-
-                            if (ok)
-                            {
-                                break;
-                            }
-                        }
-                    }
-
-                    if (bufferDataLength == buffer.Length)
-                    {
-                        //boundary is not longer than 70 bytes according to the specification, so keeping the last 100 (minimum 74) bytes is enough
-                        const int bytesToKeep = 100;
-                        Buffer.BlockCopy(buffer, buffer.Length - bytesToKeep, buffer, 0, bytesToKeep);
-                        bufferDataLength = bytesToKeep;
-                    }
-                }
-
-                return bytesRead;
-            }
-            finally
-            {
-                BufferPool.ReturnBuffer(buffer);
-            }
         }
     }
 }
