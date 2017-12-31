@@ -6,7 +6,6 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Threading.Tasks;
 using StreamExtended;
-using StreamExtended.Helpers;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -597,7 +596,7 @@ namespace Titanium.Web.Proxy
                 switch (header.Name.ToLower())
                 {
                     //these are the only encoding this proxy can read
-                    case "accept-encoding":
+                    case KnownHeaders.AcceptEncoding:
                         header.Value = "gzip,deflate";
                         break;
                 }

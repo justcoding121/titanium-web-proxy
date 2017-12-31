@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Text;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
@@ -28,7 +29,7 @@ namespace Titanium.Web.Proxy.Helpers
                 foreach (string parameter in parameters)
                 {
                     var split = parameter.Split(ProxyConstants.EqualSplit, 2);
-                    if (split.Length == 2 && split[0].Trim().Equals("charset", StringComparison.CurrentCultureIgnoreCase))
+                    if (split.Length == 2 && split[0].Trim().Equals(KnownHeaders.ContentTypeCharset, StringComparison.CurrentCultureIgnoreCase))
                     {
                         string value = split[1];
                         if (value.Equals("x-user-defined", StringComparison.OrdinalIgnoreCase))
@@ -65,7 +66,7 @@ namespace Titanium.Web.Proxy.Helpers
                 foreach (string parameter in parameters)
                 {
                     var split = parameter.Split(ProxyConstants.EqualSplit, 2);
-                    if (split.Length == 2 && split[0].Trim().Equals("boundary", StringComparison.CurrentCultureIgnoreCase))
+                    if (split.Length == 2 && split[0].Trim().Equals(KnownHeaders.ContentTypeBoundary, StringComparison.CurrentCultureIgnoreCase))
                     {
                         string value = split[1];
                         if (value.Length > 2 && value[0] == '"' && value[value.Length - 1] == '"')

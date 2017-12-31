@@ -586,7 +586,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             var response = new RedirectResponse();
             response.HttpVersion = WebSession.Request.HttpVersion;
-            response.Headers.AddHeader("Location", url);
+            response.Headers.AddHeader(KnownHeaders.Location, url);
             response.Body = emptyData;
 
             await Respond(response);

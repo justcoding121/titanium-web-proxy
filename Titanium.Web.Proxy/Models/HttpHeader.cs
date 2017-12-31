@@ -2,6 +2,7 @@
 using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Models
 {
@@ -56,7 +57,7 @@ namespace Titanium.Web.Proxy.Models
 
         internal static HttpHeader GetProxyAuthorizationHeader(string userName, string password)
         {
-            var result = new HttpHeader("Proxy-Authorization",
+            var result = new HttpHeader(KnownHeaders.ProxyAuthorization,
                 "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{userName}:{password}")));
             return result;
         }
