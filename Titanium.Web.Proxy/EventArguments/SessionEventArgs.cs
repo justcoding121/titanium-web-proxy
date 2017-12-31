@@ -5,7 +5,6 @@ using System.Net;
 using System.Threading.Tasks;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Decompression;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
@@ -216,23 +215,8 @@ namespace Titanium.Web.Proxy.EventArguments
             //If chunked then its easy just read the whole body with the content length mentioned in the header
             using (var bodyStream = new MemoryStream())
             {
-                //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
-                if (isChunked)
-                {
-                    await streamReader.CopyBytesToStreamChunked(bodyStream);
-                }
-                else
-                {
-                    //http 1.0
-                    if (contentLength == -1)
-                    {
-                        contentLength = long.MaxValue;
-                    }
-
-                    //If not chunked then its easy just read the amount of bytes mentioned in content length header
-                    await streamReader.CopyBytesToStream(bodyStream, contentLength);
-                }
-
+                var writer = new HttpWriter(bodyStream, bufferSize);
+                await writer.CopyBodyAsync(streamReader, isChunked, contentLength, true);
                 return await GetDecompressedBody(contentEncoding, bodyStream.ToArray());
             }
         }

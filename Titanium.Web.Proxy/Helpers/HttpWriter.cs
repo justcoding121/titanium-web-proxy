@@ -5,13 +5,12 @@ using System.Text;
 using System.Threading.Tasks;
 using StreamExtended.Helpers;
 using StreamExtended.Network;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    abstract class HttpWriter
+    internal class HttpWriter
     {
         public int BufferSize { get; }
 
@@ -23,7 +22,7 @@ namespace Titanium.Web.Proxy.Helpers
         
         private static readonly Encoder encoder = Encoding.ASCII.GetEncoder();
 
-        protected HttpWriter(Stream stream, int bufferSize) 
+        internal HttpWriter(Stream stream, int bufferSize) 
         {
             BufferSize = bufferSize;
 
@@ -136,14 +135,16 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="streamReader"></param>
         /// <param name="isChunked"></param>
         /// <param name="contentLength"></param>
+        /// <param name="removeChunkedEncoding"></param>
         /// <returns></returns>
-        internal Task CopyBodyAsync(CustomBinaryReader streamReader, bool isChunked, long contentLength)
+        internal Task CopyBodyAsync(CustomBinaryReader streamReader, bool isChunked, long contentLength, bool removeChunkedEncoding)
         {
+            //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
             if (isChunked)
             {
                 //Need to revist, find any potential bugs
                 //send the body bytes to server in chunks
-                return CopyBodyChunkedAsync(streamReader);
+                return CopyBodyChunkedAsync(streamReader, removeChunkedEncoding);
             }
             
             //http 1.0
@@ -152,6 +153,7 @@ namespace Titanium.Web.Proxy.Helpers
                 contentLength = long.MaxValue;
             }
 
+            //If not chunked then its easy just read the amount of bytes mentioned in content length header
             return CopyBytesFromStream(streamReader, contentLength);
         }
 
@@ -177,23 +179,29 @@ namespace Titanium.Web.Proxy.Helpers
         /// Copies the streams chunked
         /// </summary>
         /// <param name="reader"></param>
+        /// <param name="removeChunkedEncoding"></param>
         /// <returns></returns>
-        private async Task CopyBodyChunkedAsync(CustomBinaryReader reader)
+        private async Task CopyBodyChunkedAsync(CustomBinaryReader reader, bool removeChunkedEncoding)
         {
             while (true)
             {
                 string chunkHead = await reader.ReadLineAsync();
                 int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
 
-                await WriteLineAsync(chunkHead);
-                
+                if (!removeChunkedEncoding)
+                {
+                    await WriteLineAsync(chunkHead);
+                }
 
                 if (chunkSize != 0)
                 {
                     await CopyBytesFromStream(reader, chunkSize);
                 }
 
-                await WriteLineAsync();
+                if (!removeChunkedEncoding)
+                {
+                    await WriteLineAsync();
+                }
 
                 //chunk trail
                 await reader.ReadLineAsync();
@@ -205,9 +213,35 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        private Task CopyBytesFromStream(CustomBinaryReader reader, long count)
+        /// <summary>
+        /// Copies the specified bytes to the stream from the input stream
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <param name="count"></param>
+        /// <returns></returns>
+        private async Task CopyBytesFromStream(CustomBinaryReader reader, long count)
         {
-            return reader.CopyBytesToStream(stream, count);
+            var buffer = reader.Buffer;
+            long remainingBytes = count;
+
+            while (remainingBytes > 0)
+            {
+                int bytesToRead = buffer.Length;
+                if (remainingBytes < bytesToRead)
+                {
+                    bytesToRead = (int)remainingBytes;
+                }
+
+                int bytesRead = await reader.ReadBytesAsync(buffer, bytesToRead);
+                if (bytesRead == 0)
+                {
+                    break;
+                }
+
+                remainingBytes -= bytesRead;
+
+                await stream.WriteAsync(buffer, 0, bytesRead);
+            }
         }
     }
 }
