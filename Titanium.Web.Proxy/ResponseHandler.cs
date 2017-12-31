@@ -105,8 +105,7 @@ namespace Titanium.Web.Proxy
                     //Write body if exists
                     if (response.HasBody)
                     {
-                        await clientStreamWriter.CopyBodyAsync(args.WebSession.ServerConnection.StreamReader, 
-                            response.IsChunked, response.ContentLength, false);
+                        await args.CopyResponseBodyAsync(clientStreamWriter, false);
                     }
                 }
             }
