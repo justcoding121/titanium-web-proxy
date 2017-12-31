@@ -42,7 +42,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Content encoding for this response
         /// </summary>
-        public string ContentEncoding => Headers.GetHeaderValueOrNull("content-encoding")?.Trim();
+        public string ContentEncoding => Headers.GetHeaderValueOrNull(KnownHeaders.ContentEncoding)?.Trim();
 
         /// <summary>
         /// Http version
@@ -94,11 +94,11 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull("connection");
+                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Connection);
 
                 if (headerValue != null)
                 {
-                    if (headerValue.ContainsIgnoreCase("close"))
+                    if (headerValue.ContainsIgnoreCase(KnownHeaders.ConnectionClose))
                     {
                         return false;
                     }
@@ -111,7 +111,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Content type of this response
         /// </summary>
-        public string ContentType => Headers.GetHeaderValueOrNull("content-type");
+        public string ContentType => Headers.GetHeaderValueOrNull(KnownHeaders.ContentType);
 
         /// <summary>
         /// Length of response body
@@ -120,7 +120,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull("content-length");
+                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.ContentLength);
 
                 if (headerValue == null)
                 {
@@ -138,12 +138,12 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (value >= 0)
                 {
-                    Headers.SetOrAddHeaderValue("content-length", value.ToString());
+                    Headers.SetOrAddHeaderValue(KnownHeaders.ContentLength, value.ToString());
                     IsChunked = false;
                 }
                 else
                 {
-                    Headers.RemoveHeader("content-length");
+                    Headers.RemoveHeader(KnownHeaders.ContentLength);
                 }
             }
         }
@@ -155,19 +155,19 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull("transfer-encoding");
-                return headerValue != null && headerValue.ContainsIgnoreCase("chunked");
+                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
+                return headerValue != null && headerValue.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked);
             }
             set
             {
                 if (value)
                 {
-                    Headers.SetOrAddHeaderValue("transfer-encoding", "chunked");
+                    Headers.SetOrAddHeaderValue(KnownHeaders.TransferEncoding, KnownHeaders.TransferEncodingChunked);
                     ContentLength = -1;
                 }
                 else
                 {
-                    Headers.RemoveHeader("transfer-encoding");
+                    Headers.RemoveHeader(KnownHeaders.TransferEncoding);
                 }
             }
         }

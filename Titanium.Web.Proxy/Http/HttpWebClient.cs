@@ -105,7 +105,7 @@ namespace Titanium.Web.Proxy.Http
             //write request headers
             foreach (var header in Request.Headers)
             {
-                if (header.Name != "Proxy-Authorization")
+                if (header.Name != KnownHeaders.ProxyAuthorization)
                 {
                     await header.WriteToStreamAsync(writer);
                 }

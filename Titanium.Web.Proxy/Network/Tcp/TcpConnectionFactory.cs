@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Network.Tcp
@@ -71,12 +72,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     var writer = new HttpRequestWriter(stream, server.BufferSize);
                     await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
                     await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
-                    await writer.WriteLineAsync("Connection: Keep-Alive");
+                    await writer.WriteLineAsync($"{KnownHeaders.Connection}: {KnownHeaders.ConnectionKeepAlive}");
 
                     if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
                     {
                         await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer);
-                        await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " +
+                        await writer.WriteLineAsync(KnownHeaders.ProxyAuthorization + ": Basic " +
                                                     Convert.ToBase64String(Encoding.UTF8.GetBytes(
                                                         externalProxy.UserName + ":" + externalProxy.Password)));
                     }
