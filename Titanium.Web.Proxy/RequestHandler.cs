@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
@@ -177,7 +178,8 @@ namespace Titanium.Web.Proxy
                                 }
 
                                 await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
-                                    (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); });
+                                    (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); }, 
+                                    (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); });
                             }
                             finally
                             {
@@ -193,8 +195,17 @@ namespace Titanium.Web.Proxy
                 disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
                     httpRemoteUri.Scheme == UriSchemeHttps ? httpRemoteUri.Host : null, endPoint, connectRequest);
             }
+            catch (IOException e)
+            {
+                ExceptionFunc(new Exception("Connection was aborted", e));
+            }
+            catch (SocketException e)
+            {
+                ExceptionFunc(new Exception("Could not connect", e));
+            }
             catch (Exception e)
             {
+                // is this the correct error message?
                 ExceptionFunc(new Exception("Error whilst authorizing request", e));
             }
             finally
@@ -392,7 +403,8 @@ namespace Titanium.Web.Proxy
                         }
 
                         await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
-                            (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); });
+                            (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); },
+                            (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); });
 
                         args.Dispose();
                         break;

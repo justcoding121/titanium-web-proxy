@@ -111,6 +111,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="clientStream"></param>
         /// <param name="serverStream"></param>
+        /// <param name="bufferSize"></param>
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
         /// <returns></returns>
