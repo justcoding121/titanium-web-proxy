@@ -174,6 +174,7 @@ namespace Titanium.Web.Proxy.Http
                 Response.Is100Continue = true;
                 Response.StatusCode = 0;
                 await ServerConnection.StreamReader.ReadLineAsync();
+
                 //now receive response
                 await ReceiveResponse();
                 return;
@@ -186,6 +187,7 @@ namespace Titanium.Web.Proxy.Http
                 Response.ExpectationFailed = true;
                 Response.StatusCode = 0;
                 await ServerConnection.StreamReader.ReadLineAsync();
+
                 //now receive response 
                 await ReceiveResponse();
                 return;
