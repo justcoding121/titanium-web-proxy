@@ -621,7 +621,6 @@ namespace Titanium.Web.Proxy
             {
                 serverConnection.Dispose();
                 serverConnection = null;
-                UpdateServerConnectionCount(false);
             }
         }
 

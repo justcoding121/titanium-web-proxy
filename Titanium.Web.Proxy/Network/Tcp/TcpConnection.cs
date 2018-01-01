@@ -13,6 +13,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpConnection : IDisposable
     {
+        private ProxyServer proxyServer { get; }
+
         internal ExternalProxy UpStreamProxy { get; set; }
 
         internal string HostName { get; set; }
@@ -55,9 +57,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         internal DateTime LastAccess { get; set; }
 
-        internal TcpConnection()
+        internal TcpConnection(ProxyServer proxyServer)
         {
             LastAccess = DateTime.Now;
+            this.proxyServer = proxyServer;
+            this.proxyServer.UpdateServerConnectionCount(true);
         }
 
         /// <summary>
@@ -70,6 +74,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
             Stream?.Dispose();
 
             TcpClient.CloseSocket();
+
+            proxyServer.UpdateServerConnectionCount(false);
         }
     }
 }
