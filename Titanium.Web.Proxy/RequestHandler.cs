@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Threading.Tasks;
 using StreamExtended;
+using StreamExtended.Helpers;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -166,9 +167,18 @@ namespace Titanium.Web.Proxy
                                 if (clientStream.Available > 0)
                                 {
                                     //send the buffered data
-                                    var data = new byte[clientStream.Available];
-                                    await clientStream.ReadAsync(data, 0, data.Length);
-                                    await connection.StreamWriter.WriteAsync(data, true);
+                                    var data = BufferPool.GetBuffer(BufferSize);
+
+                                    try
+                                    {
+                                        // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
+                                        await clientStream.ReadAsync(data, 0, clientStream.Available);
+                                        await connection.StreamWriter.WriteAsync(data, true);
+                                    }
+                                    finally
+                                    {
+                                        BufferPool.ReturnBuffer(data);
+                                    }
                                 }
 
                                 var serverHelloInfo = await SslTools.PeekServerHello(connection.Stream);
