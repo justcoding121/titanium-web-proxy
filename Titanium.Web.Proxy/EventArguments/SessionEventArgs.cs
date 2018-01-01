@@ -34,6 +34,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private Func<SessionEventArgs, Task> httpResponseHandler;
 
+        private readonly Action<Exception> exceptionFunc;
+
         /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
@@ -104,12 +106,14 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgs(int bufferSize, 
+        internal SessionEventArgs(int bufferSize,
             ProxyEndPoint endPoint,
-            Func<SessionEventArgs, Task> httpResponseHandler)
+            Func<SessionEventArgs, Task> httpResponseHandler,
+            Action<Exception> exceptionFunc)
         {
             this.bufferSize = bufferSize;
             this.httpResponseHandler = httpResponseHandler;
+            this.exceptionFunc = exceptionFunc;
 
             ProxyClient = new ProxyClient();
             WebSession = new HttpWebClient(bufferSize);
@@ -169,17 +173,41 @@ namespace Titanium.Web.Proxy.EventArguments
 
         internal void OnDataSent(byte[] buffer, int offset, int count)
         {
-            DataSent?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            try
+            {
+                DataSent?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            }
+            catch (Exception ex)
+            {
+                var ex2 = new Exception("Exception thrown in user event", ex);
+                exceptionFunc(ex2);
+            }
         }
 
         internal void OnDataReceived(byte[] buffer, int offset, int count)
         {
-            DataReceived?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            try
+            {
+                DataReceived?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            }
+            catch (Exception ex)
+            {
+                var ex2 = new Exception("Exception thrown in user event", ex);
+                exceptionFunc(ex2);
+            }
         }
 
         internal void OnMultipartRequestPartSent(string boundary, HeaderCollection headers)
         {
-            MultipartRequestPartSent?.Invoke(this, new MultipartRequestPartSentEventArgs(boundary, headers));
+            try
+            {
+                MultipartRequestPartSent?.Invoke(this, new MultipartRequestPartSentEventArgs(boundary, headers));
+            }
+            catch (Exception ex)
+            {
+                var ex2 = new Exception("Exception thrown in user event", ex);
+                exceptionFunc(ex2);
+            }
         }
 
         /// <summary>
