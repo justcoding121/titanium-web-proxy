@@ -86,7 +86,7 @@ namespace Titanium.Web.Proxy
 
                     await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.Headers);
 
-                    var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest);
+                    var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest, ExceptionFunc);
                     connectArgs.ProxyClient.TcpClient = tcpClient;
                     connectArgs.ProxyClient.ClientStream = clientStream;
 
@@ -164,7 +164,8 @@ namespace Titanium.Web.Proxy
                         {
                             if (isClientHello)
                             {
-                                if (clientStream.Available > 0)
+                                int available = clientStream.Available;
+                                if (available > 0)
                                 {
                                     //send the buffered data
                                     var data = BufferPool.GetBuffer(BufferSize);
@@ -172,8 +173,8 @@ namespace Titanium.Web.Proxy
                                     try
                                     {
                                         // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
-                                        await clientStream.ReadAsync(data, 0, clientStream.Available);
-                                        await connection.StreamWriter.WriteAsync(data, true);
+                                        await clientStream.ReadAsync(data, 0, available);
+                                        await connection.StreamWriter.WriteAsync(data, 0, available, true);
                                     }
                                     finally
                                     {
@@ -309,7 +310,7 @@ namespace Titanium.Web.Proxy
                     break;
                 }
 
-                var args = new SessionEventArgs(BufferSize, endPoint, HandleHttpSessionResponse)
+                var args = new SessionEventArgs(BufferSize, endPoint, HandleHttpSessionResponse, ExceptionFunc)
                 {
                     ProxyClient = { TcpClient = client },
                     WebSession = { ConnectRequest = connectRequest }
