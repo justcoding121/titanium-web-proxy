@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Models;
@@ -765,22 +766,7 @@ namespace Titanium.Web.Proxy
             finally
             {
                 UpdateClientConnectionCount(false);
-
-                try
-                {
-                    if (tcpClient != null)
-                    {
-                        //This line is important!
-                        //contributors please don't remove it without discussion
-                        //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
-                        //due to default TCP CLOSE_WAIT timeout for 4 minutes
-                        tcpClient.LingerState = new LingerOption(true, 0);
-                        tcpClient.Close();
-                    }
-                }
-                catch
-                {
-                }
+                tcpClient.CloseSocket();
             }
         }
 
