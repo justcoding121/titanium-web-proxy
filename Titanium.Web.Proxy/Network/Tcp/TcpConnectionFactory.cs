@@ -116,9 +116,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 throw;
             }
 
-            server.UpdateServerConnectionCount(true);
-
-            return new TcpConnection
+            return new TcpConnection(server)
             {
                 UpStreamProxy = externalProxy,
                 UpStreamEndPoint = upStreamEndPoint,
