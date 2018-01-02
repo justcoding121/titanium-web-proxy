@@ -17,7 +17,9 @@ namespace Titanium.Web.Proxy.Helpers
         private readonly char[] charBuffer;
 
         private static readonly byte[] newLine = ProxyConstants.NewLine;
-        
+
+        private static readonly Encoding encoding = Encoding.ASCII;
+
         private static readonly Encoder encoder = Encoding.ASCII.GetEncoder();
 
         internal HttpWriter(Stream stream, int bufferSize) : base(stream)
@@ -36,10 +38,10 @@ namespace Titanium.Web.Proxy.Helpers
         public async Task WriteAsync(string value)
         {
             int charCount = value.Length;
-            value.CopyTo(0, charBuffer, 0, charCount);
-
             if (charCount < BufferSize)
             {
+                value.CopyTo(0, charBuffer, 0, charCount);
+
                 var buffer = BufferPool.GetBuffer(BufferSize);
                 try
                 {
@@ -53,9 +55,8 @@ namespace Titanium.Web.Proxy.Helpers
             }
             else
             {
-                var buffer = new byte[charCount + 1];
-                int idx = encoder.GetBytes(charBuffer, 0, charCount, buffer, 0, true);
-                await WriteAsync(buffer, 0, idx);
+                var buffer = encoding.GetBytes(value);
+                await WriteAsync(buffer);
             }
         }
 
