@@ -12,15 +12,15 @@ namespace Titanium.Web.Proxy.Network
 {
     class DebugCustomBufferedStream : CustomBufferedStream
     {
-        private const string basePath = @"c:\\11\\";
+        private const string basePath = @".";
 
         private static int counter;
 
         public int Counter { get; }
 
-        private FileStream fileStreamSent;
+        private readonly FileStream fileStreamSent;
 
-        private FileStream fileStreamReceived;
+        private readonly FileStream fileStreamReceived;
 
         public DebugCustomBufferedStream(Stream baseStream, int bufferSize) : base(baseStream, bufferSize)
         {
@@ -39,10 +39,11 @@ namespace Titanium.Web.Proxy.Network
             fileStreamReceived.Write(buffer, offset, count);
         }
 
-        public void Flush()
+        public override void Flush()
         {
             fileStreamSent.Flush(true);
             fileStreamReceived.Flush(true);
+            base.Flush();
         }
     }
 }
