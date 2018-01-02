@@ -2,6 +2,8 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Network.Tcp
@@ -11,6 +13,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpConnection : IDisposable
     {
+        private ProxyServer proxyServer { get; }
+
         internal ExternalProxy UpStreamProxy { get; set; }
 
         internal string HostName { get; set; }
@@ -34,9 +38,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal TcpClient TcpClient { private get; set; }
 
         /// <summary>
-        /// used to read lines from server
+        /// Used to read lines from server
         /// </summary>
         internal CustomBinaryReader StreamReader { get; set; }
+
+        /// <summary>
+        /// Used to write lines to server
+        /// </summary>
+        internal HttpRequestWriter StreamWriter { get; set; }
 
         /// <summary>
         /// Server stream
@@ -48,9 +57,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         internal DateTime LastAccess { get; set; }
 
-        internal TcpConnection()
+        internal TcpConnection(ProxyServer proxyServer)
         {
             LastAccess = DateTime.Now;
+            this.proxyServer = proxyServer;
+            this.proxyServer.UpdateServerConnectionCount(true);
         }
 
         /// <summary>
@@ -58,25 +69,13 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         public void Dispose()
         {
-            Stream?.Dispose();
-
             StreamReader?.Dispose();
 
-            try
-            {
-                if (TcpClient != null)
-                {
-                    //This line is important!
-                    //contributors please don't remove it without discussion
-                    //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
-                    //due to default TCP CLOSE_WAIT timeout for 4 minutes
-                    TcpClient.LingerState = new LingerOption(true, 0);
-                    TcpClient.Close();
-                }
-            }
-            catch
-            {
-            }
+            Stream?.Dispose();
+
+            TcpClient.CloseSocket();
+
+            proxyServer.UpdateServerConnectionCount(false);
         }
     }
 }

@@ -43,7 +43,7 @@ namespace Titanium.Web.Proxy
                 //If user requested call back then do it
                 if (BeforeResponse != null && !response.ResponseLocked)
                 {
-                    await BeforeResponse.InvokeParallelAsync(this, args, ExceptionFunc);
+                    await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
                 }
 
                 //if user requested to send request again
@@ -96,7 +96,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     await clientStreamWriter.WriteHeadersAsync(response.Headers);
-                    await clientStreamWriter.WriteResponseBodyAsync(response.Body, isChunked);
+                    await clientStreamWriter.WriteBodyAsync(response.Body, isChunked);
                 }
                 else
                 {
@@ -105,12 +105,9 @@ namespace Titanium.Web.Proxy
                     //Write body if exists
                     if (response.HasBody)
                     {
-                        await clientStreamWriter.WriteResponseBodyAsync(BufferSize, args.WebSession.ServerConnection.StreamReader,
-                            response.IsChunked, response.ContentLength);
+                        await args.CopyResponseBodyAsync(clientStreamWriter, false);
                     }
                 }
-
-                await clientStreamWriter.FlushAsync();
             }
             catch (Exception e)
             {

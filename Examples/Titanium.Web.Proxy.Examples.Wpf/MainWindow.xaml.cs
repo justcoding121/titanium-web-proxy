@@ -11,7 +11,6 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.Examples.Wpf
 {
@@ -63,13 +62,14 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         public MainWindow()
         {
             proxyServer = new ProxyServer();
-            //proxyServer.CertificateEngine = CertificateEngine.BouncyCastle;
+            //proxyServer.CertificateEngine = CertificateEngine.DefaultWindows;
             proxyServer.TrustRootCertificate = true;
             proxyServer.CertificateManager.TrustRootCertificateAsAdministrator();
             proxyServer.ForwardToUpstreamGateway = true;
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
             {
+                ExcludedHttpsHostNameRegex = new[] { "ssllabs.com" },
                 //IncludedHttpsHostNameRegex = new string[0],
             };
 
@@ -134,10 +134,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() =>
             {
-                if (sessionDictionary.TryGetValue(e.WebSession, out var item2))
+                if (sessionDictionary.TryGetValue(e.WebSession, out item))
                 {
-                    item2.Update();
-                    item = item2;
+                    item.Update();
                 }
             });
 
@@ -147,6 +146,11 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 {
                     e.WebSession.Response.KeepBody = true;
                     await e.GetResponseBody();
+
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        item.Update();
+                    });
                 }
             }
         }

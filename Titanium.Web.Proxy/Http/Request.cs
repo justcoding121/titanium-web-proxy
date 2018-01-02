@@ -67,14 +67,14 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public string Host
         {
-            get => Headers.GetHeaderValueOrNull("host");
-            set => Headers.SetOrAddHeaderValue("host", value);
+            get => Headers.GetHeaderValueOrNull(KnownHeaders.Host);
+            set => Headers.SetOrAddHeaderValue(KnownHeaders.Host, value);
         }
 
         /// <summary>
         /// Content encoding header value
         /// </summary>
-        public string ContentEncoding => Headers.GetHeaderValueOrNull("content-encoding");
+        public string ContentEncoding => Headers.GetHeaderValueOrNull(KnownHeaders.ContentEncoding);
 
         /// <summary>
         /// Request content-length
@@ -83,7 +83,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull("content-length");
+                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.ContentLength);
 
                 if (headerValue == null)
                 {
@@ -102,12 +102,12 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (value >= 0)
                 {
-                    Headers.SetOrAddHeaderValue("content-length", value.ToString());
+                    Headers.SetOrAddHeaderValue(KnownHeaders.ContentLength, value.ToString());
                     IsChunked = false;
                 }
                 else
                 {
-                    Headers.RemoveHeader("content-length");
+                    Headers.RemoveHeader(KnownHeaders.ContentLength);
                 }
             }
         }
@@ -117,8 +117,8 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public string ContentType
         {
-            get => Headers.GetHeaderValueOrNull("content-type");
-            set => Headers.SetOrAddHeaderValue("content-type", value);
+            get => Headers.GetHeaderValueOrNull(KnownHeaders.ContentType);
+            set => Headers.SetOrAddHeaderValue(KnownHeaders.ContentType, value);
         }
 
         /// <summary>
@@ -128,19 +128,19 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull("transfer-encoding");
-                return headerValue != null && headerValue.ContainsIgnoreCase("chunked");
+                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
+                return headerValue != null && headerValue.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked);
             }
             set
             {
                 if (value)
                 {
-                    Headers.SetOrAddHeaderValue("transfer-encoding", "chunked");
+                    Headers.SetOrAddHeaderValue(KnownHeaders.TransferEncoding, KnownHeaders.TransferEncodingChunked);
                     ContentLength = -1;
                 }
                 else
                 {
-                    Headers.RemoveHeader("transfer-encoding");
+                    Headers.RemoveHeader(KnownHeaders.TransferEncoding);
                 }
             }
         }
@@ -152,8 +152,8 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull("expect");
-                return headerValue != null && headerValue.Equals("100-continue");
+                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Expect);
+                return headerValue != null && headerValue.Equals(KnownHeaders.Expect100Continue);
             }
         }
 
@@ -241,14 +241,14 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull("upgrade");
+                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
 
                 if (headerValue == null)
                 {
                     return false;
                 }
 
-                return headerValue.Equals("websocket", StringComparison.CurrentCultureIgnoreCase);
+                return headerValue.Equals(KnownHeaders.UpgradeWebsocket, StringComparison.CurrentCultureIgnoreCase);
             }
         }
 
@@ -275,7 +275,7 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 var sb = new StringBuilder();
-                sb.AppendLine($"{Method} {OriginalUrl} HTTP/{HttpVersion.Major}.{HttpVersion.Minor}");
+                sb.AppendLine(CreateRequestLine(Method, OriginalUrl, HttpVersion));
                 foreach (var header in Headers)
                 {
                     sb.AppendLine(header.ToString());
@@ -284,6 +284,11 @@ namespace Titanium.Web.Proxy.Http
                 sb.AppendLine();
                 return sb.ToString();
             }
+        }
+
+        internal static string CreateRequestLine(string httpMethod, string httpUrl, Version version)
+        {
+            return $"{httpMethod} {httpUrl} HTTP/{version.Major}.{version.Minor}";
         }
 
         internal static void ParseRequestLine(string httpCmd, out string httpMethod, out string httpUrl, out Version version)

@@ -63,6 +63,21 @@ namespace Titanium.Web.Proxy.Http
             return null;
         }
 
+        public HttpHeader GetFirstHeader(string name)
+        {
+            if (Headers.TryGetValue(name, out var header))
+            {
+                return header;
+            }
+
+            if (NonUniqueHeaders.TryGetValue(name, out var headers))
+            {
+                return headers.FirstOrDefault();
+            }
+
+            return null;
+        }
+
         /// <summary>
         /// Returns all headers 
         /// </summary>
@@ -235,7 +250,7 @@ namespace Titanium.Web.Proxy.Http
             return null;
         }
 
-        internal string SetOrAddHeaderValue(string headerName, string value)
+        internal void SetOrAddHeaderValue(string headerName, string value)
         {
             if (Headers.TryGetValue(headerName, out var header))
             {
@@ -245,8 +260,6 @@ namespace Titanium.Web.Proxy.Http
             {
                 Headers.Add(headerName, new HttpHeader(headerName, value));
             }
-
-            return null;
         }
 
         /// <summary>
@@ -255,12 +268,12 @@ namespace Titanium.Web.Proxy.Http
         internal void FixProxyHeaders()
         {
             //If proxy-connection close was returned inform to close the connection
-            string proxyHeader = GetHeaderValueOrNull("proxy-connection");
-            RemoveHeader("proxy-connection");
+            string proxyHeader = GetHeaderValueOrNull(KnownHeaders.ProxyConnection);
+            RemoveHeader(KnownHeaders.ProxyConnection);
 
             if (proxyHeader != null)
             {
-                SetOrAddHeaderValue("connection", proxyHeader);
+                SetOrAddHeaderValue(KnownHeaders.Connection, proxyHeader);
             }
         }
 

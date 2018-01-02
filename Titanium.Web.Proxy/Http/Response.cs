@@ -42,12 +42,12 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Content encoding for this response
         /// </summary>
-        public string ContentEncoding => Headers.GetHeaderValueOrNull("content-encoding")?.Trim();
+        public string ContentEncoding => Headers.GetHeaderValueOrNull(KnownHeaders.ContentEncoding)?.Trim();
 
         /// <summary>
         /// Http version
         /// </summary>
-        public Version HttpVersion { get; set; }
+        public Version HttpVersion { get; set; } = HttpHeader.VersionUnknown;
 
         /// <summary>
         /// Keeps the response body data after the session is finished
@@ -61,16 +61,24 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
+                long contentLength = ContentLength;
+
+                //If content length is set to 0 the response has no body
+                if (contentLength == 0)
+                {
+                    return false;
+                }
+
                 //Has body only if response is chunked or content length >0
                 //If none are true then check if connection:close header exist, if so write response until server or client terminates the connection
-                if (IsChunked || ContentLength > 0 || !KeepAlive)
+                if (IsChunked || contentLength > 0 || !KeepAlive)
                 {
                     return true;
                 }
 
                 //has response if connection:keep-alive header exist and when version is http/1.0
                 //Because in Http 1.0 server can return a response without content-length (expectation being client would read until end of stream)
-                if (KeepAlive && HttpVersion.Minor == 0)
+                if (KeepAlive && HttpVersion == HttpHeader.Version10)
                 {
                     return true;
                 }
@@ -86,11 +94,11 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull("connection");
+                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Connection);
 
                 if (headerValue != null)
                 {
-                    if (headerValue.ContainsIgnoreCase("close"))
+                    if (headerValue.ContainsIgnoreCase(KnownHeaders.ConnectionClose))
                     {
                         return false;
                     }
@@ -103,7 +111,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Content type of this response
         /// </summary>
-        public string ContentType => Headers.GetHeaderValueOrNull("content-type");
+        public string ContentType => Headers.GetHeaderValueOrNull(KnownHeaders.ContentType);
 
         /// <summary>
         /// Length of response body
@@ -112,15 +120,14 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull("content-length");
+                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.ContentLength);
 
                 if (headerValue == null)
                 {
                     return -1;
                 }
 
-                long.TryParse(headerValue, out long contentLen);
-                if (contentLen >= 0)
+                if (long.TryParse(headerValue, out long contentLen))
                 {
                     return contentLen;
                 }
@@ -131,12 +138,12 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (value >= 0)
                 {
-                    Headers.SetOrAddHeaderValue("content-length", value.ToString());
+                    Headers.SetOrAddHeaderValue(KnownHeaders.ContentLength, value.ToString());
                     IsChunked = false;
                 }
                 else
                 {
-                    Headers.RemoveHeader("content-length");
+                    Headers.RemoveHeader(KnownHeaders.ContentLength);
                 }
             }
         }
@@ -148,19 +155,19 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull("transfer-encoding");
-                return headerValue != null && headerValue.ContainsIgnoreCase("chunked");
+                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
+                return headerValue != null && headerValue.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked);
             }
             set
             {
                 if (value)
                 {
-                    Headers.SetOrAddHeaderValue("transfer-encoding", "chunked");
+                    Headers.SetOrAddHeaderValue(KnownHeaders.TransferEncoding, KnownHeaders.TransferEncodingChunked);
                     ContentLength = -1;
                 }
                 else
                 {
-                    Headers.RemoveHeader("transfer-encoding");
+                    Headers.RemoveHeader(KnownHeaders.TransferEncoding);
                 }
             }
         }
@@ -228,7 +235,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Gets the resposne status.
         /// </summary>
-        public string Status => $"HTTP/{HttpVersion?.Major}.{HttpVersion?.Minor} {StatusCode} {StatusDescription}";
+        public string Status => CreateResponseLine(HttpVersion, StatusCode, StatusDescription);
 
         /// <summary>
         /// Gets the header text.
@@ -247,6 +254,11 @@ namespace Titanium.Web.Proxy.Http
                 sb.AppendLine();
                 return sb.ToString();
             }
+        }
+
+        internal static string CreateResponseLine(Version version, int statusCode, string statusDescription)
+        {
+            return $"HTTP/{version.Major}.{version.Minor} {statusCode} {statusDescription}";
         }
 
         internal static void ParseResponseLine(string httpStatus, out Version version, out int statusCode, out string statusDescription)

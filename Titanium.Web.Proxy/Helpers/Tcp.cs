@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -111,16 +112,21 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="clientStream"></param>
         /// <param name="serverStream"></param>
+        /// <param name="bufferSize"></param>
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
         /// <returns></returns>
         internal static async Task SendRaw(Stream clientStream, Stream serverStream, int bufferSize,
             Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive)
         {
-            //Now async relay all server=>client & client=>server data
-            var sendRelay = clientStream.CopyToAsync(serverStream, onDataSend, bufferSize);
+            var cts = new CancellationTokenSource();
 
-            var receiveRelay = serverStream.CopyToAsync(clientStream, onDataReceive, bufferSize);
+            //Now async relay all server=>client & client=>server data
+            var sendRelay = clientStream.CopyToAsync(serverStream, onDataSend, bufferSize, cts.Token);
+            var receiveRelay = serverStream.CopyToAsync(clientStream, onDataReceive, bufferSize, cts.Token);
+
+            await Task.WhenAny(sendRelay, receiveRelay);
+            cts.Cancel();
 
             await Task.WhenAll(sendRelay, receiveRelay);
         }
