@@ -1,7 +1,8 @@
 ﻿using System;
-using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Models
 {
@@ -10,6 +11,8 @@ namespace Titanium.Web.Proxy.Models
     /// </summary>
     public class HttpHeader
     {
+        internal static readonly Version VersionUnknown = new Version(0, 0);
+
         internal static readonly Version Version10 = new Version(1, 0);
 
         internal static readonly Version Version11 = new Version(1, 1);
@@ -54,19 +57,12 @@ namespace Titanium.Web.Proxy.Models
 
         internal static HttpHeader GetProxyAuthorizationHeader(string userName, string password)
         {
-            var result = new HttpHeader("Proxy-Authorization",
+            var result = new HttpHeader(KnownHeaders.ProxyAuthorization,
                 "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{userName}:{password}")));
             return result;
         }
 
-        internal void WriteToStream(StreamWriter writer)
-        {
-            writer.Write(Name);
-            writer.Write(": ");
-            writer.WriteLine(Value);
-        }
-
-        internal async Task WriteToStreamAsync(StreamWriter writer)
+        internal async Task WriteToStreamAsync(HttpWriter writer)
         {
             await writer.WriteAsync(Name);
             await writer.WriteAsync(": ");

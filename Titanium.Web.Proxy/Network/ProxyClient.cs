@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy.Network
         internal TcpClient TcpClient { get; set; }
 
         /// <summary>
-        /// holds the stream to client
+        /// Holds the stream to client
         /// </summary>
         internal CustomBufferedStream ClientStream { get; set; }
 
@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy.Network
         internal CustomBinaryReader ClientStreamReader { get; set; }
 
         /// <summary>
-        /// used to write line by line to client
+        /// Used to write line by line to client
         /// </summary>
         internal HttpResponseWriter ClientStreamWriter { get; set; }
     }

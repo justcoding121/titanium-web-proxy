@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Net;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 
@@ -74,61 +73,45 @@ namespace Titanium.Web.Proxy.Http
             connection.LastAccess = DateTime.Now;
             ServerConnection = connection;
         }
-        
+
         /// <summary>
         /// Prepare and send the http(s) request
         /// </summary>
         /// <returns></returns>
         internal async Task SendRequest(bool enable100ContinueBehaviour)
         {
-            var stream = ServerConnection.Stream;
+            var upstreamProxy = ServerConnection.UpStreamProxy;
 
-            byte[] requestBytes;
-            using (var ms = new MemoryStream())
-            using (var writer = new HttpRequestWriter(ms, bufferSize))
+            bool useUpstreamProxy = upstreamProxy != null && ServerConnection.IsHttps == false;
+
+            var writer = ServerConnection.StreamWriter;
+
+            //prepare the request & headers
+            await writer.WriteLineAsync(Request.CreateRequestLine(Request.Method,
+                useUpstreamProxy ? Request.OriginalUrl : Request.RequestUri.PathAndQuery,
+                Request.HttpVersion));
+
+
+            //Send Authentication to Upstream proxy if needed
+            if (upstreamProxy != null
+                && ServerConnection.IsHttps == false
+                && !string.IsNullOrEmpty(upstreamProxy.UserName)
+                && upstreamProxy.Password != null)
             {
-                var upstreamProxy = ServerConnection.UpStreamProxy;
-
-                bool useUpstreamProxy = upstreamProxy != null && ServerConnection.IsHttps == false;
-
-                //prepare the request & headers
-                if (useUpstreamProxy)
-                {
-                    writer.WriteLine($"{Request.Method} {Request.OriginalUrl} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
-                }
-                else
-                {
-                    writer.WriteLine($"{Request.Method} {Request.RequestUri.PathAndQuery} HTTP/{Request.HttpVersion.Major}.{Request.HttpVersion.Minor}");
-                }
-
-
-                //Send Authentication to Upstream proxy if needed
-                if (upstreamProxy != null
-                    && ServerConnection.IsHttps == false
-                    && !string.IsNullOrEmpty(upstreamProxy.UserName)
-                    && upstreamProxy.Password != null)
-                {
-                    HttpHeader.ProxyConnectionKeepAlive.WriteToStream(writer);
-                    HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password).WriteToStream(writer);
-                }
-
-                //write request headers
-                foreach (var header in Request.Headers)
-                {
-                    if (header.Name != "Proxy-Authorization")
-                    {
-                        header.WriteToStream(writer);
-                    }
-                }
-
-                writer.WriteLine();
-                writer.Flush();
-
-                requestBytes = ms.ToArray();
+                await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer);
+                await HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password).WriteToStreamAsync(writer);
             }
 
-            await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
-            await stream.FlushAsync();
+            //write request headers
+            foreach (var header in Request.Headers)
+            {
+                if (header.Name != KnownHeaders.ProxyAuthorization)
+                {
+                    await header.WriteToStreamAsync(writer);
+                }
+            }
+
+            await writer.WriteLineAsync();
 
             if (enable100ContinueBehaviour)
             {
@@ -191,6 +174,7 @@ namespace Titanium.Web.Proxy.Http
                 Response.Is100Continue = true;
                 Response.StatusCode = 0;
                 await ServerConnection.StreamReader.ReadLineAsync();
+
                 //now receive response
                 await ReceiveResponse();
                 return;
@@ -203,6 +187,7 @@ namespace Titanium.Web.Proxy.Http
                 Response.ExpectationFailed = true;
                 Response.StatusCode = 0;
                 await ServerConnection.StreamReader.ReadLineAsync();
+
                 //now receive response 
                 await ReceiveResponse();
                 return;

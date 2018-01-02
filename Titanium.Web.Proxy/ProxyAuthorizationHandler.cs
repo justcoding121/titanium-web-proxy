@@ -8,6 +8,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy
 {
@@ -20,37 +21,36 @@ namespace Titanium.Web.Proxy
                 return true;
             }
 
-            var httpHeaders = session.WebSession.Request.Headers.ToArray();
+            var httpHeaders = session.WebSession.Request.Headers;
 
             try
             {
-                var header = httpHeaders.FirstOrDefault(t => t.Name == "Proxy-Authorization");
+                var header = httpHeaders.GetFirstHeader(KnownHeaders.ProxyAuthorization);
                 if (header == null)
                 {
                     session.WebSession.Response = await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Required");
                     return false;
                 }
 
-                string headerValue = header.Value.Trim();
-                if (!headerValue.StartsWith("basic", StringComparison.CurrentCultureIgnoreCase))
+                var headerValueParts = header.Value.Split(ProxyConstants.SpaceSplit);
+                if (headerValueParts.Length != 2 || !headerValueParts[0].Equals("basic", StringComparison.CurrentCultureIgnoreCase))
                 {
                     //Return not authorized
                     session.WebSession.Response = await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Invalid");
                     return false;
                 }
 
-                headerValue = headerValue.Substring(5).Trim();
-
-                string decoded = Encoding.UTF8.GetString(Convert.FromBase64String(headerValue));
-                if (decoded.Contains(":") == false)
+                string decoded = Encoding.UTF8.GetString(Convert.FromBase64String(headerValueParts[1]));
+                int colonIndex = decoded.IndexOf(':');
+                if (colonIndex == -1)
                 {
                     //Return not authorized
                     session.WebSession.Response = await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Invalid");
                     return false;
                 }
 
-                string username = decoded.Substring(0, decoded.IndexOf(':'));
-                string password = decoded.Substring(decoded.IndexOf(':') + 1);
+                string username = decoded.Substring(0, colonIndex);
+                string password = decoded.Substring(colonIndex + 1);
                 return await AuthenticateUserFunc(username, password);
             }
             catch (Exception e)
@@ -72,8 +72,8 @@ namespace Titanium.Web.Proxy
                 StatusDescription = description
             };
 
-            response.Headers.AddHeader("Proxy-Authenticate", $"Basic realm=\"{ProxyRealm}\"");
-            response.Headers.AddHeader("Proxy-Connection", "close");
+            response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, $"Basic realm=\"{ProxyRealm}\"");
+            response.Headers.AddHeader(KnownHeaders.ProxyConnection, KnownHeaders.ProxyConnectionClose);
 
             await clientStreamWriter.WriteResponseAsync(response);
             return response;

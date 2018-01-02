@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private string protocol;
         private string host;
         private string url;
-        private long bodySize;
+        private long? bodySize;
         private string process;
         private long receivedDataCount;
         private long sentDataCount;
@@ -48,7 +48,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             set => SetField(ref url, value);
         }
 
-        public long BodySize
+        public long? BodySize
         {
             get => bodySize;
             set => SetField(ref bodySize, value);
@@ -76,8 +76,11 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         protected void SetField<T>(ref T field, T value,[CallerMemberName] string propertyName = null)
         {
-            field = value;
-            OnPropertyChanged(propertyName);
+            if (!Equals(field, value))
+            {
+                field = value;
+                OnPropertyChanged(propertyName);
+            }
         }
 
         [NotifyPropertyChangedInvocator]
@@ -105,7 +108,24 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 Url = request.RequestUri.AbsolutePath;
             }
 
-            BodySize = response?.ContentLength ?? -1;
+            if (!IsTunnelConnect)
+            {
+                long responseSize = -1;
+                if (response != null)
+                {
+                    if (response.ContentLength != -1)
+                    {
+                        responseSize = response.ContentLength;
+                    }
+                    else if (response.IsBodyRead && response.Body != null)
+                    {
+                        responseSize = response.Body.Length;
+                    }
+                }
+
+                BodySize = responseSize;
+            }
+
             Process = GetProcessDescription(WebSession.ProcessId.Value);
         }
 

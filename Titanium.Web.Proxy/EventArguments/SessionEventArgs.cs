@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Threading.Tasks;
+using StreamExtended.Helpers;
+using StreamExtended.Network;
 using Titanium.Web.Proxy.Decompression;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
@@ -21,6 +22,8 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public class SessionEventArgs : EventArgs, IDisposable
     {
+        private static readonly byte[] emptyData = new byte[0];
+
         /// <summary>
         /// Size of Buffers used by this object
         /// </summary>
@@ -31,6 +34,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private Func<SessionEventArgs, Task> httpResponseHandler;
 
+        private readonly Action<Exception> exceptionFunc;
+
         /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
@@ -39,9 +44,9 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Holds a reference to client
         /// </summary>
-        internal ProxyClient ProxyClient { get; set; }
+        internal ProxyClient ProxyClient { get; }
 
-        internal bool HasMulipartEventSubscribers => MultipartRequestPartSent != null;
+        private bool hasMulipartEventSubscribers => MultipartRequestPartSent != null;
 
         /// <summary>
         /// Returns a unique Id for this request/response session
@@ -101,12 +106,14 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgs(int bufferSize, 
+        internal SessionEventArgs(int bufferSize,
             ProxyEndPoint endPoint,
-            Func<SessionEventArgs, Task> httpResponseHandler)
+            Func<SessionEventArgs, Task> httpResponseHandler,
+            Action<Exception> exceptionFunc)
         {
             this.bufferSize = bufferSize;
             this.httpResponseHandler = httpResponseHandler;
+            this.exceptionFunc = exceptionFunc;
 
             ProxyClient = new ProxyClient();
             WebSession = new HttpWebClient(bufferSize);
@@ -135,42 +142,21 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Read request body content as bytes[] for current session
         /// </summary>
-        private async Task ReadRequestBody()
+        private async Task ReadRequestBodyAsync()
         {
             WebSession.Request.EnsureBodyAvailable(false);
 
-            //Caching check
-            if (!WebSession.Request.IsBodyRead)
-            {
-                //If chunked then its easy just read the whole body with the content length mentioned in the request header
-                using (var requestBodyStream = new MemoryStream())
-                {
-                    //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
-                    if (WebSession.Request.IsChunked)
-                    {
-                        await ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(requestBodyStream);
-                    }
-                    else
-                    {
-                        //If not chunked then its easy just read the whole body with the content length mentioned in the request header
-                        if (WebSession.Request.ContentLength > 0)
-                        {
-                            //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await ProxyClient.ClientStreamReader.CopyBytesToStream(requestBodyStream, WebSession.Request.ContentLength);
-                        }
-                        else if (WebSession.Request.HttpVersion.Major == 1 && WebSession.Request.HttpVersion.Minor == 0)
-                        {
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(requestBodyStream, long.MaxValue);
-                        }
-                    }
+            var request = WebSession.Request;
 
-                    WebSession.Request.Body = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding, requestBodyStream.ToArray());
-                }
+            //If not already read (not cached yet)
+            if (!request.IsBodyRead)
+            {
+                var body = await ReadBodyAsync(ProxyClient.ClientStreamReader, request.IsChunked, request.ContentLength, request.ContentEncoding, true);
+                request.Body = body;
 
                 //Now set the flag to true
                 //So that next time we can deliver body from cache
-                WebSession.Request.IsBodyRead = true;
-                var body = WebSession.Request.Body;
+                request.IsBodyRead = true;
                 OnDataSent(body, 0, body.Length);
             }
         }
@@ -181,73 +167,208 @@ namespace Titanium.Web.Proxy.EventArguments
         internal async Task ClearResponse()
         {
             //siphon out the body
-            await ReadResponseBody();
+            await ReadResponseBodyAsync();
             WebSession.Response = new Response();
         }
 
         internal void OnDataSent(byte[] buffer, int offset, int count)
         {
-            DataSent?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            try
+            {
+                DataSent?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            }
+            catch (Exception ex)
+            {
+                var ex2 = new Exception("Exception thrown in user event", ex);
+                exceptionFunc(ex2);
+            }
         }
 
         internal void OnDataReceived(byte[] buffer, int offset, int count)
         {
-            DataReceived?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            try
+            {
+                DataReceived?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            }
+            catch (Exception ex)
+            {
+                var ex2 = new Exception("Exception thrown in user event", ex);
+                exceptionFunc(ex2);
+            }
         }
 
         internal void OnMultipartRequestPartSent(string boundary, HeaderCollection headers)
         {
-            MultipartRequestPartSent?.Invoke(this, new MultipartRequestPartSentEventArgs(boundary, headers));
+            try
+            {
+                MultipartRequestPartSent?.Invoke(this, new MultipartRequestPartSentEventArgs(boundary, headers));
+            }
+            catch (Exception ex)
+            {
+                var ex2 = new Exception("Exception thrown in user event", ex);
+                exceptionFunc(ex2);
+            }
         }
 
         /// <summary>
         /// Read response body as byte[] for current response
         /// </summary>
-        private async Task ReadResponseBody()
+        private async Task ReadResponseBodyAsync()
         {
             if (!WebSession.Request.RequestLocked)
             {
                 throw new Exception("You cannot read the response body before request is made to server.");
             }
 
-            //If not already read (not cached yet)
-            if (!WebSession.Response.IsBodyRead)
+            var response = WebSession.Response;
+            if (!response.HasBody)
             {
-                if (WebSession.Response.HasBody)
-                {
-                    using (var responseBodyStream = new MemoryStream())
-                    {
-                        //If chuncked the read chunk by chunk until we hit chunk end symbol
-                        if (WebSession.Response.IsChunked)
-                        {
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStreamChunked(responseBodyStream);
-                        }
-                        else
-                        {
-                            if (WebSession.Response.ContentLength > 0)
-                            {
-                                //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                                await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, WebSession.Response.ContentLength);
-                            }
-                            else if (WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0 ||
-                                     WebSession.Response.ContentLength == -1)
-                            {
-                                await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, long.MaxValue);
-                            }
-                        }
+                return;
+            }
 
-                        WebSession.Response.Body = await GetDecompressedResponseBody(WebSession.Response.ContentEncoding, responseBodyStream.ToArray());
-                    }
+            //If not already read (not cached yet)
+            if (!response.IsBodyRead)
+            {
+                var body = await ReadBodyAsync(WebSession.ServerConnection.StreamReader, response.IsChunked, response.ContentLength, response.ContentEncoding, false);
+                response.Body = body;
+
+                //Now set the flag to true
+                //So that next time we can deliver body from cache
+                response.IsBodyRead = true;
+                OnDataReceived(body, 0, body.Length);
+            }
+        }
+
+        private async Task<byte[]> ReadBodyAsync(CustomBinaryReader reader, bool isChunked, long contentLength, string contentEncoding, bool isRequest)
+        {
+            using (var bodyStream = new MemoryStream())
+            {
+                var writer = new HttpWriter(bodyStream, bufferSize);
+                if (isRequest)
+                {
+                    await CopyRequestBodyAsync(writer, true);
                 }
                 else
                 {
-                    WebSession.Response.Body = new byte[0];
+                    await CopyResponseBodyAsync(writer, true);
                 }
 
-                //set this to true for caching
-                WebSession.Response.IsBodyRead = true;
-                var body = WebSession.Response.Body;
-                OnDataReceived(body, 0, body.Length);
+                return await GetDecompressedBodyAsync(contentEncoding, bodyStream.ToArray());
+            }
+        }
+
+        /// <summary>
+        ///  This is called when the request is PUT/POST/PATCH to read the body
+        /// </summary>
+        /// <returns></returns>
+        internal async Task CopyRequestBodyAsync(HttpWriter writer, bool removeChunkedEncoding)
+        {
+            // End the operation
+            var request = WebSession.Request;
+            var reader = ProxyClient.ClientStreamReader;
+
+            long contentLength = request.ContentLength;
+
+            //send the request body bytes to server
+            if (contentLength > 0 && hasMulipartEventSubscribers && request.IsMultipartFormData)
+            {
+                string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
+
+                using (var copyStream = new CopyStream(reader, writer, bufferSize))
+                using (var copyStreamReader = new CustomBinaryReader(copyStream, bufferSize))
+                {
+                    while (contentLength > copyStream.ReadBytes)
+                    {
+                        long read = await ReadUntilBoundaryAsync(copyStreamReader, contentLength, boundary);
+                        if (read == 0)
+                        {
+                            break;
+                        }
+
+                        if (contentLength > copyStream.ReadBytes)
+                        {
+                            var headers = new HeaderCollection();
+                            await HeaderParser.ReadHeaders(copyStreamReader, headers);
+                            OnMultipartRequestPartSent(boundary, headers);
+                        }
+                    }
+
+                    await copyStream.FlushAsync();
+                }
+            }
+            else
+            {
+                await writer.CopyBodyAsync(reader, request.IsChunked, contentLength, removeChunkedEncoding);
+            }
+        }
+
+        internal async Task CopyResponseBodyAsync(HttpWriter writer, bool removeChunkedEncoding)
+        {
+            var response = WebSession.Response;
+            var reader = WebSession.ServerConnection.StreamReader;
+
+            await writer.CopyBodyAsync(reader, response.IsChunked, response.ContentLength, removeChunkedEncoding);
+        }
+
+        /// <summary>
+        /// Read a line from the byte stream
+        /// </summary>
+        /// <returns></returns>
+        private async Task<long> ReadUntilBoundaryAsync(CustomBinaryReader reader, long totalBytesToRead, string boundary)
+        {
+            int bufferDataLength = 0;
+
+            var buffer = BufferPool.GetBuffer(bufferSize);
+            try
+            {
+                int boundaryLength = boundary.Length + 4;
+                long bytesRead = 0;
+
+                while (bytesRead < totalBytesToRead && (reader.DataAvailable || await reader.FillBufferAsync()))
+                {
+                    byte newChar = reader.ReadByteFromBuffer();
+                    buffer[bufferDataLength] = newChar;
+
+                    bufferDataLength++;
+                    bytesRead++;
+
+                    if (bufferDataLength >= boundaryLength)
+                    {
+                        int startIdx = bufferDataLength - boundaryLength;
+                        if (buffer[startIdx] == '-' && buffer[startIdx + 1] == '-')
+                        {
+                            startIdx += 2;
+                            bool ok = true;
+                            for (int i = 0; i < boundary.Length; i++)
+                            {
+                                if (buffer[startIdx + i] != boundary[i])
+                                {
+                                    ok = false;
+                                    break;
+                                }
+                            }
+
+                            if (ok)
+                            {
+                                break;
+                            }
+                        }
+                    }
+
+                    if (bufferDataLength == buffer.Length)
+                    {
+                        //boundary is not longer than 70 bytes according to the specification, so keeping the last 100 (minimum 74) bytes is enough
+                        const int bytesToKeep = 100;
+                        Buffer.BlockCopy(buffer, buffer.Length - bytesToKeep, buffer, 0, bytesToKeep);
+                        bufferDataLength = bytesToKeep;
+                    }
+                }
+
+                return bytesRead;
+            }
+            finally
+            {
+                BufferPool.ReturnBuffer(buffer);
             }
         }
 
@@ -259,7 +380,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (!WebSession.Request.IsBodyRead)
             {
-                await ReadRequestBody();
+                await ReadRequestBodyAsync();
             }
 
             return WebSession.Request.Body;
@@ -273,7 +394,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (!WebSession.Request.IsBodyRead)
             {
-                await ReadRequestBody();
+                await ReadRequestBodyAsync();
             }
 
             return WebSession.Request.BodyString;
@@ -293,7 +414,7 @@ namespace Titanium.Web.Proxy.EventArguments
             //syphon out the request body from client before setting the new body
             if (!WebSession.Request.IsBodyRead)
             {
-                await ReadRequestBody();
+                await ReadRequestBodyAsync();
             }
 
             WebSession.Request.Body = body;
@@ -314,7 +435,7 @@ namespace Titanium.Web.Proxy.EventArguments
             //syphon out the request body from client before setting the new body
             if (!WebSession.Request.IsBodyRead)
             {
-                await ReadRequestBody();
+                await ReadRequestBodyAsync();
             }
 
             await SetRequestBody(WebSession.Request.Encoding.GetBytes(body));
@@ -328,7 +449,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (!WebSession.Response.IsBodyRead)
             {
-                await ReadResponseBody();
+                await ReadResponseBodyAsync();
             }
 
             return WebSession.Response.Body;
@@ -342,7 +463,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (!WebSession.Response.IsBodyRead)
             {
-                await ReadResponseBody();
+                await ReadResponseBodyAsync();
             }
 
             return WebSession.Response.BodyString;
@@ -400,12 +521,12 @@ namespace Titanium.Web.Proxy.EventArguments
             await SetResponseBody(bodyBytes);
         }
 
-        private async Task<byte[]> GetDecompressedResponseBody(string encodingType, byte[] responseBodyStream)
+        private async Task<byte[]> GetDecompressedBodyAsync(string encodingType, byte[] bodyStream)
         {
             var decompressionFactory = new DecompressionFactory();
             var decompressor = decompressionFactory.Create(encodingType);
 
-            return await decompressor.Decompress(responseBodyStream, bufferSize);
+            return await decompressor.Decompress(bodyStream, bufferSize);
         }
 
         /// <summary>
@@ -493,8 +614,8 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             var response = new RedirectResponse();
             response.HttpVersion = WebSession.Request.HttpVersion;
-            response.Headers.AddHeader("Location", url);
-            response.Body = new byte[0];
+            response.Headers.AddHeader(KnownHeaders.Location, url);
+            response.Body = emptyData;
 
             await Respond(response);
         }
@@ -526,6 +647,10 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             httpResponseHandler = null;
             CustomUpStreamProxyUsed = null;
+
+            DataSent = null;
+            DataReceived = null;
+            MultipartRequestPartSent = null;
 
             WebSession.FinishSession();
         }

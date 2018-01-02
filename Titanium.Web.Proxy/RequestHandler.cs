@@ -49,7 +49,6 @@ namespace Titanium.Web.Proxy
             {
                 //read the first line HTTP command
                 string httpCmd = await clientStreamReader.ReadLineAsync();
-
                 if (string.IsNullOrEmpty(httpCmd))
                 {
                     return;
@@ -86,20 +85,20 @@ namespace Titanium.Web.Proxy
 
                     await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.Headers);
 
-                    var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest);
+                    var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest, ExceptionFunc);
                     connectArgs.ProxyClient.TcpClient = tcpClient;
                     connectArgs.ProxyClient.ClientStream = clientStream;
 
                     if (TunnelConnectRequest != null)
                     {
-                        await TunnelConnectRequest.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
+                        await TunnelConnectRequest.InvokeAsync(this, connectArgs, ExceptionFunc);
                     }
 
                     if (await CheckAuthorization(clientStreamWriter, connectArgs) == false)
                     {
                         if (TunnelConnectResponse != null)
                         {
-                            await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
+                            await TunnelConnectResponse.InvokeAsync(this, connectArgs, ExceptionFunc);
                         }
 
                         return;
@@ -119,7 +118,7 @@ namespace Titanium.Web.Proxy
                     if (TunnelConnectResponse != null)
                     {
                         connectArgs.IsHttpsConnect = isClientHello;
-                        await TunnelConnectResponse.InvokeParallelAsync(this, connectArgs, ExceptionFunc);
+                        await TunnelConnectResponse.InvokeAsync(this, connectArgs, ExceptionFunc);
                     }
 
                     if (!excluded && isClientHello)
@@ -153,39 +152,51 @@ namespace Titanium.Web.Proxy
                             return;
                         }
 
-                        //Now read the actual HTTPS request line
-                        httpCmd = await clientStreamReader.ReadLineAsync();
+                        if (await CanBeHttpMethod(clientStream))
+                        {
+                            //Now read the actual HTTPS request line
+                            httpCmd = await clientStreamReader.ReadLineAsync();
+                        }
+                        else
+                        {
+                            // It can be for example some Google (Cloude Messaging for Chrome) magic
+                            excluded = true;
+                        }
                     }
+
                     //Hostname is excluded or it is not an HTTPS connect
-                    else
+                    if (excluded || !isClientHello)
                     {
                         //create new connection
                         using (var connection = await GetServerConnection(connectArgs, true))
                         {
-                            try
+                            if (isClientHello)
                             {
-                                if (isClientHello)
+                                int available = clientStream.Available;
+                                if (available > 0)
                                 {
-                                    if (clientStream.Available > 0)
-                                    {
-                                        //send the buffered data
-                                        var data = new byte[clientStream.Available];
-                                        await clientStream.ReadAsync(data, 0, data.Length);
-                                        await connection.Stream.WriteAsync(data, 0, data.Length);
-                                        await connection.Stream.FlushAsync();
-                                    }
+                                    //send the buffered data
+                                    var data = BufferPool.GetBuffer(BufferSize);
 
-                                    var serverHelloInfo = await SslTools.PeekServerHello(connection.Stream);
-                                    ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
+                                    try
+                                    {
+                                        // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
+                                        await clientStream.ReadAsync(data, 0, available);
+                                        await connection.StreamWriter.WriteAsync(data, 0, available, true);
+                                    }
+                                    finally
+                                    {
+                                        BufferPool.ReturnBuffer(data);
+                                    }
                                 }
 
-                                await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
-                                    (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); });
+                                var serverHelloInfo = await SslTools.PeekServerHello(connection.Stream);
+                                ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
                             }
-                            finally
-                            {
-                                UpdateServerConnectionCount(false);
-                            }
+
+                            await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
+                                (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
+                                (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); });
                         }
 
                         return;
@@ -196,8 +207,17 @@ namespace Titanium.Web.Proxy
                 disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
                     httpRemoteUri.Scheme == UriSchemeHttps ? httpRemoteUri.Host : null, endPoint, connectRequest);
             }
+            catch (IOException e)
+            {
+                ExceptionFunc(new Exception("Connection was aborted", e));
+            }
+            catch (SocketException e)
+            {
+                ExceptionFunc(new Exception("Could not connect", e));
+            }
             catch (Exception e)
             {
+                // is this the correct error message?
                 ExceptionFunc(new Exception("Error whilst authorizing request", e));
             }
             finally
@@ -207,6 +227,34 @@ namespace Titanium.Web.Proxy
                     Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                 }
             }
+        }
+
+        private async Task<bool> CanBeHttpMethod(CustomBufferedStream clientStream)
+        {
+            int legthToCheck = 10;
+            for (int i = 0; i < legthToCheck; i++)
+            {
+                int b = await clientStream.PeekByteAsync(i);
+                if (b == -1)
+                {
+                    return false;
+                }
+
+                if (b == ' ' && i > 2)
+                {
+                    // at least 3 letters and a space
+                    return true;
+                }
+
+                if (!char.IsLetter((char)b))
+                {
+                    // non letter or too short
+                    return false;
+                }
+            }
+
+            // only letters
+            return true;
         }
 
         /// <summary>
@@ -228,18 +276,14 @@ namespace Titanium.Web.Proxy
             {
                 if (endPoint.EnableSsl)
                 {
-                    var clientSslHelloInfo = await SslTools.PeekClientHello(clientStream);
+                    var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
 
-                    if (clientSslHelloInfo != null)
+                    if (clientHelloInfo != null)
                     {
                         var sslStream = new SslStream(clientStream);
                         clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
-                        string sniHostName = null;
-                        if (clientSslHelloInfo.Extensions != null && clientSslHelloInfo.Extensions.TryGetValue("server_name", out var serverNameExtension))
-                        {
-                            sniHostName = serverNameExtension.Data;
-                        }
+                        string sniHostName = clientHelloInfo.GetServerName();
                         
                         string certName = HttpHelper.GetWildCardDomainName(sniHostName ?? endPoint.GenericCertificateName);
                         var certificate = CertificateManager.CreateCertificate(certName, false);
@@ -302,7 +346,7 @@ namespace Titanium.Web.Proxy
                     break;
                 }
 
-                var args = new SessionEventArgs(BufferSize, endPoint, HandleHttpSessionResponse)
+                var args = new SessionEventArgs(BufferSize, endPoint, HandleHttpSessionResponse, ExceptionFunc)
                 {
                     ProxyClient = { TcpClient = client },
                     WebSession = { ConnectRequest = connectRequest }
@@ -349,7 +393,7 @@ namespace Titanium.Web.Proxy
                     //If user requested interception do it
                     if (BeforeRequest != null)
                     {
-                        await BeforeRequest.InvokeParallelAsync(this, args, ExceptionFunc);
+                        await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);
                     }
 
                     if (args.WebSession.Request.CancelRequest)
@@ -366,7 +410,6 @@ namespace Titanium.Web.Proxy
                     {
                         connection.Dispose();
                         connection = null;
-                        UpdateServerConnectionCount(false);
                     }
 
                     if (connection == null)
@@ -379,16 +422,8 @@ namespace Titanium.Web.Proxy
                     {
                         //prepare the prefix content
                         var requestHeaders = args.WebSession.Request.Headers;
-                        byte[] requestBytes;
-                        using (var ms = new MemoryStream())
-                        using (var writer = new HttpRequestWriter(ms, BufferSize))
-                        {
-                            writer.WriteLine(httpCmd);
-                            writer.WriteHeaders(requestHeaders);
-                            requestBytes = ms.ToArray();
-                        }
-
-                        await connection.Stream.WriteAsync(requestBytes, 0, requestBytes.Length);
+                        await connection.StreamWriter.WriteLineAsync(httpCmd);
+                        await connection.StreamWriter.WriteHeadersAsync(requestHeaders);
                         string httpStatus = await connection.StreamReader.ReadLineAsync();
 
                         Response.ParseResponseLine(httpStatus, out var responseVersion, out int responseStatusCode, out string responseStatusDescription);
@@ -403,11 +438,12 @@ namespace Titanium.Web.Proxy
                         //If user requested call back then do it
                         if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
                         {
-                            await BeforeResponse.InvokeParallelAsync(this, args, ExceptionFunc);
+                            await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
                         }
 
                         await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
-                            (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); }, (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); });
+                            (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); },
+                            (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); });
 
                         args.Dispose();
                         break;
@@ -478,15 +514,17 @@ namespace Titanium.Web.Proxy
                 //If 100 continue was the response inform that to the client
                 if (Enable100ContinueBehaviour)
                 {
+                    var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
+
                     if (request.Is100Continue)
                     {
-                        await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.Continue, "Continue");
-                        await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
+                        await clientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.Continue, "Continue");
+                        await clientStreamWriter.WriteLineAsync();
                     }
                     else if (request.ExpectationFailed)
                     {
-                        await args.ProxyClient.ClientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
-                        await args.ProxyClient.ClientStreamWriter.WriteLineAsync();
+                        await clientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
+                        await clientStreamWriter.WriteLineAsync();
                     }
                 }
 
@@ -513,8 +551,7 @@ namespace Titanium.Web.Proxy
                         //chunked send is not supported as of now
                         request.ContentLength = body.Length;
 
-                        var newStream = args.WebSession.ServerConnection.Stream;
-                        await newStream.WriteAsync(body, 0, body.Length);
+                        await args.WebSession.ServerConnection.StreamWriter.WriteAsync(body);
                     }
                     else
                     {
@@ -523,7 +560,8 @@ namespace Titanium.Web.Proxy
                             //If its a post/put/patch request, then read the client html body and send it to server
                             if (request.HasBody)
                             {
-                                await SendClientRequestBody(args);
+                                HttpWriter writer = args.WebSession.ServerConnection.StreamWriter;
+                                await args.CopyRequestBodyAsync(writer, false);
                             }
                         }
                     }
@@ -609,126 +647,13 @@ namespace Titanium.Web.Proxy
                 switch (header.Name.ToLower())
                 {
                     //these are the only encoding this proxy can read
-                    case "accept-encoding":
+                    case KnownHeaders.AcceptEncoding:
                         header.Value = "gzip,deflate";
                         break;
                 }
             }
 
             requestHeaders.FixProxyHeaders();
-        }
-
-        /// <summary>
-        ///  This is called when the request is PUT/POST/PATCH to read the body
-        /// </summary>
-        /// <param name="args"></param>
-        /// <returns></returns>
-        private async Task SendClientRequestBody(SessionEventArgs args)
-        {
-            // End the operation
-            var postStream = args.WebSession.ServerConnection.Stream;
-
-            //send the request body bytes to server
-            if (args.WebSession.Request.ContentLength > 0)
-            {
-                var request = args.WebSession.Request;
-                if (args.HasMulipartEventSubscribers && request.IsMultipartFormData)
-                {
-                    string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
-
-                    long bytesToSend = args.WebSession.Request.ContentLength;
-                    while (bytesToSend > 0)
-                    {
-                        long read = await SendUntilBoundaryAsync(args.ProxyClient.ClientStream, postStream, bytesToSend, boundary);
-                        if (read == 0)
-                        {
-                            break;
-                        }
-
-                        bytesToSend -= read;
-                        if (bytesToSend > 0)
-                        {
-                            var headers = new HeaderCollection();
-                            var stream = new CustomBufferedPeekStream(args.ProxyClient.ClientStream);
-                            await HeaderParser.ReadHeaders(new CustomBinaryReader(stream, BufferSize), headers);
-                            args.OnMultipartRequestPartSent(boundary, headers);
-                        }
-                    }
-                }
-                else
-                {
-                    await args.ProxyClient.ClientStreamReader.CopyBytesToStream(postStream, args.WebSession.Request.ContentLength);
-                }
-            }
-            //Need to revist, find any potential bugs
-            //send the request body bytes to server in chunks
-            else if (args.WebSession.Request.IsChunked)
-            {
-                await args.ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(postStream);
-            }
-        }
-
-        /// <summary>
-        /// Read a line from the byte stream
-        /// </summary>
-        /// <returns></returns>
-        public async Task<long> SendUntilBoundaryAsync(CustomBufferedStream inputStream, CustomBufferedStream outputStream, long totalBytesToRead, string boundary)
-        {
-            int bufferDataLength = 0;
-
-            // try to use the thread static buffer
-            var buffer = BufferPool.GetBuffer(BufferSize);
-            int boundaryLength = boundary.Length + 4;
-            long bytesRead = 0;
-
-            while (bytesRead < totalBytesToRead && (inputStream.DataAvailable || await inputStream.FillBufferAsync()))
-            {
-                byte newChar = inputStream.ReadByteFromBuffer();
-                buffer[bufferDataLength] = newChar;
-
-                bufferDataLength++;
-                bytesRead++;
-
-                if (bufferDataLength >= boundaryLength)
-                {
-                    int startIdx = bufferDataLength - boundaryLength;
-                    if (buffer[startIdx] == '-' && buffer[startIdx + 1] == '-'
-                        && buffer[bufferDataLength - 2] == '\r' && buffer[bufferDataLength - 1] == '\n')
-                    {
-                        startIdx += 2;
-                        bool ok = true;
-                        for (int i = 0; i < boundary.Length; i++)
-                        {
-                            if (buffer[startIdx + i] != boundary[i])
-                            {
-                                ok = false;
-                                break;
-                            }
-                        }
-
-                        if (ok)
-                        {
-                            break;
-                        }
-                    }
-                }
-
-                if (bufferDataLength == buffer.Length)
-                {
-                    //boundary is not longer than 70 bytes accounrding to the specification, so keeping the last 100 (minimum 74) bytes is enough
-                    const int bytesToKeep = 100;
-                    await outputStream.WriteAsync(buffer, 0, buffer.Length - bytesToKeep);
-                    Buffer.BlockCopy(buffer, buffer.Length - bytesToKeep, buffer, 0, bytesToKeep);
-                    bufferDataLength = bytesToKeep;
-                }
-            }
-
-            if (bytesRead > 0)
-            {
-                await outputStream.WriteAsync(buffer, 0, bufferDataLength);
-            }
-
-            return bytesRead;
         }
     }
 }
