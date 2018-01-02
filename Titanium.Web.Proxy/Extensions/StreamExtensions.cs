@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
+using StreamExtended.Helpers;
 
 namespace Titanium.Web.Proxy.Extensions
 {
@@ -16,23 +18,59 @@ namespace Titanium.Web.Proxy.Extensions
         /// <param name="output"></param>
         /// <param name="onCopy"></param>
         /// <param name="bufferSize"></param>
-        internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy, int bufferSize)
+        internal static Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy, int bufferSize)
         {
-            byte[] buffer = new byte[bufferSize];
-            while (true)
+            return CopyToAsync(input, output, onCopy, bufferSize, CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Copy streams asynchronously
+        /// </summary>
+        /// <param name="input"></param>
+        /// <param name="output"></param>
+        /// <param name="onCopy"></param>
+        /// <param name="bufferSize"></param>
+        /// <param name="cancellationToken"></param>
+        internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy, int bufferSize, CancellationToken cancellationToken)
+        {
+            byte[] buffer = BufferPool.GetBuffer(bufferSize);
+            try
             {
-                int num = await input.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
-                int bytesRead;
-                if ((bytesRead = num) != 0)
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    await output.WriteAsync(buffer, 0, bytesRead).ConfigureAwait(false);
-                    onCopy?.Invoke(buffer, 0, bytesRead);
-                }
-                else
-                {
-                    break;
+                    // cancellation is not working on Socket ReadAsync
+                    // https://github.com/dotnet/corefx/issues/15033
+                    int num = await input.ReadAsync(buffer, 0, buffer.Length, CancellationToken.None).WithCancellation(cancellationToken);
+                    int bytesRead;
+                    if ((bytesRead = num) != 0 && !cancellationToken.IsCancellationRequested)
+                    {
+                        await output.WriteAsync(buffer, 0, bytesRead, CancellationToken.None);
+                        onCopy?.Invoke(buffer, 0, bytesRead);
+                    }
+                    else
+                    {
+                        break;
+                    }
                 }
             }
+            finally
+            {
+                BufferPool.ReturnBuffer(buffer);
+            }
+        }
+
+        private static async Task<T> WithCancellation<T>(this Task<T> task, CancellationToken cancellationToken)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            using (cancellationToken.Register(s => ((TaskCompletionSource<bool>)s).TrySetResult(true), tcs))
+            {
+                if (task != await Task.WhenAny(task, tcs.Task))
+                {
+                    return default(T);
+                }
+            }
+
+            return await task;
         }
     }
 }
