@@ -49,7 +49,6 @@ namespace Titanium.Web.Proxy
             {
                 //read the first line HTTP command
                 string httpCmd = await clientStreamReader.ReadLineAsync();
-
                 if (string.IsNullOrEmpty(httpCmd))
                 {
                     return;
@@ -153,11 +152,20 @@ namespace Titanium.Web.Proxy
                             return;
                         }
 
-                        //Now read the actual HTTPS request line
-                        httpCmd = await clientStreamReader.ReadLineAsync();
+                        if (await CanBeHttpMethod(clientStream))
+                        {
+                            //Now read the actual HTTPS request line
+                            httpCmd = await clientStreamReader.ReadLineAsync();
+                        }
+                        else
+                        {
+                            // It can be for example some Google (Cloude Messaging for Chrome) magic
+                            excluded = true;
+                        }
                     }
+
                     //Hostname is excluded or it is not an HTTPS connect
-                    else
+                    if (excluded || !isClientHello)
                     {
                         //create new connection
                         using (var connection = await GetServerConnection(connectArgs, true))
@@ -219,6 +227,34 @@ namespace Titanium.Web.Proxy
                     Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
                 }
             }
+        }
+
+        private async Task<bool> CanBeHttpMethod(CustomBufferedStream clientStream)
+        {
+            int legthToCheck = 10;
+            for (int i = 0; i < legthToCheck; i++)
+            {
+                int b = await clientStream.PeekByteAsync(i);
+                if (b == -1)
+                {
+                    return false;
+                }
+
+                if (b == ' ' && i > 2)
+                {
+                    // at least 3 letters and a space
+                    return true;
+                }
+
+                if (!char.IsLetter((char)b))
+                {
+                    // non letter or too short
+                    return false;
+                }
+            }
+
+            // only letters
+            return true;
         }
 
         /// <summary>
