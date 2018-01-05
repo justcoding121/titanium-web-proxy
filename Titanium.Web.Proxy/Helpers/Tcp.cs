@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using StreamExtended.Helpers;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Network.Tcp;
 
@@ -109,15 +110,115 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         /// relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers as prefix
         /// Usefull for websocket requests
+        /// Asynchronous Programming Model, which does not throw exceptions when the socket is closed
         /// </summary>
         /// <param name="clientStream"></param>
         /// <param name="serverStream"></param>
         /// <param name="bufferSize"></param>
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
+        /// <param name="exceptionFunc"></param>
         /// <returns></returns>
-        internal static async Task SendRaw(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive)
+        internal static async Task SendRawApm(Stream clientStream, Stream serverStream, int bufferSize,
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, Action<Exception> exceptionFunc)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            var cts = new CancellationTokenSource();
+            cts.Token.Register(() => tcs.TrySetResult(true));
+
+            //Now async relay all server=>client & client=>server data
+            byte[] clientBuffer = BufferPool.GetBuffer(bufferSize);
+            byte[] serverBuffer = BufferPool.GetBuffer(bufferSize);
+            try
+            {
+                BeginRead(clientStream, serverStream, clientBuffer, cts, onDataSend, exceptionFunc);
+                BeginRead(serverStream, clientStream, serverBuffer, cts, onDataReceive, exceptionFunc);
+                await tcs.Task;
+            }
+            finally
+            {
+                BufferPool.ReturnBuffer(clientBuffer);
+                BufferPool.ReturnBuffer(serverBuffer);
+            }
+        }
+
+        private static void BeginRead(Stream inputStream, Stream outputStream, byte[] buffer, CancellationTokenSource cts, Action<byte[], int, int> onCopy, Action<Exception> exceptionFunc)
+        {
+            if (cts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            bool readFlag = false;
+            var readCallback = (AsyncCallback)(ar =>
+            {
+                if (cts.IsCancellationRequested || readFlag)
+                {
+                    return;
+                }
+
+                readFlag = true;
+
+                try
+                {
+                    int read = inputStream.EndRead(ar);
+                    if (read <= 0)
+                    {
+                        cts.Cancel();
+                        return;
+                    }
+
+                    onCopy?.Invoke(buffer, 0, read);
+
+                    var writeCallback = (AsyncCallback)(ar2 =>
+                    {
+                        if (cts.IsCancellationRequested)
+                        {
+                            return;
+                        }
+
+                        try
+                        {
+                            outputStream.EndWrite(ar2);
+                            BeginRead(inputStream, outputStream, buffer, cts, onCopy, exceptionFunc);
+                        }
+                        catch (IOException ex)
+                        {
+                            cts.Cancel();
+                            exceptionFunc(ex);
+                        }
+                    });
+
+                    outputStream.BeginWrite(buffer, 0, read, writeCallback, null);
+                }
+                catch (IOException ex)
+                {
+                    cts.Cancel();
+                    exceptionFunc(ex);
+                }
+            });
+
+            var readResult = inputStream.BeginRead(buffer, 0, buffer.Length, readCallback, null);
+            if (readResult.CompletedSynchronously)
+            {
+                readCallback(readResult);
+            }
+        }
+
+        /// <summary>
+        /// relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers as prefix
+        /// Usefull for websocket requests
+        /// Task-based Asynchronous Pattern
+        /// </summary>
+        /// <param name="clientStream"></param>
+        /// <param name="serverStream"></param>
+        /// <param name="bufferSize"></param>
+        /// <param name="onDataSend"></param>
+        /// <param name="onDataReceive"></param>
+        /// <param name="exceptionFunc"></param>
+        /// <returns></returns>
+        internal static async Task SendRawTap(Stream clientStream, Stream serverStream, int bufferSize,
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, Action<Exception> exceptionFunc)
         {
             var cts = new CancellationTokenSource();
 
