@@ -18,8 +18,6 @@ namespace Titanium.Web.Proxy.Helpers
 
         private static readonly byte[] newLine = ProxyConstants.NewLine;
 
-        private static readonly Encoding encoding = Encoding.ASCII;
-
         private static readonly Encoder encoder = Encoding.ASCII.GetEncoder();
 
         internal HttpWriter(Stream stream, int bufferSize) : base(stream)
@@ -35,10 +33,16 @@ namespace Titanium.Web.Proxy.Helpers
             return WriteAsync(newLine);
         }
 
-        public async Task WriteAsync(string value)
+        public Task WriteAsync(string value)
         {
+            return WriteAsyncInternal(value, false);
+        }
+
+        private Task WriteAsyncInternal(string value, bool addNewLine)
+        {
+            int newLineChars = addNewLine ? newLine.Length : 0;
             int charCount = value.Length;
-            if (charCount < BufferSize)
+            if (charCount < BufferSize - newLineChars)
             {
                 value.CopyTo(0, charBuffer, 0, charCount);
 
@@ -46,7 +50,13 @@ namespace Titanium.Web.Proxy.Helpers
                 try
                 {
                     int idx = encoder.GetBytes(charBuffer, 0, charCount, buffer, 0, true);
-                    await WriteAsync(buffer, 0, idx);
+                    if (newLineChars > 0)
+                    {
+                        Buffer.BlockCopy(newLine, 0, buffer, idx, newLineChars);
+                        idx += newLineChars;
+                    }
+
+                    return WriteAsync(buffer, 0, idx);
                 }
                 finally
                 {
@@ -55,15 +65,24 @@ namespace Titanium.Web.Proxy.Helpers
             }
             else
             {
-                var buffer = encoding.GetBytes(value);
-                await WriteAsync(buffer);
+                var charBuffer = new char[charCount];
+                value.CopyTo(0, charBuffer, 0, charCount);
+
+                var buffer = new byte[charCount + newLineChars + 1];
+                int idx = encoder.GetBytes(charBuffer, 0, charCount, buffer, 0, true);
+                if (newLineChars > 0)
+                {
+                    Buffer.BlockCopy(newLine, 0, buffer, idx, newLineChars);
+                    idx += newLineChars;
+                }
+
+                return WriteAsync(buffer, 0, idx);
             }
         }
 
-        public async Task WriteLineAsync(string value)
+        public Task WriteLineAsync(string value)
         {
-            await WriteAsync(value);
-            await WriteLineAsync();
+            return WriteAsyncInternal(value, true);
         }
 
         /// <summary>
