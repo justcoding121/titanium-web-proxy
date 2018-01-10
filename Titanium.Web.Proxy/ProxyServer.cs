@@ -1,4 +1,5 @@
-﻿using System;
+﻿using StreamExtended.Network;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -7,7 +8,6 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -438,7 +438,7 @@ namespace Titanium.Web.Proxy
 
             if (isHttp)
             {
-                endPoint.IsSystemHttpsProxy = true;
+                endPoint.IsSystemHttpProxy = true;
             }
 
             if (isHttps)
