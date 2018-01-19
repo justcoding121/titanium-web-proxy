@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using Org.BouncyCastle.Asn1;
@@ -132,9 +133,14 @@ namespace Titanium.Web.Proxy.Network.Certificate
             var rsaparams = new RsaPrivateCrtKeyParameters(rsa.Modulus, rsa.PublicExponent, rsa.PrivateExponent, rsa.Prime1, rsa.Prime2, rsa.Exponent1,
                 rsa.Exponent2, rsa.Coefficient);
 
+#if NET45
             // Set private key onto certificate instance
             var x509Certificate = new X509Certificate2(certificate.GetEncoded());
             x509Certificate.PrivateKey = DotNetUtilities.ToRSA(rsaparams);
+#else
+            var x509Certificate = WithPrivateKey(certificate, rsaparams);
+            x509Certificate.FriendlyName = subjectName;
+#endif
 
             if (!doNotSetFriendlyName)
             {
@@ -151,6 +157,22 @@ namespace Titanium.Web.Proxy.Network.Certificate
             return x509Certificate;
         }
 
+        private static X509Certificate2 WithPrivateKey(Org.BouncyCastle.X509.X509Certificate certificate, AsymmetricKeyParameter privateKey)
+        {
+            const string password = "password";
+            var store = new Pkcs12Store();
+            var entry = new X509CertificateEntry(certificate);
+            store.SetCertificateEntry(certificate.SubjectDN.ToString(), entry);
+
+            store.SetKeyEntry(certificate.SubjectDN.ToString(), new AsymmetricKeyEntry(privateKey), new[] { entry });
+            using (var ms = new MemoryStream())
+            {
+                store.Save(ms, password.ToCharArray(), new SecureRandom(new CryptoApiRandomGenerator()));
+
+                return new X509Certificate2(ms.ToArray(), password, X509KeyStorageFlags.Exportable);
+            }
+        }
+        
         /// <summary>
         /// Makes the certificate internal.
         /// </summary>

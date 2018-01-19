@@ -194,9 +194,10 @@ namespace Titanium.Web.Proxy
                                 ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
                             }
 
-                            await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
+                            await TcpHelper.SendRawApm(clientStream, connection.Stream, BufferSize,
                                 (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
-                                (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); });
+                                (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
+                                ExceptionFunc);
                         }
 
                         return;
@@ -441,9 +442,10 @@ namespace Titanium.Web.Proxy
                             await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
                         }
 
-                        await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
+                        await TcpHelper.SendRawApm(clientStream, connection.Stream, BufferSize,
                             (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); },
-                            (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); });
+                            (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); },
+                            ExceptionFunc);
 
                         args.Dispose();
                         break;
