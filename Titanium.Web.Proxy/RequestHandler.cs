@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using StreamExtended;
 using StreamExtended.Helpers;
@@ -15,7 +16,6 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy
@@ -25,6 +25,8 @@ namespace Titanium.Web.Proxy
     /// </summary>
     partial class ProxyServer
     {
+        private static readonly Regex uriSchemeRegex = new Regex("^[a-z]*://", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         private bool isWindowsAuthenticationEnabledAndSupported => EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
 
         /// <summary>
@@ -360,9 +362,22 @@ namespace Titanium.Web.Proxy
                     //Read the request headers in to unique and non-unique header collections
                     await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.Headers);
 
-                    var httpRemoteUri = new Uri(httpsConnectHostname == null
-                        ? isTransparentEndPoint ? string.Concat("http://", args.WebSession.Request.Host, httpUrl) : httpUrl
-                        : string.Concat("https://", args.WebSession.Request.Host ?? httpsConnectHostname, httpUrl));
+                    Uri httpRemoteUri;
+                    if (uriSchemeRegex.IsMatch(httpUrl))
+                    {
+                        httpRemoteUri = new Uri(httpUrl);
+                    }
+                    else
+                    {
+                        string host = args.WebSession.Request.Host ?? httpsConnectHostname;
+                        string hostAndPath = host;
+                        if (httpUrl.StartsWith("/"))
+                        {
+                            hostAndPath += httpUrl;
+                        }
+
+                        httpRemoteUri = new Uri(string.Concat(httpsConnectHostname == null ? "http://" : "https://", hostAndPath));
+                    }
 
                     args.WebSession.Request.RequestUri = httpRemoteUri;
                     args.WebSession.Request.OriginalUrl = httpUrl;
