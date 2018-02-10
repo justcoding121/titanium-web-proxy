@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -33,7 +34,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 var headerValueParts = header.Value.Split(ProxyConstants.SpaceSplit);
-                if (headerValueParts.Length != 2 || !headerValueParts[0].Equals("basic", StringComparison.CurrentCultureIgnoreCase))
+                if (headerValueParts.Length != 2 || !headerValueParts[0].EqualsIgnoreCase(KnownHeaders.ProxyAuthorizationBasic))
                 {
                     //Return not authorized
                     session.WebSession.Response = await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Invalid");

@@ -58,7 +58,33 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Has request body?
         /// </summary>
-        public bool HasBody => Method == "POST" || Method == "PUT" || Method == "PATCH";
+        public bool HasBody
+        {
+            get
+            {
+                long contentLength = ContentLength;
+
+                //If content length is set to 0 the request has no body
+                if (contentLength == 0)
+                {
+                    return false;
+                }
+
+                //Has body only if request is chunked or content length >0
+                if (IsChunked || contentLength > 0)
+                {
+                    return true;
+                }
+
+                //has body if POST  and when version is http/1.0
+                if (Method == "POST" && HttpVersion == HttpHeader.Version10)
+                {
+                    return true;
+                }
+
+                return false;
+            }
+        }
 
         /// <summary>
         /// Http hostname header value if exists
@@ -248,7 +274,7 @@ namespace Titanium.Web.Proxy.Http
                     return false;
                 }
 
-                return headerValue.Equals(KnownHeaders.UpgradeWebsocket, StringComparison.CurrentCultureIgnoreCase);
+                return headerValue.EqualsIgnoreCase(KnownHeaders.UpgradeWebsocket);
             }
         }
 

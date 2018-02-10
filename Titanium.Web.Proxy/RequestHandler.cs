@@ -196,7 +196,7 @@ namespace Titanium.Web.Proxy
                                 ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
                             }
 
-                            await TcpHelper.SendRawApm(clientStream, connection.Stream, BufferSize,
+                            await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
                                 (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
                                 (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
                                 ExceptionFunc);
@@ -365,7 +365,14 @@ namespace Titanium.Web.Proxy
                     Uri httpRemoteUri;
                     if (uriSchemeRegex.IsMatch(httpUrl))
                     {
-                        httpRemoteUri = new Uri(httpUrl);
+                        try
+                        {
+                            httpRemoteUri = new Uri(httpUrl);
+                        }
+                        catch (Exception ex)
+                        {
+                            throw new Exception($"Invalid URI: '{httpUrl}'", ex);
+                        }
                     }
                     else
                     {
@@ -376,7 +383,15 @@ namespace Titanium.Web.Proxy
                             hostAndPath += httpUrl;
                         }
 
-                        httpRemoteUri = new Uri(string.Concat(httpsConnectHostname == null ? "http://" : "https://", hostAndPath));
+                        string url = string.Concat(httpsConnectHostname == null ? "http://" : "https://", hostAndPath);
+                        try
+                        {
+                            httpRemoteUri = new Uri(url);
+                        }
+                        catch (Exception ex)
+                        {
+                            throw new Exception($"Invalid URI: '{url}'", ex);
+                        }
                     }
 
                     args.WebSession.Request.RequestUri = httpRemoteUri;
@@ -396,7 +411,10 @@ namespace Titanium.Web.Proxy
                     }
 
                     PrepareRequestHeaders(args.WebSession.Request.Headers);
-                    args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
+                    if (!isTransparentEndPoint)
+                    {
+                        args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
+                    }
 
                     //if win auth is enabled
                     //we need a cache of request body
@@ -457,7 +475,7 @@ namespace Titanium.Web.Proxy
                             await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
                         }
 
-                        await TcpHelper.SendRawApm(clientStream, connection.Stream, BufferSize,
+                        await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
                             (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); },
                             (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); },
                             ExceptionFunc);

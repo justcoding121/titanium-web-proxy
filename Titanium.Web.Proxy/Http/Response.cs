@@ -98,7 +98,7 @@ namespace Titanium.Web.Proxy.Http
 
                 if (headerValue != null)
                 {
-                    if (headerValue.ContainsIgnoreCase(KnownHeaders.ConnectionClose))
+                    if (headerValue.EqualsIgnoreCase(KnownHeaders.ConnectionClose))
                     {
                         return false;
                     }

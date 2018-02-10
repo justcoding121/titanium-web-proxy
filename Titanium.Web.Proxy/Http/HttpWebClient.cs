@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 
@@ -123,13 +124,13 @@ namespace Titanium.Web.Proxy.Http
 
                     //find if server is willing for expect continue
                     if (responseStatusCode == (int)HttpStatusCode.Continue
-                        && responseStatusDescription.Equals("continue", StringComparison.CurrentCultureIgnoreCase))
+                        && responseStatusDescription.EqualsIgnoreCase("continue"))
                     {
                         Request.Is100Continue = true;
                         await ServerConnection.StreamReader.ReadLineAsync();
                     }
                     else if (responseStatusCode == (int)HttpStatusCode.ExpectationFailed
-                             && responseStatusDescription.Equals("expectation failed", StringComparison.CurrentCultureIgnoreCase))
+                             && responseStatusDescription.EqualsIgnoreCase("expectation failed"))
                     {
                         Request.ExpectationFailed = true;
                         await ServerConnection.StreamReader.ReadLineAsync();
@@ -168,7 +169,7 @@ namespace Titanium.Web.Proxy.Http
 
             //For HTTP 1.1 comptibility server may send expect-continue even if not asked for it in request
             if (Response.StatusCode == (int)HttpStatusCode.Continue
-                && Response.StatusDescription.Equals("continue", StringComparison.CurrentCultureIgnoreCase))
+                && Response.StatusDescription.EqualsIgnoreCase("continue"))
             {
                 //Read the next line after 100-continue 
                 Response.Is100Continue = true;
@@ -181,7 +182,7 @@ namespace Titanium.Web.Proxy.Http
             }
 
             if (Response.StatusCode == (int)HttpStatusCode.ExpectationFailed
-                && Response.StatusDescription.Equals("expectation failed", StringComparison.CurrentCultureIgnoreCase))
+                && Response.StatusDescription.EqualsIgnoreCase("expectation failed"))
             {
                 //read next line after expectation failed response
                 Response.ExpectationFailed = true;

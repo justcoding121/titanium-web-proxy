@@ -33,6 +33,7 @@ namespace Titanium.Web.Proxy.Http
         public const string Host = "host";
 
         public const string ProxyAuthorization = "Proxy-Authorization";
+        public const string ProxyAuthorizationBasic = "basic";
 
         public const string ProxyConnection = "Proxy-Connection";
         public const string ProxyConnectionClose = "close";
