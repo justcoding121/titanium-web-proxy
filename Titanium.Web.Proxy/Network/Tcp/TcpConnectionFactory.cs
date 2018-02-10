@@ -86,9 +86,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                     using (var reader = new CustomBinaryReader(stream, server.BufferSize))
                     {
-                        string result = await reader.ReadLineAsync();
+                        string httpStatus = await reader.ReadLineAsync();
 
-                        if (!new[] { "200 OK", "connection established" }.Any(s => result.ContainsIgnoreCase(s)))
+                        Response.ParseResponseLine(httpStatus, out var version, out int statusCode, out string statusDescription);
+
+                        if (!statusDescription.EqualsIgnoreCase("200 OK") 
+                            && !statusDescription.EqualsIgnoreCase("connection established"))
                         {
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
                         }
@@ -99,7 +102,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                 if (isHttps)
                 {
-
                     var sslStream = new SslStream(stream, false, server.ValidateServerCertificate, server.SelectClientCertificate);
                     stream = new CustomBufferedStream(sslStream, server.BufferSize);
 
