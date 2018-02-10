@@ -36,7 +36,8 @@ namespace Titanium.Web.Proxy.Helpers
                 try
                 {
                     tcpTable = Marshal.AllocHGlobal(tcpTableLength);
-                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) == 0)
+                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) ==
+                        0)
                     {
                         var table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable, typeof(NativeMethods.TcpTable));
 
@@ -77,7 +78,8 @@ namespace Titanium.Web.Proxy.Helpers
                 try
                 {
                     tcpTable = Marshal.AllocHGlobal(tcpTableLength);
-                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) == 0)
+                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, (int)NativeMethods.TcpTableType.OwnerPidAll, 0) ==
+                        0)
                     {
                         var table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable, typeof(NativeMethods.TcpTable));
 
@@ -142,7 +144,8 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        private static void BeginRead(Stream inputStream, Stream outputStream, byte[] buffer, CancellationTokenSource cts, Action<byte[], int, int> onCopy, Action<Exception> exceptionFunc)
+        private static void BeginRead(Stream inputStream, Stream outputStream, byte[] buffer, CancellationTokenSource cts, Action<byte[], int, int> onCopy,
+            Action<Exception> exceptionFunc)
         {
             if (cts.IsCancellationRequested)
             {
@@ -230,6 +233,28 @@ namespace Titanium.Web.Proxy.Helpers
             cts.Cancel();
 
             await Task.WhenAll(sendRelay, receiveRelay);
+        }
+
+        /// <summary>
+        /// relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers as prefix
+        /// Usefull for websocket requests
+        /// </summary>
+        /// <param name="clientStream"></param>
+        /// <param name="serverStream"></param>
+        /// <param name="bufferSize"></param>
+        /// <param name="onDataSend"></param>
+        /// <param name="onDataReceive"></param>
+        /// <param name="exceptionFunc"></param>
+        /// <returns></returns>
+        internal static Task SendRaw(Stream clientStream, Stream serverStream, int bufferSize,
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, Action<Exception> exceptionFunc)
+        {
+#if NET45
+            return SendRawApm(clientStream, serverStream, bufferSize, onDataSend, onDataReceive, exceptionFunc);
+#else
+            // todo: Apm hangs in dotnet core
+            return SendRawTap(clientStream, serverStream, bufferSize, onDataSend, onDataReceive, exceptionFunc);
+#endif
         }
     }
 }
