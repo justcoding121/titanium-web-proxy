@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using Titanium.Web.Proxy.Models;
@@ -10,23 +11,29 @@ namespace Titanium.Web.Proxy.Http
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class HeaderCollection : IEnumerable<HttpHeader>
     {
+        private readonly Dictionary<string, HttpHeader> headers;
+
+        private readonly Dictionary<string, List<HttpHeader>> nonUniqueHeaders;
+
         /// <summary>
         /// Unique Request header collection
         /// </summary>
-        public Dictionary<string, HttpHeader> Headers { get; }
+        public ReadOnlyDictionary<string, HttpHeader> Headers { get; }
 
         /// <summary>
         /// Non Unique headers
         /// </summary>
-        public Dictionary<string, List<HttpHeader>> NonUniqueHeaders { get; }
+        public ReadOnlyDictionary<string, List<HttpHeader>> NonUniqueHeaders { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="HeaderCollection"/> class.
         /// </summary>
         public HeaderCollection()
         {
-            Headers = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
-            NonUniqueHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
+            headers = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
+            nonUniqueHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
+            Headers = new ReadOnlyDictionary<string, HttpHeader>(headers);
+            NonUniqueHeaders = new ReadOnlyDictionary<string, List<HttpHeader>>(nonUniqueHeaders);
         }
 
         /// <summary>
@@ -36,7 +43,7 @@ namespace Titanium.Web.Proxy.Http
         /// <returns></returns>
         public bool HeaderExists(string name)
         {
-            return Headers.ContainsKey(name) || NonUniqueHeaders.ContainsKey(name);
+            return headers.ContainsKey(name) || nonUniqueHeaders.ContainsKey(name);
         }
 
         /// <summary>
@@ -47,17 +54,17 @@ namespace Titanium.Web.Proxy.Http
         /// <returns></returns>
         public List<HttpHeader> GetHeaders(string name)
         {
-            if (Headers.ContainsKey(name))
+            if (headers.ContainsKey(name))
             {
                 return new List<HttpHeader>
                 {
-                    Headers[name]
+                    headers[name]
                 };
             }
 
-            if (NonUniqueHeaders.ContainsKey(name))
+            if (nonUniqueHeaders.ContainsKey(name))
             {
-                return new List<HttpHeader>(NonUniqueHeaders[name]);
+                return new List<HttpHeader>(nonUniqueHeaders[name]);
             }
 
             return null;
@@ -65,14 +72,14 @@ namespace Titanium.Web.Proxy.Http
 
         public HttpHeader GetFirstHeader(string name)
         {
-            if (Headers.TryGetValue(name, out var header))
+            if (headers.TryGetValue(name, out var header))
             {
                 return header;
             }
 
-            if (NonUniqueHeaders.TryGetValue(name, out var headers))
+            if (nonUniqueHeaders.TryGetValue(name, out var h))
             {
-                return headers.FirstOrDefault();
+                return h.FirstOrDefault();
             }
 
             return null;
@@ -86,8 +93,8 @@ namespace Titanium.Web.Proxy.Http
         {
             var result = new List<HttpHeader>();
 
-            result.AddRange(Headers.Select(x => x.Value));
-            result.AddRange(NonUniqueHeaders.SelectMany(x => x.Value));
+            result.AddRange(headers.Select(x => x.Value));
+            result.AddRange(nonUniqueHeaders.SelectMany(x => x.Value));
 
             return result;
         }
@@ -108,18 +115,20 @@ namespace Titanium.Web.Proxy.Http
         /// <param name="newHeader"></param>
         public void AddHeader(HttpHeader newHeader)
         {
-            if (NonUniqueHeaders.ContainsKey(newHeader.Name))
+            // if header exist in non-unique header collection add it there
+            if (nonUniqueHeaders.ContainsKey(newHeader.Name))
             {
-                NonUniqueHeaders[newHeader.Name].Add(newHeader);
+                nonUniqueHeaders[newHeader.Name].Add(newHeader);
                 return;
             }
 
-            if (Headers.ContainsKey(newHeader.Name))
+            // if header is already in unique header collection then move both to non-unique collection
+            if (headers.ContainsKey(newHeader.Name))
             {
-                var existing = Headers[newHeader.Name];
-                Headers.Remove(newHeader.Name);
+                var existing = headers[newHeader.Name];
+                headers.Remove(newHeader.Name);
 
-                NonUniqueHeaders.Add(newHeader.Name, new List<HttpHeader>
+                nonUniqueHeaders.Add(newHeader.Name, new List<HttpHeader>
                 {
                     existing,
                     newHeader
@@ -127,7 +136,8 @@ namespace Titanium.Web.Proxy.Http
             }
             else
             {
-                Headers.Add(newHeader.Name, newHeader);
+                // add to unique header collection
+                headers.Add(newHeader.Name, newHeader);
             }
         }
 
@@ -195,10 +205,10 @@ namespace Titanium.Web.Proxy.Http
         /// False if no header exists with given name</returns>
         public bool RemoveHeader(string headerName)
         {
-            bool result = Headers.Remove(headerName);
+            bool result = headers.Remove(headerName);
 
             // do not convert to '||' expression to avoid lazy evaluation
-            if (NonUniqueHeaders.Remove(headerName))
+            if (nonUniqueHeaders.Remove(headerName))
             {
                 result = true;
             }
@@ -212,17 +222,17 @@ namespace Titanium.Web.Proxy.Http
         /// <param name="header">Returns true if header exists and was removed </param>
         public bool RemoveHeader(HttpHeader header)
         {
-            if (Headers.ContainsKey(header.Name))
+            if (headers.ContainsKey(header.Name))
             {
-                if (Headers[header.Name].Equals(header))
+                if (headers[header.Name].Equals(header))
                 {
-                    Headers.Remove(header.Name);
+                    headers.Remove(header.Name);
                     return true;
                 }
             }
-            else if (NonUniqueHeaders.ContainsKey(header.Name))
+            else if (nonUniqueHeaders.ContainsKey(header.Name))
             {
-                if (NonUniqueHeaders[header.Name].RemoveAll(x => x.Equals(header)) > 0)
+                if (nonUniqueHeaders[header.Name].RemoveAll(x => x.Equals(header)) > 0)
                 {
                     return true;
                 }
@@ -236,13 +246,13 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public void Clear()
         {
-            Headers.Clear();
-            NonUniqueHeaders.Clear();
+            headers.Clear();
+            nonUniqueHeaders.Clear();
         }
 
         internal string GetHeaderValueOrNull(string headerName)
         {
-            if (Headers.TryGetValue(headerName, out var header))
+            if (headers.TryGetValue(headerName, out var header))
             {
                 return header.Value;
             }
@@ -252,13 +262,13 @@ namespace Titanium.Web.Proxy.Http
 
         internal void SetOrAddHeaderValue(string headerName, string value)
         {
-            if (Headers.TryGetValue(headerName, out var header))
+            if (headers.TryGetValue(headerName, out var header))
             {
                 header.Value = value;
             }
             else
             {
-                Headers.Add(headerName, new HttpHeader(headerName, value));
+                headers.Add(headerName, new HttpHeader(headerName, value));
             }
         }
 
@@ -285,7 +295,7 @@ namespace Titanium.Web.Proxy.Http
         /// </returns>
         public IEnumerator<HttpHeader> GetEnumerator()
         {
-            return Headers.Values.Concat(NonUniqueHeaders.Values.SelectMany(x => x)).GetEnumerator();
+            return headers.Values.Concat(nonUniqueHeaders.Values.SelectMany(x => x)).GetEnumerator();
         }
 
         IEnumerator IEnumerable.GetEnumerator()
