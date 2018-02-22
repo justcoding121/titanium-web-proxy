@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private int lastSessionNumber;
 
-        public ObservableCollection<SessionListItem> Sessions { get; } =  new ObservableCollection<SessionListItem>();
+        public ObservableCollection<SessionListItem> Sessions { get; } = new ObservableCollection<SessionListItem>();
 
         public SessionListItem SelectedSession
         {
@@ -63,8 +63,24 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             proxyServer = new ProxyServer();
             //proxyServer.CertificateEngine = CertificateEngine.DefaultWindows;
-            proxyServer.TrustRootCertificate = true;
-            proxyServer.CertificateManager.TrustRootCertificateAsAdministrator();
+
+            //add password to rootCert.pfx
+            //proxyServer.Password_rootCert = "MyPassword";
+
+
+            //save all fake certificates in folder "crts"(will be save in proxy dll directory)
+            //proxyServer.SaveFakeCertificates = true;
+
+
+            //proxyServer.TrustRootCertificate = true;
+            //or if you need Load or Create Certificate now. ////// "true" if you need Enable===> Trust the RootCertificate used by this proxy server
+            proxyServer.EnsureRootCertificate(true);
+
+
+
+
+            //proxyServer.CertificateManager.TrustRootCertificateAsAdministrator();
+
             proxyServer.ForwardToUpstreamGateway = true;
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
