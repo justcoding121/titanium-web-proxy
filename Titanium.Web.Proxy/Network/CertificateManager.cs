@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -28,8 +28,8 @@ namespace Titanium.Web.Proxy.Network
         BouncyCastle = 1
     }
 
-
-
+   
+ 
 
     /// <summary>
     /// A class to manage SSL certificates used by this proxy server
@@ -68,7 +68,7 @@ namespace Titanium.Web.Proxy.Network
             set
             {
                 trustRootCertificate = value;
-
+                 
             }
         }
 
@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy.Network
             get => saveCertificate;
             set
             {
-                saveCertificate = value;
+                saveCertificate = value; 
             }
         }
 
@@ -100,7 +100,7 @@ namespace Titanium.Web.Proxy.Network
 
         private X509Certificate2 rootCertificate;
 
-        public bool only_load_rootCert { get; set; }
+        private bool overwriteRootCert;
 
         /// <summary>
         /// Cache dictionary
@@ -109,7 +109,7 @@ namespace Titanium.Web.Proxy.Network
 
         private readonly Action<Exception> exceptionFunc;
 
-
+         
         internal string Issuer
         {
             get => issuer ?? defaultRootCertificateIssuer;
@@ -185,7 +185,7 @@ namespace Titanium.Web.Proxy.Network
 
             string path = Path.GetDirectoryName(assemblyLocation);
             if (null == path)
-                throw new NullReferenceException();
+                throw new NullReferenceException(); 
             return path;
         }
 
@@ -202,76 +202,79 @@ namespace Titanium.Web.Proxy.Network
         private string GetRootCertificatePath()
         {
             string path = GetRootCertificateDirectory();
-
-            string fileName = Path.Combine(path, "rootCert.pfx");
+             
+            //string fileName = Path.Combine(path, "rootCert.pfx");
+            string fileName = filename_loadx;
+            if ((fileName == string.Empty))
+            { 
+                fileName = Path.Combine(path, "rootCert.pfx");
+                passwordx = password_rootCert; /*string.Empty;*/
+                StorageFlag = X509KeyStorageFlags.Exportable;
+                this.overwriteRootCert = true;
+            }
             return fileName;
         }
 
         public X509Certificate2 LoadRootCertificate()
         {
-            string fileName = filename_loadx;
-            if (/*(fileName.Trim().Length<=0)||*/ (fileName == string.Empty))
-            {
-                fileName = GetRootCertificatePath();
-                passwordx = password_rootCert; /*string.Empty;*/
-                StorageFlag = X509KeyStorageFlags.Exportable;
-            }
-
+            string fileName = GetRootCertificatePath();
+             
             if (!File.Exists(fileName))
+            { 
                 return null;
+            }
+               
             try
-            {
+            { 
                 //return new X509Certificate2(fileName, string.Empty, X509KeyStorageFlags.Exportable);
                 return new X509Certificate2(fileName, passwordx, StorageFlag);
             }
             catch (Exception e)
-            {
+            { 
                 exceptionFunc(e);
                 return null;
             }
         }
 
 
+  
 
 
 
-
-
-        /// <summary>
-        /// Attempts to create a RootCertificate
-        /// </summary>
-        /// <param name="persistToFile">if set to <c>true</c> try to load/save the certificate from rootCert.pfx.</param>
-        /// <returns>
-        /// true if succeeded, else false
-        /// </returns>
-        public bool CreateTrustedRootCertificate(bool persistToFile = true)
-        {
+      
+            /// <summary>
+            /// Attempts to create a RootCertificate
+            /// </summary>
+            /// <param name="persistToFile">if set to <c>true</c> try to load/save the certificate from rootCert.pfx.</param>
+            /// <returns>
+            /// true if succeeded, else false
+            /// </returns>
+       public bool CreateTrustedRootCertificate(bool persistToFile = true)
+        { 
             if (persistToFile && RootCertificate == null)
             {
-
-                RootCertificate = LoadRootCertificate();
-
+                
+                    RootCertificate = LoadRootCertificate();               
+                  
             }
 
             if (RootCertificate != null)
-            {
+            { 
                 return true;
             }
             else
             {
-                if (only_load_rootCert == true)
-                {
+                if (overwriteRootCert == false)
+                { 
                     return false;
                 }
             }
 
-
+             
 
             try
-            {
-                RootCertificate = CreateCertificate(RootCertificateName, true);
-
-
+            { 
+                RootCertificate = CreateCertificate(RootCertificateName, true);                 
             }
             catch (Exception e)
             {
@@ -282,25 +285,20 @@ namespace Titanium.Web.Proxy.Network
             {
                 try
                 {
-                    try
-                    {
-                        Directory.Delete(GetCertPath(), true);
-                    }
-                    catch { }
-                    string fileName = GetRootCertificatePath();
-                    File.WriteAllBytes(fileName, RootCertificate.Export(X509ContentType.Pkcs12, password_rootCert));
-
-
-
+                    try {
+                        Directory.Delete(GetCertPath(), true); 
+                    } catch { }
+                    string fileName = GetRootCertificatePath(); 
+                    File.WriteAllBytes(fileName, RootCertificate.Export(X509ContentType.Pkcs12, password_rootCert)); 
                 }
                 catch (Exception e)
-                {
+                { 
                     exceptionFunc(e);
                 }
             }
 
-
-
+ 
+         
 
             return RootCertificate != null;
         }
@@ -308,43 +306,48 @@ namespace Titanium.Web.Proxy.Network
 
 
         /// <summary>
-        /// Attempts to Manually load a RootCertificate
-        /// set password and path_fileCertificate
+        /// Manually load a RootCertificate
+        /// set password and path_fileRootCert
         /// </summary> 
+        /// <param name="fileName"></param>
+        /// <param name="password"></param>
+        /// <param name="overwriteRootCert"></param>
+        /// <param name="StorageFlag"></param>
         /// <returns>
         /// true if succeeded, else false
         /// </returns>
-        public void SetInfo_LoadRootCertificate(string fileName, string passwordx, X509KeyStorageFlags StorageFlag = X509KeyStorageFlags.Exportable)
+        public void SetInfo_LoadRootCertificate(string fileName, string password, bool overwriteRootCert = true, X509KeyStorageFlags StorageFlag = X509KeyStorageFlags.Exportable)
         {
             filename_loadx = fileName;
-            this.passwordx = passwordx;
+           this.passwordx = password;
+            this.password_rootCert = passwordx;
             this.StorageFlag = StorageFlag;
-            only_load_rootCert = true;
-
+            this.overwriteRootCert = overwriteRootCert; 
         }
 
         /// <summary>
-        /// Attempts to Manually load a RootCertificate
+        /// Manually load a RootCertificate
         /// </summary> 
+        /// <param name="fileName"></param>
+        /// <param name="password"></param>
+        /// <param name="overwriteRootCert"></param>
+        /// <param name="StorageFlag"></param>
         /// <returns>
         /// true if succeeded, else false
         /// </returns>
-        public bool LoadRootCertificate(string fileName, string passwordx, X509KeyStorageFlags StorageFlag = X509KeyStorageFlags.Exportable)
+        public bool LoadRootCertificate(string fileName, string password, bool overwriteRootCert = true, X509KeyStorageFlags StorageFlag = X509KeyStorageFlags.Exportable)
         {
-            filename_loadx = fileName;
-            this.passwordx = passwordx;
-            this.StorageFlag = StorageFlag;
-            only_load_rootCert = true;
-            RootCertificate = LoadRootCertificate();
+            SetInfo_LoadRootCertificate(fileName, password, overwriteRootCert, StorageFlag);
+             RootCertificate = LoadRootCertificate(); 
 
             return (RootCertificate != null);
 
         }
-
+      
         private string passwordx = string.Empty;
         private string filename_loadx = "";
         X509KeyStorageFlags StorageFlag = X509KeyStorageFlags.Exportable;
-
+         
 
 
         /// <summary>
@@ -359,7 +362,7 @@ namespace Titanium.Web.Proxy.Network
             TrustRootCertificate(StoreLocation.LocalMachine);
         }
 
-
+ 
 
 
         /// <summary>
@@ -380,7 +383,7 @@ namespace Titanium.Web.Proxy.Network
             var info = new ProcessStartInfo
             {
                 FileName = "certutil.exe",
-                Arguments = "-importPFX -p \"" + password_rootCert + "\" -f \"" + fileName + "\"",
+                Arguments = "-importPFX -p \""+ password_rootCert + "\" -f \"" + fileName + "\"",
                 CreateNoWindow = true,
                 UseShellExecute = true,
                 Verb = "runas",
@@ -533,42 +536,40 @@ namespace Titanium.Web.Proxy.Network
                         // {
                         //     CreateTrustedRootCertificate();
                         // }
-
-                        if ((isRootCertificate == false) && (saveCertificate == true))
-                        {
-
-                            string path = GetCertPath();
-                            string subjectName = System.Text.RegularExpressions.Regex.Replace(certificateName.ToLower(), @"^" + "CN".ToLower() + @"\s*=\s*", "");
+                    
+                        if ((isRootCertificate == false)&& (saveCertificate == true)) {
+                             
+                            string path = GetCertPath(); 
+                            string subjectName = System.Text.RegularExpressions.Regex.Replace(certificateName.ToLower(), @"^" + "CN".ToLower() + @"\s*=\s*", ""); 
                             subjectName = subjectName.Replace("*", "$x$");
-                            subjectName = Path.Combine(path, subjectName + ".pfx");
+                            subjectName= Path.Combine(path, subjectName+ ".pfx");
                             if (!File.Exists(subjectName))
-                            {
+                            { 
                                 certificate = this.makeCertificate(certificateName, isRootCertificate);
                                 File.WriteAllBytes(subjectName, certificate.Export(X509ContentType.Pkcs12));
                             }
                             else
                             {
                                 try
-                                {
-                                    certificate = new X509Certificate2(subjectName, string.Empty, StorageFlag);
+                                { 
+                                    certificate = new X509Certificate2(subjectName, string.Empty, StorageFlag); 
                                 }
                                 catch/* (Exception e)*/
-                                {
-                                    certificate = this.makeCertificate(certificateName, isRootCertificate);
+                                { 
+                                    certificate = this.makeCertificate(certificateName, isRootCertificate);                                   
                                 }
                             }
                         }
-                        else
-                        {
-
-                            certificate = this.makeCertificate(certificateName, isRootCertificate);
+                        else {
+                           
+                            certificate = this.makeCertificate(certificateName, isRootCertificate);                           
 
                         }
-
-
+                      
+                        
                     }
                     catch (Exception e)
-                    {
+                    { 
                         exceptionFunc(e);
                     }
                     if (certificate != null && !certificateCache.ContainsKey(certificateName))
@@ -588,7 +589,7 @@ namespace Titanium.Web.Proxy.Network
                         return cached.Certificate;
                     }
                 }
-            }
+        }
 
             return certificate;
         }
@@ -649,7 +650,7 @@ namespace Titanium.Web.Proxy.Network
                 x509PersonalStore.Add(RootCertificate);
             }
             catch (Exception e)
-            {
+            { 
                 exceptionFunc(
                     new Exception("Failed to make system trust root certificate "
                                   + $" for {storeLocation} store location. You may need admin rights.", e));
@@ -661,7 +662,7 @@ namespace Titanium.Web.Proxy.Network
             }
         }
 
-
+   
         /// <summary>
         /// Remove the Root Certificate trust
         /// </summary>
