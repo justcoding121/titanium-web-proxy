@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private int lastSessionNumber;
 
-        public ObservableCollection<SessionListItem> Sessions { get; } = new ObservableCollection<SessionListItem>();
+        public ObservableCollection<SessionListItem> Sessions { get; } =  new ObservableCollection<SessionListItem>();
 
         public SessionListItem SelectedSession
         {
@@ -65,27 +65,36 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             //proxyServer.CertificateEngine = CertificateEngine.DefaultWindows;
 
             //add password to rootCert.pfx
-            //proxyServer.Password_rootCert = "MyPassword";
+            //proxyServer.Password_rootCert = "PfxPassword";
 
 
             //save all fake certificates in folder "crts"(will be save in proxy dll directory)
+            //if create new rootCert.pfx ====> delete folder "crts"
             //proxyServer.SaveFakeCertificates = true;
 
 
-            //proxyServer.TrustRootCertificate = true;
+            proxyServer.TrustRootCertificate = true;
             //or if you need Load or Create Certificate now. ////// "true" if you need Enable===> Trust the RootCertificate used by this proxy server
-            proxyServer.EnsureRootCertificate(true);
+            //proxyServer.EnsureRootCertificate(true);
 
 
+            //or load directly certificate(As Administrator if need this)
+            //and At the same time chose path and password
+            //if doesn't exist file or password is incorect and (overwriteRootCert=true) ====> create new pfx file 
+            //note : load now (if existed)
+            //proxyServer.CertificateManager.LoadRootCertificate(@"C:\NameFolder\rootCert.pfx", "PfxPassword");
 
+            //or set info to load certificate (As Administrator if need this)
+            //Will not (load or create) certificate Before call function CreateTrustedRootCertificate
+            //proxyServer.CertificateManager.SetInfo_LoadRootCertificate(@"C:\NameFolder\rootCert.pfx", "PfxPassword");
 
             //proxyServer.CertificateManager.TrustRootCertificateAsAdministrator();
 
-            proxyServer.ForwardToUpstreamGateway = true;
+            //proxyServer.ForwardToUpstreamGateway = true;
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
             {
-                ExcludedHttpsHostNameRegex = new[] { "ssllabs.com" },
+                //ExcludedHttpsHostNameRegex = new[] { "ssllabs.com" },
                 //IncludedHttpsHostNameRegex = new string[0],
             };
 
@@ -104,7 +113,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             proxyServer.TunnelConnectResponse += ProxyServer_TunnelConnectResponse;
             proxyServer.ClientConnectionCountChanged += delegate { Dispatcher.Invoke(() => { ClientConnectionCount = proxyServer.ClientConnectionCount; }); };
             proxyServer.ServerConnectionCountChanged += delegate { Dispatcher.Invoke(() => { ServerConnectionCount = proxyServer.ServerConnectionCount; }); };
-            proxyServer.Start();
+            
+                proxyServer.Start(); 
+        
 
             proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
 
