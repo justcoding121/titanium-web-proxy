@@ -1,4 +1,4 @@
-﻿using StreamExtended.Network;
+using StreamExtended.Network;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -42,15 +42,15 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private bool trustRootCertificate;
 
-
-        private bool saveCertificate = false;
+         
+        private bool saveCertificate=false;
 
         /// <summary>
         /// Password for export and load rootCert.pfx 
         /// </summary>
         private string password_rootCert = string.Empty;
 
-
+       
 
         /// <summary>
         /// Backing field for corresponding public property
@@ -152,7 +152,7 @@ namespace Titanium.Web.Proxy
             set
             {
                 saveCertificate = value;
-                CertificateManager.SaveCertificate = saveCertificate;
+                CertificateManager.SaveCertificate = saveCertificate; 
             }
         }
 
@@ -170,7 +170,7 @@ namespace Titanium.Web.Proxy
 
             }
         }
-
+ 
 
         /// <summary>
         /// Select Certificate Engine 
@@ -374,12 +374,12 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void AddEndPoint(ProxyEndPoint endPoint)
         {
-
+           
             if (ProxyEndPoints.Any(x => x.IpAddress.Equals(endPoint.IpAddress) && endPoint.Port != 0 && x.Port == endPoint.Port))
             {
                 throw new Exception("Cannot add another endpoint to same port & ip address");
             }
-
+          
             ProxyEndPoints.Add(endPoint);
 
             if (ProxyRunning)
@@ -449,7 +449,7 @@ namespace Titanium.Web.Proxy
                 if (!endPoint.EnableSsl)
                 {
                     throw new Exception("Endpoint do not support Https connections");
-                }
+                } 
                 EnsureRootCertificate();
 
                 //If certificate was trusted by the machine
@@ -564,15 +564,15 @@ namespace Titanium.Web.Proxy
             }
 
 
-            try
-            {
-                if (ProxyEndPoints.Any(x => (x as ExplicitProxyEndPoint).GenericCertificate == null))
-                {
+            try {
+                  if (ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.GenericCertificate == null))
+                  {
                     EnsureRootCertificate();
-                }
+                  }
             }
-            catch
+            catch (Exception ex)
             {
+                throw new Exception(ex.Message);
             }
 
             //clear any system proxy settings which is pointing to our own endpoint (causing a cycle)
@@ -761,7 +761,7 @@ namespace Titanium.Web.Proxy
         {
             if (!CertificateManager.CertValidated)
             {
-
+               
                 CertificateManager.CreateTrustedRootCertificate();
 
                 if (TrustRootCertificate)
@@ -771,7 +771,7 @@ namespace Titanium.Web.Proxy
             }
         }
 
-
+   
 
         /// <summary>
         /// When a connection is received from client act
