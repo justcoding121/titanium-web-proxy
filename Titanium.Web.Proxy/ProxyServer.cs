@@ -42,6 +42,16 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private bool trustRootCertificate;
 
+
+        private bool saveCertificate = false;
+
+        /// <summary>
+        /// Password for export and load rootCert.pfx 
+        /// </summary>
+        private string password_rootCert = string.Empty;
+
+
+
         /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
@@ -122,12 +132,45 @@ namespace Titanium.Web.Proxy
             set
             {
                 trustRootCertificate = value;
-                if (value)
-                {
-                    EnsureRootCertificate();
-                }
+                CertificateManager.TrustrootCertificate = trustRootCertificate;
+                //if (value)
+                //{
+                ////convert to public function
+                ///now, "Manually" call this function===> EnsureRootCertificate();
+                //    
+                //}
             }
         }
+
+        /// <summary>
+        /// Save all fake certificates in folder "crts"(will be save in proxy dll directory)
+        /// for can load the certificate and not make new certificate every time 
+        /// </summary>
+        public bool SaveFakeCertificates
+        {
+            get => saveCertificate;
+            set
+            {
+                saveCertificate = value;
+                CertificateManager.SaveCertificate = saveCertificate;
+            }
+        }
+
+
+        /// <summary>
+        /// add password to rootCert.pfx
+        /// </summary>
+        public string Password_rootCert
+        {
+            get => this.password_rootCert;
+            set
+            {
+                this.password_rootCert = value;
+                CertificateManager.Password_rootCert = this.password_rootCert;
+
+            }
+        }
+
 
         /// <summary>
         /// Select Certificate Engine 
@@ -331,6 +374,7 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void AddEndPoint(ProxyEndPoint endPoint)
         {
+
             if (ProxyEndPoints.Any(x => x.IpAddress.Equals(endPoint.IpAddress) && endPoint.Port != 0 && x.Port == endPoint.Port))
             {
                 throw new Exception("Cannot add another endpoint to same port & ip address");
@@ -406,7 +450,6 @@ namespace Titanium.Web.Proxy
                 {
                     throw new Exception("Endpoint do not support Https connections");
                 }
-
                 EnsureRootCertificate();
 
                 //If certificate was trusted by the machine
@@ -518,6 +561,18 @@ namespace Titanium.Web.Proxy
             if (ProxyRunning)
             {
                 throw new Exception("Proxy is already running.");
+            }
+
+
+            try
+            {
+                if (ProxyEndPoints.Any(x => (x as ExplicitProxyEndPoint).GenericCertificate == null))
+                {
+                    EnsureRootCertificate();
+                }
+            }
+            catch
+            {
             }
 
             //clear any system proxy settings which is pointing to our own endpoint (causing a cycle)
@@ -692,10 +747,21 @@ namespace Titanium.Web.Proxy
             return Task.FromResult(proxy);
         }
 
-        private void EnsureRootCertificate()
+        /// <summary>
+        /// Load or Create Certificate : after "Test Is the root certificate used by this proxy is valid?"
+        /// <param name="TrustRootCertificate">"Make current machine trust the Root Certificate used by this proxy" ==> True or False</param>
+        /// </summary>
+        public void EnsureRootCertificate(bool TrustRootCertificate)
+        {
+            this.TrustRootCertificate = TrustRootCertificate;
+            EnsureRootCertificate();
+        }
+
+        public void EnsureRootCertificate()
         {
             if (!CertificateManager.CertValidated)
             {
+
                 CertificateManager.CreateTrustedRootCertificate();
 
                 if (TrustRootCertificate)
@@ -704,6 +770,8 @@ namespace Titanium.Web.Proxy
                 }
             }
         }
+
+
 
         /// <summary>
         /// When a connection is received from client act
