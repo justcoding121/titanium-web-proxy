@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.IO;
 using System.Reflection;
@@ -48,7 +48,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="signingCert">The signing cert.</param>
         /// <returns>X509Certificate2 instance.</returns>
         public X509Certificate2 MakeCertificate(string sSubjectCn, bool isRoot, X509Certificate2 signingCert = null)
-        {
+        { 
             return MakeCertificateInternal(sSubjectCn, isRoot, true, signingCert);
         }
 
@@ -70,7 +70,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             string issuerName, DateTime validFrom,
             DateTime validTo, int keyStrength = 2048,
             string signatureAlgorithm = "SHA256WithRSA",
-            AsymmetricKeyParameter issuerPrivateKey = null, X509Certificate2 cloneCertificate = null)
+            AsymmetricKeyParameter issuerPrivateKey = null, X509Certificate2 cloneCertificate=null)
         {
             // Generating Random Numbers
             var randomGenerator = new CryptoApiRandomGenerator();
@@ -100,13 +100,13 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 var subjectAlternativeNamesExtension = new DerSequence(subjectAlternativeNames);
                 certificateGenerator.AddExtension(X509Extensions.SubjectAlternativeName.Id, false, subjectAlternativeNamesExtension);
             }
-
+            
             // Subject Public Key
             var keyGenerationParameters = new KeyGenerationParameters(secureRandom, keyStrength);
             var keyPairGenerator = new RsaKeyPairGenerator();
             keyPairGenerator.Init(keyGenerationParameters);
             var subjectKeyPair = keyPairGenerator.GenerateKeyPair();
-
+            
 
             certificateGenerator.SetPublicKey(subjectKeyPair.Public);
 
@@ -148,8 +148,8 @@ namespace Titanium.Web.Proxy.Network.Certificate
             if (!doNotSetFriendlyName)
             {
                 try
-                {
-                    x509Certificate.FriendlyName = System.Text.RegularExpressions.Regex.Replace(subjectName.ToLower(), @"^" + "CN".ToLower() + @"\s*=\s*", "");
+                { 
+                    x509Certificate.FriendlyName = System.Text.RegularExpressions.Regex.Replace(subjectName.ToLower(), @"^CN\s*=\s*", ""); 
                 }
                 catch (PlatformNotSupportedException)
                 {
@@ -175,7 +175,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 return new X509Certificate2(ms.ToArray(), password, X509KeyStorageFlags.Exportable);
             }
         }
-
+        
         /// <summary>
         /// Makes the certificate internal.
         /// </summary>
@@ -203,16 +203,16 @@ namespace Titanium.Web.Proxy.Network.Certificate
             else
             {
 
-                var kp = DotNetUtilities.GetKeyPair(signingCertificate.PrivateKey);
-
+                var kp = DotNetUtilities.GetKeyPair(signingCertificate.PrivateKey); 
+            
                 return GenerateCertificate(hostName, subjectName, signingCertificate.Subject, validFrom, validTo, issuerPrivateKey: kp.Private);
 
             }
         }
 
 
-
-
+     
+ 
         /// <summary>
         /// Makes the certificate internal.
         /// </summary>
