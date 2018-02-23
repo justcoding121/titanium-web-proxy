@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="tcpRows">TcpRow collection to initialize with.</param>
         internal TcpTable(IEnumerable<TcpRow> tcpRows)
         {
-            this.TcpRows = tcpRows;
+            TcpRows = tcpRows;
         }
 
         /// <summary>

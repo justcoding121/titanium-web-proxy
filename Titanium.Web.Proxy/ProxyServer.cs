@@ -47,23 +47,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private int serverConnectionCount;
 
-        /// <summary>
-        /// Backing field for corresponding public property
-        /// </summary>
-        private bool trustRootCertificate = false;
-
-        private bool overwritePFXfile = true;
-
-        /// <summary>
-        /// Password for export and load rootCert.pfx
-        /// </summary>
-        private string passwordPFX = string.Empty;
-
-        private string namePFXfile = string.Empty;
-
         private X509KeyStorageFlags storageFlag = X509KeyStorageFlags.Exportable;
-
-        private bool saveFakeCertificates = false;
 
         /// <summary>
         /// A object that creates tcp connection to server
@@ -131,12 +115,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public bool TrustRootCertificate
         {
-            get => trustRootCertificate;
-            set
-            {
-                trustRootCertificate = value;
-                CertificateManager.trustRootCertificate = trustRootCertificate;
-            }
+            get => CertificateManager.trustRootCertificate;
+            set => CertificateManager.trustRootCertificate = value;
         }
 
         /// <summary>
@@ -145,54 +125,38 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public bool SaveFakeCertificates
         {
-            get => saveFakeCertificates;
-            set
-            {
-                saveFakeCertificates = value;
-                CertificateManager.saveFakeCertificates = saveFakeCertificates;
-            }
+            get => CertificateManager.SaveFakeCertificates;
+            set => CertificateManager.SaveFakeCertificates = value;
         }
 
         /// <summary>
         /// Overwrite Root certificate file
         /// <para>true : replace an existing .pfx file if password is incorect or if RootCertificate = null</para>
         /// </summary>
-        public bool OverwritePFXfile
+        public bool OverwritePfxFile
         {
-            get => overwritePFXfile;
-            set
-            {
-                overwritePFXfile = value;
-                CertificateManager.overwritePFXfile = this.overwritePFXfile;
-            }
+            get => CertificateManager.OverwritePfXFile;
+            set => CertificateManager.OverwritePfXFile = value;
         }
 
         /// <summary>
         /// Password of the Root certificate file
         /// <para>Set a password for the .pfx file</para>
         /// </summary>
-        public string PasswordPFX
+        public string PfxPassword
         {
-            get => passwordPFX;
-            set
-            {
-                passwordPFX = value;
-                CertificateManager.passwordpfx = this.passwordPFX;
-            }
+            get => CertificateManager.PfxPassword;
+            set => CertificateManager.PfxPassword = value;
         }
 
         /// <summary>
         /// Name(path) of the Root certificate file
         /// <para>Set the name(path) of the .pfx file. If it is string.Empty Root certificate file will be named as "rootCert.pfx" (and will be saved in proxy dll directory)</para>
         /// </summary>
-        public string NamePFXfile
+        public string PfxFilePath
         {
-            get => namePFXfile;
-            set
-            {
-                namePFXfile = value;
-                CertificateManager.namePFXfile = this.namePFXfile;
-            }
+            get => CertificateManager.PfxFilePath;
+            set => CertificateManager.PfxFilePath = value;
         }
 
         public X509KeyStorageFlags StorageFlag
@@ -201,7 +165,7 @@ namespace Titanium.Web.Proxy
             set
             {
                 storageFlag = value;
-                CertificateManager.storageFlag = this.storageFlag;
+                CertificateManager.StorageFlag = storageFlag;
             }
         }
 
@@ -480,7 +444,8 @@ namespace Titanium.Web.Proxy
                 if (!endPoint.EnableSsl)
                 {
                     throw new Exception("Endpoint do not support Https connections");
-                } 
+                }
+
                 EnsureRootCertificate();
 
                 //If certificate was trusted by the machine
@@ -772,11 +737,11 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         /// Load or Create Certificate : after "Test Is the root certificate used by this proxy is valid?"
-        /// <param name="TrustRootCertificate">"Make current machine trust the Root Certificate used by this proxy" ==> True or False</param>
+        /// <param name="trustRootCertificate">"Make current machine trust the Root Certificate used by this proxy" ==> True or False</param>
         /// </summary>
-        public void EnsureRootCertificate(bool TrustRootCertificate)
+        public void EnsureRootCertificate(bool trustRootCertificate)
         {
-            this.TrustRootCertificate = TrustRootCertificate;
+            TrustRootCertificate = trustRootCertificate;
             EnsureRootCertificate();
         }
 

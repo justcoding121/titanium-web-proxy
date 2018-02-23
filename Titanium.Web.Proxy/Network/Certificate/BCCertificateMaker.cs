@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.RegularExpressions;
 using System.Threading;
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Pkcs;
@@ -24,6 +25,8 @@ namespace Titanium.Web.Proxy.Network.Certificate
     /// </summary>
     internal class BCCertificateMaker : ICertificateMaker
     {
+        public static readonly Regex CNRemoverRegex = new Regex(@"^CN\s*=\s*", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         private const int certificateValidDays = 1825;
         private const int certificateGraceDays = 366;
 
@@ -146,7 +149,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             {
                 try
                 {
-                    x509Certificate.FriendlyName = System.Text.RegularExpressions.Regex.Replace(subjectName, @"^CN\s*=\s*", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    x509Certificate.FriendlyName = CNRemoverRegex.Replace(subjectName, string.Empty);
                 }
                 catch (PlatformNotSupportedException)
                 {
