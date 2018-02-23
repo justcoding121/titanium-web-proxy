@@ -407,12 +407,11 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint"></param>
         public void AddEndPoint(ProxyEndPoint endPoint)
         {
-           
             if (ProxyEndPoints.Any(x => x.IpAddress.Equals(endPoint.IpAddress) && endPoint.Port != 0 && x.Port == endPoint.Port))
             {
                 throw new Exception("Cannot add another endpoint to same port & ip address");
             }
-          
+
             ProxyEndPoints.Add(endPoint);
 
             if (ProxyRunning)
@@ -785,7 +784,6 @@ namespace Titanium.Web.Proxy
         {
             if (!CertificateManager.CertValidated)
             {
-               
                 CertificateManager.CreateTrustedRootCertificate();
 
                 if (TrustRootCertificate)
@@ -793,7 +791,7 @@ namespace Titanium.Web.Proxy
                     CertificateManager.TrustRootCertificate();
                 }
             }
-        }   
+        }
 
         /// <summary>
         /// When a connection is received from client act
