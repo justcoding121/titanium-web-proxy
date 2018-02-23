@@ -65,13 +65,13 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             //proxyServer.CertificateEngine = CertificateEngine.DefaultWindows;
 
             ////Set a password for the .pfx file
-            //proxyServer.PasswordPFX = "PfxPassword";
+            //proxyServer.PfxPassword = "PfxPassword";
 
             ////Set Name(path) of the Root certificate file
-            //proxyServer.NamePFXfile = @"C:\NameFolder\rootCert.pfx";
+            //proxyServer.PfxFilePath = @"C:\NameFolder\rootCert.pfx";
 
             ////do you want Replace an existing Root certificate file(.pfx) if password is incorrect(RootCertificate=null)?  yes====>true
-            //proxyServer.OverwritePFXfile = true;
+            //proxyServer.OverwritePfxFile = true;
 
             ////save all fake certificates in folder "crts"(will be created in proxy dll directory)
             ////if create new Root certificate file(.pfx) ====> delete folder "crts"
@@ -83,19 +83,18 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             ////if you need Load or Create Certificate now. ////// "true" if you need Enable===> Trust the RootCertificate used by this proxy server
             //proxyServer.EnsureRootCertificate(true);
 
-            //or load directly certificate(As Administrator if need this)
-            //and At the same time chose path and password
-            //if password is incorrect and (overwriteRootCert=true)(RootCertificate=null) ====> replace an existing .pfx file
-            //note : load now (if existed)
+            ////or load directly certificate(As Administrator if need this)
+            ////and At the same time chose path and password
+            ////if password is incorrect and (overwriteRootCert=true)(RootCertificate=null) ====> replace an existing .pfx file
+            ////note : load now (if existed)
             //proxyServer.CertificateManager.LoadRootCertificate(@"C:\NameFolder\rootCert.pfx", "PfxPassword");
 
-            //proxyServer.CertificateManager.TrustRootCertificateAsAdministrator();
-
-            //proxyServer.ForwardToUpstreamGateway = true;
+            proxyServer.CertificateManager.TrustRootCertificateAsAdministrator();
+            proxyServer.ForwardToUpstreamGateway = true;
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
             {
-                //ExcludedHttpsHostNameRegex = new[] { "ssllabs.com" },
+                ExcludedHttpsHostNameRegex = new[] { "ssllabs.com" },
                 //IncludedHttpsHostNameRegex = new string[0],
             };
 
@@ -114,7 +113,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             proxyServer.TunnelConnectResponse += ProxyServer_TunnelConnectResponse;
             proxyServer.ClientConnectionCountChanged += delegate { Dispatcher.Invoke(() => { ClientConnectionCount = proxyServer.ClientConnectionCount; }); };
             proxyServer.ServerConnectionCountChanged += delegate { Dispatcher.Invoke(() => { ServerConnectionCount = proxyServer.ServerConnectionCount; }); };
-            proxyServer.Start(); 
+            proxyServer.Start();
+
             proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
 
             InitializeComponent();
