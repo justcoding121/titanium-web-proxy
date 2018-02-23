@@ -40,27 +40,30 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
-        private bool trustRootCertificate;
-
-         
-        private bool saveCertificate=false;
-
-        /// <summary>
-        /// Password for export and load rootCert.pfx 
-        /// </summary>
-        private string password_rootCert = string.Empty;
-
-       
-
-        /// <summary>
-        /// Backing field for corresponding public property
-        /// </summary>
         private int clientConnectionCount;
 
         /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
         private int serverConnectionCount;
+
+        /// <summary>
+        /// Backing field for corresponding public property
+        /// </summary>
+        private bool trustRootCertificate = false;
+
+        private bool overwritePFXfile = true;
+
+        /// <summary>
+        /// Password for export and load rootCert.pfx
+        /// </summary>
+        private string passwordPFX = string.Empty;
+
+        private string namePFXfile = string.Empty;
+
+        private X509KeyStorageFlags storageFlag = X509KeyStorageFlags.Exportable;
+
+        private bool saveFakeCertificates = false;
 
         /// <summary>
         /// A object that creates tcp connection to server
@@ -112,7 +115,7 @@ namespace Titanium.Web.Proxy
         /// Name of the root certificate
         /// (This is valid only when RootCertificate property is not set)
         /// If no certificate is provided then a default Root Certificate will be created and used
-        /// The provided root certificate will be stored in proxy exe directory with the private key 
+        /// The provided root certificate will be stored in proxy exe directory with the private key
         /// Root certificate file will be named as "rootCert.pfx"
         /// </summary>
         public string RootCertificateName
@@ -132,45 +135,75 @@ namespace Titanium.Web.Proxy
             set
             {
                 trustRootCertificate = value;
-                CertificateManager.TrustrootCertificate = trustRootCertificate;
-                //if (value)
-                //{
-                ////convert to public function
-                ///now, "Manually" call this function===> EnsureRootCertificate();
-                //    
-                //}
+                CertificateManager.trustRootCertificate = trustRootCertificate;
             }
         }
 
         /// <summary>
-        /// Save all fake certificates in folder "crts"(will be save in proxy dll directory)
-        /// for can load the certificate and not make new certificate every time 
+        /// Save all fake certificates in folder "crts"(will be created in proxy dll directory)
+        /// <para>for can load the certificate and not make new certificate every time </para>
         /// </summary>
         public bool SaveFakeCertificates
         {
-            get => saveCertificate;
+            get => saveFakeCertificates;
             set
             {
-                saveCertificate = value;
-                CertificateManager.SaveCertificate = saveCertificate; 
+                saveFakeCertificates = value;
+                CertificateManager.saveFakeCertificates = saveFakeCertificates;
             }
         }
-
 
         /// <summary>
-        /// add password to rootCert.pfx
+        /// Overwrite Root certificate file
+        /// <para>true : replace an existing .pfx file if password is incorect or if RootCertificate = null</para>
         /// </summary>
-        public string Password_rootCert
+        public bool OverwritePFXfile
         {
-            get => this.password_rootCert;
+            get => overwritePFXfile;
             set
             {
-                this.password_rootCert = value;
-                CertificateManager.Password_rootCert = this.password_rootCert;
-
+                overwritePFXfile = value;
+                CertificateManager.overwritePFXfile = this.overwritePFXfile;
             }
         }
- 
+
+        /// <summary>
+        /// Password of the Root certificate file
+        /// <para>Set a password for the .pfx file</para>
+        /// </summary>
+        public string PasswordPFX
+        {
+            get => passwordPFX;
+            set
+            {
+                passwordPFX = value;
+                CertificateManager.passwordpfx = this.passwordPFX;
+            }
+        }
+
+        /// <summary>
+        /// Name(path) of the Root certificate file
+        /// <para>Set the name(path) of the .pfx file. If it is string.Empty Root certificate file will be named as "rootCert.pfx" (and will be saved in proxy dll directory)</para>
+        /// </summary>
+        public string NamePFXfile
+        {
+            get => namePFXfile;
+            set
+            {
+                namePFXfile = value;
+                CertificateManager.namePFXfile = this.namePFXfile;
+            }
+        }
+
+        public X509KeyStorageFlags StorageFlag
+        {
+            get => storageFlag;
+            set
+            {
+                storageFlag = value;
+                CertificateManager.storageFlag = this.storageFlag;
+            }
+        }
 
         /// <summary>
         /// Select Certificate Engine 
@@ -390,7 +423,7 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         /// Remove a proxy end point
-        /// Will throw error if the end point does'nt exist 
+        /// Will throw error if the end point does'nt exist
         /// </summary>
         /// <param name="endPoint"></param>
         public void RemoveEndPoint(ProxyEndPoint endPoint)
@@ -416,7 +449,6 @@ namespace Titanium.Web.Proxy
         {
             SetAsSystemProxy(endPoint, ProxyProtocolType.Http);
         }
-
 
         /// <summary>
         /// Set the given explicit end point as the default proxy server for current machine
@@ -563,16 +595,9 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
-
-            try {
-                  if (ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.GenericCertificate == null))
-                  {
-                    EnsureRootCertificate();
-                  }
-            }
-            catch (Exception ex)
+            if (ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.GenericCertificate == null))
             {
-                throw new Exception(ex.Message);
+                EnsureRootCertificate();
             }
 
             //clear any system proxy settings which is pointing to our own endpoint (causing a cycle)
@@ -625,7 +650,6 @@ namespace Titanium.Web.Proxy
                 WinAuthEndPoint.ClearIdleStates(2);
             }
         }
-
 
         /// <summary>
         /// Stop this proxy server
@@ -769,9 +793,7 @@ namespace Titanium.Web.Proxy
                     CertificateManager.TrustRootCertificate();
                 }
             }
-        }
-
-   
+        }   
 
         /// <summary>
         /// When a connection is received from client act
