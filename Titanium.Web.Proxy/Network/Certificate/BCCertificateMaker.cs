@@ -48,7 +48,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="signingCert">The signing cert.</param>
         /// <returns>X509Certificate2 instance.</returns>
         public X509Certificate2 MakeCertificate(string sSubjectCn, bool isRoot, X509Certificate2 signingCert = null)
-        { 
+        {
             return MakeCertificateInternal(sSubjectCn, isRoot, true, signingCert);
         }
 
@@ -148,8 +148,8 @@ namespace Titanium.Web.Proxy.Network.Certificate
             if (!doNotSetFriendlyName)
             {
                 try
-                { 
-                    x509Certificate.FriendlyName = System.Text.RegularExpressions.Regex.Replace(subjectName.ToLower(), @"^CN\s*=\s*", ""); 
+                {
+                    x509Certificate.FriendlyName = System.Text.RegularExpressions.Regex.Replace(subjectName, @"^CN\s*=\s*", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                 }
                 catch (PlatformNotSupportedException)
                 {
@@ -203,16 +203,13 @@ namespace Titanium.Web.Proxy.Network.Certificate
             else
             {
 
-                var kp = DotNetUtilities.GetKeyPair(signingCertificate.PrivateKey); 
+                var kp = DotNetUtilities.GetKeyPair(signingCertificate.PrivateKey);
             
                 return GenerateCertificate(hostName, subjectName, signingCertificate.Subject, validFrom, validTo, issuerPrivateKey: kp.Private);
 
             }
         }
 
-
-     
- 
         /// <summary>
         /// Makes the certificate internal.
         /// </summary>
