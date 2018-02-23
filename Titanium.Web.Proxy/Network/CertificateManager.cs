@@ -93,7 +93,7 @@ namespace Titanium.Web.Proxy.Network
         private readonly IDictionary<string, CachedCertificate> certificateCache;
 
         private readonly Action<Exception> exceptionFunc;
-         
+
         internal string Issuer
         {
             get => issuer ?? defaultRootCertificateIssuer;
@@ -201,15 +201,15 @@ namespace Titanium.Web.Proxy.Network
                 return null;
             }
         }
-      
-            /// <summary>
-            /// Attempts to create a RootCertificate
-            /// </summary>
-            /// <param name="persistToFile">if set to <c>true</c> try to load/save the certificate from rootCert.pfx.</param>
-            /// <returns>
-            /// true if succeeded, else false
-            /// </returns>
-       public bool CreateTrustedRootCertificate(bool persistToFile = true)
+
+        /// <summary>
+        /// Attempts to create a RootCertificate
+        /// </summary>
+        /// <param name="persistToFile">if set to <c>true</c> try to load/save the certificate from rootCert.pfx.</param>
+        /// <returns>
+        /// true if succeeded, else false
+        /// </returns>
+        public bool CreateTrustedRootCertificate(bool persistToFile = true)
         {
             if (persistToFile && RootCertificate == null)
             {
@@ -455,9 +455,7 @@ namespace Titanium.Web.Proxy.Network
                 {
                     try
                     {
-                    
                         if ((isRootCertificate == false) && (saveFakeCertificates == true)) {
-                             
                             string path = GetCertPath(); 
                             string subjectName = System.Text.RegularExpressions.Regex.Replace(certificateName, @"^CN\s*=\s*", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase); 
                             subjectName = subjectName.Replace("*", "$x$");
@@ -480,12 +478,8 @@ namespace Titanium.Web.Proxy.Network
                             }
                         }
                         else {
-                           
                             certificate = this.makeCertificate(certificateName, isRootCertificate);
-
                         }
-                      
-                        
                     }
                     catch (Exception e)
                     {
@@ -580,7 +574,7 @@ namespace Titanium.Web.Proxy.Network
                 x509PersonalStore.Close();
             }
         }
-   
+
         /// <summary>
         /// Remove the Root Certificate trust
         /// </summary>
