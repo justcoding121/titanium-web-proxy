@@ -103,7 +103,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             var keyGenerationParameters = new KeyGenerationParameters(secureRandom, keyStrength);
             var keyPairGenerator = new RsaKeyPairGenerator();
             keyPairGenerator.Init(keyGenerationParameters);
-            var subjectKeyPair = keyPairGenerator.GenerateKeyPair();            
+            var subjectKeyPair = keyPairGenerator.GenerateKeyPair();
 
             certificateGenerator.SetPublicKey(subjectKeyPair.Public);
 
@@ -199,7 +199,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             }
             else
             {
-                var kp = DotNetUtilities.GetKeyPair(signingCertificate.PrivateKey);            
+                var kp = DotNetUtilities.GetKeyPair(signingCertificate.PrivateKey);
                 return GenerateCertificate(hostName, subjectName, signingCertificate.Subject, validFrom, validTo, issuerPrivateKey: kp.Private);
             }
         }
