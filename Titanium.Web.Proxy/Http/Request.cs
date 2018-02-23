@@ -76,7 +76,7 @@ namespace Titanium.Web.Proxy.Http
                     return true;
                 }
 
-                //has body if POST  and when version is http/1.0
+                //has body if POST and when version is http/1.0
                 if (Method == "POST" && HttpVersion == HttpHeader.Version10)
                 {
                     return true;
