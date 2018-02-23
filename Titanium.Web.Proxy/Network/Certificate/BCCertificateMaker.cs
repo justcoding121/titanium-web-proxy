@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -146,7 +146,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             {
                 try
                 {
-                    x509Certificate.FriendlyName = subjectName;
+                    x509Certificate.FriendlyName = System.Text.RegularExpressions.Regex.Replace(subjectName, @"^CN\s*=\s*", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                 }
                 catch (PlatformNotSupportedException)
                 {
