@@ -120,6 +120,13 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
+        /// Needs elevated permission. Works only on Windows.
+        /// <para>Puts the certificate to the local machine's certificate store.</para>
+        /// <para>Certutil.exe is a command-line program that is installed as part of Certificate Services</para>
+        /// </summary>
+        public bool TrustRootCertificateAsAdministrator { get; set; } = false;
+
+        /// <summary>
         /// Save all fake certificates in folder "crts"(will be created in proxy dll directory)
         /// <para>for can load the certificate and not make new certificate every time </para>
         /// </summary>
@@ -754,6 +761,11 @@ namespace Titanium.Web.Proxy
                 if (TrustRootCertificate)
                 {
                     CertificateManager.TrustRootCertificate();
+                }
+
+                if (TrustRootCertificateAsAdministrator)
+                {
+                    CertificateManager.TrustRootCertificateAsAdministrator();
                 }
             }
         }
