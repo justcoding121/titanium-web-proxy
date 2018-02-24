@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private int lastSessionNumber;
 
-        public ObservableCollection<SessionListItem> Sessions { get; } =  new ObservableCollection<SessionListItem>();
+        public ObservableCollection<SessionListItem> Sessions { get; } = new ObservableCollection<SessionListItem>();
 
         public SessionListItem SelectedSession
         {
@@ -79,6 +79,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             //Trust Root Certificate
             proxyServer.TrustRootCertificate = true;
+            proxyServer.TrustRootCertificateAsAdministrator = true;
+
+            proxyServer.ForwardToUpstreamGateway = true;
 
             ////if you need Load or Create Certificate now. ////// "true" if you need Enable===> Trust the RootCertificate used by this proxy server
             //proxyServer.EnsureRootCertificate(true);
@@ -88,9 +91,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             ////if password is incorrect and (overwriteRootCert=true)(RootCertificate=null) ====> replace an existing .pfx file
             ////note : load now (if existed)
             //proxyServer.CertificateManager.LoadRootCertificate(@"C:\NameFolder\rootCert.pfx", "PfxPassword");
-
-            proxyServer.CertificateManager.TrustRootCertificateAsAdministrator();
-            proxyServer.ForwardToUpstreamGateway = true;
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
             {
