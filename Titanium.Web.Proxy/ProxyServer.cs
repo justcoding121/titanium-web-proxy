@@ -818,13 +818,13 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
+                if (endPoint is TransparentProxyEndPoint tep)
                 {
-                    await HandleClient(endPoint as TransparentProxyEndPoint, tcpClient);
+                    await HandleClient(tep, tcpClient);
                 }
                 else
                 {
-                    await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient);
+                    await HandleClient((ExplicitProxyEndPoint)endPoint, tcpClient);
                 }
             }
             finally
