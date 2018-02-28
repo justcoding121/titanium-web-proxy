@@ -536,16 +536,18 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         /// <param name="html"></param>
         /// <param name="headers"></param>
-        public async Task Ok(string html, Dictionary<string, HttpHeader> headers)
+        public async Task Ok(string html, Dictionary<string, HttpHeader> headers = null)
         {
             var response = new OkResponse();
-            response.Headers.AddHeaders(headers);
+            if (headers != null)
+            {
+                response.Headers.AddHeaders(headers);
+            }
+            
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Body = response.Encoding.GetBytes(html ?? string.Empty);
 
             await Respond(response);
-
-            WebSession.Request.CancelRequest = true;
         }
 
         /// <summary>
