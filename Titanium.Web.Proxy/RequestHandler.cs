@@ -45,8 +45,6 @@ namespace Titanium.Web.Proxy
             var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
             var clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
 
-            Uri httpRemoteUri;
-
             try
             {
                 //read the first line HTTP command
@@ -58,26 +56,29 @@ namespace Titanium.Web.Proxy
 
                 Request.ParseRequestLine(httpCmd, out string httpMethod, out string httpUrl, out var version);
 
-                httpRemoteUri = httpMethod == "CONNECT" ? new Uri("http://" + httpUrl) : new Uri(httpUrl);
-
-                //filter out excluded host names
-                bool excluded = false;
-
-                if (endPoint.ExcludedHttpsHostNameRegex != null)
-                {
-                    excluded = endPoint.ExcludedHttpsHostNameRegexList.Any(x => x.IsMatch(httpRemoteUri.Host));
-                }
-
-                if (endPoint.IncludedHttpsHostNameRegex != null)
-                {
-                    excluded = !endPoint.IncludedHttpsHostNameRegexList.Any(x => x.IsMatch(httpRemoteUri.Host));
-                }
+                string connectHostname = null;
 
                 ConnectRequest connectRequest = null;
 
                 //Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
                 if (httpMethod == "CONNECT")
                 {
+                    var httpRemoteUri = new Uri("http://" + httpUrl);
+                    connectHostname = httpRemoteUri.Host;
+
+                    //filter out excluded host names
+                    bool excluded = false;
+
+                    if (endPoint.ExcludedHttpsHostNameRegex != null)
+                    {
+                        excluded = endPoint.ExcludedHttpsHostNameRegexList.Any(x => x.IsMatch(connectHostname));
+                    }
+
+                    if (endPoint.IncludedHttpsHostNameRegex != null)
+                    {
+                        excluded = !endPoint.IncludedHttpsHostNameRegexList.Any(x => x.IsMatch(connectHostname));
+                    }
+
                     connectRequest = new ConnectRequest
                     {
                         RequestUri = httpRemoteUri,
@@ -125,8 +126,7 @@ namespace Titanium.Web.Proxy
 
                     if (!excluded && isClientHello)
                     {
-                        httpRemoteUri = new Uri("https://" + httpUrl);
-                        connectRequest.RequestUri = httpRemoteUri;
+                        connectRequest.RequestUri = new Uri("https://" + httpUrl);
 
                         SslStream sslStream = null;
 
@@ -134,7 +134,7 @@ namespace Titanium.Web.Proxy
                         {
                             sslStream = new SslStream(clientStream);
 
-                            string certName = HttpHelper.GetWildCardDomainName(httpRemoteUri.Host);
+                            string certName = HttpHelper.GetWildCardDomainName(connectHostname);
 
                             var certificate = endPoint.GenericCertificate ?? CertificateManager.CreateCertificate(certName, false);
 
@@ -208,7 +208,7 @@ namespace Titanium.Web.Proxy
 
                 //Now create the request
                 disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                    httpRemoteUri.Scheme == UriSchemeHttps ? httpRemoteUri.Host : null, endPoint, connectRequest);
+                    connectHostname, endPoint, connectRequest);
             }
             catch (IOException e)
             {
@@ -287,7 +287,7 @@ namespace Titanium.Web.Proxy
                         clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
                         string sniHostName = clientHelloInfo.GetServerName();
-                        
+
                         string certName = HttpHelper.GetWildCardDomainName(sniHostName ?? endPoint.GenericCertificateName);
                         var certificate = CertificateManager.CreateCertificate(certName, false);
 
