@@ -135,8 +135,7 @@ namespace Titanium.Web.Proxy
 
                 //request again with updated authorization header
                 //and server cookies
-                bool disposed = await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args, false);
-                return disposed;
+                await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args);
             }
 
             return false;

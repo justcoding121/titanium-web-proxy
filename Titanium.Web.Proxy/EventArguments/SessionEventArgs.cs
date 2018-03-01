@@ -29,11 +29,6 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private readonly int bufferSize;
 
-        /// <summary>
-        /// Holds a reference to proxy response handler method
-        /// </summary>
-        private Func<SessionEventArgs, Task> httpResponseHandler;
-
         private readonly Action<Exception> exceptionFunc;
 
         /// <summary>
@@ -108,11 +103,9 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         internal SessionEventArgs(int bufferSize,
             ProxyEndPoint endPoint,
-            Func<SessionEventArgs, Task> httpResponseHandler,
             Action<Exception> exceptionFunc)
         {
             this.bufferSize = bufferSize;
-            this.httpResponseHandler = httpResponseHandler;
             this.exceptionFunc = exceptionFunc;
 
             ProxyClient = new ProxyClient();
@@ -536,16 +529,18 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         /// <param name="html"></param>
         /// <param name="headers"></param>
-        public async Task Ok(string html, Dictionary<string, HttpHeader> headers)
+        public async Task Ok(string html, Dictionary<string, HttpHeader> headers = null)
         {
             var response = new OkResponse();
-            response.Headers.AddHeaders(headers);
+            if (headers != null)
+            {
+                response.Headers.AddHeaders(headers);
+            }
+            
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Body = response.Encoding.GetBytes(html ?? string.Empty);
 
             await Respond(response);
-
-            WebSession.Request.CancelRequest = true;
         }
 
         /// <summary>
@@ -635,8 +630,6 @@ namespace Titanium.Web.Proxy.EventArguments
 
             WebSession.Response = response;
 
-            await httpResponseHandler(this);
-
             WebSession.Request.CancelRequest = true;
         }
 
@@ -645,7 +638,6 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public void Dispose()
         {
-            httpResponseHandler = null;
             CustomUpStreamProxyUsed = null;
 
             DataSent = null;
