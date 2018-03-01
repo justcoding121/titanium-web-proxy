@@ -29,11 +29,6 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private readonly int bufferSize;
 
-        /// <summary>
-        /// Holds a reference to proxy response handler method
-        /// </summary>
-        private Func<SessionEventArgs, Task> httpResponseHandler;
-
         private readonly Action<Exception> exceptionFunc;
 
         /// <summary>
@@ -108,11 +103,9 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         internal SessionEventArgs(int bufferSize,
             ProxyEndPoint endPoint,
-            Func<SessionEventArgs, Task> httpResponseHandler,
             Action<Exception> exceptionFunc)
         {
             this.bufferSize = bufferSize;
-            this.httpResponseHandler = httpResponseHandler;
             this.exceptionFunc = exceptionFunc;
 
             ProxyClient = new ProxyClient();
@@ -637,8 +630,6 @@ namespace Titanium.Web.Proxy.EventArguments
 
             WebSession.Response = response;
 
-            await httpResponseHandler(this);
-
             WebSession.Request.CancelRequest = true;
         }
 
@@ -647,7 +638,6 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public void Dispose()
         {
-            httpResponseHandler = null;
             CustomUpStreamProxyUsed = null;
 
             DataSent = null;

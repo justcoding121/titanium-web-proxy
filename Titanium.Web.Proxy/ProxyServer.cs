@@ -655,26 +655,6 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///  Handle dispose of a client/server session
-        /// </summary>
-        /// <param name="clientStream"></param>
-        /// <param name="clientStreamReader"></param>
-        /// <param name="clientStreamWriter"></param>
-        /// <param name="serverConnection"></param>
-        private void Dispose(CustomBufferedStream clientStream, CustomBinaryReader clientStreamReader, HttpResponseWriter clientStreamWriter, TcpConnection serverConnection)
-        {
-            clientStreamReader?.Dispose();
-
-            clientStream?.Dispose();
-
-            if (serverConnection != null)
-            {
-                serverConnection.Dispose();
-                serverConnection = null;
-            }
-        }
-
-        /// <summary>
         /// Dispose Proxy.
         /// </summary>
         public void Dispose()
