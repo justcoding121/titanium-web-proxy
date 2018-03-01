@@ -106,8 +106,11 @@ namespace Titanium.Web.Proxy
                     }
 
                     //write back successfull CONNECT response
-                    connectArgs.WebSession.Response = ConnectResponse.CreateSuccessfullConnectResponse(version);
-                    await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response);
+                    var response = ConnectResponse.CreateSuccessfullConnectResponse(version);
+                    response.Headers.FixProxyHeaders();
+                    connectArgs.WebSession.Response = response;
+
+                    await clientStreamWriter.WriteResponseAsync(response);
 
                     var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
                     bool isClientHello = clientHelloInfo != null;
@@ -401,14 +404,14 @@ namespace Titanium.Web.Proxy
                         args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                         //proxy authorization check
-                        if (httpsConnectHostname == null && await CheckAuthorization(clientStreamWriter, args) == false)
+                        if (!args.IsTransparent && httpsConnectHostname == null && await CheckAuthorization(clientStreamWriter, args) == false)
                         {
                             break;
                         }
 
-                        PrepareRequestHeaders(args.WebSession.Request.Headers);
                         if (!isTransparentEndPoint)
                         {
+                            PrepareRequestHeaders(args.WebSession.Request.Headers);
                             args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
                         }
 
@@ -426,10 +429,18 @@ namespace Titanium.Web.Proxy
                             await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);
                         }
 
+                        var response = args.WebSession.Response;
+
                         if (args.WebSession.Request.CancelRequest)
                         {
                             await HandleHttpSessionResponse(args);
-                            break;
+
+                            if (!response.KeepAlive)
+                            {
+                                break;
+                            }
+
+                            continue;
                         }
 
                         //create a new connection if hostname/upstream end point changes
@@ -457,13 +468,16 @@ namespace Titanium.Web.Proxy
                             string httpStatus = await connection.StreamReader.ReadLineAsync();
 
                             Response.ParseResponseLine(httpStatus, out var responseVersion, out int responseStatusCode, out string responseStatusDescription);
-                            args.WebSession.Response.HttpVersion = responseVersion;
-                            args.WebSession.Response.StatusCode = responseStatusCode;
-                            args.WebSession.Response.StatusDescription = responseStatusDescription;
+                            response.HttpVersion = responseVersion;
+                            response.StatusCode = responseStatusCode;
+                            response.StatusDescription = responseStatusDescription;
 
-                            await HeaderParser.ReadHeaders(connection.StreamReader, args.WebSession.Response.Headers);
+                            await HeaderParser.ReadHeaders(connection.StreamReader, response.Headers);
 
-                            await clientStreamWriter.WriteResponseAsync(args.WebSession.Response);
+                            if (!args.IsTransparent)
+                            {
+                                await clientStreamWriter.WriteResponseAsync(response);
+                            }
 
                             //If user requested call back then do it
                             if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
@@ -483,7 +497,7 @@ namespace Titanium.Web.Proxy
                         await HandleHttpSessionRequestInternal(connection, args);
 
                         //if connection is closing exit
-                        if (args.WebSession.Response.KeepAlive == false)
+                        if (!response.KeepAlive)
                         {
                             break;
                         }
@@ -522,7 +536,7 @@ namespace Titanium.Web.Proxy
                 if (request.ExpectContinue)
                 {
                     args.WebSession.SetConnection(connection);
-                    await args.WebSession.SendRequest(Enable100ContinueBehaviour);
+                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent);
                 }
 
                 //If 100 continue was the response inform that to the client
@@ -546,7 +560,7 @@ namespace Titanium.Web.Proxy
                 if (!request.ExpectContinue)
                 {
                     args.WebSession.SetConnection(connection);
-                    await args.WebSession.SendRequest(Enable100ContinueBehaviour);
+                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent);
                 }
 
                 //check if content-length is > 0
