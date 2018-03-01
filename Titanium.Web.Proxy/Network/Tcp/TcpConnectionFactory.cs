@@ -88,10 +88,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     {
                         string httpStatus = await reader.ReadLineAsync();
 
-                        Response.ParseResponseLine(httpStatus, out var version, out int statusCode, out string statusDescription);
+                        Response.ParseResponseLine(httpStatus, out _, out int statusCode, out string statusDescription);
 
-                        if (!statusDescription.EqualsIgnoreCase("200 OK") 
-                            && !statusDescription.EqualsIgnoreCase("connection established"))
+                        if (statusCode != 200 && !statusDescription.EqualsIgnoreCase("OK") 
+                            && !statusDescription.EqualsIgnoreCase("Connection Established"))
                         {
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
                         }

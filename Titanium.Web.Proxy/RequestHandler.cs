@@ -38,8 +38,6 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient tcpClient)
         {
-            bool disposed = false;
-
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
             var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
@@ -47,22 +45,22 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                //read the first line HTTP command
-                string httpCmd = await clientStreamReader.ReadLineAsync();
-                if (string.IsNullOrEmpty(httpCmd))
-                {
-                    return;
-                }
-
-                Request.ParseRequestLine(httpCmd, out string httpMethod, out string httpUrl, out var version);
-
                 string connectHostname = null;
 
                 ConnectRequest connectRequest = null;
 
                 //Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
-                if (httpMethod == "CONNECT")
+                if (await IsConnectMethod(clientStream) == 1)
                 {
+                    //read the first line HTTP command
+                    string httpCmd = await clientStreamReader.ReadLineAsync();
+                    if (string.IsNullOrEmpty(httpCmd))
+                    {
+                        return;
+                    }
+
+                    Request.ParseRequestLine(httpCmd, out string _, out string httpUrl, out var version);
+
                     var httpRemoteUri = new Uri("http://" + httpUrl);
                     connectHostname = httpRemoteUri.Host;
 
@@ -154,12 +152,7 @@ namespace Titanium.Web.Proxy
                             return;
                         }
 
-                        if (await CanBeHttpMethod(clientStream))
-                        {
-                            //Now read the actual HTTPS request line
-                            httpCmd = await clientStreamReader.ReadLineAsync();
-                        }
-                        else
+                        if (await IsConnectMethod(clientStream) == -1)
                         {
                             // It can be for example some Google (Cloude Messaging for Chrome) magic
                             excluded = true;
@@ -207,8 +200,11 @@ namespace Titanium.Web.Proxy
                 }
 
                 //Now create the request
-                disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
-                    connectHostname, endPoint, connectRequest);
+                await HandleHttpSessionRequest(tcpClient, clientStream, clientStreamReader, clientStreamWriter, connectHostname, endPoint, connectRequest);
+            }
+            catch (ProxyHttpException e)
+            {
+                ExceptionFunc(e);
             }
             catch (IOException e)
             {
@@ -220,44 +216,53 @@ namespace Titanium.Web.Proxy
             }
             catch (Exception e)
             {
-                // is this the correct error message?
-                ExceptionFunc(new Exception("Error whilst authorizing request", e));
+                ExceptionFunc(new Exception("Error occured in whilst handling the client", e));
             }
             finally
             {
-                if (!disposed)
-                {
-                    Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
-                }
+                clientStreamReader.Dispose();
+                clientStream.Dispose();
             }
         }
 
-        private async Task<bool> CanBeHttpMethod(CustomBufferedStream clientStream)
+        /// <summary>
+        /// Determines whether is connect method.
+        /// </summary>
+        /// <param name="clientStream">The client stream.</param>
+        /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
+        private async Task<int> IsConnectMethod(CustomBufferedStream clientStream)
         {
+            bool isConnect = true;
             int legthToCheck = 10;
             for (int i = 0; i < legthToCheck; i++)
             {
                 int b = await clientStream.PeekByteAsync(i);
                 if (b == -1)
                 {
-                    return false;
+                    return -1;
                 }
 
                 if (b == ' ' && i > 2)
                 {
                     // at least 3 letters and a space
-                    return true;
+                    return isConnect ? 1 : 0;
                 }
 
-                if (!char.IsLetter((char)b))
+                char ch = (char)b;
+                if (!char.IsLetter(ch))
                 {
                     // non letter or too short
-                    return false;
+                    return -1;
+                }
+
+                if (i > 6 || ch != "CONNECT"[i])
+                {
+                    isConnect = false;
                 }
             }
 
             // only letters
-            return true;
+            return isConnect ? 1 : 0;
         }
 
         /// <summary>
@@ -269,11 +274,10 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
-            bool disposed = false;
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
-            CustomBinaryReader clientStreamReader = null;
-            HttpResponseWriter clientStreamWriter = null;
+            var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
+            var clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
 
             try
             {
@@ -298,22 +302,14 @@ namespace Titanium.Web.Proxy
                     //HTTPS server created - we can now decrypt the client's traffic
                 }
 
-                clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-                clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
-
-                //now read the request line
-                string httpCmd = await clientStreamReader.ReadLineAsync();
-
                 //Now create the request
-                disposed = await HandleHttpSessionRequest(tcpClient, httpCmd, clientStream, clientStreamReader, clientStreamWriter,
+                await HandleHttpSessionRequest(tcpClient, clientStream, clientStreamReader, clientStreamWriter,
                     endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null, true);
             }
             finally
             {
-                if (!disposed)
-                {
-                    Dispose(clientStream, clientStreamReader, clientStreamWriter, null);
-                }
+                clientStreamReader.Dispose();
+                clientStream.Dispose();
             }
         }
 
@@ -323,7 +319,6 @@ namespace Titanium.Web.Proxy
         /// client/server abruptly terminates connection or by normal HTTP termination
         /// </summary>
         /// <param name="client"></param>
-        /// <param name="httpCmd"></param>
         /// <param name="clientStream"></param>
         /// <param name="clientStreamReader"></param>
         /// <param name="clientStreamWriter"></param>
@@ -332,193 +327,181 @@ namespace Titanium.Web.Proxy
         /// <param name="connectRequest"></param>
         /// <param name="isTransparentEndPoint"></param>
         /// <returns></returns>
-        private async Task<bool> HandleHttpSessionRequest(TcpClient client, string httpCmd, CustomBufferedStream clientStream,
+        private async Task HandleHttpSessionRequest(TcpClient client, CustomBufferedStream clientStream,
             CustomBinaryReader clientStreamReader, HttpResponseWriter clientStreamWriter, string httpsConnectHostname,
             ProxyEndPoint endPoint, ConnectRequest connectRequest, bool isTransparentEndPoint = false)
         {
-            bool disposed = false;
-
             TcpConnection connection = null;
 
-            //Loop through each subsequest request on this particular client connection
-            //(assuming HTTP connection is kept alive by client)
-            while (true)
+            try
             {
-                if (string.IsNullOrEmpty(httpCmd))
+                //Loop through each subsequest request on this particular client connection
+                //(assuming HTTP connection is kept alive by client)
+                while (true)
                 {
-                    break;
-                }
-
-                var args = new SessionEventArgs(BufferSize, endPoint, HandleHttpSessionResponse, ExceptionFunc)
-                {
-                    ProxyClient = { TcpClient = client },
-                    WebSession = { ConnectRequest = connectRequest }
-                };
-
-                try
-                {
-                    Request.ParseRequestLine(httpCmd, out string httpMethod, out string httpUrl, out var version);
-
-                    //Read the request headers in to unique and non-unique header collections
-                    await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.Headers);
-
-                    Uri httpRemoteUri;
-                    if (uriSchemeRegex.IsMatch(httpUrl))
+                    // read the request line
+                    string httpCmd = await clientStreamReader.ReadLineAsync();
+                    if (string.IsNullOrEmpty(httpCmd))
                     {
-                        try
-                        {
-                            httpRemoteUri = new Uri(httpUrl);
-                        }
-                        catch (Exception ex)
-                        {
-                            throw new Exception($"Invalid URI: '{httpUrl}'", ex);
-                        }
-                    }
-                    else
-                    {
-                        string host = args.WebSession.Request.Host ?? httpsConnectHostname;
-                        string hostAndPath = host;
-                        if (httpUrl.StartsWith("/"))
-                        {
-                            hostAndPath += httpUrl;
-                        }
-
-                        string url = string.Concat(httpsConnectHostname == null ? "http://" : "https://", hostAndPath);
-                        try
-                        {
-                            httpRemoteUri = new Uri(url);
-                        }
-                        catch (Exception ex)
-                        {
-                            throw new Exception($"Invalid URI: '{url}'", ex);
-                        }
-                    }
-
-                    args.WebSession.Request.RequestUri = httpRemoteUri;
-                    args.WebSession.Request.OriginalUrl = httpUrl;
-
-                    args.WebSession.Request.Method = httpMethod;
-                    args.WebSession.Request.HttpVersion = version;
-                    args.ProxyClient.ClientStream = clientStream;
-                    args.ProxyClient.ClientStreamReader = clientStreamReader;
-                    args.ProxyClient.ClientStreamWriter = clientStreamWriter;
-
-                    //proxy authorization check
-                    if (httpsConnectHostname == null && await CheckAuthorization(clientStreamWriter, args) == false)
-                    {
-                        args.Dispose();
                         break;
                     }
 
-                    PrepareRequestHeaders(args.WebSession.Request.Headers);
-                    if (!isTransparentEndPoint)
+                    var args = new SessionEventArgs(BufferSize, endPoint, ExceptionFunc)
                     {
-                        args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
-                    }
+                        ProxyClient = { TcpClient = client },
+                        WebSession = { ConnectRequest = connectRequest }
+                    };
 
-                    //if win auth is enabled
-                    //we need a cache of request body
-                    //so that we can send it after authentication in WinAuthHandler.cs
-                    if (isWindowsAuthenticationEnabledAndSupported && args.WebSession.Request.HasBody)
+                    try
                     {
-                        await args.GetRequestBody();
-                    }
+                        Request.ParseRequestLine(httpCmd, out string httpMethod, out string httpUrl, out var version);
 
-                    //If user requested interception do it
-                    if (BeforeRequest != null)
-                    {
-                        await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);
-                    }
+                        //Read the request headers in to unique and non-unique header collections
+                        await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.Headers);
 
-                    if (args.WebSession.Request.CancelRequest)
-                    {
-                        args.Dispose();
-                        break;
-                    }
-
-                    //create a new connection if hostname/upstream end point changes
-                    if (connection != null
-                        && (!connection.HostName.Equals(args.WebSession.Request.RequestUri.Host, StringComparison.OrdinalIgnoreCase)
-                           || (args.WebSession.UpStreamEndPoint != null
-                           && !args.WebSession.UpStreamEndPoint.Equals(connection.UpStreamEndPoint))))
-                    {
-                        connection.Dispose();
-                        connection = null;
-                    }
-
-                    if (connection == null)
-                    {
-                        connection = await GetServerConnection(args, false);
-                    }
-
-                    //if upgrading to websocket then relay the requet without reading the contents
-                    if (args.WebSession.Request.UpgradeToWebSocket)
-                    {
-                        //prepare the prefix content
-                        var requestHeaders = args.WebSession.Request.Headers;
-                        await connection.StreamWriter.WriteLineAsync(httpCmd);
-                        await connection.StreamWriter.WriteHeadersAsync(requestHeaders);
-                        string httpStatus = await connection.StreamReader.ReadLineAsync();
-
-                        Response.ParseResponseLine(httpStatus, out var responseVersion, out int responseStatusCode, out string responseStatusDescription);
-                        args.WebSession.Response.HttpVersion = responseVersion;
-                        args.WebSession.Response.StatusCode = responseStatusCode;
-                        args.WebSession.Response.StatusDescription = responseStatusDescription;
-
-                        await HeaderParser.ReadHeaders(connection.StreamReader, args.WebSession.Response.Headers);
-
-                        await clientStreamWriter.WriteResponseAsync(args.WebSession.Response);
-
-                        //If user requested call back then do it
-                        if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
+                        Uri httpRemoteUri;
+                        if (uriSchemeRegex.IsMatch(httpUrl))
                         {
-                            await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
+                            try
+                            {
+                                httpRemoteUri = new Uri(httpUrl);
+                            }
+                            catch (Exception ex)
+                            {
+                                throw new Exception($"Invalid URI: '{httpUrl}'", ex);
+                            }
+                        }
+                        else
+                        {
+                            string host = args.WebSession.Request.Host ?? httpsConnectHostname;
+                            string hostAndPath = host;
+                            if (httpUrl.StartsWith("/"))
+                            {
+                                hostAndPath += httpUrl;
+                            }
+
+                            string url = string.Concat(httpsConnectHostname == null ? "http://" : "https://", hostAndPath);
+                            try
+                            {
+                                httpRemoteUri = new Uri(url);
+                            }
+                            catch (Exception ex)
+                            {
+                                throw new Exception($"Invalid URI: '{url}'", ex);
+                            }
                         }
 
-                        await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
-                            (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); },
-                            (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); },
-                            ExceptionFunc);
+                        args.WebSession.Request.RequestUri = httpRemoteUri;
+                        args.WebSession.Request.OriginalUrl = httpUrl;
 
-                        args.Dispose();
-                        break;
+                        args.WebSession.Request.Method = httpMethod;
+                        args.WebSession.Request.HttpVersion = version;
+                        args.ProxyClient.ClientStream = clientStream;
+                        args.ProxyClient.ClientStreamReader = clientStreamReader;
+                        args.ProxyClient.ClientStreamWriter = clientStreamWriter;
+
+                        //proxy authorization check
+                        if (httpsConnectHostname == null && await CheckAuthorization(clientStreamWriter, args) == false)
+                        {
+                            break;
+                        }
+
+                        PrepareRequestHeaders(args.WebSession.Request.Headers);
+                        if (!isTransparentEndPoint)
+                        {
+                            args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
+                        }
+
+                        //if win auth is enabled
+                        //we need a cache of request body
+                        //so that we can send it after authentication in WinAuthHandler.cs
+                        if (isWindowsAuthenticationEnabledAndSupported && args.WebSession.Request.HasBody)
+                        {
+                            await args.GetRequestBody();
+                        }
+
+                        //If user requested interception do it
+                        if (BeforeRequest != null)
+                        {
+                            await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);
+                        }
+
+                        if (args.WebSession.Request.CancelRequest)
+                        {
+                            await HandleHttpSessionResponse(args);
+                            break;
+                        }
+
+                        //create a new connection if hostname/upstream end point changes
+                        if (connection != null
+                            && (!connection.HostName.Equals(args.WebSession.Request.RequestUri.Host, StringComparison.OrdinalIgnoreCase)
+                                || (args.WebSession.UpStreamEndPoint != null
+                                    && !args.WebSession.UpStreamEndPoint.Equals(connection.UpStreamEndPoint))))
+                        {
+                            connection.Dispose();
+                            connection = null;
+                        }
+
+                        if (connection == null)
+                        {
+                            connection = await GetServerConnection(args, false);
+                        }
+
+                        //if upgrading to websocket then relay the requet without reading the contents
+                        if (args.WebSession.Request.UpgradeToWebSocket)
+                        {
+                            //prepare the prefix content
+                            var requestHeaders = args.WebSession.Request.Headers;
+                            await connection.StreamWriter.WriteLineAsync(httpCmd);
+                            await connection.StreamWriter.WriteHeadersAsync(requestHeaders);
+                            string httpStatus = await connection.StreamReader.ReadLineAsync();
+
+                            Response.ParseResponseLine(httpStatus, out var responseVersion, out int responseStatusCode, out string responseStatusDescription);
+                            args.WebSession.Response.HttpVersion = responseVersion;
+                            args.WebSession.Response.StatusCode = responseStatusCode;
+                            args.WebSession.Response.StatusDescription = responseStatusDescription;
+
+                            await HeaderParser.ReadHeaders(connection.StreamReader, args.WebSession.Response.Headers);
+
+                            await clientStreamWriter.WriteResponseAsync(args.WebSession.Response);
+
+                            //If user requested call back then do it
+                            if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
+                            {
+                                await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
+                            }
+
+                            await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
+                                (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); },
+                                (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); },
+                                ExceptionFunc);
+
+                            break;
+                        }
+
+                        //construct the web request that we are going to issue on behalf of the client.
+                        await HandleHttpSessionRequestInternal(connection, args);
+
+                        //if connection is closing exit
+                        if (args.WebSession.Response.KeepAlive == false)
+                        {
+                            break;
+                        }
                     }
-
-                    //construct the web request that we are going to issue on behalf of the client.
-                    disposed = await HandleHttpSessionRequestInternal(connection, args, false);
-
-                    if (disposed)
+                    catch (Exception e) when (!(e is ProxyHttpException))
                     {
-                        //already disposed inside above method
-                        args.Dispose();
-                        break;
+                        throw new ProxyHttpException("Error occured whilst handling session request", e, args);
                     }
-
-                    //if connection is closing exit
-                    if (args.WebSession.Response.KeepAlive == false)
+                    finally
                     {
                         args.Dispose();
-                        break;
                     }
-
-                    args.Dispose();
-
-                    // read the next request
-                    httpCmd = await clientStreamReader.ReadLineAsync();
-                }
-                catch (Exception e)
-                {
-                    ExceptionFunc(new ProxyHttpException("Error occured whilst handling session request", e, args));
-                    break;
                 }
             }
-
-            if (!disposed)
+            finally
             {
-                Dispose(clientStream, clientStreamReader, clientStreamWriter, connection);
+                connection?.Dispose();
             }
-
-            return true;
         }
 
         /// <summary>
@@ -526,13 +509,9 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="connection"></param>
         /// <param name="args"></param>
-        /// <param name="closeConnection"></param>
-        /// <returns></returns>
-        private async Task<bool> HandleHttpSessionRequestInternal(TcpConnection connection, SessionEventArgs args, bool closeConnection)
+        /// <returns>True if close the connection</returns>
+        private async Task HandleHttpSessionRequestInternal(TcpConnection connection, SessionEventArgs args)
         {
-            bool disposed = false;
-            bool keepAlive = false;
-
             try
             {
                 var request = args.WebSession.Request;
@@ -605,43 +584,13 @@ namespace Titanium.Web.Proxy
                 //If not expectation failed response was returned by server then parse response
                 if (!request.ExpectationFailed)
                 {
-                    disposed = await HandleHttpSessionResponse(args);
-
-                    //already disposed inside above method
-                    if (disposed)
-                    {
-                        return true;
-                    }
-                }
-
-                //if connection is closing exit
-                if (args.WebSession.Response.KeepAlive == false)
-                {
-                    return true;
-                }
-
-                if (!closeConnection)
-                {
-                    keepAlive = true;
-                    return false;
+                    await HandleHttpSessionResponse(args);
                 }
             }
-            catch (Exception e)
+            catch (Exception e) when (!(e is ProxyHttpException))
             {
-                ExceptionFunc(new ProxyHttpException("Error occured whilst handling session request (internal)", e, args));
-                return true;
+                throw new ProxyHttpException("Error occured whilst handling session request (internal)", e, args);
             }
-            finally
-            {
-                if (!disposed && !keepAlive)
-                {
-                    //dispose
-                    Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader, args.ProxyClient.ClientStreamWriter,
-                        args.WebSession.ServerConnection);
-                }
-            }
-
-            return true;
         }
 
         /// <summary>
