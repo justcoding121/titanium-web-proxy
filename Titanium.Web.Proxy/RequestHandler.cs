@@ -429,10 +429,18 @@ namespace Titanium.Web.Proxy
                             await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);
                         }
 
+                        var response = args.WebSession.Response;
+
                         if (args.WebSession.Request.CancelRequest)
                         {
                             await HandleHttpSessionResponse(args);
-                            break;
+
+                            if (!response.KeepAlive)
+                            {
+                                break;
+                            }
+
+                            continue;
                         }
 
                         //create a new connection if hostname/upstream end point changes
@@ -449,8 +457,6 @@ namespace Titanium.Web.Proxy
                         {
                             connection = await GetServerConnection(args, false);
                         }
-
-                        var response = args.WebSession.Response;
 
                         //if upgrading to websocket then relay the requet without reading the contents
                         if (args.WebSession.Request.UpgradeToWebSocket)
@@ -491,7 +497,7 @@ namespace Titanium.Web.Proxy
                         await HandleHttpSessionRequestInternal(connection, args);
 
                         //if connection is closing exit
-                        if (response.KeepAlive == false)
+                        if (!response.KeepAlive)
                         {
                             break;
                         }
