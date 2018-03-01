@@ -18,7 +18,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="args"></param>
         /// <returns>true if client/server connection was terminated (and disposed) </returns>
-        private async Task<bool> HandleHttpSessionResponse(SessionEventArgs args)
+        private async Task HandleHttpSessionResponse(SessionEventArgs args)
         {
             try
             {
@@ -30,12 +30,7 @@ namespace Titanium.Web.Proxy
                 //check for windows authentication
                 if (isWindowsAuthenticationEnabledAndSupported && response.StatusCode == (int)HttpStatusCode.Unauthorized)
                 {
-                    bool disposed = await Handle401UnAuthorized(args);
-
-                    if (disposed)
-                    {
-                        return true;
-                    }
+                    await Handle401UnAuthorized(args);
                 }
 
                 args.ReRequest = false;
@@ -52,8 +47,8 @@ namespace Titanium.Web.Proxy
                 {
                     //clear current response
                     await args.ClearResponse();
-                    bool disposed = await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args, false);
-                    return disposed;
+                    await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args);
+                    return;
                 }
 
                 response.ResponseLocked = true;
@@ -109,16 +104,10 @@ namespace Titanium.Web.Proxy
                     }
                 }
             }
-            catch (Exception e)
+            catch (Exception e) when (!(e is ProxyHttpException))
             {
-                ExceptionFunc(new ProxyHttpException("Error occured whilst handling session response", e, args));
-                Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader, args.ProxyClient.ClientStreamWriter,
-                    args.WebSession.ServerConnection);
-
-                return true;
+                throw new ProxyHttpException("Error occured whilst handling session response", e, args);
             }
-
-            return false;
         }
 
         /// <summary>

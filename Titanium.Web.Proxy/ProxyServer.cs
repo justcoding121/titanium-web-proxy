@@ -1,4 +1,4 @@
-﻿using StreamExtended.Network;
+using StreamExtended.Network;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -40,17 +40,14 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
-        private bool trustRootCertificate;
-
-        /// <summary>
-        /// Backing field for corresponding public property
-        /// </summary>
         private int clientConnectionCount;
 
         /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
         private int serverConnectionCount;
+
+        private X509KeyStorageFlags storageFlag = X509KeyStorageFlags.Exportable;
 
         /// <summary>
         /// A object that creates tcp connection to server
@@ -102,7 +99,7 @@ namespace Titanium.Web.Proxy
         /// Name of the root certificate
         /// (This is valid only when RootCertificate property is not set)
         /// If no certificate is provided then a default Root Certificate will be created and used
-        /// The provided root certificate will be stored in proxy exe directory with the private key 
+        /// The provided root certificate will be stored in proxy exe directory with the private key
         /// Root certificate file will be named as "rootCert.pfx"
         /// </summary>
         public string RootCertificateName
@@ -118,14 +115,64 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public bool TrustRootCertificate
         {
-            get => trustRootCertificate;
+            get => CertificateManager.trustRootCertificate;
+            set => CertificateManager.trustRootCertificate = value;
+        }
+
+        /// <summary>
+        /// Needs elevated permission. Works only on Windows.
+        /// <para>Puts the certificate to the local machine's certificate store.</para>
+        /// <para>Certutil.exe is a command-line program that is installed as part of Certificate Services</para>
+        /// </summary>
+        public bool TrustRootCertificateAsAdministrator { get; set; } = false;
+
+        /// <summary>
+        /// Save all fake certificates in folder "crts"(will be created in proxy dll directory)
+        /// <para>for can load the certificate and not make new certificate every time </para>
+        /// </summary>
+        public bool SaveFakeCertificates
+        {
+            get => CertificateManager.SaveFakeCertificates;
+            set => CertificateManager.SaveFakeCertificates = value;
+        }
+
+        /// <summary>
+        /// Overwrite Root certificate file
+        /// <para>true : replace an existing .pfx file if password is incorect or if RootCertificate = null</para>
+        /// </summary>
+        public bool OverwritePfxFile
+        {
+            get => CertificateManager.OverwritePfXFile;
+            set => CertificateManager.OverwritePfXFile = value;
+        }
+
+        /// <summary>
+        /// Password of the Root certificate file
+        /// <para>Set a password for the .pfx file</para>
+        /// </summary>
+        public string PfxPassword
+        {
+            get => CertificateManager.PfxPassword;
+            set => CertificateManager.PfxPassword = value;
+        }
+
+        /// <summary>
+        /// Name(path) of the Root certificate file
+        /// <para>Set the name(path) of the .pfx file. If it is string.Empty Root certificate file will be named as "rootCert.pfx" (and will be saved in proxy dll directory)</para>
+        /// </summary>
+        public string PfxFilePath
+        {
+            get => CertificateManager.PfxFilePath;
+            set => CertificateManager.PfxFilePath = value;
+        }
+
+        public X509KeyStorageFlags StorageFlag
+        {
+            get => storageFlag;
             set
             {
-                trustRootCertificate = value;
-                if (value)
-                {
-                    EnsureRootCertificate();
-                }
+                storageFlag = value;
+                CertificateManager.StorageFlag = storageFlag;
             }
         }
 
@@ -346,7 +393,7 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         /// Remove a proxy end point
-        /// Will throw error if the end point does'nt exist 
+        /// Will throw error if the end point does'nt exist
         /// </summary>
         /// <param name="endPoint"></param>
         public void RemoveEndPoint(ProxyEndPoint endPoint)
@@ -372,7 +419,6 @@ namespace Titanium.Web.Proxy
         {
             SetAsSystemProxy(endPoint, ProxyProtocolType.Http);
         }
-
 
         /// <summary>
         /// Set the given explicit end point as the default proxy server for current machine
@@ -520,6 +566,11 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
+            if (ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.GenericCertificate == null))
+            {
+                EnsureRootCertificate();
+            }
+
             //clear any system proxy settings which is pointing to our own endpoint (causing a cycle)
             //due to non gracious proxy shutdown before or something else
             if (systemProxySettingsManager != null && RunTime.IsWindows)
@@ -571,7 +622,6 @@ namespace Titanium.Web.Proxy
             }
         }
 
-
         /// <summary>
         /// Stop this proxy server
         /// </summary>
@@ -602,26 +652,6 @@ namespace Titanium.Web.Proxy
             CertificateManager?.StopClearIdleCertificates();
 
             ProxyRunning = false;
-        }
-
-        /// <summary>
-        ///  Handle dispose of a client/server session
-        /// </summary>
-        /// <param name="clientStream"></param>
-        /// <param name="clientStreamReader"></param>
-        /// <param name="clientStreamWriter"></param>
-        /// <param name="serverConnection"></param>
-        private void Dispose(CustomBufferedStream clientStream, CustomBinaryReader clientStreamReader, HttpResponseWriter clientStreamWriter, TcpConnection serverConnection)
-        {
-            clientStreamReader?.Dispose();
-
-            clientStream?.Dispose();
-
-            if (serverConnection != null)
-            {
-                serverConnection.Dispose();
-                serverConnection = null;
-            }
         }
 
         /// <summary>
@@ -692,7 +722,17 @@ namespace Titanium.Web.Proxy
             return Task.FromResult(proxy);
         }
 
-        private void EnsureRootCertificate()
+        /// <summary>
+        /// Load or Create Certificate : after "Test Is the root certificate used by this proxy is valid?"
+        /// <param name="trustRootCertificate">"Make current machine trust the Root Certificate used by this proxy" ==> True or False</param>
+        /// </summary>
+        public void EnsureRootCertificate(bool trustRootCertificate)
+        {
+            TrustRootCertificate = trustRootCertificate;
+            EnsureRootCertificate();
+        }
+
+        public void EnsureRootCertificate()
         {
             if (!CertificateManager.CertValidated)
             {
@@ -701,6 +741,11 @@ namespace Titanium.Web.Proxy
                 if (TrustRootCertificate)
                 {
                     CertificateManager.TrustRootCertificate();
+                }
+
+                if (TrustRootCertificateAsAdministrator)
+                {
+                    CertificateManager.TrustRootCertificateAsAdministrator();
                 }
             }
         }
@@ -753,13 +798,13 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                if (endPoint.GetType() == typeof(TransparentProxyEndPoint))
+                if (endPoint is TransparentProxyEndPoint tep)
                 {
-                    await HandleClient(endPoint as TransparentProxyEndPoint, tcpClient);
+                    await HandleClient(tep, tcpClient);
                 }
                 else
                 {
-                    await HandleClient(endPoint as ExplicitProxyEndPoint, tcpClient);
+                    await HandleClient((ExplicitProxyEndPoint)endPoint, tcpClient);
                 }
             }
             finally
