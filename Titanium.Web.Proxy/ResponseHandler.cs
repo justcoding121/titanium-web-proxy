@@ -70,7 +70,11 @@ namespace Titanium.Web.Proxy
                 //Write back response status to client
                 await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.StatusCode, response.StatusDescription);
 
-                response.Headers.FixProxyHeaders();
+                if (!args.IsTransparent)
+                {
+                    response.Headers.FixProxyHeaders();
+                }
+
                 if (response.IsBodyRead)
                 {
                     bool isChunked = response.IsChunked;

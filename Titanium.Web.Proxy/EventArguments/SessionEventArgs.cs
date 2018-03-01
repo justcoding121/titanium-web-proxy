@@ -96,7 +96,9 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public event EventHandler<MultipartRequestPartSentEventArgs> MultipartRequestPartSent;
 
-        public ProxyEndPoint LocalEndPoint;
+        public ProxyEndPoint LocalEndPoint { get; }
+
+        public bool IsTransparent => LocalEndPoint is TransparentProxyEndPoint;
 
         /// <summary>
         /// Constructor to initialize the proxy
