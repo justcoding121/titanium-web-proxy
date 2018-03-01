@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy.Http
         /// Prepare and send the http(s) request
         /// </summary>
         /// <returns></returns>
-        internal async Task SendRequest(bool enable100ContinueBehaviour)
+        internal async Task SendRequest(bool enable100ContinueBehaviour, bool isTransparent)
         {
             var upstreamProxy = ServerConnection.UpStreamProxy;
 
@@ -89,12 +89,12 @@ namespace Titanium.Web.Proxy.Http
 
             //prepare the request & headers
             await writer.WriteLineAsync(Request.CreateRequestLine(Request.Method,
-                useUpstreamProxy ? Request.OriginalUrl : Request.RequestUri.PathAndQuery,
+                useUpstreamProxy || isTransparent ? Request.OriginalUrl : Request.RequestUri.PathAndQuery,
                 Request.HttpVersion));
 
 
             //Send Authentication to Upstream proxy if needed
-            if (upstreamProxy != null
+            if (!isTransparent && upstreamProxy != null
                 && ServerConnection.IsHttps == false
                 && !string.IsNullOrEmpty(upstreamProxy.UserName)
                 && upstreamProxy.Password != null)
@@ -106,7 +106,7 @@ namespace Titanium.Web.Proxy.Http
             //write request headers
             foreach (var header in Request.Headers)
             {
-                if (header.Name != KnownHeaders.ProxyAuthorization)
+                if (isTransparent || header.Name != KnownHeaders.ProxyAuthorization)
                 {
                     await header.WriteToStreamAsync(writer);
                 }
