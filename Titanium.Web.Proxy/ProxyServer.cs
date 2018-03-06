@@ -286,12 +286,20 @@ namespace Titanium.Web.Proxy
         public event EventHandler ServerConnectionCountChanged;
 
         /// <summary>
+        /// Return true if this HTTP connect request should'nt be decrypted and instead be relayed
+        /// Valid only for explicit endpoints
+        /// </summary>
+        public Func<string, Task<bool>> ExcludeTunnelConnect;
+
+        /// <summary>
         /// Intercept tunnel connect request
+        /// Valid only for explicit endpoints
         /// </summary>
         public event AsyncEventHandler<TunnelConnectSessionEventArgs> TunnelConnectRequest;
 
         /// <summary>
         /// Intercept tunnel connect response
+        /// Valid only for explicit endpoints
         /// </summary>
         public event AsyncEventHandler<TunnelConnectSessionEventArgs> TunnelConnectResponse;
 
@@ -320,7 +328,6 @@ namespace Titanium.Web.Proxy
         /// Intercept response from server
         /// </summary>
         public event AsyncEventHandler<SessionEventArgs> BeforeResponse;
-
 
         /// <summary>
         /// Callback for error events in proxy

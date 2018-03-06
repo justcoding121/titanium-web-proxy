@@ -77,6 +77,11 @@ namespace Titanium.Web.Proxy
                         excluded = !endPoint.IncludedHttpsHostNameRegexList.Any(x => x.IsMatch(connectHostname));
                     }
 
+                    if(ExcludeTunnelConnect!=null)
+                    {
+                        excluded = await ExcludeTunnelConnect(connectHostname);
+                    }
+
                     connectRequest = new ConnectRequest
                     {
                         RequestUri = httpRemoteUri,
