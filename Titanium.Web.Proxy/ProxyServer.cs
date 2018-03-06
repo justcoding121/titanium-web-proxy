@@ -28,16 +28,6 @@ namespace Titanium.Web.Proxy
         internal static readonly string UriSchemeHttps = Uri.UriSchemeHttps;
 
         /// <summary>
-        /// An default exception log func
-        /// </summary>
-        private readonly Lazy<Action<Exception>> defaultExceptionFunc = new Lazy<Action<Exception>>(() => (e => { }));
-
-        /// <summary>
-        /// backing exception func for exposed public property
-        /// </summary>
-        private Action<Exception> exceptionFunc;
-
-        /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
         private int clientConnectionCount;
@@ -67,46 +57,33 @@ namespace Titanium.Web.Proxy
         private readonly FireFoxProxySettingsManager firefoxProxySettingsManager = new FireFoxProxySettingsManager();
 
         /// <summary>
-        /// Buffer size used throughout this proxy
+        /// An default exception log func
         /// </summary>
-        public int BufferSize { get; set; } = 8192;
+        private readonly Lazy<Action<Exception>> defaultExceptionFunc = new Lazy<Action<Exception>>(() => (e => { }));
 
         /// <summary>
-        /// Manages certificates used by this proxy
+        /// backing exception func for exposed public property
         /// </summary>
-        public CertificateManager CertificateManager { get; }
+        private Action<Exception> exceptionFunc;
 
         /// <summary>
-        /// The root certificate
+        /// Is the proxy currently running
         /// </summary>
-        public X509Certificate2 RootCertificate
-        {
-            get => CertificateManager.RootCertificate;
-            set => CertificateManager.RootCertificate = value;
-        }
+        public bool ProxyRunning { get; private set; }
 
         /// <summary>
-        /// Name of the root certificate issuer 
-        /// (This is valid only when RootCertificate property is not set)
+        /// Gets or sets a value indicating whether requests will be chained to upstream gateway.
         /// </summary>
-        public string RootCertificateIssuerName
-        {
-            get => CertificateManager.Issuer;
-            set => CertificateManager.Issuer = value;
-        }
+        public bool ForwardToUpstreamGateway { get; set; }
 
         /// <summary>
-        /// Name of the root certificate
-        /// (This is valid only when RootCertificate property is not set)
-        /// If no certificate is provided then a default Root Certificate will be created and used
-        /// The provided root certificate will be stored in proxy exe directory with the private key
-        /// Root certificate file will be named as "rootCert.pfx"
+        /// Enable disable Windows Authentication (NTLM/Kerberos)
+        /// Note: NTLM/Kerberos will always send local credentials of current user
+        /// who is running the proxy process. This is because a man
+        /// in middle attack is not currently supported
+        /// (which would require windows delegation enabled for this server process)
         /// </summary>
-        public string RootCertificateName
-        {
-            get => CertificateManager.RootCertificateName;
-            set => CertificateManager.RootCertificateName = value;
-        }
+        public bool EnableWinAuth { get; set; }
 
         /// <summary>
         /// Trust the RootCertificate used by this proxy server
@@ -147,6 +124,73 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
+        /// Should we check for certificare revocation during SSL authentication to servers
+        /// Note: If enabled can reduce performance (Default disabled)
+        /// </summary>
+        public bool CheckCertificateRevocation { get; set; }
+
+        /// <summary>
+        /// Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
+        /// Broken 100 contunue implementations on server/client may cause problems if enabled
+        /// </summary>
+        public bool Enable100ContinueBehaviour { get; set; }
+
+        /// <summary>
+        /// Buffer size used throughout this proxy
+        /// </summary>
+        public int BufferSize { get; set; } = 8192;
+
+        /// <summary>
+        /// Minutes certificates should be kept in cache when not used
+        /// </summary>
+        public int CertificateCacheTimeOutMinutes { get; set; }
+
+        /// <summary>
+        /// Seconds client/server connection are to be kept alive when waiting for read/write to complete
+        /// </summary>
+        public int ConnectionTimeOutSeconds { get; set; }
+
+        /// <summary>
+        /// Total number of active client connections
+        /// </summary>
+        public int ClientConnectionCount => clientConnectionCount;
+
+        /// <summary>
+        /// Total number of active server connections
+        /// </summary>
+        public int ServerConnectionCount => serverConnectionCount;
+
+        /// <summary>
+        /// Name of the root certificate issuer 
+        /// (This is valid only when RootCertificate property is not set)
+        /// </summary>
+        public string RootCertificateIssuerName
+        {
+            get => CertificateManager.Issuer;
+            set => CertificateManager.Issuer = value;
+        }
+
+        /// <summary>
+        /// Name of the root certificate
+        /// (This is valid only when RootCertificate property is not set)
+        /// If no certificate is provided then a default Root Certificate will be created and used
+        /// The provided root certificate will be stored in proxy exe directory with the private key
+        /// Root certificate file will be named as "rootCert.pfx"
+        /// </summary>
+        public string RootCertificateName
+        {
+            get => CertificateManager.RootCertificateName;
+            set => CertificateManager.RootCertificateName = value;
+        }
+
+
+        /// <summary>
+        /// Realm used during Proxy Basic Authentication 
+        /// </summary>
+        public string ProxyRealm { get; set; } = "TitaniumProxy";
+
+
+        /// <summary>
         /// Password of the Root certificate file
         /// <para>Set a password for the .pfx file</para>
         /// </summary>
@@ -164,6 +208,24 @@ namespace Titanium.Web.Proxy
         {
             get => CertificateManager.PfxFilePath;
             set => CertificateManager.PfxFilePath = value;
+        }
+
+        /// <summary>
+        /// List of supported Ssl versions
+        /// </summary>
+        public SslProtocols SupportedSslProtocols { get; set; } =
+#if NET45
+            SslProtocols.Ssl3 |
+#endif
+            SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12;
+
+        /// <summary>
+        /// The root certificate
+        /// </summary>
+        public X509Certificate2 RootCertificate
+        {
+            get => CertificateManager.RootCertificate;
+            set => CertificateManager.RootCertificate = value;
         }
 
         public X509KeyStorageFlags StorageFlag
@@ -188,56 +250,9 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        /// Should we check for certificare revocation during SSL authentication to servers
-        /// Note: If enabled can reduce performance (Default disabled)
+        /// Manages certificates used by this proxy
         /// </summary>
-        public bool CheckCertificateRevocation { get; set; }
-
-        /// <summary>
-        /// Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
-        /// Broken 100 contunue implementations on server/client may cause problems if enabled
-        /// </summary>
-        public bool Enable100ContinueBehaviour { get; set; }
-
-        /// <summary>
-        /// Minutes certificates should be kept in cache when not used
-        /// </summary>
-        public int CertificateCacheTimeOutMinutes { get; set; }
-
-        /// <summary>
-        /// Seconds client/server connection are to be kept alive when waiting for read/write to complete
-        /// </summary>
-        public int ConnectionTimeOutSeconds { get; set; }
-
-        /// <summary>
-        /// Intercept request to server
-        /// </summary>
-        public event AsyncEventHandler<SessionEventArgs> BeforeRequest;
-
-        /// <summary>
-        /// Intercept response from server
-        /// </summary>
-        public event AsyncEventHandler<SessionEventArgs> BeforeResponse;
-
-        /// <summary>
-        /// Intercept tunnel connect reques
-        /// </summary>
-        public event AsyncEventHandler<TunnelConnectSessionEventArgs> TunnelConnectRequest;
-
-        /// <summary>
-        /// Intercept tunnel connect response
-        /// </summary>
-        public event AsyncEventHandler<TunnelConnectSessionEventArgs> TunnelConnectResponse;
-
-        /// <summary>
-        /// Occurs when client connection count changed.
-        /// </summary>
-        public event EventHandler ClientConnectionCountChanged;
-
-        /// <summary>
-        /// Occurs when server connection count changed.
-        /// </summary>
-        public event EventHandler ServerConnectionCountChanged;
+        public CertificateManager CertificateManager { get; }
 
         /// <summary>
         /// External proxy for Http
@@ -256,23 +271,29 @@ namespace Titanium.Web.Proxy
         public IPEndPoint UpStreamEndPoint { get; set; } = new IPEndPoint(IPAddress.Any, 0);
 
         /// <summary>
-        /// Is the proxy currently running
+        /// A list of IpAddress and port this proxy is listening to
         /// </summary>
-        public bool ProxyRunning { get; private set; }
+        public List<ProxyEndPoint> ProxyEndPoints { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether requests will be chained to upstream gateway.
+        /// Occurs when client connection count changed.
         /// </summary>
-        public bool ForwardToUpstreamGateway { get; set; }
+        public event EventHandler ClientConnectionCountChanged;
 
         /// <summary>
-        /// Enable disable Windows Authentication (NTLM/Kerberos)
-        /// Note: NTLM/Kerberos will always send local credentials of current user
-        /// who is running the proxy process. This is because a man
-        /// in middle attack is not currently supported
-        /// (which would require windows delegation enabled for this server process)
+        /// Occurs when server connection count changed.
         /// </summary>
-        public bool EnableWinAuth { get; set; }
+        public event EventHandler ServerConnectionCountChanged;
+
+        /// <summary>
+        /// Intercept tunnel connect request
+        /// </summary>
+        public event AsyncEventHandler<TunnelConnectSessionEventArgs> TunnelConnectRequest;
+
+        /// <summary>
+        /// Intercept tunnel connect response
+        /// </summary>
+        public event AsyncEventHandler<TunnelConnectSessionEventArgs> TunnelConnectResponse;
 
         /// <summary>
         /// Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication
@@ -283,6 +304,23 @@ namespace Titanium.Web.Proxy
         /// Callback tooverride client certificate during SSL mutual authentication
         /// </summary>
         public event AsyncEventHandler<CertificateSelectionEventArgs> ClientCertificateSelectionCallback;
+
+        /// <summary>
+        /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP(S) requests
+        /// return the ExternalProxy object with valid credentials
+        /// </summary>
+        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamProxyFunc { get; set; }
+
+        /// <summary>
+        /// Intercept request to server
+        /// </summary>
+        public event AsyncEventHandler<SessionEventArgs> BeforeRequest;
+
+        /// <summary>
+        /// Intercept response from server
+        /// </summary>
+        public event AsyncEventHandler<SessionEventArgs> BeforeResponse;
+
 
         /// <summary>
         /// Callback for error events in proxy
@@ -300,40 +338,6 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public Func<string, string, Task<bool>> AuthenticateUserFunc { get; set; }
 
-        /// <summary>
-        /// Realm used during Proxy Basic Authentication 
-        /// </summary>
-        public string ProxyRealm { get; set; } = "TitaniumProxy";
-
-        /// <summary>
-        /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP(S) requests
-        /// return the ExternalProxy object with valid credentials
-        /// </summary>
-        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamProxyFunc { get; set; }
-
-        /// <summary>
-        /// A list of IpAddress and port this proxy is listening to
-        /// </summary>
-        public List<ProxyEndPoint> ProxyEndPoints { get; set; }
-
-        /// <summary>
-        /// List of supported Ssl versions
-        /// </summary>
-        public SslProtocols SupportedSslProtocols { get; set; } =
-#if NET45
-            SslProtocols.Ssl3 |
-#endif
-            SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12;
-
-        /// <summary>
-        /// Total number of active client connections
-        /// </summary>
-        public int ClientConnectionCount => clientConnectionCount;
-
-        /// <summary>
-        /// Total number of active server connections
-        /// </summary>
-        public int ServerConnectionCount => serverConnectionCount;
 
         /// <summary>
         /// Constructor
