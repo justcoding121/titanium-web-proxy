@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy
                 ConnectRequest connectRequest = null;
 
                 //Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
-                if (await IsConnectMethod(clientStream) == 1)
+                if (await HttpHelper.IsConnectMethod(clientStream) == 1)
                 {
                     //read the first line HTTP command
                     string httpCmd = await clientStreamReader.ReadLineAsync();
@@ -155,7 +155,7 @@ namespace Titanium.Web.Proxy
                             return;
                         }
 
-                        if (await IsConnectMethod(clientStream) == -1)
+                        if (await HttpHelper.IsConnectMethod(clientStream) == -1)
                         {
                             // It can be for example some Google (Cloude Messaging for Chrome) magic
                             excluded = true;
@@ -228,45 +228,6 @@ namespace Titanium.Web.Proxy
             }
         }
 
-        /// <summary>
-        /// Determines whether is connect method.
-        /// </summary>
-        /// <param name="clientStream">The client stream.</param>
-        /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
-        private async Task<int> IsConnectMethod(CustomBufferedStream clientStream)
-        {
-            bool isConnect = true;
-            int legthToCheck = 10;
-            for (int i = 0; i < legthToCheck; i++)
-            {
-                int b = await clientStream.PeekByteAsync(i);
-                if (b == -1)
-                {
-                    return -1;
-                }
-
-                if (b == ' ' && i > 2)
-                {
-                    // at least 3 letters and a space
-                    return isConnect ? 1 : 0;
-                }
-
-                char ch = (char)b;
-                if (!char.IsLetter(ch))
-                {
-                    // non letter or too short
-                    return -1;
-                }
-
-                if (i > 6 || ch != "CONNECT"[i])
-                {
-                    isConnect = false;
-                }
-            }
-
-            // only letters
-            return isConnect ? 1 : 0;
-        }
 
         /// <summary>
         /// This is called when this proxy acts as a reverse proxy (like a real http server)
@@ -640,15 +601,9 @@ namespace Titanium.Web.Proxy
         /// <param name="requestHeaders"></param>
         private void PrepareRequestHeaders(HeaderCollection requestHeaders)
         {
-            foreach (var header in requestHeaders)
+            if(requestHeaders.HeaderExists(KnownHeaders.AcceptEncoding))
             {
-                switch (header.Name.ToLower())
-                {
-                    //these are the only encoding this proxy can read
-                    case KnownHeaders.AcceptEncoding:
-                        header.Value = "gzip,deflate";
-                        break;
-                }
+                requestHeaders.SetOrAddHeaderValue(KnownHeaders.AcceptEncoding, "gzip,deflate");
             }
 
             requestHeaders.FixProxyHeaders();
