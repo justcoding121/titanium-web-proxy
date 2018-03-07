@@ -77,9 +77,9 @@ namespace Titanium.Web.Proxy
                         excluded = !endPoint.IncludedHttpsHostNameRegexList.Any(x => x.IsMatch(connectHostname));
                     }
 
-                    if(ExcludeTunnelConnect!=null)
+                    if(endPoint.BeforeTunnelConnect!=null)
                     {
-                        excluded = await ExcludeTunnelConnect(connectHostname);
+                        excluded = await endPoint.BeforeTunnelConnect(connectHostname);
                     }
 
                     connectRequest = new ConnectRequest
@@ -95,18 +95,12 @@ namespace Titanium.Web.Proxy
                     connectArgs.ProxyClient.TcpClient = tcpClient;
                     connectArgs.ProxyClient.ClientStream = clientStream;
 
-                    if (TunnelConnectRequest != null)
-                    {
-                        await TunnelConnectRequest.InvokeAsync(this, connectArgs, ExceptionFunc);
-                    }
+                    await endPoint.InvokeTunnectConnectRequest(this, connectArgs, ExceptionFunc);
+                    
 
                     if (await CheckAuthorization(clientStreamWriter, connectArgs) == false)
                     {
-                        if (TunnelConnectResponse != null)
-                        {
-                            await TunnelConnectResponse.InvokeAsync(this, connectArgs, ExceptionFunc);
-                        }
-
+                        await endPoint.InvokeTunnectConnectResponse(this, connectArgs, ExceptionFunc);
                         return;
                     }
 
@@ -124,11 +118,7 @@ namespace Titanium.Web.Proxy
                         connectRequest.ClientHelloInfo = clientHelloInfo;
                     }
 
-                    if (TunnelConnectResponse != null)
-                    {
-                        connectArgs.IsHttpsConnect = isClientHello;
-                        await TunnelConnectResponse.InvokeAsync(this, connectArgs, ExceptionFunc);
-                    }
+                    await endPoint.InvokeTunnectConnectResponse(this, connectArgs, ExceptionFunc, isClientHello);
 
                     if (!excluded && isClientHello)
                     {
