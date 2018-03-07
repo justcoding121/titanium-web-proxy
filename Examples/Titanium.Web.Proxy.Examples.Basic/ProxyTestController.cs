@@ -130,7 +130,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task<bool> OnBeforeTunnelConnect(string hostname)
         {
-            if (hostname.Contains("google.com") || hostname.Contains("bing.com"))
+            if (hostname.Contains("amazon.com") || hostname.Contains("paypal.com"))
             {
                 //exclude bing.com and google.com from being decrypted
                 //instead it will be relayed via a secure TCP tunnel
@@ -181,7 +181,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             //To cancel a request with a custom HTML content
             //Filter URL
-            if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
+            if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("yahoo.com"))
             {
                 await e.Ok("<!DOCTYPE html>" +
                       "<html><body><h1>" +
