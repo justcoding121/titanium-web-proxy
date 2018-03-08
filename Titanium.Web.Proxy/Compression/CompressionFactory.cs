@@ -1,18 +1,24 @@
-﻿namespace Titanium.Web.Proxy.Compression
+﻿using System;
+
+namespace Titanium.Web.Proxy.Compression
 {
     /// <summary>
     ///  A factory to generate the compression methods based on the type of compression
     /// </summary>
     internal class CompressionFactory
     {
-        public ICompression Create(string type)
+        //cache
+        private static Lazy<ICompression> gzip = new Lazy<ICompression>(() => new GZipCompression());
+        private static Lazy<ICompression> deflate = new Lazy<ICompression>(() => new DeflateCompression());
+
+        public static ICompression GetCompression(string type)
         {
             switch (type)
             {
                 case "gzip":
-                    return new GZipCompression();
+                    return gzip.Value;
                 case "deflate":
-                    return new DeflateCompression();
+                    return deflate.Value;
                 default:
                     return null;
             }

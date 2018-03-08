@@ -122,8 +122,7 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         private async Task<byte[]> GetCompressedResponseBody(string encodingType, byte[] responseBodyStream)
         {
-            var compressionFactory = new CompressionFactory();
-            var compressor = compressionFactory.Create(encodingType);
+            var compressor = CompressionFactory.GetCompression(encodingType);
             return await compressor.Compress(responseBodyStream);
         }
     }
