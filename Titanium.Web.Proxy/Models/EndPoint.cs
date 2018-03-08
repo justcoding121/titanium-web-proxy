@@ -78,7 +78,7 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         /// List of host names to exclude using Regular Expressions.
         /// </summary>
-        [Obsolete("ExcludedHttpsHostNameRegex is deprecated, please use ExcludeTunnelConnect instead.")]
+        [Obsolete("ExcludedHttpsHostNameRegex is deprecated, please use BeforeTunnelConnect event instead.")]
         public IEnumerable<string> ExcludedHttpsHostNameRegex
         {
             get { return ExcludedHttpsHostNameRegexList?.Select(x => x.ToString()).ToList(); }
@@ -96,7 +96,7 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         /// List of host names to exclude using Regular Expressions.
         /// </summary>
-        [Obsolete("IncludedHttpsHostNameRegex is deprecated, please use ExcludeTunnelConnect instead.")]
+        [Obsolete("IncludedHttpsHostNameRegex is deprecated, please use BeforeTunnelConnect event instead.")]
         public IEnumerable<string> IncludedHttpsHostNameRegex
         {
             get { return IncludedHttpsHostNameRegexList?.Select(x => x.ToString()).ToList(); }

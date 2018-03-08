@@ -52,11 +52,6 @@ namespace Titanium.Web.Proxy
         private SystemProxyManager systemProxySettingsManager { get; }
 
         /// <summary>
-        /// Set firefox to use default system proxy
-        /// </summary>
-        private readonly FireFoxProxySettingsManager firefoxProxySettingsManager = new FireFoxProxySettingsManager();
-
-        /// <summary>
         /// An default exception log func
         /// </summary>
         private readonly Lazy<Action<Exception>> defaultExceptionFunc = new Lazy<Action<Exception>>(() => (e => { }));
@@ -484,8 +479,6 @@ namespace Titanium.Web.Proxy
             {
                 endPoint.IsSystemHttpsProxy = true;
             }
-
-            firefoxProxySettingsManager.UseSystemProxy();
 
             string proxyType = null;
             switch (protocolType)
