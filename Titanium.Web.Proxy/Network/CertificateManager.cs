@@ -90,7 +90,7 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// Cache dictionary
         /// </summary>
-        private readonly IDictionary<string, CachedCertificate> certificateCache;
+        private readonly ConcurrentDictionary<string, CachedCertificate> certificateCache;
 
         private readonly Action<Exception> exceptionFunc;
 
@@ -498,10 +498,11 @@ namespace Titanium.Web.Proxy.Network
             {
                 //this is ConcurrentDictionary
                 //if key exists it will silently handle; no need for locking
-                certificateCache.Add(certificateName, new CachedCertificate
+                certificateCache.TryAdd(certificateName, new CachedCertificate
                 {
                     Certificate = certificate
                 });
+
             }
 
 
@@ -528,8 +529,9 @@ namespace Titanium.Web.Proxy.Network
 
                 var outdated = certificateCache.Where(x => x.Value.LastAccess < cutOff).ToList();
 
+                CachedCertificate removed;
                 foreach (var cache in outdated)
-                    certificateCache.Remove(cache.Key);
+                    certificateCache.TryRemove(cache.Key, out removed);
 
                 //after a minute come back to check for outdated certificates in cache
                 await Task.Delay(1000 * 60);
