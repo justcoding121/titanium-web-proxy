@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
     public class ProxyTestController
     {
         private readonly ProxyServer proxyServer;
-
+        private ExplicitProxyEndPoint explicitEndPoint;
 
         //keep track of request headers
         private readonly IDictionary<Guid, HeaderCollection> requestHeaderHistory = new ConcurrentDictionary<Guid, HeaderCollection>();
@@ -52,37 +52,30 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             proxyServer.BeforeRequest += OnRequest;
             proxyServer.BeforeResponse += OnResponse;
-            proxyServer.TunnelConnectRequest += OnTunnelConnectRequest;
-            proxyServer.TunnelConnectResponse += OnTunnelConnectResponse;
+            
             proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
             proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
             //proxyServer.EnableWinAuth = true;
 
-            var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
+            explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
             {
-                //Exclude Https addresses you don't want to proxy
-                //Useful for clients that use certificate pinning
-                //for example google.com and dropbox.com
-                ExcludedHttpsHostNameRegex = new List<string>
-                {
-                    "dropbox.com"
-                },
+            //You can set only one of the ExcludedHttpsHostNameRegex and IncludedHttpsHostNameRegex properties, otherwise ArgumentException will be thrown
 
-                //Include Https addresses you want to proxy (others will be excluded)
-                //for example github.com
-                //IncludedHttpsHostNameRegex = new List<string>
-                //{
-                //    "github.com"
-                //},
-
-                //You can set only one of the ExcludedHttpsHostNameRegex and IncludedHttpsHostNameRegex properties, otherwise ArgumentException will be thrown
-
-                //Use self-issued generic certificate on all https requests
-                //Optimizes performance by not creating a certificate for each https-enabled domain
-                //Useful when certificate trust is not required by proxy clients
-                //GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
+            //Use self-issued generic certificate on all https requests
+            //Optimizes performance by not creating a certificate for each https-enabled domain
+            //Useful when certificate trust is not required by proxy clients
+            //GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
             };
+
+            //Exclude Https addresses you don't want to proxy
+            //Useful for clients that use certificate pinning
+            //for example google.com and dropbox.com
+            explicitEndPoint.BeforeTunnelConnect += OnBeforeTunnelConnect;
+
+
+            explicitEndPoint.TunnelConnectRequest += OnTunnelConnectRequest;
+            explicitEndPoint.TunnelConnectResponse += OnTunnelConnectResponse;
 
             //An explicit endpoint is where the client knows about the existence of a proxy
             //So client sends request in a proxy friendly manner
@@ -120,8 +113,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public void Stop()
         {
-            proxyServer.TunnelConnectRequest -= OnTunnelConnectRequest;
-            proxyServer.TunnelConnectResponse -= OnTunnelConnectResponse;
+            explicitEndPoint.BeforeTunnelConnect -= OnBeforeTunnelConnect;
+            explicitEndPoint.TunnelConnectRequest -= OnTunnelConnectRequest;
+            explicitEndPoint.TunnelConnectResponse -= OnTunnelConnectResponse;
+
             proxyServer.BeforeRequest -= OnRequest;
             proxyServer.BeforeResponse -= OnResponse;
             proxyServer.ServerCertificateValidationCallback -= OnCertificateValidation;
@@ -131,6 +126,20 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             //remove the generated certificates
             //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
+        }
+
+        private async Task<bool> OnBeforeTunnelConnect(string hostname)
+        {
+            if (hostname.Contains("amazon.com") || hostname.Contains("paypal.com"))
+            {
+                //exclude bing.com and google.com from being decrypted
+                //instead it will be relayed via a secure TCP tunnel
+                return await Task.FromResult(true);
+            }
+            else
+            {
+                return await Task.FromResult(false);
+            }
         }
 
         private async Task OnTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
@@ -172,7 +181,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             //To cancel a request with a custom HTML content
             //Filter URL
-            if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
+            if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("yahoo.com"))
             {
                 await e.Ok("<!DOCTYPE html>" +
                       "<html><body><h1>" +
