@@ -1,5 +1,7 @@
-﻿using System;
+﻿using StreamExtended.Network;
+using System;
 using System.Text;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Shared;
@@ -112,6 +114,46 @@ namespace Titanium.Web.Proxy.Helpers
 
             //return as it is
             return hostname;
+        }
+
+        /// <summary>
+        /// Determines whether is connect method.
+        /// </summary>
+        /// <param name="clientStream">The client stream.</param>
+        /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
+        internal static async Task<int> IsConnectMethod(CustomBufferedStream clientStream)
+        {
+            bool isConnect = true;
+            int legthToCheck = 10;
+            for (int i = 0; i < legthToCheck; i++)
+            {
+                int b = await clientStream.PeekByteAsync(i);
+                if (b == -1)
+                {
+                    return -1;
+                }
+
+                if (b == ' ' && i > 2)
+                {
+                    // at least 3 letters and a space
+                    return isConnect ? 1 : 0;
+                }
+
+                char ch = (char)b;
+                if (!char.IsLetter(ch))
+                {
+                    // non letter or too short
+                    return -1;
+                }
+
+                if (i > 6 || ch != "CONNECT"[i])
+                {
+                    isConnect = false;
+                }
+            }
+
+            // only letters
+            return isConnect ? 1 : 0;
         }
     }
 }
