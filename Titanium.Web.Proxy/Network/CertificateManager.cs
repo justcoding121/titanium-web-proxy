@@ -155,7 +155,7 @@ namespace Titanium.Web.Proxy.Network
 
             string path = Path.GetDirectoryName(assemblyLocation);
             if (null == path)
-                throw new NullReferenceException(); 
+                throw new NullReferenceException();
 
             return path;
         }
@@ -176,7 +176,7 @@ namespace Titanium.Web.Proxy.Network
         private string GetRootCertificatePath()
         {
             string path = GetRootCertificateDirectory();
-             
+
             string fileName = PfxFilePath;
             if (fileName == string.Empty)
             {
@@ -195,7 +195,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 return null;
             }
-               
+
             try
             {
                 return new X509Certificate2(fileName, PfxPassword, StorageFlag);
@@ -253,7 +253,7 @@ namespace Titanium.Web.Proxy.Network
                         // ignore
                     }
 
-                    string fileName = GetRootCertificatePath(); 
+                    string fileName = GetRootCertificatePath();
                     File.WriteAllBytes(fileName, RootCertificate.Export(X509ContentType.Pkcs12, PfxPassword));
                 }
                 catch (Exception e)
@@ -317,7 +317,7 @@ namespace Titanium.Web.Proxy.Network
             var info = new ProcessStartInfo
             {
                 FileName = "certutil.exe",
-                Arguments = "-importPFX -p \""+ PfxPassword + "\" -f \"" + fileName + "\"",
+                Arguments = "-importPFX -p \"" + PfxPassword + "\" -f \"" + fileName + "\"",
                 CreateNoWindow = true,
                 UseShellExecute = true,
                 Verb = "runas",
@@ -458,64 +458,52 @@ namespace Titanium.Web.Proxy.Network
             }
 
             X509Certificate2 certificate = null;
-            lock (string.Intern(certificateName))
+            try
             {
-                if (certificateCache.ContainsKey(certificateName) == false)
+                if (!isRootCertificate && SaveFakeCertificates)
                 {
-                    try
-                    {
-                        if (!isRootCertificate && SaveFakeCertificates)
-                        {
-                            string path = GetCertPath();
-                            string subjectName = BCCertificateMaker.CNRemoverRegex.Replace(certificateName, string.Empty);
-                            subjectName = subjectName.Replace("*", "$x$");
-                            subjectName = Path.Combine(path, subjectName + ".pfx");
+                    string path = GetCertPath();
+                    string subjectName = BCCertificateMaker.CNRemoverRegex.Replace(certificateName, string.Empty);
+                    subjectName = subjectName.Replace("*", "$x$");
+                    subjectName = Path.Combine(path, subjectName + ".pfx");
 
-                            if (!File.Exists(subjectName))
-                            {
-                                certificate = MakeCertificate(certificateName, isRootCertificate);
-                                File.WriteAllBytes(subjectName, certificate.Export(X509ContentType.Pkcs12));
-                            }
-                            else
-                            {
-                                try
-                                {
-                                    certificate = new X509Certificate2(subjectName, string.Empty, StorageFlag);
-                                }
-                                catch /* (Exception e)*/
-                                {
-                                    certificate = MakeCertificate(certificateName, isRootCertificate);
-                                }
-                            }
+                    if (!File.Exists(subjectName))
+                    {
+                        certificate = MakeCertificate(certificateName, isRootCertificate);
+                        File.WriteAllBytes(subjectName, certificate.Export(X509ContentType.Pkcs12));
+                    }
+                    else
+                    {
+                        try
+                        {
+                            certificate = new X509Certificate2(subjectName, string.Empty, StorageFlag);
                         }
-                        else
+                        catch /* (Exception e)*/
                         {
                             certificate = MakeCertificate(certificateName, isRootCertificate);
                         }
                     }
-                    catch (Exception e)
-                    {
-                        exceptionFunc(e);
-                    }
-
-                    if (certificate != null && !certificateCache.ContainsKey(certificateName))
-                    {
-                        certificateCache.Add(certificateName, new CachedCertificate
-                        {
-                            Certificate = certificate
-                        });
-                    }
                 }
                 else
                 {
-                    if (certificateCache.ContainsKey(certificateName))
-                    {
-                        var cached = certificateCache[certificateName];
-                        cached.LastAccess = DateTime.Now;
-                        return cached.Certificate;
-                    }
+                    certificate = MakeCertificate(certificateName, isRootCertificate);
                 }
             }
+            catch (Exception e)
+            {
+                exceptionFunc(e);
+            }
+
+            if (certificate != null)
+            {
+                //this is ConcurrentDictionary
+                //if key exists it will silently handle; no need for locking
+                certificateCache.Add(certificateName, new CachedCertificate
+                {
+                    Certificate = certificate
+                });
+            }
+
 
             return certificate;
         }
