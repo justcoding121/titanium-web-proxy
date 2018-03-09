@@ -91,6 +91,7 @@ namespace Titanium.Web.Proxy.Network
         /// Cache dictionary
         /// </summary>
         private readonly ConcurrentDictionary<string, CachedCertificate> certificateCache;
+        private readonly ConcurrentDictionary<string, Task<X509Certificate2>> pendingCertificateTasks;
 
         private readonly Action<Exception> exceptionFunc;
 
@@ -135,6 +136,7 @@ namespace Titanium.Web.Proxy.Network
             Engine = CertificateEngine.BouncyCastle;
 
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
+            pendingCertificateTasks = new ConcurrentDictionary<string, Task<X509Certificate2>>();
         }
 
         public void ClearRootCertificate()
@@ -443,19 +445,13 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        /// Create an SSL certificate
+        ///  Create an SSL certificate
         /// </summary>
         /// <param name="certificateName"></param>
         /// <param name="isRootCertificate"></param>
         /// <returns></returns>
         internal X509Certificate2 CreateCertificate(string certificateName, bool isRootCertificate)
         {
-            if (certificateCache.ContainsKey(certificateName))
-            {
-                var cached = certificateCache[certificateName];
-                cached.LastAccess = DateTime.Now;
-                return cached.Certificate;
-            }
 
             X509Certificate2 certificate = null;
             try
@@ -494,19 +490,54 @@ namespace Titanium.Web.Proxy.Network
                 exceptionFunc(e);
             }
 
-            if (certificate != null)
+            return certificate;
+        }
+
+        /// <summary>
+        /// Create an SSL certificate async
+        /// </summary>
+        /// <param name="certificateName"></param>
+        /// <returns></returns>
+        internal async Task<X509Certificate2> CreateCertificateAsync(string certificateName)
+        {
+            //handle burst requests with same certificate name
+            Task<X509Certificate2> task;
+            if (pendingCertificateTasks.TryGetValue(certificateName, out task))
+            {
+                await task;
+                pendingCertificateTasks.TryRemove(certificateName, out task);
+            }
+
+            //check in cache first
+            CachedCertificate cached;
+            if (certificateCache.TryGetValue(certificateName, out cached))
+            {
+                cached.LastAccess = DateTime.Now;
+                return cached.Certificate;
+            }
+
+            //run certificate creation task
+            task = Task.Run(() =>
+            {
+                return CreateCertificate(certificateName, false);
+            });
+
+            pendingCertificateTasks.TryAdd(certificateName, task);
+            await task;
+            pendingCertificateTasks.TryRemove(certificateName, out task);
+
+            if (task.Result != null)
             {
                 //this is ConcurrentDictionary
                 //if key exists it will silently handle; no need for locking
                 certificateCache.TryAdd(certificateName, new CachedCertificate
                 {
-                    Certificate = certificate
+                    Certificate = task.Result
                 });
 
             }
 
-
-            return certificate;
+            return task.Result;
         }
 
         /// <summary>
