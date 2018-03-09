@@ -504,7 +504,7 @@ namespace Titanium.Web.Proxy.Network
             Task<X509Certificate2> task;
             if (pendingCertificateTasks.TryGetValue(certificateName, out task))
             {
-                return await GetTaskResult(certificateName, task);
+                return await task;
             }
 
             //check in cache first
@@ -518,31 +518,26 @@ namespace Titanium.Web.Proxy.Network
             //run certificate creation task
             task = Task.Run(() =>
             {
-                return CreateCertificate(certificateName, false);
+                var result =  CreateCertificate(certificateName, false);
+                if (result != null)
+                {
+                    //this is ConcurrentDictionary
+                    //if key exists it will silently handle; no need for locking
+                    certificateCache.TryAdd(certificateName, new CachedCertificate
+                    {
+                        Certificate = result
+                    });
+
+                }
+                return result;
             });
 
             pendingCertificateTasks.TryAdd(certificateName, task);
-
-            return await GetTaskResult(certificateName, task);
-        }
-
-        private async Task<X509Certificate2> GetTaskResult(string certificateName, Task<X509Certificate2> task)
-        {
-            await task;
+            var certificate =  await task;
             pendingCertificateTasks.TryRemove(certificateName, out task);
 
-            if (task.Result != null)
-            {
-                //this is ConcurrentDictionary
-                //if key exists it will silently handle; no need for locking
-                certificateCache.TryAdd(certificateName, new CachedCertificate
-                {
-                    Certificate = task.Result
-                });
+            return certificate;
 
-            }
-
-            return task.Result;
         }
 
         /// <summary>
