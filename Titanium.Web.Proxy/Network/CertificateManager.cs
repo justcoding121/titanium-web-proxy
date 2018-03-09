@@ -504,8 +504,7 @@ namespace Titanium.Web.Proxy.Network
             Task<X509Certificate2> task;
             if (pendingCertificateTasks.TryGetValue(certificateName, out task))
             {
-                await task;
-                pendingCertificateTasks.TryRemove(certificateName, out task);
+                return await GetTaskResult(certificateName, task);
             }
 
             //check in cache first
@@ -523,6 +522,12 @@ namespace Titanium.Web.Proxy.Network
             });
 
             pendingCertificateTasks.TryAdd(certificateName, task);
+
+            return await GetTaskResult(certificateName, task);
+        }
+
+        private async Task<X509Certificate2> GetTaskResult(string certificateName, Task<X509Certificate2> task)
+        {
             await task;
             pendingCertificateTasks.TryRemove(certificateName, out task);
 
