@@ -52,11 +52,11 @@ Setup HTTP proxy:
 var proxyServer = new ProxyServer();
 
 //locally trust root certificate used by this proxy 
-proxyServer.TrustRootCertificate = true;
+proxyServer.CertificateManager.TrustRootCertificate = true;
 
 //optionally set the Certificate Engine
 //Under Mono only BouncyCastle will be supported
-//proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
+//proxyServer.CertificateManager.CertificateEngine = Network.CertificateEngine.BouncyCastle;
 
 proxyServer.BeforeRequest += OnRequest;
 proxyServer.BeforeResponse += OnResponse;
@@ -66,16 +66,16 @@ proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
 var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
 {
-//Exclude HTTPS addresses you don't want to proxy
-//Useful for clients that use certificate pinning
-//for example dropbox.com
-// ExcludedHttpsHostNameRegex = new List<string>() { "google.com", "dropbox.com" }
+//You can set only one of the ExcludedHttpsHostNameRegex and IncludedHttpsHostNameRegex properties, otherwise ArgumentException will be thrown
 
-//Use self-issued generic certificate on all HTTPS requests
-//Optimizes performance by not creating a certificate for each HTTPS-enabled domain
+//Use self-issued generic certificate on all https requests
+//Optimizes performance by not creating a certificate for each https-enabled domain
 //Useful when certificate trust is not required by proxy clients
-// GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
+//GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
 };
+
+//Fired when a CONNECT request is received
+explicitEndPoint.BeforeTunnelConnect += OnBeforeTunnelConnect;
 
 //An explicit endpoint is where the client knows about the existence of a proxy
 //So client sends request in a proxy friendly manner
@@ -109,6 +109,7 @@ proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
 Console.Read();
 
 //Unsubscribe & Quit
+explicitEndPoint.BeforeTunnelConnect -= OnBeforeTunnelConnect;
 proxyServer.BeforeRequest -= OnRequest;
 proxyServer.BeforeResponse -= OnResponse;
 proxyServer.ServerCertificateValidationCallback -= OnCertificateValidation;
@@ -124,6 +125,21 @@ Sample request and response event handlers
 //To access requestBody from OnResponse handler
 private IDictionary<Guid, string> requestBodyHistory 
         = new ConcurrentDictionary<Guid, string>();
+
+private async Task<bool> OnBeforeTunnelConnect(string hostname)
+{
+    if (hostname.Contains("dropbox.com"))
+    {
+         //Exclude Https addresses you don't want to proxy
+         //Useful for clients that use certificate pinning
+         //for example dropbox.com
+        return await Task.FromResult(true);
+    }
+    else
+    {
+        return await Task.FromResult(false);
+    }
+}
 
 public async Task OnRequest(object sender, SessionEventArgs e)
 {
@@ -152,7 +168,7 @@ public async Task OnRequest(object sender, SessionEventArgs e)
     //Filter URL
     if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
     {
-	await e.Ok("<!DOCTYPE html>" +
+	e.Ok("<!DOCTYPE html>" +
 	      "<html><body><h1>" +
 	      "Website Blocked" +
 	      "</h1>" +
@@ -163,7 +179,7 @@ public async Task OnRequest(object sender, SessionEventArgs e)
     //Redirect example
     if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
     {
-	await e.Redirect("https://www.paypal.com");
+	e.Redirect("https://www.paypal.com");
     }
 }
 

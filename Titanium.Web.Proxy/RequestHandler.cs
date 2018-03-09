@@ -132,7 +132,7 @@ namespace Titanium.Web.Proxy
 
                             string certName = HttpHelper.GetWildCardDomainName(connectHostname);
 
-                            var certificate = endPoint.GenericCertificate ?? CertificateManager.CreateCertificate(certName, false);
+                            var certificate = endPoint.GenericCertificate ?? await CertificateManager.CreateCertificateAsync(certName);
 
                             //Successfully managed to authenticate the client using the fake certificate
                             await sslStream.AuthenticateAsServerAsync(certificate, false, SupportedSslProtocols, false);
@@ -252,7 +252,7 @@ namespace Titanium.Web.Proxy
                         string sniHostName = clientHelloInfo.GetServerName();
 
                         string certName = HttpHelper.GetWildCardDomainName(sniHostName ?? endPoint.GenericCertificateName);
-                        var certificate = CertificateManager.CreateCertificate(certName, false);
+                        var certificate = await CertificateManager.CreateCertificateAsync(certName);
 
                         //Successfully managed to authenticate the client using the fake certificate
                         await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
