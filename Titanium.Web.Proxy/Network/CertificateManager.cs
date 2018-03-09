@@ -510,18 +510,10 @@ namespace Titanium.Web.Proxy.Network
                 {
                     TrustRootCertificate();
                 }
-                else
-                {
-                    RemoveTrustedRootCertificate();
-                }
 
                 if (TrustRootAsAdministrator)
                 {
                     TrustRootCertificateAsAdmin();
-                }
-                else
-                {
-                    RemoveTrustedRootCertificateAsAdmin();
                 }
             }
         }
