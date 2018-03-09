@@ -195,7 +195,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             ////Redirect example
             //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
             //{
-            //    await e.Redirect("https://www.paypal.com");
+            //   e.Redirect("https://www.paypal.com");
             //}
         }
 
