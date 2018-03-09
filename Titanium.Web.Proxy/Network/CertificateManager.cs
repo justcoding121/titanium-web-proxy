@@ -91,7 +91,7 @@ namespace Titanium.Web.Proxy.Network
         /// Cache dictionary
         /// </summary>
         private readonly ConcurrentDictionary<string, CachedCertificate> certificateCache;
-        private readonly ConcurrentDictionary<string, Task<X509Certificate2>> pendingCertificateTasks;
+        private readonly ConcurrentDictionary<string, Task<X509Certificate2>> pendingCertificateCreationTasks;
 
         private readonly Action<Exception> exceptionFunc;
 
@@ -136,7 +136,7 @@ namespace Titanium.Web.Proxy.Network
             Engine = CertificateEngine.BouncyCastle;
 
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
-            pendingCertificateTasks = new ConcurrentDictionary<string, Task<X509Certificate2>>();
+            pendingCertificateCreationTasks = new ConcurrentDictionary<string, Task<X509Certificate2>>();
         }
 
         public void ClearRootCertificate()
@@ -500,19 +500,22 @@ namespace Titanium.Web.Proxy.Network
         /// <returns></returns>
         internal async Task<X509Certificate2> CreateCertificateAsync(string certificateName)
         {
-            //handle burst requests with same certificate name
-            Task<X509Certificate2> task;
-            if (pendingCertificateTasks.TryGetValue(certificateName, out task))
-            {
-                return await task;
-            }
-
             //check in cache first
             CachedCertificate cached;
             if (certificateCache.TryGetValue(certificateName, out cached))
             {
                 cached.LastAccess = DateTime.Now;
                 return cached.Certificate;
+            }
+
+            //handle burst requests with same certificate name
+            //by checking for existing creation task for same certificate name
+            Task<X509Certificate2> task;
+            if (pendingCertificateCreationTasks.TryGetValue(certificateName, out task))
+            {
+                //certificate already added to cache
+                //just return the result here
+                return await task;
             }
 
             //run certificate creation task
@@ -532,9 +535,10 @@ namespace Titanium.Web.Proxy.Network
                 return result;
             });
 
-            pendingCertificateTasks.TryAdd(certificateName, task);
+            //cleanup pending tasks & return result
+            pendingCertificateCreationTasks.TryAdd(certificateName, task);
             var certificate =  await task;
-            pendingCertificateTasks.TryRemove(certificateName, out task);
+            pendingCertificateCreationTasks.TryRemove(certificateName, out task);
 
             return certificate;
 
