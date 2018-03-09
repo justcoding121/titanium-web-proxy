@@ -32,20 +32,18 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer = new ProxyServer();
 
             //generate root certificate without storing it in file system
-            //proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
             //proxyServer.CertificateManager.CreateTrustedRootCertificate(false);
             //proxyServer.CertificateManager.TrustRootCertificate();
 
             proxyServer.ExceptionFunc = exception => Console.WriteLine(exception.Message);
-            proxyServer.TrustRootCertificate = true;
             proxyServer.ForwardToUpstreamGateway = true;
 
             //optionally set the Certificate Engine
             //Under Mono or Non-Windows runtimes only BouncyCastle will be supported
-            //proxyServer.CertificateEngine = Network.CertificateEngine.DefaultWindows;
+            //proxyServer.CertificateManager.CertificateEngine = Network.CertificateEngine.BouncyCastle;
 
             //optionally set the Root Certificate
-            //proxyServer.RootCertificate = new X509Certificate2("myCert.pfx", string.Empty, X509KeyStorageFlags.Exportable);
+            //proxyServer.CertificateManager.RootCertificate = new X509Certificate2("myCert.pfx", string.Empty, X509KeyStorageFlags.Exportable);
         }
 
         public void StartProxy()
