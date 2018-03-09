@@ -68,9 +68,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
             };
 
-            //Exclude Https addresses you don't want to proxy
-            //Useful for clients that use certificate pinning
-            //for example google.com and dropbox.com
+            //Fired when a CONNECT request is received
             explicitEndPoint.BeforeTunnelConnect += OnBeforeTunnelConnect;
 
 
@@ -130,10 +128,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task<bool> OnBeforeTunnelConnect(string hostname)
         {
-            if (hostname.Contains("amazon.com") || hostname.Contains("paypal.com"))
+            if (hostname.Contains("dropbox.com"))
             {
-                //exclude bing.com and google.com from being decrypted
-                //instead it will be relayed via a secure TCP tunnel
+                //Exclude Https addresses you don't want to proxy
+                //Useful for clients that use certificate pinning
+                //for example dropbox.com
                 return await Task.FromResult(true);
             }
             else
