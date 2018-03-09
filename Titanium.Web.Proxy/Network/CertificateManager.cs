@@ -509,7 +509,7 @@ namespace Titanium.Web.Proxy.Network
             }
 
             //handle burst requests with same certificate name
-            //by checking for existing creation task for same certificate name
+            //by checking for existing task for same certificate name
             Task<X509Certificate2> task;
             if (pendingCertificateCreationTasks.TryGetValue(certificateName, out task))
             {
@@ -518,7 +518,7 @@ namespace Titanium.Web.Proxy.Network
                 return await task;
             }
 
-            //run certificate creation task
+            //run certificate creation task & add it to pending tasks
             task = Task.Run(() =>
             {
                 var result =  CreateCertificate(certificateName, false);
@@ -534,9 +534,9 @@ namespace Titanium.Web.Proxy.Network
                 }
                 return result;
             });
-
-            //cleanup pending tasks & return result
             pendingCertificateCreationTasks.TryAdd(certificateName, task);
+          
+            //cleanup pending tasks & return result
             var certificate =  await task;
             pendingCertificateCreationTasks.TryRemove(certificateName, out task);
 
