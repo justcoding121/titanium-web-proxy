@@ -1,11 +1,9 @@
-using StreamExtended.Network;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -37,13 +35,14 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private int serverConnectionCount;
 
-        private X509KeyStorageFlags storageFlag = X509KeyStorageFlags.Exportable;
-
         /// <summary>
         /// A object that creates tcp connection to server
         /// </summary>
         private TcpConnectionFactory tcpConnectionFactory { get; }
 
+        /// <summary>
+        /// Manaage upstream proxy detection
+        /// </summary>
         private WinHttpWebProxyFinder systemProxyResolver;
 
         /// <summary>
@@ -81,44 +80,6 @@ namespace Titanium.Web.Proxy
         public bool EnableWinAuth { get; set; }
 
         /// <summary>
-        /// Trust the RootCertificate used by this proxy server
-        /// Note that this do not make the client trust the certificate!
-        /// This would import the root certificate to the certificate store of machine that runs this proxy server
-        /// </summary>
-        public bool TrustRootCertificate
-        {
-            get => CertificateManager.trustRootCertificate;
-            set => CertificateManager.trustRootCertificate = value;
-        }
-
-        /// <summary>
-        /// Needs elevated permission. Works only on Windows.
-        /// <para>Puts the certificate to the local machine's certificate store.</para>
-        /// <para>Certutil.exe is a command-line program that is installed as part of Certificate Services</para>
-        /// </summary>
-        public bool TrustRootCertificateAsAdministrator { get; set; } = false;
-
-        /// <summary>
-        /// Save all fake certificates in folder "crts"(will be created in proxy dll directory)
-        /// <para>for can load the certificate and not make new certificate every time </para>
-        /// </summary>
-        public bool SaveFakeCertificates
-        {
-            get => CertificateManager.SaveFakeCertificates;
-            set => CertificateManager.SaveFakeCertificates = value;
-        }
-
-        /// <summary>
-        /// Overwrite Root certificate file
-        /// <para>true : replace an existing .pfx file if password is incorect or if RootCertificate = null</para>
-        /// </summary>
-        public bool OverwritePfxFile
-        {
-            get => CertificateManager.OverwritePfXFile;
-            set => CertificateManager.OverwritePfXFile = value;
-        }
-
-        /// <summary>
         /// Should we check for certificare revocation during SSL authentication to servers
         /// Note: If enabled can reduce performance (Default disabled)
         /// </summary>
@@ -136,14 +97,9 @@ namespace Titanium.Web.Proxy
         public int BufferSize { get; set; } = 8192;
 
         /// <summary>
-        /// Minutes certificates should be kept in cache when not used
-        /// </summary>
-        public int CertificateCacheTimeOutMinutes { get; set; }
-
-        /// <summary>
         /// Seconds client/server connection are to be kept alive when waiting for read/write to complete
         /// </summary>
-        public int ConnectionTimeOutSeconds { get; set; }
+        public int ConnectionTimeOutSeconds { get; set; }        
 
         /// <summary>
         /// Total number of active client connections
@@ -156,54 +112,10 @@ namespace Titanium.Web.Proxy
         public int ServerConnectionCount => serverConnectionCount;
 
         /// <summary>
-        /// Name of the root certificate issuer 
-        /// (This is valid only when RootCertificate property is not set)
-        /// </summary>
-        public string RootCertificateIssuerName
-        {
-            get => CertificateManager.Issuer;
-            set => CertificateManager.Issuer = value;
-        }
-
-        /// <summary>
-        /// Name of the root certificate
-        /// (This is valid only when RootCertificate property is not set)
-        /// If no certificate is provided then a default Root Certificate will be created and used
-        /// The provided root certificate will be stored in proxy exe directory with the private key
-        /// Root certificate file will be named as "rootCert.pfx"
-        /// </summary>
-        public string RootCertificateName
-        {
-            get => CertificateManager.RootCertificateName;
-            set => CertificateManager.RootCertificateName = value;
-        }
-
-
-        /// <summary>
         /// Realm used during Proxy Basic Authentication 
         /// </summary>
         public string ProxyRealm { get; set; } = "TitaniumProxy";
 
-
-        /// <summary>
-        /// Password of the Root certificate file
-        /// <para>Set a password for the .pfx file</para>
-        /// </summary>
-        public string PfxPassword
-        {
-            get => CertificateManager.PfxPassword;
-            set => CertificateManager.PfxPassword = value;
-        }
-
-        /// <summary>
-        /// Name(path) of the Root certificate file
-        /// <para>Set the name(path) of the .pfx file. If it is string.Empty Root certificate file will be named as "rootCert.pfx" (and will be saved in proxy dll directory)</para>
-        /// </summary>
-        public string PfxFilePath
-        {
-            get => CertificateManager.PfxFilePath;
-            set => CertificateManager.PfxFilePath = value;
-        }
 
         /// <summary>
         /// List of supported Ssl versions
@@ -214,35 +126,6 @@ namespace Titanium.Web.Proxy
 #endif
             SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12;
 
-        /// <summary>
-        /// The root certificate
-        /// </summary>
-        public X509Certificate2 RootCertificate
-        {
-            get => CertificateManager.RootCertificate;
-            set => CertificateManager.RootCertificate = value;
-        }
-
-        public X509KeyStorageFlags StorageFlag
-        {
-            get => storageFlag;
-            set
-            {
-                storageFlag = value;
-                CertificateManager.StorageFlag = storageFlag;
-            }
-        }
-
-        /// <summary>
-        /// Select Certificate Engine 
-        /// Optionally set to BouncyCastle
-        /// Mono only support BouncyCastle and it is the default
-        /// </summary>
-        public CertificateEngine CertificateEngine
-        {
-            get => CertificateManager.Engine;
-            set => CertificateManager.Engine = value;
-        }
 
         /// <summary>
         /// Manages certificates used by this proxy
@@ -322,24 +205,37 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public Func<string, string, Task<bool>> AuthenticateUserFunc { get; set; }
 
+        /// <summary>
+        /// Constructor
+        /// </summary>
+        public ProxyServer() : this(null, null, true, false)
+        {
+        }
 
         /// <summary>
         /// Constructor
         /// </summary>
-        public ProxyServer() : this(null, null)
+        public ProxyServer(bool trustRoot) : this(null, null, trustRoot, false)
         {
         }
+
+        /// <summary>
+        /// Constructor
+        /// </summary>
+        public ProxyServer(bool trustRoot, bool trustRootAsAdmin) : this(null, null, trustRoot, trustRootAsAdmin)
+        {
+        }
+
 
         /// <summary>
         /// Constructor.
         /// </summary>
         /// <param name="rootCertificateName">Name of root certificate.</param>
         /// <param name="rootCertificateIssuerName">Name of root certificate issuer.</param>
-        public ProxyServer(string rootCertificateName, string rootCertificateIssuerName)
+        public ProxyServer(string rootCertificateName, string rootCertificateIssuerName, bool trustRootCertificate, bool trustRootCertificateAsAdmin)
         {
             //default values
             ConnectionTimeOutSeconds = 30;
-            CertificateCacheTimeOutMinutes = 60;
 
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory();
@@ -349,14 +245,17 @@ namespace Titanium.Web.Proxy
             }
 
             CertificateManager = new CertificateManager(ExceptionFunc);
+            CertificateManager.TrustRoot = trustRootCertificate;
+            CertificateManager.TrustRootAsAdministrator = trustRootCertificateAsAdmin;
+
             if (rootCertificateName != null)
             {
-                RootCertificateName = rootCertificateName;
+                CertificateManager.RootCertificateName = rootCertificateName;
             }
 
             if (rootCertificateIssuerName != null)
             {
-                RootCertificateIssuerName = rootCertificateIssuerName;
+                CertificateManager.RootCertificateIssuerName = rootCertificateIssuerName;
             }
         }
 
@@ -441,7 +340,7 @@ namespace Titanium.Web.Proxy
                     throw new Exception("Endpoint do not support Https connections");
                 }
 
-                EnsureRootCertificate();
+                CertificateManager.EnsureRootCertificate();
 
                 //If certificate was trusted by the machine
                 if (!CertificateManager.CertValidated)
@@ -554,7 +453,7 @@ namespace Titanium.Web.Proxy
 
             if (ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.GenericCertificate == null))
             {
-                EnsureRootCertificate();
+                CertificateManager.EnsureRootCertificate();
             }
 
             //clear any system proxy settings which is pointing to our own endpoint (causing a cycle)
@@ -599,7 +498,7 @@ namespace Titanium.Web.Proxy
                 Listen(endPoint);
             }
 
-            CertificateManager.ClearIdleCertificates(CertificateCacheTimeOutMinutes);
+            CertificateManager.ClearIdleCertificates();
 
             if (RunTime.IsWindows && !RunTime.IsRunningOnMono)
             {
@@ -706,34 +605,6 @@ namespace Titanium.Web.Proxy
         {
             var proxy = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
             return Task.FromResult(proxy);
-        }
-
-        /// <summary>
-        /// Load or Create Certificate : after "Test Is the root certificate used by this proxy is valid?"
-        /// <param name="trustRootCertificate">"Make current machine trust the Root Certificate used by this proxy" ==> True or False</param>
-        /// </summary>
-        public void EnsureRootCertificate(bool trustRootCertificate)
-        {
-            TrustRootCertificate = trustRootCertificate;
-            EnsureRootCertificate();
-        }
-
-        public void EnsureRootCertificate()
-        {
-            if (!CertificateManager.CertValidated)
-            {
-                CertificateManager.CreateTrustedRootCertificate();
-
-                if (TrustRootCertificate)
-                {
-                    CertificateManager.TrustRootCertificate();
-                }
-
-                if (TrustRootCertificateAsAdministrator)
-                {
-                    CertificateManager.TrustRootCertificateAsAdministrator();
-                }
-            }
         }
 
         /// <summary>

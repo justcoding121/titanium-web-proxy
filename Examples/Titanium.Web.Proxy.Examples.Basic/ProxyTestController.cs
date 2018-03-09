@@ -32,20 +32,18 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer = new ProxyServer();
 
             //generate root certificate without storing it in file system
-            //proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
             //proxyServer.CertificateManager.CreateTrustedRootCertificate(false);
             //proxyServer.CertificateManager.TrustRootCertificate();
 
             proxyServer.ExceptionFunc = exception => Console.WriteLine(exception.Message);
-            proxyServer.TrustRootCertificate = true;
             proxyServer.ForwardToUpstreamGateway = true;
 
             //optionally set the Certificate Engine
             //Under Mono or Non-Windows runtimes only BouncyCastle will be supported
-            //proxyServer.CertificateEngine = Network.CertificateEngine.DefaultWindows;
+            //proxyServer.CertificateManager.CertificateEngine = Network.CertificateEngine.BouncyCastle;
 
             //optionally set the Root Certificate
-            //proxyServer.RootCertificate = new X509Certificate2("myCert.pfx", string.Empty, X509KeyStorageFlags.Exportable);
+            //proxyServer.CertificateManager.RootCertificate = new X509Certificate2("myCert.pfx", string.Empty, X509KeyStorageFlags.Exportable);
         }
 
         public void StartProxy()
@@ -68,9 +66,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
             };
 
-            //Exclude Https addresses you don't want to proxy
-            //Useful for clients that use certificate pinning
-            //for example google.com and dropbox.com
+            //Fired when a CONNECT request is received
             explicitEndPoint.BeforeTunnelConnect += OnBeforeTunnelConnect;
 
 
@@ -130,10 +126,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task<bool> OnBeforeTunnelConnect(string hostname)
         {
-            if (hostname.Contains("amazon.com") || hostname.Contains("paypal.com"))
+            if (hostname.Contains("dropbox.com"))
             {
-                //exclude bing.com and google.com from being decrypted
-                //instead it will be relayed via a secure TCP tunnel
+                //Exclude Https addresses you don't want to proxy
+                //Useful for clients that use certificate pinning
+                //for example dropbox.com
                 return await Task.FromResult(true);
             }
             else
@@ -183,7 +180,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //Filter URL
             if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("yahoo.com"))
             {
-                await e.Ok("<!DOCTYPE html>" +
+                e.Ok("<!DOCTYPE html>" +
                       "<html><body><h1>" +
                       "Website Blocked" +
                       "</h1>" +
@@ -195,7 +192,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             ////Redirect example
             //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
             //{
-            //    await e.Redirect("https://www.paypal.com");
+            //   e.Redirect("https://www.paypal.com");
             //}
         }
 

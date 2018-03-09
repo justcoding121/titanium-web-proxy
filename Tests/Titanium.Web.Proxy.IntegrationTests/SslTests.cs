@@ -51,7 +51,6 @@ namespace Titanium.Web.Proxy.IntegrationTests
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
-            proxyServer.TrustRootCertificate = true;
         }
 
         public void StartProxy(int proxyPort)

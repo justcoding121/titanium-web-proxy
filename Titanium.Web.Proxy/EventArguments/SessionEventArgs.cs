@@ -531,7 +531,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         /// <param name="html"></param>
         /// <param name="headers"></param>
-        public async Task Ok(string html, Dictionary<string, HttpHeader> headers = null)
+        public void Ok(string html, Dictionary<string, HttpHeader> headers = null)
         {
             var response = new OkResponse();
             if (headers != null)
@@ -542,7 +542,7 @@ namespace Titanium.Web.Proxy.EventArguments
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Body = response.Encoding.GetBytes(html ?? string.Empty);
 
-            await Respond(response);
+            Respond(response);
         }
 
         /// <summary>
@@ -552,14 +552,14 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         /// <param name="result"></param>
         /// <param name="headers"></param>
-        public async Task Ok(byte[] result, Dictionary<string, HttpHeader> headers = null)
+        public void Ok(byte[] result, Dictionary<string, HttpHeader> headers = null)
         {
             var response = new OkResponse();
             response.Headers.AddHeaders(headers);
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Body = result;
 
-            await Respond(response);
+            Respond(response);
         }
 
         /// <summary>
@@ -572,14 +572,14 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="status"></param>
         /// <param name="headers"></param>
         /// <returns></returns>
-        public async Task GenericResponse(string html, HttpStatusCode status, Dictionary<string, HttpHeader> headers = null)
+        public void GenericResponse(string html, HttpStatusCode status, Dictionary<string, HttpHeader> headers = null)
         {
             var response = new GenericResponse(status);
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Headers.AddHeaders(headers);
             response.Body = response.Encoding.GetBytes(html ?? string.Empty);
 
-            await Respond(response);
+            Respond(response);
         }
 
         /// <summary>
@@ -592,14 +592,14 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="status"></param>
         /// <param name="headers"></param>
         /// <returns></returns>
-        public async Task GenericResponse(byte[] result, HttpStatusCode status, Dictionary<string, HttpHeader> headers)
+        public void GenericResponse(byte[] result, HttpStatusCode status, Dictionary<string, HttpHeader> headers)
         {
             var response = new GenericResponse(status);
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Headers.AddHeaders(headers);
             response.Body = result;
 
-            await Respond(response);
+            Respond(response);
         }
 
         /// <summary>
@@ -607,18 +607,18 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         /// <param name="url"></param>
         /// <returns></returns>
-        public async Task Redirect(string url)
+        public void Redirect(string url)
         {
             var response = new RedirectResponse();
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Headers.AddHeader(KnownHeaders.Location, url);
             response.Body = emptyData;
 
-            await Respond(response);
+            Respond(response);
         }
 
         /// a generic responder method 
-        public async Task Respond(Response response)
+        public void Respond(Response response)
         {
             if (WebSession.Request.RequestLocked)
             {
