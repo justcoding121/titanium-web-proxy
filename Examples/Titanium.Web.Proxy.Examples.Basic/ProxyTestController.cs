@@ -183,7 +183,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //Filter URL
             if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("yahoo.com"))
             {
-                await e.Ok("<!DOCTYPE html>" +
+                e.Ok("<!DOCTYPE html>" +
                       "<html><body><h1>" +
                       "Website Blocked" +
                       "</h1>" +
