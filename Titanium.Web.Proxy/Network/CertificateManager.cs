@@ -322,7 +322,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="storeLocation"></param>
         /// <returns></returns>
-        private void RemoveTrustedRootCertificates(StoreLocation storeLocation)
+        private void RemoveTrustedRootCertificate(StoreLocation storeLocation)
         {
             if (RootCertificate == null)
             {
@@ -521,7 +521,7 @@ namespace Titanium.Web.Proxy.Network
                 }
                 else
                 {
-                    RemoveTrustedRootCertificatesAsAdministrator();
+                    RemoveTrustedRootCertificateAsAdmin();
                 }
             }
         }
@@ -695,10 +695,10 @@ namespace Titanium.Web.Proxy.Network
         public void RemoveTrustedRootCertificate()
         {
             //current user
-            RemoveTrustedRootCertificates(StoreLocation.CurrentUser);
+            RemoveTrustedRootCertificate(StoreLocation.CurrentUser);
 
             //current system
-            RemoveTrustedRootCertificates(StoreLocation.LocalMachine);
+            RemoveTrustedRootCertificate(StoreLocation.LocalMachine);
         }
 
         /// <summary>
@@ -706,7 +706,7 @@ namespace Titanium.Web.Proxy.Network
         /// Needs elevated permission. Works only on Windows.
         /// </summary>
         /// <returns></returns>
-        public bool RemoveTrustedRootCertificatesAsAdministrator()
+        public bool RemoveTrustedRootCertificateAsAdmin()
         {
             if (!RunTime.IsWindows || RunTime.IsRunningOnMono)
             {
