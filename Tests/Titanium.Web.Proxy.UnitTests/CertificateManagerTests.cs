@@ -29,10 +29,10 @@ namespace Titanium.Web.Proxy.UnitTests
                 {
                     tasks.Add(Task.Run(async () =>
                     {
-                        await Task.Delay(random.Next(0, 10) * 1000);
+                        await Task.Delay(random.Next(0, 10) * 100);
 
                         //get the connection
-                        var certificate = mgr.CreateCertificate(host, false);
+                        var certificate = await mgr.CreateCertificateAsync(host);
 
                         Assert.IsNotNull(certificate);
                     }));
