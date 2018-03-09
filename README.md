@@ -152,7 +152,7 @@ public async Task OnRequest(object sender, SessionEventArgs e)
     //Filter URL
     if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
     {
-	await e.Ok("<!DOCTYPE html>" +
+		e.Ok("<!DOCTYPE html>" +
 	      "<html><body><h1>" +
 	      "Website Blocked" +
 	      "</h1>" +
@@ -163,7 +163,7 @@ public async Task OnRequest(object sender, SessionEventArgs e)
     //Redirect example
     if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
     {
-	await e.Redirect("https://www.paypal.com");
+		e.Redirect("https://www.paypal.com");
     }
 }
 
