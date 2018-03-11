@@ -76,42 +76,6 @@ namespace Titanium.Web.Proxy.Models
         public X509Certificate2 GenericCertificate { get; set; }
 
         /// <summary>
-        /// List of host names to exclude using Regular Expressions.
-        /// </summary>
-        [Obsolete("ExcludedHttpsHostNameRegex is deprecated, please use BeforeTunnelConnect event instead.")]
-        public IEnumerable<string> ExcludedHttpsHostNameRegex
-        {
-            get { return ExcludedHttpsHostNameRegexList?.Select(x => x.ToString()).ToList(); }
-            set
-            {
-                if (IncludedHttpsHostNameRegex != null)
-                {
-                    throw new ArgumentException("Cannot set excluded when included is set");
-                }
-
-                ExcludedHttpsHostNameRegexList = value?.Select(x => new Regex(x, RegexOptions.Compiled)).ToList();
-            }
-        }
-
-        /// <summary>
-        /// List of host names to exclude using Regular Expressions.
-        /// </summary>
-        [Obsolete("IncludedHttpsHostNameRegex is deprecated, please use BeforeTunnelConnect event instead.")]
-        public IEnumerable<string> IncludedHttpsHostNameRegex
-        {
-            get { return IncludedHttpsHostNameRegexList?.Select(x => x.ToString()).ToList(); }
-            set
-            {
-                if (ExcludedHttpsHostNameRegex != null)
-                {
-                    throw new ArgumentException("Cannot set included when excluded is set");
-                }
-
-                IncludedHttpsHostNameRegexList = value?.Select(x => new Regex(x, RegexOptions.Compiled)).ToList();
-            }
-        }
-
-        /// <summary>
         /// Return true if this HTTP connect request should'nt be decrypted and instead be relayed
         /// Valid only for explicit endpoints
         /// </summary>
