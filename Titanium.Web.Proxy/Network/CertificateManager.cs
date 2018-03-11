@@ -295,7 +295,9 @@ namespace Titanium.Web.Proxy.Network
 
             var x509RootStore = new X509Store(StoreName.Root, storeLocation);
             var x509PersonalStore = new X509Store(StoreName.My, storeLocation);
-
+           
+            //TODO
+            //also it should do not duplicate if certificate already exists
             try
             {
                 x509RootStore.Open(OpenFlags.ReadWrite);
@@ -651,6 +653,9 @@ namespace Titanium.Web.Proxy.Network
             string fileName = Path.GetTempFileName();
             File.WriteAllBytes(fileName, RootCertificate.Export(X509ContentType.Pkcs12, PfxPassword));
 
+            //TODO
+            //need to figure out why this command do not add 
+            //certificate to currentuser\personal store
             var info = new ProcessStartInfo
             {
                 FileName = "certutil.exe",
