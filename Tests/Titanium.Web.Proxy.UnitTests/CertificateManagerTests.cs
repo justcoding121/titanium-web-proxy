@@ -15,25 +15,23 @@ namespace Titanium.Web.Proxy.UnitTests
         private readonly Random random = new Random();
 
         [TestMethod]
-        public async Task Simple_Create_Certificate_Test()
+        public async Task Simple_BC_Create_Certificate_Test()
         {
             var tasks = new List<Task>();
 
             var mgr = new CertificateManager(new Lazy<Action<Exception>>(() => (e => { })).Value);
-
+            mgr.CertificateEngine = CertificateEngine.BouncyCastle;
             mgr.ClearIdleCertificates();
-
-            foreach (string host in hostNames)
-            {
-                tasks.Add(Task.Run(async () =>
+            for (int i = 0; i < 5; i++)
+                foreach (string host in hostNames)
                 {
-
+                    tasks.Add(Task.Run(() =>
+                    {
                     //get the connection
-                    var certificate = await mgr.CreateCertificateAsync(host);
-
-                    Assert.IsNotNull(certificate);
-                }));
-            }
+                    var certificate = mgr.CreateCertificate(host, false);
+                        Assert.IsNotNull(certificate);
+                    }));
+                }
 
             await Task.WhenAll(tasks.ToArray());
 
@@ -42,27 +40,27 @@ namespace Titanium.Web.Proxy.UnitTests
 
         //uncomment this to compare WinCert maker performance with BC (BC takes more time for same test above)
         //cannot run this test in build server since trusting the certificate won't happen successfully
-        //[TestMethod]
+        [TestMethod]
         public async Task Simple_Create_Win_Certificate_Test()
         {
             var tasks = new List<Task>();
 
             var mgr = new CertificateManager(new Lazy<Action<Exception>>(() => (e => { })).Value);
-            mgr.CreateRootCertificate(true);
-            mgr.TrustRootCertificate();
-            mgr.ClearIdleCertificates();
             mgr.CertificateEngine = CertificateEngine.DefaultWindows;
+            mgr.CreateRootCertificate(true);
+            mgr.TrustRootCertificateAsAdmin();
+            mgr.ClearIdleCertificates();
 
-            foreach (string host in hostNames)
-            {
-                tasks.Add(Task.Run(async () =>
+            for (int i = 0; i < 5; i++)
+                foreach (string host in hostNames)
                 {
+                    tasks.Add(Task.Run(() =>
+                    {
                     //get the connection
-                    var certificate = await mgr.CreateCertificateAsync(host);
-
-                    Assert.IsNotNull(certificate);
-                }));
-            }
+                    var certificate = mgr.CreateCertificate(host, false);
+                        Assert.IsNotNull(certificate);
+                    }));
+                }
 
             await Task.WhenAll(tasks.ToArray());
 
