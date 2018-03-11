@@ -67,16 +67,6 @@ namespace Titanium.Web.Proxy
                     //filter out excluded host names
                     bool excluded = false;
 
-                    if (endPoint.ExcludedHttpsHostNameRegex != null)
-                    {
-                        excluded = endPoint.ExcludedHttpsHostNameRegexList.Any(x => x.IsMatch(connectHostname));
-                    }
-
-                    if (endPoint.IncludedHttpsHostNameRegex != null)
-                    {
-                        excluded = !endPoint.IncludedHttpsHostNameRegexList.Any(x => x.IsMatch(connectHostname));
-                    }
-
                     if(endPoint.BeforeTunnelConnect!=null)
                     {
                         excluded = await endPoint.BeforeTunnelConnect(connectHostname);
