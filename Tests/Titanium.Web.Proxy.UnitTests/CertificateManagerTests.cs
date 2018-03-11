@@ -19,7 +19,11 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(new Lazy<Action<Exception>>(() => (e => { })).Value);
+            var mgr = new CertificateManager(new Lazy<Action<Exception>>(() => (e =>
+            {
+                Console.WriteLine(e.ToString() + e.InnerException != null ? e.InnerException.ToString() : string.Empty);
+            })).Value);
+
             mgr.CertificateEngine = CertificateEngine.BouncyCastle;
             mgr.ClearIdleCertificates();
             for (int i = 0; i < 5; i++)
@@ -27,8 +31,8 @@ namespace Titanium.Web.Proxy.UnitTests
                 {
                     tasks.Add(Task.Run(() =>
                     {
-                    //get the connection
-                    var certificate = mgr.CreateCertificate(host, false);
+                        //get the connection
+                        var certificate = mgr.CreateCertificate(host, false);
                         Assert.IsNotNull(certificate);
                     }));
                 }
@@ -45,10 +49,14 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(new Lazy<Action<Exception>>(() => (e => { })).Value);
+            var mgr = new CertificateManager(new Lazy<Action<Exception>>(() => (e =>
+            {
+                Console.WriteLine(e.ToString() + e.InnerException != null ? e.InnerException.ToString() : string.Empty);
+            })).Value);
+
             mgr.CertificateEngine = CertificateEngine.DefaultWindows;
             mgr.CreateRootCertificate(true);
-            mgr.TrustRootCertificateAsAdmin();
+            mgr.TrustRootCertificate();
             mgr.ClearIdleCertificates();
 
             for (int i = 0; i < 5; i++)
@@ -56,8 +64,8 @@ namespace Titanium.Web.Proxy.UnitTests
                 {
                     tasks.Add(Task.Run(() =>
                     {
-                    //get the connection
-                    var certificate = mgr.CreateCertificate(host, false);
+                        //get the connection
+                        var certificate = mgr.CreateCertificate(host, false);
                         Assert.IsNotNull(certificate);
                     }));
                 }
