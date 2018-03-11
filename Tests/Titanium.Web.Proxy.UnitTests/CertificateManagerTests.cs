@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy.UnitTests
 
         //uncomment this to compare WinCert maker performance with BC (BC takes more time for same test above)
         //cannot run this test in build server since trusting the certificate won't happen successfully
-        [TestMethod]
+        //[TestMethod]
         public async Task Simple_Create_Win_Certificate_Test()
         {
             var tasks = new List<Task>();
@@ -57,6 +57,7 @@ namespace Titanium.Web.Proxy.UnitTests
             mgr.CertificateEngine = CertificateEngine.DefaultWindows;
             mgr.CreateRootCertificate(true);
             mgr.TrustRootCertificate();
+            //mgr.TrustRootCertificateAsAdmin();
             mgr.ClearIdleCertificates();
 
             for (int i = 0; i < 5; i++)
