@@ -165,31 +165,31 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //    e.MultipartRequestPartSent += MultipartRequestPartSent;
             //}
 
-            if (e.WebSession.Request.HasBody)
-            {
-                //Get/Set request body bytes
-                var bodyBytes = await e.GetRequestBody();
-                await e.SetRequestBody(bodyBytes);
+            //if (e.WebSession.Request.HasBody)
+            //{
+            //    //Get/Set request body bytes
+            //    var bodyBytes = await e.GetRequestBody();
+            //    await e.SetRequestBody(bodyBytes);
 
-                //Get/Set request body as string
-                string bodyString = await e.GetRequestBodyAsString();
-                await e.SetRequestBodyString(bodyString);
+            //    //Get/Set request body as string
+            //    string bodyString = await e.GetRequestBodyAsString();
+            //    await e.SetRequestBodyString(bodyString);
 
-                //requestBodyHistory[e.Id] = bodyString;
-            }
+            //    //requestBodyHistory[e.Id] = bodyString;
+            //}
 
             //To cancel a request with a custom HTML content
             //Filter URL
-            if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("yahoo.com"))
-            {
-                e.Ok("<!DOCTYPE html>" +
-                      "<html><body><h1>" +
-                      "Website Blocked" +
-                      "</h1>" +
-                      "<p>Blocked by titanium web proxy.</p>" +
-                      "</body>" +
-                      "</html>");
-            }
+            //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("yahoo.com"))
+            //{
+            //    e.Ok("<!DOCTYPE html>" +
+            //          "<html><body><h1>" +
+            //          "Website Blocked" +
+            //          "</h1>" +
+            //          "<p>Blocked by titanium web proxy.</p>" +
+            //          "</body>" +
+            //          "</html>");
+            //}
 
             ////Redirect example
             //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
@@ -219,27 +219,27 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //    var requestBody = requestBodyHistory[e.Id];
             //}
 
-            //read response headers
-            responseHeaderHistory[e.Id] = e.WebSession.Response.Headers;
+            ////read response headers
+            //responseHeaderHistory[e.Id] = e.WebSession.Response.Headers;
 
-            // print out process id of current session
-            //Console.WriteLine($"PID: {e.WebSession.ProcessId.Value}");
+            //// print out process id of current session
+            ////Console.WriteLine($"PID: {e.WebSession.ProcessId.Value}");
 
-            //if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
-            if (e.WebSession.Request.Method == "GET" || e.WebSession.Request.Method == "POST")
-            {
-                if (e.WebSession.Response.StatusCode == (int)HttpStatusCode.OK)
-                {
-                    if (e.WebSession.Response.ContentType != null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
-                    {
-                        var bodyBytes = await e.GetResponseBody();
-                        await e.SetResponseBody(bodyBytes);
+            ////if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
+            //if (e.WebSession.Request.Method == "GET" || e.WebSession.Request.Method == "POST")
+            //{
+            //    if (e.WebSession.Response.StatusCode == (int)HttpStatusCode.OK)
+            //    {
+            //        if (e.WebSession.Response.ContentType != null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
+            //        {
+            //            var bodyBytes = await e.GetResponseBody();
+            //            await e.SetResponseBody(bodyBytes);
 
-                        string body = await e.GetResponseBodyAsString();
-                        await e.SetResponseBodyString(body);
-                    }
-                }
-            }
+            //            string body = await e.GetResponseBodyAsString();
+            //            await e.SetResponseBodyString(body);
+            //        }
+            //    }
+            //}
         }
 
         /// <summary>
