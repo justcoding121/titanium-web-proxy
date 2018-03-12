@@ -67,18 +67,21 @@ namespace Titanium.Web.Proxy.Network
         internal bool CertValidated => RootCertificate != null;
 
         /// <summary>
-        /// Trust the RootCertificate used by this proxy server
-        /// Note that this do not make the client trust the certificate!
-        /// This would import the root certificate to the certificate store of machine that runs this proxy server
+        /// Trust the RootCertificate used by this proxy server for current user
         /// </summary>
         internal bool UserTrustRoot { get; set; } = false;
 
         /// <summary>
-        /// Needs elevated permission. Works only on Windows.
-        /// <para>Puts the certificate to the local machine's certificate store.</para>
-        /// <para>Certutil.exe is a command-line program that is installed as part of Certificate Services</para>
+        /// Trust the RootCertificate used by this proxy server for current machine
+        /// Needs elevated permission, otherwise will fail silently. 
         /// </summary>
-        internal bool MachineTrustRootAsAdministrator { get; set; } = false;
+        internal bool MachineTrustRoot { get; set; } = false;
+
+        /// <summary>
+        /// Whether trust operations should be done with elevated privillages
+        /// Will prompt with UAC if required. Works only on Windows.
+        /// </summary>
+        internal bool TrustRootAsAdministrator { get; set; } = false;
 
         /// <summary>
         /// Select Certificate Engine 
@@ -186,9 +189,36 @@ namespace Titanium.Web.Proxy.Network
         public X509KeyStorageFlags StorageFlag { get; set; } = X509KeyStorageFlags.Exportable;
 
 
-        internal CertificateManager(Action<Exception> exceptionFunc)
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="rootCertificateName">Name of root certificate.</param>
+        /// <param name="rootCertificateIssuerName">Name of root certificate issuer.</param>
+        /// <param name="userTrustRootCertificate"></param>
+        /// <param name="machineTrustRootCertificate">Note:setting machineTrustRootCertificate to true will force userTrustRootCertificate to true</param>
+        /// <param name="trustRootCertificateAsAdmin "></param>
+        /// <param name="exceptionFunc"></param>
+        internal CertificateManager(string rootCertificateName, string rootCertificateIssuerName, bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin, Action < Exception> exceptionFunc)
         {
             this.exceptionFunc = exceptionFunc;
+
+            UserTrustRoot = userTrustRootCertificate;
+            if (machineTrustRootCertificate)
+            {
+                MachineTrustRoot = machineTrustRootCertificate;
+            }
+
+            TrustRootAsAdministrator = trustRootCertificateAsAdmin;
+            if (rootCertificateName != null)
+            {
+                RootCertificateName = rootCertificateName;
+            }
+
+            if (rootCertificateIssuerName != null)
+            {
+                RootCertificateIssuerName = rootCertificateIssuerName;
+            }
+
             if (RunTime.IsWindows)
             {
                 //this is faster in Windows based on tests (see unit test project CertificateManagerTests.cs)
@@ -617,6 +647,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         public void TrustRootCertificate(bool machineTrusted = false)
         {
+
             //currentUser\personal
             InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
 
@@ -698,21 +729,20 @@ namespace Titanium.Web.Proxy.Network
         /// Ensure certificates are setup (creates root if required) 
         /// Also makes root certificate trusted based on initial setup from proxy constructor for user/machine trust.
         /// </summary>
-        public void EnsureRootCertificate(bool machineTrustRootCertificate = false)
+        public void EnsureRootCertificate()
         {
             if (!CertValidated)
             {
                 CreateRootCertificate();
             }
 
-            if (UserTrustRoot)
+            if (TrustRootAsAdministrator)
             {
-                TrustRootCertificate(machineTrustRootCertificate);
+                TrustRootCertificateAsAdmin(MachineTrustRoot);
             }
-
-            if (MachineTrustRootAsAdministrator)
+            else if (UserTrustRoot)
             {
-                TrustRootCertificateAsAdmin();
+                TrustRootCertificate(MachineTrustRoot);
             }
 
         }
@@ -720,12 +750,20 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// Ensure certificates are setup (creates root if required) 
         /// Also makes root certificate trusted based on provided parameters
+        /// Note:setting machineTrustRootCertificate to true will force userTrustRootCertificate to true
         /// </summary>
-        public void EnsureRootCertificate(bool userTrustRootCertificate, bool machineTrustRootCertificate, bool machineTrustRootCertificateAsAdmin)
+        public void EnsureRootCertificate(bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false, bool trustRootCertificateAsAdmin = false)
         {
+            if(machineTrustRootCertificate)
+            {
+                userTrustRootCertificate = true;
+            }
+
             UserTrustRoot = userTrustRootCertificate;
-            MachineTrustRootAsAdministrator = machineTrustRootCertificateAsAdmin;
-            EnsureRootCertificate(machineTrustRootCertificate);
+            MachineTrustRoot = machineTrustRootCertificate;
+            TrustRootAsAdministrator = trustRootCertificateAsAdmin;
+
+            EnsureRootCertificate();
         }
 
 
