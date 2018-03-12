@@ -21,7 +21,7 @@ namespace Titanium.Web.Proxy.UnitTests
 
             var mgr = new CertificateManager(new Lazy<Action<Exception>>(() => (e =>
             {
-                Console.WriteLine(e.ToString() + e.InnerException != null ? e.InnerException.ToString() : string.Empty);
+                //Console.WriteLine(e.ToString() + e.InnerException != null ? e.InnerException.ToString() : string.Empty);
             })).Value);
 
             mgr.CertificateEngine = CertificateEngine.BouncyCastle;
@@ -51,7 +51,7 @@ namespace Titanium.Web.Proxy.UnitTests
 
             var mgr = new CertificateManager(new Lazy<Action<Exception>>(() => (e =>
             {
-                Console.WriteLine(e.ToString() + e.InnerException != null ? e.InnerException.ToString() : string.Empty);
+                //Console.WriteLine(e.ToString() + e.InnerException != null ? e.InnerException.ToString() : string.Empty);
             })).Value);
 
             mgr.CertificateEngine = CertificateEngine.DefaultWindows;
