@@ -703,17 +703,18 @@ namespace Titanium.Web.Proxy.Network
             if (!CertValidated)
             {
                 CreateRootCertificate();
-
-                if (UserTrustRoot)
-                {
-                    TrustRootCertificate(machineTrustRootCertificate);
-                }
-
-                if (MachineTrustRootAsAdministrator)
-                {
-                    TrustRootCertificateAsAdmin();
-                }
             }
+
+            if (UserTrustRoot)
+            {
+                TrustRootCertificate(machineTrustRootCertificate);
+            }
+
+            if (MachineTrustRootAsAdministrator)
+            {
+                TrustRootCertificateAsAdmin();
+            }
+
         }
 
         /// <summary>
@@ -823,7 +824,7 @@ namespace Titanium.Web.Proxy.Network
                 ErrorDialog = false,
                 WindowStyle = ProcessWindowStyle.Hidden
                 }
-                    });
+              });
             }
 
             var success = true;
