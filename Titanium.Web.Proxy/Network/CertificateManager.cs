@@ -9,6 +9,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network.Certificate;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Network
 {
@@ -70,14 +71,14 @@ namespace Titanium.Web.Proxy.Network
         /// Note that this do not make the client trust the certificate!
         /// This would import the root certificate to the certificate store of machine that runs this proxy server
         /// </summary>
-        internal bool TrustRoot { get; set; } = false;
+        internal bool UserTrustRoot { get; set; } = false;
 
         /// <summary>
         /// Needs elevated permission. Works only on Windows.
         /// <para>Puts the certificate to the local machine's certificate store.</para>
         /// <para>Certutil.exe is a command-line program that is installed as part of Certificate Services</para>
         /// </summary>
-        internal bool TrustRootAsAdministrator { get; set; } = false;
+        internal bool MachineTrustRootAsAdministrator { get; set; } = false;
 
         /// <summary>
         /// Select Certificate Engine 
@@ -188,7 +189,7 @@ namespace Titanium.Web.Proxy.Network
         internal CertificateManager(Action<Exception> exceptionFunc)
         {
             this.exceptionFunc = exceptionFunc;
-            if(RunTime.IsWindows)
+            if (RunTime.IsWindows)
             {
                 //this is faster in Windows based on tests (see unit test project CertificateManagerTests.cs)
                 CertificateEngine = CertificateEngine.DefaultWindows;
@@ -247,10 +248,17 @@ namespace Titanium.Web.Proxy.Network
             return fileName;
         }
 
-        private bool FindRootCertificate(StoreLocation storeLocation)
+        /// <summary>
+        /// For CertificateEngine.DefaultWindows to work we need to also check in personal store
+        /// </summary>
+        /// <param name="storeLocation"></param>
+        /// <returns></returns>
+        private bool RootCertificateInstalled(StoreLocation storeLocation)
         {
             string value = $"{RootCertificate.Issuer}";
-            return FindCertificates(StoreName.Root, storeLocation, value).Count > 0;
+            return FindCertificates(StoreName.Root, storeLocation, value).Count > 0
+                && (CertificateEngine != CertificateEngine.DefaultWindows
+                || FindCertificates(StoreName.My, storeLocation, value).Count > 0);
         }
 
         private X509Certificate2Collection FindCertificates(StoreName storeName, StoreLocation storeLocation, string findValue)
@@ -267,53 +275,41 @@ namespace Titanium.Web.Proxy.Network
             }
         }
 
-        private X509Certificate2 MakeCertificate(string certificateName, bool isRootCertificate)
-        {
-            if (!isRootCertificate && RootCertificate == null)
-            {
-                CreateRootCertificate();
-            }
-
-            return certEngine.MakeCertificate(certificateName, isRootCertificate, RootCertificate);
-        }
-
         /// <summary>
         /// Make current machine trust the Root Certificate used by this proxy
         /// </summary>
         /// <param name="storeLocation"></param>
         /// <returns></returns>
-        private void TrustRootCertificate(StoreLocation storeLocation)
+        private void InstallCertificate(StoreName storeName, StoreLocation storeLocation)
         {
             if (RootCertificate == null)
             {
                 exceptionFunc(
-                    new Exception("Could not set root certificate"
-                                  + " as system proxy since it is null or empty."));
+                    new Exception("Could not install certificate"
+                                  + " as it is null or empty."));
 
                 return;
             }
 
-            var x509RootStore = new X509Store(StoreName.Root, storeLocation);
-            var x509PersonalStore = new X509Store(StoreName.My, storeLocation);
+            var x509store = new X509Store(storeName, storeLocation);
 
+            //TODO
+            //also it should do not duplicate if certificate already exists
             try
             {
-                x509RootStore.Open(OpenFlags.ReadWrite);
-                x509PersonalStore.Open(OpenFlags.ReadWrite);
+                x509store.Open(OpenFlags.ReadWrite);
+                x509store.Add(RootCertificate);
 
-                x509RootStore.Add(RootCertificate);
-                x509PersonalStore.Add(RootCertificate);
             }
             catch (Exception e)
             {
                 exceptionFunc(
                     new Exception("Failed to make system trust root certificate "
-                                  + $" for {storeLocation} store location. You may need admin rights.", e));
+                                  + $" for {storeName}\\{storeLocation} store location. You may need admin rights.", e));
             }
             finally
             {
-                x509RootStore.Close();
-                x509PersonalStore.Close();
+                x509store.Close();
             }
         }
 
@@ -322,27 +318,24 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="storeLocation"></param>
         /// <returns></returns>
-        private void RemoveTrustedRootCertificate(StoreLocation storeLocation)
+        private void UninstallCertificate(StoreName storeName, StoreLocation storeLocation, X509Certificate2 certificate)
         {
-            if (RootCertificate == null)
+            if (certificate == null)
             {
                 exceptionFunc(
-                    new Exception("Could not set root certificate"
-                                  + " as system proxy since it is null or empty."));
+                    new Exception("Could not remove certificate"
+                                  + " as it is null or empty."));
 
                 return;
             }
 
-            var x509RootStore = new X509Store(StoreName.Root, storeLocation);
-            var x509PersonalStore = new X509Store(StoreName.My, storeLocation);
+            var x509Store = new X509Store(storeName, storeLocation);
 
             try
             {
-                x509RootStore.Open(OpenFlags.ReadWrite);
-                x509PersonalStore.Open(OpenFlags.ReadWrite);
+                x509Store.Open(OpenFlags.ReadWrite);
 
-                x509RootStore.Remove(RootCertificate);
-                x509PersonalStore.Remove(RootCertificate);
+                x509Store.Remove(certificate);
             }
             catch (Exception e)
             {
@@ -352,9 +345,26 @@ namespace Titanium.Web.Proxy.Network
             }
             finally
             {
-                x509RootStore.Close();
-                x509PersonalStore.Close();
+                x509Store.Close();
             }
+        }
+
+        private X509Certificate2 MakeCertificate(string certificateName, bool isRootCertificate)
+        {
+            if (!isRootCertificate && RootCertificate == null)
+            {
+                CreateRootCertificate();
+            }
+
+            var certificate = certEngine.MakeCertificate(certificateName, isRootCertificate, RootCertificate);
+
+            if (CertificateEngine == CertificateEngine.DefaultWindows)
+            {
+                //prevent certificates getting piled up in User\Personal store
+                Task.Run(() => UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, certificate));
+            }
+
+            return certificate;
         }
 
         /// <summary>
@@ -372,22 +382,32 @@ namespace Titanium.Web.Proxy.Network
                 if (!isRootCertificate && SaveFakeCertificates)
                 {
                     string path = GetCertificatePath();
-                    string subjectName = BCCertificateMaker.CNRemoverRegex.Replace(certificateName, string.Empty);
+                    string subjectName = ProxyConstants.CNRemoverRegex.Replace(certificateName, string.Empty);
                     subjectName = subjectName.Replace("*", "$x$");
-                    subjectName = Path.Combine(path, subjectName + ".pfx");
+                    var certificatePath = Path.Combine(path, subjectName + ".pfx");
 
-                    if (!File.Exists(subjectName))
+                    if (!File.Exists(certificatePath))
                     {
                         certificate = MakeCertificate(certificateName, isRootCertificate);
-                        File.WriteAllBytes(subjectName, certificate.Export(X509ContentType.Pkcs12));
+
+                        //store as cache
+                        Task.Run(() =>
+                        {
+                            try
+                            {
+                                File.WriteAllBytes(certificatePath, certificate.Export(X509ContentType.Pkcs12));
+                            }
+                            catch (Exception e) { exceptionFunc(new Exception("Failed to save fake certificate.", e)); }
+                        });
                     }
                     else
                     {
                         try
                         {
-                            certificate = new X509Certificate2(subjectName, string.Empty, StorageFlag);
+                            certificate = new X509Certificate2(certificatePath, string.Empty, StorageFlag);
                         }
-                        catch /* (Exception e)*/
+                        //if load failed create again
+                        catch
                         {
                             certificate = MakeCertificate(certificateName, isRootCertificate);
                         }
@@ -458,14 +478,6 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        /// Stops the certificate cache clear process
-        /// </summary>
-        internal void StopClearIdleCertificates()
-        {
-            clearCertificates = false;
-        }
-
-        /// <summary>
         /// A method to clear outdated certificates
         /// </summary>
         internal async void ClearIdleCertificates()
@@ -486,62 +498,13 @@ namespace Titanium.Web.Proxy.Network
             }
         }
 
-        /// <summary>
-        /// Load or Create Certificate : after "Test Is the root certificate used by this proxy is valid?"
-        /// <param name="trustRootCertificate">"Make current machine trust the Root Certificate used by this proxy" ==> True or False</param>
-        /// </summary>
-        public void EnsureRootCertificate(bool trustRootCertificate, bool trustRootCertificateAsAdmin)
-        {
-            this.TrustRoot = trustRootCertificate;
-            this.TrustRootAsAdministrator = trustRootCertificateAsAdmin;
-            EnsureRootCertificate();
-        }
 
         /// <summary>
-        /// Create/load root if required and ensure that the root certificate is trusted.
+        /// Stops the certificate cache clear process
         /// </summary>
-        public void EnsureRootCertificate()
+        internal void StopClearIdleCertificates()
         {
-            if (!CertValidated)
-            {
-                CreateRootCertificate();
-
-                if (TrustRoot)
-                {
-                    TrustRootCertificate();
-                }
-
-                if (TrustRootAsAdministrator)
-                {
-                    TrustRootCertificateAsAdmin();
-                }
-            }
-        }
-
-        public void ClearRootCertificate()
-        {
-            certificateCache.Clear();
-            rootCertificate = null;
-        }
-
-        public X509Certificate2 LoadRootCertificate()
-        {
-            string fileName = GetRootCertificatePath();
-            pfxFileExists = File.Exists(fileName);
-            if (!pfxFileExists)
-            {
-                return null;
-            }
-
-            try
-            {
-                return new X509Certificate2(fileName, PfxPassword, StorageFlag);
-            }
-            catch (Exception e)
-            {
-                exceptionFunc(e);
-                return null;
-            }
+            clearCertificates = false;
         }
 
         /// <summary>
@@ -603,7 +566,31 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        /// Manually load a Root certificate file(.pfx file)
+        /// Loads root certificate from current executing assembly location with expected name rootCert.pfx
+        /// </summary>
+        /// <returns></returns>
+        public X509Certificate2 LoadRootCertificate()
+        {
+            string fileName = GetRootCertificatePath();
+            pfxFileExists = File.Exists(fileName);
+            if (!pfxFileExists)
+            {
+                return null;
+            }
+
+            try
+            {
+                return new X509Certificate2(fileName, PfxPassword, StorageFlag);
+            }
+            catch (Exception e)
+            {
+                exceptionFunc(e);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Manually load a Root certificate file from give path (.pfx file)
         /// </summary> 
         /// <param name="pfxFilePath">Set the name(path) of the .pfx file. If it is string.Empty Root certificate file will be named as "rootCert.pfx" (and will be saved in proxy dll directory)</param>
         /// <param name="password">Set a password for the .pfx file</param>
@@ -625,41 +612,66 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        /// Trusts the root certificate.
+        /// Trusts the root certificate in user store, optionally also in machine store
+        /// Machine trust would require elevated permissions (will silently fail otherwise)
         /// </summary>
-        public void TrustRootCertificate()
+        public void TrustRootCertificate(bool machineTrusted = false)
         {
-            //current user
-            TrustRootCertificate(StoreLocation.CurrentUser);
+            //currentUser\personal
+            InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
 
-            //current system
-            TrustRootCertificate(StoreLocation.LocalMachine);
+            if (!machineTrusted)
+            {
+                //currentUser\Root
+                InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
+            }
+            else
+            {
+                //current system
+                InstallCertificate(StoreName.My, StoreLocation.LocalMachine);
+
+                //this adds to both currentUser\Root & currentMachine\Root
+                InstallCertificate(StoreName.Root, StoreLocation.LocalMachine);
+            }
         }
 
         /// <summary>
-        /// Puts the certificate to the local machine's certificate store.
-        /// Needs elevated permission. Works only on Windows.
+        /// Puts the certificate to the user store, optionally also to machine store
+        /// Prompts with UAC if elevated permissions are required. Works only on Windows.
         /// </summary>
         /// <returns></returns>
-        public bool TrustRootCertificateAsAdmin()
+        public bool TrustRootCertificateAsAdmin(bool machineTrusted = false)
         {
             if (!RunTime.IsWindows || RunTime.IsRunningOnMono)
             {
                 return false;
             }
 
-            string fileName = Path.GetTempFileName();
-            File.WriteAllBytes(fileName, RootCertificate.Export(X509ContentType.Pkcs12, PfxPassword));
+            //currentUser\Personal
+            InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
 
-            var info = new ProcessStartInfo
+            string pfxFileName = Path.GetTempFileName();
+            File.WriteAllBytes(pfxFileName, RootCertificate.Export(X509ContentType.Pkcs12, PfxPassword));
+
+            //currentUser\Root, currentMachine\Personal &  currentMachine\Root
+            var info = new ProcessStartInfo()
             {
                 FileName = "certutil.exe",
-                Arguments = "-importPFX -p \"" + PfxPassword + "\" -f \"" + fileName + "\"",
                 CreateNoWindow = true,
                 UseShellExecute = true,
                 Verb = "runas",
                 ErrorDialog = false,
+                WindowStyle = ProcessWindowStyle.Hidden
             };
+
+            if (!machineTrusted)
+            {
+                info.Arguments = "-f -user -p \"" + PfxPassword + "\" -importpfx root \"" + pfxFileName + "\"";
+            }
+            else
+            {
+                info.Arguments = "-importPFX -p \"" + PfxPassword + "\" -f \"" + pfxFileName + "\"";
+            }
 
             try
             {
@@ -670,11 +682,12 @@ namespace Titanium.Web.Proxy.Network
                 }
 
                 process.WaitForExit();
+                File.Delete(pfxFileName);
 
-                File.Delete(fileName);
             }
-            catch
+            catch (Exception e)
             {
+                exceptionFunc(e);
                 return false;
             }
 
@@ -682,63 +695,46 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        /// Removes the trusted certificates.
+        /// Ensure certificates are setup (creates root if required) 
+        /// Also makes root certificate trusted based on initial setup from proxy constructor for user/machine trust.
         /// </summary>
-        public void RemoveTrustedRootCertificate()
+        public void EnsureRootCertificate(bool machineTrustRootCertificate = false)
         {
-            //current user
-            RemoveTrustedRootCertificate(StoreLocation.CurrentUser);
+            if (!CertValidated)
+            {
+                CreateRootCertificate();
+            }
 
-            //current system
-            RemoveTrustedRootCertificate(StoreLocation.LocalMachine);
+            if (UserTrustRoot)
+            {
+                TrustRootCertificate(machineTrustRootCertificate);
+            }
+
+            if (MachineTrustRootAsAdministrator)
+            {
+                TrustRootCertificateAsAdmin();
+            }
+
         }
 
         /// <summary>
-        /// Removes the trusted certificates from the local machine's certificate store.
-        /// Needs elevated permission. Works only on Windows.
+        /// Ensure certificates are setup (creates root if required) 
+        /// Also makes root certificate trusted based on provided parameters
         /// </summary>
-        /// <returns></returns>
-        public bool RemoveTrustedRootCertificateAsAdmin()
+        public void EnsureRootCertificate(bool userTrustRootCertificate, bool machineTrustRootCertificate, bool machineTrustRootCertificateAsAdmin)
         {
-            if (!RunTime.IsWindows || RunTime.IsRunningOnMono)
-            {
-                return false;
-            }
-
-            var info = new ProcessStartInfo
-            {
-                FileName = "certutil.exe",
-                Arguments = "-delstore Root \"" + RootCertificateName + "\"",
-                CreateNoWindow = true,
-                UseShellExecute = true,
-                Verb = "runas",
-                ErrorDialog = false,
-            };
-
-            try
-            {
-                var process = Process.Start(info);
-                if (process == null)
-                {
-                    return false;
-                }
-
-                process.WaitForExit();
-            }
-            catch
-            {
-                return false;
-            }
-
-            return true;
+            UserTrustRoot = userTrustRootCertificate;
+            MachineTrustRootAsAdministrator = machineTrustRootCertificateAsAdmin;
+            EnsureRootCertificate(machineTrustRootCertificate);
         }
+
 
         /// <summary>
         /// Determines whether the root certificate is trusted.
         /// </summary>
-        public bool IsRootCertificateTrusted()
+        public bool IsRootCertificateUserTrusted()
         {
-            return FindRootCertificate(StoreLocation.CurrentUser) || IsRootCertificateMachineTrusted();
+            return RootCertificateInstalled(StoreLocation.CurrentUser) || IsRootCertificateMachineTrusted();
         }
 
         /// <summary>
@@ -746,10 +742,119 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         public bool IsRootCertificateMachineTrusted()
         {
-            return FindRootCertificate(StoreLocation.LocalMachine);
+            return RootCertificateInstalled(StoreLocation.LocalMachine);
         }
 
-     
+        /// <summary>
+        /// Removes the trusted certificates from user store, optionally also from machine store
+        /// To remove from machine store elevated permissions are required (will fail silently otherwise)
+        /// </summary>
+        public void RemoveTrustedRootCertificate(bool machineTrusted = false)
+        {
+            //currentUser\personal
+            UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
+
+            if (!machineTrusted)
+            {
+                //currentUser\Root
+                UninstallCertificate(StoreName.Root, StoreLocation.CurrentUser, RootCertificate);
+            }
+            else
+            {
+                //current system
+                UninstallCertificate(StoreName.My, StoreLocation.LocalMachine, RootCertificate);
+
+                //this adds to both currentUser\Root & currentMachine\Root
+                UninstallCertificate(StoreName.Root, StoreLocation.LocalMachine, RootCertificate);
+            }
+
+        }
+
+        /// <summary>
+        /// Removes the trusted certificates from user store, optionally also from machine store
+        //  Prompts with UAC if elevated permissions are required. Works only on Windows.
+        /// </summary>
+        /// <returns></returns>
+        public bool RemoveTrustedRootCertificateAsAdmin(bool machineTrusted = false)
+        {
+            if (!RunTime.IsWindows || RunTime.IsRunningOnMono)
+            {
+                return false;
+            }
+            //currentUser\Personal
+            UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
+
+            var infos = new List<ProcessStartInfo>();
+            if (!machineTrusted)
+            {
+                //currentUser\Root
+                infos.Add(new ProcessStartInfo()
+                {
+                    FileName = "certutil.exe",
+                    Arguments = "-delstore -user Root \"" + RootCertificateName + "\"",
+                    CreateNoWindow = true,
+                    UseShellExecute = true,
+                    Verb = "runas",
+                    ErrorDialog = false,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                });
+
+            }
+            else
+            {
+                infos.AddRange(
+                    new List<ProcessStartInfo>() { 
+                //currentMachine\Personal
+                new ProcessStartInfo(){
+                FileName = "certutil.exe",
+                Arguments = "-delstore My \"" + RootCertificateName + "\"",
+                CreateNoWindow = true,
+                UseShellExecute = true,
+                Verb = "runas",
+                ErrorDialog = false,
+                WindowStyle = ProcessWindowStyle.Hidden
+                },
+                //currentUser\Personal & currentMachine\Personal
+                new ProcessStartInfo(){
+                FileName = "certutil.exe",
+                Arguments = "-delstore Root \"" + RootCertificateName + "\"",
+                CreateNoWindow = true,
+                UseShellExecute = true,
+                Verb = "runas",
+                ErrorDialog = false,
+                WindowStyle = ProcessWindowStyle.Hidden
+                }
+              });
+            }
+
+            var success = true;
+            try
+            {
+                foreach (var info in infos)
+                {
+                    var process = Process.Start(info);
+
+                    if (process == null)
+                    {
+                        success = false;
+                    }
+
+                    process.WaitForExit();
+                }
+            }
+            catch
+            {
+                success = false;
+            }
+
+            return success;
+        }
+
+        public void ClearRootCertificate()
+        {
+            certificateCache.Clear();
+            rootCertificate = null;
+        }
 
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.

@@ -250,17 +250,8 @@ namespace Titanium.Web.Proxy.Network.Certificate
             typeX509Enrollment.InvokeMember("InstallResponse", BindingFlags.InvokeMethod, null, x509Enrollment, typeValue);
             typeValue = new object[] { null, 0, 1 };
 
-            try
-            {
-                string empty = (string)typeX509Enrollment.InvokeMember("CreatePFX", BindingFlags.InvokeMethod, null, x509Enrollment, typeValue);
-                return new X509Certificate2(Convert.FromBase64String(empty), string.Empty, X509KeyStorageFlags.Exportable);
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
-
-            return null;
+            string empty = (string)typeX509Enrollment.InvokeMember("CreatePFX", BindingFlags.InvokeMethod, null, x509Enrollment, typeValue);
+            return new X509Certificate2(Convert.FromBase64String(empty), string.Empty, X509KeyStorageFlags.Exportable);
         }
 
         private X509Certificate2 MakeCertificateInternal(string sSubjectCN, bool isRoot,

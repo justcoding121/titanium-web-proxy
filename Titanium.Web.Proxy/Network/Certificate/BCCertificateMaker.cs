@@ -17,6 +17,7 @@ using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Utilities;
 using Org.BouncyCastle.X509;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Network.Certificate
 {
@@ -25,8 +26,6 @@ namespace Titanium.Web.Proxy.Network.Certificate
     /// </summary>
     internal class BCCertificateMaker : ICertificateMaker
     {
-        public static readonly Regex CNRemoverRegex = new Regex(@"^CN\s*=\s*", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
         private const int certificateValidDays = 1825;
         private const int certificateGraceDays = 366;
 
@@ -149,7 +148,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             {
                 try
                 {
-                    x509Certificate.FriendlyName = CNRemoverRegex.Replace(subjectName, string.Empty);
+                    x509Certificate.FriendlyName = ProxyConstants.CNRemoverRegex.Replace(subjectName, string.Empty);
                 }
                 catch (PlatformNotSupportedException)
                 {
