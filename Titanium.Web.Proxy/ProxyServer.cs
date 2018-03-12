@@ -99,7 +99,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Seconds client/server connection are to be kept alive when waiting for read/write to complete
         /// </summary>
-        public int ConnectionTimeOutSeconds { get; set; }        
+        public int ConnectionTimeOutSeconds { get; set; }
 
         /// <summary>
         /// Total number of active client connections
@@ -208,31 +208,22 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Constructor
         /// </summary>
-        public ProxyServer() : this(null, null, true, false)
+        /// <param name="userTrustRootCertificate"></param>
+        /// <param name="machineTrustRootCertificate">Note:setting machineTrustRootCertificate to true will force userTrustRootCertificate to true</param>
+        /// <param name="trustRootCertificateAsAdmin "></param>
+        public ProxyServer(bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false, bool trustRootCertificateAsAdmin = false) : this(null, null, userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin)
         {
         }
-
-        /// <summary>
-        /// Constructor
-        /// </summary>
-        public ProxyServer(bool trustRoot) : this(null, null, trustRoot, false)
-        {
-        }
-
-        /// <summary>
-        /// Constructor
-        /// </summary>
-        public ProxyServer(bool trustRoot, bool trustRootAsAdmin) : this(null, null, trustRoot, trustRootAsAdmin)
-        {
-        }
-
 
         /// <summary>
         /// Constructor.
         /// </summary>
         /// <param name="rootCertificateName">Name of root certificate.</param>
         /// <param name="rootCertificateIssuerName">Name of root certificate issuer.</param>
-        public ProxyServer(string rootCertificateName, string rootCertificateIssuerName, bool trustRootCertificate, bool trustRootCertificateAsAdmin)
+        /// <param name="userTrustRootCertificate"></param>
+        /// <param name="machineTrustRootCertificate">Note:setting machineTrustRootCertificate to true will force userTrustRootCertificate to true</param>
+        /// <param name="trustRootCertificateAsAdmin "></param>
+        public ProxyServer(string rootCertificateName, string rootCertificateIssuerName, bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false, bool trustRootCertificateAsAdmin = false)
         {
             //default values
             ConnectionTimeOutSeconds = 30;
@@ -244,19 +235,7 @@ namespace Titanium.Web.Proxy
                 systemProxySettingsManager = new SystemProxyManager();
             }
 
-            CertificateManager = new CertificateManager(ExceptionFunc);
-            CertificateManager.UserTrustRoot = trustRootCertificate;
-            CertificateManager.MachineTrustRootAsAdministrator = trustRootCertificateAsAdmin;
-
-            if (rootCertificateName != null)
-            {
-                CertificateManager.RootCertificateName = rootCertificateName;
-            }
-
-            if (rootCertificateIssuerName != null)
-            {
-                CertificateManager.RootCertificateIssuerName = rootCertificateIssuerName;
-            }
+            CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName, userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, ExceptionFunc);
         }
 
         /// <summary>
