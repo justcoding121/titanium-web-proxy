@@ -56,7 +56,7 @@ namespace Titanium.Web.Proxy.UnitTests
 
             mgr.CertificateEngine = CertificateEngine.DefaultWindows;
             mgr.CreateRootCertificate(true);
-            mgr.TrustRootCertificate();
+            mgr.TrustRootCertificate(true);
             mgr.ClearIdleCertificates();
 
             for (int i = 0; i < 5; i++)
@@ -71,7 +71,7 @@ namespace Titanium.Web.Proxy.UnitTests
                 }
 
             await Task.WhenAll(tasks.ToArray());
-            mgr.RemoveTrustedRootCertificate();
+            mgr.RemoveTrustedRootCertificate(true);
             mgr.StopClearIdleCertificates();
         }
     }
