@@ -32,8 +32,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer = new ProxyServer();
 
             //generate root certificate without storing it in file system
-            //proxyServer.CertificateManager.CreateTrustedRootCertificate(false);
+            //proxyServer.CertificateManager.CreateRootCertificate(false);
+            
             //proxyServer.CertificateManager.TrustRootCertificate();
+            //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
 
             proxyServer.ExceptionFunc = exception => Console.WriteLine(exception.Message);
             proxyServer.ForwardToUpstreamGateway = true;

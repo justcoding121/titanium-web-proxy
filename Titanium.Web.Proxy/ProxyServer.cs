@@ -245,8 +245,8 @@ namespace Titanium.Web.Proxy
             }
 
             CertificateManager = new CertificateManager(ExceptionFunc);
-            CertificateManager.TrustRoot = trustRootCertificate;
-            CertificateManager.TrustRootAsAdministrator = trustRootCertificateAsAdmin;
+            CertificateManager.UserTrustRoot = trustRootCertificate;
+            CertificateManager.MachineTrustRootAsAdministrator = trustRootCertificateAsAdmin;
 
             if (rootCertificateName != null)
             {
