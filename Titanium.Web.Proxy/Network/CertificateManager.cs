@@ -274,7 +274,15 @@ namespace Titanium.Web.Proxy.Network
                 CreateRootCertificate();
             }
 
-            return certEngine.MakeCertificate(certificateName, isRootCertificate, RootCertificate);
+            var certificate = certEngine.MakeCertificate(certificateName, isRootCertificate, RootCertificate);
+
+            if (CertificateEngine == CertificateEngine.DefaultWindows)
+            {
+                //prevent certificates getting piled up in User\Personal store
+                Task.Run(() => UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, certificate));
+            }
+
+            return certificate;
         }
 
         /// <summary>
@@ -282,7 +290,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="storeLocation"></param>
         /// <returns></returns>
-        private void TrustRootCertificate(StoreName storeName, StoreLocation storeLocation)
+        private void InstallCertificate(StoreName storeName, StoreLocation storeLocation)
         {
             if (RootCertificate == null)
             {
@@ -320,7 +328,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="storeLocation"></param>
         /// <returns></returns>
-        private void RemoveTrustedRootCertificate(StoreName storeName, StoreLocation storeLocation)
+        private void UninstallCertificate(StoreName storeName, StoreLocation storeLocation, X509Certificate2 certificate)
         {
             if (RootCertificate == null)
             {
@@ -337,7 +345,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 x509Store.Open(OpenFlags.ReadWrite);
 
-                x509Store.Remove(RootCertificate);
+                x509Store.Remove(certificate);
             }
             catch (Exception e)
             {
@@ -624,13 +632,13 @@ namespace Titanium.Web.Proxy.Network
         public void TrustRootCertificate()
         {
             //current user
-            TrustRootCertificate(StoreName.My, StoreLocation.CurrentUser);
+            InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
 
             //current system
-            TrustRootCertificate(StoreName.My, StoreLocation.LocalMachine);
+            InstallCertificate(StoreName.My, StoreLocation.LocalMachine);
 
             //this adds to both currentUser\Root & currentMachine\Root
-            TrustRootCertificate(StoreName.Root, StoreLocation.LocalMachine);
+            InstallCertificate(StoreName.Root, StoreLocation.LocalMachine);
         }
 
         /// <summary>
@@ -649,7 +657,7 @@ namespace Titanium.Web.Proxy.Network
             File.WriteAllBytes(pfxFileName, RootCertificate.Export(X509ContentType.Pkcs12, PfxPassword));
 
             //currentUser\Personal
-            TrustRootCertificate(StoreName.My, StoreLocation.CurrentUser);
+            InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
 
             //currentUser\Root, currentMachine\Personal &  currentMachine\Root
             var info = new ProcessStartInfo()
@@ -689,13 +697,13 @@ namespace Titanium.Web.Proxy.Network
         public void RemoveTrustedRootCertificate()
         {
             //current user
-            RemoveTrustedRootCertificate(StoreName.My, StoreLocation.CurrentUser);
+            UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
 
             //current system
-            RemoveTrustedRootCertificate(StoreName.My, StoreLocation.LocalMachine);
+            UninstallCertificate(StoreName.My, StoreLocation.LocalMachine, RootCertificate);
 
             //this removes from both currentUser\Root & currentMachine\Root
-            RemoveTrustedRootCertificate(StoreName.Root, StoreLocation.LocalMachine);
+            UninstallCertificate(StoreName.Root, StoreLocation.LocalMachine, RootCertificate);
         }
 
         /// <summary>
@@ -711,7 +719,7 @@ namespace Titanium.Web.Proxy.Network
             }
 
             //currentUser\Personal
-            RemoveTrustedRootCertificate(StoreName.My, StoreLocation.CurrentUser);
+            UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
 
             var infos = new List<ProcessStartInfo>()
             {
@@ -775,8 +783,6 @@ namespace Titanium.Web.Proxy.Network
         {
             return FindRootCertificate(StoreLocation.LocalMachine);
         }
-
-
 
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
