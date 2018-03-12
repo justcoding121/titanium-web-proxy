@@ -205,10 +205,12 @@ namespace Titanium.Web.Proxy.Network
             UserTrustRoot = userTrustRootCertificate;
             if (machineTrustRootCertificate)
             {
-                MachineTrustRoot = machineTrustRootCertificate;
+                userTrustRootCertificate = true;
             }
 
+            MachineTrustRoot = machineTrustRootCertificate;
             TrustRootAsAdministrator = trustRootCertificateAsAdmin;
+
             if (rootCertificateName != null)
             {
                 RootCertificateName = rootCertificateName;
@@ -754,12 +756,12 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         public void EnsureRootCertificate(bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false, bool trustRootCertificateAsAdmin = false)
         {
-            if(machineTrustRootCertificate)
+            UserTrustRoot = userTrustRootCertificate;
+            if (machineTrustRootCertificate)
             {
                 userTrustRootCertificate = true;
             }
 
-            UserTrustRoot = userTrustRootCertificate;
             MachineTrustRoot = machineTrustRootCertificate;
             TrustRootAsAdministrator = trustRootCertificateAsAdmin;
 
