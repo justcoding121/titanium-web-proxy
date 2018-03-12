@@ -275,24 +275,6 @@ namespace Titanium.Web.Proxy.Network
             }
         }
 
-        private X509Certificate2 MakeCertificate(string certificateName, bool isRootCertificate)
-        {
-            if (!isRootCertificate && RootCertificate == null)
-            {
-                CreateRootCertificate();
-            }
-
-            var certificate = certEngine.MakeCertificate(certificateName, isRootCertificate, RootCertificate);
-
-            if (CertificateEngine == CertificateEngine.DefaultWindows)
-            {
-                //prevent certificates getting piled up in User\Personal store
-                Task.Run(() => UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, certificate));
-            }
-
-            return certificate;
-        }
-
         /// <summary>
         /// Make current machine trust the Root Certificate used by this proxy
         /// </summary>
@@ -365,6 +347,24 @@ namespace Titanium.Web.Proxy.Network
             {
                 x509Store.Close();
             }
+        }
+
+        private X509Certificate2 MakeCertificate(string certificateName, bool isRootCertificate)
+        {
+            if (!isRootCertificate && RootCertificate == null)
+            {
+                CreateRootCertificate();
+            }
+
+            var certificate = certEngine.MakeCertificate(certificateName, isRootCertificate, RootCertificate);
+
+            if (CertificateEngine == CertificateEngine.DefaultWindows)
+            {
+                //prevent certificates getting piled up in User\Personal store
+                Task.Run(() => UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, certificate));
+            }
+
+            return certificate;
         }
 
         /// <summary>
@@ -478,14 +478,6 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        /// Stops the certificate cache clear process
-        /// </summary>
-        internal void StopClearIdleCertificates()
-        {
-            clearCertificates = false;
-        }
-
-        /// <summary>
         /// A method to clear outdated certificates
         /// </summary>
         internal async void ClearIdleCertificates()
@@ -507,6 +499,13 @@ namespace Titanium.Web.Proxy.Network
         }
 
 
+        /// <summary>
+        /// Stops the certificate cache clear process
+        /// </summary>
+        internal void StopClearIdleCertificates()
+        {
+            clearCertificates = false;
+        }
 
         /// <summary>
         /// Attempts to create a RootCertificate
@@ -567,7 +566,7 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        /// Loads root certificate from current executing assembly location
+        /// Loads root certificate from current executing assembly location with expected name rootCert.pfx
         /// </summary>
         /// <returns></returns>
         public X509Certificate2 LoadRootCertificate()
@@ -591,7 +590,7 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        /// Manually load a Root certificate file(.pfx file)
+        /// Manually load a Root certificate file from give path (.pfx file)
         /// </summary> 
         /// <param name="pfxFilePath">Set the name(path) of the .pfx file. If it is string.Empty Root certificate file will be named as "rootCert.pfx" (and will be saved in proxy dll directory)</param>
         /// <param name="password">Set a password for the .pfx file</param>
@@ -614,7 +613,7 @@ namespace Titanium.Web.Proxy.Network
 
         /// <summary>
         /// Trusts the root certificate in user store, optionally also in machine store
-        /// Machine trust would require elevated permissions
+        /// Machine trust would require elevated permissions (will silently fail otherwise)
         /// </summary>
         public void TrustRootCertificate(bool machineTrusted = false)
         {
@@ -696,7 +695,8 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        /// Ensure certificates are setup (creates if required) & root certificate is trusted.
+        /// Ensure certificates are setup (creates root if required) 
+        /// Also makes root certificate trusted based on initial setup from proxy constructor for user/machine trust.
         /// </summary>
         public void EnsureRootCertificate(bool machineTrustRootCertificate = false)
         {
@@ -717,7 +717,8 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        /// Ensure certificates are setup (creates if required) & root certificate is trusted.
+        /// Ensure certificates are setup (creates root if required) 
+        /// Also makes root certificate trusted based on provided parameters
         /// </summary>
         public void EnsureRootCertificate(bool userTrustRootCertificate, bool machineTrustRootCertificate, bool machineTrustRootCertificateAsAdmin)
         {
@@ -846,9 +847,6 @@ namespace Titanium.Web.Proxy.Network
             }
 
             return success;
-
-
-            return true;
         }
 
         public void ClearRootCertificate()
@@ -856,7 +854,6 @@ namespace Titanium.Web.Proxy.Network
             certificateCache.Clear();
             rootCertificate = null;
         }
-
 
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
