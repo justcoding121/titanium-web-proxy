@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             proxyServer.ExceptionFunc = exception => Console.WriteLine(exception.Message);
             proxyServer.ForwardToUpstreamGateway = true;
-
+            proxyServer.CertificateManager.SaveFakeCertificates = true;
             //optionally set the Certificate Engine
             //Under Mono or Non-Windows runtimes only BouncyCastle will be supported
             //proxyServer.CertificateManager.CertificateEngine = Network.CertificateEngine.BouncyCastle;
