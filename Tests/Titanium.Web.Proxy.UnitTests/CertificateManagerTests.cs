@@ -15,25 +15,27 @@ namespace Titanium.Web.Proxy.UnitTests
         private readonly Random random = new Random();
 
         [TestMethod]
-        public async Task Simple_Create_Certificate_Test()
+        public async Task Simple_BC_Create_Certificate_Test()
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(new Lazy<Action<Exception>>(() => (e => { })).Value);
-
-            mgr.ClearIdleCertificates();
-
-            foreach (string host in hostNames)
+            var mgr = new CertificateManager(new Lazy<Action<Exception>>(() => (e =>
             {
-                tasks.Add(Task.Run(async () =>
+                //Console.WriteLine(e.ToString() + e.InnerException != null ? e.InnerException.ToString() : string.Empty);
+            })).Value);
+
+            mgr.CertificateEngine = CertificateEngine.BouncyCastle;
+            mgr.ClearIdleCertificates();
+            for (int i = 0; i < 5; i++)
+                foreach (string host in hostNames)
                 {
-
-                    //get the connection
-                    var certificate = await mgr.CreateCertificateAsync(host);
-
-                    Assert.IsNotNull(certificate);
-                }));
-            }
+                    tasks.Add(Task.Run(() =>
+                    {
+                        //get the connection
+                        var certificate = mgr.CreateCertificate(host, false);
+                        Assert.IsNotNull(certificate);
+                    }));
+                }
 
             await Task.WhenAll(tasks.ToArray());
 
@@ -42,30 +44,34 @@ namespace Titanium.Web.Proxy.UnitTests
 
         //uncomment this to compare WinCert maker performance with BC (BC takes more time for same test above)
         //cannot run this test in build server since trusting the certificate won't happen successfully
-        //[TestMethod]
+        [TestMethod]
         public async Task Simple_Create_Win_Certificate_Test()
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(new Lazy<Action<Exception>>(() => (e => { })).Value);
-            mgr.CreateRootCertificate(true);
-            mgr.TrustRootCertificate();
-            mgr.ClearIdleCertificates();
-            mgr.CertificateEngine = CertificateEngine.DefaultWindows;
-
-            foreach (string host in hostNames)
+            var mgr = new CertificateManager(new Lazy<Action<Exception>>(() => (e =>
             {
-                tasks.Add(Task.Run(async () =>
-                {
-                    //get the connection
-                    var certificate = await mgr.CreateCertificateAsync(host);
+                //Console.WriteLine(e.ToString() + e.InnerException != null ? e.InnerException.ToString() : string.Empty);
+            })).Value);
 
-                    Assert.IsNotNull(certificate);
-                }));
-            }
+            mgr.CertificateEngine = CertificateEngine.DefaultWindows;
+            mgr.CreateRootCertificate(true);
+            mgr.TrustRootCertificate(true);
+            mgr.ClearIdleCertificates();
+
+            for (int i = 0; i < 5; i++)
+                foreach (string host in hostNames)
+                {
+                    tasks.Add(Task.Run(() =>
+                    {
+                        //get the connection
+                        var certificate = mgr.CreateCertificate(host, false);
+                        Assert.IsNotNull(certificate);
+                    }));
+                }
 
             await Task.WhenAll(tasks.ToArray());
-
+            mgr.RemoveTrustedRootCertificate(true);
             mgr.StopClearIdleCertificates();
         }
     }
