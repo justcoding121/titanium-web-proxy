@@ -295,8 +295,8 @@ namespace Titanium.Web.Proxy.Network
             if (RootCertificate == null)
             {
                 exceptionFunc(
-                    new Exception("Could not set root certificate"
-                                  + " as system proxy since it is null or empty."));
+                    new Exception("Could not install certificate"
+                                  + " as it is null or empty."));
 
                 return;
             }
@@ -330,11 +330,11 @@ namespace Titanium.Web.Proxy.Network
         /// <returns></returns>
         private void UninstallCertificate(StoreName storeName, StoreLocation storeLocation, X509Certificate2 certificate)
         {
-            if (RootCertificate == null)
+            if (certificate == null)
             {
                 exceptionFunc(
-                    new Exception("Could not set root certificate"
-                                  + " as system proxy since it is null or empty."));
+                    new Exception("Could not remove certificate"
+                                  + " as it is null or empty."));
 
                 return;
             }
@@ -653,11 +653,11 @@ namespace Titanium.Web.Proxy.Network
                 return false;
             }
 
-            string pfxFileName = Path.GetTempFileName();
-            File.WriteAllBytes(pfxFileName, RootCertificate.Export(X509ContentType.Pkcs12, PfxPassword));
-
             //currentUser\Personal
             InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
+
+            string pfxFileName = Path.GetTempFileName();
+            File.WriteAllBytes(pfxFileName, RootCertificate.Export(X509ContentType.Pkcs12, PfxPassword));
 
             //currentUser\Root, currentMachine\Personal &  currentMachine\Root
             var info = new ProcessStartInfo()
