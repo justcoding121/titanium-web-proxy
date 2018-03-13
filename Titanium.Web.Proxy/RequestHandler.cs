@@ -64,14 +64,6 @@ namespace Titanium.Web.Proxy
                     var httpRemoteUri = new Uri("http://" + httpUrl);
                     connectHostname = httpRemoteUri.Host;
 
-                    //filter out excluded host names
-                    bool excluded = false;
-
-                    if(endPoint.BeforeTunnelConnect!=null)
-                    {
-                        excluded = await endPoint.BeforeTunnelConnect(connectHostname);
-                    }
-
                     connectRequest = new ConnectRequest
                     {
                         RequestUri = httpRemoteUri,
@@ -86,7 +78,9 @@ namespace Titanium.Web.Proxy
                     connectArgs.ProxyClient.ClientStream = clientStream;
 
                     await endPoint.InvokeTunnectConnectRequest(this, connectArgs, ExceptionFunc);
-                    
+
+                    //filter out excluded host names
+                    bool excluded = connectArgs.Excluded;
 
                     if (await CheckAuthorization(clientStreamWriter, connectArgs) == false)
                     {
