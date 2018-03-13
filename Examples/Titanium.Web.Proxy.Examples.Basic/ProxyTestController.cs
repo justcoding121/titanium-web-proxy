@@ -124,7 +124,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task OnTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
-            string hostname = e.WebSession.Request.Host;
+            string hostname = e.WebSession.Request.RequestUri.Host;
             Console.WriteLine("Tunnel to: " + hostname);
 
             if (hostname.Contains("dropbox.com"))
