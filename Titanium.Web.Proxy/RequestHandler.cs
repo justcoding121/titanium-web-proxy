@@ -128,8 +128,9 @@ namespace Titanium.Web.Proxy
                             clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
                             clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
                         }
-                        catch
+                        catch(Exception e)
                         {
+                            ExceptionFunc(new Exception($"Could'nt authenticate client '{connectHostname}' with fake certificate.", e));
                             sslStream?.Dispose();
                             return;
                         }
@@ -233,13 +234,19 @@ namespace Titanium.Web.Proxy
                         var sslStream = new SslStream(clientStream);
                         clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
-                        string sniHostName = clientHelloInfo.GetServerName();
+                        string sniHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
 
-                        string certName = HttpHelper.GetWildCardDomainName(sniHostName ?? endPoint.GenericCertificateName);
+                        string certName = HttpHelper.GetWildCardDomainName(sniHostName);
                         var certificate = await CertificateManager.CreateCertificateAsync(certName);
-
-                        //Successfully managed to authenticate the client using the fake certificate
-                        await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
+                        try
+                        {
+                            //Successfully managed to authenticate the client using the fake certificate
+                            await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
+                        }
+                        catch (Exception e)
+                        {
+                            ExceptionFunc(new Exception($"Could'nt authenticate client '{sniHostName}' with fake certificate.", e));
+                        }
                     }
 
                     //HTTPS server created - we can now decrypt the client's traffic
