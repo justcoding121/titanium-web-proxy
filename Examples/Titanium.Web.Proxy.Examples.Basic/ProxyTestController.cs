@@ -69,9 +69,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
             };
 
             //Fired when a CONNECT request is received
-            explicitEndPoint.BeforeTunnelConnect += OnBeforeTunnelConnect;
-
-
             explicitEndPoint.TunnelConnectRequest += OnTunnelConnectRequest;
             explicitEndPoint.TunnelConnectResponse += OnTunnelConnectResponse;
 
@@ -111,7 +108,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public void Stop()
         {
-            explicitEndPoint.BeforeTunnelConnect -= OnBeforeTunnelConnect;
             explicitEndPoint.TunnelConnectRequest -= OnTunnelConnectRequest;
             explicitEndPoint.TunnelConnectResponse -= OnTunnelConnectResponse;
 
@@ -126,24 +122,18 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
         }
 
-        private async Task<bool> OnBeforeTunnelConnect(string hostname)
+        private async Task OnTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
+            string hostname = e.WebSession.Request.Host;
+            Console.WriteLine("Tunnel to: " + hostname);
+
             if (hostname.Contains("dropbox.com"))
             {
                 //Exclude Https addresses you don't want to proxy
                 //Useful for clients that use certificate pinning
                 //for example dropbox.com
-                return await Task.FromResult(true);
+                e.Excluded = true;
             }
-            else
-            {
-                return await Task.FromResult(false);
-            }
-        }
-
-        private async Task OnTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
-        {
-            Console.WriteLine("Tunnel to: " + e.WebSession.Request.Host);
         }
 
         private async Task OnTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
