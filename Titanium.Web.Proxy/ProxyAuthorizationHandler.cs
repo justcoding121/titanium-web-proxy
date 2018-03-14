@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy
                 var header = httpHeaders.GetFirstHeader(KnownHeaders.ProxyAuthorization);
                 if (header == null)
                 {
-                    session.WebSession.Response = SendAuthentication407Response("Proxy Authentication Required");
+                    session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Required");
                     return false;
                 }
 
@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy
                 if (headerValueParts.Length != 2 || !headerValueParts[0].EqualsIgnoreCase(KnownHeaders.ProxyAuthorizationBasic))
                 {
                     //Return not authorized
-                    session.WebSession.Response = SendAuthentication407Response("Proxy Authentication Invalid");
+                    session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
                     return false;
                 }
 
@@ -46,7 +46,7 @@ namespace Titanium.Web.Proxy
                 if (colonIndex == -1)
                 {
                     //Return not authorized
-                    session.WebSession.Response = SendAuthentication407Response("Proxy Authentication Invalid");
+                    session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
                     return false;
                 }
 
@@ -56,7 +56,7 @@ namespace Titanium.Web.Proxy
                 if (!authenticated)
                 {
                     //Return not authorized
-                    session.WebSession.Response = SendAuthentication407Response("Proxy Authentication Invalid");
+                    session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
                 }
 
                 return authenticated;
@@ -66,12 +66,12 @@ namespace Titanium.Web.Proxy
                 ExceptionFunc(new ProxyAuthorizationException("Error whilst authorizing request", e, httpHeaders));
 
                 //Return not authorized
-                session.WebSession.Response = SendAuthentication407Response("Proxy Authentication Invalid");
+                session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
                 return false;
             }
         }
 
-        private Response SendAuthentication407Response(string description)
+        private Response CreateAuthentication407Response(string description)
         {
             var response = new Response
             {
