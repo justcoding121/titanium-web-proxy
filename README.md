@@ -126,18 +126,16 @@ Sample request and response event handlers
 private IDictionary<Guid, string> requestBodyHistory 
         = new ConcurrentDictionary<Guid, string>();
 
-private async Task<bool> OnBeforeTunnelConnect(string hostname)
+private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
 {
+    string hostname = e.WebSession.Request.RequestUri.Host;
+
     if (hostname.Contains("dropbox.com"))
     {
          //Exclude Https addresses you don't want to proxy
          //Useful for clients that use certificate pinning
          //for example dropbox.com
-        return await Task.FromResult(true);
-    }
-    else
-    {
-        return await Task.FromResult(false);
+         e.Excluded = true;
     }
 }
 

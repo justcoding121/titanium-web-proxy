@@ -115,6 +115,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private async Task ProxyServer_BeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
+            string hostname = e.WebSession.Request.RequestUri.Host;
+            if (hostname.EndsWith("webex.com"))
+            {
+                e.Excluded = true;
+            }
+
             await Dispatcher.InvokeAsync(() =>
             {
                 AddSession(e);
