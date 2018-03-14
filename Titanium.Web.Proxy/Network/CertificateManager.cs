@@ -59,7 +59,7 @@ namespace Titanium.Web.Proxy.Network
         private readonly ConcurrentDictionary<string, CachedCertificate> certificateCache;
         private readonly ConcurrentDictionary<string, Task<X509Certificate2>> pendingCertificateCreationTasks;
 
-        private readonly Action<Exception> exceptionFunc;
+        private readonly ExceptionHandler exceptionFunc;
 
         /// <summary>
         /// Is the root certificate used by this proxy is valid?
@@ -107,7 +107,9 @@ namespace Titanium.Web.Proxy.Network
 
                 if (certEngine == null)
                 {
-                    certEngine = engine == CertificateEngine.BouncyCastle ? (ICertificateMaker)new BCCertificateMaker(exceptionFunc) : new WinCertificateMaker(exceptionFunc);
+                    certEngine = engine == CertificateEngine.BouncyCastle
+                        ? (ICertificateMaker)new BCCertificateMaker(exceptionFunc)
+                        : new WinCertificateMaker(exceptionFunc);
                 }
             }
         }
@@ -198,7 +200,7 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="machineTrustRootCertificate">Note:setting machineTrustRootCertificate to true will force userTrustRootCertificate to true</param>
         /// <param name="trustRootCertificateAsAdmin"></param>
         /// <param name="exceptionFunc"></param>
-        internal CertificateManager(string rootCertificateName, string rootCertificateIssuerName, bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin, Action < Exception> exceptionFunc)
+        internal CertificateManager(string rootCertificateName, string rootCertificateIssuerName, bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin, ExceptionHandler exceptionFunc)
         {
             this.exceptionFunc = exceptionFunc;
 

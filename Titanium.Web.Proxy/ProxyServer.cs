@@ -53,12 +53,12 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// An default exception log func
         /// </summary>
-        private readonly Lazy<Action<Exception>> defaultExceptionFunc = new Lazy<Action<Exception>>(() => (e => { }));
+        private readonly Lazy<ExceptionHandler> defaultExceptionFunc = new Lazy<ExceptionHandler>(() => (e => { }));
 
         /// <summary>
         /// backing exception func for exposed public property
         /// </summary>
-        private Action<Exception> exceptionFunc;
+        private ExceptionHandler exceptionFunc;
 
         /// <summary>
         /// Is the proxy currently running
@@ -192,7 +192,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Callback for error events in proxy
         /// </summary>
-        public Action<Exception> ExceptionFunc
+        public ExceptionHandler ExceptionFunc
         {
             get => exceptionFunc ?? defaultExceptionFunc.Value;
             set => exceptionFunc = value;
