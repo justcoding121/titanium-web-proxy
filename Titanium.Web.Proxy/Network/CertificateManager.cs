@@ -196,7 +196,7 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="rootCertificateIssuerName">Name of root certificate issuer.</param>
         /// <param name="userTrustRootCertificate"></param>
         /// <param name="machineTrustRootCertificate">Note:setting machineTrustRootCertificate to true will force userTrustRootCertificate to true</param>
-        /// <param name="trustRootCertificateAsAdmin "></param>
+        /// <param name="trustRootCertificateAsAdmin"></param>
         /// <param name="exceptionFunc"></param>
         internal CertificateManager(string rootCertificateName, string rootCertificateIssuerName, bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin, Action < Exception> exceptionFunc)
         {
@@ -310,6 +310,7 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// Make current machine trust the Root Certificate used by this proxy
         /// </summary>
+        /// <param name="storeName"></param>
         /// <param name="storeLocation"></param>
         /// <returns></returns>
         private void InstallCertificate(StoreName storeName, StoreLocation storeLocation)
@@ -348,7 +349,9 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         /// Remove the Root Certificate trust
         /// </summary>
+        /// <param name="storeName"></param>
         /// <param name="storeLocation"></param>
+        /// <param name="certificate"></param>
         /// <returns></returns>
         private void UninstallCertificate(StoreName storeName, StoreLocation storeLocation, X509Certificate2 certificate)
         {

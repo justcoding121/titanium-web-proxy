@@ -27,13 +27,13 @@ namespace Titanium.Web.Proxy.Models
         /// Valid only for explicit endpoints
         /// Set the <see cref="TunnelConnectSessionEventArgs.Excluded"/> property to true if this HTTP connect request should'nt be decrypted and instead be relayed
         /// </summary>
-        public event AsyncEventHandler<TunnelConnectSessionEventArgs> TunnelConnectRequest;
+        public event AsyncEventHandler<TunnelConnectSessionEventArgs> BeforeTunnelConnectRequest;
 
         /// <summary>
         /// Intercept tunnel connect response
         /// Valid only for explicit endpoints
         /// </summary>
-        public event AsyncEventHandler<TunnelConnectSessionEventArgs> TunnelConnectResponse;
+        public event AsyncEventHandler<TunnelConnectSessionEventArgs> BeforeTunnelConnectResponse;
 
         /// <summary>
         /// Constructor.
@@ -45,20 +45,20 @@ namespace Titanium.Web.Proxy.Models
         {
         }
 
-        internal async Task InvokeTunnectConnectRequest(ProxyServer proxyServer, TunnelConnectSessionEventArgs connectArgs, Action<Exception> exceptionFunc)
+        internal async Task InvokeBeforeTunnelConnectRequest(ProxyServer proxyServer, TunnelConnectSessionEventArgs connectArgs, Action<Exception> exceptionFunc)
         {
-            if (TunnelConnectRequest != null)
+            if (BeforeTunnelConnectRequest != null)
             {
-                await TunnelConnectRequest.InvokeAsync(proxyServer, connectArgs, exceptionFunc);
+                await BeforeTunnelConnectRequest.InvokeAsync(proxyServer, connectArgs, exceptionFunc);
             }
         }
 
-        internal async Task InvokeTunnectConnectResponse(ProxyServer proxyServer, TunnelConnectSessionEventArgs connectArgs, Action<Exception> exceptionFunc, bool isClientHello = false)
+        internal async Task InvokeBeforeTunnectConnectResponse(ProxyServer proxyServer, TunnelConnectSessionEventArgs connectArgs, Action<Exception> exceptionFunc, bool isClientHello = false)
         {
-            if (TunnelConnectResponse != null)
+            if (BeforeTunnelConnectResponse != null)
             {
                 connectArgs.IsHttpsConnect = isClientHello;
-                await TunnelConnectResponse.InvokeAsync(proxyServer, connectArgs, exceptionFunc);
+                await BeforeTunnelConnectResponse.InvokeAsync(proxyServer, connectArgs, exceptionFunc);
             }
         }
     }

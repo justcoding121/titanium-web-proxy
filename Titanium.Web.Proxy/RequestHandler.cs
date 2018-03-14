@@ -77,14 +77,17 @@ namespace Titanium.Web.Proxy
                     connectArgs.ProxyClient.TcpClient = tcpClient;
                     connectArgs.ProxyClient.ClientStream = clientStream;
 
-                    await endPoint.InvokeTunnectConnectRequest(this, connectArgs, ExceptionFunc);
+                    await endPoint.InvokeBeforeTunnelConnectRequest(this, connectArgs, ExceptionFunc);
 
                     //filter out excluded host names
                     bool excluded = connectArgs.Excluded;
 
-                    if (await CheckAuthorization(clientStreamWriter, connectArgs) == false)
+                    if (await CheckAuthorization(connectArgs) == false)
                     {
-                        await endPoint.InvokeTunnectConnectResponse(this, connectArgs, ExceptionFunc);
+                        await endPoint.InvokeBeforeTunnectConnectResponse(this, connectArgs, ExceptionFunc);
+
+                        //send the response
+                        await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response);
                         return;
                     }
 
@@ -102,7 +105,7 @@ namespace Titanium.Web.Proxy
                         connectRequest.ClientHelloInfo = clientHelloInfo;
                     }
 
-                    await endPoint.InvokeTunnectConnectResponse(this, connectArgs, ExceptionFunc, isClientHello);
+                    await endPoint.InvokeBeforeTunnectConnectResponse(this, connectArgs, ExceptionFunc, isClientHello);
 
                     if (!excluded && isClientHello)
                     {
@@ -352,8 +355,12 @@ namespace Titanium.Web.Proxy
                         args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                         //proxy authorization check
-                        if (!args.IsTransparent && httpsConnectHostname == null && await CheckAuthorization(clientStreamWriter, args) == false)
+                        if (!args.IsTransparent && httpsConnectHostname == null && await CheckAuthorization(args) == false)
                         {
+                            await InvokeBeforeResponse(args);
+
+                            //send the response
+                            await clientStreamWriter.WriteResponseAsync(args.WebSession.Response);
                             break;
                         }
 
@@ -372,10 +379,7 @@ namespace Titanium.Web.Proxy
                         }
 
                         //If user requested interception do it
-                        if (BeforeRequest != null)
-                        {
-                            await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);
-                        }
+                        await InvokeBeforeRequest(args);
 
                         var response = args.WebSession.Response;
 
@@ -428,9 +432,9 @@ namespace Titanium.Web.Proxy
                             }
 
                             //If user requested call back then do it
-                            if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
+                            if (!args.WebSession.Response.ResponseLocked)
                             {
-                                await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
+                                await InvokeBeforeResponse(args);
                             }
 
                             await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
