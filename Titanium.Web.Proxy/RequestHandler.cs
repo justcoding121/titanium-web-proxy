@@ -599,5 +599,13 @@ namespace Titanium.Web.Proxy
 
             requestHeaders.FixProxyHeaders();
         }
+
+        private async Task InvokeBeforeRequest(SessionEventArgs args)
+        {
+            if (BeforeRequest != null)
+            {
+                await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);
+            }
+        }
     }
 }

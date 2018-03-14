@@ -23,10 +23,9 @@ namespace Titanium.Web.Proxy.Extensions
             {
                 await callback(sender, args);
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                var ex2 = new Exception("Exception thrown in user event", ex);
-                exceptionFunc(ex2);
+                exceptionFunc(new Exception("Exception thrown in user event", e));
             }
         }
     }
