@@ -246,6 +246,7 @@ namespace Titanium.Web.Proxy
                         catch (Exception e)
                         {
                             ExceptionFunc(new Exception($"Could'nt authenticate client '{sniHostName}' with fake certificate.", e));
+                            return;
                         }
                     }
 
