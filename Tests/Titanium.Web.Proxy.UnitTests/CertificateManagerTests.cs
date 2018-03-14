@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<Action<Exception>>(() => (e =>
+            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => (e =>
             {
                 //Console.WriteLine(e.ToString() + e.InnerException != null ? e.InnerException.ToString() : string.Empty);
             })).Value);
@@ -48,7 +48,7 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<Action<Exception>>(() => (e =>
+            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => (e =>
             {
                 //Console.WriteLine(e.ToString() + e.InnerException != null ? e.InnerException.ToString() : string.Empty);
             })).Value);

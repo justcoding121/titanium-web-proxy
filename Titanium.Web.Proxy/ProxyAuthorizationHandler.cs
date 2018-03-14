@@ -63,7 +63,7 @@ namespace Titanium.Web.Proxy
             }
             catch (Exception e)
             {
-                ExceptionFunc(new ProxyAuthorizationException("Error whilst authorizing request", e, httpHeaders));
+                ExceptionFunc(new ProxyAuthorizationException("Error whilst authorizing request", session, e, httpHeaders));
 
                 //Return not authorized
                 session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
