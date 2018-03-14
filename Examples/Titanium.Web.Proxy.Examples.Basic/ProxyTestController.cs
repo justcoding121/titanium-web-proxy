@@ -69,8 +69,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             };
 
             //Fired when a CONNECT request is received
-            explicitEndPoint.TunnelConnectRequest += OnTunnelConnectRequest;
-            explicitEndPoint.TunnelConnectResponse += OnTunnelConnectResponse;
+            explicitEndPoint.BeforeTunnelConnectRequest += OnBeforeTunnelConnectRequest;
+            explicitEndPoint.BeforeTunnelConnectResponse += OnBeforeTunnelConnectResponse;
 
             //An explicit endpoint is where the client knows about the existence of a proxy
             //So client sends request in a proxy friendly manner
@@ -108,8 +108,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public void Stop()
         {
-            explicitEndPoint.TunnelConnectRequest -= OnTunnelConnectRequest;
-            explicitEndPoint.TunnelConnectResponse -= OnTunnelConnectResponse;
+            explicitEndPoint.BeforeTunnelConnectRequest -= OnBeforeTunnelConnectRequest;
+            explicitEndPoint.BeforeTunnelConnectResponse -= OnBeforeTunnelConnectResponse;
 
             proxyServer.BeforeRequest -= OnRequest;
             proxyServer.BeforeResponse -= OnResponse;
@@ -122,7 +122,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
         }
 
-        private async Task OnTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
+        private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
             string hostname = e.WebSession.Request.RequestUri.Host;
             Console.WriteLine("Tunnel to: " + hostname);
@@ -136,7 +136,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             }
         }
 
-        private async Task OnTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
+        private async Task OnBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
         {
         }
 

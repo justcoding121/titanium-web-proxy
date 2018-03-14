@@ -210,7 +210,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="userTrustRootCertificate"></param>
         /// <param name="machineTrustRootCertificate">Note:setting machineTrustRootCertificate to true will force userTrustRootCertificate to true</param>
-        /// <param name="trustRootCertificateAsAdmin "></param>
+        /// <param name="trustRootCertificateAsAdmin"></param>
         public ProxyServer(bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false, bool trustRootCertificateAsAdmin = false) : this(null, null, userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin)
         {
         }
@@ -222,7 +222,7 @@ namespace Titanium.Web.Proxy
         /// <param name="rootCertificateIssuerName">Name of root certificate issuer.</param>
         /// <param name="userTrustRootCertificate"></param>
         /// <param name="machineTrustRootCertificate">Note:setting machineTrustRootCertificate to true will force userTrustRootCertificate to true</param>
-        /// <param name="trustRootCertificateAsAdmin "></param>
+        /// <param name="trustRootCertificateAsAdmin"></param>
         public ProxyServer(string rootCertificateName, string rootCertificateIssuerName, bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false, bool trustRootCertificateAsAdmin = false)
         {
             //default values
@@ -658,6 +658,22 @@ namespace Titanium.Web.Proxy
         {
             endPoint.Listener.Stop();
             endPoint.Listener.Server.Dispose();
+        }
+
+        private async Task InvokeBeforeRequest(SessionEventArgs args)
+        {
+            if (BeforeRequest != null)
+            {
+                await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);
+            }
+        }
+
+        private async Task InvokeBeforeResponse(SessionEventArgs args)
+        {
+            if (BeforeResponse != null)
+            {
+                await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
+            }
         }
 
         internal void UpdateClientConnectionCount(bool increment)

@@ -35,10 +35,10 @@ namespace Titanium.Web.Proxy
 
                 args.ReRequest = false;
 
-                //If user requested call back then do it
-                if (BeforeResponse != null && !response.ResponseLocked)
+                //if user requested call back then do it
+                if (!response.ResponseLocked)
                 {
-                    await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
+                    await InvokeBeforeResponse(args);
                 }
 
                 //if user requested to send request again
