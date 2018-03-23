@@ -43,12 +43,12 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
         private object sharedPrivateKey;
 
-        private readonly Action<Exception> exceptionFunc;
+        private readonly ExceptionHandler exceptionFunc;
 
         /// <summary>
         /// Constructor.
         /// </summary>
-        internal WinCertificateMaker(Action<Exception> exceptionFunc)
+        internal WinCertificateMaker(ExceptionHandler exceptionFunc)
         {
             this.exceptionFunc = exceptionFunc;
             typeX500DN = Type.GetTypeFromProgID("X509Enrollment.CX500DistinguishedName", true);

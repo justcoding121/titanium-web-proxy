@@ -102,8 +102,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             proxyServer.BeforeRequest += ProxyServer_BeforeRequest;
             proxyServer.BeforeResponse += ProxyServer_BeforeResponse;
-            explicitEndPoint.TunnelConnectRequest += ProxyServer_TunnelConnectRequest;
-            explicitEndPoint.TunnelConnectResponse += ProxyServer_TunnelConnectResponse;
+            explicitEndPoint.BeforeTunnelConnectRequest += ProxyServer_BeforeTunnelConnectRequest;
+            explicitEndPoint.BeforeTunnelConnectResponse += ProxyServer_BeforeTunnelConnectResponse;
             proxyServer.ClientConnectionCountChanged += delegate { Dispatcher.Invoke(() => { ClientConnectionCount = proxyServer.ClientConnectionCount; }); };
             proxyServer.ServerConnectionCountChanged += delegate { Dispatcher.Invoke(() => { ServerConnectionCount = proxyServer.ServerConnectionCount; }); };
             proxyServer.Start();
@@ -113,15 +113,21 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             InitializeComponent();
         }
 
-        private async Task ProxyServer_TunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
+        private async Task ProxyServer_BeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
+            string hostname = e.WebSession.Request.RequestUri.Host;
+            if (hostname.EndsWith("webex.com"))
+            {
+                e.Excluded = true;
+            }
+
             await Dispatcher.InvokeAsync(() =>
             {
                 AddSession(e);
             });
         }
 
-        private async Task ProxyServer_TunnelConnectResponse(object sender, SessionEventArgs e)
+        private async Task ProxyServer_BeforeTunnelConnectResponse(object sender, SessionEventArgs e)
         {
             await Dispatcher.InvokeAsync(() =>
             {

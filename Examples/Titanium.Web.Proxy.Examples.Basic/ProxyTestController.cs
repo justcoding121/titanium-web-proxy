@@ -69,11 +69,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             };
 
             //Fired when a CONNECT request is received
-            explicitEndPoint.BeforeTunnelConnect += OnBeforeTunnelConnect;
-
-
-            explicitEndPoint.TunnelConnectRequest += OnTunnelConnectRequest;
-            explicitEndPoint.TunnelConnectResponse += OnTunnelConnectResponse;
+            explicitEndPoint.BeforeTunnelConnectRequest += OnBeforeTunnelConnectRequest;
+            explicitEndPoint.BeforeTunnelConnectResponse += OnBeforeTunnelConnectResponse;
 
             //An explicit endpoint is where the client knows about the existence of a proxy
             //So client sends request in a proxy friendly manner
@@ -111,9 +108,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public void Stop()
         {
-            explicitEndPoint.BeforeTunnelConnect -= OnBeforeTunnelConnect;
-            explicitEndPoint.TunnelConnectRequest -= OnTunnelConnectRequest;
-            explicitEndPoint.TunnelConnectResponse -= OnTunnelConnectResponse;
+            explicitEndPoint.BeforeTunnelConnectRequest -= OnBeforeTunnelConnectRequest;
+            explicitEndPoint.BeforeTunnelConnectResponse -= OnBeforeTunnelConnectResponse;
 
             proxyServer.BeforeRequest -= OnRequest;
             proxyServer.BeforeResponse -= OnResponse;
@@ -126,27 +122,21 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
         }
 
-        private async Task<bool> OnBeforeTunnelConnect(string hostname)
+        private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
+            string hostname = e.WebSession.Request.RequestUri.Host;
+            Console.WriteLine("Tunnel to: " + hostname);
+
             if (hostname.Contains("dropbox.com"))
             {
                 //Exclude Https addresses you don't want to proxy
                 //Useful for clients that use certificate pinning
                 //for example dropbox.com
-                return await Task.FromResult(true);
-            }
-            else
-            {
-                return await Task.FromResult(false);
+                e.Excluded = true;
             }
         }
 
-        private async Task OnTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
-        {
-            Console.WriteLine("Tunnel to: " + e.WebSession.Request.Host);
-        }
-
-        private async Task OnTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
+        private async Task OnBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
         {
         }
 

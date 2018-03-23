@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy
 {
     public partial class ProxyServer
     {
-        private async Task<bool> CheckAuthorization(HttpResponseWriter clientStreamWriter, SessionEventArgs session)
+        private async Task<bool> CheckAuthorization(SessionEventArgs session)
         {
             if (AuthenticateUserFunc == null)
             {
@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy
                 var header = httpHeaders.GetFirstHeader(KnownHeaders.ProxyAuthorization);
                 if (header == null)
                 {
-                    session.WebSession.Response = await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Required");
+                    session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Required");
                     return false;
                 }
 
@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy
                 if (headerValueParts.Length != 2 || !headerValueParts[0].EqualsIgnoreCase(KnownHeaders.ProxyAuthorizationBasic))
                 {
                     //Return not authorized
-                    session.WebSession.Response = await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Invalid");
+                    session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
                     return false;
                 }
 
@@ -46,25 +46,32 @@ namespace Titanium.Web.Proxy
                 if (colonIndex == -1)
                 {
                     //Return not authorized
-                    session.WebSession.Response = await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Invalid");
+                    session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
                     return false;
                 }
 
                 string username = decoded.Substring(0, colonIndex);
                 string password = decoded.Substring(colonIndex + 1);
-                return await AuthenticateUserFunc(username, password);
+                bool authenticated = await AuthenticateUserFunc(username, password);
+                if (!authenticated)
+                {
+                    //Return not authorized
+                    session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+                }
+
+                return authenticated;
             }
             catch (Exception e)
             {
-                ExceptionFunc(new ProxyAuthorizationException("Error whilst authorizing request", e, httpHeaders));
+                ExceptionFunc(new ProxyAuthorizationException("Error whilst authorizing request", session, e, httpHeaders));
 
                 //Return not authorized
-                session.WebSession.Response = await SendAuthentication407Response(clientStreamWriter, "Proxy Authentication Invalid");
+                session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
                 return false;
             }
         }
 
-        private async Task<Response> SendAuthentication407Response(HttpResponseWriter clientStreamWriter, string description)
+        private Response CreateAuthentication407Response(string description)
         {
             var response = new Response
             {
@@ -77,7 +84,6 @@ namespace Titanium.Web.Proxy
             response.Headers.AddHeader(KnownHeaders.ProxyConnection, KnownHeaders.ProxyConnectionClose);
 
             response.Headers.FixProxyHeaders();
-            await clientStreamWriter.WriteResponseAsync(response);
             return response;
         }
     }

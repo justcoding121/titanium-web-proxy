@@ -122,7 +122,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static async Task SendRawApm(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, Action<Exception> exceptionFunc)
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc)
         {
             var tcs = new TaskCompletionSource<bool>();
             var cts = new CancellationTokenSource();
@@ -145,7 +145,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         private static void BeginRead(Stream inputStream, Stream outputStream, byte[] buffer, CancellationTokenSource cts, Action<byte[], int, int> onCopy,
-            Action<Exception> exceptionFunc)
+            ExceptionHandler exceptionFunc)
         {
             if (cts.IsCancellationRequested)
             {
@@ -221,7 +221,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static async Task SendRawTap(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, Action<Exception> exceptionFunc)
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc)
         {
             var cts = new CancellationTokenSource();
 
@@ -247,7 +247,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static Task SendRaw(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, Action<Exception> exceptionFunc)
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc)
         {
 #if NET45
             return SendRawApm(clientStream, serverStream, bufferSize, onDataSend, onDataReceive, exceptionFunc);
