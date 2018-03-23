@@ -271,7 +271,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
                         }
                         catch (Exception ex)
                         {
-                            exceptionFunc.Invoke(new Exception("Failed to create Win certificate", ex));
+                            exceptionFunc(new Exception("Failed to create Win certificate", ex));
                         }
 
                         if (!cancellationToken.IsCancellationRequested)
