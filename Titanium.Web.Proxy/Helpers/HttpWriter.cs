@@ -153,15 +153,16 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="isChunked"></param>
         /// <param name="contentLength"></param>
         /// <param name="removeChunkedEncoding"></param>
+        /// <param name="onCopy"></param>
         /// <returns></returns>
-        internal Task CopyBodyAsync(CustomBinaryReader streamReader, bool isChunked, long contentLength, bool removeChunkedEncoding)
+        internal Task CopyBodyAsync(CustomBinaryReader streamReader, bool isChunked, long contentLength, bool removeChunkedEncoding, Action<byte[], int, int> onCopy)
         {
             //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
             if (isChunked)
             {
                 //Need to revist, find any potential bugs
                 //send the body bytes to server in chunks
-                return CopyBodyChunkedAsync(streamReader, removeChunkedEncoding);
+                return CopyBodyChunkedAsync(streamReader, removeChunkedEncoding, onCopy);
             }
             
             //http 1.0
@@ -171,7 +172,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             //If not chunked then its easy just read the amount of bytes mentioned in content length header
-            return CopyBytesFromStream(streamReader, contentLength);
+            return CopyBytesFromStream(streamReader, contentLength, onCopy);
         }
 
         /// <summary>
@@ -197,8 +198,9 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="reader"></param>
         /// <param name="removeChunkedEncoding"></param>
+        /// <param name="onCopy"></param>
         /// <returns></returns>
-        private async Task CopyBodyChunkedAsync(CustomBinaryReader reader, bool removeChunkedEncoding)
+        private async Task CopyBodyChunkedAsync(CustomBinaryReader reader, bool removeChunkedEncoding, Action<byte[], int, int> onCopy)
         {
             while (true)
             {
@@ -212,7 +214,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 if (chunkSize != 0)
                 {
-                    await CopyBytesFromStream(reader, chunkSize);
+                    await CopyBytesFromStream(reader, chunkSize, onCopy);
                 }
 
                 if (!removeChunkedEncoding)
@@ -235,8 +237,9 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="reader"></param>
         /// <param name="count"></param>
+        /// <param name="onCopy"></param>
         /// <returns></returns>
-        private async Task CopyBytesFromStream(CustomBinaryReader reader, long count)
+        private async Task CopyBytesFromStream(CustomBinaryReader reader, long count, Action<byte[], int, int> onCopy)
         {
             var buffer = reader.Buffer;
             long remainingBytes = count;
@@ -258,6 +261,8 @@ namespace Titanium.Web.Proxy.Helpers
                 remainingBytes -= bytesRead;
 
                 await WriteAsync(buffer, 0, bytesRead);
+
+                onCopy?.Invoke(buffer, 0, bytesRead);
             }
         }
     }
