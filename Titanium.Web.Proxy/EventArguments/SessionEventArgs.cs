@@ -174,8 +174,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                var ex2 = new Exception("Exception thrown in user event", ex);
-                exceptionFunc(ex2);
+                exceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -187,8 +186,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                var ex2 = new Exception("Exception thrown in user event", ex);
-                exceptionFunc(ex2);
+                exceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -200,8 +198,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                var ex2 = new Exception("Exception thrown in user event", ex);
-                exceptionFunc(ex2);
+                exceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
