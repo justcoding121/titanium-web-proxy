@@ -125,5 +125,14 @@ namespace Titanium.Web.Proxy
             var compressor = CompressionFactory.GetCompression(encodingType);
             return await compressor.Compress(responseBodyStream);
         }
+
+
+        private async Task InvokeBeforeResponse(SessionEventArgs args)
+        {
+            if (BeforeResponse != null)
+            {
+                await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
+            }
+        }
     }
 }

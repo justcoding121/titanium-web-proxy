@@ -660,21 +660,6 @@ namespace Titanium.Web.Proxy
             endPoint.Listener.Server.Dispose();
         }
 
-        private async Task InvokeBeforeRequest(SessionEventArgs args)
-        {
-            if (BeforeRequest != null)
-            {
-                await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);
-            }
-        }
-
-        private async Task InvokeBeforeResponse(SessionEventArgs args)
-        {
-            if (BeforeResponse != null)
-            {
-                await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
-            }
-        }
 
         internal void UpdateClientConnectionCount(bool increment)
         {
