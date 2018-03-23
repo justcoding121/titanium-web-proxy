@@ -290,7 +290,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             else
             {
-                await writer.CopyBodyAsync(reader, request.IsChunked, contentLength, removeChunkedEncoding);
+                await writer.CopyBodyAsync(reader, request.IsChunked, contentLength, removeChunkedEncoding, OnDataSent);
             }
         }
 
@@ -299,7 +299,7 @@ namespace Titanium.Web.Proxy.EventArguments
             var response = WebSession.Response;
             var reader = WebSession.ServerConnection.StreamReader;
 
-            await writer.CopyBodyAsync(reader, response.IsChunked, response.ContentLength, removeChunkedEncoding);
+            await writer.CopyBodyAsync(reader, response.IsChunked, response.ContentLength, removeChunkedEncoding, OnDataReceived);
         }
 
         /// <summary>
