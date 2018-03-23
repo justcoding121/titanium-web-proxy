@@ -9,7 +9,7 @@
         /// Constructor.
         /// </summary>
         /// <param name="message"></param>
-        public BodyNotFoundException(string message) : base(message)
+        internal BodyNotFoundException(string message) : base(message)
         {
         }
     }

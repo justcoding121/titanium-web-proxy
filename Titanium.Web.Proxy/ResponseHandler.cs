@@ -35,10 +35,10 @@ namespace Titanium.Web.Proxy
 
                 args.ReRequest = false;
 
-                //If user requested call back then do it
-                if (BeforeResponse != null && !response.ResponseLocked)
+                //if user requested call back then do it
+                if (!response.ResponseLocked)
                 {
-                    await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
+                    await InvokeBeforeResponse(args);
                 }
 
                 //if user requested to send request again
@@ -124,6 +124,15 @@ namespace Titanium.Web.Proxy
         {
             var compressor = CompressionFactory.GetCompression(encodingType);
             return await compressor.Compress(responseBodyStream);
+        }
+
+
+        private async Task InvokeBeforeResponse(SessionEventArgs args)
+        {
+            if (BeforeResponse != null)
+            {
+                await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
+            }
         }
     }
 }

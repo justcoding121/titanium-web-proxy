@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private readonly int bufferSize;
 
-        private readonly Action<Exception> exceptionFunc;
+        private readonly ExceptionHandler exceptionFunc;
 
         /// <summary>
         /// Backing field for corresponding public property
@@ -105,7 +105,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         internal SessionEventArgs(int bufferSize,
             ProxyEndPoint endPoint,
-            Action<Exception> exceptionFunc)
+            ExceptionHandler exceptionFunc)
         {
             this.bufferSize = bufferSize;
             this.exceptionFunc = exceptionFunc;

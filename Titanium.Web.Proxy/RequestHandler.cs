@@ -64,14 +64,6 @@ namespace Titanium.Web.Proxy
                     var httpRemoteUri = new Uri("http://" + httpUrl);
                     connectHostname = httpRemoteUri.Host;
 
-                    //filter out excluded host names
-                    bool excluded = false;
-
-                    if(endPoint.BeforeTunnelConnect!=null)
-                    {
-                        excluded = await endPoint.BeforeTunnelConnect(connectHostname);
-                    }
-
                     connectRequest = new ConnectRequest
                     {
                         RequestUri = httpRemoteUri,
@@ -85,12 +77,17 @@ namespace Titanium.Web.Proxy
                     connectArgs.ProxyClient.TcpClient = tcpClient;
                     connectArgs.ProxyClient.ClientStream = clientStream;
 
-                    await endPoint.InvokeTunnectConnectRequest(this, connectArgs, ExceptionFunc);
-                    
+                    await endPoint.InvokeBeforeTunnelConnectRequest(this, connectArgs, ExceptionFunc);
 
-                    if (await CheckAuthorization(clientStreamWriter, connectArgs) == false)
+                    //filter out excluded host names
+                    bool excluded = connectArgs.Excluded;
+
+                    if (await CheckAuthorization(connectArgs) == false)
                     {
-                        await endPoint.InvokeTunnectConnectResponse(this, connectArgs, ExceptionFunc);
+                        await endPoint.InvokeBeforeTunnectConnectResponse(this, connectArgs, ExceptionFunc);
+
+                        //send the response
+                        await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response);
                         return;
                     }
 
@@ -108,7 +105,7 @@ namespace Titanium.Web.Proxy
                         connectRequest.ClientHelloInfo = clientHelloInfo;
                     }
 
-                    await endPoint.InvokeTunnectConnectResponse(this, connectArgs, ExceptionFunc, isClientHello);
+                    await endPoint.InvokeBeforeTunnectConnectResponse(this, connectArgs, ExceptionFunc, isClientHello);
 
                     if (!excluded && isClientHello)
                     {
@@ -134,8 +131,9 @@ namespace Titanium.Web.Proxy
                             clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
                             clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
                         }
-                        catch
+                        catch(Exception e)
                         {
+                            ExceptionFunc(new Exception($"Could'nt authenticate client '{connectHostname}' with fake certificate.", e));
                             sslStream?.Dispose();
                             return;
                         }
@@ -239,13 +237,20 @@ namespace Titanium.Web.Proxy
                         var sslStream = new SslStream(clientStream);
                         clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
-                        string sniHostName = clientHelloInfo.GetServerName();
+                        string sniHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
 
-                        string certName = HttpHelper.GetWildCardDomainName(sniHostName ?? endPoint.GenericCertificateName);
+                        string certName = HttpHelper.GetWildCardDomainName(sniHostName);
                         var certificate = await CertificateManager.CreateCertificateAsync(certName);
-
-                        //Successfully managed to authenticate the client using the fake certificate
-                        await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
+                        try
+                        {
+                            //Successfully managed to authenticate the client using the fake certificate
+                            await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
+                        }
+                        catch (Exception e)
+                        {
+                            ExceptionFunc(new Exception($"Could'nt authenticate client '{sniHostName}' with fake certificate.", e));
+                            return;
+                        }
                     }
 
                     //HTTPS server created - we can now decrypt the client's traffic
@@ -350,8 +355,12 @@ namespace Titanium.Web.Proxy
                         args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                         //proxy authorization check
-                        if (!args.IsTransparent && httpsConnectHostname == null && await CheckAuthorization(clientStreamWriter, args) == false)
+                        if (!args.IsTransparent && httpsConnectHostname == null && await CheckAuthorization(args) == false)
                         {
+                            await InvokeBeforeResponse(args);
+
+                            //send the response
+                            await clientStreamWriter.WriteResponseAsync(args.WebSession.Response);
                             break;
                         }
 
@@ -370,10 +379,7 @@ namespace Titanium.Web.Proxy
                         }
 
                         //If user requested interception do it
-                        if (BeforeRequest != null)
-                        {
-                            await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);
-                        }
+                        await InvokeBeforeRequest(args);
 
                         var response = args.WebSession.Response;
 
@@ -426,9 +432,9 @@ namespace Titanium.Web.Proxy
                             }
 
                             //If user requested call back then do it
-                            if (BeforeResponse != null && !args.WebSession.Response.ResponseLocked)
+                            if (!args.WebSession.Response.ResponseLocked)
                             {
-                                await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
+                                await InvokeBeforeResponse(args);
                             }
 
                             await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
@@ -592,6 +598,14 @@ namespace Titanium.Web.Proxy
             }
 
             requestHeaders.FixProxyHeaders();
+        }
+
+        private async Task InvokeBeforeRequest(SessionEventArgs args)
+        {
+            if (BeforeRequest != null)
+            {
+                await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);
+            }
         }
     }
 }
