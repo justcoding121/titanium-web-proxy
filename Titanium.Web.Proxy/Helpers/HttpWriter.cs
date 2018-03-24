@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using StreamExtended.Helpers;
 using StreamExtended.Network;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Shared;
 
@@ -152,17 +153,16 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="streamReader"></param>
         /// <param name="isChunked"></param>
         /// <param name="contentLength"></param>
-        /// <param name="removeChunkedEncoding"></param>
         /// <param name="onCopy"></param>
         /// <returns></returns>
-        internal Task CopyBodyAsync(CustomBinaryReader streamReader, bool isChunked, long contentLength, bool removeChunkedEncoding, Action<byte[], int, int> onCopy)
+        internal Task CopyBodyAsync(CustomBinaryReader streamReader, bool isChunked, long contentLength, Action<byte[], int, int> onCopy)
         {
             //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
             if (isChunked)
             {
                 //Need to revist, find any potential bugs
                 //send the body bytes to server in chunks
-                return CopyBodyChunkedAsync(streamReader, removeChunkedEncoding, onCopy);
+                return CopyBodyChunkedAsync(streamReader, onCopy);
             }
             
             //http 1.0
@@ -197,30 +197,30 @@ namespace Titanium.Web.Proxy.Helpers
         /// Copies the streams chunked
         /// </summary>
         /// <param name="reader"></param>
-        /// <param name="removeChunkedEncoding"></param>
         /// <param name="onCopy"></param>
         /// <returns></returns>
-        private async Task CopyBodyChunkedAsync(CustomBinaryReader reader, bool removeChunkedEncoding, Action<byte[], int, int> onCopy)
+        private async Task CopyBodyChunkedAsync(CustomBinaryReader reader, Action<byte[], int, int> onCopy)
         {
             while (true)
             {
                 string chunkHead = await reader.ReadLineAsync();
+                int idx = chunkHead.IndexOf(";");
+                if (idx >= 0)
+                {
+                    // remove chunk extension
+                    chunkHead = chunkHead.Substring(0, idx);
+                }
+
                 int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
 
-                if (!removeChunkedEncoding)
-                {
-                    await WriteLineAsync(chunkHead);
-                }
+                await WriteLineAsync(chunkHead);
 
                 if (chunkSize != 0)
                 {
                     await CopyBytesFromStream(reader, chunkSize, onCopy);
                 }
 
-                if (!removeChunkedEncoding)
-                {
-                    await WriteLineAsync();
-                }
+                await WriteLineAsync();
 
                 //chunk trail
                 await reader.ReadLineAsync();

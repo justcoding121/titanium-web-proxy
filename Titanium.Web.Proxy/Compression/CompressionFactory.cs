@@ -8,8 +8,8 @@ namespace Titanium.Web.Proxy.Compression
     internal class CompressionFactory
     {
         //cache
-        private static Lazy<ICompression> gzip = new Lazy<ICompression>(() => new GZipCompression());
-        private static Lazy<ICompression> deflate = new Lazy<ICompression>(() => new DeflateCompression());
+        private static readonly Lazy<ICompression> gzip = new Lazy<ICompression>(() => new GZipCompression());
+        private static readonly Lazy<ICompression> deflate = new Lazy<ICompression>(() => new DeflateCompression());
 
         public static ICompression GetCompression(string type)
         {

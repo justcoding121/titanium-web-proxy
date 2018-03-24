@@ -80,22 +80,23 @@ namespace Titanium.Web.Proxy
                     bool isChunked = response.IsChunked;
                     string contentEncoding = response.ContentEncoding;
 
+                    var body = response.Body;
                     if (contentEncoding != null)
                     {
-                        response.Body = await GetCompressedResponseBody(contentEncoding, response.Body);
+                        body = await GetCompressedResponseBody(contentEncoding, body);
 
                         if (isChunked == false)
                         {
-                            response.ContentLength = response.Body.Length;
+                            response.ContentLength = body.Length;
                         }
                         else
                         {
                             response.ContentLength = -1;
-                        }
+                        }   
                     }
 
                     await clientStreamWriter.WriteHeadersAsync(response.Headers);
-                    await clientStreamWriter.WriteBodyAsync(response.Body, isChunked);
+                    await clientStreamWriter.WriteBodyAsync(body, isChunked);
                 }
                 else
                 {
@@ -104,7 +105,7 @@ namespace Titanium.Web.Proxy
                     //Write body if exists
                     if (response.HasBody)
                     {
-                        await args.CopyResponseBodyAsync(clientStreamWriter, false);
+                        await args.CopyResponseBodyAsync(clientStreamWriter, TransformationMode.None);
                     }
                 }
             }
@@ -132,6 +133,14 @@ namespace Titanium.Web.Proxy
             if (BeforeResponse != null)
             {
                 await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
+            }
+        }
+
+        private async Task InvokeAfterResponse(SessionEventArgs args)
+        {
+            if (AfterResponse != null)
+            {
+                await AfterResponse.InvokeAsync(this, args, ExceptionFunc);
             }
         }
     }

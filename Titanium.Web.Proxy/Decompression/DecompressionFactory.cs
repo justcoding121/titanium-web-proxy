@@ -5,6 +5,8 @@
     /// </summary>
     internal class DecompressionFactory
     {
+        public static DecompressionFactory Instance = new DecompressionFactory();
+
         internal IDecompression Create(string type)
         {
             switch (type)
