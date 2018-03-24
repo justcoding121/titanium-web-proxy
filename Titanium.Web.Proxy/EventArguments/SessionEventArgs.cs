@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net;
+using System.Reflection;
 using System.Threading.Tasks;
 using StreamExtended.Helpers;
 using StreamExtended.Network;
@@ -325,7 +326,7 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 if (newReader)
                 {
-                    var bufStream = new CustomBufferedStream(s, bufferSize);
+                    var bufStream = new CustomBufferedStream(s, bufferSize, true);
                     s = bufStream;
                     reader = new CustomBinaryReader(bufStream, bufferSize);
                 }
@@ -337,7 +338,11 @@ namespace Titanium.Web.Proxy.EventArguments
                 if (newReader)
                 {
                     reader?.Dispose();
-                    decompressStream?.Dispose();
+                    if (decompressStream != null && decompressStream != stream)
+                    {
+                        decompressStream.Dispose();
+                    }
+
                     if (chunkedStream != null)
                     {
                         await chunkedStream.Finish();

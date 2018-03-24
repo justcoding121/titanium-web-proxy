@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Security;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -35,7 +36,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             //generate root certificate without storing it in file system
             //proxyServer.CertificateManager.CreateRootCertificate(false);
-            
+
             //proxyServer.CertificateManager.TrustRootCertificate();
             //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
 
@@ -45,7 +46,15 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 {
                     var color = Console.ForegroundColor;
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine(exception.Message);
+                    if (exception is ProxyHttpException phex)
+                    {
+                        Console.WriteLine(exception.Message + ": " + phex.InnerException?.Message);
+                    }
+                    else
+                    {
+                        Console.WriteLine(exception.Message);
+                    }
+
                     Console.ForegroundColor = color;
                 }
             };
@@ -63,7 +72,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             proxyServer.BeforeRequest += OnRequest;
             proxyServer.BeforeResponse += OnResponse;
-            
+
             proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
             proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
@@ -71,12 +80,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
             {
-            //You can set only one of the ExcludedHttpsHostNameRegex and IncludedHttpsHostNameRegex properties, otherwise ArgumentException will be thrown
+                //You can set only one of the ExcludedHttpsHostNameRegex and IncludedHttpsHostNameRegex properties, otherwise ArgumentException will be thrown
 
-            //Use self-issued generic certificate on all https requests
-            //Optimizes performance by not creating a certificate for each https-enabled domain
-            //Useful when certificate trust is not required by proxy clients
-            //GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
+                //Use self-issued generic certificate on all https requests
+                //Optimizes performance by not creating a certificate for each https-enabled domain
+                //Useful when certificate trust is not required by proxy clients
+                //GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
             };
 
             //Fired when a CONNECT request is received
@@ -136,7 +145,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
             string hostname = e.WebSession.Request.RequestUri.Host;
-            Console.WriteLine("Tunnel to: " + hostname);
+            WriteToConsole("Tunnel to: " + hostname);
 
             if (hostname.Contains("dropbox.com"))
             {
@@ -154,8 +163,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
         //intecept & cancel redirect or update requests
         private async Task OnRequest(object sender, SessionEventArgs e)
         {
-            Console.WriteLine("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
-            Console.WriteLine(e.WebSession.Request.Url);
+            WriteToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
+            WriteToConsole(e.WebSession.Request.Url);
 
             //read request headers
             requestHeaderHistory[e.Id] = e.WebSession.Request.Headers;
@@ -203,16 +212,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private void MultipartRequestPartSent(object sender, MultipartRequestPartSentEventArgs e)
         {
             var session = (SessionEventArgs)sender;
-            Console.WriteLine("Multipart form data headers:");
+            WriteToConsole("Multipart form data headers:");
             foreach (var header in e.Headers)
             {
-                Console.WriteLine(header);
+                WriteToConsole(header.ToString());
             }
         }
 
         private async Task OnResponse(object sender, SessionEventArgs e)
         {
-            Console.WriteLine("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
+            WriteToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
             //if (requestBodyHistory.ContainsKey(e.Id))
             //{
@@ -224,7 +233,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //responseHeaderHistory[e.Id] = e.WebSession.Response.Headers;
 
             //// print out process id of current session
-            ////Console.WriteLine($"PID: {e.WebSession.ProcessId.Value}");
+            ////WriteToConsole($"PID: {e.WebSession.ProcessId.Value}");
 
             ////if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
             //if (e.WebSession.Request.Method == "GET" || e.WebSession.Request.Method == "POST")
@@ -269,6 +278,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //set e.clientCertificate to override
 
             return Task.FromResult(0);
+        }
+
+        private void WriteToConsole(string message)
+        {
+            lock (lockObj)
+            {
+                Console.WriteLine(message);
+            }
         }
     }
 }
