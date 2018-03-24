@@ -1,4 +1,5 @@
 ﻿using System;
+using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Compression
 {
@@ -18,9 +19,9 @@ namespace Titanium.Web.Proxy.Compression
         {
             switch (type)
             {
-                case "gzip":
+                case KnownHeaders.ContentEncodingGzip:
                     return gzip.Value;
-                case "deflate":
+                case KnownHeaders.ContentEncodingDeflate:
                     return deflate.Value;
                 default:
                     return def.Value;

@@ -210,7 +210,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private async Task ReadResponseBodyAsync()
         {
-            if (!WebSession.Request.RequestLocked)
+            if (!WebSession.Request.Locked)
             {
                 throw new Exception("You cannot read the response body before request is made to server.");
             }
@@ -453,7 +453,7 @@ namespace Titanium.Web.Proxy.EventArguments
         public async Task SetRequestBody(byte[] body)
         {
             var request = WebSession.Request;
-            if (request.RequestLocked)
+            if (request.Locked)
             {
                 throw new Exception("You cannot call this function after request is made to server.");
             }
@@ -474,7 +474,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="body"></param>
         public async Task SetRequestBodyString(string body)
         {
-            if (WebSession.Request.RequestLocked)
+            if (WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function after request is made to server.");
             }
@@ -522,7 +522,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="body"></param>
         public async Task SetResponseBody(byte[] body)
         {
-            if (!WebSession.Request.RequestLocked)
+            if (!WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function before request is made to server.");
             }
@@ -547,7 +547,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="body"></param>
         public async Task SetResponseBodyString(string body)
         {
-            if (!WebSession.Request.RequestLocked)
+            if (!WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function before request is made to server.");
             }
@@ -659,14 +659,14 @@ namespace Titanium.Web.Proxy.EventArguments
         /// a generic responder method 
         public void Respond(Response response)
         {
-            if (WebSession.Request.RequestLocked)
+            if (WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function after request is made to server.");
             }
 
-            WebSession.Request.RequestLocked = true;
+            WebSession.Request.Locked = true;
 
-            response.ResponseLocked = true;
+            response.Locked = true;
             response.IsBodyRead = true;
 
             WebSession.Response = response;

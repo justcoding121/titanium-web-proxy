@@ -435,7 +435,7 @@ namespace Titanium.Web.Proxy
                                 }
 
                                 //If user requested call back then do it
-                                if (!args.WebSession.Response.ResponseLocked)
+                                if (!args.WebSession.Response.Locked)
                                 {
                                     await InvokeBeforeResponse(args);
                                 }
@@ -490,7 +490,7 @@ namespace Titanium.Web.Proxy
             try
             {
                 var request = args.WebSession.Request;
-                request.RequestLocked = true;
+                request.Locked = true;
 
                 //if expect continue is enabled then send the headers first 
                 //and see if server would return 100 conitinue
