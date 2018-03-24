@@ -22,7 +22,6 @@ namespace Titanium.Web.Proxy.Http
                 StatusDescription = "Connection Established"
             };
 
-            response.Headers.AddHeader(KnownHeaders.Timestamp, DateTime.Now.ToString());
             return response;
         }
     }
