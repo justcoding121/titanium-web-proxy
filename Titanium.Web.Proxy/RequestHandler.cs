@@ -465,6 +465,7 @@ namespace Titanium.Web.Proxy
                     catch (Exception e)
                     {
                         args.Exception = e;
+                        throw e;
                     }
                     finally
                     {
