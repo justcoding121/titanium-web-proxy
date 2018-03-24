@@ -107,16 +107,6 @@ namespace Titanium.Web.Proxy.EventArguments
             }
         }
 
-        protected override void Dispose(bool disposing)
-        {
-            if (chunkBytesRemaining != -1)
-            {
-                ;
-            }
-
-            base.Dispose(disposing);
-        }
-
         public override void Write(byte[] buffer, int offset, int count)
         {
             throw new NotSupportedException();
