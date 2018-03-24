@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Compression;
@@ -83,7 +85,7 @@ namespace Titanium.Web.Proxy
                     var body = response.Body;
                     if (contentEncoding != null)
                     {
-                        body = await GetCompressedResponseBody(contentEncoding, body);
+                        body = GetCompressedResponseBody(contentEncoding, body);
 
                         if (isChunked == false)
                         {
@@ -119,12 +121,20 @@ namespace Titanium.Web.Proxy
         /// get the compressed response body from give response bytes
         /// </summary>
         /// <param name="encodingType"></param>
-        /// <param name="responseBodyStream"></param>
+        /// <param name="responseBody"></param>
         /// <returns></returns>
-        private async Task<byte[]> GetCompressedResponseBody(string encodingType, byte[] responseBodyStream)
+        private byte[] GetCompressedResponseBody(string encodingType, byte[] responseBody)
         {
             var compressor = CompressionFactory.GetCompression(encodingType);
-            return await compressor.Compress(responseBodyStream);
+            using (var ms = new MemoryStream())
+            {
+                using (var zip = compressor.GetStream(ms))
+                {
+                    zip.Write(responseBody, 0, responseBody.Length);
+                }
+
+                return ms.ToArray();
+            }
         }
 
 
