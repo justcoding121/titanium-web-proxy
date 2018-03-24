@@ -281,6 +281,11 @@ namespace Titanium.Web.Proxy.Http
             statusDescription = httpResult[2];
         }
 
+        internal void UpdateContentLength()
+        {
+            ContentLength = IsChunked ? -1 : body.Length;
+        }
+
         /// <summary>
         /// Finish the session
         /// </summary>
