@@ -13,6 +13,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
 {
     public class ProxyTestController
     {
+        private readonly object lockObj = new object();
+
         private readonly ProxyServer proxyServer;
         private ExplicitProxyEndPoint explicitEndPoint;
 
@@ -37,7 +39,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.CertificateManager.TrustRootCertificate();
             //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
 
-            proxyServer.ExceptionFunc = exception => Console.WriteLine(exception.Message);
+            proxyServer.ExceptionFunc = exception =>
+            {
+                lock (lockObj)
+                {
+                    var color = Console.ForegroundColor;
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine(exception.Message);
+                    Console.ForegroundColor = color;
+                }
+            };
             proxyServer.ForwardToUpstreamGateway = true;
             proxyServer.CertificateManager.SaveFakeCertificates = true;
             //optionally set the Certificate Engine
