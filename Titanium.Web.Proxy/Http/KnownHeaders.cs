@@ -47,8 +47,5 @@ namespace Titanium.Web.Proxy.Http
 
         public const string TransferEncoding = "transfer-encoding";
         public const string TransferEncodingChunked = "chunked";
-
-        // ???
-        public const string Timestamp = "Timestamp";
     }
 }
