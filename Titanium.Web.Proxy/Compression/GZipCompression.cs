@@ -9,13 +9,13 @@ namespace Titanium.Web.Proxy.Compression
     /// </summary>
     internal class GZipCompression : ICompression
     {
-        public async Task<byte[]> Compress(byte[] responseBody)
+        public async Task<byte[]> Compress(byte[] body)
         {
             using (var ms = new MemoryStream())
             {
                 using (var zip = new GZipStream(ms, CompressionMode.Compress, true))
                 {
-                    await zip.WriteAsync(responseBody, 0, responseBody.Length);
+                    await zip.WriteAsync(body, 0, body.Length);
                 }
 
                 return ms.ToArray();
