@@ -38,7 +38,7 @@ namespace Titanium.Web.Proxy
                 args.ReRequest = false;
 
                 //if user requested call back then do it
-                if (!response.ResponseLocked)
+                if (!response.Locked)
                 {
                     await InvokeBeforeResponse(args);
                 }
@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy
                     return;
                 }
 
-                response.ResponseLocked = true;
+                response.Locked = true;
 
                 var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
 
