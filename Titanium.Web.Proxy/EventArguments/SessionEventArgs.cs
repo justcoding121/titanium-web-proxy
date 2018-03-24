@@ -452,19 +452,20 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="body"></param>
         public async Task SetRequestBody(byte[] body)
         {
-            if (WebSession.Request.RequestLocked)
+            var request = WebSession.Request;
+            if (request.RequestLocked)
             {
                 throw new Exception("You cannot call this function after request is made to server.");
             }
 
             //syphon out the request body from client before setting the new body
-            if (!WebSession.Request.IsBodyRead)
+            if (!request.IsBodyRead)
             {
                 await ReadRequestBodyAsync();
             }
 
-            WebSession.Request.Body = body;
-            WebSession.Request.ContentLength = WebSession.Request.IsChunked ? -1 : body.Length;
+            request.Body = body;
+            request.UpdateContentLength();
         }
 
         /// <summary>
@@ -526,23 +527,18 @@ namespace Titanium.Web.Proxy.EventArguments
                 throw new Exception("You cannot call this function before request is made to server.");
             }
 
+            var response = WebSession.Response;
+
             //syphon out the response body from server before setting the new body
-            if (WebSession.Response.Body == null)
+            if (response.Body == null)
             {
                 await GetResponseBody();
             }
 
-            WebSession.Response.Body = body;
+            response.Body = body;
 
             //If there is a content length header update it
-            if (WebSession.Response.IsChunked == false)
-            {
-                WebSession.Response.ContentLength = body.Length;
-            }
-            else
-            {
-                WebSession.Response.ContentLength = -1;
-            }
+            response.UpdateContentLength();
         }
 
         /// <summary>

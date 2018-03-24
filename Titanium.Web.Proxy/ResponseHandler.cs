@@ -83,9 +83,9 @@ namespace Titanium.Web.Proxy
                     string contentEncoding = response.ContentEncoding;
 
                     var body = response.Body;
-                    if (contentEncoding != null)
+                    if (contentEncoding != null && body != null)
                     {
-                        body = GetCompressedResponseBody(contentEncoding, body);
+                        body = GetCompressedBody(contentEncoding, body);
 
                         if (isChunked == false)
                         {
@@ -118,19 +118,19 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        /// get the compressed response body from give response bytes
+        /// get the compressed body from given bytes
         /// </summary>
         /// <param name="encodingType"></param>
-        /// <param name="responseBody"></param>
+        /// <param name="body"></param>
         /// <returns></returns>
-        private byte[] GetCompressedResponseBody(string encodingType, byte[] responseBody)
+        private byte[] GetCompressedBody(string encodingType, byte[] body)
         {
             var compressor = CompressionFactory.GetCompression(encodingType);
             using (var ms = new MemoryStream())
             {
                 using (var zip = compressor.GetStream(ms))
                 {
-                    zip.Write(responseBody, 0, responseBody.Length);
+                    zip.Write(body, 0, body.Length);
                 }
 
                 return ms.ToArray();

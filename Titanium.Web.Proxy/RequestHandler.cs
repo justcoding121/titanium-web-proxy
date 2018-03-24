@@ -530,17 +530,25 @@ namespace Titanium.Web.Proxy
                     //If request was modified by user
                     if (request.IsBodyRead)
                     {
-                        var body = request.Body;
+                        bool isChunked = request.IsChunked;
+                        string contentEncoding = request.ContentEncoding;
 
-                        if (request.ContentEncoding != null)
+                        var body = request.Body;
+                        if (contentEncoding != null && body != null)
                         {
-                            body = GetCompressedResponseBody(request.ContentEncoding, body);
+                            body = GetCompressedBody(contentEncoding, body);
+
+                            if (isChunked == false)
+                            {
+                                request.ContentLength = body.Length;
+                            }
+                            else
+                            {
+                                request.ContentLength = -1;
+                            }
                         }
 
-                        //chunked send is not supported as of now
-                        request.ContentLength = body.Length;
-
-                        await args.WebSession.ServerConnection.StreamWriter.WriteAsync(body);
+                        await args.WebSession.ServerConnection.StreamWriter.WriteBodyAsync(body, isChunked);
                     }
                     else
                     {
