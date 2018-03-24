@@ -17,6 +17,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private string process;
         private long receivedDataCount;
         private long sentDataCount;
+        private Exception exception;
 
         public int Number { get; set; }
 
@@ -70,6 +71,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             get => sentDataCount;
             set => SetField(ref sentDataCount, value);
+        }
+
+        public Exception Exception
+        {
+            get => exception;
+            set => SetField(ref exception, value);
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

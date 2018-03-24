@@ -1,15 +1,16 @@
-﻿using System.Threading.Tasks;
+﻿using System.IO;
+using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Decompression
 {
     /// <summary>
-    /// When no compression is specified just return the byte array
+    /// When no compression is specified just return the stream
     /// </summary>
     internal class DefaultDecompression : IDecompression
     {
-        public Task<byte[]> Decompress(byte[] compressedArray, int bufferSize)
+        public Stream GetStream(Stream stream)
         {
-            return Task.FromResult(compressedArray);
+            return stream;
         }
     }
 }
