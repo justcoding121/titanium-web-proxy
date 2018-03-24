@@ -8,9 +8,9 @@ namespace Titanium.Web.Proxy.Compression
     /// </summary>
     internal class DefaultCompression : ICompression
     {
-        public async Task<byte[]> Compress(byte[] body)
+        public Stream GetStream(Stream stream)
         {
-            return body;
+            return stream;
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System.IO;
+using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Compression
 {
@@ -7,6 +8,6 @@ namespace Titanium.Web.Proxy.Compression
     /// </summary>
     interface ICompression
     {
-        Task<byte[]> Compress(byte[] body);
+        Stream GetStream(Stream stream);
     }
 }

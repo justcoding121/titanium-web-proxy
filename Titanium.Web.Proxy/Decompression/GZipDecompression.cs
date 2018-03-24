@@ -12,7 +12,7 @@ namespace Titanium.Web.Proxy.Decompression
     {
         public Stream GetStream(Stream stream)
         {
-            return new GZipStream(stream, CompressionMode.Decompress);
+            return new GZipStream(stream, CompressionMode.Decompress, true);
         }
     }
 }

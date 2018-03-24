@@ -530,12 +530,12 @@ namespace Titanium.Web.Proxy
                     //If request was modified by user
                     if (request.IsBodyRead)
                     {
+                        var body = request.Body;
+
                         if (request.ContentEncoding != null)
                         {
-                            request.Body = await GetCompressedResponseBody(request.ContentEncoding, request.Body);
+                            body = GetCompressedResponseBody(request.ContentEncoding, body);
                         }
-
-                        var body = request.Body;
 
                         //chunked send is not supported as of now
                         request.ContentLength = body.Length;
