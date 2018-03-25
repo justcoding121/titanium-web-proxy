@@ -8,18 +8,21 @@ using StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
-    internal class ChunkedStream : Stream
+    internal class LimitedStream : Stream
     {
         private readonly CustomBufferedStream baseStream;
         private readonly CustomBinaryReader baseReader;
+        private readonly bool isChunked;
 
         private bool readChunkTrail;
-        private int chunkBytesRemaining;
+        private long bytesRemaining;
 
-        public ChunkedStream(CustomBufferedStream baseStream, CustomBinaryReader baseReader)
+        public LimitedStream(CustomBufferedStream baseStream, CustomBinaryReader baseReader, bool isChunked, long contentLength)
         {
             this.baseStream = baseStream;
             this.baseReader = baseReader;
+            this.isChunked = isChunked;
+            bytesRemaining = isChunked ? 0 : contentLength;
         }
 
         private void GetNextChunk()
@@ -41,11 +44,11 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
-            chunkBytesRemaining = chunkSize;
+            bytesRemaining = chunkSize;
 
             if (chunkSize == 0)
             {
-                chunkBytesRemaining = -1;
+                bytesRemaining = -1;
 
                 //chunk trail
                 string s = baseReader.ReadLineAsync().Result;
@@ -69,24 +72,31 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            if (chunkBytesRemaining == -1)
+            if (bytesRemaining == -1)
             {
                 return 0;
             }
 
-            if (chunkBytesRemaining == 0)
+            if (bytesRemaining == 0)
             {
-                GetNextChunk();
+                if (isChunked)
+                {
+                    GetNextChunk();
+                }
+                else
+                {
+                    bytesRemaining = -1;
+                }
             }
 
-            if (chunkBytesRemaining == -1)
+            if (bytesRemaining == -1)
             {
                 return 0;
             }
 
-            int toRead = Math.Min(count, chunkBytesRemaining);
+            int toRead = (int)Math.Min(count, bytesRemaining);
             int res = baseStream.Read(buffer, offset, toRead);
-            chunkBytesRemaining -= res;
+            bytesRemaining -= res;
 
             return res;
         }
@@ -96,7 +106,7 @@ namespace Titanium.Web.Proxy.EventArguments
             var buffer = BufferPool.GetBuffer(baseReader.Buffer.Length);
             try
             {
-                while (chunkBytesRemaining != -1)
+                while (bytesRemaining != -1)
                 {
                     await ReadAsync(buffer, 0, buffer.Length);
                 }

@@ -8,14 +8,11 @@ namespace Titanium.Web.Proxy.Decompression
     /// </summary>
     internal class DecompressionFactory
     {
-        public static readonly DecompressionFactory Instance = new DecompressionFactory();
-
         //cache
         private static readonly Lazy<IDecompression> gzip = new Lazy<IDecompression>(() => new GZipDecompression());
         private static readonly Lazy<IDecompression> deflate = new Lazy<IDecompression>(() => new DeflateDecompression());
-        private static readonly Lazy<IDecompression> def = new Lazy<IDecompression>(() => new DefaultDecompression());
 
-        internal IDecompression Create(string type)
+        public static IDecompression Create(string type)
         {
             switch (type)
             {
@@ -24,7 +21,7 @@ namespace Titanium.Web.Proxy.Decompression
                 case KnownHeaders.ContentEncodingDeflate:
                     return deflate.Value;
                 default:
-                    return def.Value;
+                    throw new Exception($"Unsupported decompression mode: {type}");
             }
         }
     }

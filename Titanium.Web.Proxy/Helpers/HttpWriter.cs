@@ -165,7 +165,7 @@ namespace Titanium.Web.Proxy.Helpers
                 return CopyBodyChunkedAsync(streamReader, onCopy);
             }
             
-            //http 1.0
+            //http 1.0 or the stream reader limits the stream
             if (contentLength == -1)
             {
                 contentLength = long.MaxValue;

@@ -294,61 +294,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             else
             {
-                await CopyBodyAsync(ProxyClient.ClientStream, reader, writer,
-                    request.IsChunked, transformation, request.ContentEncoding, contentLength, OnDataSent);
-            }
-        }
-
-        private async Task CopyBodyAsync(CustomBufferedStream stream, CustomBinaryReader reader, HttpWriter writer,
-            bool isChunked, TransformationMode transformation, string contentEncoding, long contentLength,
-            Action<byte[], int, int> onCopy)
-        {
-            bool newReader = false;
-
-            Stream s = stream;
-            ChunkedStream chunkedStream = null;
-            Stream decompressStream = null;
-
-            if (isChunked && transformation != TransformationMode.None)
-            {
-                s = chunkedStream = new ChunkedStream(stream, reader);
-                isChunked = false;
-                newReader = true;
-            }
-
-            if (transformation == TransformationMode.Uncompress)
-            {
-                s = decompressStream = DecompressionFactory.Instance.Create(contentEncoding).GetStream(s);
-                newReader = true;
-            }
-
-            try
-            {
-                if (newReader)
-                {
-                    var bufStream = new CustomBufferedStream(s, bufferSize, true);
-                    s = bufStream;
-                    reader = new CustomBinaryReader(bufStream, bufferSize);
-                }
-
-                await writer.CopyBodyAsync(reader, isChunked, contentLength, onCopy);
-            }
-            finally
-            {
-                if (newReader)
-                {
-                    reader?.Dispose();
-                    if (decompressStream != null && decompressStream != stream)
-                    {
-                        decompressStream.Dispose();
-                    }
-
-                    if (chunkedStream != null)
-                    {
-                        await chunkedStream.Finish();
-                        chunkedStream.Dispose();
-                    }
-                }
+                await CopyBodyAsync(ProxyClient.ClientStream, reader, writer, request, transformation, OnDataSent);
             }
         }
 
@@ -357,8 +303,47 @@ namespace Titanium.Web.Proxy.EventArguments
             var response = WebSession.Response;
             var reader = WebSession.ServerConnection.StreamReader;
 
-            await CopyBodyAsync(WebSession.ServerConnection.Stream, reader, writer,
-                response.IsChunked, transformation, response.ContentEncoding, response.ContentLength, OnDataReceived);
+            await CopyBodyAsync(WebSession.ServerConnection.Stream, reader, writer, response, transformation, OnDataReceived);
+        }
+
+        private async Task CopyBodyAsync(CustomBufferedStream stream, CustomBinaryReader reader, HttpWriter writer,
+            RequestResponseBase requestResponse, TransformationMode transformation, Action<byte[], int, int> onCopy)
+        {
+            bool isChunked = requestResponse.IsChunked;
+            long contentLength = requestResponse.ContentLength;
+            if (transformation == TransformationMode.None)
+            {
+                await writer.CopyBodyAsync(reader, isChunked, contentLength, onCopy);
+                return;
+            }
+
+            LimitedStream limitedStream;
+            Stream decompressStream = null;
+
+            string contentEncoding = requestResponse.ContentEncoding;
+
+            Stream s = limitedStream = new LimitedStream(stream, reader, isChunked, contentLength);
+
+            if (transformation == TransformationMode.Uncompress && contentEncoding != null)
+            {
+                s = decompressStream = DecompressionFactory.Create(contentEncoding).GetStream(s);
+            }
+
+            try
+            {
+                var bufStream = new CustomBufferedStream(s, bufferSize, true);
+                reader = new CustomBinaryReader(bufStream, bufferSize);
+
+                await writer.CopyBodyAsync(reader, false, -1, onCopy);
+            }
+            finally
+            {
+                reader?.Dispose();
+                decompressStream?.Dispose();
+
+                await limitedStream.Finish();
+                limitedStream.Dispose();
+            }
         }
 
         /// <summary>
