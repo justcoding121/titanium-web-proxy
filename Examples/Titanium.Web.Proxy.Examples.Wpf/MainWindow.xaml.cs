@@ -90,8 +90,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             //proxyServer.CertificateManager.LoadRootCertificate(@"C:\NameFolder\rootCert.pfx", "PfxPassword");
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true);
-
-
+            
             proxyServer.AddEndPoint(explicitEndPoint);
             //proxyServer.UpStreamHttpProxy = new ExternalProxy
             //{
