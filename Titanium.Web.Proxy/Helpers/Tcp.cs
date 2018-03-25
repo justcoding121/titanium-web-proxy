@@ -249,12 +249,8 @@ namespace Titanium.Web.Proxy.Helpers
         internal static Task SendRaw(Stream clientStream, Stream serverStream, int bufferSize,
             Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc)
         {
-#if NET45
-            return SendRawApm(clientStream, serverStream, bufferSize, onDataSend, onDataReceive, exceptionFunc);
-#else
-            // todo: Apm hangs in dotnet core
+            // todo: fix APM mode
             return SendRawTap(clientStream, serverStream, bufferSize, onDataSend, onDataReceive, exceptionFunc);
-#endif
         }
     }
 }
