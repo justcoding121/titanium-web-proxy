@@ -46,7 +46,7 @@ namespace Titanium.Web.Proxy.Helpers
                     protocol = ProxyServer.UriSchemeHttp;
                     break;
                 case ProxyProtocolType.Https:
-                    protocol = Proxy.ProxyServer.UriSchemeHttps;
+                    protocol = ProxyServer.UriSchemeHttps;
                     break;
                 default:
                     throw new Exception("Unsupported protocol type");
