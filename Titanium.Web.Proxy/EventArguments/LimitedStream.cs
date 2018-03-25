@@ -22,7 +22,11 @@ namespace Titanium.Web.Proxy.EventArguments
             this.baseStream = baseStream;
             this.baseReader = baseReader;
             this.isChunked = isChunked;
-            bytesRemaining = isChunked ? 0 : contentLength;
+            bytesRemaining = isChunked 
+                ? 0 
+                : contentLength == -1 
+                    ? long.MaxValue 
+                    : contentLength;
         }
 
         private void GetNextChunk()
@@ -98,22 +102,31 @@ namespace Titanium.Web.Proxy.EventArguments
             int res = baseStream.Read(buffer, offset, toRead);
             bytesRemaining -= res;
 
+            if (res == 0)
+            {
+                bytesRemaining = -1;
+            }
+
             return res;
         }
 
         public async Task Finish()
         {
-            var buffer = BufferPool.GetBuffer(baseReader.Buffer.Length);
-            try
+            if (bytesRemaining != -1)
             {
-                while (bytesRemaining != -1)
+                var buffer = BufferPool.GetBuffer(baseReader.Buffer.Length);
+                try
                 {
-                    await ReadAsync(buffer, 0, buffer.Length);
+                    int res = await ReadAsync(buffer, 0, buffer.Length);
+                    if (res != 0)
+                    {
+                        throw new Exception("Data received after stream end");
+                    }
                 }
-            }
-            finally
-            {
-                BufferPool.ReturnBuffer(buffer);
+                finally
+                {
+                    BufferPool.ReturnBuffer(buffer);
+                }
             }
         }
 
