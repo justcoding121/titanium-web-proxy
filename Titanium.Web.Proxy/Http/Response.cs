@@ -2,7 +2,6 @@
 using System.ComponentModel;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 
@@ -12,18 +11,8 @@ namespace Titanium.Web.Proxy.Http
     /// Http(s) response object
     /// </summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
-    public class Response
+    public class Response : RequestResponseBase
     {
-        /// <summary>
-        /// Cached response body content as byte array
-        /// </summary>
-        private byte[] body;
-
-        /// <summary>
-        /// Cached response body as string
-        /// </summary>
-        private string bodyString;
-
         /// <summary>
         /// Response Status Code.
         /// </summary>
@@ -33,26 +22,6 @@ namespace Titanium.Web.Proxy.Http
         /// Response Status description.
         /// </summary>
         public string StatusDescription { get; set; }
-
-        /// <summary>
-        /// Encoding used in response
-        /// </summary>
-        public Encoding Encoding => HttpHelper.GetEncodingFromContentType(ContentType);
-
-        /// <summary>
-        /// Content encoding for this response
-        /// </summary>
-        public string ContentEncoding => Headers.GetHeaderValueOrNull(KnownHeaders.ContentEncoding)?.Trim();
-
-        /// <summary>
-        /// Http version
-        /// </summary>
-        public Version HttpVersion { get; set; } = HttpHeader.VersionUnknown;
-
-        /// <summary>
-        /// Keeps the response body data after the session is finished
-        /// </summary>
-        public bool KeepBody { get; set; }
 
         /// <summary>
         /// Has response body?
@@ -108,119 +77,15 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        /// <summary>
-        /// Content type of this response
-        /// </summary>
-        public string ContentType => Headers.GetHeaderValueOrNull(KnownHeaders.ContentType);
-
-        /// <summary>
-        /// Length of response body
-        /// </summary>
-        public long ContentLength
+        internal override void EnsureBodyAvailable(bool throwWhenNotReadYet = true)
         {
-            get
-            {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.ContentLength);
-
-                if (headerValue == null)
-                {
-                    return -1;
-                }
-
-                if (long.TryParse(headerValue, out long contentLen))
-                {
-                    return contentLen;
-                }
-
-                return -1;
-            }
-            set
-            {
-                if (value >= 0)
-                {
-                    Headers.SetOrAddHeaderValue(KnownHeaders.ContentLength, value.ToString());
-                    IsChunked = false;
-                }
-                else
-                {
-                    Headers.RemoveHeader(KnownHeaders.ContentLength);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Response transfer-encoding is chunked?
-        /// </summary>
-        public bool IsChunked
-        {
-            get
-            {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
-                return headerValue != null && headerValue.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked);
-            }
-            set
-            {
-                if (value)
-                {
-                    Headers.SetOrAddHeaderValue(KnownHeaders.TransferEncoding, KnownHeaders.TransferEncodingChunked);
-                    ContentLength = -1;
-                }
-                else
-                {
-                    Headers.RemoveHeader(KnownHeaders.TransferEncoding);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Collection of all response headers
-        /// </summary>
-        public HeaderCollection Headers { get; } = new HeaderCollection();
-
-        internal void EnsureBodyAvailable()
-        {
-            if (!IsBodyRead)
+            if (!IsBodyRead && throwWhenNotReadYet)
             {
                 throw new Exception("Response body is not read yet. " +
                                     "Use SessionEventArgs.GetResponseBody() or SessionEventArgs.GetResponseBodyAsString() " +
                                     "method to read the response body.");
             }
         }
-
-        /// <summary>
-        /// Response body as byte array
-        /// </summary>
-        [Browsable(false)]
-        public byte[] Body
-        {
-            get
-            {
-                EnsureBodyAvailable();
-                return body;
-            }
-            internal set
-            {
-                body = value;
-                bodyString = null;
-            }
-        }
-
-        /// <summary>
-        /// Response body as string
-        /// Use the encoding specified in response to decode the byte[] data to string
-        /// </summary>
-        [Browsable(false)]
-        public string BodyString => bodyString ?? (bodyString = Encoding.GetString(Body));
-
-        /// <summary>
-        /// Was response body read by user
-        /// </summary>
-        public bool IsBodyRead { get; internal set; }
-
-        /// <summary>
-        /// Is response is no more modifyable by user (user callbacks complete?)
-        /// </summary>
-        internal bool ResponseLocked { get; set; }
 
         /// <summary>
         /// Is response 100-continue
@@ -240,7 +105,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Gets the header text.
         /// </summary>
-        public string HeaderText
+        public override string HeaderText
         {
             get
             {
@@ -279,23 +144,6 @@ namespace Titanium.Web.Proxy.Http
 
             statusCode = int.Parse(httpResult[1]);
             statusDescription = httpResult[2];
-        }
-
-        /// <summary>
-        /// Finish the session
-        /// </summary>
-        internal void FinishSession()
-        {
-            if (!KeepBody)
-            {
-                body = null;
-                bodyString = null;
-            }
-        }
-
-        public override string ToString()
-        {
-            return HeaderText;
         }
     }
 }

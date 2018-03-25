@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Net;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -102,6 +103,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             proxyServer.BeforeRequest += ProxyServer_BeforeRequest;
             proxyServer.BeforeResponse += ProxyServer_BeforeResponse;
+            proxyServer.AfterResponse += ProxyServer_AfterResponse;
             explicitEndPoint.BeforeTunnelConnectRequest += ProxyServer_BeforeTunnelConnectRequest;
             explicitEndPoint.BeforeTunnelConnectResponse += ProxyServer_BeforeTunnelConnectResponse;
             proxyServer.ClientConnectionCountChanged += delegate { Dispatcher.Invoke(() => { ClientConnectionCount = proxyServer.ClientConnectionCount; }); };
@@ -177,6 +179,17 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                     });
                 }
             }
+        }
+
+        private async Task ProxyServer_AfterResponse(object sender, SessionEventArgs e)
+        {
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (sessionDictionary.TryGetValue(e.WebSession, out var item))
+                {
+                    item.Exception = e.Exception;
+                }
+            });
         }
 
         private SessionListItem AddSession(SessionEventArgs e)
@@ -255,9 +268,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             }
 
             //string hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
-            TextBoxRequest.Text = request.HeaderText + request.Encoding.GetString(data) +
-                                  (truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null) +
-                                  (request as ConnectRequest)?.ClientHelloInfo;
+            var sb = new StringBuilder();
+            sb.Append(request.HeaderText);
+            sb.Append(request.Encoding.GetString(data));
+            sb.Append(truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null);
+            sb.Append((request as ConnectRequest)?.ClientHelloInfo);
+            TextBoxRequest.Text = sb.ToString();
 
             var response = session.Response;
             data = (response.IsBodyRead ? response.Body : null) ?? new byte[0];
@@ -268,9 +284,18 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             }
 
             //hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
-            TextBoxResponse.Text = session.Response.HeaderText + session.Response.Encoding.GetString(data) +
-                                   (truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null) +
-                                   (session.Response as ConnectResponse)?.ServerHelloInfo;
+            sb = new StringBuilder();
+            sb.Append(response.HeaderText);
+            sb.Append(response.Encoding.GetString(data));
+            sb.Append(truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null);
+            sb.Append((response as ConnectResponse)?.ServerHelloInfo);
+            if (SelectedSession.Exception != null)
+            {
+                sb.Append(Environment.NewLine);
+                sb.Append(SelectedSession.Exception);
+            }
+
+            TextBoxResponse.Text = sb.ToString();
         }
     }
 }

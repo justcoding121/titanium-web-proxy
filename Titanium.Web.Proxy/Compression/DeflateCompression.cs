@@ -9,17 +9,9 @@ namespace Titanium.Web.Proxy.Compression
     /// </summary>
     internal class DeflateCompression : ICompression
     {
-        public async Task<byte[]> Compress(byte[] responseBody)
+        public Stream GetStream(Stream stream)
         {
-            using (var ms = new MemoryStream())
-            {
-                using (var zip = new DeflateStream(ms, CompressionMode.Compress, true))
-                {
-                    await zip.WriteAsync(responseBody, 0, responseBody.Length);
-                }
-
-                return ms.ToArray();
-            }
+            return new DeflateStream(stream, CompressionMode.Compress, true);
         }
     }
 }

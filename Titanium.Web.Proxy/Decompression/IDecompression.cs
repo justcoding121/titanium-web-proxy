@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System.IO;
+using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Decompression
 {
@@ -7,6 +8,6 @@ namespace Titanium.Web.Proxy.Decompression
     /// </summary>
     internal interface IDecompression
     {
-        Task<byte[]> Decompress(byte[] compressedArray, int bufferSize);
+        Stream GetStream(Stream stream);
     }
 }
