@@ -40,6 +40,8 @@ namespace Titanium.Web.Proxy.Http
 
         // Response headers
         public const string ContentEncoding = "content-encoding";
+        public const string ContentEncodingDeflate = "deflate";
+        public const string ContentEncodingGzip = "gzip";
 
         public const string Location = "Location";
 
@@ -47,8 +49,5 @@ namespace Titanium.Web.Proxy.Http
 
         public const string TransferEncoding = "transfer-encoding";
         public const string TransferEncodingChunked = "chunked";
-
-        // ???
-        public const string Timestamp = "Timestamp";
     }
 }

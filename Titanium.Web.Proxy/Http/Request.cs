@@ -3,28 +3,17 @@ using System.ComponentModel;
 using System.Text;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
 {
     /// <summary>
-    /// A HTTP(S) request object
+    /// Http(s) request object
     /// </summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
-    public class Request
+    public class Request : RequestResponseBase
     {
-        /// <summary>
-        /// Cached request body as byte array
-        /// </summary>
-        private byte[] body;
-
-        /// <summary>
-        /// Cached request body as string
-        /// </summary>
-        private string bodyString;
-
         /// <summary>
         /// Request Method
         /// </summary>
@@ -44,16 +33,6 @@ namespace Titanium.Web.Proxy.Http
         /// The original request Url.
         /// </summary>
         public string OriginalUrl { get; set; }
-
-        /// <summary>
-        /// Request Http Version
-        /// </summary>
-        public Version HttpVersion { get; set; }
-
-        /// <summary>
-        /// Keeps the request body data after the session is finished
-        /// </summary>
-        public bool KeepBody { get; set; }
 
         /// <summary>
         /// Has request body?
@@ -98,80 +77,6 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Content encoding header value
-        /// </summary>
-        public string ContentEncoding => Headers.GetHeaderValueOrNull(KnownHeaders.ContentEncoding);
-
-        /// <summary>
-        /// Request content-length
-        /// </summary>
-        public long ContentLength
-        {
-            get
-            {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.ContentLength);
-
-                if (headerValue == null)
-                {
-                    return -1;
-                }
-
-                long.TryParse(headerValue, out long contentLen);
-                if (contentLen >= 0)
-                {
-                    return contentLen;
-                }
-
-                return -1;
-            }
-            set
-            {
-                if (value >= 0)
-                {
-                    Headers.SetOrAddHeaderValue(KnownHeaders.ContentLength, value.ToString());
-                    IsChunked = false;
-                }
-                else
-                {
-                    Headers.RemoveHeader(KnownHeaders.ContentLength);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Request content-type
-        /// </summary>
-        public string ContentType
-        {
-            get => Headers.GetHeaderValueOrNull(KnownHeaders.ContentType);
-            set => Headers.SetOrAddHeaderValue(KnownHeaders.ContentType, value);
-        }
-
-        /// <summary>
-        /// Is request body send as chunked bytes
-        /// </summary>
-        public bool IsChunked
-        {
-            get
-            {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
-                return headerValue != null && headerValue.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked);
-            }
-            set
-            {
-                if (value)
-                {
-                    Headers.SetOrAddHeaderValue(KnownHeaders.TransferEncoding, KnownHeaders.TransferEncodingChunked);
-                    ContentLength = -1;
-                }
-                else
-                {
-                    Headers.RemoveHeader(KnownHeaders.TransferEncoding);
-                }
-            }
-        }
-
-        /// <summary>
         /// Does this request has a 100-continue header?
         /// </summary>
         public bool ExpectContinue
@@ -191,16 +96,11 @@ namespace Titanium.Web.Proxy.Http
         public string Url => RequestUri.OriginalString;
 
         /// <summary>
-        /// Encoding for this request
-        /// </summary>
-        public Encoding Encoding => HttpHelper.GetEncodingFromContentType(ContentType);
-
-        /// <summary>
         /// Terminates the underlying Tcp Connection to client after current request
         /// </summary>
         internal bool CancelRequest { get; set; }
 
-        internal void EnsureBodyAvailable(bool throwWhenNotReadYet = true)
+        internal override void EnsureBodyAvailable(bool throwWhenNotReadYet = true)
         {
             //GET request don't have a request body to read
             if (!HasBody)
@@ -211,7 +111,7 @@ namespace Titanium.Web.Proxy.Http
 
             if (!IsBodyRead)
             {
-                if (RequestLocked)
+                if (Locked)
                 {
                     throw new Exception("You cannot get the request body after request is made to server.");
                 }
@@ -224,41 +124,6 @@ namespace Titanium.Web.Proxy.Http
                 }
             }
         }
-
-        /// <summary>
-        /// Request body as byte array
-        /// </summary>
-        [Browsable(false)]
-        public byte[] Body
-        {
-            get
-            {
-                EnsureBodyAvailable();
-                return body;
-            }
-            internal set
-            {
-                body = value;
-                bodyString = null;
-            }
-        }
-
-        /// <summary>
-        /// Request body as string
-        /// Use the encoding specified in request to decode the byte[] data to string
-        /// </summary>
-        [Browsable(false)]
-        public string BodyString => bodyString ?? (bodyString = Encoding.GetString(Body));
-
-        /// <summary>
-        /// Request body was read by user?
-        /// </summary>
-        public bool IsBodyRead { get; internal set; }
-
-        /// <summary>
-        /// Request is ready to be sent (user callbacks are complete?)
-        /// </summary>
-        internal bool RequestLocked { get; set; }
 
         /// <summary>
         /// Does this request has an upgrade to websocket header?
@@ -279,11 +144,6 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Request header collection
-        /// </summary>
-        public HeaderCollection Headers { get; } = new HeaderCollection();
-
-        /// <summary>
         /// Does server responsed positively for 100 continue request
         /// </summary>
         public bool Is100Continue { get; internal set; }
@@ -296,7 +156,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Gets the header text.
         /// </summary>
-        public string HeaderText
+        public override string HeaderText
         {
             get
             {
@@ -366,23 +226,6 @@ namespace Titanium.Web.Proxy.Http
             }
 
             return true;
-        }
-
-        /// <summary>
-        /// Finish the session
-        /// </summary>
-        public void FinishSession()
-        {
-            if (!KeepBody)
-            {
-                body = null;
-                bodyString = null;
-            }
-        }
-
-        public override string ToString()
-        {
-            return HeaderText;
         }
     }
 }

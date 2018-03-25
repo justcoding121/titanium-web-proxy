@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Compression;
@@ -36,7 +38,7 @@ namespace Titanium.Web.Proxy
                 args.ReRequest = false;
 
                 //if user requested call back then do it
-                if (!response.ResponseLocked)
+                if (!response.Locked)
                 {
                     await InvokeBeforeResponse(args);
                 }
@@ -51,7 +53,7 @@ namespace Titanium.Web.Proxy
                     return;
                 }
 
-                response.ResponseLocked = true;
+                response.Locked = true;
 
                 var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
 
@@ -80,22 +82,23 @@ namespace Titanium.Web.Proxy
                     bool isChunked = response.IsChunked;
                     string contentEncoding = response.ContentEncoding;
 
-                    if (contentEncoding != null)
+                    var body = response.Body;
+                    if (contentEncoding != null && body != null)
                     {
-                        response.Body = await GetCompressedResponseBody(contentEncoding, response.Body);
+                        body = GetCompressedBody(contentEncoding, body);
 
                         if (isChunked == false)
                         {
-                            response.ContentLength = response.Body.Length;
+                            response.ContentLength = body.Length;
                         }
                         else
                         {
                             response.ContentLength = -1;
-                        }
+                        }   
                     }
 
                     await clientStreamWriter.WriteHeadersAsync(response.Headers);
-                    await clientStreamWriter.WriteBodyAsync(response.Body, isChunked);
+                    await clientStreamWriter.WriteBodyAsync(body, isChunked);
                 }
                 else
                 {
@@ -104,7 +107,7 @@ namespace Titanium.Web.Proxy
                     //Write body if exists
                     if (response.HasBody)
                     {
-                        await args.CopyResponseBodyAsync(clientStreamWriter, false);
+                        await args.CopyResponseBodyAsync(clientStreamWriter, TransformationMode.None);
                     }
                 }
             }
@@ -115,15 +118,23 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        /// get the compressed response body from give response bytes
+        /// get the compressed body from given bytes
         /// </summary>
         /// <param name="encodingType"></param>
-        /// <param name="responseBodyStream"></param>
+        /// <param name="body"></param>
         /// <returns></returns>
-        private async Task<byte[]> GetCompressedResponseBody(string encodingType, byte[] responseBodyStream)
+        private byte[] GetCompressedBody(string encodingType, byte[] body)
         {
             var compressor = CompressionFactory.GetCompression(encodingType);
-            return await compressor.Compress(responseBodyStream);
+            using (var ms = new MemoryStream())
+            {
+                using (var zip = compressor.GetStream(ms))
+                {
+                    zip.Write(body, 0, body.Length);
+                }
+
+                return ms.ToArray();
+            }
         }
 
 
@@ -132,6 +143,14 @@ namespace Titanium.Web.Proxy
             if (BeforeResponse != null)
             {
                 await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
+            }
+        }
+
+        private async Task InvokeAfterResponse(SessionEventArgs args)
+        {
+            if (AfterResponse != null)
+            {
+                await AfterResponse.InvokeAsync(this, args, ExceptionFunc);
             }
         }
     }
