@@ -190,6 +190,11 @@ namespace Titanium.Web.Proxy
         public event AsyncEventHandler<SessionEventArgs> BeforeResponse;
 
         /// <summary>
+        /// Intercept after response from server
+        /// </summary>
+        public event AsyncEventHandler<SessionEventArgs> AfterResponse;
+
+        /// <summary>
         /// Callback for error events in proxy
         /// </summary>
         public ExceptionHandler ExceptionFunc

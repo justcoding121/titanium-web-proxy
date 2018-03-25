@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Net;
+using System.Reflection;
 using System.Threading.Tasks;
 using StreamExtended.Helpers;
 using StreamExtended.Network;
@@ -100,6 +102,8 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public bool IsTransparent => LocalEndPoint is TransparentProxyEndPoint;
 
+        public Exception Exception { get; internal set; }
+
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
@@ -146,7 +150,7 @@ namespace Titanium.Web.Proxy.EventArguments
             //If not already read (not cached yet)
             if (!request.IsBodyRead)
             {
-                var body = await ReadBodyAsync(ProxyClient.ClientStreamReader, request.IsChunked, request.ContentLength, request.ContentEncoding, true);
+                var body = await ReadBodyAsync(ProxyClient.ClientStreamReader, true);
                 request.Body = body;
 
                 //Now set the flag to true
@@ -174,8 +178,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                var ex2 = new Exception("Exception thrown in user event", ex);
-                exceptionFunc(ex2);
+                exceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -187,8 +190,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                var ex2 = new Exception("Exception thrown in user event", ex);
-                exceptionFunc(ex2);
+                exceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -200,8 +202,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                var ex2 = new Exception("Exception thrown in user event", ex);
-                exceptionFunc(ex2);
+                exceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -210,7 +211,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private async Task ReadResponseBodyAsync()
         {
-            if (!WebSession.Request.RequestLocked)
+            if (!WebSession.Request.Locked)
             {
                 throw new Exception("You cannot read the response body before request is made to server.");
             }
@@ -224,7 +225,7 @@ namespace Titanium.Web.Proxy.EventArguments
             //If not already read (not cached yet)
             if (!response.IsBodyRead)
             {
-                var body = await ReadBodyAsync(WebSession.ServerConnection.StreamReader, response.IsChunked, response.ContentLength, response.ContentEncoding, false);
+                var body = await ReadBodyAsync(WebSession.ServerConnection.StreamReader, false);
                 response.Body = body;
 
                 //Now set the flag to true
@@ -234,21 +235,21 @@ namespace Titanium.Web.Proxy.EventArguments
             }
         }
 
-        private async Task<byte[]> ReadBodyAsync(CustomBinaryReader reader, bool isChunked, long contentLength, string contentEncoding, bool isRequest)
+        private async Task<byte[]> ReadBodyAsync(CustomBinaryReader reader, bool isRequest)
         {
             using (var bodyStream = new MemoryStream())
             {
                 var writer = new HttpWriter(bodyStream, bufferSize);
                 if (isRequest)
                 {
-                    await CopyRequestBodyAsync(writer, true);
+                    await CopyRequestBodyAsync(writer, TransformationMode.Uncompress);
                 }
                 else
                 {
-                    await CopyResponseBodyAsync(writer, true);
+                    await CopyResponseBodyAsync(writer, TransformationMode.Uncompress);
                 }
 
-                return await GetDecompressedBodyAsync(contentEncoding, bodyStream.ToArray());
+                return bodyStream.ToArray();
             }
         }
 
@@ -256,7 +257,7 @@ namespace Titanium.Web.Proxy.EventArguments
         ///  This is called when the request is PUT/POST/PATCH to read the body
         /// </summary>
         /// <returns></returns>
-        internal async Task CopyRequestBodyAsync(HttpWriter writer, bool removeChunkedEncoding)
+        internal async Task CopyRequestBodyAsync(HttpWriter writer, TransformationMode transformation)
         {
             // End the operation
             var request = WebSession.Request;
@@ -293,16 +294,56 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             else
             {
-                await writer.CopyBodyAsync(reader, request.IsChunked, contentLength, removeChunkedEncoding);
+                await CopyBodyAsync(ProxyClient.ClientStream, reader, writer, request, transformation, OnDataSent);
             }
         }
 
-        internal async Task CopyResponseBodyAsync(HttpWriter writer, bool removeChunkedEncoding)
+        internal async Task CopyResponseBodyAsync(HttpWriter writer, TransformationMode transformation)
         {
             var response = WebSession.Response;
             var reader = WebSession.ServerConnection.StreamReader;
 
-            await writer.CopyBodyAsync(reader, response.IsChunked, response.ContentLength, removeChunkedEncoding);
+            await CopyBodyAsync(WebSession.ServerConnection.Stream, reader, writer, response, transformation, OnDataReceived);
+        }
+
+        private async Task CopyBodyAsync(CustomBufferedStream stream, CustomBinaryReader reader, HttpWriter writer,
+            RequestResponseBase requestResponse, TransformationMode transformation, Action<byte[], int, int> onCopy)
+        {
+            bool isChunked = requestResponse.IsChunked;
+            long contentLength = requestResponse.ContentLength;
+            if (transformation == TransformationMode.None)
+            {
+                await writer.CopyBodyAsync(reader, isChunked, contentLength, onCopy);
+                return;
+            }
+
+            LimitedStream limitedStream;
+            Stream decompressStream = null;
+
+            string contentEncoding = requestResponse.ContentEncoding;
+
+            Stream s = limitedStream = new LimitedStream(stream, reader, isChunked, contentLength);
+
+            if (transformation == TransformationMode.Uncompress && contentEncoding != null)
+            {
+                s = decompressStream = DecompressionFactory.Create(contentEncoding).GetStream(s);
+            }
+
+            try
+            {
+                var bufStream = new CustomBufferedStream(s, bufferSize, true);
+                reader = new CustomBinaryReader(bufStream, bufferSize);
+
+                await writer.CopyBodyAsync(reader, false, -1, onCopy);
+            }
+            finally
+            {
+                reader?.Dispose();
+                decompressStream?.Dispose();
+
+                await limitedStream.Finish();
+                limitedStream.Dispose();
+            }
         }
 
         /// <summary>
@@ -401,19 +442,20 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="body"></param>
         public async Task SetRequestBody(byte[] body)
         {
-            if (WebSession.Request.RequestLocked)
+            var request = WebSession.Request;
+            if (request.Locked)
             {
                 throw new Exception("You cannot call this function after request is made to server.");
             }
 
             //syphon out the request body from client before setting the new body
-            if (!WebSession.Request.IsBodyRead)
+            if (!request.IsBodyRead)
             {
                 await ReadRequestBodyAsync();
             }
 
-            WebSession.Request.Body = body;
-            WebSession.Request.ContentLength = WebSession.Request.IsChunked ? -1 : body.Length;
+            request.Body = body;
+            request.UpdateContentLength();
         }
 
         /// <summary>
@@ -422,7 +464,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="body"></param>
         public async Task SetRequestBodyString(string body)
         {
-            if (WebSession.Request.RequestLocked)
+            if (WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function after request is made to server.");
             }
@@ -470,28 +512,23 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="body"></param>
         public async Task SetResponseBody(byte[] body)
         {
-            if (!WebSession.Request.RequestLocked)
+            if (!WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function before request is made to server.");
             }
 
+            var response = WebSession.Response;
+
             //syphon out the response body from server before setting the new body
-            if (WebSession.Response.Body == null)
+            if (response.Body == null)
             {
                 await GetResponseBody();
             }
 
-            WebSession.Response.Body = body;
+            response.Body = body;
 
             //If there is a content length header update it
-            if (WebSession.Response.IsChunked == false)
-            {
-                WebSession.Response.ContentLength = body.Length;
-            }
-            else
-            {
-                WebSession.Response.ContentLength = -1;
-            }
+            response.UpdateContentLength();
         }
 
         /// <summary>
@@ -500,7 +537,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="body"></param>
         public async Task SetResponseBodyString(string body)
         {
-            if (!WebSession.Request.RequestLocked)
+            if (!WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function before request is made to server.");
             }
@@ -514,14 +551,6 @@ namespace Titanium.Web.Proxy.EventArguments
             var bodyBytes = WebSession.Response.Encoding.GetBytes(body);
 
             await SetResponseBody(bodyBytes);
-        }
-
-        private async Task<byte[]> GetDecompressedBodyAsync(string encodingType, byte[] bodyStream)
-        {
-            var decompressionFactory = new DecompressionFactory();
-            var decompressor = decompressionFactory.Create(encodingType);
-
-            return await decompressor.Decompress(bodyStream, bufferSize);
         }
 
         /// <summary>
@@ -620,14 +649,14 @@ namespace Titanium.Web.Proxy.EventArguments
         /// a generic responder method 
         public void Respond(Response response)
         {
-            if (WebSession.Request.RequestLocked)
+            if (WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function after request is made to server.");
             }
 
-            WebSession.Request.RequestLocked = true;
+            WebSession.Request.Locked = true;
 
-            response.ResponseLocked = true;
+            response.Locked = true;
             response.IsBodyRead = true;
 
             WebSession.Response = response;
@@ -645,6 +674,7 @@ namespace Titanium.Web.Proxy.EventArguments
             DataSent = null;
             DataReceived = null;
             MultipartRequestPartSent = null;
+            Exception = null;
 
             WebSession.FinishSession();
         }
