@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Has request body?
         /// </summary>
-        public bool HasBody
+        public override bool HasBody
         {
             get
             {

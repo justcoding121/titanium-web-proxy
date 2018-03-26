@@ -38,7 +38,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Web Request.
         /// </summary>
-        public Request Request { get; internal set; }
+        public Request Request { get; }
 
         /// <summary>
         /// Web Response.
@@ -56,13 +56,13 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public bool IsHttps => Request.IsHttps;
 
-        internal HttpWebClient(int bufferSize)
+        internal HttpWebClient(int bufferSize, Request request = null, Response response = null)
         {
             this.bufferSize = bufferSize;
 
             RequestId = Guid.NewGuid();
-            Request = new Request();
-            Response = new Response();
+            Request = request ?? new Request();
+            Response = response ?? new Response();
         }
 
         /// <summary>

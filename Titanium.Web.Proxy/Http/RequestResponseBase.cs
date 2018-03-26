@@ -134,6 +134,17 @@ namespace Titanium.Web.Proxy.Http
                 bodyString = null;
             }
         }
+
+        /// <summary>
+        /// Has the request/response body?
+        /// </summary>
+        public abstract bool HasBody { get; }
+
+        /// <summary>
+        /// Store weather the original request/response has body or not, since the user may change the parameters
+        /// </summary>
+        internal bool OriginalHasBody;
+
         internal abstract void EnsureBodyAvailable(bool throwWhenNotReadYet = true);
 
         /// <summary>

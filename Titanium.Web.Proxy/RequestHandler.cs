@@ -347,11 +347,12 @@ namespace Titanium.Web.Proxy
                                 }
                             }
 
-                            args.WebSession.Request.RequestUri = httpRemoteUri;
-                            args.WebSession.Request.OriginalUrl = httpUrl;
+                            var request = args.WebSession.Request;
+                            request.RequestUri = httpRemoteUri;
+                            request.OriginalUrl = httpUrl;
 
-                            args.WebSession.Request.Method = httpMethod;
-                            args.WebSession.Request.HttpVersion = version;
+                            request.Method = httpMethod;
+                            request.HttpVersion = version;
                             args.ProxyClient.ClientStream = clientStream;
                             args.ProxyClient.ClientStreamReader = clientStreamReader;
                             args.ProxyClient.ClientStreamWriter = clientStreamWriter;
@@ -368,25 +369,28 @@ namespace Titanium.Web.Proxy
 
                             if (!isTransparentEndPoint)
                             {
-                                PrepareRequestHeaders(args.WebSession.Request.Headers);
-                                args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
+                                PrepareRequestHeaders(request.Headers);
+                                request.Host = request.RequestUri.Authority;
                             }
 
                             //if win auth is enabled
                             //we need a cache of request body
                             //so that we can send it after authentication in WinAuthHandler.cs
-                            if (isWindowsAuthenticationEnabledAndSupported && args.WebSession.Request.HasBody)
+                            if (isWindowsAuthenticationEnabledAndSupported && request.HasBody)
                             {
                                 await args.GetRequestBody();
                             }
+
+                            request.OriginalHasBody = request.HasBody;
 
                             //If user requested interception do it
                             await InvokeBeforeRequest(args);
 
                             var response = args.WebSession.Response;
 
-                            if (args.WebSession.Request.CancelRequest)
+                            if (request.CancelRequest)
                             {
+                                await args.SiphonBodyAsync(true);
                                 await HandleHttpSessionResponse(args);
 
                                 if (!response.KeepAlive)
@@ -413,7 +417,7 @@ namespace Titanium.Web.Proxy
                             }
 
                             //if upgrading to websocket then relay the requet without reading the contents
-                            if (args.WebSession.Request.UpgradeToWebSocket)
+                            if (request.UpgradeToWebSocket)
                             {
                                 //prepare the prefix content
                                 var requestHeaders = args.WebSession.Request.Headers;
