@@ -107,15 +107,18 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgs(int bufferSize,
-            ProxyEndPoint endPoint,
-            ExceptionHandler exceptionFunc)
+        internal SessionEventArgs(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc)
+            : this(bufferSize, endPoint, exceptionFunc, null)
+        {
+        }
+
+        protected SessionEventArgs(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc, Request request)
         {
             this.bufferSize = bufferSize;
             this.exceptionFunc = exceptionFunc;
 
             ProxyClient = new ProxyClient();
-            WebSession = new HttpWebClient(bufferSize);
+            WebSession = new HttpWebClient(bufferSize, request);
             LocalEndPoint = endPoint;
 
             WebSession.ProcessId = new Lazy<int>(() =>
@@ -136,6 +139,21 @@ namespace Titanium.Web.Proxy.EventArguments
 
                 throw new PlatformNotSupportedException();
             });
+        }
+
+        private CustomBufferedStream GetStream(bool isRequest)
+        {
+            return isRequest ? ProxyClient.ClientStream : WebSession.ServerConnection.Stream;
+        }
+
+        private CustomBinaryReader GetStreamReader(bool isRequest)
+        {
+            return isRequest ? ProxyClient.ClientStreamReader : WebSession.ServerConnection.StreamReader;
+        }
+
+        private HttpWriter GetStreamWriter(bool isRequest)
+        {
+            return isRequest ? (HttpWriter)ProxyClient.ClientStreamWriter : WebSession.ServerConnection.StreamWriter;
         }
 
         /// <summary>
@@ -240,17 +258,35 @@ namespace Titanium.Web.Proxy.EventArguments
             using (var bodyStream = new MemoryStream())
             {
                 var writer = new HttpWriter(bodyStream, bufferSize);
-                if (isRequest)
-                {
-                    await CopyRequestBodyAsync(writer, TransformationMode.Uncompress);
-                }
-                else
-                {
-                    await CopyResponseBodyAsync(writer, TransformationMode.Uncompress);
-                }
-
+                await ReadBodyAsync(writer, reader, isRequest);
                 return bodyStream.ToArray();
             }
+        }
+
+        internal async Task SiphonBodyAsync(bool isRequest)
+        {
+            var requestResponse = isRequest ? (RequestResponseBase)WebSession.Request : WebSession.Response;
+            if (requestResponse.IsBodyRead || !requestResponse.OriginalHasBody)
+            {
+                return;
+            }
+
+            var reader = GetStreamReader(isRequest);
+            using (var bodyStream = new MemoryStream())
+            {
+                var writer = new HttpWriter(bodyStream, bufferSize);
+                await ReadBodyAsync(writer, reader, isRequest);
+            }
+        }
+
+        private Task ReadBodyAsync(HttpWriter writer, CustomBinaryReader reader, bool isRequest)
+        {
+            if (isRequest)
+            {
+                return CopyRequestBodyAsync(writer, TransformationMode.Uncompress);
+            }
+
+            return CopyResponseBodyAsync(writer, TransformationMode.Uncompress);
         }
 
         /// <summary>
@@ -259,15 +295,14 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <returns></returns>
         internal async Task CopyRequestBodyAsync(HttpWriter writer, TransformationMode transformation)
         {
-            // End the operation
             var request = WebSession.Request;
-            var reader = ProxyClient.ClientStreamReader;
 
             long contentLength = request.ContentLength;
 
             //send the request body bytes to server
             if (contentLength > 0 && hasMulipartEventSubscribers && request.IsMultipartFormData)
             {
+                var reader = GetStreamReader(true);
                 string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
 
                 using (var copyStream = new CopyStream(reader, writer, bufferSize))
@@ -294,21 +329,22 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             else
             {
-                await CopyBodyAsync(ProxyClient.ClientStream, reader, writer, request, transformation, OnDataSent);
+                await CopyBodyAsync(true, writer, transformation, OnDataSent);
             }
         }
 
         internal async Task CopyResponseBodyAsync(HttpWriter writer, TransformationMode transformation)
         {
-            var response = WebSession.Response;
-            var reader = WebSession.ServerConnection.StreamReader;
-
-            await CopyBodyAsync(WebSession.ServerConnection.Stream, reader, writer, response, transformation, OnDataReceived);
+            await CopyBodyAsync(false, writer, transformation, OnDataReceived);
         }
 
-        private async Task CopyBodyAsync(CustomBufferedStream stream, CustomBinaryReader reader, HttpWriter writer,
-            RequestResponseBase requestResponse, TransformationMode transformation, Action<byte[], int, int> onCopy)
+        private async Task CopyBodyAsync(bool isRequest, HttpWriter writer, TransformationMode transformation, Action<byte[], int, int> onCopy)
         {
+            var stream = GetStream(isRequest);
+            var reader = GetStreamReader(isRequest);
+
+            var requestResponse = isRequest ? (RequestResponseBase)WebSession.Request : WebSession.Response;
+
             bool isChunked = requestResponse.IsChunked;
             long contentLength = requestResponse.ContentLength;
             if (transformation == TransformationMode.None)
