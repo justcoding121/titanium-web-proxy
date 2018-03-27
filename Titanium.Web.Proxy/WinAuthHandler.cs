@@ -130,12 +130,8 @@ namespace Titanium.Web.Proxy
                 //Should we cache all Set-Cokiee headers from server during auth process
                 //and send it to client after auth?
 
-                //clear current server response
-                await args.ClearResponse();
-
-                //request again with updated authorization header
-                //and server cookies
-                await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args);
+                // Let ReposnseHandler send the updated request
+                args.ReRequest = true;
             }
         }
     }
