@@ -173,7 +173,7 @@ namespace Titanium.Web.Proxy.Http
 
         internal byte[] CompressBodyAndUpdateContentLength()
         {
-            if (!IsBodyRead)
+            if (!IsBodyRead && BodyInternal == null)
             {
                 return null;
             }

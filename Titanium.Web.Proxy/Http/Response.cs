@@ -128,6 +128,21 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        public Response()
+        {
+        }
+
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        public Response(byte[] body)
+        {
+            Body = body;
+        }
+
         internal static string CreateResponseLine(Version version, int statusCode, string statusDescription)
         {
             return $"HTTP/{version.Major}.{version.Minor} {statusCode} {statusDescription}";
