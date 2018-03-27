@@ -422,9 +422,8 @@ namespace Titanium.Web.Proxy
                             if (request.UpgradeToWebSocket)
                             {
                                 //prepare the prefix content
-                                var requestHeaders = request.Headers;
                                 await connection.StreamWriter.WriteLineAsync(httpCmd);
-                                await connection.StreamWriter.WriteHeadersAsync(requestHeaders);
+                                await connection.StreamWriter.WriteHeadersAsync(request.Headers);
                                 string httpStatus = await connection.StreamReader.ReadLineAsync();
 
                                 Response.ParseResponseLine(httpStatus, out var responseVersion, out int responseStatusCode,
@@ -499,6 +498,8 @@ namespace Titanium.Web.Proxy
                 var request = args.WebSession.Request;
                 request.Locked = true;
 
+                var body = request.CompressBodyAndUpdateContentLength();
+
                 //if expect continue is enabled then send the headers first 
                 //and see if server would return 100 conitinue
                 if (request.ExpectContinue)
@@ -538,25 +539,7 @@ namespace Titanium.Web.Proxy
                     if (request.IsBodyRead)
                     {
                         var writer = args.WebSession.ServerConnection.StreamWriter;
-                        bool isChunked = request.IsChunked;
-                        string contentEncoding = request.ContentEncoding;
-
-                        var body = request.Body;
-                        if (contentEncoding != null && body != null)
-                        {
-                            body = writer.GetCompressedBody(contentEncoding, body);
-
-                            if (isChunked == false)
-                            {
-                                request.ContentLength = body.Length;
-                            }
-                            else
-                            {
-                                request.ContentLength = -1;
-                            }
-                        }
-
-                        await writer.WriteBodyAsync(body, isChunked);
+                        await writer.WriteBodyAsync(body, request.IsChunked);
                     }
                     else
                     {
