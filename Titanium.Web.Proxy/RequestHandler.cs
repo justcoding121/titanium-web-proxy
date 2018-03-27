@@ -390,7 +390,9 @@ namespace Titanium.Web.Proxy
 
                             if (request.CancelRequest)
                             {
-                                await args.SiphonBodyAsync(true);
+                                //syphon out the request body from client before setting the new body
+                                await args.SyphonOutBodyAsync(true);
+
                                 await HandleHttpSessionResponse(args);
 
                                 if (!response.KeepAlive)
@@ -403,7 +405,7 @@ namespace Titanium.Web.Proxy
 
                             //create a new connection if hostname/upstream end point changes
                             if (connection != null
-                                && (!connection.HostName.Equals(args.WebSession.Request.RequestUri.Host, StringComparison.OrdinalIgnoreCase)
+                                && (!connection.HostName.Equals(request.RequestUri.Host, StringComparison.OrdinalIgnoreCase)
                                     || (args.WebSession.UpStreamEndPoint != null
                                         && !args.WebSession.UpStreamEndPoint.Equals(connection.UpStreamEndPoint))))
                             {
@@ -420,7 +422,7 @@ namespace Titanium.Web.Proxy
                             if (request.UpgradeToWebSocket)
                             {
                                 //prepare the prefix content
-                                var requestHeaders = args.WebSession.Request.Headers;
+                                var requestHeaders = request.Headers;
                                 await connection.StreamWriter.WriteLineAsync(httpCmd);
                                 await connection.StreamWriter.WriteHeadersAsync(requestHeaders);
                                 string httpStatus = await connection.StreamReader.ReadLineAsync();
