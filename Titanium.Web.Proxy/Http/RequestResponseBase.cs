@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Cached body content as byte array
         /// </summary>
-        private byte[] body;
+        protected byte[] BodyInternal;
 
         /// <summary>
         /// Cached body as string
@@ -127,11 +127,11 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 EnsureBodyAvailable();
-                return body;
+                return BodyInternal;
             }
             internal set
             {
-                body = value;
+                BodyInternal = value;
                 bodyString = null;
 
                 //If there is a content length header update it
@@ -173,6 +173,11 @@ namespace Titanium.Web.Proxy.Http
 
         internal byte[] CompressBodyAndUpdateContentLength()
         {
+            if (!IsBodyRead)
+            {
+                return null;
+            }
+
             bool isChunked = IsChunked;
             string contentEncoding = ContentEncoding;
 
@@ -219,7 +224,7 @@ namespace Titanium.Web.Proxy.Http
 
         internal void UpdateContentLength()
         {
-            ContentLength = IsChunked ? -1 : body?.Length ?? 0;
+            ContentLength = IsChunked ? -1 : BodyInternal?.Length ?? 0;
         }
 
         /// <summary>
@@ -229,7 +234,7 @@ namespace Titanium.Web.Proxy.Http
         {
             if (!KeepBody)
             {
-                body = null;
+                BodyInternal = null;
                 bodyString = null;
             }
         }

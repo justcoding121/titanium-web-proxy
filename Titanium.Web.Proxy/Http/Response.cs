@@ -81,6 +81,11 @@ namespace Titanium.Web.Proxy.Http
 
         internal override void EnsureBodyAvailable(bool throwWhenNotReadYet = true)
         {
+            if (BodyInternal != null)
+            {
+                return;
+            }
+
             if (!IsBodyRead && throwWhenNotReadYet)
             {
                 throw new Exception("Response body is not read yet. " +
