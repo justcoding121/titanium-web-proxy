@@ -46,7 +46,6 @@ namespace Titanium.Web.Proxy
             try
             {
                 string connectHostname = null;
-
                 ConnectRequest connectRequest = null;
 
                 //Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
@@ -297,7 +296,7 @@ namespace Titanium.Web.Proxy
                     string httpCmd = await clientStreamReader.ReadLineAsync();
                     if (string.IsNullOrEmpty(httpCmd))
                     {
-                        break;
+                        return;
                     }
 
                     var args = new SessionEventArgs(BufferSize, endPoint, ExceptionFunc)
@@ -364,7 +363,7 @@ namespace Titanium.Web.Proxy
 
                                 //send the response
                                 await clientStreamWriter.WriteResponseAsync(args.WebSession.Response);
-                                break;
+                                return;
                             }
 
                             if (!isTransparentEndPoint)
@@ -397,7 +396,7 @@ namespace Titanium.Web.Proxy
 
                                 if (!response.KeepAlive)
                                 {
-                                    break;
+                                    return;
                                 }
 
                                 continue;
@@ -450,16 +449,22 @@ namespace Titanium.Web.Proxy
                                     (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); },
                                     ExceptionFunc);
 
-                                break;
+                                return;
                             }
 
                             //construct the web request that we are going to issue on behalf of the client.
                             await HandleHttpSessionRequestInternal(connection, args);
 
+                            if (args.WebSession.ServerConnection == null)
+                            {
+                                //server connection was closed
+                                return;
+                            }
+
                             //if connection is closing exit
                             if (!response.KeepAlive)
                             {
-                                break;
+                                return;
                             }
                         }
                         catch (Exception e) when (!(e is ProxyHttpException))
