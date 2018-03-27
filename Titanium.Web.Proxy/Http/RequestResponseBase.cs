@@ -132,6 +132,9 @@ namespace Titanium.Web.Proxy.Http
             {
                 body = value;
                 bodyString = null;
+
+                //If there is a content length header update it
+                UpdateContentLength();
             }
         }
 
@@ -166,7 +169,7 @@ namespace Titanium.Web.Proxy.Http
 
         internal void UpdateContentLength()
         {
-            ContentLength = IsChunked ? -1 : body.Length;
+            ContentLength = IsChunked ? -1 : body?.Length ?? 0;
         }
 
         /// <summary>

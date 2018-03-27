@@ -43,6 +43,12 @@ namespace Titanium.Web.Proxy
                     await InvokeBeforeResponse(args);
                 }
 
+                if (response.TerminateResponse)
+                {
+                    //syphon out the response body from server before setting the new body
+                    await args.SyphonOutBodyAsync(false);
+                }
+
                 //if user requested to send request again
                 //likely after making modifications from User Response Handler
                 if (args.ReRequest)

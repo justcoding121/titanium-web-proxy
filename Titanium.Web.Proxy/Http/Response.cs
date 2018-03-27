@@ -77,6 +77,8 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        internal bool TerminateResponse { get; set; }
+
         internal override void EnsureBodyAvailable(bool throwWhenNotReadYet = true)
         {
             if (!IsBodyRead && throwWhenNotReadYet)

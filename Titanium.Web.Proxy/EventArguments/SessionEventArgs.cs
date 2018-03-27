@@ -183,8 +183,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         internal async Task ClearResponse()
         {
-            //siphon out the body
-            await ReadResponseBodyAsync();
+            //syphon out the response body from server
+            await SyphonOutBodyAsync(false);
             WebSession.Response = new Response();
         }
 
@@ -263,7 +263,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
         }
 
-        internal async Task SiphonBodyAsync(bool isRequest)
+        internal async Task SyphonOutBodyAsync(bool isRequest)
         {
             var requestResponse = isRequest ? (RequestResponseBase)WebSession.Request : WebSession.Response;
             if (requestResponse.IsBodyRead || !requestResponse.OriginalHasBody)
@@ -476,18 +476,12 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Sets the request body
         /// </summary>
         /// <param name="body"></param>
-        public async Task SetRequestBody(byte[] body)
+        public void SetRequestBody(byte[] body)
         {
             var request = WebSession.Request;
             if (request.Locked)
             {
                 throw new Exception("You cannot call this function after request is made to server.");
-            }
-
-            //syphon out the request body from client before setting the new body
-            if (!request.IsBodyRead)
-            {
-                await ReadRequestBodyAsync();
             }
 
             request.Body = body;
@@ -498,20 +492,14 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Sets the body with the specified string
         /// </summary>
         /// <param name="body"></param>
-        public async Task SetRequestBodyString(string body)
+        public void SetRequestBodyString(string body)
         {
             if (WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function after request is made to server.");
             }
 
-            //syphon out the request body from client before setting the new body
-            if (!WebSession.Request.IsBodyRead)
-            {
-                await ReadRequestBodyAsync();
-            }
-
-            await SetRequestBody(WebSession.Request.Encoding.GetBytes(body));
+            SetRequestBody(WebSession.Request.Encoding.GetBytes(body));
         }
 
         /// <summary>
@@ -546,7 +534,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Set the response body bytes
         /// </summary>
         /// <param name="body"></param>
-        public async Task SetResponseBody(byte[] body)
+        public void SetResponseBody(byte[] body)
         {
             if (!WebSession.Request.Locked)
             {
@@ -554,17 +542,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             var response = WebSession.Response;
-
-            //syphon out the response body from server before setting the new body
-            if (response.Body == null)
-            {
-                await GetResponseBody();
-            }
-
             response.Body = body;
-
-            //If there is a content length header update it
-            response.UpdateContentLength();
         }
 
         /// <summary>
@@ -586,7 +564,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             var bodyBytes = WebSession.Response.Encoding.GetBytes(body);
 
-            await SetResponseBody(bodyBytes);
+            SetResponseBody(bodyBytes);
         }
 
         /// <summary>
@@ -687,17 +665,24 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (WebSession.Request.Locked)
             {
-                throw new Exception("You cannot call this function after request is made to server.");
+                if (WebSession.Response.Locked)
+                {
+                    throw new Exception("You cannot call this function after response is sent to the client.");
+                }
+
+                WebSession.Response = response;
             }
+            else
+            {
+                WebSession.Request.Locked = true;
 
-            WebSession.Request.Locked = true;
+                response.Locked = true;
+                response.IsBodyRead = true;
 
-            response.Locked = true;
-            response.IsBodyRead = true;
+                WebSession.Response = response;
 
-            WebSession.Response = response;
-
-            WebSession.Request.CancelRequest = true;
+                WebSession.Request.CancelRequest = true;
+            }
         }
 
         /// <summary>
