@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using StreamExtended.Helpers;
 using StreamExtended.Network;
+using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Shared;
 
@@ -262,6 +263,63 @@ namespace Titanium.Web.Proxy.Helpers
                 await WriteAsync(buffer, 0, bytesRead);
 
                 onCopy?.Invoke(buffer, 0, bytesRead);
+            }
+        }
+
+        /// <summary>
+        /// Writes the request/response headers and body.
+        /// </summary>
+        /// <param name="requestResponse"></param>
+        /// <param name="flush"></param>
+        /// <returns></returns>
+        protected async Task WriteAsync(RequestResponseBase requestResponse, bool flush = true)
+        {
+            if (requestResponse.HasBody)
+            {
+                bool isChunked = requestResponse.IsChunked;
+                string contentEncoding = requestResponse.ContentEncoding;
+
+                var body = requestResponse.Body;
+                if (contentEncoding != null && body != null)
+                {
+                    body = GetCompressedBody(contentEncoding, body);
+
+                    if (isChunked == false)
+                    {
+                        requestResponse.ContentLength = body.Length;
+                    }
+                    else
+                    {
+                        requestResponse.ContentLength = -1;
+                    }
+                }
+
+                await WriteHeadersAsync(requestResponse.Headers, flush);
+                await WriteBodyAsync(body, isChunked);
+            }
+            else
+            {
+                await WriteHeadersAsync(requestResponse.Headers, flush);
+            }
+        }
+
+        /// <summary>
+        /// get the compressed body from given bytes
+        /// </summary>
+        /// <param name="encodingType"></param>
+        /// <param name="body"></param>
+        /// <returns></returns>
+        internal byte[] GetCompressedBody(string encodingType, byte[] body)
+        {
+            var compressor = CompressionFactory.GetCompression(encodingType);
+            using (var ms = new MemoryStream())
+            {
+                using (var zip = compressor.GetStream(ms))
+                {
+                    zip.Write(body, 0, body.Length);
+                }
+
+                return ms.ToArray();
             }
         }
     }

@@ -168,7 +168,7 @@ namespace Titanium.Web.Proxy.EventArguments
             //If not already read (not cached yet)
             if (!request.IsBodyRead)
             {
-                var body = await ReadBodyAsync(ProxyClient.ClientStreamReader, true);
+                var body = await ReadBodyAsync(true);
                 request.Body = body;
 
                 //Now set the flag to true
@@ -243,7 +243,7 @@ namespace Titanium.Web.Proxy.EventArguments
             //If not already read (not cached yet)
             if (!response.IsBodyRead)
             {
-                var body = await ReadBodyAsync(WebSession.ServerConnection.StreamReader, false);
+                var body = await ReadBodyAsync(false);
                 response.Body = body;
 
                 //Now set the flag to true
@@ -253,12 +253,21 @@ namespace Titanium.Web.Proxy.EventArguments
             }
         }
 
-        private async Task<byte[]> ReadBodyAsync(CustomBinaryReader reader, bool isRequest)
+        private async Task<byte[]> ReadBodyAsync(bool isRequest)
         {
             using (var bodyStream = new MemoryStream())
             {
                 var writer = new HttpWriter(bodyStream, bufferSize);
-                await ReadBodyAsync(writer, reader, isRequest);
+
+                if (isRequest)
+                {
+                    await CopyRequestBodyAsync(writer, TransformationMode.Uncompress);
+                }
+                else
+                {
+                    await CopyResponseBodyAsync(writer, TransformationMode.Uncompress);
+                }
+
                 return bodyStream.ToArray();
             }
         }
@@ -271,22 +280,11 @@ namespace Titanium.Web.Proxy.EventArguments
                 return;
             }
 
-            var reader = GetStreamReader(isRequest);
             using (var bodyStream = new MemoryStream())
             {
                 var writer = new HttpWriter(bodyStream, bufferSize);
-                await ReadBodyAsync(writer, reader, isRequest);
+                await CopyBodyAsync(isRequest, writer, TransformationMode.None, null);
             }
-        }
-
-        private Task ReadBodyAsync(HttpWriter writer, CustomBinaryReader reader, bool isRequest)
-        {
-            if (isRequest)
-            {
-                return CopyRequestBodyAsync(writer, TransformationMode.Uncompress);
-            }
-
-            return CopyResponseBodyAsync(writer, TransformationMode.Uncompress);
         }
 
         /// <summary>
@@ -549,17 +547,11 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Replace the response body with the specified string
         /// </summary>
         /// <param name="body"></param>
-        public async Task SetResponseBodyString(string body)
+        public void SetResponseBodyString(string body)
         {
             if (!WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function before request is made to server.");
-            }
-
-            //syphon out the response body from server before setting the new body
-            if (!WebSession.Response.IsBodyRead)
-            {
-                await GetResponseBody();
             }
 
             var bodyBytes = WebSession.Response.Encoding.GetBytes(body);
@@ -670,6 +662,8 @@ namespace Titanium.Web.Proxy.EventArguments
                     throw new Exception("You cannot call this function after response is sent to the client.");
                 }
 
+                response.Locked = true;
+                response.TerminateResponse = WebSession.Response.TerminateResponse;
                 WebSession.Response = response;
             }
             else
@@ -677,12 +671,15 @@ namespace Titanium.Web.Proxy.EventArguments
                 WebSession.Request.Locked = true;
 
                 response.Locked = true;
-                response.IsBodyRead = true;
-
                 WebSession.Response = response;
 
                 WebSession.Request.CancelRequest = true;
             }
+        }
+
+        public void TerminateServerConnection()
+        {
+            WebSession.Response.TerminateResponse = true;
         }
 
         /// <summary>

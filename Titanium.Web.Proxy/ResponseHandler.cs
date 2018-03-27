@@ -43,10 +43,22 @@ namespace Titanium.Web.Proxy
                     await InvokeBeforeResponse(args);
                 }
 
-                if (response.TerminateResponse)
+                // it may changed in the user event
+                response = args.WebSession.Response;
+
+                var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
+
+                if (response.TerminateResponse || response.Locked)
                 {
-                    //syphon out the response body from server before setting the new body
-                    await args.SyphonOutBodyAsync(false);
+                    await clientStreamWriter.WriteResponseAsync(response);
+
+                    if (!response.TerminateResponse)
+                    {
+                        //syphon out the response body from server before setting the new body
+                        await args.SyphonOutBodyAsync(false);
+                    }
+
+                    return;
                 }
 
                 //if user requested to send request again
@@ -61,8 +73,6 @@ namespace Titanium.Web.Proxy
 
                 response.Locked = true;
 
-                var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
-
                 //Write back to client 100-conitinue response if that's what server returned
                 if (response.Is100Continue)
                 {
@@ -75,9 +85,6 @@ namespace Titanium.Web.Proxy
                     await clientStreamWriter.WriteLineAsync();
                 }
 
-                //Write back response status to client
-                await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.StatusCode, response.StatusDescription);
-
                 if (!args.IsTransparent)
                 {
                     response.Headers.FixProxyHeaders();
@@ -85,29 +92,12 @@ namespace Titanium.Web.Proxy
 
                 if (response.IsBodyRead)
                 {
-                    bool isChunked = response.IsChunked;
-                    string contentEncoding = response.ContentEncoding;
-
-                    var body = response.Body;
-                    if (contentEncoding != null && body != null)
-                    {
-                        body = GetCompressedBody(contentEncoding, body);
-
-                        if (isChunked == false)
-                        {
-                            response.ContentLength = body.Length;
-                        }
-                        else
-                        {
-                            response.ContentLength = -1;
-                        }   
-                    }
-
-                    await clientStreamWriter.WriteHeadersAsync(response.Headers);
-                    await clientStreamWriter.WriteBodyAsync(body, isChunked);
+                    await clientStreamWriter.WriteResponseAsync(response);
                 }
                 else
                 {
+                    //Write back response status to client
+                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.StatusCode, response.StatusDescription);
                     await clientStreamWriter.WriteHeadersAsync(response.Headers);
 
                     //Write body if exists
@@ -122,27 +112,6 @@ namespace Titanium.Web.Proxy
                 throw new ProxyHttpException("Error occured whilst handling session response", e, args);
             }
         }
-
-        /// <summary>
-        /// get the compressed body from given bytes
-        /// </summary>
-        /// <param name="encodingType"></param>
-        /// <param name="body"></param>
-        /// <returns></returns>
-        private byte[] GetCompressedBody(string encodingType, byte[] body)
-        {
-            var compressor = CompressionFactory.GetCompression(encodingType);
-            using (var ms = new MemoryStream())
-            {
-                using (var zip = compressor.GetStream(ms))
-                {
-                    zip.Write(body, 0, body.Length);
-                }
-
-                return ms.ToArray();
-            }
-        }
-
 
         private async Task InvokeBeforeResponse(SessionEventArgs args)
         {

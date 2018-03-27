@@ -537,13 +537,14 @@ namespace Titanium.Web.Proxy
                     //If request was modified by user
                     if (request.IsBodyRead)
                     {
+                        var writer = args.WebSession.ServerConnection.StreamWriter;
                         bool isChunked = request.IsChunked;
                         string contentEncoding = request.ContentEncoding;
 
                         var body = request.Body;
                         if (contentEncoding != null && body != null)
                         {
-                            body = GetCompressedBody(contentEncoding, body);
+                            body = writer.GetCompressedBody(contentEncoding, body);
 
                             if (isChunked == false)
                             {
@@ -555,7 +556,7 @@ namespace Titanium.Web.Proxy
                             }
                         }
 
-                        await args.WebSession.ServerConnection.StreamWriter.WriteBodyAsync(body, isChunked);
+                        await writer.WriteBodyAsync(body, isChunked);
                     }
                     else
                     {
