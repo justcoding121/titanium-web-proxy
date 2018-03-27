@@ -28,14 +28,13 @@ namespace Titanium.Web.Proxy
                 await args.WebSession.ReceiveResponse();
 
                 var response = args.WebSession.Response;
+                args.ReRequest = false;
 
                 //check for windows authentication
                 if (isWindowsAuthenticationEnabledAndSupported && response.StatusCode == (int)HttpStatusCode.Unauthorized)
                 {
                     await Handle401UnAuthorized(args);
                 }
-
-                args.ReRequest = false;
 
                 //if user requested call back then do it
                 if (!response.Locked)
