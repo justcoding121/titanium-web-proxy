@@ -79,6 +79,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                     return null;
                 }
 
+                state.AuthState = State.WinAuthState.INITIAL_TOKEN;
                 token = clientToken.GetBytes();
                 authStates.Add(requestId, state);
             }
@@ -135,7 +136,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                     return null;
                 }
 
-                authStates.Remove(requestId);
+                state.AuthState = State.WinAuthState.FINAL_TOKEN;
                 token = clientToken.GetBytes();
             }
             finally
@@ -164,6 +165,51 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
             //after a minute come back to check for outdated certificates in cache
             await Task.Delay(1000 * 60);
+        }
+
+        /// <summary>
+        /// Validates that the current WinAuth state of the connection matches the 
+        /// expectation, used to detect failed authentication
+        /// </summary>
+        /// <param name="requestId"></param>
+        /// <param name="expectedAuthState"></param>
+        /// <returns></returns>
+        internal static bool ValidateWinAuthState(Guid requestId, State.WinAuthState expectedAuthState)
+        {
+            State state;
+            var stateExists = authStates.TryGetValue(requestId, out state);
+
+            if (expectedAuthState == State.WinAuthState.UNAUTHORIZED)
+            {
+                // Validation before initial token
+                return (stateExists == false ||
+                        state.AuthState == State.WinAuthState.UNAUTHORIZED ||
+                        state.AuthState == State.WinAuthState.AUTHORIZED); // Server may require re-authentication on an open connection
+            }
+
+            if (expectedAuthState == State.WinAuthState.INITIAL_TOKEN)
+            {
+                // Validation before final token
+                return (stateExists &&
+                        (state.AuthState == State.WinAuthState.INITIAL_TOKEN ||
+                         state.AuthState == State.WinAuthState.AUTHORIZED)); // Server may require re-authentication on an open connection
+            }
+
+            throw new Exception("Unsupported validation of WinAuthState");
+        }
+
+        /// <summary>
+        /// Set the AuthState to authorized and update the connection state lifetime
+        /// </summary>
+        /// <param name="requestId"></param>
+        internal static void AuthenticatedResponse(Guid requestId)
+        {
+            State state;
+            if (authStates.TryGetValue(requestId, out state))
+            {
+                state.AuthState = State.WinAuthState.AUTHORIZED;
+                state.UpdatePresence();
+            }
         }
 
         #region Native calls to secur32.dll
