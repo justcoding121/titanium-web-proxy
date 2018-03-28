@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.WinAuth;
@@ -85,8 +86,9 @@ namespace Titanium.Web.Proxy
             {
                 string scheme = authSchemes.FirstOrDefault(x => authHeader.Value.Equals(x, StringComparison.OrdinalIgnoreCase));
 
-                if ((scheme != null && !WinAuthEndPoint.ValidateWinAuthState(args.WebSession.RequestId, State.WinAuthState.UNAUTHORIZED)) ||
-                    (scheme == null && !WinAuthEndPoint.ValidateWinAuthState(args.WebSession.RequestId, State.WinAuthState.INITIAL_TOKEN)))
+                var expectedAuthState = scheme == null ? State.WinAuthState.INITIAL_TOKEN : State.WinAuthState.UNAUTHORIZED;
+
+                if (!WinAuthEndPoint.ValidateWinAuthState(args.WebSession.RequestId, expectedAuthState))
                 {
                     // Invalid state, create proper error message to client
                     await RewriteUnauthorizedResponse(args);
@@ -117,7 +119,7 @@ namespace Titanium.Web.Proxy
                 //challenge value will start with any of the scheme selected
                 else
                 {
-                    scheme = authSchemes.FirstOrDefault(x => authHeader.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase) &&
+                    scheme = authSchemes.First(x => authHeader.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase) &&
                                                              authHeader.Value.Length > x.Length + 1);
 
                     string serverToken = authHeader.Value.Substring(scheme.Length + 1);
@@ -152,6 +154,7 @@ namespace Titanium.Web.Proxy
         internal async Task RewriteUnauthorizedResponse(SessionEventArgs args)
         {
             var response = args.WebSession.Response;
+
             // Strip authentication headers to avoid credentials prompt in client web browser
             foreach (var authHeaderName in authHeaderNames)
             {
@@ -164,9 +167,10 @@ namespace Titanium.Web.Proxy
                                       ") failed. Please check credentials.</h2></div>";
             string originalErrorMessage = "<div class=\"inserted-by-proxy\"><h3>Response from remote web server below.</h3></div><br/>";
             string body = await args.GetResponseBodyAsString();
-            if (body.ToLower().Contains("<body>"))
+            int idx = body.IndexOfIgnoreCase("<body>");
+            if (idx >= 0)
             {
-                var bodyPos = body.ToLower().IndexOf("<body>") + ("<body>").Length;
+                var bodyPos = idx + "<body>".Length;
                 body = body.Insert(bodyPos, authErrorMessage + originalErrorMessage);
             }
             else
