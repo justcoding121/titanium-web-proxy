@@ -46,7 +46,6 @@ namespace Titanium.Web.Proxy
             try
             {
                 string connectHostname = null;
-
                 ConnectRequest connectRequest = null;
 
                 //Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
@@ -297,7 +296,7 @@ namespace Titanium.Web.Proxy
                     string httpCmd = await clientStreamReader.ReadLineAsync();
                     if (string.IsNullOrEmpty(httpCmd))
                     {
-                        break;
+                        return;
                     }
 
                     var args = new SessionEventArgs(BufferSize, endPoint, ExceptionFunc)
@@ -347,11 +346,12 @@ namespace Titanium.Web.Proxy
                                 }
                             }
 
-                            args.WebSession.Request.RequestUri = httpRemoteUri;
-                            args.WebSession.Request.OriginalUrl = httpUrl;
+                            var request = args.WebSession.Request;
+                            request.RequestUri = httpRemoteUri;
+                            request.OriginalUrl = httpUrl;
 
-                            args.WebSession.Request.Method = httpMethod;
-                            args.WebSession.Request.HttpVersion = version;
+                            request.Method = httpMethod;
+                            request.HttpVersion = version;
                             args.ProxyClient.ClientStream = clientStream;
                             args.ProxyClient.ClientStreamReader = clientStreamReader;
                             args.ProxyClient.ClientStreamWriter = clientStreamWriter;
@@ -363,35 +363,40 @@ namespace Titanium.Web.Proxy
 
                                 //send the response
                                 await clientStreamWriter.WriteResponseAsync(args.WebSession.Response);
-                                break;
+                                return;
                             }
 
                             if (!isTransparentEndPoint)
                             {
-                                PrepareRequestHeaders(args.WebSession.Request.Headers);
-                                args.WebSession.Request.Host = args.WebSession.Request.RequestUri.Authority;
+                                PrepareRequestHeaders(request.Headers);
+                                request.Host = request.RequestUri.Authority;
                             }
 
                             //if win auth is enabled
                             //we need a cache of request body
                             //so that we can send it after authentication in WinAuthHandler.cs
-                            if (isWindowsAuthenticationEnabledAndSupported && args.WebSession.Request.HasBody)
+                            if (isWindowsAuthenticationEnabledAndSupported && request.HasBody)
                             {
                                 await args.GetRequestBody();
                             }
+
+                            request.OriginalHasBody = request.HasBody;
 
                             //If user requested interception do it
                             await InvokeBeforeRequest(args);
 
                             var response = args.WebSession.Response;
 
-                            if (args.WebSession.Request.CancelRequest)
+                            if (request.CancelRequest)
                             {
+                                //syphon out the request body from client before setting the new body
+                                await args.SyphonOutBodyAsync(true);
+
                                 await HandleHttpSessionResponse(args);
 
                                 if (!response.KeepAlive)
                                 {
-                                    break;
+                                    return;
                                 }
 
                                 continue;
@@ -399,7 +404,7 @@ namespace Titanium.Web.Proxy
 
                             //create a new connection if hostname/upstream end point changes
                             if (connection != null
-                                && (!connection.HostName.Equals(args.WebSession.Request.RequestUri.Host, StringComparison.OrdinalIgnoreCase)
+                                && (!connection.HostName.Equals(request.RequestUri.Host, StringComparison.OrdinalIgnoreCase)
                                     || (args.WebSession.UpStreamEndPoint != null
                                         && !args.WebSession.UpStreamEndPoint.Equals(connection.UpStreamEndPoint))))
                             {
@@ -413,12 +418,11 @@ namespace Titanium.Web.Proxy
                             }
 
                             //if upgrading to websocket then relay the requet without reading the contents
-                            if (args.WebSession.Request.UpgradeToWebSocket)
+                            if (request.UpgradeToWebSocket)
                             {
                                 //prepare the prefix content
-                                var requestHeaders = args.WebSession.Request.Headers;
                                 await connection.StreamWriter.WriteLineAsync(httpCmd);
-                                await connection.StreamWriter.WriteHeadersAsync(requestHeaders);
+                                await connection.StreamWriter.WriteHeadersAsync(request.Headers);
                                 string httpStatus = await connection.StreamReader.ReadLineAsync();
 
                                 Response.ParseResponseLine(httpStatus, out var responseVersion, out int responseStatusCode,
@@ -445,16 +449,22 @@ namespace Titanium.Web.Proxy
                                     (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); },
                                     ExceptionFunc);
 
-                                break;
+                                return;
                             }
 
                             //construct the web request that we are going to issue on behalf of the client.
                             await HandleHttpSessionRequestInternal(connection, args);
 
+                            if (args.WebSession.ServerConnection == null)
+                            {
+                                //server connection was closed
+                                return;
+                            }
+
                             //if connection is closing exit
                             if (!response.KeepAlive)
                             {
-                                break;
+                                return;
                             }
                         }
                         catch (Exception e) when (!(e is ProxyHttpException))
@@ -492,6 +502,8 @@ namespace Titanium.Web.Proxy
             {
                 var request = args.WebSession.Request;
                 request.Locked = true;
+
+                var body = request.CompressBodyAndUpdateContentLength();
 
                 //if expect continue is enabled then send the headers first 
                 //and see if server would return 100 conitinue
@@ -531,25 +543,8 @@ namespace Titanium.Web.Proxy
                     //If request was modified by user
                     if (request.IsBodyRead)
                     {
-                        bool isChunked = request.IsChunked;
-                        string contentEncoding = request.ContentEncoding;
-
-                        var body = request.Body;
-                        if (contentEncoding != null && body != null)
-                        {
-                            body = GetCompressedBody(contentEncoding, body);
-
-                            if (isChunked == false)
-                            {
-                                request.ContentLength = body.Length;
-                            }
-                            else
-                            {
-                                request.ContentLength = -1;
-                            }
-                        }
-
-                        await args.WebSession.ServerConnection.StreamWriter.WriteBodyAsync(body, isChunked);
+                        var writer = args.WebSession.ServerConnection.StreamWriter;
+                        await writer.WriteBodyAsync(body, request.IsChunked);
                     }
                     else
                     {

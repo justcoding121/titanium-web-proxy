@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using StreamExtended.Helpers;
 using StreamExtended.Network;
-using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Shared;
 
@@ -94,12 +94,9 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         public async Task WriteHeadersAsync(HeaderCollection headers, bool flush = true)
         {
-            if (headers != null)
+            foreach (var header in headers)
             {
-                foreach (var header in headers)
-                {
-                    await header.WriteToStreamAsync(this);
-                }
+                await header.WriteToStreamAsync(this);
             }
 
             await WriteLineAsync();
@@ -263,6 +260,23 @@ namespace Titanium.Web.Proxy.Helpers
                 await WriteAsync(buffer, 0, bytesRead);
 
                 onCopy?.Invoke(buffer, 0, bytesRead);
+            }
+        }
+
+        /// <summary>
+        /// Writes the request/response headers and body.
+        /// </summary>
+        /// <param name="requestResponse"></param>
+        /// <param name="flush"></param>
+        /// <returns></returns>
+        protected async Task WriteAsync(RequestResponseBase requestResponse, bool flush = true)
+        {
+            var body = requestResponse.CompressBodyAndUpdateContentLength();
+            await WriteHeadersAsync(requestResponse.Headers, flush);
+
+            if (body != null)
+            {
+                await WriteBodyAsync(body, requestResponse.IsChunked);
             }
         }
     }

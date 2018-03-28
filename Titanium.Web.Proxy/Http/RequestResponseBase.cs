@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
@@ -15,7 +16,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Cached body content as byte array
         /// </summary>
-        private byte[] body;
+        protected byte[] BodyInternal;
 
         /// <summary>
         /// Cached body as string
@@ -126,15 +127,83 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 EnsureBodyAvailable();
-                return body;
+                return BodyInternal;
             }
             internal set
             {
-                body = value;
+                BodyInternal = value;
                 bodyString = null;
+
+                //If there is a content length header update it
+                UpdateContentLength();
             }
         }
+
+        /// <summary>
+        /// Has the request/response body?
+        /// </summary>
+        public abstract bool HasBody { get; }
+
+        /// <summary>
+        /// Store weather the original request/response has body or not, since the user may change the parameters
+        /// </summary>
+        internal bool OriginalHasBody;
+
         internal abstract void EnsureBodyAvailable(bool throwWhenNotReadYet = true);
+
+        /// <summary>
+        /// get the compressed body from given bytes
+        /// </summary>
+        /// <param name="encodingType"></param>
+        /// <param name="body"></param>
+        /// <returns></returns>
+        internal byte[] GetCompressedBody(string encodingType, byte[] body)
+        {
+            var compressor = CompressionFactory.GetCompression(encodingType);
+            using (var ms = new MemoryStream())
+            {
+                using (var zip = compressor.GetStream(ms))
+                {
+                    zip.Write(body, 0, body.Length);
+                }
+
+                return ms.ToArray();
+            }
+        }
+
+        internal byte[] CompressBodyAndUpdateContentLength()
+        {
+            if (!IsBodyRead && BodyInternal == null)
+            {
+                return null;
+            }
+
+            bool isChunked = IsChunked;
+            string contentEncoding = ContentEncoding;
+
+            if (HasBody)
+            {
+                var body = Body;
+                if (contentEncoding != null && body != null)
+                {
+                    body = GetCompressedBody(contentEncoding, body);
+
+                    if (isChunked == false)
+                    {
+                        ContentLength = body.Length;
+                    }
+                    else
+                    {
+                        ContentLength = -1;
+                    }
+                }
+
+                return body;
+            }
+
+            ContentLength = 0;
+            return null;
+        }
 
         /// <summary>
         /// Body as string
@@ -155,7 +224,7 @@ namespace Titanium.Web.Proxy.Http
 
         internal void UpdateContentLength()
         {
-            ContentLength = IsChunked ? -1 : body.Length;
+            ContentLength = IsChunked ? -1 : BodyInternal?.Length ?? 0;
         }
 
         /// <summary>
@@ -165,7 +234,7 @@ namespace Titanium.Web.Proxy.Http
         {
             if (!KeepBody)
             {
-                body = null;
+                BodyInternal = null;
                 bodyString = null;
             }
         }
