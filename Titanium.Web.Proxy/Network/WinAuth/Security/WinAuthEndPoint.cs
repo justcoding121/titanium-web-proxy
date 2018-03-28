@@ -38,11 +38,9 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
             try
             {
-                int result;
-
                 var state = new State();
 
-                result = AcquireCredentialsHandle(
+                int result = AcquireCredentialsHandle(
                     WindowsIdentity.GetCurrent().Name,
                     authScheme,
                     SecurityCredentialsOutbound,
@@ -110,13 +108,11 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
             try
             {
-                int result;
-
                 var state = authStates[requestId];
 
                 state.UpdatePresence();
 
-                result = InitializeSecurityContext(ref state.Credentials,
+                int result = InitializeSecurityContext(ref state.Credentials,
                     ref state.Context,
                     hostname,
                     StandardContextAttributes,
@@ -176,23 +172,22 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         /// <returns></returns>
         internal static bool ValidateWinAuthState(Guid requestId, State.WinAuthState expectedAuthState)
         {
-            State state;
-            var stateExists = authStates.TryGetValue(requestId, out state);
+            var stateExists = authStates.TryGetValue(requestId, out var state);
 
             if (expectedAuthState == State.WinAuthState.UNAUTHORIZED)
             {
                 // Validation before initial token
-                return (stateExists == false ||
-                        state.AuthState == State.WinAuthState.UNAUTHORIZED ||
-                        state.AuthState == State.WinAuthState.AUTHORIZED); // Server may require re-authentication on an open connection
+                return stateExists == false ||
+                       state.AuthState == State.WinAuthState.UNAUTHORIZED ||
+                       state.AuthState == State.WinAuthState.AUTHORIZED; // Server may require re-authentication on an open connection
             }
 
             if (expectedAuthState == State.WinAuthState.INITIAL_TOKEN)
             {
                 // Validation before final token
-                return (stateExists &&
-                        (state.AuthState == State.WinAuthState.INITIAL_TOKEN ||
-                         state.AuthState == State.WinAuthState.AUTHORIZED)); // Server may require re-authentication on an open connection
+                return stateExists &&
+                       (state.AuthState == State.WinAuthState.INITIAL_TOKEN ||
+                        state.AuthState == State.WinAuthState.AUTHORIZED); // Server may require re-authentication on an open connection
             }
 
             throw new Exception("Unsupported validation of WinAuthState");
@@ -204,8 +199,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         /// <param name="requestId"></param>
         internal static void AuthenticatedResponse(Guid requestId)
         {
-            State state;
-            if (authStates.TryGetValue(requestId, out state))
+            if (authStates.TryGetValue(requestId, out var state))
             {
                 state.AuthState = State.WinAuthState.AUTHORIZED;
                 state.UpdatePresence();

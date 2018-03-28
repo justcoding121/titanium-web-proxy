@@ -14,5 +14,10 @@ namespace Titanium.Web.Proxy.Extensions
         {
             return CultureInfo.CurrentCulture.CompareInfo.IndexOf(str, value, CompareOptions.IgnoreCase) >= 0;
         }
+
+        internal static int IndexOfIgnoreCase(this string str, string value)
+        {
+            return CultureInfo.CurrentCulture.CompareInfo.IndexOf(str, value, CompareOptions.IgnoreCase);
+        }
     }
 }
