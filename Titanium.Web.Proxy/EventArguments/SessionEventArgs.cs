@@ -107,15 +107,18 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgs(int bufferSize,
-            ProxyEndPoint endPoint,
-            ExceptionHandler exceptionFunc)
+        internal SessionEventArgs(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc)
+            : this(bufferSize, endPoint, exceptionFunc, null)
+        {
+        }
+
+        protected SessionEventArgs(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc, Request request)
         {
             this.bufferSize = bufferSize;
             this.exceptionFunc = exceptionFunc;
 
             ProxyClient = new ProxyClient();
-            WebSession = new HttpWebClient(bufferSize);
+            WebSession = new HttpWebClient(bufferSize, request);
             LocalEndPoint = endPoint;
 
             WebSession.ProcessId = new Lazy<int>(() =>
@@ -138,6 +141,21 @@ namespace Titanium.Web.Proxy.EventArguments
             });
         }
 
+        private CustomBufferedStream GetStream(bool isRequest)
+        {
+            return isRequest ? ProxyClient.ClientStream : WebSession.ServerConnection.Stream;
+        }
+
+        private CustomBinaryReader GetStreamReader(bool isRequest)
+        {
+            return isRequest ? ProxyClient.ClientStreamReader : WebSession.ServerConnection.StreamReader;
+        }
+
+        private HttpWriter GetStreamWriter(bool isRequest)
+        {
+            return isRequest ? (HttpWriter)ProxyClient.ClientStreamWriter : WebSession.ServerConnection.StreamWriter;
+        }
+
         /// <summary>
         /// Read request body content as bytes[] for current session
         /// </summary>
@@ -150,7 +168,7 @@ namespace Titanium.Web.Proxy.EventArguments
             //If not already read (not cached yet)
             if (!request.IsBodyRead)
             {
-                var body = await ReadBodyAsync(ProxyClient.ClientStreamReader, true);
+                var body = await ReadBodyAsync(true);
                 request.Body = body;
 
                 //Now set the flag to true
@@ -165,8 +183,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         internal async Task ClearResponse()
         {
-            //siphon out the body
-            await ReadResponseBodyAsync();
+            //syphon out the response body from server
+            await SyphonOutBodyAsync(false);
             WebSession.Response = new Response();
         }
 
@@ -225,7 +243,7 @@ namespace Titanium.Web.Proxy.EventArguments
             //If not already read (not cached yet)
             if (!response.IsBodyRead)
             {
-                var body = await ReadBodyAsync(WebSession.ServerConnection.StreamReader, false);
+                var body = await ReadBodyAsync(false);
                 response.Body = body;
 
                 //Now set the flag to true
@@ -235,11 +253,12 @@ namespace Titanium.Web.Proxy.EventArguments
             }
         }
 
-        private async Task<byte[]> ReadBodyAsync(CustomBinaryReader reader, bool isRequest)
+        private async Task<byte[]> ReadBodyAsync(bool isRequest)
         {
             using (var bodyStream = new MemoryStream())
             {
                 var writer = new HttpWriter(bodyStream, bufferSize);
+
                 if (isRequest)
                 {
                     await CopyRequestBodyAsync(writer, TransformationMode.Uncompress);
@@ -253,21 +272,35 @@ namespace Titanium.Web.Proxy.EventArguments
             }
         }
 
+        internal async Task SyphonOutBodyAsync(bool isRequest)
+        {
+            var requestResponse = isRequest ? (RequestResponseBase)WebSession.Request : WebSession.Response;
+            if (requestResponse.IsBodyRead || !requestResponse.OriginalHasBody)
+            {
+                return;
+            }
+
+            using (var bodyStream = new MemoryStream())
+            {
+                var writer = new HttpWriter(bodyStream, bufferSize);
+                await CopyBodyAsync(isRequest, writer, TransformationMode.None, null);
+            }
+        }
+
         /// <summary>
         ///  This is called when the request is PUT/POST/PATCH to read the body
         /// </summary>
         /// <returns></returns>
         internal async Task CopyRequestBodyAsync(HttpWriter writer, TransformationMode transformation)
         {
-            // End the operation
             var request = WebSession.Request;
-            var reader = ProxyClient.ClientStreamReader;
 
             long contentLength = request.ContentLength;
 
             //send the request body bytes to server
             if (contentLength > 0 && hasMulipartEventSubscribers && request.IsMultipartFormData)
             {
+                var reader = GetStreamReader(true);
                 string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
 
                 using (var copyStream = new CopyStream(reader, writer, bufferSize))
@@ -294,21 +327,22 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             else
             {
-                await CopyBodyAsync(ProxyClient.ClientStream, reader, writer, request, transformation, OnDataSent);
+                await CopyBodyAsync(true, writer, transformation, OnDataSent);
             }
         }
 
         internal async Task CopyResponseBodyAsync(HttpWriter writer, TransformationMode transformation)
         {
-            var response = WebSession.Response;
-            var reader = WebSession.ServerConnection.StreamReader;
-
-            await CopyBodyAsync(WebSession.ServerConnection.Stream, reader, writer, response, transformation, OnDataReceived);
+            await CopyBodyAsync(false, writer, transformation, OnDataReceived);
         }
 
-        private async Task CopyBodyAsync(CustomBufferedStream stream, CustomBinaryReader reader, HttpWriter writer,
-            RequestResponseBase requestResponse, TransformationMode transformation, Action<byte[], int, int> onCopy)
+        private async Task CopyBodyAsync(bool isRequest, HttpWriter writer, TransformationMode transformation, Action<byte[], int, int> onCopy)
         {
+            var stream = GetStream(isRequest);
+            var reader = GetStreamReader(isRequest);
+
+            var requestResponse = isRequest ? (RequestResponseBase)WebSession.Request : WebSession.Response;
+
             bool isChunked = requestResponse.IsChunked;
             long contentLength = requestResponse.ContentLength;
             if (transformation == TransformationMode.None)
@@ -440,7 +474,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Sets the request body
         /// </summary>
         /// <param name="body"></param>
-        public async Task SetRequestBody(byte[] body)
+        public void SetRequestBody(byte[] body)
         {
             var request = WebSession.Request;
             if (request.Locked)
@@ -448,34 +482,21 @@ namespace Titanium.Web.Proxy.EventArguments
                 throw new Exception("You cannot call this function after request is made to server.");
             }
 
-            //syphon out the request body from client before setting the new body
-            if (!request.IsBodyRead)
-            {
-                await ReadRequestBodyAsync();
-            }
-
             request.Body = body;
-            request.UpdateContentLength();
         }
 
         /// <summary>
         /// Sets the body with the specified string
         /// </summary>
         /// <param name="body"></param>
-        public async Task SetRequestBodyString(string body)
+        public void SetRequestBodyString(string body)
         {
             if (WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function after request is made to server.");
             }
 
-            //syphon out the request body from client before setting the new body
-            if (!WebSession.Request.IsBodyRead)
-            {
-                await ReadRequestBodyAsync();
-            }
-
-            await SetRequestBody(WebSession.Request.Encoding.GetBytes(body));
+            SetRequestBody(WebSession.Request.Encoding.GetBytes(body));
         }
 
         /// <summary>
@@ -510,7 +531,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Set the response body bytes
         /// </summary>
         /// <param name="body"></param>
-        public async Task SetResponseBody(byte[] body)
+        public void SetResponseBody(byte[] body)
         {
             if (!WebSession.Request.Locked)
             {
@@ -518,39 +539,23 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             var response = WebSession.Response;
-
-            //syphon out the response body from server before setting the new body
-            if (response.Body == null)
-            {
-                await GetResponseBody();
-            }
-
             response.Body = body;
-
-            //If there is a content length header update it
-            response.UpdateContentLength();
         }
 
         /// <summary>
         /// Replace the response body with the specified string
         /// </summary>
         /// <param name="body"></param>
-        public async Task SetResponseBodyString(string body)
+        public void SetResponseBodyString(string body)
         {
             if (!WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function before request is made to server.");
             }
 
-            //syphon out the response body from server before setting the new body
-            if (!WebSession.Response.IsBodyRead)
-            {
-                await GetResponseBody();
-            }
-
             var bodyBytes = WebSession.Response.Encoding.GetBytes(body);
 
-            await SetResponseBody(bodyBytes);
+            SetResponseBody(bodyBytes);
         }
 
         /// <summary>
@@ -651,17 +656,29 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (WebSession.Request.Locked)
             {
-                throw new Exception("You cannot call this function after request is made to server.");
+                if (WebSession.Response.Locked)
+                {
+                    throw new Exception("You cannot call this function after response is sent to the client.");
+                }
+
+                response.Locked = true;
+                response.TerminateResponse = WebSession.Response.TerminateResponse;
+                WebSession.Response = response;
             }
+            else
+            {
+                WebSession.Request.Locked = true;
 
-            WebSession.Request.Locked = true;
+                response.Locked = true;
+                WebSession.Response = response;
 
-            response.Locked = true;
-            response.IsBodyRead = true;
+                WebSession.Request.CancelRequest = true;
+            }
+        }
 
-            WebSession.Response = response;
-
-            WebSession.Request.CancelRequest = true;
+        public void TerminateServerConnection()
+        {
+            WebSession.Response.TerminateResponse = true;
         }
 
         /// <summary>

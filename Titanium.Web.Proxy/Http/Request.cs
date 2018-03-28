@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Has request body?
         /// </summary>
-        public bool HasBody
+        public override bool HasBody
         {
             get
             {
@@ -102,6 +102,11 @@ namespace Titanium.Web.Proxy.Http
 
         internal override void EnsureBodyAvailable(bool throwWhenNotReadYet = true)
         {
+            if (BodyInternal != null)
+            {
+                return;
+            }
+
             //GET request don't have a request body to read
             if (!HasBody)
             {

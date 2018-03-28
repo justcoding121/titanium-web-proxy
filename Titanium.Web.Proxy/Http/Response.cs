@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         /// Has response body?
         /// </summary>
-        public bool HasBody
+        public override bool HasBody
         {
             get
             {
@@ -77,8 +77,15 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        internal bool TerminateResponse { get; set; }
+
         internal override void EnsureBodyAvailable(bool throwWhenNotReadYet = true)
         {
+            if (BodyInternal != null)
+            {
+                return;
+            }
+
             if (!IsBodyRead && throwWhenNotReadYet)
             {
                 throw new Exception("Response body is not read yet. " +
@@ -119,6 +126,21 @@ namespace Titanium.Web.Proxy.Http
                 sb.AppendLine();
                 return sb.ToString();
             }
+        }
+
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        public Response()
+        {
+        }
+
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        public Response(byte[] body)
+        {
+            Body = body;
         }
 
         internal static string CreateResponseLine(Version version, int statusCode, string statusDescription)
