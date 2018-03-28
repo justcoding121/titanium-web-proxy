@@ -97,7 +97,12 @@ namespace Titanium.Web.Proxy
 
                     await clientStreamWriter.WriteResponseAsync(response);
 
-                    var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
+                    ClientHelloInfo clientHelloInfo = null;
+                    if (endPoint.EnableSsl)
+                    {
+                        clientHelloInfo = await SslTools.PeekClientHello(clientStream);
+                    }
+
                     bool isClientHello = clientHelloInfo != null;
                     if (isClientHello)
                     {
