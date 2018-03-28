@@ -130,7 +130,7 @@ namespace Titanium.Web.Proxy
                 //Should we cache all Set-Cokiee headers from server during auth process
                 //and send it to client after auth?
 
-                // Let ReposnseHandler send the updated request
+                // Let ResponseHandler send the updated request
                 args.ReRequest = true;
             }
         }

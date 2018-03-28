@@ -36,6 +36,8 @@ namespace Titanium.Web.Proxy
                     await Handle401UnAuthorized(args);
                 }
 
+                response.OriginalHasBody = response.HasBody;
+
                 //if user requested call back then do it
                 if (!response.Locked)
                 {
@@ -44,9 +46,9 @@ namespace Titanium.Web.Proxy
 
                 // it may changed in the user event
                 response = args.WebSession.Response;
-
+                
                 var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
-
+                
                 if (response.TerminateResponse || response.Locked)
                 {
                     await clientStreamWriter.WriteResponseAsync(response);
@@ -64,7 +66,7 @@ namespace Titanium.Web.Proxy
 
                     return;
                 }
-
+                
                 //if user requested to send request again
                 //likely after making modifications from User Response Handler
                 if (args.ReRequest)
