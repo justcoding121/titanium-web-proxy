@@ -7,12 +7,24 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
     /// </summary>
     internal class State
     {
+        /// <summary>
+        /// States during Windows Authentication
+        /// </summary>
+        public enum WinAuthState
+        {
+            UNAUTHORIZED,
+            INITIAL_TOKEN,
+            FINAL_TOKEN,
+            AUTHORIZED
+        };
+
         internal State()
         {
             Credentials = new Common.SecurityHandle(0);
             Context = new Common.SecurityHandle(0);
 
             LastSeen = DateTime.Now;
+            AuthState = WinAuthState.UNAUTHORIZED;
         }
 
         /// <summary>
@@ -30,10 +42,16 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         /// </summary>
         internal DateTime LastSeen;
 
+        /// <summary>
+        /// Current state of the authentication process
+        /// </summary>
+        internal WinAuthState AuthState;
+
         internal void ResetHandles()
         {
             Credentials.Reset();
             Context.Reset();
+            AuthState = WinAuthState.UNAUTHORIZED;
         }
 
         internal void UpdatePresence()
