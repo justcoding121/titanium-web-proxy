@@ -46,9 +46,9 @@ namespace Titanium.Web.Proxy
 
                 // it may changed in the user event
                 response = args.WebSession.Response;
-                
+
                 var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
-                
+
                 if (response.TerminateResponse || response.Locked)
                 {
                     await clientStreamWriter.WriteResponseAsync(response);
