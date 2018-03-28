@@ -66,7 +66,7 @@ namespace Titanium.Web.Proxy
 
                     return;
                 }
-                
+
                 //if user requested to send request again
                 //likely after making modifications from User Response Handler
                 if (args.ReRequest)
