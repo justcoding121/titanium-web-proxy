@@ -65,6 +65,8 @@ namespace Titanium.Web.Proxy
             //check in unique headers
             if (authHeader == null)
             {
+                headerName = null;
+
                 //check in non-unique headers first
                 var uHeader = response.Headers.Headers.FirstOrDefault(x => authHeaderNames.Any(y => x.Key.Equals(y, StringComparison.OrdinalIgnoreCase)));
 
