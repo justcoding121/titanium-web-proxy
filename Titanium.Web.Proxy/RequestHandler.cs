@@ -135,7 +135,7 @@ namespace Titanium.Web.Proxy
                             clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
                             clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
                         }
-                        catch(Exception e)
+                        catch (Exception e)
                         {
                             ExceptionFunc(new Exception($"Could'nt authenticate client '{connectHostname}' with fake certificate.", e));
                             sslStream?.Dispose();
@@ -238,21 +238,32 @@ namespace Titanium.Web.Proxy
 
                     if (clientHelloInfo != null)
                     {
-                        var sslStream = new SslStream(clientStream);
-                        clientStream = new CustomBufferedStream(sslStream, BufferSize);
+                        SslStream sslStream = null;
+                        string sniHostName = null;
 
-                        string sniHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
-
-                        string certName = HttpHelper.GetWildCardDomainName(sniHostName);
-                        var certificate = await CertificateManager.CreateCertificateAsync(certName);
                         try
                         {
+                            sslStream = new SslStream(clientStream);
+
+                            sniHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
+
+                            string certName = HttpHelper.GetWildCardDomainName(sniHostName);
+                            var certificate = await CertificateManager.CreateCertificateAsync(certName);
+
                             //Successfully managed to authenticate the client using the fake certificate
                             await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
+
+                            //HTTPS server created - we can now decrypt the client's traffic
+                            clientStream = new CustomBufferedStream(sslStream, BufferSize);
+
+                            clientStreamReader.Dispose();
+                            clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
+                            clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
                         }
                         catch (Exception e)
                         {
                             ExceptionFunc(new Exception($"Could'nt authenticate client '{sniHostName}' with fake certificate.", e));
+                            sslStream?.Dispose();
                             return;
                         }
                     }
