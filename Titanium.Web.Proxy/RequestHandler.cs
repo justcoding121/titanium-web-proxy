@@ -92,6 +92,8 @@ namespace Titanium.Web.Proxy
 
                     //write back successfull CONNECT response
                     var response = ConnectResponse.CreateSuccessfullConnectResponse(version);
+                    // Set ContentLength explicitly to properly handle HTTP 1.0
+                    response.ContentLength = 0;
                     response.Headers.FixProxyHeaders();
                     connectArgs.WebSession.Response = response;
 

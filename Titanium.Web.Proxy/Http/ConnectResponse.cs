@@ -22,8 +22,6 @@ namespace Titanium.Web.Proxy.Http
                 StatusDescription = "Connection Established"
             };
 
-            // Set ContentLength explicitly to properly handle HTTP 1.0
-            response.ContentLength = 0; 
             return response;
         }
     }
