@@ -483,7 +483,6 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             request.Body = body;
-            request.UpdateContentLength();
         }
 
         /// <summary>

@@ -7,6 +7,7 @@ using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy
 {
@@ -28,14 +29,22 @@ namespace Titanium.Web.Proxy
                 await args.WebSession.ReceiveResponse();
 
                 var response = args.WebSession.Response;
+                args.ReRequest = false;
 
                 //check for windows authentication
-                if (isWindowsAuthenticationEnabledAndSupported && response.StatusCode == (int)HttpStatusCode.Unauthorized)
+                if (isWindowsAuthenticationEnabledAndSupported)
                 {
-                    await Handle401UnAuthorized(args);
+                    if (response.StatusCode == (int)HttpStatusCode.Unauthorized)
+                    {
+                        await Handle401UnAuthorized(args);
+                    }
+                    else
+                    {
+                        WinAuthEndPoint.AuthenticatedResponse(args.WebSession.RequestId);
+                    }
                 }
 
-                args.ReRequest = false;
+                response.OriginalHasBody = response.HasBody;
 
                 //if user requested call back then do it
                 if (!response.Locked)

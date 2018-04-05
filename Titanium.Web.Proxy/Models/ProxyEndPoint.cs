@@ -17,11 +17,10 @@ namespace Titanium.Web.Proxy.Models
         /// <param name="ipAddress"></param>
         /// <param name="port"></param>
         /// <param name="enableSsl"></param>
-        protected ProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl)
+        protected ProxyEndPoint(IPAddress ipAddress, int port)
         {
             IpAddress = ipAddress;
             Port = port;
-            EnableSsl = enableSsl;
         }
         
         /// <summary>
@@ -39,10 +38,6 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         public int Port { get; internal set; }
 
-        /// <summary>
-        /// Enable SSL?
-        /// </summary>
-        public bool EnableSsl { get; }
 
         /// <summary>
         /// Is IPv6 enabled?

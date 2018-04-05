@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy
                     await endPoint.InvokeBeforeTunnelConnectRequest(this, connectArgs, ExceptionFunc);
 
                     //filter out excluded host names
-                    bool excluded = connectArgs.Excluded;
+                    bool excluded = !endPoint.DecryptSsl || connectArgs.Excluded;
 
                     if (await CheckAuthorization(connectArgs) == false)
                     {
@@ -97,7 +97,8 @@ namespace Titanium.Web.Proxy
 
                     await clientStreamWriter.WriteResponseAsync(response);
 
-                    var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
+                    var clientHelloInfo =  await SslTools.PeekClientHello(clientStream);
+                    
                     bool isClientHello = clientHelloInfo != null;
                     if (isClientHello)
                     {
@@ -130,7 +131,7 @@ namespace Titanium.Web.Proxy
                             clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
                             clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
                         }
-                        catch(Exception e)
+                        catch (Exception e)
                         {
                             ExceptionFunc(new Exception($"Could'nt authenticate client '{connectHostname}' with fake certificate.", e));
                             sslStream?.Dispose();
@@ -227,37 +228,46 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                if (endPoint.EnableSsl)
-                {
-                    var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
+                var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
 
-                    if (clientHelloInfo != null)
+                var isHttps = clientHelloInfo != null;
+                string httpsHostName = null;
+
+                if (isHttps)
+                {
+                    SslStream sslStream = null;
+                  
+                    try
                     {
-                        var sslStream = new SslStream(clientStream);
+                        sslStream = new SslStream(clientStream);
+
+                        httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
+
+                        string certName = HttpHelper.GetWildCardDomainName(httpsHostName);
+                        var certificate = await CertificateManager.CreateCertificateAsync(certName);
+
+                        //Successfully managed to authenticate the client using the fake certificate
+                        await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
+
+                        //HTTPS server created - we can now decrypt the client's traffic
                         clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
-                        string sniHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
-
-                        string certName = HttpHelper.GetWildCardDomainName(sniHostName);
-                        var certificate = await CertificateManager.CreateCertificateAsync(certName);
-                        try
-                        {
-                            //Successfully managed to authenticate the client using the fake certificate
-                            await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
-                        }
-                        catch (Exception e)
-                        {
-                            ExceptionFunc(new Exception($"Could'nt authenticate client '{sniHostName}' with fake certificate.", e));
-                            return;
-                        }
+                        clientStreamReader.Dispose();
+                        clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
+                        clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
                     }
-
-                    //HTTPS server created - we can now decrypt the client's traffic
+                    catch (Exception e)
+                    {
+                        ExceptionFunc(new Exception($"Could'nt authenticate client '{httpsHostName}' with fake certificate.", e));
+                        sslStream?.Dispose();
+                        return;
+                    }
                 }
 
+                //HTTPS server created - we can now decrypt the client's traffic
                 //Now create the request
                 await HandleHttpSessionRequest(tcpClient, clientStream, clientStreamReader, clientStreamWriter,
-                    endPoint.EnableSsl ? endPoint.GenericCertificateName : null, endPoint, null, true);
+                    isHttps ? httpsHostName : null, endPoint, null, true);
             }
             finally
             {
@@ -605,7 +615,7 @@ namespace Titanium.Web.Proxy
         /// <param name="requestHeaders"></param>
         private void PrepareRequestHeaders(HeaderCollection requestHeaders)
         {
-            if(requestHeaders.HeaderExists(KnownHeaders.AcceptEncoding))
+            if (requestHeaders.HeaderExists(KnownHeaders.AcceptEncoding))
             {
                 requestHeaders.SetOrAddHeaderValue(KnownHeaders.AcceptEncoding, "gzip,deflate");
             }
