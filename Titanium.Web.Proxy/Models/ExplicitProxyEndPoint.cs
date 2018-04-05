@@ -18,6 +18,11 @@ namespace Titanium.Web.Proxy.Models
         internal bool IsSystemHttpsProxy { get; set; }
 
         /// <summary>
+        /// Enable SSL?
+        /// </summary>
+        public bool DecryptSsl { get; }
+
+        /// <summary>
         /// Generic certificate to use for SSL decryption.
         /// </summary>
         public X509Certificate2 GenericCertificate { get; set; }
@@ -40,9 +45,10 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         /// <param name="ipAddress"></param>
         /// <param name="port"></param>
-        /// <param name="enableSsl"></param>
-        public ExplicitProxyEndPoint(IPAddress ipAddress, int port, bool enableSsl) : base(ipAddress, port, enableSsl)
+        /// <param name="decryptSsl"></param>
+        public ExplicitProxyEndPoint(IPAddress ipAddress, int port, bool decryptSsl = true) : base(ipAddress, port)
         {
+            this.DecryptSsl = decryptSsl;
         }
 
         internal async Task InvokeBeforeTunnelConnectRequest(ProxyServer proxyServer, TunnelConnectSessionEventArgs connectArgs, ExceptionHandler exceptionFunc)
