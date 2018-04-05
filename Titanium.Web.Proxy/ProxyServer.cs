@@ -316,13 +316,9 @@ namespace Titanium.Web.Proxy
 
             bool isHttp = (protocolType & ProxyProtocolType.Http) > 0;
             bool isHttps = (protocolType & ProxyProtocolType.Https) > 0;
-
+            
             if (isHttps)
             {
-                if (!endPoint.EnableSsl)
-                {
-                    throw new Exception("Endpoint do not support Https connections");
-                }
 
                 CertificateManager.EnsureRootCertificate();
 
