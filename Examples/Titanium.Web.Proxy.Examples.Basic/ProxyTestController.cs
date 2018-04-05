@@ -78,7 +78,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             //proxyServer.EnableWinAuth = true;
 
-            explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
+            explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000)
             {
                 //You can set only one of the ExcludedHttpsHostNameRegex and IncludedHttpsHostNameRegex properties, otherwise ArgumentException will be thrown
 
