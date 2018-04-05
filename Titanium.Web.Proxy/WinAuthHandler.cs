@@ -133,7 +133,7 @@ namespace Titanium.Web.Proxy
                     request.Headers.SetOrAddHeaderValue(KnownHeaders.Authorization, auth);
 
                     //send body for final auth request
-                    if (request.HasBody)
+                    if (request.OriginalHasBody)
                     {
                         request.ContentLength = request.Body.Length;
                     }
