@@ -232,7 +232,7 @@ namespace Titanium.Web.Proxy
             {
                 var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
 
-                var isHttps = clientHelloInfo != null;
+                var isHttps = endPoint.DecryptSsl && clientHelloInfo != null;
                 string httpsHostName = null;
 
                 if (isHttps)

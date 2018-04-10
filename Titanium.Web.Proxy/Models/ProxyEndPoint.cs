@@ -16,13 +16,14 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         /// <param name="ipAddress"></param>
         /// <param name="port"></param>
-        /// <param name="enableSsl"></param>
-        protected ProxyEndPoint(IPAddress ipAddress, int port)
+        /// <param name="decryptSsl"></param>
+        protected ProxyEndPoint(IPAddress ipAddress, int port, bool decryptSsl)
         {
             IpAddress = ipAddress;
             Port = port;
+            DecryptSsl = decryptSsl;
         }
-        
+
         /// <summary>
         /// underlying TCP Listener object
         /// </summary>
@@ -38,6 +39,10 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         public int Port { get; internal set; }
 
+        /// <summary>
+        /// Enable SSL?
+        /// </summary>
+        public bool DecryptSsl { get; }
 
         /// <summary>
         /// Is IPv6 enabled?
