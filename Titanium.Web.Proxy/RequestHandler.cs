@@ -232,37 +232,77 @@ namespace Titanium.Web.Proxy
             {
                 var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
 
-                var isHttps = endPoint.DecryptSsl && clientHelloInfo != null;
+                var isHttps = clientHelloInfo != null;
                 string httpsHostName = null;
 
                 if (isHttps)
                 {
-                    SslStream sslStream = null;
-                  
-                    try
+                    httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
+
+                    if (endPoint.DecryptSsl)
                     {
-                        sslStream = new SslStream(clientStream);
+                        SslStream sslStream = null;
 
-                        httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
+                        try
+                        {
+                            sslStream = new SslStream(clientStream);
 
-                        string certName = HttpHelper.GetWildCardDomainName(httpsHostName);
-                        var certificate = await CertificateManager.CreateCertificateAsync(certName);
+                            string certName = HttpHelper.GetWildCardDomainName(httpsHostName);
+                            var certificate = await CertificateManager.CreateCertificateAsync(certName);
 
-                        //Successfully managed to authenticate the client using the fake certificate
-                        await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
+                            //Successfully managed to authenticate the client using the fake certificate
+                            await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
 
-                        //HTTPS server created - we can now decrypt the client's traffic
-                        clientStream = new CustomBufferedStream(sslStream, BufferSize);
+                            //HTTPS server created - we can now decrypt the client's traffic
+                            clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
-                        clientStreamReader.Dispose();
-                        clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-                        clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
+                            clientStreamReader.Dispose();
+                            clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
+                            clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
+                        }
+                        catch (Exception e)
+                        {
+                            ExceptionFunc(new Exception($"Could'nt authenticate client '{httpsHostName}' with fake certificate.", e));
+                            sslStream?.Dispose();
+                            return;
+                        }
                     }
-                    catch (Exception e)
+                    else
                     {
-                        ExceptionFunc(new Exception($"Could'nt authenticate client '{httpsHostName}' with fake certificate.", e));
-                        sslStream?.Dispose();
-                        return;
+                        //create new connection
+                        var connection = new TcpClient(UpStreamEndPoint);
+                        await connection.ConnectAsync(httpsHostName, endPoint.Port);
+                        connection.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
+                        connection.SendTimeout = ConnectionTimeOutSeconds * 1000;
+
+                        using (connection)
+                        {
+                            var serverStream = connection.GetStream();
+
+                            int available = clientStream.Available;
+                            if (available > 0)
+                            {
+                                //send the buffered data
+                                var data = BufferPool.GetBuffer(BufferSize);
+
+                                try
+                                {
+                                    // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
+                                    await clientStream.ReadAsync(data, 0, available);
+                                    await serverStream.WriteAsync(data, 0, available);
+                                    await serverStream.FlushAsync();
+                                }
+                                finally
+                                {
+                                    BufferPool.ReturnBuffer(data);
+                                }
+                            }
+
+                            //var serverHelloInfo = await SslTools.PeekServerHello(serverStream);
+
+                            await TcpHelper.SendRaw(clientStream, serverStream, BufferSize,
+                                null, null, ExceptionFunc);
+                        }
                     }
                 }
 
