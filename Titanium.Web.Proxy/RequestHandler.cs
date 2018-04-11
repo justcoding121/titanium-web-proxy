@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy
                     await endPoint.InvokeBeforeTunnelConnectRequest(this, connectArgs, ExceptionFunc);
 
                     //filter out excluded host names
-                    bool excluded = !endPoint.DecryptSsl || connectArgs.Excluded;
+                    bool decryptSsl = endPoint.DecryptSsl && connectArgs.DecryptSsl;
 
                     if (await CheckAuthorization(connectArgs) == false)
                     {
@@ -109,7 +109,7 @@ namespace Titanium.Web.Proxy
 
                     await endPoint.InvokeBeforeTunnectConnectResponse(this, connectArgs, ExceptionFunc, isClientHello);
 
-                    if (!excluded && isClientHello)
+                    if (decryptSsl && isClientHello)
                     {
                         connectRequest.RequestUri = new Uri("https://" + httpUrl);
 
@@ -143,12 +143,12 @@ namespace Titanium.Web.Proxy
                         if (await HttpHelper.IsConnectMethod(clientStream) == -1)
                         {
                             // It can be for example some Google (Cloude Messaging for Chrome) magic
-                            excluded = true;
+                            decryptSsl = false;
                         }
                     }
 
                     //Hostname is excluded or it is not an HTTPS connect
-                    if (excluded || !isClientHello)
+                    if (!decryptSsl || !isClientHello)
                     {
                         //create new connection
                         using (var connection = await GetServerConnection(connectArgs, true))

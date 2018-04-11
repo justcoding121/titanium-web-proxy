@@ -66,8 +66,6 @@ proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
 var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
 {
-//You can set only one of the ExcludedHttpsHostNameRegex and IncludedHttpsHostNameRegex properties, otherwise ArgumentException will be thrown
-
 //Use self-issued generic certificate on all https requests
 //Optimizes performance by not creating a certificate for each https-enabled domain
 //Useful when certificate trust is not required by proxy clients
@@ -135,7 +133,7 @@ private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSess
          //Exclude Https addresses you don't want to proxy
          //Useful for clients that use certificate pinning
          //for example dropbox.com
-         e.Excluded = true;
+         e.DecryptSsl = false;
     }
 }
 
