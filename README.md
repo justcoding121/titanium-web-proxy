@@ -232,7 +232,6 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
 #### Roadmap
 
 * Support HTTP 2.0 
-* Support SOCKS protocol
 
 #### Collaborators
 
