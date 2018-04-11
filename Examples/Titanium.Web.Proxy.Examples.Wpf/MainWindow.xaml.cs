@@ -119,7 +119,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             string hostname = e.WebSession.Request.RequestUri.Host;
             if (hostname.EndsWith("webex.com"))
             {
-                e.Excluded = true;
+                e.DecryptSsl = false;
             }
 
             await Dispatcher.InvokeAsync(() =>

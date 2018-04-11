@@ -6,7 +6,7 @@ namespace Titanium.Web.Proxy.EventArguments
 {
     public class TunnelConnectSessionEventArgs : SessionEventArgs
     {
-        public bool Excluded { get; set; }
+        public bool DecryptSsl { get; set; } = true;
 
         public bool IsHttpsConnect { get; internal set; }
 
