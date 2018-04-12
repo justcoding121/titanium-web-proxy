@@ -81,7 +81,7 @@ namespace Titanium.Web.Proxy
                     //filter out excluded host names
                     bool decryptSsl = endPoint.DecryptSsl && connectArgs.DecryptSsl;
 
-                    if (connectArgs.BlockConnect)
+                    if (connectArgs.DenyConnect)
                     {
                         if (connectArgs.WebSession.Response.StatusCode == 0)
                         {
