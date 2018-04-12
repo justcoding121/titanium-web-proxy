@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -262,6 +261,7 @@ namespace Titanium.Web.Proxy
                     httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
 
                     var args = new BeforeSslAuthenticateEventArgs();
+                    args.SniHostName = httpsHostName;
                     await endPoint.InvokeBeforeSslAuthenticate(this, args, ExceptionFunc);
 
                     if(args.TerminateSession)

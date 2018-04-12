@@ -1,5 +1,4 @@
-﻿using System;
-using System.Net;
+﻿using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
