@@ -8,7 +8,10 @@ namespace Titanium.Web.Proxy.EventArguments
     {
         public bool DecryptSsl { get; set; } = true;
 
-        public bool BlockConnect { get; set; }
+        /// <summary>
+        /// Denies the connect request with a Forbidden status 
+        /// </summary>
+        public bool DenyConnect { get; set; }
 
         public bool IsHttpsConnect { get; internal set; }
 
