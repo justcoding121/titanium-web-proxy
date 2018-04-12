@@ -14,14 +14,14 @@ namespace Titanium.Web.Proxy
     public partial class ProxyServer
     {
         //possible header names
-        private static readonly HashSet<string> authHeaderNames = new HashSet<string>
+        private static readonly HashSet<string> authHeaderNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "WWW-Authenticate".ToLower(),
+            "WWW-Authenticate",
             //IIS 6.0 messed up names below
-            "WWWAuthenticate".ToLower(),
-            "NTLMAuthorization".ToLower(),
-            "NegotiateAuthorization".ToLower(),
-            "KerberosAuthorization".ToLower()
+            "WWWAuthenticate",
+            "NTLMAuthorization",
+            "NegotiateAuthorization",
+            "KerberosAuthorization"
         };
 
         private static readonly HashSet<string> authSchemes = new HashSet<string>
@@ -48,8 +48,7 @@ namespace Titanium.Web.Proxy
             var response = args.WebSession.Response;
 
             //check in non-unique headers first
-            var header = response.Headers.NonUniqueHeaders.FirstOrDefault(
-                    x => authHeaderNames.Contains(x.Key.ToLower()));
+            var header = response.Headers.NonUniqueHeaders.FirstOrDefault(x => authHeaderNames.Contains(x.Key));
 
             if (!header.Equals(new KeyValuePair<string, List<HttpHeader>>()))
             {
@@ -68,7 +67,7 @@ namespace Titanium.Web.Proxy
                 headerName = null;
 
                 //check in non-unique headers first
-                var uHeader = response.Headers.Headers.FirstOrDefault(x => authHeaderNames.Contains(x.Key.ToLower()));
+                var uHeader = response.Headers.Headers.FirstOrDefault(x => authHeaderNames.Contains(x.Key));
 
                 if (!uHeader.Equals(new KeyValuePair<string, HttpHeader>()))
                 {

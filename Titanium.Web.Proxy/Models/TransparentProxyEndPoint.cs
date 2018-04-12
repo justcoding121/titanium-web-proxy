@@ -19,8 +19,8 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         /// <param name="ipAddress"></param>
         /// <param name="port"></param>
-        /// <param name="enableSsl"></param>
-        public TransparentProxyEndPoint(IPAddress ipAddress, int port) : base(ipAddress, port)
+        /// <param name="decryptSsl"></param>
+        public TransparentProxyEndPoint(IPAddress ipAddress, int port, bool decryptSsl = true) : base(ipAddress, port, decryptSsl)
         {
             GenericCertificateName = "localhost";
         }

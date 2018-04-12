@@ -79,7 +79,24 @@ namespace Titanium.Web.Proxy
                     await endPoint.InvokeBeforeTunnelConnectRequest(this, connectArgs, ExceptionFunc);
 
                     //filter out excluded host names
-                    bool excluded = !endPoint.DecryptSsl || connectArgs.Excluded;
+                    bool decryptSsl = endPoint.DecryptSsl && connectArgs.DecryptSsl;
+
+                    if (connectArgs.BlockConnect)
+                    {
+                        if (connectArgs.WebSession.Response.StatusCode == 0)
+                        {
+                            connectArgs.WebSession.Response = new Response
+                            {
+                                HttpVersion = HttpHeader.Version11,
+                                StatusCode = (int)HttpStatusCode.Forbidden,
+                                StatusDescription = "Forbidden",
+                            };
+                        }
+
+                        //send the response
+                        await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response);
+                        return;
+                    }
 
                     if (await CheckAuthorization(connectArgs) == false)
                     {
@@ -109,7 +126,7 @@ namespace Titanium.Web.Proxy
 
                     await endPoint.InvokeBeforeTunnectConnectResponse(this, connectArgs, ExceptionFunc, isClientHello);
 
-                    if (!excluded && isClientHello)
+                    if (decryptSsl && isClientHello)
                     {
                         connectRequest.RequestUri = new Uri("https://" + httpUrl);
 
@@ -143,12 +160,12 @@ namespace Titanium.Web.Proxy
                         if (await HttpHelper.IsConnectMethod(clientStream) == -1)
                         {
                             // It can be for example some Google (Cloude Messaging for Chrome) magic
-                            excluded = true;
+                            decryptSsl = false;
                         }
                     }
 
                     //Hostname is excluded or it is not an HTTPS connect
-                    if (excluded || !isClientHello)
+                    if (!decryptSsl || !isClientHello)
                     {
                         //create new connection
                         using (var connection = await GetServerConnection(connectArgs, true))
@@ -237,32 +254,72 @@ namespace Titanium.Web.Proxy
 
                 if (isHttps)
                 {
-                    SslStream sslStream = null;
-                  
-                    try
+                    httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
+
+                    if (endPoint.DecryptSsl)
                     {
-                        sslStream = new SslStream(clientStream);
+                        SslStream sslStream = null;
 
-                        httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
+                        try
+                        {
+                            sslStream = new SslStream(clientStream);
 
-                        string certName = HttpHelper.GetWildCardDomainName(httpsHostName);
-                        var certificate = await CertificateManager.CreateCertificateAsync(certName);
+                            string certName = HttpHelper.GetWildCardDomainName(httpsHostName);
+                            var certificate = await CertificateManager.CreateCertificateAsync(certName);
 
-                        //Successfully managed to authenticate the client using the fake certificate
-                        await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
+                            //Successfully managed to authenticate the client using the fake certificate
+                            await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
 
-                        //HTTPS server created - we can now decrypt the client's traffic
-                        clientStream = new CustomBufferedStream(sslStream, BufferSize);
+                            //HTTPS server created - we can now decrypt the client's traffic
+                            clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
-                        clientStreamReader.Dispose();
-                        clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
-                        clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
+                            clientStreamReader.Dispose();
+                            clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
+                            clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
+                        }
+                        catch (Exception e)
+                        {
+                            ExceptionFunc(new Exception($"Could'nt authenticate client '{httpsHostName}' with fake certificate.", e));
+                            sslStream?.Dispose();
+                            return;
+                        }
                     }
-                    catch (Exception e)
+                    else
                     {
-                        ExceptionFunc(new Exception($"Could'nt authenticate client '{httpsHostName}' with fake certificate.", e));
-                        sslStream?.Dispose();
-                        return;
+                        //create new connection
+                        var connection = new TcpClient(UpStreamEndPoint);
+                        await connection.ConnectAsync(httpsHostName, endPoint.Port);
+                        connection.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
+                        connection.SendTimeout = ConnectionTimeOutSeconds * 1000;
+
+                        using (connection)
+                        {
+                            var serverStream = connection.GetStream();
+
+                            int available = clientStream.Available;
+                            if (available > 0)
+                            {
+                                //send the buffered data
+                                var data = BufferPool.GetBuffer(BufferSize);
+
+                                try
+                                {
+                                    // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
+                                    await clientStream.ReadAsync(data, 0, available);
+                                    await serverStream.WriteAsync(data, 0, available);
+                                    await serverStream.FlushAsync();
+                                }
+                                finally
+                                {
+                                    BufferPool.ReturnBuffer(data);
+                                }
+                            }
+
+                            //var serverHelloInfo = await SslTools.PeekServerHello(serverStream);
+
+                            await TcpHelper.SendRaw(clientStream, serverStream, BufferSize,
+                                null, null, ExceptionFunc);
+                        }
                     }
                 }
 
@@ -590,7 +647,7 @@ namespace Titanium.Web.Proxy
         /// <param name="args"></param>
         /// <param name="isConnect"></param>
         /// <returns></returns>
-        private async Task<TcpConnection> GetServerConnection(SessionEventArgs args, bool isConnect)
+        private async Task<TcpConnection> GetServerConnection(SessionEventArgsBase args, bool isConnect)
         {
             ExternalProxy customUpStreamProxy = null;
 
