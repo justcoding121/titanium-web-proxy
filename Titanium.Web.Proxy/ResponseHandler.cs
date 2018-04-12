@@ -1,9 +1,6 @@
 ﻿using System;
-using System.IO;
-using System.IO.Compression;
 using System.Net;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;

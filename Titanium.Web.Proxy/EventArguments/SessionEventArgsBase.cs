@@ -1,16 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
 using System.Net;
-using System.Reflection;
-using System.Threading.Tasks;
-using StreamExtended.Helpers;
-using StreamExtended.Network;
-using Titanium.Web.Proxy.Decompression;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 
