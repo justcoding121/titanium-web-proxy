@@ -164,6 +164,11 @@ namespace Titanium.Web.Proxy
                         }
                     }
 
+                    if (connectArgs.TerminateSession)
+                    {
+                        throw new Exception("Session was terminated by user.");
+                    }
+
                     //Hostname is excluded or it is not an HTTPS connect
                     if (!decryptSsl || !isClientHello)
                     {
@@ -256,7 +261,15 @@ namespace Titanium.Web.Proxy
                 {
                     httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
 
-                    if (endPoint.DecryptSsl)
+                    var args = new BeforeSslAuthenticateEventArgs();
+                    await endPoint.InvokeBeforeSslAuthenticate(this, args, ExceptionFunc);
+
+                    if(args.TerminateSession)
+                    {
+                        throw new Exception("Session was terminated by user.");
+                    }
+
+                    if (endPoint.DecryptSsl && args.DecryptSsl)
                     {
                         SslStream sslStream = null;
 
@@ -548,9 +561,15 @@ namespace Titanium.Web.Proxy
                     }
                     finally
                     {
+                        if (args.TerminateSession)
+                        {
+                            throw new Exception("Session was terminated by user.");
+                        }
+
                         await InvokeAfterResponse(args);
                         args.Dispose();
                     }
+
                 }
             }
             finally
