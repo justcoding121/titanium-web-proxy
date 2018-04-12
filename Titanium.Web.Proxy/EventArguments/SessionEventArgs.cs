@@ -22,34 +22,16 @@ namespace Titanium.Web.Proxy.EventArguments
     /// A proxy session ends when client terminates connection to proxy
     /// or when server terminates connection from proxy
     /// </summary>
-    public class SessionEventArgs : EventArgs, IDisposable
+    public class SessionEventArgs : SessionEventArgsBase
     {
         private static readonly byte[] emptyData = new byte[0];
-
-        /// <summary>
-        /// Size of Buffers used by this object
-        /// </summary>
-        private readonly int bufferSize;
-
-        private readonly ExceptionHandler exceptionFunc;
 
         /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
         private bool reRequest;
 
-        /// <summary>
-        /// Holds a reference to client
-        /// </summary>
-        internal ProxyClient ProxyClient { get; }
-
         private bool hasMulipartEventSubscribers => MultipartRequestPartSent != null;
-
-        /// <summary>
-        /// Returns a unique Id for this request/response session
-        /// same as RequestId of WebSession
-        /// </summary>
-        public Guid Id => WebSession.RequestId;
 
         /// <summary>
         /// Should we send the request again 
@@ -69,40 +51,9 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Does this session uses SSL
-        /// </summary>
-        public bool IsHttps => WebSession.Request.IsHttps;
-
-        /// <summary>
-        /// Client End Point.
-        /// </summary>
-        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
-
-        /// <summary>
-        /// A web session corresponding to a single request/response sequence
-        /// within a proxy connection
-        /// </summary>
-        public HttpWebClient WebSession { get; }
-
-        /// <summary>
-        /// Are we using a custom upstream HTTP(S) proxy?
-        /// </summary>
-        public ExternalProxy CustomUpStreamProxyUsed { get; internal set; }
-
-        public event EventHandler<DataEventArgs> DataSent;
-
-        public event EventHandler<DataEventArgs> DataReceived;
-
-        /// <summary>
         /// Occurs when multipart request part sent.
         /// </summary>
         public event EventHandler<MultipartRequestPartSentEventArgs> MultipartRequestPartSent;
-
-        public ProxyEndPoint LocalEndPoint { get; }
-
-        public bool IsTransparent => LocalEndPoint is TransparentProxyEndPoint;
-
-        public Exception Exception { get; internal set; }
 
         /// <summary>
         /// Constructor to initialize the proxy
@@ -113,32 +64,8 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         protected SessionEventArgs(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc, Request request)
+            : base(bufferSize, endPoint, exceptionFunc, request)
         {
-            this.bufferSize = bufferSize;
-            this.exceptionFunc = exceptionFunc;
-
-            ProxyClient = new ProxyClient();
-            WebSession = new HttpWebClient(bufferSize, request);
-            LocalEndPoint = endPoint;
-
-            WebSession.ProcessId = new Lazy<int>(() =>
-            {
-                if (RunTime.IsWindows)
-                {
-                    var remoteEndPoint = (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
-
-                    //If client is localhost get the process id
-                    if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
-                    {
-                        return NetworkHelper.GetProcessIdFromPort(remoteEndPoint.Port, endPoint.IpV6Enabled);
-                    }
-
-                    //can't access process Id of remote request from remote machine
-                    return -1;
-                }
-
-                throw new PlatformNotSupportedException();
-            });
         }
 
         private CustomBufferedStream GetStream(bool isRequest)
@@ -188,30 +115,6 @@ namespace Titanium.Web.Proxy.EventArguments
             WebSession.Response = new Response();
         }
 
-        internal void OnDataSent(byte[] buffer, int offset, int count)
-        {
-            try
-            {
-                DataSent?.Invoke(this, new DataEventArgs(buffer, offset, count));
-            }
-            catch (Exception ex)
-            {
-                exceptionFunc(new Exception("Exception thrown in user event", ex));
-            }
-        }
-
-        internal void OnDataReceived(byte[] buffer, int offset, int count)
-        {
-            try
-            {
-                DataReceived?.Invoke(this, new DataEventArgs(buffer, offset, count));
-            }
-            catch (Exception ex)
-            {
-                exceptionFunc(new Exception("Exception thrown in user event", ex));
-            }
-        }
-
         internal void OnMultipartRequestPartSent(string boundary, HeaderCollection headers)
         {
             try
@@ -220,7 +123,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                exceptionFunc(new Exception("Exception thrown in user event", ex));
+                ExceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -257,7 +160,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             using (var bodyStream = new MemoryStream())
             {
-                var writer = new HttpWriter(bodyStream, bufferSize);
+                var writer = new HttpWriter(bodyStream, BufferSize);
 
                 if (isRequest)
                 {
@@ -282,7 +185,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             using (var bodyStream = new MemoryStream())
             {
-                var writer = new HttpWriter(bodyStream, bufferSize);
+                var writer = new HttpWriter(bodyStream, BufferSize);
                 await CopyBodyAsync(isRequest, writer, TransformationMode.None, null);
             }
         }
@@ -303,8 +206,8 @@ namespace Titanium.Web.Proxy.EventArguments
                 var reader = GetStreamReader(true);
                 string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
 
-                using (var copyStream = new CopyStream(reader, writer, bufferSize))
-                using (var copyStreamReader = new CustomBinaryReader(copyStream, bufferSize))
+                using (var copyStream = new CopyStream(reader, writer, BufferSize))
+                using (var copyStreamReader = new CustomBinaryReader(copyStream, BufferSize))
                 {
                     while (contentLength > copyStream.ReadBytes)
                     {
@@ -365,8 +268,8 @@ namespace Titanium.Web.Proxy.EventArguments
 
             try
             {
-                var bufStream = new CustomBufferedStream(s, bufferSize, true);
-                reader = new CustomBinaryReader(bufStream, bufferSize);
+                var bufStream = new CustomBufferedStream(s, BufferSize, true);
+                reader = new CustomBinaryReader(bufStream, BufferSize);
 
                 await writer.CopyBodyAsync(reader, false, -1, onCopy);
             }
@@ -388,7 +291,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             int bufferDataLength = 0;
 
-            var buffer = BufferPool.GetBuffer(bufferSize);
+            var buffer = BufferPool.GetBuffer(BufferSize);
             try
             {
                 int boundaryLength = boundary.Length + 4;
@@ -684,16 +587,10 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// implement any cleanup here
         /// </summary>
-        public void Dispose()
+        public override void Dispose()
         {
-            CustomUpStreamProxyUsed = null;
-
-            DataSent = null;
-            DataReceived = null;
             MultipartRequestPartSent = null;
-            Exception = null;
-
-            WebSession.FinishSession();
+            base.Dispose();
         }
     }
 }

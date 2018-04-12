@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy
 {
     public partial class ProxyServer
     {
-        private async Task<bool> CheckAuthorization(SessionEventArgs session)
+        private async Task<bool> CheckAuthorization(SessionEventArgsBase session)
         {
             if (AuthenticateUserFunc == null)
             {

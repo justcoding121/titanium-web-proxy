@@ -17,13 +17,13 @@ namespace Titanium.Web.Proxy.Exceptions
         /// <param name="session">The <see cref="SessionEventArgs"/> instance containing the event data.</param>
         /// <param name="innerException">Inner exception associated to upstream proxy authorization</param>
         /// <param name="headers">Http's headers associated</param>
-        internal ProxyAuthorizationException(string message, SessionEventArgs session, Exception innerException, IEnumerable<HttpHeader> headers) : base(message, innerException)
+        internal ProxyAuthorizationException(string message, SessionEventArgsBase session, Exception innerException, IEnumerable<HttpHeader> headers) : base(message, innerException)
         {
             Session = session;
             Headers = headers;
         }
 
-        public SessionEventArgs Session { get; }
+        public SessionEventArgsBase Session { get; }
 
         /// <summary>
         /// Headers associated with the authorization exception

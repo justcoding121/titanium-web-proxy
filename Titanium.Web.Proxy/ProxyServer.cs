@@ -177,7 +177,7 @@ namespace Titanium.Web.Proxy
         /// A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP(S) requests
         /// return the ExternalProxy object with valid credentials
         /// </summary>
-        public Func<SessionEventArgs, Task<ExternalProxy>> GetCustomUpStreamProxyFunc { get; set; }
+        public Func<SessionEventArgsBase, Task<ExternalProxy>> GetCustomUpStreamProxyFunc { get; set; }
 
         /// <summary>
         /// Intercept request to server
@@ -581,7 +581,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="sessionEventArgs">The <see cref="SessionEventArgs"/> instance containing the event data.</param>
         /// <returns><see cref="ExternalProxy"/> instance containing valid proxy configuration from PAC/WAPD scripts if any exists.</returns>
-        private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgs sessionEventArgs)
+        private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
         {
             var proxy = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
             return Task.FromResult(proxy);
