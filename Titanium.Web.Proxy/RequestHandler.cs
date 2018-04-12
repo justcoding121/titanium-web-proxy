@@ -81,6 +81,23 @@ namespace Titanium.Web.Proxy
                     //filter out excluded host names
                     bool decryptSsl = endPoint.DecryptSsl && connectArgs.DecryptSsl;
 
+                    if (connectArgs.BlockConnect)
+                    {
+                        if (connectArgs.WebSession.Response.StatusCode == 0)
+                        {
+                            connectArgs.WebSession.Response = new Response
+                            {
+                                HttpVersion = HttpHeader.Version11,
+                                StatusCode = (int)HttpStatusCode.Forbidden,
+                                StatusDescription = "Forbidden",
+                            };
+                        }
+
+                        //send the response
+                        await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response);
+                        return;
+                    }
+
                     if (await CheckAuthorization(connectArgs) == false)
                     {
                         await endPoint.InvokeBeforeTunnectConnectResponse(this, connectArgs, ExceptionFunc);
@@ -630,7 +647,7 @@ namespace Titanium.Web.Proxy
         /// <param name="args"></param>
         /// <param name="isConnect"></param>
         /// <returns></returns>
-        private async Task<TcpConnection> GetServerConnection(SessionEventArgs args, bool isConnect)
+        private async Task<TcpConnection> GetServerConnection(SessionEventArgsBase args, bool isConnect)
         {
             ExternalProxy customUpStreamProxy = null;
 
