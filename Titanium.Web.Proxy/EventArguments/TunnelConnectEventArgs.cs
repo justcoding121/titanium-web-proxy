@@ -4,9 +4,11 @@ using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
-    public class TunnelConnectSessionEventArgs : SessionEventArgs
+    public class TunnelConnectSessionEventArgs : SessionEventArgsBase
     {
         public bool DecryptSsl { get; set; } = true;
+
+        public bool BlockConnect { get; set; }
 
         public bool IsHttpsConnect { get; internal set; }
 

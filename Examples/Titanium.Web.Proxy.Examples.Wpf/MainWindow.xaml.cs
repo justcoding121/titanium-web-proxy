@@ -128,7 +128,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             });
         }
 
-        private async Task ProxyServer_BeforeTunnelConnectResponse(object sender, SessionEventArgs e)
+        private async Task ProxyServer_BeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
         {
             await Dispatcher.InvokeAsync(() =>
             {
@@ -191,7 +191,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             });
         }
 
-        private SessionListItem AddSession(SessionEventArgs e)
+        private SessionListItem AddSession(SessionEventArgsBase e)
         {
             var item = CreateSessionListItem(e);
             Sessions.Add(item);
@@ -199,7 +199,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             return item;
         }
 
-        private SessionListItem CreateSessionListItem(SessionEventArgs e)
+        private SessionListItem CreateSessionListItem(SessionEventArgsBase e)
         {
             lastSessionNumber++;
             bool isTunnelConnect = e is TunnelConnectSessionEventArgs;
