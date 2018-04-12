@@ -1,4 +1,7 @@
 ﻿using System.Net;
+using System.Threading.Tasks;
+using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Extensions;
 
 namespace Titanium.Web.Proxy.Models
 {
@@ -15,6 +18,11 @@ namespace Titanium.Web.Proxy.Models
         public string GenericCertificateName { get; set; }
 
         /// <summary>
+        /// Before Ssl authentication
+        /// </summary>
+        public event AsyncEventHandler<BeforeSslAuthenticateEventArgs> BeforeSslAuthenticate;
+       
+        /// <summary>
         /// Constructor.
         /// </summary>
         /// <param name="ipAddress"></param>
@@ -23,6 +31,14 @@ namespace Titanium.Web.Proxy.Models
         public TransparentProxyEndPoint(IPAddress ipAddress, int port, bool decryptSsl = true) : base(ipAddress, port, decryptSsl)
         {
             GenericCertificateName = "localhost";
+        }
+
+        internal async Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer, BeforeSslAuthenticateEventArgs connectArgs, ExceptionHandler exceptionFunc)
+        {
+            if (BeforeSslAuthenticate != null)
+            {
+                await BeforeSslAuthenticate.InvokeAsync(proxyServer, connectArgs, exceptionFunc);
+            }
         }
     }
 }

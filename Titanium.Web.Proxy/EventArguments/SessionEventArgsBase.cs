@@ -69,6 +69,11 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public ProxyEndPoint LocalEndPoint { get; }
 
+        /// <summary>
+        /// Terminates the session abruptly by terminating client/server connections
+        /// </summary>
+        public bool TerminateSession { get; set; }
+
         public bool IsTransparent => LocalEndPoint is TransparentProxyEndPoint;
 
         public Exception Exception { get; internal set; }
