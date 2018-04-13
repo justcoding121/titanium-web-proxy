@@ -223,6 +223,11 @@ namespace Titanium.Web.Proxy
                             {
                                 return;
                             }
+
+                            if (args.TerminateSession)
+                            {
+                                throw new Exception("Session was terminated by user.");
+                            }
                         }
                         catch (Exception e) when (!(e is ProxyHttpException))
                         {
@@ -236,11 +241,6 @@ namespace Titanium.Web.Proxy
                     }
                     finally
                     {
-                        if (args.TerminateSession)
-                        {
-                            throw new Exception("Session was terminated by user.");
-                        }
-
                         await InvokeAfterResponse(args);
                         args.Dispose();
                     }
