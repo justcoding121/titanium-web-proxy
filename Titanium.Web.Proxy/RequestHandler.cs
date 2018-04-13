@@ -23,7 +23,6 @@ namespace Titanium.Web.Proxy
 
         private bool isWindowsAuthenticationEnabledAndSupported => EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
 
-
         /// <summary>
         /// This is the core request handler method for a particular connection from client
         /// Will create new session (request/response) sequence until 
