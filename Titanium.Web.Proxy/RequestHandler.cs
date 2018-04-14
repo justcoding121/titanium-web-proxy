@@ -33,14 +33,15 @@ namespace Titanium.Web.Proxy
         /// <param name="clientStream"></param>
         /// <param name="clientStreamReader"></param>
         /// <param name="clientStreamWriter"></param>
+        /// <param name="cancellationTokenSource"></param>
         /// <param name="httpsConnectHostname"></param>
         /// <param name="endPoint"></param>
         /// <param name="connectRequest"></param>
         /// <param name="isTransparentEndPoint"></param>
         /// <returns></returns>
-        private async Task HandleHttpSessionRequest(TcpClient client, CustomBufferedStream clientStream,
-            CustomBinaryReader clientStreamReader, HttpResponseWriter clientStreamWriter, string httpsConnectHostname,
-            ProxyEndPoint endPoint, ConnectRequest connectRequest, CancellationTokenSource cancellationTokenSource, bool isTransparentEndPoint = false)
+        private async Task HandleHttpSessionRequest(ProxyEndPoint endPoint, TcpClient client,
+            CustomBufferedStream clientStream, CustomBinaryReader clientStreamReader, HttpResponseWriter clientStreamWriter,
+            CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, ConnectRequest connectRequest, bool isTransparentEndPoint = false)
         {
             TcpConnection connection = null;
 
@@ -57,7 +58,7 @@ namespace Titanium.Web.Proxy
                         return;
                     }
 
-                    var args = new SessionEventArgs(BufferSize, endPoint, ExceptionFunc, cancellationTokenSource)
+                    var args = new SessionEventArgs(BufferSize, endPoint, cancellationTokenSource, ExceptionFunc)
                     {
                         ProxyClient = { TcpClient = client },
                         WebSession = { ConnectRequest = connectRequest }
@@ -354,11 +355,11 @@ namespace Titanium.Web.Proxy
 
             args.CustomUpStreamProxyUsed = customUpStreamProxy;
 
-            return await tcpConnectionFactory.CreateClient(this,
-                args.WebSession.Request.RequestUri.Host,
+            return await tcpConnectionFactory.CreateClient(args.WebSession.Request.RequestUri.Host,
                 args.WebSession.Request.RequestUri.Port,
                 args.WebSession.Request.HttpVersion,
-                isHttps, isConnect,
+                isHttps,
+                isConnect, this,
                 args.WebSession.UpStreamEndPoint ?? UpStreamEndPoint,
                 customUpStreamProxy ?? (isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy));
         }

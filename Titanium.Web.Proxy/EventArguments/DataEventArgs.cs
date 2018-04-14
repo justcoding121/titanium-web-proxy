@@ -10,7 +10,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public int Count { get; }
 
-        public DataEventArgs(byte[] buffer, int offset, int count)
+        internal DataEventArgs(byte[] buffer, int offset, int count)
         {
             Buffer = buffer;
             Offset = offset;

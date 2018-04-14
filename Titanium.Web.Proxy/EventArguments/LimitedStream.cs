@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.EventArguments
         private bool readChunkTrail;
         private long bytesRemaining;
 
-        public LimitedStream(CustomBufferedStream baseStream, CustomBinaryReader baseReader, bool isChunked, long contentLength)
+        internal LimitedStream(CustomBufferedStream baseStream, CustomBinaryReader baseReader, bool isChunked, long contentLength)
         {
             this.baseStream = baseStream;
             this.baseReader = baseReader;
