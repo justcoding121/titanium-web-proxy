@@ -24,11 +24,11 @@ namespace Titanium.Web.Proxy
             "KerberosAuthorization"
         };
 
-        private static readonly HashSet<string> authSchemes = new HashSet<string>
+        private static readonly HashSet<string> authSchemes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "NTLM".ToLower(),
-            "Negotiate".ToLower(),
-            "Kerberos".ToLower()
+            "NTLM",
+            "Negotiate",
+            "Kerberos"
         };
 
         /// <summary>
@@ -86,7 +86,7 @@ namespace Titanium.Web.Proxy
 
             if (authHeader != null)
             {
-                string scheme = authSchemes.Contains(authHeader.Value.ToLower()) ? authHeader.Value.ToLower() : null;
+                string scheme = authSchemes.Contains(authHeader.Value) ? authHeader.Value : null;
 
                 var expectedAuthState =
                     scheme == null ? State.WinAuthState.INITIAL_TOKEN : State.WinAuthState.UNAUTHORIZED;
