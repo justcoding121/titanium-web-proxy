@@ -11,6 +11,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
+using System.Threading;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -56,13 +57,13 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgs(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc)
-            : this(bufferSize, endPoint, exceptionFunc, null)
+        internal SessionEventArgs(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc, CancellationTokenSource cancellationTokenSource)
+            : this(bufferSize, endPoint, exceptionFunc, null, cancellationTokenSource)
         {
         }
 
-        protected SessionEventArgs(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc, Request request)
-            : base(bufferSize, endPoint, exceptionFunc, request)
+        protected SessionEventArgs(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc, Request request, CancellationTokenSource cancellationTokenSource)
+            : base(bufferSize, endPoint, exceptionFunc, request, cancellationTokenSource)
         {
         }
 

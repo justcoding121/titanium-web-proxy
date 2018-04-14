@@ -11,6 +11,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
+using System.Threading;
 
 namespace Titanium.Web.Proxy
 {
@@ -39,7 +40,7 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         private async Task HandleHttpSessionRequest(TcpClient client, CustomBufferedStream clientStream,
             CustomBinaryReader clientStreamReader, HttpResponseWriter clientStreamWriter, string httpsConnectHostname,
-            ProxyEndPoint endPoint, ConnectRequest connectRequest, bool isTransparentEndPoint = false)
+            ProxyEndPoint endPoint, ConnectRequest connectRequest, CancellationTokenSource cancellationTokenSource, bool isTransparentEndPoint = false)
         {
             TcpConnection connection = null;
 
@@ -56,7 +57,7 @@ namespace Titanium.Web.Proxy
                         return;
                     }
 
-                    var args = new SessionEventArgs(BufferSize, endPoint, ExceptionFunc)
+                    var args = new SessionEventArgs(BufferSize, endPoint, ExceptionFunc, cancellationTokenSource)
                     {
                         ProxyClient = { TcpClient = client },
                         WebSession = { ConnectRequest = connectRequest }
@@ -204,7 +205,7 @@ namespace Titanium.Web.Proxy
                                 await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
                                     (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); },
                                     (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); },
-                                    ExceptionFunc);
+                                    ExceptionFunc, args.cancellationTokenSource);
 
                                 return;
                             }
@@ -224,7 +225,7 @@ namespace Titanium.Web.Proxy
                                 return;
                             }
 
-                            if (args.TerminateSession)
+                            if (args.cancellationTokenSource.IsCancellationRequested)
                             {
                                 throw new Exception("Session was terminated by user.");
                             }

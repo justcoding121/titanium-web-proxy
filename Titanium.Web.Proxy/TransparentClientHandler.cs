@@ -10,6 +10,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
+using System.Threading;
 
 namespace Titanium.Web.Proxy
 {
@@ -25,11 +26,13 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
+            var cancellationTokenSource = new CancellationTokenSource();
+
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
             var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
             var clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
-
+           
             try
             {
                 var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
@@ -41,11 +44,11 @@ namespace Titanium.Web.Proxy
                 {
                     httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
 
-                    var args = new BeforeSslAuthenticateEventArgs();
+                    var args = new BeforeSslAuthenticateEventArgs(cancellationTokenSource);
                     args.SniHostName = httpsHostName;
                     await endPoint.InvokeBeforeSslAuthenticate(this, args, ExceptionFunc);
 
-                    if (args.TerminateSession)
+                    if (args.TaskCancellationSource.IsCancellationRequested)
                     {
                         throw new Exception("Session was terminated by user.");
                     }
@@ -112,7 +115,7 @@ namespace Titanium.Web.Proxy
                             //var serverHelloInfo = await SslTools.PeekServerHello(serverStream);
 
                             await TcpHelper.SendRaw(clientStream, serverStream, BufferSize,
-                                null, null, ExceptionFunc);
+                                null, null, ExceptionFunc, args.TaskCancellationSource);
                         }
                     }
                 }
@@ -120,12 +123,16 @@ namespace Titanium.Web.Proxy
                 //HTTPS server created - we can now decrypt the client's traffic
                 //Now create the request
                 await HandleHttpSessionRequest(tcpClient, clientStream, clientStreamReader, clientStreamWriter,
-                    isHttps ? httpsHostName : null, endPoint, null, true);
+                    isHttps ? httpsHostName : null, endPoint, null, cancellationTokenSource, true);
             }
             finally
             {
                 clientStreamReader.Dispose();
                 clientStream.Dispose();
+                if (!cancellationTokenSource.IsCancellationRequested)
+                {
+                    cancellationTokenSource.Cancel();
+                }
             }
         }
     }
