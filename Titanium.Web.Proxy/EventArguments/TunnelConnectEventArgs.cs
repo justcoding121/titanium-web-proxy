@@ -7,7 +7,7 @@ namespace Titanium.Web.Proxy.EventArguments
     public class TunnelConnectSessionEventArgs : SessionEventArgsBase
     {
         internal TunnelConnectSessionEventArgs(int bufferSize, ProxyEndPoint endPoint, ConnectRequest connectRequest,
-            ExceptionHandler exceptionFunc, CancellationTokenSource cancellationTokenSource)
+            CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
             : base(bufferSize, endPoint, cancellationTokenSource, connectRequest, exceptionFunc)
         {
         }
