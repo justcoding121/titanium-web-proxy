@@ -27,6 +27,7 @@ namespace Titanium.Web.Proxy.UnitTests
             mgr.CertificateEngine = CertificateEngine.BouncyCastle;
             mgr.ClearIdleCertificates();
             for (int i = 0; i < 5; i++)
+            {
                 foreach (string host in hostNames)
                 {
                     tasks.Add(Task.Run(() =>
@@ -36,6 +37,7 @@ namespace Titanium.Web.Proxy.UnitTests
                         Assert.IsNotNull(certificate);
                     }));
                 }
+            }
 
             await Task.WhenAll(tasks.ToArray());
 
@@ -59,6 +61,7 @@ namespace Titanium.Web.Proxy.UnitTests
             mgr.ClearIdleCertificates();
 
             for (int i = 0; i < 5; i++)
+            {
                 foreach (string host in hostNames)
                 {
                     tasks.Add(Task.Run(() =>
@@ -68,6 +71,7 @@ namespace Titanium.Web.Proxy.UnitTests
                         Assert.IsNotNull(certificate);
                     }));
                 }
+            }
 
             await Task.WhenAll(tasks.ToArray());
             mgr.RemoveTrustedRootCertificate(true);

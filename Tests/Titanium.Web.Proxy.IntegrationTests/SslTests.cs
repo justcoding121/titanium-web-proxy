@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             var handler = new HttpClientHandler
             {
                 Proxy = new WebProxy($"http://localhost:{localProxyPort}", false),
-                UseProxy = true,
+                UseProxy = true
             };
 
             var client = new HttpClient(handler);
@@ -68,8 +68,10 @@ namespace Titanium.Web.Proxy.IntegrationTests
             proxyServer.Start();
 
             foreach (var endPoint in proxyServer.ProxyEndPoints)
+            {
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ",
                     endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
+            }
         }
 
         public void Stop()
@@ -96,7 +98,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
         }
 
         /// <summary>
-        /// Allows overriding default certificate validation logic
+        ///     Allows overriding default certificate validation logic
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
@@ -112,7 +114,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
         }
 
         /// <summary>
-        /// Allows overriding default client certificate selection logic during mutual authentication
+        ///     Allows overriding default client certificate selection logic during mutual authentication
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>

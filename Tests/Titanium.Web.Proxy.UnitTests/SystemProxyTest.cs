@@ -85,7 +85,9 @@ namespace Titanium.Web.Proxy.UnitTests
             {
                 hostName = Dns.GetHostName();
             }
-            catch{}
+            catch
+            {
+            }
 
             if (hostName != null)
             {
