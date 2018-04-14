@@ -122,10 +122,9 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static async Task SendRawApm(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc)
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc, CancellationTokenSource cts)
         {
             var tcs = new TaskCompletionSource<bool>();
-            var cts = new CancellationTokenSource();
             cts.Token.Register(() => tcs.TrySetResult(true));
 
             //Now async relay all server=>client & client=>server data
@@ -144,10 +143,10 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        private static void BeginRead(Stream inputStream, Stream outputStream, byte[] buffer, CancellationTokenSource cts, Action<byte[], int, int> onCopy,
+        private static void BeginRead(Stream inputStream, Stream outputStream, byte[] buffer, CancellationTokenSource cancellationTokenSource, Action<byte[], int, int> onCopy,
             ExceptionHandler exceptionFunc)
         {
-            if (cts.IsCancellationRequested)
+            if (cancellationTokenSource.IsCancellationRequested)
             {
                 return;
             }
@@ -155,7 +154,7 @@ namespace Titanium.Web.Proxy.Helpers
             bool readFlag = false;
             var readCallback = (AsyncCallback)(ar =>
             {
-                if (cts.IsCancellationRequested || readFlag)
+                if (cancellationTokenSource.IsCancellationRequested || readFlag)
                 {
                     return;
                 }
@@ -167,7 +166,7 @@ namespace Titanium.Web.Proxy.Helpers
                     int read = inputStream.EndRead(ar);
                     if (read <= 0)
                     {
-                        cts.Cancel();
+                        cancellationTokenSource.Cancel();
                         return;
                     }
 
@@ -175,7 +174,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                     var writeCallback = (AsyncCallback)(ar2 =>
                     {
-                        if (cts.IsCancellationRequested)
+                        if (cancellationTokenSource.IsCancellationRequested)
                         {
                             return;
                         }
@@ -183,11 +182,11 @@ namespace Titanium.Web.Proxy.Helpers
                         try
                         {
                             outputStream.EndWrite(ar2);
-                            BeginRead(inputStream, outputStream, buffer, cts, onCopy, exceptionFunc);
+                            BeginRead(inputStream, outputStream, buffer, cancellationTokenSource, onCopy, exceptionFunc);
                         }
                         catch (IOException ex)
                         {
-                            cts.Cancel();
+                            cancellationTokenSource.Cancel();
                             exceptionFunc(ex);
                         }
                     });
@@ -196,7 +195,7 @@ namespace Titanium.Web.Proxy.Helpers
                 }
                 catch (IOException ex)
                 {
-                    cts.Cancel();
+                    cancellationTokenSource.Cancel();
                     exceptionFunc(ex);
                 }
             });
@@ -220,17 +219,15 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onDataReceive"></param>
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
-        internal static async Task SendRawTap(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc)
+        private static async Task SendRawTap(Stream clientStream, Stream serverStream, int bufferSize,
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc, CancellationTokenSource cancellationTokenSource)
         {
-            var cts = new CancellationTokenSource();
-
             //Now async relay all server=>client & client=>server data
-            var sendRelay = clientStream.CopyToAsync(serverStream, onDataSend, bufferSize, cts.Token);
-            var receiveRelay = serverStream.CopyToAsync(clientStream, onDataReceive, bufferSize, cts.Token);
+            var sendRelay = clientStream.CopyToAsync(serverStream, onDataSend, bufferSize, cancellationTokenSource.Token);
+            var receiveRelay = serverStream.CopyToAsync(clientStream, onDataReceive, bufferSize, cancellationTokenSource.Token);
 
             await Task.WhenAny(sendRelay, receiveRelay);
-            cts.Cancel();
+            cancellationTokenSource.Cancel();
 
             await Task.WhenAll(sendRelay, receiveRelay);
         }
@@ -247,10 +244,10 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static Task SendRaw(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc)
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc, CancellationTokenSource cancellationTokenSource)
         {
             // todo: fix APM mode
-            return SendRawTap(clientStream, serverStream, bufferSize, onDataSend, onDataReceive, exceptionFunc);
+            return SendRawTap(clientStream, serverStream, bufferSize, onDataSend, onDataReceive, exceptionFunc, cancellationTokenSource);
         }
     }
 }

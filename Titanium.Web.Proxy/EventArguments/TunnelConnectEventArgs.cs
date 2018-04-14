@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
@@ -15,8 +16,8 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public bool IsHttpsConnect { get; internal set; }
 
-        internal TunnelConnectSessionEventArgs(int bufferSize, ProxyEndPoint endPoint, ConnectRequest connectRequest, ExceptionHandler exceptionFunc) 
-            : base(bufferSize, endPoint, exceptionFunc, connectRequest)
+        internal TunnelConnectSessionEventArgs(int bufferSize, ProxyEndPoint endPoint, ConnectRequest connectRequest, ExceptionHandler exceptionFunc, CancellationTokenSource cancellationTokenSource) 
+            : base(bufferSize, endPoint, exceptionFunc, connectRequest, cancellationTokenSource)
         {
         }
     }

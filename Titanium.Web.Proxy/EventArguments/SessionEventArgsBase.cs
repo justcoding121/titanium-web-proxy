@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using System.Threading;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -21,6 +22,8 @@ namespace Titanium.Web.Proxy.EventArguments
         protected readonly int BufferSize;
 
         protected readonly ExceptionHandler ExceptionFunc;
+
+        internal CancellationTokenSource cancellationTokenSource;
 
         /// <summary>
         /// Holds a reference to client
@@ -60,11 +63,6 @@ namespace Titanium.Web.Proxy.EventArguments
 
         public ProxyEndPoint LocalEndPoint { get; }
 
-        /// <summary>
-        /// Terminates the session abruptly by terminating client/server connections
-        /// </summary>
-        public bool TerminateSession { get; set; }
-
         public bool IsTransparent => LocalEndPoint is TransparentProxyEndPoint;
 
         public Exception Exception { get; internal set; }
@@ -72,15 +70,17 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc)
-            : this(bufferSize, endPoint, exceptionFunc, null)
+        internal SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc, CancellationTokenSource cancellationTokenSource)
+            : this(bufferSize, endPoint, exceptionFunc, null, cancellationTokenSource)
         {
         }
 
-        protected SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc, Request request)
+        protected SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc, 
+            Request request, CancellationTokenSource  cancellationTokenSource)
         {
             this.BufferSize = bufferSize;
             this.ExceptionFunc = exceptionFunc;
+            this.cancellationTokenSource = cancellationTokenSource;
 
             ProxyClient = new ProxyClient();
             WebSession = new HttpWebClient(bufferSize, request);
@@ -130,6 +130,13 @@ namespace Titanium.Web.Proxy.EventArguments
             }
         }
 
+        /// <summary>
+        /// Terminates the session abruptly by terminating client/server connections
+        /// </summary>
+        public void TerminateSession()
+        {
+            cancellationTokenSource.Cancel();
+        }
         /// <summary>
         /// implement any cleanup here
         /// </summary>

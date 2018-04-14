@@ -12,6 +12,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using System.Threading;
 
 namespace Titanium.Web.Proxy
 {
@@ -26,6 +27,7 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient tcpClient)
         {
+            var cancellationTokenSource = new CancellationTokenSource();
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
             var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
@@ -60,7 +62,7 @@ namespace Titanium.Web.Proxy
 
                     await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.Headers);
 
-                    var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest, ExceptionFunc);
+                    var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest, ExceptionFunc, cancellationTokenSource);
                     connectArgs.ProxyClient.TcpClient = tcpClient;
                     connectArgs.ProxyClient.ClientStream = clientStream;
 
@@ -152,7 +154,7 @@ namespace Titanium.Web.Proxy
                         }
                     }
 
-                    if (connectArgs.TerminateSession)
+                    if (connectArgs.cancellationTokenSource.IsCancellationRequested)
                     {
                         throw new Exception("Session was terminated by user.");
                     }
@@ -190,7 +192,7 @@ namespace Titanium.Web.Proxy
                             await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
                                 (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
                                 (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
-                                ExceptionFunc);
+                                ExceptionFunc, connectArgs.cancellationTokenSource);
                         }
 
                         return;
@@ -198,7 +200,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 //Now create the request
-                await HandleHttpSessionRequest(tcpClient, clientStream, clientStreamReader, clientStreamWriter, connectHostname, endPoint, connectRequest);
+                await HandleHttpSessionRequest(tcpClient, clientStream, clientStreamReader, clientStreamWriter, connectHostname, endPoint, connectRequest, cancellationTokenSource);
             }
             catch (ProxyHttpException e)
             {
@@ -220,6 +222,10 @@ namespace Titanium.Web.Proxy
             {
                 clientStreamReader.Dispose();
                 clientStream.Dispose();
+                if (!cancellationTokenSource.IsCancellationRequested)
+                {
+                    cancellationTokenSource.Cancel();
+                }
             }
         }
 
