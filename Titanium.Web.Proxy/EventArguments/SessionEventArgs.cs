@@ -34,12 +34,12 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         internal SessionEventArgs(int bufferSize, ProxyEndPoint endPoint,
             CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
-            : this(bufferSize, endPoint, cancellationTokenSource, null, exceptionFunc)
+            : this(bufferSize, endPoint, null, cancellationTokenSource, exceptionFunc)
         {
         }
 
         protected SessionEventArgs(int bufferSize, ProxyEndPoint endPoint,
-            CancellationTokenSource cancellationTokenSource, Request request, ExceptionHandler exceptionFunc)
+            Request request, CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
             : base(bufferSize, endPoint, cancellationTokenSource, request, exceptionFunc)
         {
         }
