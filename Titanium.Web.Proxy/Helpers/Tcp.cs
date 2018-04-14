@@ -127,6 +127,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
         /// <param name="exceptionFunc"></param>
+        /// <param name="cancellationTokenSource"></param>
         /// <returns></returns>
         internal static async Task SendRawApm(Stream clientStream, Stream serverStream, int bufferSize,
             Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc,
@@ -230,6 +231,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
         /// <param name="exceptionFunc"></param>
+        /// <param name="cancellationTokenSource"></param>
         /// <returns></returns>
         private static async Task SendRawTap(Stream clientStream, Stream serverStream, int bufferSize,
             Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc,
@@ -258,6 +260,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
         /// <param name="exceptionFunc"></param>
+        /// <param name="cancellationTokenSource"></param>
         /// <returns></returns>
         internal static Task SendRaw(Stream clientStream, Stream serverStream, int bufferSize,
             Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc,
