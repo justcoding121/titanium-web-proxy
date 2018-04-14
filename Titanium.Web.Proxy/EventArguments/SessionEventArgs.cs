@@ -211,7 +211,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 {
                     while (contentLength > copyStream.ReadBytes)
                     {
-                        long read = await ReadUntilBoundaryAsync(copyStreamReader, contentLength, boundary);
+                        long read = await ReadUntilBoundaryAsync(copyStreamReader, contentLength, boundary, cancellationToken);
                         if (read == 0)
                         {
                             break;
@@ -287,7 +287,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        private async Task<long> ReadUntilBoundaryAsync(CustomBinaryReader reader, long totalBytesToRead, string boundary)
+        private async Task<long> ReadUntilBoundaryAsync(CustomBinaryReader reader, long totalBytesToRead, string boundary, CancellationToken cancellationToken)
         {
             int bufferDataLength = 0;
 
@@ -297,7 +297,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 int boundaryLength = boundary.Length + 4;
                 long bytesRead = 0;
 
-                while (bytesRead < totalBytesToRead && (reader.DataAvailable || await reader.FillBufferAsync()))
+                while (bytesRead < totalBytesToRead && (reader.DataAvailable || await reader.FillBufferAsync(cancellationToken)))
                 {
                     byte newChar = reader.ReadByteFromBuffer();
                     buffer[bufferDataLength] = newChar;

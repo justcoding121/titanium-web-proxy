@@ -172,7 +172,7 @@ namespace Titanium.Web.Proxy
                 ") failed. Please check credentials.</h2></div>";
             string originalErrorMessage =
                 "<div class=\"inserted-by-proxy\"><h3>Response from remote web server below.</h3></div><br/>";
-            string body = await args.GetResponseBodyAsString();
+            string body = await args.GetResponseBodyAsString(args.CancellationTokenSource.Token);
             int idx = body.IndexOfIgnoreCase("<body>");
             if (idx >= 0)
             {

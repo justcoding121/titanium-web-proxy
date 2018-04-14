@@ -168,7 +168,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             //If not chunked then its easy just read the amount of bytes mentioned in content length header
-            return CopyBytesFromStream(streamReader, contentLength, onCopy);
+            return CopyBytesFromStream(streamReader, contentLength, onCopy, cancellationToken);
         }
 
         /// <summary>
@@ -214,7 +214,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 if (chunkSize != 0)
                 {
-                    await CopyBytesFromStream(reader, chunkSize, onCopy);
+                    await CopyBytesFromStream(reader, chunkSize, onCopy, cancellationToken);
                 }
 
                 await WriteLineAsync(cancellationToken);
@@ -235,8 +235,9 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="reader"></param>
         /// <param name="count"></param>
         /// <param name="onCopy"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task CopyBytesFromStream(CustomBinaryReader reader, long count, Action<byte[], int, int> onCopy)
+        private async Task CopyBytesFromStream(CustomBinaryReader reader, long count, Action<byte[], int, int> onCopy, CancellationToken cancellationToken)
         {
             var buffer = reader.Buffer;
             long remainingBytes = count;
@@ -249,7 +250,7 @@ namespace Titanium.Web.Proxy.Helpers
                     bytesToRead = (int)remainingBytes;
                 }
 
-                int bytesRead = await reader.ReadBytesAsync(buffer, bytesToRead);
+                int bytesRead = await reader.ReadBytesAsync(buffer, bytesToRead, cancellationToken);
                 if (bytesRead == 0)
                 {
                     break;
@@ -257,7 +258,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 remainingBytes -= bytesRead;
 
-                await WriteAsync(buffer, 0, bytesRead);
+                await WriteAsync(buffer, 0, bytesRead, cancellationToken);
 
                 onCopy?.Invoke(buffer, 0, bytesRead);
             }
