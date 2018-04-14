@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended.Helpers;
 using StreamExtended.Network;
@@ -10,8 +11,6 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
-using System.Threading;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -29,6 +28,21 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Backing field for corresponding public property
         /// </summary>
         private bool reRequest;
+
+        /// <summary>
+        /// Constructor to initialize the proxy
+        /// </summary>
+        internal SessionEventArgs(int bufferSize, ProxyEndPoint endPoint,
+            CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
+            : this(bufferSize, endPoint, cancellationTokenSource, null, exceptionFunc)
+        {
+        }
+
+        protected SessionEventArgs(int bufferSize, ProxyEndPoint endPoint,
+            CancellationTokenSource cancellationTokenSource, Request request, ExceptionHandler exceptionFunc)
+            : base(bufferSize, endPoint, cancellationTokenSource, request, exceptionFunc)
+        {
+        }
 
         private bool hasMulipartEventSubscribers => MultipartRequestPartSent != null;
 
@@ -53,21 +67,6 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Occurs when multipart request part sent.
         /// </summary>
         public event EventHandler<MultipartRequestPartSentEventArgs> MultipartRequestPartSent;
-
-        /// <summary>
-        /// Constructor to initialize the proxy
-        /// </summary>
-        internal SessionEventArgs(int bufferSize, ProxyEndPoint endPoint,
-            CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
-            : this(bufferSize, endPoint, cancellationTokenSource, null, exceptionFunc)
-        {
-        }
-
-        protected SessionEventArgs(int bufferSize, ProxyEndPoint endPoint,
-            CancellationTokenSource cancellationTokenSource, Request request, ExceptionHandler exceptionFunc)
-            : base(bufferSize, endPoint, cancellationTokenSource, request, exceptionFunc)
-        {
-        }
 
         private CustomBufferedStream GetStream(bool isRequest)
         {
@@ -476,7 +475,7 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 response.Headers.AddHeaders(headers);
             }
-            
+
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Body = response.Encoding.GetBytes(html ?? string.Empty);
 

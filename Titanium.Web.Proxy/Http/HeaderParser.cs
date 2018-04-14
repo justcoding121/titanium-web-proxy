@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using StreamExtended.Network;
-using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
@@ -20,7 +18,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Increase size of buffer and copy existing content to new buffer
+        ///     Increase size of buffer and copy existing content to new buffer
         /// </summary>
         /// <param name="buffer"></param>
         /// <param name="size"></param>

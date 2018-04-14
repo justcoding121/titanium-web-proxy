@@ -1,26 +1,19 @@
 ﻿#if DEBUG
-using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Network
 {
-    class DebugCustomBufferedStream : CustomBufferedStream
+    internal class DebugCustomBufferedStream : CustomBufferedStream
     {
         private const string basePath = @".";
 
         private static int counter;
 
-        public int Counter { get; }
+        private readonly FileStream fileStreamReceived;
 
         private readonly FileStream fileStreamSent;
-
-        private readonly FileStream fileStreamReceived;
 
         public DebugCustomBufferedStream(Stream baseStream, int bufferSize) : base(baseStream, bufferSize)
         {
@@ -28,6 +21,8 @@ namespace Titanium.Web.Proxy.Network
             fileStreamSent = new FileStream(Path.Combine(basePath, $"{Counter}_sent.dat"), FileMode.Create);
             fileStreamReceived = new FileStream(Path.Combine(basePath, $"{Counter}_received.dat"), FileMode.Create);
         }
+
+        public int Counter { get; }
 
         protected override void OnDataSent(byte[] buffer, int offset, int count)
         {

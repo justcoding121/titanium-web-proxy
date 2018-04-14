@@ -5,14 +5,14 @@ using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    sealed class HttpResponseWriter : HttpWriter
+    internal sealed class HttpResponseWriter : HttpWriter
     {
         public HttpResponseWriter(Stream stream, int bufferSize) : base(stream, bufferSize)
         {
         }
 
         /// <summary>
-        /// Writes the response.
+        ///     Writes the response.
         /// </summary>
         /// <param name="response"></param>
         /// <param name="flush"></param>
@@ -24,7 +24,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Write response status
+        ///     Write response status
         /// </summary>
         /// <param name="version"></param>
         /// <param name="code"></param>

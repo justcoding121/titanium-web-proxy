@@ -3,6 +3,7 @@ using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended;
 using StreamExtended.Helpers;
@@ -12,15 +13,14 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
-using System.Threading;
 
 namespace Titanium.Web.Proxy
 {
     partial class ProxyServer
     {
         /// <summary>
-        /// This is called when client is aware of proxy
-        /// So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
+        ///     This is called when client is aware of proxy
+        ///     So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
         /// </summary>
         /// <param name="endPoint"></param>
         /// <param name="tcpClient"></param>
@@ -57,12 +57,13 @@ namespace Titanium.Web.Proxy
                     {
                         RequestUri = httpRemoteUri,
                         OriginalUrl = httpUrl,
-                        HttpVersion = version,
+                        HttpVersion = version
                     };
 
                     await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.Headers);
 
-                    var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest, ExceptionFunc, cancellationTokenSource);
+                    var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest,
+                        ExceptionFunc, cancellationTokenSource);
                     connectArgs.ProxyClient.TcpClient = tcpClient;
                     connectArgs.ProxyClient.ClientStream = clientStream;
 
@@ -79,7 +80,7 @@ namespace Titanium.Web.Proxy
                             {
                                 HttpVersion = HttpHeader.Version11,
                                 StatusCode = (int)HttpStatusCode.Forbidden,
-                                StatusDescription = "Forbidden",
+                                StatusDescription = "Forbidden"
                             };
                         }
 
@@ -128,7 +129,8 @@ namespace Titanium.Web.Proxy
 
                             string certName = HttpHelper.GetWildCardDomainName(connectHostname);
 
-                            var certificate = endPoint.GenericCertificate ?? await CertificateManager.CreateCertificateAsync(certName);
+                            var certificate = endPoint.GenericCertificate ??
+                                              await CertificateManager.CreateCertificateAsync(certName);
 
                             //Successfully managed to authenticate the client using the fake certificate
                             await sslStream.AuthenticateAsServerAsync(certificate, false, SupportedSslProtocols, false);
@@ -142,14 +144,14 @@ namespace Titanium.Web.Proxy
                         }
                         catch (Exception e)
                         {
-                            ExceptionFunc(new Exception($"Could'nt authenticate client '{connectHostname}' with fake certificate.", e));
+                            ExceptionFunc(new Exception(
+                                $"Could'nt authenticate client '{connectHostname}' with fake certificate.", e));
                             sslStream?.Dispose();
                             return;
                         }
 
                         if (await HttpHelper.IsConnectMethod(clientStream) == -1)
                         {
-                            // It can be for example some Google (Cloude Messaging for Chrome) magic
                             decryptSsl = false;
                         }
                     }
@@ -200,7 +202,8 @@ namespace Titanium.Web.Proxy
                 }
 
                 //Now create the request
-                await HandleHttpSessionRequest(endPoint, tcpClient, clientStream, clientStreamReader, clientStreamWriter, cancellationTokenSource, connectHostname, connectRequest);
+                await HandleHttpSessionRequest(endPoint, tcpClient, clientStream, clientStreamReader,
+                    clientStreamWriter, cancellationTokenSource, connectHostname, connectRequest);
             }
             catch (ProxyHttpException e)
             {
@@ -228,7 +231,5 @@ namespace Titanium.Web.Proxy
                 }
             }
         }
-
-
     }
 }

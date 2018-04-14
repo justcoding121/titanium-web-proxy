@@ -1,7 +1,7 @@
-﻿using StreamExtended.Network;
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Sockets;
+using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
@@ -9,10 +9,17 @@ using Titanium.Web.Proxy.Models;
 namespace Titanium.Web.Proxy.Network.Tcp
 {
     /// <summary>
-    /// An object that holds TcpConnection to a particular server and port
+    ///     An object that holds TcpConnection to a particular server and port
     /// </summary>
     internal class TcpConnection : IDisposable
     {
+        internal TcpConnection(ProxyServer proxyServer)
+        {
+            LastAccess = DateTime.Now;
+            this.proxyServer = proxyServer;
+            this.proxyServer.UpdateServerConnectionCount(true);
+        }
+
         private ProxyServer proxyServer { get; }
 
         internal ExternalProxy UpStreamProxy { get; set; }
@@ -26,46 +33,39 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal bool UseUpstreamProxy { get; set; }
 
         /// <summary>
-        /// Local NIC via connection is made
+        ///     Local NIC via connection is made
         /// </summary>
         internal IPEndPoint UpStreamEndPoint { get; set; }
 
         /// <summary>
-        /// Http version
+        ///     Http version
         /// </summary>
         internal Version Version { get; set; }
 
         internal TcpClient TcpClient { private get; set; }
 
         /// <summary>
-        /// Used to read lines from server
+        ///     Used to read lines from server
         /// </summary>
         internal CustomBinaryReader StreamReader { get; set; }
 
         /// <summary>
-        /// Used to write lines to server
+        ///     Used to write lines to server
         /// </summary>
         internal HttpRequestWriter StreamWriter { get; set; }
 
         /// <summary>
-        /// Server stream
+        ///     Server stream
         /// </summary>
         internal CustomBufferedStream Stream { get; set; }
 
         /// <summary>
-        /// Last time this connection was used
+        ///     Last time this connection was used
         /// </summary>
         internal DateTime LastAccess { get; set; }
 
-        internal TcpConnection(ProxyServer proxyServer)
-        {
-            LastAccess = DateTime.Now;
-            this.proxyServer = proxyServer;
-            this.proxyServer.UpdateServerConnectionCount(true);
-        }
-
         /// <summary>
-        /// Dispose.
+        ///     Dispose.
         /// </summary>
         public void Dispose()
         {

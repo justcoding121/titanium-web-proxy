@@ -9,11 +9,11 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
         {
         }
 
+        public override bool IsInvalid => handle == IntPtr.Zero;
+
         protected override bool ReleaseHandle()
         {
             return NativeMethods.WinHttp.WinHttpCloseHandle(handle);
         }
-
-        public override bool IsInvalid => handle == IntPtr.Zero;
     }
 }

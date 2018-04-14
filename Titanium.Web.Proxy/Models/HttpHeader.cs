@@ -7,7 +7,7 @@ using Titanium.Web.Proxy.Http;
 namespace Titanium.Web.Proxy.Models
 {
     /// <summary>
-    /// Http Header object used by proxy
+    ///     Http Header object used by proxy
     /// </summary>
     public class HttpHeader
     {
@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy.Models
         internal static HttpHeader ProxyConnectionKeepAlive = new HttpHeader("Proxy-Connection", "keep-alive");
 
         /// <summary>
-        /// Constructor.
+        ///     Constructor.
         /// </summary>
         /// <param name="name"></param>
         /// <param name="value"></param>
@@ -37,17 +37,17 @@ namespace Titanium.Web.Proxy.Models
         }
 
         /// <summary>
-        /// Header Name.
+        ///     Header Name.
         /// </summary>
         public string Name { get; set; }
 
         /// <summary>
-        /// Header Value.
+        ///     Header Value.
         /// </summary>
         public string Value { get; set; }
 
         /// <summary>
-        /// Returns header as a valid header string
+        ///     Returns header as a valid header string
         /// </summary>
         /// <returns></returns>
         public override string ToString()

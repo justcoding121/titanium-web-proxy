@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading.Tasks;
 using StreamExtended.Helpers;
 using StreamExtended.Network;
-using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Shared;
 
@@ -13,13 +12,11 @@ namespace Titanium.Web.Proxy.Helpers
 {
     internal class HttpWriter : CustomBinaryWriter
     {
-        public int BufferSize { get; }
-
-        private readonly char[] charBuffer;
-
         private static readonly byte[] newLine = ProxyConstants.NewLine;
 
         private static readonly Encoder encoder = Encoding.ASCII.GetEncoder();
+
+        private readonly char[] charBuffer;
 
         internal HttpWriter(Stream stream, int bufferSize) : base(stream)
         {
@@ -28,6 +25,8 @@ namespace Titanium.Web.Proxy.Helpers
             // ASCII encoder max byte count is char count + 1
             charBuffer = new char[BufferSize - 1];
         }
+
+        public int BufferSize { get; }
 
         public Task WriteLineAsync()
         {
@@ -87,7 +86,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Write the headers to client
+        ///     Write the headers to client
         /// </summary>
         /// <param name="headers"></param>
         /// <param name="flush"></param>
@@ -102,7 +101,6 @@ namespace Titanium.Web.Proxy.Helpers
             await WriteLineAsync();
             if (flush)
             {
-                // flush the stream
                 await FlushAsync();
             }
         }
@@ -112,7 +110,6 @@ namespace Titanium.Web.Proxy.Helpers
             await WriteAsync(data, 0, data.Length);
             if (flush)
             {
-                // flush the stream
                 await FlushAsync();
             }
         }
@@ -122,13 +119,12 @@ namespace Titanium.Web.Proxy.Helpers
             await WriteAsync(data, offset, count);
             if (flush)
             {
-                // flush the stream
                 await FlushAsync();
             }
         }
 
         /// <summary>
-        /// Writes the byte array body to the stream; optionally chunked
+        ///     Writes the byte array body to the stream; optionally chunked
         /// </summary>
         /// <param name="data"></param>
         /// <param name="isChunked"></param>
@@ -144,24 +140,23 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Copies the specified content length number of bytes to the output stream from the given inputs stream
-        /// optionally chunked
+        ///     Copies the specified content length number of bytes to the output stream from the given inputs stream
+        ///     optionally chunked
         /// </summary>
         /// <param name="streamReader"></param>
         /// <param name="isChunked"></param>
         /// <param name="contentLength"></param>
         /// <param name="onCopy"></param>
         /// <returns></returns>
-        internal Task CopyBodyAsync(CustomBinaryReader streamReader, bool isChunked, long contentLength, Action<byte[], int, int> onCopy)
+        internal Task CopyBodyAsync(CustomBinaryReader streamReader, bool isChunked, long contentLength,
+            Action<byte[], int, int> onCopy)
         {
             //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
             if (isChunked)
             {
-                //Need to revist, find any potential bugs
-                //send the body bytes to server in chunks
                 return CopyBodyChunkedAsync(streamReader, onCopy);
             }
-            
+
             //http 1.0 or the stream reader limits the stream
             if (contentLength == -1)
             {
@@ -173,7 +168,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Copies the given input bytes to output stream chunked
+        ///     Copies the given input bytes to output stream chunked
         /// </summary>
         /// <param name="data"></param>
         /// <returns></returns>
@@ -191,7 +186,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Copies the streams chunked
+        ///     Copies the streams chunked
         /// </summary>
         /// <param name="reader"></param>
         /// <param name="onCopy"></param>
@@ -204,7 +199,6 @@ namespace Titanium.Web.Proxy.Helpers
                 int idx = chunkHead.IndexOf(";");
                 if (idx >= 0)
                 {
-                    // remove chunk extension
                     chunkHead = chunkHead.Substring(0, idx);
                 }
 
@@ -230,7 +224,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Copies the specified bytes to the stream from the input stream
+        ///     Copies the specified bytes to the stream from the input stream
         /// </summary>
         /// <param name="reader"></param>
         /// <param name="count"></param>
@@ -264,7 +258,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Writes the request/response headers and body.
+        ///     Writes the request/response headers and body.
         /// </summary>
         /// <param name="requestResponse"></param>
         /// <param name="flush"></param>
