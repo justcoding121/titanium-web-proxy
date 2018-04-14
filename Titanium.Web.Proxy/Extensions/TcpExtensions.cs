@@ -66,6 +66,7 @@ namespace Titanium.Web.Proxy.Extensions
             }
             catch
             {
+                // ignored
             }
         }
     }
