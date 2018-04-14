@@ -16,17 +16,7 @@ namespace Titanium.Web.Proxy.Http
         private readonly Dictionary<string, List<HttpHeader>> nonUniqueHeaders;
 
         /// <summary>
-        /// Unique Request header collection
-        /// </summary>
-        public ReadOnlyDictionary<string, HttpHeader> Headers { get; }
-
-        /// <summary>
-        /// Non Unique headers
-        /// </summary>
-        public ReadOnlyDictionary<string, List<HttpHeader>> NonUniqueHeaders { get; }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="HeaderCollection"/> class.
+        ///     Initializes a new instance of the <see cref="HeaderCollection" /> class.
         /// </summary>
         public HeaderCollection()
         {
@@ -37,7 +27,33 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// True if header exists
+        ///     Unique Request header collection
+        /// </summary>
+        public ReadOnlyDictionary<string, HttpHeader> Headers { get; }
+
+        /// <summary>
+        ///     Non Unique headers
+        /// </summary>
+        public ReadOnlyDictionary<string, List<HttpHeader>> NonUniqueHeaders { get; }
+
+        /// <summary>
+        ///     Returns an enumerator that iterates through the collection.
+        /// </summary>
+        /// <returns>
+        ///     An enumerator that can be used to iterate through the collection.
+        /// </returns>
+        public IEnumerator<HttpHeader> GetEnumerator()
+        {
+            return headers.Values.Concat(nonUniqueHeaders.Values.SelectMany(x => x)).GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
+        /// <summary>
+        ///     True if header exists
         /// </summary>
         /// <param name="name"></param>
         /// <returns></returns>
@@ -47,8 +63,8 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Returns all headers with given name if exists
-        /// Returns null if does'nt exist
+        ///     Returns all headers with given name if exists
+        ///     Returns null if does'nt exist
         /// </summary>
         /// <param name="name"></param>
         /// <returns></returns>
@@ -86,7 +102,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Returns all headers 
+        ///     Returns all headers
         /// </summary>
         /// <returns></returns>
         public List<HttpHeader> GetAllHeaders()
@@ -100,7 +116,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Add a new header with given name and value
+        ///     Add a new header with given name and value
         /// </summary>
         /// <param name="name"></param>
         /// <param name="value"></param>
@@ -110,7 +126,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Adds the given header object to Request
+        ///     Adds the given header object to Request
         /// </summary>
         /// <param name="newHeader"></param>
         public void AddHeader(HttpHeader newHeader)
@@ -142,7 +158,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Adds the given header objects to Request
+        ///     Adds the given header objects to Request
         /// </summary>
         /// <param name="newHeaders"></param>
         public void AddHeaders(IEnumerable<HttpHeader> newHeaders)
@@ -159,7 +175,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Adds the given header objects to Request
+        ///     Adds the given header objects to Request
         /// </summary>
         /// <param name="newHeaders"></param>
         public void AddHeaders(IEnumerable<KeyValuePair<string, string>> newHeaders)
@@ -176,7 +192,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Adds the given header objects to Request
+        ///     Adds the given header objects to Request
         /// </summary>
         /// <param name="newHeaders"></param>
         public void AddHeaders(IEnumerable<KeyValuePair<string, HttpHeader>> newHeaders)
@@ -190,7 +206,8 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (header.Key != header.Value.Name)
                 {
-                    throw new Exception("Header name mismatch. Key and the name of the HttpHeader object should be the same.");
+                    throw new Exception(
+                        "Header name mismatch. Key and the name of the HttpHeader object should be the same.");
                 }
 
                 AddHeader(header.Value);
@@ -198,11 +215,13 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        ///  removes all headers with given name
+        ///     removes all headers with given name
         /// </summary>
         /// <param name="headerName"></param>
-        /// <returns>True if header was removed
-        /// False if no header exists with given name</returns>
+        /// <returns>
+        ///     True if header was removed
+        ///     False if no header exists with given name
+        /// </returns>
         public bool RemoveHeader(string headerName)
         {
             bool result = headers.Remove(headerName);
@@ -217,7 +236,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Removes given header object if it exist
+        ///     Removes given header object if it exist
         /// </summary>
         /// <param name="header">Returns true if header exists and was removed </param>
         public bool RemoveHeader(HttpHeader header)
@@ -242,7 +261,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Removes all the headers.
+        ///     Removes all the headers.
         /// </summary>
         public void Clear()
         {
@@ -273,7 +292,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Fix proxy specific headers
+        ///     Fix proxy specific headers
         /// </summary>
         internal void FixProxyHeaders()
         {
@@ -285,22 +304,6 @@ namespace Titanium.Web.Proxy.Http
             {
                 SetOrAddHeaderValue(KnownHeaders.Connection, proxyHeader);
             }
-        }
-
-        /// <summary>
-        /// Returns an enumerator that iterates through the collection.
-        /// </summary>
-        /// <returns>
-        /// An enumerator that can be used to iterate through the collection.
-        /// </returns>
-        public IEnumerator<HttpHeader> GetEnumerator()
-        {
-            return headers.Values.Concat(nonUniqueHeaders.Values.SelectMany(x => x)).GetEnumerator();
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return GetEnumerator();
         }
     }
 }

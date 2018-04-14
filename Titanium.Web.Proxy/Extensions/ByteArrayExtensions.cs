@@ -3,12 +3,12 @@
 namespace Titanium.Web.Proxy.Extensions
 {
     /// <summary>
-    /// Extension methods for Byte Arrays.
+    ///     Extension methods for Byte Arrays.
     /// </summary>
     internal static class ByteArrayExtensions
     {
         /// <summary>
-        /// Get the sub array from byte of data
+        ///     Get the sub array from byte of data
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="data"></param>

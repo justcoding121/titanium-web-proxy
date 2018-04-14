@@ -1,7 +1,7 @@
-﻿using StreamExtended.Network;
-using System;
+﻿using System;
 using System.Text;
 using System.Threading.Tasks;
+using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Shared;
@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Helpers
         private static readonly Encoding defaultEncoding = Encoding.GetEncoding("ISO-8859-1");
 
         /// <summary>
-        /// Gets the character encoding of request/response from content-type header
+        ///     Gets the character encoding of request/response from content-type header
         /// </summary>
         /// <param name="contentType"></param>
         /// <returns></returns>
@@ -37,7 +37,6 @@ namespace Titanium.Web.Proxy.Helpers
                         string value = split[1];
                         if (value.Equals("x-user-defined", StringComparison.OrdinalIgnoreCase))
                         {
-                            //todo: what is this?
                             continue;
                         }
 
@@ -87,9 +86,9 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Tries to get root domain from a given hostname
-        /// Adapted from below answer
-        /// https://stackoverflow.com/questions/16473838/get-domain-name-of-a-url-in-c-sharp-net
+        ///     Tries to get root domain from a given hostname
+        ///     Adapted from below answer
+        ///     https://stackoverflow.com/questions/16473838/get-domain-name-of-a-url-in-c-sharp-net
         /// </summary>
         /// <param name="hostname"></param>
         /// <returns></returns>
@@ -103,7 +102,7 @@ namespace Titanium.Web.Proxy.Helpers
                 int idx = hostname.IndexOf(ProxyConstants.DotSplit);
 
                 //issue #352
-                if(hostname.Substring(0, idx).Contains("-"))
+                if (hostname.Substring(0, idx).Contains("-"))
                 {
                     return hostname;
                 }
@@ -117,7 +116,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Determines whether is connect method.
+        ///     Determines whether is connect method.
         /// </summary>
         /// <param name="clientStream">The client stream.</param>
         /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
@@ -135,14 +134,12 @@ namespace Titanium.Web.Proxy.Helpers
 
                 if (b == ' ' && i > 2)
                 {
-                    // at least 3 letters and a space
                     return isConnect ? 1 : 0;
                 }
 
                 char ch = (char)b;
                 if (!char.IsLetter(ch))
                 {
-                    // non letter or too short
                     return -1;
                 }
 

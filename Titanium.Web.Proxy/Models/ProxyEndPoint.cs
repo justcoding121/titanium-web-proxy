@@ -1,18 +1,15 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Net;
+﻿using System.Net;
 using System.Net.Sockets;
-using System.Text.RegularExpressions;
 
 namespace Titanium.Web.Proxy.Models
 {
     /// <summary>
-    /// An abstract endpoint where the proxy listens
+    ///     An abstract endpoint where the proxy listens
     /// </summary>
     public abstract class ProxyEndPoint
     {
         /// <summary>
-        /// Constructor.
+        ///     Constructor.
         /// </summary>
         /// <param name="ipAddress"></param>
         /// <param name="port"></param>
@@ -25,27 +22,27 @@ namespace Titanium.Web.Proxy.Models
         }
 
         /// <summary>
-        /// underlying TCP Listener object
+        ///     underlying TCP Listener object
         /// </summary>
         internal TcpListener Listener { get; set; }
 
         /// <summary>
-        /// Ip Address we are listening.
+        ///     Ip Address we are listening.
         /// </summary>
         public IPAddress IpAddress { get; }
 
         /// <summary>
-        /// Port we are listening.
+        ///     Port we are listening.
         /// </summary>
         public int Port { get; internal set; }
 
         /// <summary>
-        /// Enable SSL?
+        ///     Enable SSL?
         /// </summary>
         public bool DecryptSsl { get; }
 
         /// <summary>
-        /// Is IPv6 enabled?
+        ///     Is IPv6 enabled?
         /// </summary>
         public bool IpV6Enabled => Equals(IpAddress, IPAddress.IPv6Any)
                                    || Equals(IpAddress, IPAddress.IPv6Loopback)

@@ -5,6 +5,9 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 {
     internal class Common
     {
+        internal static uint NewContextAttributes = 0;
+        internal static SecurityInteger NewLifeTime = new SecurityInteger(0);
+
         #region Private constants
 
         private const int ISC_REQ_REPLAY_DETECT = 0x00000004;
@@ -14,12 +17,11 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
         #endregion
 
-        internal static uint NewContextAttributes = 0;
-        internal static SecurityInteger NewLifeTime = new SecurityInteger(0);
-
         #region internal constants
 
-        internal const int StandardContextAttributes = ISC_REQ_CONFIDENTIALITY | ISC_REQ_REPLAY_DETECT | ISC_REQ_SEQUENCE_DETECT | ISC_REQ_CONNECTION;
+        internal const int StandardContextAttributes =
+            ISC_REQ_CONFIDENTIALITY | ISC_REQ_REPLAY_DETECT | ISC_REQ_SEQUENCE_DETECT | ISC_REQ_CONNECTION;
+
         internal const int SecurityNativeDataRepresentation = 0x10;
         internal const int MaximumTokenSize = 12288;
         internal const int SecurityCredentialsOutbound = 2;
@@ -69,7 +71,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             Negotiate128 = 0x20000000,
 
             // Indicates that this client supports medium (56-bit) encryption.
-            Negotiate56 = (unchecked((int)0x80000000))
+            Negotiate56 = unchecked((int)0x80000000)
         }
 
         internal enum NtlmAuthLevel
@@ -86,7 +88,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             NTLM_only,
 
             /* Use NTLMv2 only. */
-            NTLMv2_only,
+            NTLMv2_only
         }
 
         #endregion
@@ -105,7 +107,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             }
 
             /// <summary>
-            /// Resets all internal pointers to default value
+            ///     Resets all internal pointers to default value
             /// </summary>
             internal void Reset()
             {
@@ -211,7 +213,8 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                             //What we need to do here is to grab a hold of the pvBuffer allocate by the individual
                             //SecBuffer and release it...
                             int currentOffset = index * Marshal.SizeOf(typeof(Buffer));
-                            var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers, currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
+                            var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers,
+                                currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
                             Marshal.FreeHGlobal(secBufferpvBuffer);
                         }
                     }
@@ -267,13 +270,14 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                         //byte array...
                         int currentOffset = index * Marshal.SizeOf(typeof(Buffer));
                         int bytesToCopy = Marshal.ReadInt32(pBuffers, currentOffset);
-                        var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers, currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
+                        var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers,
+                            currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
                         Marshal.Copy(secBufferpvBuffer, buffer, bufferIndex, bytesToCopy);
                         bufferIndex += bytesToCopy;
                     }
                 }
 
-                return (buffer);
+                return buffer;
             }
         }
 

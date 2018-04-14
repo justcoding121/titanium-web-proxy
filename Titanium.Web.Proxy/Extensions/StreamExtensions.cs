@@ -7,40 +7,43 @@ using StreamExtended.Helpers;
 namespace Titanium.Web.Proxy.Extensions
 {
     /// <summary>
-    /// Extensions used for Stream and CustomBinaryReader objects
+    ///     Extensions used for Stream and CustomBinaryReader objects
     /// </summary>
     internal static class StreamExtensions
     {
         /// <summary>
-        /// Copy streams asynchronously
+        ///     Copy streams asynchronously
         /// </summary>
         /// <param name="input"></param>
         /// <param name="output"></param>
         /// <param name="onCopy"></param>
         /// <param name="bufferSize"></param>
-        internal static Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy, int bufferSize)
+        internal static Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy,
+            int bufferSize)
         {
             return CopyToAsync(input, output, onCopy, bufferSize, CancellationToken.None);
         }
 
         /// <summary>
-        /// Copy streams asynchronously
+        ///     Copy streams asynchronously
         /// </summary>
         /// <param name="input"></param>
         /// <param name="output"></param>
         /// <param name="onCopy"></param>
         /// <param name="bufferSize"></param>
         /// <param name="cancellationToken"></param>
-        internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy, int bufferSize, CancellationToken cancellationToken)
+        internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy,
+            int bufferSize, CancellationToken cancellationToken)
         {
-            byte[] buffer = BufferPool.GetBuffer(bufferSize);
+            var buffer = BufferPool.GetBuffer(bufferSize);
             try
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     // cancellation is not working on Socket ReadAsync
                     // https://github.com/dotnet/corefx/issues/15033
-                    int num = await input.ReadAsync(buffer, 0, buffer.Length, CancellationToken.None).WithCancellation(cancellationToken);
+                    int num = await input.ReadAsync(buffer, 0, buffer.Length, CancellationToken.None)
+                        .WithCancellation(cancellationToken);
                     int bytesRead;
                     if ((bytesRead = num) != 0 && !cancellationToken.IsCancellationRequested)
                     {
@@ -66,7 +69,7 @@ namespace Titanium.Web.Proxy.Extensions
             {
                 if (task != await Task.WhenAny(task, tcs.Task))
                 {
-                    return default(T);
+                    return default;
                 }
             }
 

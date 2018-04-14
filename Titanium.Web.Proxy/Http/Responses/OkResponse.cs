@@ -3,12 +3,12 @@
 namespace Titanium.Web.Proxy.Http.Responses
 {
     /// <summary>
-    /// 200 Ok response
+    ///     200 Ok response
     /// </summary>
     public sealed class OkResponse : Response
     {
         /// <summary>
-        /// Constructor.
+        ///     Constructor.
         /// </summary>
         public OkResponse()
         {
@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Http.Responses
         }
 
         /// <summary>
-        /// Constructor.
+        ///     Constructor.
         /// </summary>
         public OkResponse(byte[] body) : this()
         {

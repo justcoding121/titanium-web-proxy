@@ -32,7 +32,8 @@ namespace Titanium.Web.Proxy
                 }
 
                 var headerValueParts = header.Value.Split(ProxyConstants.SpaceSplit);
-                if (headerValueParts.Length != 2 || !headerValueParts[0].EqualsIgnoreCase(KnownHeaders.ProxyAuthorizationBasic))
+                if (headerValueParts.Length != 2 ||
+                    !headerValueParts[0].EqualsIgnoreCase(KnownHeaders.ProxyAuthorizationBasic))
                 {
                     //Return not authorized
                     session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
@@ -53,7 +54,6 @@ namespace Titanium.Web.Proxy
                 bool authenticated = await AuthenticateUserFunc(username, password);
                 if (!authenticated)
                 {
-                    //Return not authorized
                     session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
                 }
 
@@ -61,7 +61,8 @@ namespace Titanium.Web.Proxy
             }
             catch (Exception e)
             {
-                ExceptionFunc(new ProxyAuthorizationException("Error whilst authorizing request", session, e, httpHeaders));
+                ExceptionFunc(new ProxyAuthorizationException("Error whilst authorizing request", session, e,
+                    httpHeaders));
 
                 //Return not authorized
                 session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");

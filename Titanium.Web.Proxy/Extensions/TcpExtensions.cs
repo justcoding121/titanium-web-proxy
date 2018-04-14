@@ -17,13 +17,14 @@ namespace Titanium.Web.Proxy.Extensions
                 var method = property.GetMethod;
                 if (method != null && method.ReturnType == typeof(bool))
                 {
-                    socketCleanedUpGetter = (Func<Socket, bool>)Delegate.CreateDelegate(typeof(Func<Socket, bool>), method);
+                    socketCleanedUpGetter =
+                        (Func<Socket, bool>)Delegate.CreateDelegate(typeof(Func<Socket, bool>), method);
                 }
             }
         }
 
         /// <summary>
-        /// Gets the local port from a native TCP row object.
+        ///     Gets the local port from a native TCP row object.
         /// </summary>
         /// <param name="tcpRow">The TCP row.</param>
         /// <returns>The local port</returns>
@@ -33,13 +34,14 @@ namespace Titanium.Web.Proxy.Extensions
         }
 
         /// <summary>
-        /// Gets the remote port from a native TCP row object.
+        ///     Gets the remote port from a native TCP row object.
         /// </summary>
         /// <param name="tcpRow">The TCP row.</param>
         /// <returns>The remote port</returns>
         internal static int GetRemotePort(this NativeMethods.TcpRow tcpRow)
         {
-            return (tcpRow.remotePort1 << 8) + tcpRow.remotePort2 + (tcpRow.remotePort3 << 24) + (tcpRow.remotePort4 << 16);
+            return (tcpRow.remotePort1 << 8) + tcpRow.remotePort2 + (tcpRow.remotePort3 << 24) +
+                   (tcpRow.remotePort4 << 16);
         }
 
         internal static void CloseSocket(this TcpClient tcpClient)

@@ -13,15 +13,15 @@ namespace Titanium.Web.Proxy.Helpers
     internal enum IpVersion
     {
         Ipv4 = 1,
-        Ipv6 = 2,
+        Ipv6 = 2
     }
 
     internal class TcpHelper
     {
         /// <summary>
-        /// Gets the extended TCP table.
+        ///     Gets the extended TCP table.
         /// </summary>
-        /// <returns>Collection of <see cref="TcpRow"/>.</returns>
+        /// <returns>Collection of <see cref="TcpRow" />.</returns>
         internal static TcpTable GetExtendedTcpTable(IpVersion ipVersion)
         {
             var tcpRows = new List<TcpRow>();
@@ -37,15 +37,18 @@ namespace Titanium.Web.Proxy.Helpers
                 try
                 {
                     tcpTable = Marshal.AllocHGlobal(tcpTableLength);
-                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, allPid, 0) == 0)
+                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, allPid,
+                            0) == 0)
                     {
-                        var table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable, typeof(NativeMethods.TcpTable));
+                        var table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable,
+                            typeof(NativeMethods.TcpTable));
 
                         var rowPtr = (IntPtr)((long)tcpTable + Marshal.SizeOf(table.length));
 
                         for (int i = 0; i < table.length; ++i)
                         {
-                            tcpRows.Add(new TcpRow((NativeMethods.TcpRow)Marshal.PtrToStructure(rowPtr, typeof(NativeMethods.TcpRow))));
+                            tcpRows.Add(new TcpRow(
+                                (NativeMethods.TcpRow)Marshal.PtrToStructure(rowPtr, typeof(NativeMethods.TcpRow))));
                             rowPtr = (IntPtr)((long)rowPtr + Marshal.SizeOf(typeof(NativeMethods.TcpRow)));
                         }
                     }
@@ -63,9 +66,9 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Gets the TCP row by local port number.
+        ///     Gets the TCP row by local port number.
         /// </summary>
-        /// <returns><see cref="TcpRow"/>.</returns>
+        /// <returns><see cref="TcpRow" />.</returns>
         internal static TcpRow GetTcpRowByLocalPort(IpVersion ipVersion, int localPort)
         {
             var tcpTable = IntPtr.Zero;
@@ -79,15 +82,18 @@ namespace Titanium.Web.Proxy.Helpers
                 try
                 {
                     tcpTable = Marshal.AllocHGlobal(tcpTableLength);
-                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, allPid, 0) == 0)
+                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, allPid,
+                            0) == 0)
                     {
-                        var table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable, typeof(NativeMethods.TcpTable));
+                        var table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable,
+                            typeof(NativeMethods.TcpTable));
 
                         var rowPtr = (IntPtr)((long)tcpTable + Marshal.SizeOf(table.length));
 
                         for (int i = 0; i < table.length; ++i)
                         {
-                            var tcpRow = (NativeMethods.TcpRow)Marshal.PtrToStructure(rowPtr, typeof(NativeMethods.TcpRow));
+                            var tcpRow =
+                                (NativeMethods.TcpRow)Marshal.PtrToStructure(rowPtr, typeof(NativeMethods.TcpRow));
                             if (tcpRow.GetLocalPort() == localPort)
                             {
                                 return new TcpRow(tcpRow);
@@ -110,9 +116,10 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers as prefix
-        /// Usefull for websocket requests
-        /// Asynchronous Programming Model, which does not throw exceptions when the socket is closed
+        ///     relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers
+        ///     as prefix
+        ///     Usefull for websocket requests
+        ///     Asynchronous Programming Model, which does not throw exceptions when the socket is closed
         /// </summary>
         /// <param name="clientStream"></param>
         /// <param name="serverStream"></param>
@@ -122,18 +129,20 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static async Task SendRawApm(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc, CancellationTokenSource cancellationTokenSource)
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc,
+            CancellationTokenSource cancellationTokenSource)
         {
             var taskCompletionSource = new TaskCompletionSource<bool>();
             cancellationTokenSource.Token.Register(() => taskCompletionSource.TrySetResult(true));
 
             //Now async relay all server=>client & client=>server data
-            byte[] clientBuffer = BufferPool.GetBuffer(bufferSize);
-            byte[] serverBuffer = BufferPool.GetBuffer(bufferSize);
+            var clientBuffer = BufferPool.GetBuffer(bufferSize);
+            var serverBuffer = BufferPool.GetBuffer(bufferSize);
             try
             {
                 BeginRead(clientStream, serverStream, clientBuffer, cancellationTokenSource, onDataSend, exceptionFunc);
-                BeginRead(serverStream, clientStream, serverBuffer, cancellationTokenSource, onDataReceive, exceptionFunc);
+                BeginRead(serverStream, clientStream, serverBuffer, cancellationTokenSource, onDataReceive,
+                    exceptionFunc);
                 await taskCompletionSource.Task;
             }
             finally
@@ -143,7 +152,8 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        private static void BeginRead(Stream inputStream, Stream outputStream, byte[] buffer, CancellationTokenSource cancellationTokenSource, Action<byte[], int, int> onCopy,
+        private static void BeginRead(Stream inputStream, Stream outputStream, byte[] buffer,
+            CancellationTokenSource cancellationTokenSource, Action<byte[], int, int> onCopy,
             ExceptionHandler exceptionFunc)
         {
             if (cancellationTokenSource.IsCancellationRequested)
@@ -182,7 +192,8 @@ namespace Titanium.Web.Proxy.Helpers
                         try
                         {
                             outputStream.EndWrite(ar2);
-                            BeginRead(inputStream, outputStream, buffer, cancellationTokenSource, onCopy, exceptionFunc);
+                            BeginRead(inputStream, outputStream, buffer, cancellationTokenSource, onCopy,
+                                exceptionFunc);
                         }
                         catch (IOException ex)
                         {
@@ -208,9 +219,10 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers as prefix
-        /// Usefull for websocket requests
-        /// Task-based Asynchronous Pattern
+        ///     relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers
+        ///     as prefix
+        ///     Usefull for websocket requests
+        ///     Task-based Asynchronous Pattern
         /// </summary>
         /// <param name="clientStream"></param>
         /// <param name="serverStream"></param>
@@ -220,11 +232,14 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         private static async Task SendRawTap(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc, CancellationTokenSource cancellationTokenSource)
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc,
+            CancellationTokenSource cancellationTokenSource)
         {
             //Now async relay all server=>client & client=>server data
-            var sendRelay = clientStream.CopyToAsync(serverStream, onDataSend, bufferSize, cancellationTokenSource.Token);
-            var receiveRelay = serverStream.CopyToAsync(clientStream, onDataReceive, bufferSize, cancellationTokenSource.Token);
+            var sendRelay =
+                clientStream.CopyToAsync(serverStream, onDataSend, bufferSize, cancellationTokenSource.Token);
+            var receiveRelay =
+                serverStream.CopyToAsync(clientStream, onDataReceive, bufferSize, cancellationTokenSource.Token);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             cancellationTokenSource.Cancel();
@@ -233,8 +248,9 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers as prefix
-        /// Usefull for websocket requests
+        ///     relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers
+        ///     as prefix
+        ///     Usefull for websocket requests
         /// </summary>
         /// <param name="clientStream"></param>
         /// <param name="serverStream"></param>
@@ -244,10 +260,12 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static Task SendRaw(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc, CancellationTokenSource cancellationTokenSource)
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc,
+            CancellationTokenSource cancellationTokenSource)
         {
             // todo: fix APM mode
-            return SendRawTap(clientStream, serverStream, bufferSize, onDataSend, onDataReceive, exceptionFunc, cancellationTokenSource);
+            return SendRawTap(clientStream, serverStream, bufferSize, onDataSend, onDataReceive, exceptionFunc,
+                cancellationTokenSource);
         }
     }
 }

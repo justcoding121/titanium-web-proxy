@@ -1,11 +1,10 @@
-﻿using StreamExtended.Network;
-using System;
-using System.Linq;
+﻿using System;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -14,12 +13,12 @@ using Titanium.Web.Proxy.Models;
 namespace Titanium.Web.Proxy.Network.Tcp
 {
     /// <summary>
-    /// A class that manages Tcp Connection to server used by this proxy server
+    ///     A class that manages Tcp Connection to server used by this proxy server
     /// </summary>
     internal class TcpConnectionFactory
     {
         /// <summary>
-        ///  Creates a TCP connection to server
+        ///     Creates a TCP connection to server
         /// </summary>
         /// <param name="remoteHostName"></param>
         /// <param name="remotePort"></param>
@@ -37,7 +36,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
             bool useUpstreamProxy = false;
 
             //check if external proxy is set for HTTP/HTTPS
-            if (externalProxy != null && !(externalProxy.HostName == remoteHostName && externalProxy.Port == remotePort))
+            if (externalProxy != null &&
+                !(externalProxy.HostName == remoteHostName && externalProxy.Port == remotePort))
             {
                 useUpstreamProxy = true;
 
@@ -90,8 +90,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                         Response.ParseResponseLine(httpStatus, out _, out int statusCode, out string statusDescription);
 
-                        if (statusCode != 200 && !statusDescription.EqualsIgnoreCase("OK") 
-                            && !statusDescription.EqualsIgnoreCase("Connection Established"))
+                        if (statusCode != 200 && !statusDescription.EqualsIgnoreCase("OK")
+                                              && !statusDescription.EqualsIgnoreCase("Connection Established"))
                         {
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
                         }
@@ -102,10 +102,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                 if (isHttps)
                 {
-                    var sslStream = new SslStream(stream, false, proxyServer.ValidateServerCertificate, proxyServer.SelectClientCertificate);
+                    var sslStream = new SslStream(stream, false, proxyServer.ValidateServerCertificate,
+                        proxyServer.SelectClientCertificate);
                     stream = new CustomBufferedStream(sslStream, proxyServer.BufferSize);
 
-                    await sslStream.AuthenticateAsClientAsync(remoteHostName, null, proxyServer.SupportedSslProtocols, proxyServer.CheckCertificateRevocation);
+                    await sslStream.AuthenticateAsClientAsync(remoteHostName, null, proxyServer.SupportedSslProtocols,
+                        proxyServer.CheckCertificateRevocation);
                 }
 
                 client.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;

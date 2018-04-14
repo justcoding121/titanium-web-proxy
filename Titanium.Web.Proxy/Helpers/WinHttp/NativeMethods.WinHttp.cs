@@ -4,21 +4,25 @@ using System.Runtime.InteropServices;
 // Helper classes for setting system proxy settings
 namespace Titanium.Web.Proxy.Helpers.WinHttp
 {
-    internal partial class NativeMethods
+    internal class NativeMethods
     {
         internal static class WinHttp
         {
             [DllImport("winhttp.dll", SetLastError = true)]
-            internal static extern bool WinHttpGetIEProxyConfigForCurrentUser(ref WINHTTP_CURRENT_USER_IE_PROXY_CONFIG proxyConfig);
+            internal static extern bool WinHttpGetIEProxyConfigForCurrentUser(
+                ref WINHTTP_CURRENT_USER_IE_PROXY_CONFIG proxyConfig);
 
             [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-            internal static extern WinHttpHandle WinHttpOpen(string userAgent, AccessType accessType, string proxyName, string proxyBypass, int dwFlags);
+            internal static extern WinHttpHandle WinHttpOpen(string userAgent, AccessType accessType, string proxyName,
+                string proxyBypass, int dwFlags);
 
             [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-            internal static extern bool WinHttpSetTimeouts(WinHttpHandle session, int resolveTimeout, int connectTimeout, int sendTimeout, int receiveTimeout);
+            internal static extern bool WinHttpSetTimeouts(WinHttpHandle session, int resolveTimeout,
+                int connectTimeout, int sendTimeout, int receiveTimeout);
 
             [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-            internal static extern bool WinHttpGetProxyForUrl(WinHttpHandle session, string url, [In] ref WINHTTP_AUTOPROXY_OPTIONS autoProxyOptions,
+            internal static extern bool WinHttpGetProxyForUrl(WinHttpHandle session, string url,
+                [In] ref WINHTTP_AUTOPROXY_OPTIONS autoProxyOptions,
                 out WINHTTP_PROXY_INFO proxyInfo);
 
             [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]

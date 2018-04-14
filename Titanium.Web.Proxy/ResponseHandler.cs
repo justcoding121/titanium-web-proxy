@@ -9,12 +9,12 @@ using Titanium.Web.Proxy.Network.WinAuth.Security;
 namespace Titanium.Web.Proxy
 {
     /// <summary>
-    /// Handle the response from server
+    ///     Handle the response from server
     /// </summary>
     partial class ProxyServer
     {
         /// <summary>
-        /// Called asynchronously when a request was successfully and we received the response 
+        ///     Called asynchronously when a request was successfully and we received the response
         /// </summary>
         /// <param name="args"></param>
         /// <returns>true if client/server connection was terminated (and disposed) </returns>
@@ -87,12 +87,14 @@ namespace Titanium.Web.Proxy
                 //Write back to client 100-conitinue response if that's what server returned
                 if (response.Is100Continue)
                 {
-                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, (int)HttpStatusCode.Continue, "Continue");
+                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion,
+                        (int)HttpStatusCode.Continue, "Continue");
                     await clientStreamWriter.WriteLineAsync();
                 }
                 else if (response.ExpectationFailed)
                 {
-                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
+                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion,
+                        (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
                     await clientStreamWriter.WriteLineAsync();
                 }
 
@@ -108,7 +110,8 @@ namespace Titanium.Web.Proxy
                 else
                 {
                     //Write back response status to client
-                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.StatusCode, response.StatusDescription);
+                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.StatusCode,
+                        response.StatusDescription);
                     await clientStreamWriter.WriteHeadersAsync(response.Headers);
 
                     //Write body if exists

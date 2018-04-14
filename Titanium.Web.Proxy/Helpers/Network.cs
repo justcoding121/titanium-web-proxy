@@ -26,8 +26,8 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Adapated from below link
-        /// http://stackoverflow.com/questions/11834091/how-to-check-if-localhost
+        ///     Adapated from below link
+        ///     http://stackoverflow.com/questions/11834091/how-to-check-if-localhost
         /// </summary>
         /// <param name="address"></param>
         /// <returns></returns>
@@ -55,7 +55,9 @@ namespace Titanium.Web.Proxy.Helpers
                 localhost = Dns.GetHostEntry(Dns.GetHostName());
 
                 if (IPAddress.TryParse(hostName, out var ipAddress))
+                {
                     isLocalhost = localhost.AddressList.Any(x => x.Equals(ipAddress));
+                }
 
                 if (!isLocalhost)
                 {

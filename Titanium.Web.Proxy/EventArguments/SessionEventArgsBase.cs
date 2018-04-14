@@ -9,15 +9,15 @@ using Titanium.Web.Proxy.Network;
 namespace Titanium.Web.Proxy.EventArguments
 {
     /// <summary>
-    /// Holds info related to a single proxy session (single request/response sequence)
-    /// A proxy session is bounded to a single connection from client
-    /// A proxy session ends when client terminates connection to proxy
-    /// or when server terminates connection from proxy
+    ///     Holds info related to a single proxy session (single request/response sequence)
+    ///     A proxy session is bounded to a single connection from client
+    ///     A proxy session ends when client terminates connection to proxy
+    ///     or when server terminates connection from proxy
     /// </summary>
     public class SessionEventArgsBase : EventArgs, IDisposable
     {
         /// <summary>
-        /// Size of Buffers used by this object
+        ///     Size of Buffers used by this object
         /// </summary>
         protected readonly int BufferSize;
 
@@ -26,62 +26,20 @@ namespace Titanium.Web.Proxy.EventArguments
         internal CancellationTokenSource cancellationTokenSource;
 
         /// <summary>
-        /// Holds a reference to client
+        ///     Constructor to initialize the proxy
         /// </summary>
-        internal ProxyClient ProxyClient { get; }
-
-        /// <summary>
-        /// Returns a unique Id for this request/response session
-        /// same as RequestId of WebSession
-        /// </summary>
-        public Guid Id => WebSession.RequestId;
-
-        /// <summary>
-        /// Does this session uses SSL
-        /// </summary>
-        public bool IsHttps => WebSession.Request.IsHttps;
-
-        /// <summary>
-        /// Client End Point.
-        /// </summary>
-        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
-
-        /// <summary>
-        /// A web session corresponding to a single request/response sequence
-        /// within a proxy connection
-        /// </summary>
-        public HttpWebClient WebSession { get; }
-
-        /// <summary>
-        /// Are we using a custom upstream HTTP(S) proxy?
-        /// </summary>
-        public ExternalProxy CustomUpStreamProxyUsed { get; internal set; }
-
-        public event EventHandler<DataEventArgs> DataSent;
-
-        public event EventHandler<DataEventArgs> DataReceived;
-
-        public ProxyEndPoint LocalEndPoint { get; }
-
-        public bool IsTransparent => LocalEndPoint is TransparentProxyEndPoint;
-
-        public Exception Exception { get; internal set; }
-
-        /// <summary>
-        /// Constructor to initialize the proxy
-        /// </summary>
-        internal SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint, 
+        internal SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint,
             CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
             : this(bufferSize, endPoint, cancellationTokenSource, null, exceptionFunc)
         {
         }
 
-        protected SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint, 
+        protected SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint,
             CancellationTokenSource cancellationTokenSource,
             Request request, ExceptionHandler exceptionFunc)
         {
-            this.BufferSize = bufferSize;
-            this.ExceptionFunc = exceptionFunc;
+            BufferSize = bufferSize;
+            ExceptionFunc = exceptionFunc;
             this.cancellationTokenSource = cancellationTokenSource;
 
             ProxyClient = new ProxyClient();
@@ -108,6 +66,62 @@ namespace Titanium.Web.Proxy.EventArguments
             });
         }
 
+        /// <summary>
+        ///     Holds a reference to client
+        /// </summary>
+        internal ProxyClient ProxyClient { get; }
+
+        /// <summary>
+        ///     Returns a unique Id for this request/response session
+        ///     same as RequestId of WebSession
+        /// </summary>
+        public Guid Id => WebSession.RequestId;
+
+        /// <summary>
+        ///     Does this session uses SSL
+        /// </summary>
+        public bool IsHttps => WebSession.Request.IsHttps;
+
+        /// <summary>
+        ///     Client End Point.
+        /// </summary>
+        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
+
+        /// <summary>
+        ///     A web session corresponding to a single request/response sequence
+        ///     within a proxy connection
+        /// </summary>
+        public HttpWebClient WebSession { get; }
+
+        /// <summary>
+        ///     Are we using a custom upstream HTTP(S) proxy?
+        /// </summary>
+        public ExternalProxy CustomUpStreamProxyUsed { get; internal set; }
+
+        public ProxyEndPoint LocalEndPoint { get; }
+
+        public bool IsTransparent => LocalEndPoint is TransparentProxyEndPoint;
+
+        public Exception Exception { get; internal set; }
+
+        /// <summary>
+        ///     implement any cleanup here
+        /// </summary>
+        public virtual void Dispose()
+        {
+            CustomUpStreamProxyUsed = null;
+
+            DataSent = null;
+            DataReceived = null;
+            Exception = null;
+
+            WebSession.FinishSession();
+        }
+
+        public event EventHandler<DataEventArgs> DataSent;
+
+        public event EventHandler<DataEventArgs> DataReceived;
+
         internal void OnDataSent(byte[] buffer, int offset, int count)
         {
             try
@@ -133,24 +147,11 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Terminates the session abruptly by terminating client/server connections
+        ///     Terminates the session abruptly by terminating client/server connections
         /// </summary>
         public void TerminateSession()
         {
             cancellationTokenSource.Cancel();
-        }
-        /// <summary>
-        /// implement any cleanup here
-        /// </summary>
-        public virtual void Dispose()
-        {
-            CustomUpStreamProxyUsed = null;
-
-            DataSent = null;
-            DataReceived = null;
-            Exception = null;
-
-            WebSession.FinishSession();
         }
     }
 }

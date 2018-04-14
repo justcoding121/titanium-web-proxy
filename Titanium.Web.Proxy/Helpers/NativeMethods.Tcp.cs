@@ -9,6 +9,13 @@ namespace Titanium.Web.Proxy.Helpers
         internal const int AfInet = 2;
         internal const int AfInet6 = 23;
 
+        /// <summary>
+        ///     <see href="http://msdn2.microsoft.com/en-us/library/aa365928.aspx" />
+        /// </summary>
+        [DllImport("iphlpapi.dll", SetLastError = true)]
+        internal static extern uint GetExtendedTcpTable(IntPtr tcpTable, ref int size, bool sort, int ipVersion,
+            int tableClass, int reserved);
+
         internal enum TcpTableType
         {
             BasicListener,
@@ -19,11 +26,11 @@ namespace Titanium.Web.Proxy.Helpers
             OwnerPidAll,
             OwnerModuleListener,
             OwnerModuleConnections,
-            OwnerModuleAll,
+            OwnerModuleAll
         }
 
         /// <summary>
-        /// <see href="http://msdn2.microsoft.com/en-us/library/aa366921.aspx"/>
+        ///     <see href="http://msdn2.microsoft.com/en-us/library/aa366921.aspx" />
         /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         internal struct TcpTable
@@ -33,7 +40,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// <see href="http://msdn2.microsoft.com/en-us/library/aa366913.aspx"/>
+        ///     <see href="http://msdn2.microsoft.com/en-us/library/aa366913.aspx" />
         /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         internal struct TcpRow
@@ -51,11 +58,5 @@ namespace Titanium.Web.Proxy.Helpers
             public byte remotePort4;
             public int owningPid;
         }
-
-        /// <summary>
-        /// <see href="http://msdn2.microsoft.com/en-us/library/aa365928.aspx"/>
-        /// </summary>
-        [DllImport("iphlpapi.dll", SetLastError = true)]
-        internal static extern uint GetExtendedTcpTable(IntPtr tcpTable, ref int size, bool sort, int ipVersion, int tableClass, int reserved);
     }
 }

@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         {
         }
 
-        private static unsafe byte[] GetUShortBytes(byte*bytes)
+        private static unsafe byte[] GetUShortBytes(byte* bytes)
         {
             if (BitConverter.IsLittleEndian)
             {
@@ -47,7 +47,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             return new[] { bytes[1], bytes[0] };
         }
 
-        private static unsafe byte[] GetUIntBytes(byte*bytes)
+        private static unsafe byte[] GetUIntBytes(byte* bytes)
         {
             if (BitConverter.IsLittleEndian)
             {
@@ -57,7 +57,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             return new[] { bytes[3], bytes[2], bytes[1], bytes[0] };
         }
 
-        private static unsafe byte[] GetULongBytes(byte*bytes)
+        private static unsafe byte[] GetULongBytes(byte* bytes)
         {
             if (BitConverter.IsLittleEndian)
             {
@@ -117,7 +117,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             return GetULongBytes((byte*)&value);
         }
 
-        private static unsafe void UShortFromBytes(byte*dst, byte[] src, int startIndex)
+        private static unsafe void UShortFromBytes(byte* dst, byte[] src, int startIndex)
         {
             if (BitConverter.IsLittleEndian)
             {
@@ -131,7 +131,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             }
         }
 
-        private static unsafe void UIntFromBytes(byte*dst, byte[] src, int startIndex)
+        private static unsafe void UIntFromBytes(byte* dst, byte[] src, int startIndex)
         {
             if (BitConverter.IsLittleEndian)
             {
@@ -149,17 +149,21 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             }
         }
 
-        private static unsafe void ULongFromBytes(byte*dst, byte[] src, int startIndex)
+        private static unsafe void ULongFromBytes(byte* dst, byte[] src, int startIndex)
         {
             if (BitConverter.IsLittleEndian)
             {
                 for (int i = 0; i < 8; ++i)
+                {
                     dst[i] = src[startIndex + i];
+                }
             }
             else
             {
                 for (int i = 0; i < 8; ++i)
+                {
                     dst[i] = src[startIndex + (7 - i)];
+                }
             }
         }
 

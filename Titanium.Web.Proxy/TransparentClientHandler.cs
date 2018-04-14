@@ -2,6 +2,7 @@
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended;
 using StreamExtended.Helpers;
@@ -10,16 +11,14 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
-using System.Threading;
 
 namespace Titanium.Web.Proxy
 {
     partial class ProxyServer
     {
-
         /// <summary>
-        /// This is called when this proxy acts as a reverse proxy (like a real http server)
-        /// So for HTTPS requests we would start SSL negotiation right away without expecting a CONNECT request from client
+        ///     This is called when this proxy acts as a reverse proxy (like a real http server)
+        ///     So for HTTPS requests we would start SSL negotiation right away without expecting a CONNECT request from client
         /// </summary>
         /// <param name="endPoint"></param>
         /// <param name="tcpClient"></param>
@@ -32,12 +31,12 @@ namespace Titanium.Web.Proxy
 
             var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
             var clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
-           
+
             try
             {
                 var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
 
-                var isHttps = clientHelloInfo != null;
+                bool isHttps = clientHelloInfo != null;
                 string httpsHostName = null;
 
                 if (isHttps)
@@ -76,7 +75,8 @@ namespace Titanium.Web.Proxy
                         }
                         catch (Exception e)
                         {
-                            ExceptionFunc(new Exception($"Could'nt authenticate client '{httpsHostName}' with fake certificate.", e));
+                            ExceptionFunc(new Exception(
+                                $"Could'nt authenticate client '{httpsHostName}' with fake certificate.", e));
                             sslStream?.Dispose();
                             return;
                         }

@@ -9,52 +9,11 @@ using Titanium.Web.Proxy.Network.Tcp;
 namespace Titanium.Web.Proxy.Http
 {
     /// <summary>
-    /// Used to communicate with the server over HTTP(S)
+    ///     Used to communicate with the server over HTTP(S)
     /// </summary>
     public class HttpWebClient
     {
         private readonly int bufferSize;
-
-        /// <summary>
-        /// Connection to server
-        /// </summary>
-        internal TcpConnection ServerConnection { get; set; }
-
-        /// <summary>
-        /// Request ID.
-        /// </summary>
-        public Guid RequestId { get; }
-
-        /// <summary>
-        /// Override UpStreamEndPoint for this request; Local NIC via request is made
-        /// </summary>
-        public IPEndPoint UpStreamEndPoint { get; set; }
-
-        /// <summary>
-        /// Headers passed with Connect.
-        /// </summary>
-        public ConnectRequest ConnectRequest { get; internal set; }
-
-        /// <summary>
-        /// Web Request.
-        /// </summary>
-        public Request Request { get; }
-
-        /// <summary>
-        /// Web Response.
-        /// </summary>
-        public Response Response { get; internal set; }
-
-        /// <summary>
-        /// PID of the process that is created the current session when client is running in this machine
-        /// If client is remote then this will return 
-        /// </summary>
-        public Lazy<int> ProcessId { get; internal set; }
-
-        /// <summary>
-        /// Is Https?
-        /// </summary>
-        public bool IsHttps => Request.IsHttps;
 
         internal HttpWebClient(int bufferSize, Request request = null, Response response = null)
         {
@@ -66,9 +25,50 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Set the tcp connection to server used by this webclient
+        ///     Connection to server
         /// </summary>
-        /// <param name="connection">Instance of <see cref="TcpConnection"/></param>
+        internal TcpConnection ServerConnection { get; set; }
+
+        /// <summary>
+        ///     Request ID.
+        /// </summary>
+        public Guid RequestId { get; }
+
+        /// <summary>
+        ///     Override UpStreamEndPoint for this request; Local NIC via request is made
+        /// </summary>
+        public IPEndPoint UpStreamEndPoint { get; set; }
+
+        /// <summary>
+        ///     Headers passed with Connect.
+        /// </summary>
+        public ConnectRequest ConnectRequest { get; internal set; }
+
+        /// <summary>
+        ///     Web Request.
+        /// </summary>
+        public Request Request { get; }
+
+        /// <summary>
+        ///     Web Response.
+        /// </summary>
+        public Response Response { get; internal set; }
+
+        /// <summary>
+        ///     PID of the process that is created the current session when client is running in this machine
+        ///     If client is remote then this will return
+        /// </summary>
+        public Lazy<int> ProcessId { get; internal set; }
+
+        /// <summary>
+        ///     Is Https?
+        /// </summary>
+        public bool IsHttps => Request.IsHttps;
+
+        /// <summary>
+        ///     Set the tcp connection to server used by this webclient
+        /// </summary>
+        /// <param name="connection">Instance of <see cref="TcpConnection" /></param>
         internal void SetConnection(TcpConnection connection)
         {
             connection.LastAccess = DateTime.Now;
@@ -76,7 +76,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Prepare and send the http(s) request
+        ///     Prepare and send the http(s) request
         /// </summary>
         /// <returns></returns>
         internal async Task SendRequest(bool enable100ContinueBehaviour, bool isTransparent)
@@ -95,12 +95,13 @@ namespace Titanium.Web.Proxy.Http
 
             //Send Authentication to Upstream proxy if needed
             if (!isTransparent && upstreamProxy != null
-                && ServerConnection.IsHttps == false
-                && !string.IsNullOrEmpty(upstreamProxy.UserName)
-                && upstreamProxy.Password != null)
+                               && ServerConnection.IsHttps == false
+                               && !string.IsNullOrEmpty(upstreamProxy.UserName)
+                               && upstreamProxy.Password != null)
             {
                 await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer);
-                await HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password).WriteToStreamAsync(writer);
+                await HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password)
+                    .WriteToStreamAsync(writer);
             }
 
             //write request headers
@@ -120,7 +121,8 @@ namespace Titanium.Web.Proxy.Http
                 {
                     string httpStatus = await ServerConnection.StreamReader.ReadLineAsync();
 
-                    Response.ParseResponseLine(httpStatus, out _, out int responseStatusCode, out string responseStatusDescription);
+                    Response.ParseResponseLine(httpStatus, out _, out int responseStatusCode,
+                        out string responseStatusDescription);
 
                     //find if server is willing for expect continue
                     if (responseStatusCode == (int)HttpStatusCode.Continue
@@ -140,14 +142,16 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Receive and parse the http response from server
+        ///     Receive and parse the http response from server
         /// </summary>
         /// <returns></returns>
         internal async Task ReceiveResponse()
         {
             //return if this is already read
             if (Response.StatusCode != 0)
+            {
                 return;
+            }
 
             string httpStatus = await ServerConnection.StreamReader.ReadLineAsync();
             if (httpStatus == null)
@@ -157,7 +161,6 @@ namespace Titanium.Web.Proxy.Http
 
             if (httpStatus == string.Empty)
             {
-                //Empty content in first-line, try again
                 httpStatus = await ServerConnection.StreamReader.ReadLineAsync();
             }
 
@@ -199,7 +202,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        ///     Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
         /// </summary>
         internal void FinishSession()
         {

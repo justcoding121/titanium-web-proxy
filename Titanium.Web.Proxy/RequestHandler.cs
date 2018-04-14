@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
@@ -11,23 +12,24 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
-using System.Threading;
 
 namespace Titanium.Web.Proxy
 {
     /// <summary>
-    /// Handle the request
+    ///     Handle the request
     /// </summary>
     partial class ProxyServer
     {
-        private static readonly Regex uriSchemeRegex = new Regex("^[a-z]*://", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex uriSchemeRegex =
+            new Regex("^[a-z]*://", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        private bool isWindowsAuthenticationEnabledAndSupported => EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
+        private bool isWindowsAuthenticationEnabledAndSupported =>
+            EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
 
         /// <summary>
-        /// This is the core request handler method for a particular connection from client
-        /// Will create new session (request/response) sequence until 
-        /// client/server abruptly terminates connection or by normal HTTP termination
+        ///     This is the core request handler method for a particular connection from client
+        ///     Will create new session (request/response) sequence until
+        ///     client/server abruptly terminates connection or by normal HTTP termination
         /// </summary>
         /// <param name="client"></param>
         /// <param name="clientStream"></param>
@@ -40,8 +42,10 @@ namespace Titanium.Web.Proxy
         /// <param name="isTransparentEndPoint"></param>
         /// <returns></returns>
         private async Task HandleHttpSessionRequest(ProxyEndPoint endPoint, TcpClient client,
-            CustomBufferedStream clientStream, CustomBinaryReader clientStreamReader, HttpResponseWriter clientStreamWriter,
-            CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, ConnectRequest connectRequest, bool isTransparentEndPoint = false)
+            CustomBufferedStream clientStream, CustomBinaryReader clientStreamReader,
+            HttpResponseWriter clientStreamWriter,
+            CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, ConnectRequest connectRequest,
+            bool isTransparentEndPoint = false)
         {
             TcpConnection connection = null;
 
@@ -68,7 +72,8 @@ namespace Titanium.Web.Proxy
                     {
                         try
                         {
-                            Request.ParseRequestLine(httpCmd, out string httpMethod, out string httpUrl, out var version);
+                            Request.ParseRequestLine(httpCmd, out string httpMethod, out string httpUrl,
+                                out var version);
 
                             //Read the request headers in to unique and non-unique header collections
                             await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.Headers);
@@ -94,7 +99,8 @@ namespace Titanium.Web.Proxy
                                     hostAndPath += httpUrl;
                                 }
 
-                                string url = string.Concat(httpsConnectHostname == null ? "http://" : "https://", hostAndPath);
+                                string url = string.Concat(httpsConnectHostname == null ? "http://" : "https://",
+                                    hostAndPath);
                                 try
                                 {
                                     httpRemoteUri = new Uri(url);
@@ -116,7 +122,8 @@ namespace Titanium.Web.Proxy
                             args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                             //proxy authorization check
-                            if (!args.IsTransparent && httpsConnectHostname == null && await CheckAuthorization(args) == false)
+                            if (!args.IsTransparent && httpsConnectHostname == null &&
+                                await CheckAuthorization(args) == false)
                             {
                                 await InvokeBeforeResponse(args);
 
@@ -163,9 +170,10 @@ namespace Titanium.Web.Proxy
 
                             //create a new connection if hostname/upstream end point changes
                             if (connection != null
-                                && (!connection.HostName.Equals(request.RequestUri.Host, StringComparison.OrdinalIgnoreCase)
-                                    || (args.WebSession.UpStreamEndPoint != null
-                                        && !args.WebSession.UpStreamEndPoint.Equals(connection.UpStreamEndPoint))))
+                                && (!connection.HostName.Equals(request.RequestUri.Host,
+                                        StringComparison.OrdinalIgnoreCase)
+                                    || args.WebSession.UpStreamEndPoint != null
+                                    && !args.WebSession.UpStreamEndPoint.Equals(connection.UpStreamEndPoint)))
                             {
                                 connection.Dispose();
                                 connection = null;
@@ -184,7 +192,8 @@ namespace Titanium.Web.Proxy
                                 await connection.StreamWriter.WriteHeadersAsync(request.Headers);
                                 string httpStatus = await connection.StreamReader.ReadLineAsync();
 
-                                Response.ParseResponseLine(httpStatus, out var responseVersion, out int responseStatusCode,
+                                Response.ParseResponseLine(httpStatus, out var responseVersion,
+                                    out int responseStatusCode,
                                     out string responseStatusDescription);
                                 response.HttpVersion = responseVersion;
                                 response.StatusCode = responseStatusCode;
@@ -216,7 +225,6 @@ namespace Titanium.Web.Proxy
 
                             if (args.WebSession.ServerConnection == null)
                             {
-                                //server connection was closed
                                 return;
                             }
 
@@ -246,7 +254,6 @@ namespace Titanium.Web.Proxy
                         await InvokeAfterResponse(args);
                         args.Dispose();
                     }
-
                 }
             }
             finally
@@ -256,7 +263,7 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        /// Handle a specific session (request/response sequence)
+        ///     Handle a specific session (request/response sequence)
         /// </summary>
         /// <param name="connection"></param>
         /// <param name="args"></param>
@@ -285,12 +292,14 @@ namespace Titanium.Web.Proxy
 
                     if (request.Is100Continue)
                     {
-                        await clientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.Continue, "Continue");
+                        await clientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion,
+                            (int)HttpStatusCode.Continue, "Continue");
                         await clientStreamWriter.WriteLineAsync();
                     }
                     else if (request.ExpectationFailed)
                     {
-                        await clientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
+                        await clientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion,
+                            (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
                         await clientStreamWriter.WriteLineAsync();
                     }
                 }
@@ -305,7 +314,6 @@ namespace Titanium.Web.Proxy
                 //check if content-length is > 0
                 if (request.ContentLength > 0)
                 {
-                    //If request was modified by user
                     if (request.IsBodyRead)
                     {
                         var writer = args.WebSession.ServerConnection.StreamWriter;
@@ -315,7 +323,6 @@ namespace Titanium.Web.Proxy
                     {
                         if (!request.ExpectationFailed)
                         {
-                            //If its a post/put/patch request, then read the client html body and send it to server
                             if (request.HasBody)
                             {
                                 HttpWriter writer = args.WebSession.ServerConnection.StreamWriter;
@@ -338,7 +345,7 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        /// Create a Server Connection
+        ///     Create a Server Connection
         /// </summary>
         /// <param name="args"></param>
         /// <param name="isConnect"></param>
@@ -365,7 +372,7 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        /// prepare the request headers so that we can avoid encodings not parsable by this proxy
+        ///     prepare the request headers so that we can avoid encodings not parsable by this proxy
         /// </summary>
         /// <param name="requestHeaders"></param>
         private void PrepareRequestHeaders(HeaderCollection requestHeaders)
