@@ -57,6 +57,21 @@ namespace Titanium.Web.Proxy
                 {
                     // read the request line
                     string httpCmd = await clientStreamReader.ReadLineAsync();
+                    if (httpCmd == "PRI * HTTP/2.0")
+                    {
+                        // HTTP/2 Connection Preface
+                        string line = await clientStreamReader.ReadLineAsync();
+                        if (line != string.Empty) throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+
+                        line = await clientStreamReader.ReadLineAsync();
+                        if (line != "SM") throw new Exception($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
+
+                        line = await clientStreamReader.ReadLineAsync();
+                        if (line != string.Empty) throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+
+                        // todo
+                    }
+
                     if (string.IsNullOrEmpty(httpCmd))
                     {
                         return;
@@ -362,12 +377,12 @@ namespace Titanium.Web.Proxy
 
             args.CustomUpStreamProxyUsed = customUpStreamProxy;
 
-            return await tcpConnectionFactory.CreateClient(args.WebSession.Request.RequestUri.Host,
+            return await tcpConnectionFactory.CreateClient(
+                args.WebSession.Request.RequestUri.Host,
                 args.WebSession.Request.RequestUri.Port,
-                args.WebSession.Request.HttpVersion,
-                isHttps,
-                isConnect, this,
-                args.WebSession.UpStreamEndPoint ?? UpStreamEndPoint,
+                args.WebSession.ConnectRequest?.ClientHelloInfo?.GetAlpn(),
+                args.WebSession.Request.HttpVersion, isHttps, isConnect,
+                this, args.WebSession.UpStreamEndPoint ?? UpStreamEndPoint,
                 customUpStreamProxy ?? (isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy));
         }
 

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -125,9 +126,9 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         ///     Should we check for certificare revocation during SSL authentication to servers
-        ///     Note: If enabled can reduce performance (Default disabled)
+        ///     Note: If enabled can reduce performance (Default: NoCheck)
         /// </summary>
-        public bool CheckCertificateRevocation { get; set; }
+        public X509RevocationMode CheckCertificateRevocation { get; set; }
 
         /// <summary>
         ///     Does this proxy uses the HTTP protocol 100 continue behaviour strictly?

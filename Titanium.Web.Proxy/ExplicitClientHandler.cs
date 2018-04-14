@@ -3,6 +3,7 @@ using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended;
@@ -10,6 +11,7 @@ using StreamExtended.Helpers;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -100,6 +102,7 @@ namespace Titanium.Web.Proxy
 
                     //write back successfull CONNECT response
                     var response = ConnectResponse.CreateSuccessfullConnectResponse(version);
+                    
                     // Set ContentLength explicitly to properly handle HTTP 1.0
                     response.ContentLength = 0;
                     response.Headers.FixProxyHeaders();
@@ -133,7 +136,21 @@ namespace Titanium.Web.Proxy
                                               await CertificateManager.CreateCertificateAsync(certName);
 
                             //Successfully managed to authenticate the client using the fake certificate
-                            await sslStream.AuthenticateAsServerAsync(certificate, false, SupportedSslProtocols, false);
+                            var options = new SslServerAuthenticationOptions();
+                            options.ApplicationProtocols = clientHelloInfo.GetAlpn();
+                            if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)
+                            {
+                                options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
+                            }
+
+                            // client connection is always HTTP 1.x, todo
+                            options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
+
+                            options.ServerCertificate = certificate;
+                            options.ClientCertificateRequired = false;
+                            options.EnabledSslProtocols = SupportedSslProtocols;
+                            options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;
+                            await sslStream.AuthenticateAsServerAsync(options, new CancellationToken(false));
 
                             //HTTPS server created - we can now decrypt the client's traffic
                             clientStream = new CustomBufferedStream(sslStream, BufferSize);

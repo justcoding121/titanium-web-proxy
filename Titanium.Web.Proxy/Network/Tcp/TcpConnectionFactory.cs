@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
@@ -22,6 +24,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         /// <param name="remoteHostName"></param>
         /// <param name="remotePort"></param>
+        /// <param name="applicationProtocols"></param>
         /// <param name="httpVersion"></param>
         /// <param name="isHttps"></param>
         /// <param name="isConnect"></param>
@@ -29,8 +32,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="upStreamEndPoint"></param>
         /// <param name="externalProxy"></param>
         /// <returns></returns>
-        internal async Task<TcpConnection> CreateClient(string remoteHostName,
-            int remotePort, Version httpVersion, bool isHttps, bool isConnect,
+        internal async Task<TcpConnection> CreateClient(string remoteHostName, int remotePort, 
+            List<SslApplicationProtocol> applicationProtocols, Version httpVersion, bool isHttps, bool isConnect, 
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy)
         {
             bool useUpstreamProxy = false;
@@ -106,8 +109,21 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         proxyServer.SelectClientCertificate);
                     stream = new CustomBufferedStream(sslStream, proxyServer.BufferSize);
 
-                    await sslStream.AuthenticateAsClientAsync(remoteHostName, null, proxyServer.SupportedSslProtocols,
-                        proxyServer.CheckCertificateRevocation);
+                    var options = new SslClientAuthenticationOptions();
+                    options.ApplicationProtocols = applicationProtocols;
+                    if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)
+                    {
+                        options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
+                    }
+
+                    // server connection is always HTTP 1.x, todo
+                    options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
+
+                    options.TargetHost = remoteHostName;
+                    options.ClientCertificates = null;
+                    options.EnabledSslProtocols = proxyServer.SupportedSslProtocols;
+                    options.CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation;
+                    await sslStream.AuthenticateAsClientAsync(options, new CancellationToken(false));
                 }
 
                 client.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;

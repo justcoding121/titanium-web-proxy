@@ -17,7 +17,9 @@ namespace Titanium.Web.Proxy.Models
 
         internal static readonly Version Version11 = new Version(1, 1);
 
-        internal static HttpHeader ProxyConnectionKeepAlive = new HttpHeader("Proxy-Connection", "keep-alive");
+        internal static readonly Version Version20 = new Version(2, 0);
+
+        internal static readonly HttpHeader ProxyConnectionKeepAlive = new HttpHeader("Proxy-Connection", "keep-alive");
 
         /// <summary>
         ///     Constructor.
