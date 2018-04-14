@@ -65,7 +65,7 @@ namespace Titanium.Web.Proxy
                     await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.Headers);
 
                     var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest,
-                        ExceptionFunc, cancellationTokenSource);
+                        cancellationTokenSource, ExceptionFunc);
                     connectArgs.ProxyClient.TcpClient = tcpClient;
                     connectArgs.ProxyClient.ClientStream = clientStream;
 
