@@ -80,7 +80,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                     if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
                     {
-                        await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer);
+                        await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer, cancellationToken);
                         await writer.WriteLineAsync(KnownHeaders.ProxyAuthorization + ": Basic " +
                                                     Convert.ToBase64String(Encoding.UTF8.GetBytes(
                                                         externalProxy.UserName + ":" + externalProxy.Password)), cancellationToken);
