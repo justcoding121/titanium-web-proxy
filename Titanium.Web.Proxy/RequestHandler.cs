@@ -196,7 +196,7 @@ namespace Titanium.Web.Proxy
 
                             if (connection == null)
                             {
-                                connection = await GetServerConnection(args, false);
+                                connection = await GetServerConnection(args, false, cancellationTokenSource.Token);
                             }
 
                             //if upgrading to websocket then relay the requet without reading the contents
@@ -230,7 +230,7 @@ namespace Titanium.Web.Proxy
                                 await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
                                     (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); },
                                     (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); },
-                                    ExceptionFunc, args.cancellationTokenSource);
+                                    ExceptionFunc, cancellationTokenSource);
 
                                 return;
                             }
@@ -249,7 +249,7 @@ namespace Titanium.Web.Proxy
                                 return;
                             }
 
-                            if (args.cancellationTokenSource.IsCancellationRequested)
+                            if (cancellationTokenSource.IsCancellationRequested)
                             {
                                 throw new Exception("Session was terminated by user.");
                             }
@@ -364,8 +364,9 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="args"></param>
         /// <param name="isConnect"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task<TcpConnection> GetServerConnection(SessionEventArgsBase args, bool isConnect)
+        private async Task<TcpConnection> GetServerConnection(SessionEventArgsBase args, bool isConnect, CancellationToken cancellationToken)
         {
             ExternalProxy customUpStreamProxy = null;
 
@@ -383,7 +384,8 @@ namespace Titanium.Web.Proxy
                 args.WebSession.ConnectRequest?.ClientHelloInfo?.GetAlpn(),
                 args.WebSession.Request.HttpVersion, isHttps, isConnect,
                 this, args.WebSession.UpStreamEndPoint ?? UpStreamEndPoint,
-                customUpStreamProxy ?? (isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy));
+                customUpStreamProxy ?? (isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy),
+                cancellationToken);
         }
 
         /// <summary>

@@ -5,7 +5,7 @@ namespace Titanium.Web.Proxy.EventArguments
 {
     public class BeforeSslAuthenticateEventArgs : EventArgs
     {
-        internal CancellationTokenSource TaskCancellationSource;
+        internal readonly CancellationTokenSource TaskCancellationSource;
 
         internal BeforeSslAuthenticateEventArgs(CancellationTokenSource taskCancellationSource)
         {

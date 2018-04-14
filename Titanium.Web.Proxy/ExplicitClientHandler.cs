@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy
                 if (await HttpHelper.IsConnectMethod(clientStream) == 1)
                 {
                     //read the first line HTTP command
-                    string httpCmd = await clientStreamReader.ReadLineAsync();
+                    string httpCmd = await clientStreamReader.ReadLineAsync(cancellationTokenSource.Token);
                     if (string.IsNullOrEmpty(httpCmd))
                     {
                         return;
@@ -110,7 +110,7 @@ namespace Titanium.Web.Proxy
 
                     await clientStreamWriter.WriteResponseAsync(response);
 
-                    var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
+                    var clientHelloInfo = await SslTools.PeekClientHello(clientStream, cancellationTokenSource.Token);
 
                     bool isClientHello = clientHelloInfo != null;
                     if (isClientHello)
@@ -150,7 +150,7 @@ namespace Titanium.Web.Proxy
                             options.ClientCertificateRequired = false;
                             options.EnabledSslProtocols = SupportedSslProtocols;
                             options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;
-                            await sslStream.AuthenticateAsServerAsync(options, new CancellationToken(false));
+                            await sslStream.AuthenticateAsServerAsync(options, cancellationTokenSource.Token);
 
                             //HTTPS server created - we can now decrypt the client's traffic
                             clientStream = new CustomBufferedStream(sslStream, BufferSize);
@@ -173,7 +173,7 @@ namespace Titanium.Web.Proxy
                         }
                     }
 
-                    if (connectArgs.cancellationTokenSource.IsCancellationRequested)
+                    if (cancellationTokenSource.IsCancellationRequested)
                     {
                         throw new Exception("Session was terminated by user.");
                     }
@@ -182,7 +182,7 @@ namespace Titanium.Web.Proxy
                     if (!decryptSsl || !isClientHello)
                     {
                         //create new connection
-                        using (var connection = await GetServerConnection(connectArgs, true))
+                        using (var connection = await GetServerConnection(connectArgs, true, cancellationTokenSource.Token))
                         {
                             if (isClientHello)
                             {
@@ -195,8 +195,8 @@ namespace Titanium.Web.Proxy
                                     try
                                     {
                                         // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
-                                        await clientStream.ReadAsync(data, 0, available);
-                                        await connection.StreamWriter.WriteAsync(data, 0, available, true);
+                                        await clientStream.ReadAsync(data, 0, available, cancellationTokenSource.Token);
+                                        await connection.StreamWriter.WriteAsync(data, 0, available, true, cancellationTokenSource.Token);
                                     }
                                     finally
                                     {
@@ -204,14 +204,14 @@ namespace Titanium.Web.Proxy
                                     }
                                 }
 
-                                var serverHelloInfo = await SslTools.PeekServerHello(connection.Stream);
+                                var serverHelloInfo = await SslTools.PeekServerHello(connection.Stream, cancellationTokenSource.Token);
                                 ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
                             }
 
                             await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
                                 (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
                                 (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
-                                ExceptionFunc, connectArgs.cancellationTokenSource);
+                                ExceptionFunc, connectArgs.CancellationTokenSource);
                         }
 
                         return;

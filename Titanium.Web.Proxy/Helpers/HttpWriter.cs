@@ -2,6 +2,7 @@
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended.Helpers;
 using StreamExtended.Network;
@@ -114,12 +115,12 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        public async Task WriteAsync(byte[] data, int offset, int count, bool flush)
+        public async Task WriteAsync(byte[] data, int offset, int count, bool flush, CancellationToken cancellationToken)
         {
-            await WriteAsync(data, offset, count);
+            await WriteAsync(data, offset, count, cancellationToken);
             if (flush)
             {
-                await FlushAsync();
+                await FlushAsync(cancellationToken);
             }
         }
 
