@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy
                             //var serverHelloInfo = await SslTools.PeekServerHello(serverStream);
 
                             await TcpHelper.SendRaw(clientStream, serverStream, BufferSize,
-                                null, null, ExceptionFunc, cancellationTokenSource);
+                                null, null, cancellationTokenSource, ExceptionFunc);
                         }
                     }
                 }

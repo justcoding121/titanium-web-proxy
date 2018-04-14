@@ -533,10 +533,9 @@ namespace Titanium.Web.Proxy.Network
 
                 var outdated = certificateCache.Where(x => x.Value.LastAccess < cutOff).ToList();
 
-                CachedCertificate removed;
                 foreach (var cache in outdated)
                 {
-                    certificateCache.TryRemove(cache.Key, out removed);
+                    certificateCache.TryRemove(cache.Key, out _);
                 }
 
                 //after a minute come back to check for outdated certificates in cache

@@ -65,7 +65,7 @@ namespace Titanium.Web.Proxy
                     await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.Headers);
 
                     var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest,
-                        ExceptionFunc, cancellationTokenSource);
+                        cancellationTokenSource, ExceptionFunc);
                     connectArgs.ProxyClient.TcpClient = tcpClient;
                     connectArgs.ProxyClient.ClientStream = clientStream;
 
@@ -211,7 +211,7 @@ namespace Titanium.Web.Proxy
                             await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
                                 (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
                                 (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
-                                ExceptionFunc, connectArgs.CancellationTokenSource);
+                                connectArgs.CancellationTokenSource, ExceptionFunc);
                         }
 
                         return;
