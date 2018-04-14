@@ -74,19 +74,19 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 if (useUpstreamProxy && (isConnect || isHttps))
                 {
                     var writer = new HttpRequestWriter(stream, proxyServer.BufferSize);
-                    await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
-                    await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
-                    await writer.WriteLineAsync($"{KnownHeaders.Connection}: {KnownHeaders.ConnectionKeepAlive}");
+                    await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}", cancellationToken);
+                    await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}", cancellationToken);
+                    await writer.WriteLineAsync($"{KnownHeaders.Connection}: {KnownHeaders.ConnectionKeepAlive}", cancellationToken);
 
                     if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
                     {
                         await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer);
                         await writer.WriteLineAsync(KnownHeaders.ProxyAuthorization + ": Basic " +
                                                     Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                                                        externalProxy.UserName + ":" + externalProxy.Password)));
+                                                        externalProxy.UserName + ":" + externalProxy.Password)), cancellationToken);
                     }
 
-                    await writer.WriteLineAsync();
+                    await writer.WriteLineAsync(cancellationToken);
 
                     using (var reader = new CustomBinaryReader(stream, proxyServer.BufferSize))
                     {

@@ -22,8 +22,9 @@ namespace Titanium.Web.Proxy
         {
             try
             {
+                var cancellationToken = args.CancellationTokenSource.Token;
                 //read response & headers from server
-                await args.WebSession.ReceiveResponse();
+                await args.WebSession.ReceiveResponse(cancellationToken);
 
                 var response = args.WebSession.Response;
                 args.ReRequest = false;
@@ -61,7 +62,7 @@ namespace Titanium.Web.Proxy
                     if (!response.TerminateResponse)
                     {
                         //syphon out the response body from server before setting the new body
-                        await args.SyphonOutBodyAsync(false);
+                        await args.SyphonOutBodyAsync(false, cancellationToken);
                     }
                     else
                     {
@@ -77,7 +78,7 @@ namespace Titanium.Web.Proxy
                 if (args.ReRequest)
                 {
                     //clear current response
-                    await args.ClearResponse();
+                    await args.ClearResponse(cancellationToken);
                     await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args);
                     return;
                 }
@@ -89,13 +90,13 @@ namespace Titanium.Web.Proxy
                 {
                     await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion,
                         (int)HttpStatusCode.Continue, "Continue");
-                    await clientStreamWriter.WriteLineAsync();
+                    await clientStreamWriter.WriteLineAsync(cancellationToken);
                 }
                 else if (response.ExpectationFailed)
                 {
                     await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion,
                         (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
-                    await clientStreamWriter.WriteLineAsync();
+                    await clientStreamWriter.WriteLineAsync(cancellationToken);
                 }
 
                 if (!args.IsTransparent)
@@ -112,12 +113,12 @@ namespace Titanium.Web.Proxy
                     //Write back response status to client
                     await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.StatusCode,
                         response.StatusDescription);
-                    await clientStreamWriter.WriteHeadersAsync(response.Headers);
+                    await clientStreamWriter.WriteHeadersAsync(response.Headers, cancellationToken: cancellationToken);
 
                     //Write body if exists
                     if (response.HasBody)
                     {
-                        await args.CopyResponseBodyAsync(clientStreamWriter, TransformationMode.None);
+                        await args.CopyResponseBodyAsync(clientStreamWriter, TransformationMode.None, cancellationToken);
                     }
                 }
             }
