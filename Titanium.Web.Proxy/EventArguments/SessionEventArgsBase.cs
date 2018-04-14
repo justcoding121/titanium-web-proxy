@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         protected readonly ExceptionHandler ExceptionFunc;
 
-        internal CancellationTokenSource cancellationTokenSource;
+        internal readonly CancellationTokenSource CancellationTokenSource;
 
         /// <summary>
         ///     Constructor to initialize the proxy
@@ -40,7 +40,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             BufferSize = bufferSize;
             ExceptionFunc = exceptionFunc;
-            this.cancellationTokenSource = cancellationTokenSource;
+            CancellationTokenSource = cancellationTokenSource;
 
             ProxyClient = new ProxyClient();
             WebSession = new HttpWebClient(bufferSize, request);
@@ -151,7 +151,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public void TerminateSession()
         {
-            cancellationTokenSource.Cancel();
+            CancellationTokenSource.Cancel();
         }
     }
 }

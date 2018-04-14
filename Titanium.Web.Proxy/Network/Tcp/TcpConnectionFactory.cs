@@ -31,10 +31,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="proxyServer"></param>
         /// <param name="upStreamEndPoint"></param>
         /// <param name="externalProxy"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
         internal async Task<TcpConnection> CreateClient(string remoteHostName, int remotePort, 
             List<SslApplicationProtocol> applicationProtocols, Version httpVersion, bool isHttps, bool isConnect, 
-            ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy)
+            ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy, CancellationToken cancellationToken)
         {
             bool useUpstreamProxy = false;
 
@@ -89,7 +90,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                     using (var reader = new CustomBinaryReader(stream, proxyServer.BufferSize))
                     {
-                        string httpStatus = await reader.ReadLineAsync();
+                        string httpStatus = await reader.ReadLineAsync(cancellationToken);
 
                         Response.ParseResponseLine(httpStatus, out _, out int statusCode, out string statusDescription);
 
@@ -99,7 +100,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
                         }
 
-                        await reader.ReadAndIgnoreAllLinesAsync();
+                        await reader.ReadAndIgnoreAllLinesAsync(cancellationToken);
                     }
                 }
 
@@ -123,7 +124,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     options.ClientCertificates = null;
                     options.EnabledSslProtocols = proxyServer.SupportedSslProtocols;
                     options.CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation;
-                    await sslStream.AuthenticateAsClientAsync(options, new CancellationToken(false));
+                    await sslStream.AuthenticateAsClientAsync(options, cancellationToken);
                 }
 
                 client.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;

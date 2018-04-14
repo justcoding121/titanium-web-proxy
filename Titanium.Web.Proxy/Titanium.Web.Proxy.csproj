@@ -12,8 +12,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Portable.BouncyCastle" Version="1.8.1.4" />
-    <PackageReference Include="StreamExtended" Version="1.0.141-beta" />
+    <PackageReference Include="Portable.BouncyCastle" Version="1.8.2" />
+    <PackageReference Include="StreamExtended" Version="1.0.147-beta" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">

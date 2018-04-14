@@ -34,7 +34,7 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                var clientHelloInfo = await SslTools.PeekClientHello(clientStream);
+                var clientHelloInfo = await SslTools.PeekClientHello(clientStream, cancellationTokenSource.Token);
 
                 bool isHttps = clientHelloInfo != null;
                 string httpsHostName = null;
@@ -47,7 +47,7 @@ namespace Titanium.Web.Proxy
                     args.SniHostName = httpsHostName;
                     await endPoint.InvokeBeforeSslAuthenticate(this, args, ExceptionFunc);
 
-                    if (args.TaskCancellationSource.IsCancellationRequested)
+                    if (cancellationTokenSource.IsCancellationRequested)
                     {
                         throw new Exception("Session was terminated by user.");
                     }
@@ -102,9 +102,9 @@ namespace Titanium.Web.Proxy
                                 try
                                 {
                                     // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
-                                    await clientStream.ReadAsync(data, 0, available);
-                                    await serverStream.WriteAsync(data, 0, available);
-                                    await serverStream.FlushAsync();
+                                    await clientStream.ReadAsync(data, 0, available, cancellationTokenSource.Token);
+                                    await serverStream.WriteAsync(data, 0, available, cancellationTokenSource.Token);
+                                    await serverStream.FlushAsync(cancellationTokenSource.Token);
                                 }
                                 finally
                                 {
@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy
                             //var serverHelloInfo = await SslTools.PeekServerHello(serverStream);
 
                             await TcpHelper.SendRaw(clientStream, serverStream, BufferSize,
-                                null, null, ExceptionFunc, args.TaskCancellationSource);
+                                null, null, ExceptionFunc, cancellationTokenSource);
                         }
                     }
                 }
