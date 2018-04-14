@@ -29,17 +29,17 @@ namespace Titanium.Web.Proxy.Helpers
 
         public int BufferSize { get; }
 
-        public Task WriteLineAsync()
+        public Task WriteLineAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
-            return WriteAsync(newLine);
+            return WriteAsync(newLine, cancellationToken: cancellationToken);
         }
 
-        public Task WriteAsync(string value)
+        public Task WriteAsync(string value, CancellationToken cancellationToken = default (CancellationToken))
         {
-            return WriteAsyncInternal(value, false);
+            return WriteAsyncInternal(value, false, cancellationToken);
         }
 
-        private Task WriteAsyncInternal(string value, bool addNewLine)
+        private Task WriteAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken)
         {
             int newLineChars = addNewLine ? newLine.Length : 0;
             int charCount = value.Length;
@@ -57,7 +57,7 @@ namespace Titanium.Web.Proxy.Helpers
                         idx += newLineChars;
                     }
 
-                    return WriteAsync(buffer, 0, idx);
+                    return WriteAsync(buffer, 0, idx, cancellationToken);
                 }
                 finally
                 {
@@ -77,13 +77,13 @@ namespace Titanium.Web.Proxy.Helpers
                     idx += newLineChars;
                 }
 
-                return WriteAsync(buffer, 0, idx);
+                return WriteAsync(buffer, 0, idx, cancellationToken);
             }
         }
 
-        public Task WriteLineAsync(string value)
+        public Task WriteLineAsync(string value, CancellationToken cancellationToken = default (CancellationToken))
         {
-            return WriteAsyncInternal(value, true);
+            return WriteAsyncInternal(value, true, cancellationToken);
         }
 
         /// <summary>
@@ -91,31 +91,32 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="headers"></param>
         /// <param name="flush"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task WriteHeadersAsync(HeaderCollection headers, bool flush = true)
+        public async Task WriteHeadersAsync(HeaderCollection headers, bool flush = true, CancellationToken cancellationToken = default(CancellationToken))
         {
             foreach (var header in headers)
             {
                 await header.WriteToStreamAsync(this);
             }
 
-            await WriteLineAsync();
+            await WriteLineAsync(cancellationToken);
             if (flush)
             {
-                await FlushAsync();
+                await FlushAsync(cancellationToken);
             }
         }
 
-        public async Task WriteAsync(byte[] data, bool flush = false)
+        public async Task WriteAsync(byte[] data, bool flush = false, CancellationToken cancellationToken = default(CancellationToken))
         {
-            await WriteAsync(data, 0, data.Length);
+            await WriteAsync(data, 0, data.Length, cancellationToken);
             if (flush)
             {
-                await FlushAsync();
+                await FlushAsync(cancellationToken);
             }
         }
 
-        public async Task WriteAsync(byte[] data, int offset, int count, bool flush, CancellationToken cancellationToken)
+        public async Task WriteAsync(byte[] data, int offset, int count, bool flush, CancellationToken cancellationToken = default (CancellationToken))
         {
             await WriteAsync(data, offset, count, cancellationToken);
             if (flush)
@@ -129,15 +130,16 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="data"></param>
         /// <param name="isChunked"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        internal Task WriteBodyAsync(byte[] data, bool isChunked)
+        internal Task WriteBodyAsync(byte[] data, bool isChunked, CancellationToken cancellationToken)
         {
             if (isChunked)
             {
-                return WriteBodyChunkedAsync(data);
+                return WriteBodyChunkedAsync(data, cancellationToken);
             }
 
-            return WriteAsync(data);
+            return WriteAsync(data, cancellationToken: cancellationToken);
         }
 
         /// <summary>
@@ -148,14 +150,15 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="isChunked"></param>
         /// <param name="contentLength"></param>
         /// <param name="onCopy"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
         internal Task CopyBodyAsync(CustomBinaryReader streamReader, bool isChunked, long contentLength,
-            Action<byte[], int, int> onCopy)
+            Action<byte[], int, int> onCopy, CancellationToken cancellationToken)
         {
             //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
             if (isChunked)
             {
-                return CopyBodyChunkedAsync(streamReader, onCopy);
+                return CopyBodyChunkedAsync(streamReader, onCopy, cancellationToken);
             }
 
             //http 1.0 or the stream reader limits the stream
@@ -172,18 +175,19 @@ namespace Titanium.Web.Proxy.Helpers
         ///     Copies the given input bytes to output stream chunked
         /// </summary>
         /// <param name="data"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task WriteBodyChunkedAsync(byte[] data)
+        private async Task WriteBodyChunkedAsync(byte[] data, CancellationToken cancellationToken)
         {
             var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
 
-            await WriteAsync(chunkHead);
-            await WriteLineAsync();
-            await WriteAsync(data);
-            await WriteLineAsync();
+            await WriteAsync(chunkHead, cancellationToken: cancellationToken);
+            await WriteLineAsync(cancellationToken);
+            await WriteAsync(data, cancellationToken: cancellationToken);
+            await WriteLineAsync(cancellationToken);
 
-            await WriteLineAsync("0");
-            await WriteLineAsync();
+            await WriteLineAsync("0", cancellationToken);
+            await WriteLineAsync(cancellationToken);
         }
 
         /// <summary>
@@ -191,12 +195,13 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="reader"></param>
         /// <param name="onCopy"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task CopyBodyChunkedAsync(CustomBinaryReader reader, Action<byte[], int, int> onCopy)
+        private async Task CopyBodyChunkedAsync(CustomBinaryReader reader, Action<byte[], int, int> onCopy, CancellationToken cancellationToken)
         {
             while (true)
             {
-                string chunkHead = await reader.ReadLineAsync();
+                string chunkHead = await reader.ReadLineAsync(cancellationToken);
                 int idx = chunkHead.IndexOf(";");
                 if (idx >= 0)
                 {
@@ -205,17 +210,17 @@ namespace Titanium.Web.Proxy.Helpers
 
                 int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
 
-                await WriteLineAsync(chunkHead);
+                await WriteLineAsync(chunkHead, cancellationToken);
 
                 if (chunkSize != 0)
                 {
                     await CopyBytesFromStream(reader, chunkSize, onCopy);
                 }
 
-                await WriteLineAsync();
+                await WriteLineAsync(cancellationToken);
 
                 //chunk trail
-                await reader.ReadLineAsync();
+                await reader.ReadLineAsync(cancellationToken);
 
                 if (chunkSize == 0)
                 {
@@ -263,15 +268,16 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="requestResponse"></param>
         /// <param name="flush"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        protected async Task WriteAsync(RequestResponseBase requestResponse, bool flush = true)
+        protected async Task WriteAsync(RequestResponseBase requestResponse, bool flush = true, CancellationToken cancellationToken = default (CancellationToken))
         {
             var body = requestResponse.CompressBodyAndUpdateContentLength();
-            await WriteHeadersAsync(requestResponse.Headers, flush);
+            await WriteHeadersAsync(requestResponse.Headers, flush, cancellationToken);
 
             if (body != null)
             {
-                await WriteBodyAsync(body, requestResponse.IsChunked);
+                await WriteBodyAsync(body, requestResponse.IsChunked, cancellationToken);
             }
         }
     }

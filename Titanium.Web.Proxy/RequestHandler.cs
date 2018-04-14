@@ -56,20 +56,22 @@ namespace Titanium.Web.Proxy
                 while (true)
                 {
                     // read the request line
-                    string httpCmd = await clientStreamReader.ReadLineAsync();
+                    string httpCmd = await clientStreamReader.ReadLineAsync(cancellationTokenSource.Token);
                     if (httpCmd == "PRI * HTTP/2.0")
                     {
                         // HTTP/2 Connection Preface
-                        string line = await clientStreamReader.ReadLineAsync();
+                        string line = await clientStreamReader.ReadLineAsync(cancellationTokenSource.Token);
                         if (line != string.Empty) throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
 
-                        line = await clientStreamReader.ReadLineAsync();
+                        line = await clientStreamReader.ReadLineAsync(cancellationTokenSource.Token);
                         if (line != "SM") throw new Exception($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
 
-                        line = await clientStreamReader.ReadLineAsync();
+                        line = await clientStreamReader.ReadLineAsync(cancellationTokenSource.Token);
                         if (line != string.Empty) throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
 
                         // todo
+                        var buffer = new byte[1024];
+                        await clientStreamReader.ReadBytesAsync(buffer, 0, 3, cancellationTokenSource.Token);
                     }
 
                     if (string.IsNullOrEmpty(httpCmd))
@@ -91,7 +93,7 @@ namespace Titanium.Web.Proxy
                                 out var version);
 
                             //Read the request headers in to unique and non-unique header collections
-                            await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.Headers);
+                            await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.Headers, cancellationTokenSource.Token);
 
                             Uri httpRemoteUri;
                             if (uriSchemeRegex.IsMatch(httpUrl))
@@ -171,7 +173,7 @@ namespace Titanium.Web.Proxy
                             if (request.CancelRequest)
                             {
                                 //syphon out the request body from client before setting the new body
-                                await args.SyphonOutBodyAsync(true);
+                                await args.SyphonOutBodyAsync(true, cancellationTokenSource.Token);
 
                                 await HandleHttpSessionResponse(args);
 
@@ -205,7 +207,7 @@ namespace Titanium.Web.Proxy
                                 //prepare the prefix content
                                 await connection.StreamWriter.WriteLineAsync(httpCmd);
                                 await connection.StreamWriter.WriteHeadersAsync(request.Headers);
-                                string httpStatus = await connection.StreamReader.ReadLineAsync();
+                                string httpStatus = await connection.StreamReader.ReadLineAsync(cancellationTokenSource.Token);
 
                                 Response.ParseResponseLine(httpStatus, out var responseVersion,
                                     out int responseStatusCode,
@@ -214,7 +216,7 @@ namespace Titanium.Web.Proxy
                                 response.StatusCode = responseStatusCode;
                                 response.StatusDescription = responseStatusDescription;
 
-                                await HeaderParser.ReadHeaders(connection.StreamReader, response.Headers);
+                                await HeaderParser.ReadHeaders(connection.StreamReader, response.Headers, cancellationTokenSource.Token);
 
                                 if (!args.IsTransparent)
                                 {
@@ -287,6 +289,7 @@ namespace Titanium.Web.Proxy
         {
             try
             {
+                var cancellationToken = args.CancellationTokenSource.Token;
                 var request = args.WebSession.Request;
                 request.Locked = true;
 
@@ -297,7 +300,7 @@ namespace Titanium.Web.Proxy
                 if (request.ExpectContinue)
                 {
                     args.WebSession.SetConnection(connection);
-                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent);
+                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent, cancellationToken);
                 }
 
                 //If 100 continue was the response inform that to the client
@@ -309,13 +312,13 @@ namespace Titanium.Web.Proxy
                     {
                         await clientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion,
                             (int)HttpStatusCode.Continue, "Continue");
-                        await clientStreamWriter.WriteLineAsync();
+                        await clientStreamWriter.WriteLineAsync(cancellationToken);
                     }
                     else if (request.ExpectationFailed)
                     {
                         await clientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion,
                             (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
-                        await clientStreamWriter.WriteLineAsync();
+                        await clientStreamWriter.WriteLineAsync(cancellationToken);
                     }
                 }
 
@@ -323,7 +326,7 @@ namespace Titanium.Web.Proxy
                 if (!request.ExpectContinue)
                 {
                     args.WebSession.SetConnection(connection);
-                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent);
+                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent, cancellationToken);
                 }
 
                 //check if content-length is > 0
@@ -332,7 +335,7 @@ namespace Titanium.Web.Proxy
                     if (request.IsBodyRead)
                     {
                         var writer = args.WebSession.ServerConnection.StreamWriter;
-                        await writer.WriteBodyAsync(body, request.IsChunked);
+                        await writer.WriteBodyAsync(body, request.IsChunked, cancellationToken);
                     }
                     else
                     {
@@ -341,7 +344,7 @@ namespace Titanium.Web.Proxy
                             if (request.HasBody)
                             {
                                 HttpWriter writer = args.WebSession.ServerConnection.StreamWriter;
-                                await args.CopyRequestBodyAsync(writer, TransformationMode.None);
+                                await args.CopyRequestBodyAsync(writer, TransformationMode.None, cancellationToken);
                             }
                         }
                     }

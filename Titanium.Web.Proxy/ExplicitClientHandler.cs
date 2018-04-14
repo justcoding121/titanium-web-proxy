@@ -62,7 +62,7 @@ namespace Titanium.Web.Proxy
                         HttpVersion = version
                     };
 
-                    await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.Headers);
+                    await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.Headers, cancellationTokenSource.Token);
 
                     var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest,
                         cancellationTokenSource, ExceptionFunc);
