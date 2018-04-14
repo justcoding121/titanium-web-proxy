@@ -70,13 +70,15 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc, CancellationTokenSource cancellationTokenSource)
-            : this(bufferSize, endPoint, exceptionFunc, null, cancellationTokenSource)
+        internal SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint, 
+            CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
+            : this(bufferSize, endPoint, cancellationTokenSource, null, exceptionFunc)
         {
         }
 
-        protected SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint, ExceptionHandler exceptionFunc, 
-            Request request, CancellationTokenSource  cancellationTokenSource)
+        protected SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint, 
+            CancellationTokenSource cancellationTokenSource,
+            Request request, ExceptionHandler exceptionFunc)
         {
             this.BufferSize = bufferSize;
             this.ExceptionFunc = exceptionFunc;

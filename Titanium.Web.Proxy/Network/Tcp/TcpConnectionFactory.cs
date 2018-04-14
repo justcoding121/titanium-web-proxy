@@ -21,18 +21,18 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         ///  Creates a TCP connection to server
         /// </summary>
-        /// <param name="server"></param>
         /// <param name="remoteHostName"></param>
         /// <param name="remotePort"></param>
         /// <param name="httpVersion"></param>
         /// <param name="isHttps"></param>
         /// <param name="isConnect"></param>
+        /// <param name="proxyServer"></param>
         /// <param name="upStreamEndPoint"></param>
         /// <param name="externalProxy"></param>
         /// <returns></returns>
-        internal async Task<TcpConnection> CreateClient(ProxyServer server, 
-            string remoteHostName, int remotePort, Version httpVersion, bool isHttps,
-            bool isConnect, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy)
+        internal async Task<TcpConnection> CreateClient(string remoteHostName,
+            int remotePort, Version httpVersion, bool isHttps, bool isConnect,
+            ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy)
         {
             bool useUpstreamProxy = false;
 
@@ -65,11 +65,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     await client.ConnectAsync(remoteHostName, remotePort);
                 }
 
-                stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
+                stream = new CustomBufferedStream(client.GetStream(), proxyServer.BufferSize);
 
                 if (useUpstreamProxy && (isConnect || isHttps))
                 {
-                    var writer = new HttpRequestWriter(stream, server.BufferSize);
+                    var writer = new HttpRequestWriter(stream, proxyServer.BufferSize);
                     await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
                     await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
                     await writer.WriteLineAsync($"{KnownHeaders.Connection}: {KnownHeaders.ConnectionKeepAlive}");
@@ -84,7 +84,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                     await writer.WriteLineAsync();
 
-                    using (var reader = new CustomBinaryReader(stream, server.BufferSize))
+                    using (var reader = new CustomBinaryReader(stream, proxyServer.BufferSize))
                     {
                         string httpStatus = await reader.ReadLineAsync();
 
@@ -102,14 +102,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                 if (isHttps)
                 {
-                    var sslStream = new SslStream(stream, false, server.ValidateServerCertificate, server.SelectClientCertificate);
-                    stream = new CustomBufferedStream(sslStream, server.BufferSize);
+                    var sslStream = new SslStream(stream, false, proxyServer.ValidateServerCertificate, proxyServer.SelectClientCertificate);
+                    stream = new CustomBufferedStream(sslStream, proxyServer.BufferSize);
 
-                    await sslStream.AuthenticateAsClientAsync(remoteHostName, null, server.SupportedSslProtocols, server.CheckCertificateRevocation);
+                    await sslStream.AuthenticateAsClientAsync(remoteHostName, null, proxyServer.SupportedSslProtocols, proxyServer.CheckCertificateRevocation);
                 }
 
-                client.ReceiveTimeout = server.ConnectionTimeOutSeconds * 1000;
-                client.SendTimeout = server.ConnectionTimeOutSeconds * 1000;
+                client.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                client.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
             }
             catch (Exception)
             {
@@ -118,7 +118,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 throw;
             }
 
-            return new TcpConnection(server)
+            return new TcpConnection(proxyServer)
             {
                 UpStreamProxy = externalProxy,
                 UpStreamEndPoint = upStreamEndPoint,
@@ -127,8 +127,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 IsHttps = isHttps,
                 UseUpstreamProxy = useUpstreamProxy,
                 TcpClient = client,
-                StreamReader = new CustomBinaryReader(stream, server.BufferSize),
-                StreamWriter = new HttpRequestWriter(stream, server.BufferSize),
+                StreamReader = new CustomBinaryReader(stream, proxyServer.BufferSize),
+                StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferSize),
                 Stream = stream,
                 Version = httpVersion
             };

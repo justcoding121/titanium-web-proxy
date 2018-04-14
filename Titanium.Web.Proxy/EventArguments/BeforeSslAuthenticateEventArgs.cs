@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         internal BeforeSslAuthenticateEventArgs(CancellationTokenSource taskCancellationSource)
         {
-            this.TaskCancellationSource = taskCancellationSource;
+            TaskCancellationSource = taskCancellationSource;
         }
 
         public string SniHostName { get; internal set; }

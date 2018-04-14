@@ -200,7 +200,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 //Now create the request
-                await HandleHttpSessionRequest(tcpClient, clientStream, clientStreamReader, clientStreamWriter, connectHostname, endPoint, connectRequest, cancellationTokenSource);
+                await HandleHttpSessionRequest(endPoint, tcpClient, clientStream, clientStreamReader, clientStreamWriter, cancellationTokenSource, connectHostname, connectRequest);
             }
             catch (ProxyHttpException e)
             {
