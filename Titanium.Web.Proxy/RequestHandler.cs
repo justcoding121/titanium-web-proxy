@@ -230,7 +230,7 @@ namespace Titanium.Web.Proxy
                                 await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
                                     (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); },
                                     (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); },
-                                    ExceptionFunc, cancellationTokenSource);
+                                    cancellationTokenSource, ExceptionFunc);
 
                                 return;
                             }
