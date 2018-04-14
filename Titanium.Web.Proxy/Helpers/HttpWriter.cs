@@ -97,7 +97,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             foreach (var header in headers)
             {
-                await header.WriteToStreamAsync(this);
+                await header.WriteToStreamAsync(this, cancellationToken);
             }
 
             await WriteLineAsync(cancellationToken);
