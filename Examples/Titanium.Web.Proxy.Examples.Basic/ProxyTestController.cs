@@ -17,13 +17,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private readonly object lockObj = new object();
 
         private readonly ProxyServer proxyServer;
-        private ExplicitProxyEndPoint explicitEndPoint;
 
         //keep track of request headers
-        private readonly IDictionary<Guid, HeaderCollection> requestHeaderHistory = new ConcurrentDictionary<Guid, HeaderCollection>();
+        private readonly IDictionary<Guid, HeaderCollection> requestHeaderHistory =
+            new ConcurrentDictionary<Guid, HeaderCollection>();
 
         //keep track of response headers
-        private readonly IDictionary<Guid, HeaderCollection> responseHeaderHistory = new ConcurrentDictionary<Guid, HeaderCollection>();
+        private readonly IDictionary<Guid, HeaderCollection> responseHeaderHistory =
+            new ConcurrentDictionary<Guid, HeaderCollection>();
+
+        private ExplicitProxyEndPoint explicitEndPoint;
 
         //share requestBody outside handlers
         //Using a dictionary is not a good idea since it can cause memory overflow
@@ -78,13 +81,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             //proxyServer.EnableWinAuth = true;
 
-            explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000)
-            {
-                //Use self-issued generic certificate on all https requests
-                //Optimizes performance by not creating a certificate for each https-enabled domain
-                //Useful when certificate trust is not required by proxy clients
-                //GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
-            };
+            explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000);
 
             //Fired when a CONNECT request is received
             explicitEndPoint.BeforeTunnelConnectRequest += OnBeforeTunnelConnectRequest;
@@ -111,7 +108,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
 
             foreach (var endPoint in proxyServer.ProxyEndPoints)
-                Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
+            {
+                Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name,
+                    endPoint.IpAddress, endPoint.Port);
+            }
 
 #if NETSTANDARD2_0
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -251,7 +251,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         }
 
         /// <summary>
-        /// Allows overriding default certificate validation logic
+        ///     Allows overriding default certificate validation logic
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
@@ -267,7 +267,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         }
 
         /// <summary>
-        /// Allows overriding default client certificate selection logic during mutual authentication
+        ///     Allows overriding default client certificate selection logic during mutual authentication
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>

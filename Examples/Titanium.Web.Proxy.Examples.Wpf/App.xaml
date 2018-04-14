@@ -4,6 +4,6 @@
              xmlns:local="clr-namespace:Titanium.Web.Proxy.Examples.Wpf"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+
     </Application.Resources>
 </Application>
