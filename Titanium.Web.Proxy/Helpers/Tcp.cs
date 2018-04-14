@@ -122,19 +122,19 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static async Task SendRawApm(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc, CancellationTokenSource cts)
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc, CancellationTokenSource cancellationTokenSource)
         {
-            var tcs = new TaskCompletionSource<bool>();
-            cts.Token.Register(() => tcs.TrySetResult(true));
+            var taskCompletionSource = new TaskCompletionSource<bool>();
+            cancellationTokenSource.Token.Register(() => taskCompletionSource.TrySetResult(true));
 
             //Now async relay all server=>client & client=>server data
             byte[] clientBuffer = BufferPool.GetBuffer(bufferSize);
             byte[] serverBuffer = BufferPool.GetBuffer(bufferSize);
             try
             {
-                BeginRead(clientStream, serverStream, clientBuffer, cts, onDataSend, exceptionFunc);
-                BeginRead(serverStream, clientStream, serverBuffer, cts, onDataReceive, exceptionFunc);
-                await tcs.Task;
+                BeginRead(clientStream, serverStream, clientBuffer, cancellationTokenSource, onDataSend, exceptionFunc);
+                BeginRead(serverStream, clientStream, serverBuffer, cancellationTokenSource, onDataReceive, exceptionFunc);
+                await taskCompletionSource.Task;
             }
             finally
             {
