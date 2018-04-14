@@ -126,12 +126,12 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="bufferSize"></param>
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
-        /// <param name="exceptionFunc"></param>
         /// <param name="cancellationTokenSource"></param>
+        /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static async Task SendRawApm(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc,
-            CancellationTokenSource cancellationTokenSource)
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, CancellationTokenSource cancellationTokenSource,
+            ExceptionHandler exceptionFunc)
         {
             var taskCompletionSource = new TaskCompletionSource<bool>();
             cancellationTokenSource.Token.Register(() => taskCompletionSource.TrySetResult(true));
@@ -141,8 +141,8 @@ namespace Titanium.Web.Proxy.Helpers
             var serverBuffer = BufferPool.GetBuffer(bufferSize);
             try
             {
-                BeginRead(clientStream, serverStream, clientBuffer, cancellationTokenSource, onDataSend, exceptionFunc);
-                BeginRead(serverStream, clientStream, serverBuffer, cancellationTokenSource, onDataReceive,
+                BeginRead(clientStream, serverStream, clientBuffer, onDataSend, cancellationTokenSource, exceptionFunc);
+                BeginRead(serverStream, clientStream, serverBuffer, onDataReceive, cancellationTokenSource,
                     exceptionFunc);
                 await taskCompletionSource.Task;
             }
@@ -154,7 +154,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         private static void BeginRead(Stream inputStream, Stream outputStream, byte[] buffer,
-            CancellationTokenSource cancellationTokenSource, Action<byte[], int, int> onCopy,
+            Action<byte[], int, int> onCopy, CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)
         {
             if (cancellationTokenSource.IsCancellationRequested)
@@ -193,7 +193,7 @@ namespace Titanium.Web.Proxy.Helpers
                         try
                         {
                             outputStream.EndWrite(ar2);
-                            BeginRead(inputStream, outputStream, buffer, cancellationTokenSource, onCopy,
+                            BeginRead(inputStream, outputStream, buffer, onCopy, cancellationTokenSource,
                                 exceptionFunc);
                         }
                         catch (IOException ex)
@@ -230,12 +230,12 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="bufferSize"></param>
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
-        /// <param name="exceptionFunc"></param>
         /// <param name="cancellationTokenSource"></param>
+        /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         private static async Task SendRawTap(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc,
-            CancellationTokenSource cancellationTokenSource)
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, CancellationTokenSource cancellationTokenSource,
+            ExceptionHandler exceptionFunc)
         {
             //Now async relay all server=>client & client=>server data
             var sendRelay =
@@ -259,16 +259,16 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="bufferSize"></param>
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
-        /// <param name="exceptionFunc"></param>
         /// <param name="cancellationTokenSource"></param>
+        /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static Task SendRaw(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, ExceptionHandler exceptionFunc,
-            CancellationTokenSource cancellationTokenSource)
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, CancellationTokenSource cancellationTokenSource,
+            ExceptionHandler exceptionFunc)
         {
             // todo: fix APM mode
-            return SendRawTap(clientStream, serverStream, bufferSize, onDataSend, onDataReceive, exceptionFunc,
-                cancellationTokenSource);
+            return SendRawTap(clientStream, serverStream, bufferSize, onDataSend, onDataReceive, cancellationTokenSource,
+                exceptionFunc);
         }
     }
 }
