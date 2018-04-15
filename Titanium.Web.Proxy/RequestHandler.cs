@@ -58,29 +58,6 @@ namespace Titanium.Web.Proxy
                 {
                     // read the request line
                     string httpCmd = await clientStreamReader.ReadLineAsync(cancellationToken);
-                    if (httpCmd == "PRI * HTTP/2.0")
-                    {
-                        // HTTP/2 Connection Preface
-                        string line = await clientStreamReader.ReadLineAsync(cancellationToken);
-                        if (line != string.Empty) throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
-
-                        line = await clientStreamReader.ReadLineAsync(cancellationToken);
-                        if (line != "SM") throw new Exception($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
-
-                        line = await clientStreamReader.ReadLineAsync(cancellationToken);
-                        if (line != string.Empty) throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
-
-                        // todo
-                        var buffer = new byte[1024];
-                        await clientStreamReader.ReadBytesAsync(buffer, 0, 3, cancellationToken);
-
-                        int length = (buffer[0] << 16) + (buffer[1] << 8) + buffer[2];
-                        await clientStreamReader.ReadBytesAsync(buffer, 0, length, cancellationToken);
-
-                        byte type = buffer[0];
-                        byte flags = buffer[1];
-
-                    }
 
                     if (string.IsNullOrEmpty(httpCmd))
                     {
@@ -101,7 +78,8 @@ namespace Titanium.Web.Proxy
                                 out var version);
 
                             //Read the request headers in to unique and non-unique header collections
-                            await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.Headers, cancellationToken);
+                            await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.Headers,
+                                cancellationToken);
 
                             Uri httpRemoteUri;
                             if (uriSchemeRegex.IsMatch(httpUrl))
@@ -153,7 +131,8 @@ namespace Titanium.Web.Proxy
                                 await InvokeBeforeResponse(args);
 
                                 //send the response
-                                await clientStreamWriter.WriteResponseAsync(args.WebSession.Response, cancellationToken: cancellationToken);
+                                await clientStreamWriter.WriteResponseAsync(args.WebSession.Response,
+                                    cancellationToken: cancellationToken);
                                 return;
                             }
 
@@ -214,7 +193,8 @@ namespace Titanium.Web.Proxy
                             {
                                 //prepare the prefix content
                                 await connection.StreamWriter.WriteLineAsync(httpCmd, cancellationToken);
-                                await connection.StreamWriter.WriteHeadersAsync(request.Headers, cancellationToken: cancellationToken);
+                                await connection.StreamWriter.WriteHeadersAsync(request.Headers,
+                                    cancellationToken: cancellationToken);
                                 string httpStatus = await connection.StreamReader.ReadLineAsync(cancellationToken);
 
                                 Response.ParseResponseLine(httpStatus, out var responseVersion,
@@ -224,11 +204,13 @@ namespace Titanium.Web.Proxy
                                 response.StatusCode = responseStatusCode;
                                 response.StatusDescription = responseStatusDescription;
 
-                                await HeaderParser.ReadHeaders(connection.StreamReader, response.Headers, cancellationToken);
+                                await HeaderParser.ReadHeaders(connection.StreamReader, response.Headers,
+                                    cancellationToken);
 
                                 if (!args.IsTransparent)
                                 {
-                                    await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
+                                    await clientStreamWriter.WriteResponseAsync(response,
+                                        cancellationToken: cancellationToken);
                                 }
 
                                 //If user requested call back then do it

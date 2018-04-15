@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -40,7 +41,7 @@ namespace Titanium.Web.Proxy
             try
             {
                 string connectHostname = null;
-                ConnectRequest connectRequest = null;
+                TunnelConnectSessionEventArgs connectArgs = null;
 
                 //Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
                 if (await HttpHelper.IsConnectMethod(clientStream) == 1)
@@ -57,7 +58,7 @@ namespace Titanium.Web.Proxy
                     var httpRemoteUri = new Uri("http://" + httpUrl);
                     connectHostname = httpRemoteUri.Host;
 
-                    connectRequest = new ConnectRequest
+                    var connectRequest = new ConnectRequest
                     {
                         RequestUri = httpRemoteUri,
                         OriginalUrl = httpUrl,
@@ -66,7 +67,7 @@ namespace Titanium.Web.Proxy
 
                     await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.Headers, cancellationToken);
 
-                    var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest,
+                    connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest,
                         cancellationTokenSource, ExceptionFunc);
                     connectArgs.ProxyClient.TcpClient = tcpClient;
                     connectArgs.ProxyClient.ClientStream = clientStream;
@@ -220,9 +221,41 @@ namespace Titanium.Web.Proxy
                     }
                 }
 
+                if (connectArgs != null && await HttpHelper.IsPriMethod(clientStream) == 1)
+                {
+                    // todo
+                    string httpCmd = await clientStreamReader.ReadLineAsync(cancellationToken);
+                    if (httpCmd == "PRI * HTTP/2.0")
+                    {
+                        // HTTP/2 Connection Preface
+                        string line = await clientStreamReader.ReadLineAsync(cancellationToken);
+                        if (line != string.Empty) throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+
+                        line = await clientStreamReader.ReadLineAsync(cancellationToken);
+                        if (line != "SM") throw new Exception($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
+
+                        line = await clientStreamReader.ReadLineAsync(cancellationToken);
+                        if (line != string.Empty) throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+
+                        //create new connection
+                        using (var connection = await GetServerConnection(connectArgs, true, cancellationToken))
+                        {
+                            await connection.StreamWriter.WriteLineAsync("PRI * HTTP/2.0", cancellationToken);
+                            await connection.StreamWriter.WriteLineAsync(cancellationToken);
+                            await connection.StreamWriter.WriteLineAsync("SM", cancellationToken);
+                            await connection.StreamWriter.WriteLineAsync(cancellationToken);
+
+                            await TcpHelper.SendHttp2(clientStream, connection.Stream, BufferSize,
+                                (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
+                                (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
+                                connectArgs.CancellationTokenSource, ExceptionFunc);
+                        }
+                    }
+                }
+
                 //Now create the request
                 await HandleHttpSessionRequest(endPoint, tcpClient, clientStream, clientStreamReader,
-                    clientStreamWriter, cancellationTokenSource, connectHostname, connectRequest);
+                    clientStreamWriter, cancellationTokenSource, connectHostname, connectArgs?.WebSession.ConnectRequest);
             }
             catch (ProxyHttpException e)
             {

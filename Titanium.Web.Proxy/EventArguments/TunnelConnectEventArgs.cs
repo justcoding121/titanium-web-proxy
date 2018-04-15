@@ -13,6 +13,7 @@ namespace Titanium.Web.Proxy.EventArguments
             CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
             : base(bufferSize, endPoint, cancellationTokenSource, connectRequest, exceptionFunc)
         {
+            WebSession.ConnectRequest = connectRequest;
         }
 
         public bool DecryptSsl { get; set; } = true;

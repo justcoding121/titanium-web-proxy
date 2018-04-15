@@ -120,9 +120,32 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="clientStream">The client stream.</param>
         /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static async Task<int> IsConnectMethod(CustomBufferedStream clientStream)
+        internal static Task<int> IsConnectMethod(CustomBufferedStream clientStream)
         {
-            bool isConnect = true;
+            return StartsWith(clientStream, "CONNECT");
+        }
+
+        /// <summary>
+        ///     Determines whether is pri method (HTTP/2).
+        /// </summary>
+        /// <param name="clientStream">The client stream.</param>
+        /// <returns>1: when PRI, 0: when valid HTTP method, -1: otherwise</returns>
+        internal static Task<int> IsPriMethod(CustomBufferedStream clientStream)
+        {
+            return StartsWith(clientStream, "PRI");
+        }
+
+        /// <summary>
+        ///     Determines whether the stream starts with the given string.
+        /// </summary>
+        /// <param name="clientStream">The client stream.</param>
+        /// <param name="expectedStart">The expected start.</param>
+        /// <returns>
+        /// 1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
+        /// </returns>
+        private static async Task<int> StartsWith(CustomBufferedStream clientStream, string expectedStart)
+        {
+            bool isExpected = true;
             int legthToCheck = 10;
             for (int i = 0; i < legthToCheck; i++)
             {
@@ -134,7 +157,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 if (b == ' ' && i > 2)
                 {
-                    return isConnect ? 1 : 0;
+                    return isExpected ? 1 : 0;
                 }
 
                 char ch = (char)b;
@@ -143,14 +166,14 @@ namespace Titanium.Web.Proxy.Helpers
                     return -1;
                 }
 
-                if (i > 6 || ch != "CONNECT"[i])
+                if (i >= expectedStart.Length || ch != expectedStart[i])
                 {
-                    isConnect = false;
+                    isExpected = false;
                 }
             }
 
             // only letters
-            return isConnect ? 1 : 0;
+            return isExpected ? 1 : 0;
         }
     }
 }
