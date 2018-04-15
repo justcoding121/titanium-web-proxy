@@ -130,7 +130,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static async Task SendRawApm(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, CancellationTokenSource cancellationTokenSource,
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive,
+            CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)
         {
             var taskCompletionSource = new TaskCompletionSource<bool>();
@@ -234,7 +235,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         private static async Task SendRawTap(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, CancellationTokenSource cancellationTokenSource,
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive,
+            CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)
         {
             //Now async relay all server=>client & client=>server data
@@ -263,12 +265,101 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static Task SendRaw(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive, CancellationTokenSource cancellationTokenSource,
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive,
+            CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)
         {
             // todo: fix APM mode
-            return SendRawTap(clientStream, serverStream, bufferSize, onDataSend, onDataReceive, cancellationTokenSource,
+            return SendRawTap(clientStream, serverStream, bufferSize, onDataSend, onDataReceive,
+                cancellationTokenSource,
                 exceptionFunc);
+        }
+
+        /// <summary>
+        ///     relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers
+        ///     as prefix
+        ///     Usefull for websocket requests
+        ///     Task-based Asynchronous Pattern
+        /// </summary>
+        /// <param name="clientStream"></param>
+        /// <param name="serverStream"></param>
+        /// <param name="bufferSize"></param>
+        /// <param name="onDataSend"></param>
+        /// <param name="onDataReceive"></param>
+        /// <param name="cancellationTokenSource"></param>
+        /// <param name="exceptionFunc"></param>
+        /// <returns></returns>
+        internal static async Task SendHttp2(Stream clientStream, Stream serverStream, int bufferSize,
+            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive,
+            CancellationTokenSource cancellationTokenSource,
+            ExceptionHandler exceptionFunc)
+        {
+            var connectionId = Guid.NewGuid();
+
+            //Now async relay all server=>client & client=>server data
+            var sendRelay =
+                CopyHttp2FrameAsync(clientStream, serverStream, onDataSend, bufferSize, connectionId, cancellationTokenSource.Token);
+            var receiveRelay =
+                CopyHttp2FrameAsync(serverStream, clientStream, onDataReceive, bufferSize, connectionId, cancellationTokenSource.Token);
+
+            await Task.WhenAny(sendRelay, receiveRelay);
+            cancellationTokenSource.Cancel();
+
+            await Task.WhenAll(sendRelay, receiveRelay);
+        }
+
+        private static async Task CopyHttp2FrameAsync(Stream input, Stream output, Action<byte[], int, int> onCopy,
+            int bufferSize, Guid connectionId, CancellationToken cancellationToken)
+        {
+            var headerBuffer = new byte[9];
+            var buffer = new byte[32768];
+            while (true)
+            {
+                int read = await ForceRead(input, headerBuffer, 0, 9, cancellationToken);
+                if (read != 9)
+                {
+                    return;
+                }
+
+                int length = (headerBuffer[0] << 16) + (headerBuffer[1] << 8) + headerBuffer[2];
+                byte type = headerBuffer[3];
+                byte flags = headerBuffer[4];
+                int streamId = ((headerBuffer[5] & 0x7f) << 24) + (headerBuffer[6] << 16) + (headerBuffer[7] << 8) + headerBuffer[8];
+
+                read = await ForceRead(input, buffer, 0, length, cancellationToken);
+                if (read != length)
+                {
+                    return;
+                }
+
+                await output.WriteAsync(headerBuffer, 0, headerBuffer.Length, cancellationToken);
+                await output.WriteAsync(buffer, 0, length, cancellationToken);
+
+                /*using (var fs = new System.IO.FileStream($@"c:\11\{connectionId}.{streamId}.dat", FileMode.Append))
+                {
+                    fs.Write(headerBuffer, 0, headerBuffer.Length);
+                    fs.Write(buffer, 0, length);
+                }*/
+            }
+        }
+
+        private static async Task<int> ForceRead(Stream input, byte[] buffer, int offset, int bytesToRead, CancellationToken cancellationToken)
+        {
+            int totalRead = 0;
+            while (bytesToRead > 0)
+            {
+                int read = await input.ReadAsync(buffer, offset, bytesToRead, cancellationToken);
+                if (read == -1)
+                {
+                    break;
+                }
+
+                totalRead += read;
+                bytesToRead -= read;
+                offset += read;
+            }
+
+            return totalRead;
         }
     }
 }
