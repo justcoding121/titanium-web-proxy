@@ -30,6 +30,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         internal bool IsHttps { get; set; }
 
+        internal bool IsHttp2Supported { get; set; }
+
         internal bool UseUpstreamProxy { get; set; }
 
         /// <summary>

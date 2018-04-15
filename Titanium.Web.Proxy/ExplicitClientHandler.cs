@@ -127,6 +127,19 @@ namespace Titanium.Web.Proxy
                     {
                         connectRequest.RequestUri = new Uri("https://" + httpUrl);
 
+                        bool http2Supproted = false;
+
+                        var alpn = clientHelloInfo.GetAlpn();
+                        if (alpn != null && alpn.Contains(SslApplicationProtocol.Http2))
+                        {
+                            // test server HTTP/2 support
+                            // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
+                            using (var connection = await GetServerConnection(connectArgs, true, cancellationToken))
+                            {
+                                http2Supproted = connection.IsHttp2Supported;
+                            }
+                        }
+
                         SslStream sslStream = null;
 
                         try
@@ -140,14 +153,14 @@ namespace Titanium.Web.Proxy
 
                             //Successfully managed to authenticate the client using the fake certificate
                             var options = new SslServerAuthenticationOptions();
-                            options.ApplicationProtocols = clientHelloInfo.GetAlpn();
-                            if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)
+                            if (http2Supproted)
                             {
-                                options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
+                                options.ApplicationProtocols = clientHelloInfo.GetAlpn();
+                                if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)
+                                {
+                                    options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
+                                }
                             }
-
-                            // client connection is always HTTP 1.x, todo
-                            //options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
 
                             options.ServerCertificate = certificate;
                             options.ClientCertificateRequired = false;
