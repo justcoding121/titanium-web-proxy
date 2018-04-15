@@ -55,6 +55,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
             TcpClient client = null;
             CustomBufferedStream stream = null;
 
+            bool http2Supported = false;
+
             try
             {
                 client = new TcpClient(upStreamEndPoint);
@@ -119,14 +121,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
                     }
 
-                    // server connection is always HTTP 1.x, todo
-                    //options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
-
                     options.TargetHost = remoteHostName;
                     options.ClientCertificates = null;
                     options.EnabledSslProtocols = proxyServer.SupportedSslProtocols;
                     options.CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation;
                     await sslStream.AuthenticateAsClientAsync(options, cancellationToken);
+#if NETCOREAPP2_1
+                    http2Supported = sslStream.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
+#endif
                 }
 
                 client.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
@@ -146,6 +148,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 HostName = remoteHostName,
                 Port = remotePort,
                 IsHttps = decryptSsl,
+                IsHttp2Supported = http2Supported,
                 UseUpstreamProxy = useUpstreamProxy,
                 TcpClient = client,
                 StreamReader = new CustomBinaryReader(stream, proxyServer.BufferSize),
