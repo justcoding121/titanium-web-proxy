@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy.EventArguments
     ///     A proxy session ends when client terminates connection to proxy
     ///     or when server terminates connection from proxy
     /// </summary>
-    public class SessionEventArgsBase : EventArgs, IDisposable
+    public abstract class SessionEventArgsBase : EventArgs, IDisposable
     {
         /// <summary>
         ///     Size of Buffers used by this object

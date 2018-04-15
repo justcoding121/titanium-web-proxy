@@ -105,11 +105,6 @@ namespace Titanium.Web.Proxy.Http
         public bool ExpectationFailed { get; internal set; }
 
         /// <summary>
-        ///     Gets the resposne status.
-        /// </summary>
-        public string Status => CreateResponseLine(HttpVersion, StatusCode, StatusDescription);
-
-        /// <summary>
         ///     Gets the header text.
         /// </summary>
         public override string HeaderText
@@ -117,7 +112,7 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 var sb = new StringBuilder();
-                sb.AppendLine(Status);
+                sb.AppendLine(CreateResponseLine(HttpVersion, StatusCode, StatusDescription));
                 foreach (var header in Headers)
                 {
                     sb.AppendLine(header.ToString());

@@ -57,7 +57,7 @@ namespace Titanium.Web.Proxy
 
                 if (response.TerminateResponse || response.Locked)
                 {
-                    await clientStreamWriter.WriteResponseAsync(response);
+                    await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
 
                     if (!response.TerminateResponse)
                     {
@@ -89,13 +89,13 @@ namespace Titanium.Web.Proxy
                 if (response.Is100Continue)
                 {
                     await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion,
-                        (int)HttpStatusCode.Continue, "Continue");
+                        (int)HttpStatusCode.Continue, "Continue", cancellationToken);
                     await clientStreamWriter.WriteLineAsync(cancellationToken);
                 }
                 else if (response.ExpectationFailed)
                 {
                     await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion,
-                        (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
+                        (int)HttpStatusCode.ExpectationFailed, "Expectation Failed", cancellationToken);
                     await clientStreamWriter.WriteLineAsync(cancellationToken);
                 }
 
@@ -106,13 +106,13 @@ namespace Titanium.Web.Proxy
 
                 if (response.IsBodyRead)
                 {
-                    await clientStreamWriter.WriteResponseAsync(response);
+                    await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
                 }
                 else
                 {
                     //Write back response status to client
                     await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.StatusCode,
-                        response.StatusDescription);
+                        response.StatusDescription, cancellationToken);
                     await clientStreamWriter.WriteHeadersAsync(response.Headers, cancellationToken: cancellationToken);
 
                     //Write body if exists

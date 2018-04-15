@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Http;
 
@@ -16,11 +17,14 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="response"></param>
         /// <param name="flush"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task WriteResponseAsync(Response response, bool flush = true)
+        public async Task WriteResponseAsync(Response response, bool flush = true,
+            CancellationToken cancellationToken = default)
         {
-            await WriteResponseStatusAsync(response.HttpVersion, response.StatusCode, response.StatusDescription);
-            await WriteAsync(response, flush);
+            await WriteResponseStatusAsync(response.HttpVersion, response.StatusCode, response.StatusDescription,
+                cancellationToken);
+            await WriteAsync(response, flush, cancellationToken);
         }
 
         /// <summary>
@@ -29,10 +33,11 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="version"></param>
         /// <param name="code"></param>
         /// <param name="description"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public Task WriteResponseStatusAsync(Version version, int code, string description)
+        public Task WriteResponseStatusAsync(Version version, int code, string description, CancellationToken cancellationToken)
         {
-            return WriteLineAsync(Response.CreateResponseLine(version, code, description));
+            return WriteLineAsync(Response.CreateResponseLine(version, code, description), cancellationToken);
         }
     }
 }

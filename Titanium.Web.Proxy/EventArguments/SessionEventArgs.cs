@@ -349,7 +349,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Gets the request body as bytes
         /// </summary>
         /// <returns></returns>
-        public async Task<byte[]> GetRequestBody(CancellationToken cancellationToken = default (CancellationToken))
+        public async Task<byte[]> GetRequestBody(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Request.IsBodyRead)
             {
@@ -363,7 +363,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Gets the request body as string
         /// </summary>
         /// <returns></returns>
-        public async Task<string> GetRequestBodyAsString(CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<string> GetRequestBodyAsString(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Request.IsBodyRead)
             {
@@ -406,7 +406,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Gets the response body as byte array
         /// </summary>
         /// <returns></returns>
-        public async Task<byte[]> GetResponseBody(CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<byte[]> GetResponseBody(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Response.IsBodyRead)
             {
@@ -420,7 +420,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Gets the response body as string
         /// </summary>
         /// <returns></returns>
-        public async Task<string> GetResponseBodyAsString(CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<string> GetResponseBodyAsString(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Response.IsBodyRead)
             {
