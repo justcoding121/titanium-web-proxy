@@ -26,6 +26,7 @@ namespace Titanium.Web.Proxy
         private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
             var cancellationTokenSource = new CancellationTokenSource();
+            var cancellationToken = cancellationTokenSource.Token;
 
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
@@ -34,7 +35,7 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                var clientHelloInfo = await SslTools.PeekClientHello(clientStream, cancellationTokenSource.Token);
+                var clientHelloInfo = await SslTools.PeekClientHello(clientStream, cancellationToken);
 
                 bool isHttps = clientHelloInfo != null;
                 string httpsHostName = null;
@@ -102,9 +103,9 @@ namespace Titanium.Web.Proxy
                                 try
                                 {
                                     // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
-                                    await clientStream.ReadAsync(data, 0, available, cancellationTokenSource.Token);
-                                    await serverStream.WriteAsync(data, 0, available, cancellationTokenSource.Token);
-                                    await serverStream.FlushAsync(cancellationTokenSource.Token);
+                                    await clientStream.ReadAsync(data, 0, available, cancellationToken);
+                                    await serverStream.WriteAsync(data, 0, available, cancellationToken);
+                                    await serverStream.FlushAsync(cancellationToken);
                                 }
                                 finally
                                 {

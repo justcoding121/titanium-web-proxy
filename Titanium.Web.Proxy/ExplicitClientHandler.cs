@@ -30,6 +30,8 @@ namespace Titanium.Web.Proxy
         private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient tcpClient)
         {
             var cancellationTokenSource = new CancellationTokenSource();
+            var cancellationToken = cancellationTokenSource.Token;
+
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
             var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
@@ -44,7 +46,7 @@ namespace Titanium.Web.Proxy
                 if (await HttpHelper.IsConnectMethod(clientStream) == 1)
                 {
                     //read the first line HTTP command
-                    string httpCmd = await clientStreamReader.ReadLineAsync(cancellationTokenSource.Token);
+                    string httpCmd = await clientStreamReader.ReadLineAsync(cancellationToken);
                     if (string.IsNullOrEmpty(httpCmd))
                     {
                         return;
@@ -62,7 +64,7 @@ namespace Titanium.Web.Proxy
                         HttpVersion = version
                     };
 
-                    await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.Headers, cancellationTokenSource.Token);
+                    await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.Headers, cancellationToken);
 
                     var connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest,
                         cancellationTokenSource, ExceptionFunc);
@@ -87,7 +89,7 @@ namespace Titanium.Web.Proxy
                         }
 
                         //send the response
-                        await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response);
+                        await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response, cancellationToken: cancellationToken);
                         return;
                     }
 
@@ -96,7 +98,7 @@ namespace Titanium.Web.Proxy
                         await endPoint.InvokeBeforeTunnectConnectResponse(this, connectArgs, ExceptionFunc);
 
                         //send the response
-                        await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response);
+                        await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response, cancellationToken: cancellationToken);
                         return;
                     }
 
@@ -108,9 +110,9 @@ namespace Titanium.Web.Proxy
                     response.Headers.FixProxyHeaders();
                     connectArgs.WebSession.Response = response;
 
-                    await clientStreamWriter.WriteResponseAsync(response);
+                    await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
 
-                    var clientHelloInfo = await SslTools.PeekClientHello(clientStream, cancellationTokenSource.Token);
+                    var clientHelloInfo = await SslTools.PeekClientHello(clientStream, cancellationToken);
 
                     bool isClientHello = clientHelloInfo != null;
                     if (isClientHello)
@@ -144,13 +146,13 @@ namespace Titanium.Web.Proxy
                             }
 
                             // client connection is always HTTP 1.x, todo
-                            options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
+                            //options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
 
                             options.ServerCertificate = certificate;
                             options.ClientCertificateRequired = false;
                             options.EnabledSslProtocols = SupportedSslProtocols;
                             options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;
-                            await sslStream.AuthenticateAsServerAsync(options, cancellationTokenSource.Token);
+                            await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
 
                             //HTTPS server created - we can now decrypt the client's traffic
                             clientStream = new CustomBufferedStream(sslStream, BufferSize);
@@ -182,7 +184,7 @@ namespace Titanium.Web.Proxy
                     if (!decryptSsl || !isClientHello)
                     {
                         //create new connection
-                        using (var connection = await GetServerConnection(connectArgs, true, cancellationTokenSource.Token))
+                        using (var connection = await GetServerConnection(connectArgs, true, cancellationToken))
                         {
                             if (isClientHello)
                             {
@@ -195,8 +197,8 @@ namespace Titanium.Web.Proxy
                                     try
                                     {
                                         // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
-                                        await clientStream.ReadAsync(data, 0, available, cancellationTokenSource.Token);
-                                        await connection.StreamWriter.WriteAsync(data, 0, available, true, cancellationTokenSource.Token);
+                                        await clientStream.ReadAsync(data, 0, available, cancellationToken);
+                                        await connection.StreamWriter.WriteAsync(data, 0, available, true, cancellationToken);
                                     }
                                     finally
                                     {
@@ -204,7 +206,7 @@ namespace Titanium.Web.Proxy
                                     }
                                 }
 
-                                var serverHelloInfo = await SslTools.PeekServerHello(connection.Stream, cancellationTokenSource.Token);
+                                var serverHelloInfo = await SslTools.PeekServerHello(connection.Stream, cancellationToken);
                                 ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
                             }
 
