@@ -30,16 +30,6 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        ///     <see href="http://msdn2.microsoft.com/en-us/library/aa366921.aspx" />
-        /// </summary>
-        [StructLayout(LayoutKind.Sequential)]
-        internal struct TcpTable
-        {
-            public uint length;
-            public TcpRow row;
-        }
-
-        /// <summary>
         ///     <see href="http://msdn2.microsoft.com/en-us/library/aa366913.aspx" />
         /// </summary>
         [StructLayout(LayoutKind.Sequential)]
@@ -47,16 +37,37 @@ namespace Titanium.Web.Proxy.Helpers
         {
             public TcpState state;
             public uint localAddr;
-            public byte localPort1;
-            public byte localPort2;
-            public byte localPort3;
-            public byte localPort4;
+            public TcpPort localPort;
             public uint remoteAddr;
-            public byte remotePort1;
-            public byte remotePort2;
-            public byte remotePort3;
-            public byte remotePort4;
+            public TcpPort remotePort;
             public int owningPid;
+        }
+
+        /// <summary>
+        ///     <see href="https://msdn.microsoft.com/en-us/library/aa366896.aspx"/>
+        /// </summary>
+        [StructLayout(LayoutKind.Sequential)]
+        internal unsafe struct Tcp6Row
+        {
+            public fixed byte localAddr[16];
+            public uint localScopeId;
+            public TcpPort localPort;
+            public fixed byte remoteAddr[16];
+            public uint remoteScopeId;
+            public TcpPort remotePort;
+            public TcpState state;
+            public int owningPid;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct TcpPort
+        {
+            public byte port1;
+            public byte port2;
+            public byte port3;
+            public byte port4;
+
+            public int Port => (port1 << 8) + port2 + (port3 << 24) + (port4 << 16);
         }
     }
 }
