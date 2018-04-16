@@ -6,7 +6,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended.Helpers;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -19,57 +18,10 @@ namespace Titanium.Web.Proxy.Helpers
     internal class TcpHelper
     {
         /// <summary>
-        ///     Gets the extended TCP table.
+        ///     Gets the process id by local port number.
         /// </summary>
-        /// <returns>Collection of <see cref="TcpRow" />.</returns>
-        internal static TcpTable GetExtendedTcpTable(IpVersion ipVersion)
-        {
-            var tcpRows = new List<TcpRow>();
-
-            var tcpTable = IntPtr.Zero;
-            int tcpTableLength = 0;
-
-            int ipVersionValue = ipVersion == IpVersion.Ipv4 ? NativeMethods.AfInet : NativeMethods.AfInet6;
-            int allPid = (int)NativeMethods.TcpTableType.OwnerPidAll;
-
-            if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, false, ipVersionValue, allPid, 0) != 0)
-            {
-                try
-                {
-                    tcpTable = Marshal.AllocHGlobal(tcpTableLength);
-                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, allPid,
-                            0) == 0)
-                    {
-                        var table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable,
-                            typeof(NativeMethods.TcpTable));
-
-                        var rowPtr = (IntPtr)((long)tcpTable + Marshal.SizeOf(table.length));
-
-                        for (int i = 0; i < table.length; ++i)
-                        {
-                            tcpRows.Add(new TcpRow(
-                                (NativeMethods.TcpRow)Marshal.PtrToStructure(rowPtr, typeof(NativeMethods.TcpRow))));
-                            rowPtr = (IntPtr)((long)rowPtr + Marshal.SizeOf(typeof(NativeMethods.TcpRow)));
-                        }
-                    }
-                }
-                finally
-                {
-                    if (tcpTable != IntPtr.Zero)
-                    {
-                        Marshal.FreeHGlobal(tcpTable);
-                    }
-                }
-            }
-
-            return new TcpTable(tcpRows);
-        }
-
-        /// <summary>
-        ///     Gets the TCP row by local port number.
-        /// </summary>
-        /// <returns><see cref="TcpRow" />.</returns>
-        internal static TcpRow GetTcpRowByLocalPort(IpVersion ipVersion, int localPort)
+        /// <returns>Process id.</returns>
+        internal static unsafe int GetProcessIdByLocalPort(IpVersion ipVersion, int localPort)
         {
             var tcpTable = IntPtr.Zero;
             int tcpTableLength = 0;
@@ -85,21 +37,36 @@ namespace Titanium.Web.Proxy.Helpers
                     if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, allPid,
                             0) == 0)
                     {
-                        var table = (NativeMethods.TcpTable)Marshal.PtrToStructure(tcpTable,
-                            typeof(NativeMethods.TcpTable));
+                        int rowCount = *(int*)tcpTable;
+                        tcpTable += 4; // int size
 
-                        var rowPtr = (IntPtr)((long)tcpTable + Marshal.SizeOf(table.length));
-
-                        for (int i = 0; i < table.length; ++i)
+                        if (ipVersion == IpVersion.Ipv4)
                         {
-                            var tcpRow =
-                                (NativeMethods.TcpRow)Marshal.PtrToStructure(rowPtr, typeof(NativeMethods.TcpRow));
-                            if (tcpRow.GetLocalPort() == localPort)
+                            NativeMethods.TcpRow* rowPtr = (NativeMethods.TcpRow*)tcpTable;
+
+                            for (int i = 0; i < rowCount; ++i)
                             {
-                                return new TcpRow(tcpRow);
-                            }
+                                if (rowPtr->localPort.Port == localPort)
+                                {
+                                    return rowPtr->owningPid;
+                                }
 
-                            rowPtr = (IntPtr)((long)rowPtr + Marshal.SizeOf(typeof(NativeMethods.TcpRow)));
+                                rowPtr++;
+                            }
+                        }
+                        else
+                        {
+                            NativeMethods.Tcp6Row* rowPtr = (NativeMethods.Tcp6Row*)tcpTable + 4;
+
+                            for (int i = 0; i < rowCount; ++i)
+                            {
+                                if (rowPtr->localPort.Port == localPort)
+                                {
+                                    return rowPtr->owningPid;
+                                }
+
+                                rowPtr++;
+                            }
                         }
                     }
                 }
@@ -112,7 +79,7 @@ namespace Titanium.Web.Proxy.Helpers
                 }
             }
 
-            return null;
+            return 0;
         }
 
         /// <summary>
