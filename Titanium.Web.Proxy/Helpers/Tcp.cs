@@ -37,11 +37,10 @@ namespace Titanium.Web.Proxy.Helpers
                             0) == 0)
                     {
                         int rowCount = *(int*)tcpTable;
-                        tcpTable += 4; // int size
 
                         if (ipVersion == IpVersion.Ipv4)
                         {
-                            NativeMethods.TcpRow* rowPtr = (NativeMethods.TcpRow*)tcpTable;
+                            NativeMethods.TcpRow* rowPtr = (NativeMethods.TcpRow*)(tcpTable + 4);
 
                             for (int i = 0; i < rowCount; ++i)
                             {
@@ -55,7 +54,7 @@ namespace Titanium.Web.Proxy.Helpers
                         }
                         else
                         {
-                            NativeMethods.Tcp6Row* rowPtr = (NativeMethods.Tcp6Row*)tcpTable;
+                            NativeMethods.Tcp6Row* rowPtr = (NativeMethods.Tcp6Row*)(tcpTable + 4);
 
                             for (int i = 0; i < rowCount; ++i)
                             {
