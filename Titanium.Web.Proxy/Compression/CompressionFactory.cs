@@ -9,17 +9,17 @@ namespace Titanium.Web.Proxy.Compression
     internal static class CompressionFactory
     {
         //cache
-        private static readonly Lazy<ICompression> gzip = new Lazy<ICompression>(() => new GZipCompression());
-        private static readonly Lazy<ICompression> deflate = new Lazy<ICompression>(() => new DeflateCompression());
+        private static readonly ICompression gzip = new GZipCompression();
+        private static readonly ICompression deflate = new DeflateCompression();
 
         public static ICompression GetCompression(string type)
         {
             switch (type)
             {
                 case KnownHeaders.ContentEncodingGzip:
-                    return gzip.Value;
+                    return gzip;
                 case KnownHeaders.ContentEncodingDeflate:
-                    return deflate.Value;
+                    return deflate;
                 default:
                     throw new Exception($"Unsupported compression mode: {type}");
             }
