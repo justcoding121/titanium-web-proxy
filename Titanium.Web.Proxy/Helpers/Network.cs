@@ -6,18 +6,6 @@ namespace Titanium.Web.Proxy.Helpers
 {
     internal class NetworkHelper
     {
-        internal static int GetProcessIdFromPort(int port, bool ipV6Enabled)
-        {
-            int processId = TcpHelper.GetProcessIdByLocalPort(IpVersion.Ipv4, port);
-
-            if (processId > 0 && !ipV6Enabled)
-            {
-                return processId;
-            }
-
-            return TcpHelper.GetProcessIdByLocalPort(IpVersion.Ipv6, port);
-        }
-
         /// <summary>
         ///     Adapated from below link
         ///     http://stackoverflow.com/questions/11834091/how-to-check-if-localhost
