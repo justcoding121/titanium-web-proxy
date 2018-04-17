@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     An default exception log func
         /// </summary>
-        private readonly Lazy<ExceptionHandler> defaultExceptionFunc = new Lazy<ExceptionHandler>(() => (e => { }));
+        private readonly ExceptionHandler defaultExceptionFunc = e => { };
 
         /// <summary>
         ///     Backing field for corresponding public property
@@ -209,7 +209,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public ExceptionHandler ExceptionFunc
         {
-            get => exceptionFunc ?? defaultExceptionFunc.Value;
+            get => exceptionFunc ?? defaultExceptionFunc;
             set => exceptionFunc = value;
         }
 

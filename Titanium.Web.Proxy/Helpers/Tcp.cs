@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -27,7 +26,7 @@ namespace Titanium.Web.Proxy.Helpers
             int tcpTableLength = 0;
 
             int ipVersionValue = ipVersion == IpVersion.Ipv4 ? NativeMethods.AfInet : NativeMethods.AfInet6;
-            int allPid = (int)NativeMethods.TcpTableType.OwnerPidAll;
+            const int allPid = (int)NativeMethods.TcpTableType.OwnerPidAll;
 
             if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, false, ipVersionValue, allPid, 0) != 0)
             {
@@ -56,7 +55,7 @@ namespace Titanium.Web.Proxy.Helpers
                         }
                         else
                         {
-                            NativeMethods.Tcp6Row* rowPtr = (NativeMethods.Tcp6Row*)tcpTable + 4;
+                            NativeMethods.Tcp6Row* rowPtr = (NativeMethods.Tcp6Row*)tcpTable;
 
                             for (int i = 0; i < rowCount; ++i)
                             {

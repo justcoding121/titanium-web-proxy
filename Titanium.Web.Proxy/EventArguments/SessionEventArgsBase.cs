@@ -55,7 +55,8 @@ namespace Titanium.Web.Proxy.EventArguments
                     //If client is localhost get the process id
                     if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
                     {
-                        return NetworkHelper.GetProcessIdFromPort(remoteEndPoint.Port, endPoint.IpV6Enabled);
+                        var ipVersion = endPoint.IpV6Enabled ? IpVersion.Ipv6 : IpVersion.Ipv4;
+                        return TcpHelper.GetProcessIdByLocalPort(ipVersion, remoteEndPoint.Port);
                     }
 
                     //can't access process Id of remote request from remote machine
