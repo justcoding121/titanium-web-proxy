@@ -6,8 +6,8 @@ namespace Titanium.Web.Proxy.Extensions
 {
     internal static class FuncExtensions
     {
-
-        public static async Task InvokeAsync<T>(this AsyncEventHandler<T> callback, object sender, T args, ExceptionHandler exceptionFunc)
+        public static async Task InvokeAsync<T>(this AsyncEventHandler<T> callback, object sender, T args,
+            ExceptionHandler exceptionFunc)
         {
             var invocationList = callback.GetInvocationList();
 
@@ -17,7 +17,8 @@ namespace Titanium.Web.Proxy.Extensions
             }
         }
 
-        private static async Task InternalInvokeAsync<T>(AsyncEventHandler<T> callback, object sender, T args, ExceptionHandler exceptionFunc)
+        private static async Task InternalInvokeAsync<T>(AsyncEventHandler<T> callback, object sender, T args,
+            ExceptionHandler exceptionFunc)
         {
             try
             {

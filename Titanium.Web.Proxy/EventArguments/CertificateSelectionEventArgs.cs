@@ -4,37 +4,37 @@ using System.Security.Cryptography.X509Certificates;
 namespace Titanium.Web.Proxy.EventArguments
 {
     /// <summary>
-    /// An argument passed on to user for client certificate selection during mutual SSL authentication
+    ///     An argument passed on to user for client certificate selection during mutual SSL authentication
     /// </summary>
     public class CertificateSelectionEventArgs : EventArgs
     {
         /// <summary>
-        /// Sender object.
+        ///     Sender object.
         /// </summary>
         public object Sender { get; internal set; }
 
         /// <summary>
-        /// Target host.
+        ///     Target host.
         /// </summary>
         public string TargetHost { get; internal set; }
 
         /// <summary>
-        /// Local certificates.
+        ///     Local certificates.
         /// </summary>
         public X509CertificateCollection LocalCertificates { get; internal set; }
 
         /// <summary>
-        /// Remote certificate.
+        ///     Remote certificate.
         /// </summary>
         public X509Certificate RemoteCertificate { get; internal set; }
 
         /// <summary>
-        /// Acceptable issuers.
+        ///     Acceptable issuers.
         /// </summary>
         public string[] AcceptableIssuers { get; internal set; }
 
         /// <summary>
-        /// Client Certificate.
+        ///     Client Certificate.
         /// </summary>
         public X509Certificate ClientCertificate { get; set; }
     }

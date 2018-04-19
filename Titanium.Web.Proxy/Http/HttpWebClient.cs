@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
@@ -9,52 +10,11 @@ using Titanium.Web.Proxy.Network.Tcp;
 namespace Titanium.Web.Proxy.Http
 {
     /// <summary>
-    /// Used to communicate with the server over HTTP(S)
+    ///     Used to communicate with the server over HTTP(S)
     /// </summary>
     public class HttpWebClient
     {
         private readonly int bufferSize;
-
-        /// <summary>
-        /// Connection to server
-        /// </summary>
-        internal TcpConnection ServerConnection { get; set; }
-
-        /// <summary>
-        /// Request ID.
-        /// </summary>
-        public Guid RequestId { get; }
-
-        /// <summary>
-        /// Override UpStreamEndPoint for this request; Local NIC via request is made
-        /// </summary>
-        public IPEndPoint UpStreamEndPoint { get; set; }
-
-        /// <summary>
-        /// Headers passed with Connect.
-        /// </summary>
-        public ConnectRequest ConnectRequest { get; internal set; }
-
-        /// <summary>
-        /// Web Request.
-        /// </summary>
-        public Request Request { get; }
-
-        /// <summary>
-        /// Web Response.
-        /// </summary>
-        public Response Response { get; internal set; }
-
-        /// <summary>
-        /// PID of the process that is created the current session when client is running in this machine
-        /// If client is remote then this will return 
-        /// </summary>
-        public Lazy<int> ProcessId { get; internal set; }
-
-        /// <summary>
-        /// Is Https?
-        /// </summary>
-        public bool IsHttps => Request.IsHttps;
 
         internal HttpWebClient(int bufferSize, Request request = null, Response response = null)
         {
@@ -66,9 +26,50 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Set the tcp connection to server used by this webclient
+        ///     Connection to server
         /// </summary>
-        /// <param name="connection">Instance of <see cref="TcpConnection"/></param>
+        internal TcpConnection ServerConnection { get; set; }
+
+        /// <summary>
+        ///     Request ID.
+        /// </summary>
+        public Guid RequestId { get; }
+
+        /// <summary>
+        ///     Override UpStreamEndPoint for this request; Local NIC via request is made
+        /// </summary>
+        public IPEndPoint UpStreamEndPoint { get; set; }
+
+        /// <summary>
+        ///     Headers passed with Connect.
+        /// </summary>
+        public ConnectRequest ConnectRequest { get; internal set; }
+
+        /// <summary>
+        ///     Web Request.
+        /// </summary>
+        public Request Request { get; }
+
+        /// <summary>
+        ///     Web Response.
+        /// </summary>
+        public Response Response { get; internal set; }
+
+        /// <summary>
+        ///     PID of the process that is created the current session when client is running in this machine
+        ///     If client is remote then this will return
+        /// </summary>
+        public Lazy<int> ProcessId { get; internal set; }
+
+        /// <summary>
+        ///     Is Https?
+        /// </summary>
+        public bool IsHttps => Request.IsHttps;
+
+        /// <summary>
+        ///     Set the tcp connection to server used by this webclient
+        /// </summary>
+        /// <param name="connection">Instance of <see cref="TcpConnection" /></param>
         internal void SetConnection(TcpConnection connection)
         {
             connection.LastAccess = DateTime.Now;
@@ -76,10 +77,10 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Prepare and send the http(s) request
+        ///     Prepare and send the http(s) request
         /// </summary>
         /// <returns></returns>
-        internal async Task SendRequest(bool enable100ContinueBehaviour, bool isTransparent)
+        internal async Task SendRequest(bool enable100ContinueBehaviour, bool isTransparent, CancellationToken cancellationToken)
         {
             var upstreamProxy = ServerConnection.UpStreamProxy;
 
@@ -90,17 +91,18 @@ namespace Titanium.Web.Proxy.Http
             //prepare the request & headers
             await writer.WriteLineAsync(Request.CreateRequestLine(Request.Method,
                 useUpstreamProxy || isTransparent ? Request.OriginalUrl : Request.RequestUri.PathAndQuery,
-                Request.HttpVersion));
+                Request.HttpVersion), cancellationToken);
 
 
             //Send Authentication to Upstream proxy if needed
             if (!isTransparent && upstreamProxy != null
-                && ServerConnection.IsHttps == false
-                && !string.IsNullOrEmpty(upstreamProxy.UserName)
-                && upstreamProxy.Password != null)
+                               && ServerConnection.IsHttps == false
+                               && !string.IsNullOrEmpty(upstreamProxy.UserName)
+                               && upstreamProxy.Password != null)
             {
-                await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer);
-                await HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password).WriteToStreamAsync(writer);
+                await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer, cancellationToken);
+                await HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password)
+                    .WriteToStreamAsync(writer, cancellationToken);
             }
 
             //write request headers
@@ -108,48 +110,51 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (isTransparent || header.Name != KnownHeaders.ProxyAuthorization)
                 {
-                    await header.WriteToStreamAsync(writer);
+                    await header.WriteToStreamAsync(writer, cancellationToken);
                 }
             }
 
-            await writer.WriteLineAsync();
+            await writer.WriteLineAsync(cancellationToken);
 
             if (enable100ContinueBehaviour)
             {
                 if (Request.ExpectContinue)
                 {
-                    string httpStatus = await ServerConnection.StreamReader.ReadLineAsync();
+                    string httpStatus = await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
 
-                    Response.ParseResponseLine(httpStatus, out _, out int responseStatusCode, out string responseStatusDescription);
+                    Response.ParseResponseLine(httpStatus, out _, out int responseStatusCode,
+                        out string responseStatusDescription);
 
                     //find if server is willing for expect continue
                     if (responseStatusCode == (int)HttpStatusCode.Continue
                         && responseStatusDescription.EqualsIgnoreCase("continue"))
                     {
                         Request.Is100Continue = true;
-                        await ServerConnection.StreamReader.ReadLineAsync();
+                        await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
                     }
                     else if (responseStatusCode == (int)HttpStatusCode.ExpectationFailed
                              && responseStatusDescription.EqualsIgnoreCase("expectation failed"))
                     {
                         Request.ExpectationFailed = true;
-                        await ServerConnection.StreamReader.ReadLineAsync();
+                        await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
                     }
                 }
             }
         }
 
         /// <summary>
-        /// Receive and parse the http response from server
+        ///     Receive and parse the http response from server
         /// </summary>
         /// <returns></returns>
-        internal async Task ReceiveResponse()
+        internal async Task ReceiveResponse(CancellationToken cancellationToken)
         {
             //return if this is already read
             if (Response.StatusCode != 0)
+            {
                 return;
+            }
 
-            string httpStatus = await ServerConnection.StreamReader.ReadLineAsync();
+            string httpStatus = await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
             if (httpStatus == null)
             {
                 throw new IOException();
@@ -157,8 +162,7 @@ namespace Titanium.Web.Proxy.Http
 
             if (httpStatus == string.Empty)
             {
-                //Empty content in first-line, try again
-                httpStatus = await ServerConnection.StreamReader.ReadLineAsync();
+                httpStatus = await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
             }
 
             Response.ParseResponseLine(httpStatus, out var version, out int statusCode, out string statusDescription);
@@ -174,10 +178,10 @@ namespace Titanium.Web.Proxy.Http
                 //Read the next line after 100-continue 
                 Response.Is100Continue = true;
                 Response.StatusCode = 0;
-                await ServerConnection.StreamReader.ReadLineAsync();
+                await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
 
                 //now receive response
-                await ReceiveResponse();
+                await ReceiveResponse(cancellationToken);
                 return;
             }
 
@@ -187,19 +191,19 @@ namespace Titanium.Web.Proxy.Http
                 //read next line after expectation failed response
                 Response.ExpectationFailed = true;
                 Response.StatusCode = 0;
-                await ServerConnection.StreamReader.ReadLineAsync();
+                await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
 
                 //now receive response 
-                await ReceiveResponse();
+                await ReceiveResponse(cancellationToken);
                 return;
             }
 
             //Read the response headers in to unique and non-unique header collections
-            await HeaderParser.ReadHeaders(ServerConnection.StreamReader, Response.Headers);
+            await HeaderParser.ReadHeaders(ServerConnection.StreamReader, Response.Headers, cancellationToken);
         }
 
         /// <summary>
-        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        ///     Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
         /// </summary>
         internal void FinishSession()
         {

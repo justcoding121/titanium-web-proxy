@@ -3,12 +3,12 @@
 namespace Titanium.Web.Proxy.Network.WinAuth.Security
 {
     /// <summary>
-    /// Status of authenticated session
+    ///     Status of authenticated session
     /// </summary>
     internal class State
     {
         /// <summary>
-        /// States during Windows Authentication
+        ///     States during Windows Authentication
         /// </summary>
         public enum WinAuthState
         {
@@ -16,7 +16,27 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             INITIAL_TOKEN,
             FINAL_TOKEN,
             AUTHORIZED
-        };
+        }
+
+        /// <summary>
+        ///     Current state of the authentication process
+        /// </summary>
+        internal WinAuthState AuthState;
+
+        /// <summary>
+        ///     Context will be used to validate HTLM hashes
+        /// </summary>
+        internal Common.SecurityHandle Context;
+
+        /// <summary>
+        ///     Credentials used to validate NTLM hashes
+        /// </summary>
+        internal Common.SecurityHandle Credentials;
+
+        /// <summary>
+        ///     Timestamp needed to calculate validity of the authenticated session
+        /// </summary>
+        internal DateTime LastSeen;
 
         internal State()
         {
@@ -26,26 +46,6 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             LastSeen = DateTime.Now;
             AuthState = WinAuthState.UNAUTHORIZED;
         }
-
-        /// <summary>
-        /// Credentials used to validate NTLM hashes
-        /// </summary>
-        internal Common.SecurityHandle Credentials;
-
-        /// <summary>
-        /// Context will be used to validate HTLM hashes
-        /// </summary>
-        internal Common.SecurityHandle Context;
-
-        /// <summary>
-        /// Timestamp needed to calculate validity of the authenticated session
-        /// </summary>
-        internal DateTime LastSeen;
-
-        /// <summary>
-        /// Current state of the authentication process
-        /// </summary>
-        internal WinAuthState AuthState;
 
         internal void ResetHandles()
         {

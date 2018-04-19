@@ -8,23 +8,38 @@ using Titanium.Web.Proxy.Shared;
 namespace Titanium.Web.Proxy.Http
 {
     /// <summary>
-    /// Http(s) response object
+    ///     Http(s) response object
     /// </summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class Response : RequestResponseBase
     {
         /// <summary>
-        /// Response Status Code.
+        ///     Constructor.
+        /// </summary>
+        public Response()
+        {
+        }
+
+        /// <summary>
+        ///     Constructor.
+        /// </summary>
+        public Response(byte[] body)
+        {
+            Body = body;
+        }
+
+        /// <summary>
+        ///     Response Status Code.
         /// </summary>
         public int StatusCode { get; set; }
 
         /// <summary>
-        /// Response Status description.
+        ///     Response Status description.
         /// </summary>
         public string StatusDescription { get; set; }
 
         /// <summary>
-        /// Has response body?
+        ///     Has response body?
         /// </summary>
         public override bool HasBody
         {
@@ -57,7 +72,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Keep the connection alive?
+        ///     Keep the connection alive?
         /// </summary>
         public bool KeepAlive
         {
@@ -79,6 +94,35 @@ namespace Titanium.Web.Proxy.Http
 
         internal bool TerminateResponse { get; set; }
 
+        /// <summary>
+        ///     Is response 100-continue
+        /// </summary>
+        public bool Is100Continue { get; internal set; }
+
+        /// <summary>
+        ///     expectation failed returned by server?
+        /// </summary>
+        public bool ExpectationFailed { get; internal set; }
+
+        /// <summary>
+        ///     Gets the header text.
+        /// </summary>
+        public override string HeaderText
+        {
+            get
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine(CreateResponseLine(HttpVersion, StatusCode, StatusDescription));
+                foreach (var header in Headers)
+                {
+                    sb.AppendLine(header.ToString());
+                }
+
+                sb.AppendLine();
+                return sb.ToString();
+            }
+        }
+
         internal override void EnsureBodyAvailable(bool throwWhenNotReadYet = true)
         {
             if (BodyInternal != null)
@@ -94,61 +138,13 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        /// <summary>
-        /// Is response 100-continue
-        /// </summary>
-        public bool Is100Continue { get; internal set; }
-
-        /// <summary>
-        /// expectation failed returned by server?
-        /// </summary>
-        public bool ExpectationFailed { get; internal set; }
-
-        /// <summary>
-        /// Gets the resposne status.
-        /// </summary>
-        public string Status => CreateResponseLine(HttpVersion, StatusCode, StatusDescription);
-
-        /// <summary>
-        /// Gets the header text.
-        /// </summary>
-        public override string HeaderText
-        {
-            get
-            {
-                var sb = new StringBuilder();
-                sb.AppendLine(Status);
-                foreach (var header in Headers)
-                {
-                    sb.AppendLine(header.ToString());
-                }
-
-                sb.AppendLine();
-                return sb.ToString();
-            }
-        }
-
-        /// <summary>
-        /// Constructor.
-        /// </summary>
-        public Response()
-        {
-        }
-
-        /// <summary>
-        /// Constructor.
-        /// </summary>
-        public Response(byte[] body)
-        {
-            Body = body;
-        }
-
         internal static string CreateResponseLine(Version version, int statusCode, string statusDescription)
         {
             return $"HTTP/{version.Major}.{version.Minor} {statusCode} {statusDescription}";
         }
 
-        internal static void ParseResponseLine(string httpStatus, out Version version, out int statusCode, out string statusDescription)
+        internal static void ParseResponseLine(string httpStatus, out Version version, out int statusCode,
+            out string statusDescription)
         {
             var httpResult = httpStatus.Split(ProxyConstants.SpaceSplit, 3);
             if (httpResult.Length != 3)

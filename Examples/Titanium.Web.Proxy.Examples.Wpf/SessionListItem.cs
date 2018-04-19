@@ -1,7 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Examples.Wpf.Annotations;
 using Titanium.Web.Proxy.Http;
 
@@ -9,15 +8,15 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 {
     public class SessionListItem : INotifyPropertyChanged
     {
-        private string statusCode;
-        private string protocol;
-        private string host;
-        private string url;
         private long? bodySize;
+        private Exception exception;
+        private string host;
         private string process;
+        private string protocol;
         private long receivedDataCount;
         private long sentDataCount;
-        private Exception exception;
+        private string statusCode;
+        private string url;
 
         public int Number { get; set; }
 
@@ -81,7 +80,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         public event PropertyChangedEventHandler PropertyChanged;
 
-        protected void SetField<T>(ref T field, T value,[CallerMemberName] string propertyName = null)
+        protected void SetField<T>(ref T field, T value, [CallerMemberName] string propertyName = null)
         {
             if (!Equals(field, value))
             {

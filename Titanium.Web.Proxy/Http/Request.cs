@@ -9,33 +9,33 @@ using Titanium.Web.Proxy.Shared;
 namespace Titanium.Web.Proxy.Http
 {
     /// <summary>
-    /// Http(s) request object
+    ///     Http(s) request object
     /// </summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class Request : RequestResponseBase
     {
         /// <summary>
-        /// Request Method
+        ///     Request Method
         /// </summary>
         public string Method { get; set; }
 
         /// <summary>
-        /// Request HTTP Uri
+        ///     Request HTTP Uri
         /// </summary>
         public Uri RequestUri { get; set; }
 
         /// <summary>
-        /// Is Https?
+        ///     Is Https?
         /// </summary>
         public bool IsHttps => RequestUri.Scheme == ProxyServer.UriSchemeHttps;
 
         /// <summary>
-        /// The original request Url.
+        ///     The original request Url.
         /// </summary>
         public string OriginalUrl { get; set; }
 
         /// <summary>
-        /// Has request body?
+        ///     Has request body?
         /// </summary>
         public override bool HasBody
         {
@@ -66,9 +66,9 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Http hostname header value if exists
-        /// Note: Changing this does NOT change host in RequestUri
-        /// Users can set new RequestUri separately
+        ///     Http hostname header value if exists
+        ///     Note: Changing this does NOT change host in RequestUri
+        ///     Users can set new RequestUri separately
         /// </summary>
         public string Host
         {
@@ -77,7 +77,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Does this request has a 100-continue header?
+        ///     Does this request has a 100-continue header?
         /// </summary>
         public bool ExpectContinue
         {
@@ -91,14 +91,61 @@ namespace Titanium.Web.Proxy.Http
         public bool IsMultipartFormData => ContentType?.StartsWith("multipart/form-data") == true;
 
         /// <summary>
-        /// Request Url
+        ///     Request Url
         /// </summary>
         public string Url => RequestUri.OriginalString;
 
         /// <summary>
-        /// Terminates the underlying Tcp Connection to client after current request
+        ///     Terminates the underlying Tcp Connection to client after current request
         /// </summary>
         internal bool CancelRequest { get; set; }
+
+        /// <summary>
+        ///     Does this request has an upgrade to websocket header?
+        /// </summary>
+        public bool UpgradeToWebSocket
+        {
+            get
+            {
+                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
+
+                if (headerValue == null)
+                {
+                    return false;
+                }
+
+                return headerValue.EqualsIgnoreCase(KnownHeaders.UpgradeWebsocket);
+            }
+        }
+
+        /// <summary>
+        ///     Does server responsed positively for 100 continue request
+        /// </summary>
+        public bool Is100Continue { get; internal set; }
+
+        /// <summary>
+        ///     Server responsed negatively for the request for 100 continue
+        /// </summary>
+        public bool ExpectationFailed { get; internal set; }
+
+        /// <summary>
+        ///     Gets the header text.
+        /// </summary>
+        public override string HeaderText
+        {
+            get
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine(CreateRequestLine(Method, OriginalUrl, HttpVersion));
+                foreach (var header in Headers)
+                {
+                    sb.AppendLine(header.ToString());
+                }
+
+                sb.AppendLine();
+                return sb.ToString();
+            }
+        }
 
         internal override void EnsureBodyAvailable(bool throwWhenNotReadYet = true)
         {
@@ -110,7 +157,8 @@ namespace Titanium.Web.Proxy.Http
             //GET request don't have a request body to read
             if (!HasBody)
             {
-                throw new BodyNotFoundException("Request don't have a body. " + "Please verify that this request is a Http POST/PUT/PATCH and request " +
+                throw new BodyNotFoundException("Request don't have a body. " +
+                                                "Please verify that this request is a Http POST/PUT/PATCH and request " +
                                                 "content length is greater than zero before accessing the body.");
             }
 
@@ -130,59 +178,13 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        /// <summary>
-        /// Does this request has an upgrade to websocket header?
-        /// </summary>
-        public bool UpgradeToWebSocket
-        {
-            get
-            {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
-
-                if (headerValue == null)
-                {
-                    return false;
-                }
-
-                return headerValue.EqualsIgnoreCase(KnownHeaders.UpgradeWebsocket);
-            }
-        }
-
-        /// <summary>
-        /// Does server responsed positively for 100 continue request
-        /// </summary>
-        public bool Is100Continue { get; internal set; }
-
-        /// <summary>
-        /// Server responsed negatively for the request for 100 continue
-        /// </summary>
-        public bool ExpectationFailed { get; internal set; }
-
-        /// <summary>
-        /// Gets the header text.
-        /// </summary>
-        public override string HeaderText
-        {
-            get
-            {
-                var sb = new StringBuilder();
-                sb.AppendLine(CreateRequestLine(Method, OriginalUrl, HttpVersion));
-                foreach (var header in Headers)
-                {
-                    sb.AppendLine(header.ToString());
-                }
-
-                sb.AppendLine();
-                return sb.ToString();
-            }
-        }
-
         internal static string CreateRequestLine(string httpMethod, string httpUrl, Version version)
         {
             return $"{httpMethod} {httpUrl} HTTP/{version.Major}.{version.Minor}";
         }
 
-        internal static void ParseRequestLine(string httpCmd, out string httpMethod, out string httpUrl, out Version version)
+        internal static void ParseRequestLine(string httpCmd, out string httpMethod, out string httpUrl,
+            out Version version)
         {
             //break up the line into three components (method, remote URL & Http Version)
             var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
@@ -196,11 +198,6 @@ namespace Titanium.Web.Proxy.Http
             httpMethod = httpCmdSplit[0];
             if (!IsAllUpper(httpMethod))
             {
-                //method should be upper cased: https://tools.ietf.org/html/rfc7231#section-4
-
-                //todo: create protocol violation message
-
-                //fix it
                 httpMethod = httpMethod.ToUpper();
             }
 

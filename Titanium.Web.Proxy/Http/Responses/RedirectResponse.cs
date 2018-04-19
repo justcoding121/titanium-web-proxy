@@ -3,12 +3,12 @@
 namespace Titanium.Web.Proxy.Http.Responses
 {
     /// <summary>
-    /// Redirect response
+    ///     Redirect response
     /// </summary>
     public sealed class RedirectResponse : Response
     {
         /// <summary>
-        /// Constructor.
+        ///     Constructor.
         /// </summary>
         public RedirectResponse()
         {

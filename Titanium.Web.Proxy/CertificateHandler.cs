@@ -9,14 +9,15 @@ namespace Titanium.Web.Proxy
     public partial class ProxyServer
     {
         /// <summary>
-        /// Call back to override server certificate validation
+        ///     Call back to override server certificate validation
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="certificate"></param>
         /// <param name="chain"></param>
         /// <param name="sslPolicyErrors"></param>
         /// <returns></returns>
-        internal bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        internal bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain,
+            SslPolicyErrors sslPolicyErrors)
         {
             //if user callback is registered then do it
             if (ServerCertificateValidationCallback != null)
@@ -44,7 +45,7 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        /// Call back to select client certificate used for mutual authentication
+        ///     Call back to select client certificate used for mutual authentication
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="targetHost"></param>
@@ -52,14 +53,15 @@ namespace Titanium.Web.Proxy
         /// <param name="remoteCertificate"></param>
         /// <param name="acceptableIssuers"></param>
         /// <returns></returns>
-        internal X509Certificate SelectClientCertificate(object sender, string targetHost, X509CertificateCollection localCertificates,
+        internal X509Certificate SelectClientCertificate(object sender, string targetHost,
+            X509CertificateCollection localCertificates,
             X509Certificate remoteCertificate, string[] acceptableIssuers)
         {
             X509Certificate clientCertificate = null;
 
-            if (acceptableIssuers != null && acceptableIssuers.Length > 0 && localCertificates != null && localCertificates.Count > 0)
+            if (acceptableIssuers != null && acceptableIssuers.Length > 0 && localCertificates != null &&
+                localCertificates.Count > 0)
             {
-                // Use the first certificate that is from an acceptable issuer.
                 foreach (var certificate in localCertificates)
                 {
                     string issuer = certificate.Issuer;

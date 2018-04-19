@@ -9,24 +9,24 @@ namespace Titanium.Web.Proxy.Helpers
     public enum ProxyProtocolType
     {
         /// <summary>
-        /// The none
+        ///     The none
         /// </summary>
         None = 0,
 
         /// <summary>
-        /// HTTP
+        ///     HTTP
         /// </summary>
         Http = 1,
 
         /// <summary>
-        /// HTTPS
+        ///     HTTPS
         /// </summary>
         Https = 2,
 
         /// <summary>
-        /// Both HTTP and HTTPS
+        ///     Both HTTP and HTTPS
         /// </summary>
-        AllHttp = Http | Https,
+        AllHttp = Http | Https
     }
 
     internal class HttpSystemProxyValue
@@ -57,7 +57,7 @@ namespace Titanium.Web.Proxy.Helpers
     }
 
     /// <summary>
-    /// Manage system proxy settings
+    ///     Manage system proxy settings
     /// </summary>
     internal class SystemProxyManager
     {
@@ -94,7 +94,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Set the HTTP and/or HTTPS proxy server for current machine
+        ///     Set the HTTP and/or HTTPS proxy server for current machine
         /// </summary>
         /// <param name="hostname"></param>
         /// <param name="port"></param>
@@ -133,14 +133,15 @@ namespace Titanium.Web.Proxy.Helpers
 
                 reg.DeleteValue(regAutoConfigUrl, false);
                 reg.SetValue(regProxyEnable, 1);
-                reg.SetValue(regProxyServer, string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+                reg.SetValue(regProxyServer,
+                    string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
 
                 Refresh();
             }
         }
 
         /// <summary>
-        /// Remove the HTTP and/or HTTPS proxy setting from current machine
+        ///     Remove the HTTP and/or HTTPS proxy setting from current machine
         /// </summary>
         internal void RemoveProxy(ProxyProtocolType protocolType, bool saveOriginalConfig = true)
         {
@@ -162,7 +163,8 @@ namespace Titanium.Web.Proxy.Helpers
                     if (existingSystemProxyValues.Count != 0)
                     {
                         reg.SetValue(regProxyEnable, 1);
-                        reg.SetValue(regProxyServer, string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+                        reg.SetValue(regProxyServer,
+                            string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
                     }
                     else
                     {
@@ -176,7 +178,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Removes all types of proxy settings (both http and https)
+        ///     Removes all types of proxy settings (both http and https)
         /// </summary>
         internal void DisableAllProxy()
         {
@@ -284,7 +286,8 @@ namespace Titanium.Web.Proxy.Helpers
 
         private ProxyInfo GetProxyInfoFromRegistry(RegistryKey reg)
         {
-            var pi = new ProxyInfo(null, reg.GetValue(regAutoConfigUrl) as string, reg.GetValue(regProxyEnable) as int?, reg.GetValue(regProxyServer) as string,
+            var pi = new ProxyInfo(null, reg.GetValue(regAutoConfigUrl) as string, reg.GetValue(regProxyEnable) as int?,
+                reg.GetValue(regProxyServer) as string,
                 reg.GetValue(regProxyOverride) as string);
 
             return pi;
@@ -301,7 +304,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Prepares the proxy server registry (create empty values if they don't exist) 
+        ///     Prepares the proxy server registry (create empty values if they don't exist)
         /// </summary>
         /// <param name="reg"></param>
         private static void PrepareRegistry(RegistryKey reg)
@@ -318,7 +321,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Refresh the settings so that the system know about a change in proxy setting
+        ///     Refresh the settings so that the system know about a change in proxy setting
         /// </summary>
         private void Refresh()
         {
