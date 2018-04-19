@@ -37,6 +37,7 @@ namespace Titanium.Web.Proxy.Helpers
                             0) == 0)
                     {
                         int rowCount = *(int*)tcpTable;
+                        uint portInNetworkByteOrder = ToNetworkByteOrder((uint)localPort);
 
                         if (ipVersion == IpVersion.Ipv4)
                         {
@@ -44,7 +45,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                             for (int i = 0; i < rowCount; ++i)
                             {
-                                if (rowPtr->localPort.Port == localPort)
+                                if (rowPtr->localPort == portInNetworkByteOrder)
                                 {
                                     return rowPtr->owningPid;
                                 }
@@ -58,7 +59,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                             for (int i = 0; i < rowCount; ++i)
                             {
-                                if (rowPtr->localPort.Port == localPort)
+                                if (rowPtr->localPort == portInNetworkByteOrder)
                                 {
                                     return rowPtr->owningPid;
                                 }
@@ -78,6 +79,18 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             return 0;
+        }
+
+        /// <summary>
+        /// Converts 32-bit integer from native byte order (little-endian)
+        /// to network byte order for port,
+        /// switches 0th and 1st bytes, and 2nd and 3rd bytes
+        /// </summary>
+        /// <param name="port"></param>
+        /// <returns></returns>
+        private static uint ToNetworkByteOrder(uint port)
+        {
+            return ((port >> 8) & 0x00FF00FFu) | ((port << 8) & 0xFF00FF00u);
         }
 
         /// <summary>
