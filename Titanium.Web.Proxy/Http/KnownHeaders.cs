@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Titanium.Web.Proxy.Http
+﻿namespace Titanium.Web.Proxy.Http
 {
     public static class KnownHeaders
     {

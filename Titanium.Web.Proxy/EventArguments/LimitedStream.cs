@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
@@ -10,23 +9,38 @@ namespace Titanium.Web.Proxy.EventArguments
 {
     internal class LimitedStream : Stream
     {
-        private readonly CustomBufferedStream baseStream;
         private readonly CustomBinaryReader baseReader;
+        private readonly CustomBufferedStream baseStream;
         private readonly bool isChunked;
-
-        private bool readChunkTrail;
         private long bytesRemaining;
 
-        public LimitedStream(CustomBufferedStream baseStream, CustomBinaryReader baseReader, bool isChunked, long contentLength)
+        private bool readChunkTrail;
+
+        internal LimitedStream(CustomBufferedStream baseStream, CustomBinaryReader baseReader, bool isChunked,
+            long contentLength)
         {
             this.baseStream = baseStream;
             this.baseReader = baseReader;
             this.isChunked = isChunked;
-            bytesRemaining = isChunked 
-                ? 0 
-                : contentLength == -1 
-                    ? long.MaxValue 
+            bytesRemaining = isChunked
+                ? 0
+                : contentLength == -1
+                    ? long.MaxValue
                     : contentLength;
+        }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
         }
 
         private void GetNextChunk()
@@ -43,7 +57,6 @@ namespace Titanium.Web.Proxy.EventArguments
             int idx = chunkHead.IndexOf(";");
             if (idx >= 0)
             {
-                // remove chunk extension
                 chunkHead = chunkHead.Substring(0, idx);
             }
 
@@ -133,20 +146,6 @@ namespace Titanium.Web.Proxy.EventArguments
         public override void Write(byte[] buffer, int offset, int count)
         {
             throw new NotSupportedException();
-        }
-
-        public override bool CanRead => true;
-
-        public override bool CanSeek => false;
-
-        public override bool CanWrite => false;
-
-        public override long Length => throw new NotSupportedException();
-
-        public override long Position
-        {
-            get => throw new NotSupportedException();
-            set => throw new NotSupportedException();
         }
     }
 }

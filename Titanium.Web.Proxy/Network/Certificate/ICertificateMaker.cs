@@ -3,7 +3,7 @@
 namespace Titanium.Web.Proxy.Network.Certificate
 {
     /// <summary>
-    /// Abstract interface for different Certificate Maker Engines
+    ///     Abstract interface for different Certificate Maker Engines
     /// </summary>
     internal interface ICertificateMaker
     {

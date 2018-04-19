@@ -4,27 +4,29 @@ using System.Net;
 namespace Titanium.Web.Proxy.Models
 {
     /// <summary>
-    /// An upstream proxy this proxy uses if any
+    ///     An upstream proxy this proxy uses if any
     /// </summary>
     public class ExternalProxy
     {
-        private static readonly Lazy<NetworkCredential> defaultCredentials = new Lazy<NetworkCredential>(() => CredentialCache.DefaultNetworkCredentials);
+        private static readonly Lazy<NetworkCredential> defaultCredentials =
+            new Lazy<NetworkCredential>(() => CredentialCache.DefaultNetworkCredentials);
 
-        private string userName;
         private string password;
 
+        private string userName;
+
         /// <summary>
-        /// Use default windows credentials?
+        ///     Use default windows credentials?
         /// </summary>
         public bool UseDefaultCredentials { get; set; }
 
         /// <summary>
-        /// Bypass this proxy for connections to localhost?
+        ///     Bypass this proxy for connections to localhost?
         /// </summary>
         public bool BypassLocalhost { get; set; }
 
         /// <summary>
-        /// Username.
+        ///     Username.
         /// </summary>
         public string UserName
         {
@@ -41,7 +43,7 @@ namespace Titanium.Web.Proxy.Models
         }
 
         /// <summary>
-        /// Password.
+        ///     Password.
         /// </summary>
         public string Password
         {
@@ -58,12 +60,12 @@ namespace Titanium.Web.Proxy.Models
         }
 
         /// <summary>
-        /// Host name.
+        ///     Host name.
         /// </summary>
         public string HostName { get; set; }
 
         /// <summary>
-        /// Port.
+        ///     Port.
         /// </summary>
         public int Port { get; set; }
 

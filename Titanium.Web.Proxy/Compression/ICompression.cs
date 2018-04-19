@@ -1,12 +1,11 @@
 ﻿using System.IO;
-using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Compression
 {
     /// <summary>
-    /// An inteface for http compression
+    ///     An inteface for http compression
     /// </summary>
-    interface ICompression
+    internal interface ICompression
     {
         Stream GetStream(Stream stream);
     }

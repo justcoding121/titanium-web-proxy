@@ -1,11 +1,10 @@
 ﻿using System.IO;
 using System.IO.Compression;
-using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Compression
 {
     /// <summary>
-    /// Concrete implementation of deflate compression
+    ///     Concrete implementation of deflate compression
     /// </summary>
     internal class DeflateCompression : ICompression
     {

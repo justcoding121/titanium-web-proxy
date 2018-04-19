@@ -1,12 +1,10 @@
-﻿using StreamExtended.Helpers;
-using System.IO;
+﻿using System.IO;
 using System.IO.Compression;
-using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Decompression
 {
     /// <summary>
-    /// concrete implementation of gzip de-compression
+    ///     concrete implementation of gzip de-compression
     /// </summary>
     internal class GZipDecompression : IDecompression
     {

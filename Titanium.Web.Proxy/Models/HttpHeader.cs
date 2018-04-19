@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -7,7 +8,7 @@ using Titanium.Web.Proxy.Http;
 namespace Titanium.Web.Proxy.Models
 {
     /// <summary>
-    /// Http Header object used by proxy
+    ///     Http Header object used by proxy
     /// </summary>
     public class HttpHeader
     {
@@ -17,10 +18,12 @@ namespace Titanium.Web.Proxy.Models
 
         internal static readonly Version Version11 = new Version(1, 1);
 
-        internal static HttpHeader ProxyConnectionKeepAlive = new HttpHeader("Proxy-Connection", "keep-alive");
+        internal static readonly Version Version20 = new Version(2, 0);
+
+        internal static readonly HttpHeader ProxyConnectionKeepAlive = new HttpHeader("Proxy-Connection", "keep-alive");
 
         /// <summary>
-        /// Constructor.
+        ///     Constructor.
         /// </summary>
         /// <param name="name"></param>
         /// <param name="value"></param>
@@ -37,17 +40,17 @@ namespace Titanium.Web.Proxy.Models
         }
 
         /// <summary>
-        /// Header Name.
+        ///     Header Name.
         /// </summary>
         public string Name { get; set; }
 
         /// <summary>
-        /// Header Value.
+        ///     Header Value.
         /// </summary>
         public string Value { get; set; }
 
         /// <summary>
-        /// Returns header as a valid header string
+        ///     Returns header as a valid header string
         /// </summary>
         /// <returns></returns>
         public override string ToString()
@@ -62,11 +65,11 @@ namespace Titanium.Web.Proxy.Models
             return result;
         }
 
-        internal async Task WriteToStreamAsync(HttpWriter writer)
+        internal async Task WriteToStreamAsync(HttpWriter writer, CancellationToken cancellationToken)
         {
-            await writer.WriteAsync(Name);
-            await writer.WriteAsync(": ");
-            await writer.WriteLineAsync(Value);
+            await writer.WriteAsync(Name, cancellationToken);
+            await writer.WriteAsync(": ", cancellationToken);
+            await writer.WriteLineAsync(Value, cancellationToken);
         }
     }
 }

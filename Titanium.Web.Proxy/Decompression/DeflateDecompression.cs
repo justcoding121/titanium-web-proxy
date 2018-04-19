@@ -1,12 +1,10 @@
-﻿using StreamExtended.Helpers;
-using System.IO;
+﻿using System.IO;
 using System.IO.Compression;
-using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Decompression
 {
     /// <summary>
-    /// concrete implementation of deflate de-compression
+    ///     concrete implementation of deflate de-compression
     /// </summary>
     internal class DeflateDecompression : IDecompression
     {

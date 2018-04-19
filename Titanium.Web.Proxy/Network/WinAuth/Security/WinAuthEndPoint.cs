@@ -15,13 +15,13 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
     internal class WinAuthEndPoint
     {
         /// <summary>
-        /// Keep track of auth states for reuse in final challenge response
+        ///     Keep track of auth states for reuse in final challenge response
         /// </summary>
         private static readonly IDictionary<Guid, State> authStates = new ConcurrentDictionary<Guid, State>();
 
 
         /// <summary>
-        /// Acquire the intial client token to send
+        ///     Acquire the intial client token to send
         /// </summary>
         /// <param name="hostname"></param>
         /// <param name="authScheme"></param>
@@ -53,7 +53,6 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
                 if (result != SuccessfulResult)
                 {
-                    // Credentials acquire operation failed.
                     return null;
                 }
 
@@ -73,7 +72,6 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
                 if (result != IntermediateResult)
                 {
-                    // Client challenge issue operation failed.
                     return null;
                 }
 
@@ -91,7 +89,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         }
 
         /// <summary>
-        /// Acquire the final token to send
+        ///     Acquire the final token to send
         /// </summary>
         /// <param name="hostname"></param>
         /// <param name="serverChallenge"></param>
@@ -128,7 +126,6 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
                 if (result != SuccessfulResult)
                 {
-                    // Client challenge issue operation failed.
                     return null;
                 }
 
@@ -145,7 +142,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         }
 
         /// <summary>
-        /// Clear any hanging states
+        ///     Clear any hanging states
         /// </summary>
         /// <param name="stateCacheTimeOutMinutes"></param>
         internal static async void ClearIdleStates(int stateCacheTimeOutMinutes)
@@ -164,37 +161,37 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         }
 
         /// <summary>
-        /// Validates that the current WinAuth state of the connection matches the 
-        /// expectation, used to detect failed authentication
+        ///     Validates that the current WinAuth state of the connection matches the
+        ///     expectation, used to detect failed authentication
         /// </summary>
         /// <param name="requestId"></param>
         /// <param name="expectedAuthState"></param>
         /// <returns></returns>
         internal static bool ValidateWinAuthState(Guid requestId, State.WinAuthState expectedAuthState)
         {
-            var stateExists = authStates.TryGetValue(requestId, out var state);
+            bool stateExists = authStates.TryGetValue(requestId, out var state);
 
             if (expectedAuthState == State.WinAuthState.UNAUTHORIZED)
             {
-                // Validation before initial token
                 return stateExists == false ||
                        state.AuthState == State.WinAuthState.UNAUTHORIZED ||
-                       state.AuthState == State.WinAuthState.AUTHORIZED; // Server may require re-authentication on an open connection
+                       state.AuthState ==
+                       State.WinAuthState.AUTHORIZED; // Server may require re-authentication on an open connection
             }
 
             if (expectedAuthState == State.WinAuthState.INITIAL_TOKEN)
             {
-                // Validation before final token
                 return stateExists &&
                        (state.AuthState == State.WinAuthState.INITIAL_TOKEN ||
-                        state.AuthState == State.WinAuthState.AUTHORIZED); // Server may require re-authentication on an open connection
+                        state.AuthState == State.WinAuthState.AUTHORIZED
+                       ); // Server may require re-authentication on an open connection
             }
 
             throw new Exception("Unsupported validation of WinAuthState");
         }
 
         /// <summary>
-        /// Set the AuthState to authorized and update the connection state lifetime
+        ///     Set the AuthState to authorized and update the connection state lifetime
         /// </summary>
         /// <param name="requestId"></param>
         internal static void AuthenticatedResponse(Guid requestId)
@@ -209,7 +206,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         #region Native calls to secur32.dll
 
         [DllImport("secur32.dll", SetLastError = true)]
-        static extern int InitializeSecurityContext(ref SecurityHandle phCredential, //PCredHandle
+        private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, //PCredHandle
             IntPtr phContext, //PCtxtHandle
             string pszTargetName,
             int fContextReq,
@@ -223,7 +220,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             out SecurityInteger ptsExpiry); //PTimeStamp
 
         [DllImport("secur32", CharSet = CharSet.Auto, SetLastError = true)]
-        static extern int InitializeSecurityContext(ref SecurityHandle phCredential, //PCredHandle
+        private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, //PCredHandle
             ref SecurityHandle phContext, //PCtxtHandle
             string pszTargetName,
             int fContextReq,

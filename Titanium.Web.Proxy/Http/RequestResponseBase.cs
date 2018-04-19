@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
-using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Extensions;
@@ -14,32 +12,37 @@ namespace Titanium.Web.Proxy.Http
     public abstract class RequestResponseBase
     {
         /// <summary>
-        /// Cached body content as byte array
+        ///     Cached body content as byte array
         /// </summary>
         protected byte[] BodyInternal;
 
         /// <summary>
-        /// Cached body as string
+        ///     Cached body as string
         /// </summary>
         private string bodyString;
 
         /// <summary>
-        /// Keeps the body data after the session is finished
+        ///     Store weather the original request/response has body or not, since the user may change the parameters
+        /// </summary>
+        internal bool OriginalHasBody;
+
+        /// <summary>
+        ///     Keeps the body data after the session is finished
         /// </summary>
         public bool KeepBody { get; set; }
 
         /// <summary>
-        /// Http Version
+        ///     Http Version
         /// </summary>
         public Version HttpVersion { get; set; } = HttpHeader.VersionUnknown;
 
         /// <summary>
-        /// Collection of all headers
+        ///     Collection of all headers
         /// </summary>
         public HeaderCollection Headers { get; } = new HeaderCollection();
 
         /// <summary>
-        /// Length of the body
+        ///     Length of the body
         /// </summary>
         public long ContentLength
         {
@@ -74,17 +77,17 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Content encoding for this request/response
+        ///     Content encoding for this request/response
         /// </summary>
         public string ContentEncoding => Headers.GetHeaderValueOrNull(KnownHeaders.ContentEncoding)?.Trim();
 
         /// <summary>
-        /// Encoding for this request/response
+        ///     Encoding for this request/response
         /// </summary>
         public Encoding Encoding => HttpHelper.GetEncodingFromContentType(ContentType);
 
         /// <summary>
-        /// Content-type of the request/response
+        ///     Content-type of the request/response
         /// </summary>
         public string ContentType
         {
@@ -93,7 +96,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Is body send as chunked bytes
+        ///     Is body send as chunked bytes
         /// </summary>
         public bool IsChunked
         {
@@ -119,7 +122,7 @@ namespace Titanium.Web.Proxy.Http
         public abstract string HeaderText { get; }
 
         /// <summary>
-        /// Body as byte array
+        ///     Body as byte array
         /// </summary>
         [Browsable(false)]
         public byte[] Body
@@ -140,19 +143,31 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Has the request/response body?
+        ///     Has the request/response body?
         /// </summary>
         public abstract bool HasBody { get; }
 
         /// <summary>
-        /// Store weather the original request/response has body or not, since the user may change the parameters
+        ///     Body as string
+        ///     Use the encoding specified to decode the byte[] data to string
         /// </summary>
-        internal bool OriginalHasBody;
+        [Browsable(false)]
+        public string BodyString => bodyString ?? (bodyString = Encoding.GetString(Body));
+
+        /// <summary>
+        ///     Was the body read by user?
+        /// </summary>
+        public bool IsBodyRead { get; internal set; }
+
+        /// <summary>
+        ///     Is the request/response no more modifyable by user (user callbacks complete?)
+        /// </summary>
+        internal bool Locked { get; set; }
 
         internal abstract void EnsureBodyAvailable(bool throwWhenNotReadYet = true);
 
         /// <summary>
-        /// get the compressed body from given bytes
+        ///     get the compressed body from given bytes
         /// </summary>
         /// <param name="encodingType"></param>
         /// <param name="body"></param>
@@ -205,30 +220,13 @@ namespace Titanium.Web.Proxy.Http
             return null;
         }
 
-        /// <summary>
-        /// Body as string
-        /// Use the encoding specified to decode the byte[] data to string
-        /// </summary>
-        [Browsable(false)]
-        public string BodyString => bodyString ?? (bodyString = Encoding.GetString(Body));
-
-        /// <summary>
-        /// Was the body read by user?
-        /// </summary>
-        public bool IsBodyRead { get; internal set; }
-
-        /// <summary>
-        /// Is the request/response no more modifyable by user (user callbacks complete?)
-        /// </summary>
-        internal bool Locked { get; set; }
-
         internal void UpdateContentLength()
         {
             ContentLength = IsChunked ? -1 : BodyInternal?.Length ?? 0;
         }
 
         /// <summary>
-        /// Finish the session
+        ///     Finish the session
         /// </summary>
         internal void FinishSession()
         {
