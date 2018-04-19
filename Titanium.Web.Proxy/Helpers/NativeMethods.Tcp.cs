@@ -37,9 +37,9 @@ namespace Titanium.Web.Proxy.Helpers
         {
             public TcpState state;
             public uint localAddr;
-            public TcpPort localPort;
+            public uint localPort; // in network byte order (order of bytes - 1,0,3,2)
             public uint remoteAddr;
-            public TcpPort remotePort;
+            public uint remotePort; // in network byte order (order of bytes - 1,0,3,2)
             public int owningPid;
         }
 
@@ -51,23 +51,12 @@ namespace Titanium.Web.Proxy.Helpers
         {
             public fixed byte localAddr[16];
             public uint localScopeId;
-            public TcpPort localPort;
+            public uint localPort; // in network byte order (order of bytes - 1,0,3,2)
             public fixed byte remoteAddr[16];
             public uint remoteScopeId;
-            public TcpPort remotePort;
+            public uint remotePort; // in network byte order (order of bytes - 1,0,3,2)
             public TcpState state;
             public int owningPid;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        internal struct TcpPort
-        {
-            public byte port1;
-            public byte port2;
-            public byte port3;
-            public byte port4;
-
-            public int Port => (port1 << 8) + port2 + (port3 << 24) + (port4 << 16);
         }
     }
 }
