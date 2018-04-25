@@ -1,0 +1,324 @@
+﻿<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+  
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>Titanium Web Proxy | Titanium Web Proxy </title>
+    <meta name="viewport" content="width=device-width">
+    <meta name="title" content="Titanium Web Proxy | Titanium Web Proxy ">
+    <meta name="generator" content="docfx 2.35.0.0">
+    
+    <link rel="shortcut icon" href="favicon.ico">
+    <link rel="stylesheet" href="styles/docfx.vendor.css">
+    <link rel="stylesheet" href="styles/docfx.css">
+    <link rel="stylesheet" href="styles/main.css">
+    <meta property="docfx:navrel" content="">
+    <meta property="docfx:tocrel" content="">
+    
+    <meta property="docfx:rel" content="">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+        
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+              
+              <a class="navbar-brand" href="index.html">
+                <img id="logo" class="svg" src="logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+        
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+        
+        <div id="search-results">
+          <div class="search-list"></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination"></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+        <div class="article row grid">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="">
+<h2 id="titanium-web-proxy">Titanium Web Proxy</h2>
+
+<p>A light weight HTTP(S) proxy server written in C#</p>
+<p><a href="https://ci.appveyor.com/project/justcoding121/titanium-web-proxy"><img src="https://ci.appveyor.com/api/projects/status/rvlxv8xgj0m7lkr4?svg=true" alt="Build Status"></a> <a href="https://gitter.im/Titanium-Web-Proxy/Lobby?utm_source=badge&amp;utm_medium=badge&amp;utm_campaign=pr-badge&amp;utm_content=badge"><img src="https://badges.gitter.im/Titanium-Web-Proxy/Lobby.svg" alt="Join the chat at https://gitter.im/Titanium-Web-Proxy/Lobby"></a></p>
+<p>Kindly report only issues/bugs here . For programming help or questions use <a href="http://stackoverflow.com/questions/tagged/titanium-web-proxy">StackOverflow</a> with the tag Titanium-Web-Proxy.</p>
+<ul>
+<li><a href="http://justcoding121.github.io/Titanium-Web-Proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html">API Documentation</a></li>
+<li><a href="https://github.com/justcoding121/Titanium-Web-Proxy/wiki">Wiki &amp; Contribution guidelines</a></li>
+</ul>
+<p><strong>Console example application screenshot</strong></p>
+<p><img src="https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/develop/Examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG" alt="alt tag"></p>
+<p><strong>GUI example application screenshot</strong></p>
+<p><img src="https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/develop/Examples/Titanium.Web.Proxy.Examples.Wpf/Capture.PNG" alt="alt tag"></p>
+<h3 id="features">Features</h3>
+<ul>
+<li>Multithreaded &amp; fully asynchronous proxy</li>
+<li>Supports HTTP(S) and most features of HTTP 1.1 </li>
+<li>Supports redirect/block/update requests and modifying responses</li>
+<li>Safely relays Web Socket requests over HTTP</li>
+<li>Supports mutual SSL authentication</li>
+<li>Supports proxy authentication &amp; automatic proxy detection</li>
+<li>Kerberos/NTLM authentication over HTTP protocols for windows domain</li>
+</ul>
+<h3 id="usage">Usage</h3>
+<p>Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. </p>
+<p>Install by <a href="https://www.nuget.org/packages/Titanium.Web.Proxy">nuget</a></p>
+<p>For beta releases on <a href="https://github.com/justcoding121/Titanium-Web-Proxy/tree/beta">beta branch</a></p>
+<pre><code>Install-Package Titanium.Web.Proxy -Pre
+</code></pre><p>For stable releases on <a href="https://github.com/justcoding121/Titanium-Web-Proxy/tree/stable">stable branch</a></p>
+<pre><code>Install-Package Titanium.Web.Proxy
+</code></pre><p>Supports</p>
+<ul>
+<li>.Net Standard 2.0 or above</li>
+<li>.Net Framework 4.5 or above</li>
+</ul>
+<p>Setup HTTP proxy:</p>
+<pre><code class="lang-csharp">var proxyServer = new ProxyServer();
+
+//locally trust root certificate used by this proxy 
+proxyServer.CertificateManager.TrustRootCertificate = true;
+
+//optionally set the Certificate Engine
+//Under Mono only BouncyCastle will be supported
+//proxyServer.CertificateManager.CertificateEngine = Network.CertificateEngine.BouncyCastle;
+
+proxyServer.BeforeRequest += OnRequest;
+proxyServer.BeforeResponse += OnResponse;
+proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
+proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
+
+
+var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
+{
+//Use self-issued generic certificate on all https requests
+//Optimizes performance by not creating a certificate for each https-enabled domain
+//Useful when certificate trust is not required by proxy clients
+//GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), &quot;genericcert.pfx&quot;), &quot;password&quot;)
+};
+
+//Fired when a CONNECT request is received
+explicitEndPoint.BeforeTunnelConnect += OnBeforeTunnelConnect;
+
+//An explicit endpoint is where the client knows about the existence of a proxy
+//So client sends request in a proxy friendly manner
+proxyServer.AddEndPoint(explicitEndPoint);
+proxyServer.Start();
+
+//Transparent endpoint is useful for reverse proxy (client is not aware of the existence of proxy)
+//A transparent endpoint usually requires a network router port forwarding HTTP(S) packets or DNS
+//to send data to this endPoint
+var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 8001, true)
+{
+    //Generic Certificate hostname to use
+    //when SNI is disabled by client
+    GenericCertificateName = &quot;google.com&quot;
+};
+
+proxyServer.AddEndPoint(transparentEndPoint);
+
+//proxyServer.UpStreamHttpProxy = new ExternalProxy() { HostName = &quot;localhost&quot;, Port = 8888 };
+//proxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = &quot;localhost&quot;, Port = 8888 };
+
+foreach (var endPoint in proxyServer.ProxyEndPoints)
+Console.WriteLine(&quot;Listening on &#39;{0}&#39; endpoint at Ip {1} and port: {2} &quot;,
+    endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
+
+//Only explicit proxies can be set as system proxy!
+proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
+proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
+
+//wait here (You can use something else as a wait function, I am using this as a demo)
+Console.Read();
+
+//Unsubscribe &amp; Quit
+explicitEndPoint.BeforeTunnelConnect -= OnBeforeTunnelConnect;
+proxyServer.BeforeRequest -= OnRequest;
+proxyServer.BeforeResponse -= OnResponse;
+proxyServer.ServerCertificateValidationCallback -= OnCertificateValidation;
+proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;
+
+proxyServer.Stop();
+</code></pre><p>Sample request and response event handlers</p>
+<pre><code class="lang-csharp">
+//To access requestBody from OnResponse handler
+private IDictionary&lt;Guid, string&gt; requestBodyHistory 
+        = new ConcurrentDictionary&lt;Guid, string&gt;();
+
+private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
+{
+    string hostname = e.WebSession.Request.RequestUri.Host;
+
+    if (hostname.Contains(&quot;dropbox.com&quot;))
+    {
+         //Exclude Https addresses you don&#39;t want to proxy
+         //Useful for clients that use certificate pinning
+         //for example dropbox.com
+         e.DecryptSsl = false;
+    }
+}
+
+public async Task OnRequest(object sender, SessionEventArgs e)
+{
+    Console.WriteLine(e.WebSession.Request.Url);
+
+    ////read request headers
+    var requestHeaders = e.WebSession.Request.RequestHeaders;
+
+    var method = e.WebSession.Request.Method.ToUpper();
+    if ((method == &quot;POST&quot; || method == &quot;PUT&quot; || method == &quot;PATCH&quot;))
+    {
+    //Get/Set request body bytes
+    byte[] bodyBytes = await e.GetRequestBody();
+    await e.SetRequestBody(bodyBytes);
+
+    //Get/Set request body as string
+    string bodyString = await e.GetRequestBodyAsString();
+    await e.SetRequestBodyString(bodyString);
+
+    //store request Body/request headers etc with request Id as key
+    //so that you can find it from response handler using request Id
+    requestBodyHistory[e.Id] = bodyString;
+    }
+
+    //To cancel a request with a custom HTML content
+    //Filter URL
+    if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains(&quot;google.com&quot;))
+    {
+    e.Ok(&quot;&lt;!DOCTYPE html&gt;&quot; +
+          &quot;&lt;html&gt;&lt;body&gt;&lt;h1&gt;&quot; +
+          &quot;Website Blocked&quot; +
+          &quot;&lt;/h1&gt;&quot; +
+          &quot;&lt;p&gt;Blocked by titanium web proxy.&lt;/p&gt;&quot; +
+          &quot;&lt;/body&gt;&quot; +
+          &quot;&lt;/html&gt;&quot;);
+    }
+    //Redirect example
+    if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains(&quot;wikipedia.org&quot;))
+    {
+    e.Redirect(&quot;https://www.paypal.com&quot;);
+    }
+}
+
+//Modify response
+public async Task OnResponse(object sender, SessionEventArgs e)
+{
+    //read response headers
+    var responseHeaders = e.WebSession.Response.ResponseHeaders;
+
+    //if (!e.ProxySession.Request.Host.Equals(&quot;medeczane.sgk.gov.tr&quot;)) return;
+    if (e.WebSession.Request.Method == &quot;GET&quot; || e.WebSession.Request.Method == &quot;POST&quot;)
+    {
+    if (e.WebSession.Response.ResponseStatusCode == &quot;200&quot;)
+    {
+        if (e.WebSession.Response.ContentType!=null &amp;&amp; e.WebSession.Response.ContentType.Trim().ToLower().Contains(&quot;text/html&quot;))
+        {
+        byte[] bodyBytes = await e.GetResponseBody();
+        await e.SetResponseBody(bodyBytes);
+
+        string body = await e.GetResponseBodyAsString();
+        await e.SetResponseBodyString(body);
+        }
+    }
+    }
+
+    //access request body/request headers etc by looking up using requestId
+    if(requestBodyHistory.ContainsKey(e.Id))
+    {
+    var requestBody = requestBodyHistory[e.Id];
+    }
+}
+
+/// Allows overriding default certificate validation logic
+public Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
+{
+    //set IsValid to true/false based on Certificate Errors
+    if (e.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
+    e.IsValid = true;
+
+    return Task.FromResult(0);
+}
+
+/// Allows overriding default client certificate selection logic during mutual authentication
+public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs e)
+{
+    //set e.clientCertificate to override
+    return Task.FromResult(0);
+}
+</code></pre><h3 id="note-to-contributors">Note to contributors</h3>
+<h4 id="roadmap">Roadmap</h4>
+<ul>
+<li>Support HTTP 2.0 </li>
+</ul>
+<h4 id="collaborators">Collaborators</h4>
+<ul>
+<li><a href="https://github.com/honfika">honfika</a></li>
+</ul>
+</article>
+          </div>
+          
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+              <!-- <p><a class="back-to-top" href="#top">Back to top</a><p> -->
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+            
+            <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+    
+    <script type="text/javascript" src="styles/docfx.vendor.js"></script>
+    <script type="text/javascript" src="styles/docfx.js"></script>
+    <script type="text/javascript" src="styles/main.js"></script>
+  </body>
+</html>
