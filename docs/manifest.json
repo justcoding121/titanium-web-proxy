@@ -1,0 +1,677 @@
+{
+  "homepages": [],
+  "source_base_path": "C:/Work/Repositories/Titanium-Web-Proxy",
+  "xrefmap": "xrefmap.yml",
+  "files": [
+    {
+      "type": "Resource",
+      "output": {
+        "resource": {
+          "relative_path": "index.json"
+        }
+      },
+      "is_incremental": false
+    },
+    {
+      "type": "Conceptual",
+      "source_relative_path": "PULL_REQUEST_TEMPLATE.md",
+      "output": {
+        ".html": {
+          "relative_path": "PULL_REQUEST_TEMPLATE.html",
+          "hash": "vDKCkVjkGdofMLDE4ckXmg=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "Conceptual",
+      "source_relative_path": "README.md",
+      "output": {
+        ".html": {
+          "relative_path": "README.html",
+          "hash": "lzLIbPK5aovvToQhXTxtaA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html",
+          "hash": "0NqzkBod4BlXOiWRIosTeA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html",
+          "hash": "qLvO56Dynayq7yU9Q3U2xA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs.html",
+          "hash": "jEbMzf8GUjFH2MC3qgwvzA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.html",
+          "hash": "ngypelBXxKJlhy+ryXwYaw=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.EventArguments.DataEventArgs.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.EventArguments.DataEventArgs.html",
+          "hash": "v/Pnq5a2+eLA4UIRL5n1xg=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs.html",
+          "hash": "OmZagFPMn2gItxiCsSIgVg=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html",
+          "hash": "6lY/emByAWeYarAySAV3QQ=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html",
+          "hash": "4s8Pva2bPfCDvxSxmG9Q5Q=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html",
+          "hash": "O2EyZCROauIfN5JLIZTVGw=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.EventArguments.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.EventArguments.html",
+          "hash": "294AjN2uWN3rw6b1SemPZQ=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.ExceptionHandler.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.ExceptionHandler.html",
+          "hash": "ea1ELsb+u//ElPhLLgQ14w=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Exceptions.BodyNotFoundException.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Exceptions.BodyNotFoundException.html",
+          "hash": "5dyFJVp4uvgnzj9pkvbWOw=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Exceptions.ProxyAuthorizationException.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Exceptions.ProxyAuthorizationException.html",
+          "hash": "sJie0PneKpqfh161I4xseQ=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Exceptions.ProxyException.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Exceptions.ProxyException.html",
+          "hash": "1hMqSTMhvc38rOtaMdHnLQ=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Exceptions.ProxyHttpException.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Exceptions.ProxyHttpException.html",
+          "hash": "p3ZxHGuJ7jRROJLNy7Qgkw=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Exceptions.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Exceptions.html",
+          "hash": "CD9oT784WS9VD9MElPT6jQ=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Extensions.SslApplicationProtocol.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Extensions.SslApplicationProtocol.html",
+          "hash": "Jx+OVoj+Wb3cJGMoSUg/IA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Extensions.SslClientAuthenticationOptions.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Extensions.SslClientAuthenticationOptions.html",
+          "hash": "QPCvXRWkSiF/0/69RIn4RA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Extensions.SslServerAuthenticationOptions.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Extensions.SslServerAuthenticationOptions.html",
+          "hash": "d8mXK3LpX0L+mnF9VVkMEA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Extensions.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Extensions.html",
+          "hash": "/Bx0KQPM7SaoTXEfmaDtzg=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Helpers.ProxyProtocolType.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Helpers.ProxyProtocolType.html",
+          "hash": "US7HAZBJBowYQ+1tSvmv1g=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Helpers.Ref-1.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Helpers.Ref-1.html",
+          "hash": "koEoOq9lPE9+jszj6/plLQ=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Helpers.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Helpers.html",
+          "hash": "yJ1g5NjEEJlgOP3t9VoeMg=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Http.ConnectRequest.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Http.ConnectRequest.html",
+          "hash": "yYfMEZ9u1N/HhL2yIYx6KQ=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Http.ConnectResponse.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Http.ConnectResponse.html",
+          "hash": "onNtU2SlwL7st6E9FFGRAg=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Http.HeaderCollection.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Http.HeaderCollection.html",
+          "hash": "oIQzIQC0/s8HgcgNWVYVeA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Http.HttpWebClient.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Http.HttpWebClient.html",
+          "hash": "r8/xRf46wigNIdh/fDvIXw=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Http.KnownHeaders.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Http.KnownHeaders.html",
+          "hash": "uD9e7ReO9O0Qo7B8Qp+BIw=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Http.Request.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Http.Request.html",
+          "hash": "g9sVUJbtDSCBsahvfhhBzA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Http.RequestResponseBase.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Http.RequestResponseBase.html",
+          "hash": "v/+ZT41/7iT123z/Ih1b/w=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Http.Response.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Http.Response.html",
+          "hash": "/a8x2ogfVh5Hfgu/2tkE+g=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Http.Responses.GenericResponse.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Http.Responses.GenericResponse.html",
+          "hash": "08Z9ScySSRa/agh/bGIOTg=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Http.Responses.OkResponse.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Http.Responses.OkResponse.html",
+          "hash": "9oc+HM8PDKCNzAV0mrhLIw=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Http.Responses.RedirectResponse.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Http.Responses.RedirectResponse.html",
+          "hash": "v/obuLuwFRM14jtd2jGODA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Http.Responses.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Http.Responses.html",
+          "hash": "fLlH8Fj1msboTrDWs8frOQ=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Http.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Http.html",
+          "hash": "9SCQMFiCjIyGrxMZWJe97A=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html",
+          "hash": "5LWtTfqvzt88xQDGnVZ/LQ=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Models.ExternalProxy.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Models.ExternalProxy.html",
+          "hash": "nEPgLVCci6JiiMe0U2McqQ=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Models.HttpHeader.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Models.HttpHeader.html",
+          "hash": "xD4EO+8pTYrM1woAlbqLCQ=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Models.ProxyEndPoint.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Models.ProxyEndPoint.html",
+          "hash": "oam2qCB+oqjJskQGbYtV8g=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html",
+          "hash": "1ULgDRIkGEanfzFHVw7vPg=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Models.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Models.html",
+          "hash": "eSjc2mX2GE5HZaUugT8DaA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Network.CertificateEngine.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Network.CertificateEngine.html",
+          "hash": "AXyuIiLfBs/RJF433pspPA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Network.CertificateManager.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Network.CertificateManager.html",
+          "hash": "cJugWXvNfSyMUzBUuRKd8w=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.html",
+          "hash": "+uzLH0jy2DhH8+sTT0ITuw=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Network.WinAuth.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Network.WinAuth.html",
+          "hash": "uBnSj2RWRhg7V50a1i/d/A=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.Network.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.Network.html",
+          "hash": "Bg3zLYt0v46Lqw0GirZDHg=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.ProxyServer.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.ProxyServer.html",
+          "hash": "PsxXq2yLc+Yc+50vh0/CjA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "ManagedReference",
+      "source_relative_path": "obj/api/Titanium.Web.Proxy.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/Titanium.Web.Proxy.html",
+          "hash": "LpGvqfsHqBwF7wS9ej0lNA=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    },
+    {
+      "type": "Toc",
+      "source_relative_path": "obj/api/toc.yml",
+      "output": {
+        ".html": {
+          "relative_path": "api/toc.html",
+          "hash": "FKurNWenYmx/g7gtPTgDQQ=="
+        }
+      },
+      "is_incremental": false,
+      "version": ""
+    }
+  ],
+  "incremental_info": [
+    {
+      "status": {
+        "can_incremental": true,
+        "incrementalPhase": "build"
+      },
+      "processors": {
+        "TocDocumentProcessor": {
+          "can_incremental": false,
+          "details": "Processor TocDocumentProcessor cannot suppport incremental build because the processor doesn't implement ISupportIncrementalDocumentProcessor interface.",
+          "incrementalPhase": "build"
+        },
+        "ConceptualDocumentProcessor": {
+          "can_incremental": true,
+          "incrementalPhase": "build"
+        },
+        "ManagedReferenceDocumentProcessor": {
+          "can_incremental": true,
+          "incrementalPhase": "build"
+        }
+      }
+    },
+    {
+      "status": {
+        "can_incremental": false,
+        "details": "Cannot support incremental post processing, the reason is: should not trace intermediate info.",
+        "incrementalPhase": "postProcessing"
+      },
+      "processors": {}
+    }
+  ],
+  "version_info": {},
+  "groups": [
+    {
+      "xrefmap": "xrefmap.yml"
+    }
+  ]
+}
