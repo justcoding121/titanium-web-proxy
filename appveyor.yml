@@ -38,7 +38,8 @@ test: on
 
 # skip building commits that add tags (such as release tag)
 skip_tags: true
-
+skip_commits:
+  message: 'Maintanance commit by build server'
 
 #---------------------------------#
 #       artifacts configuration   #
