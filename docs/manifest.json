@@ -1,6 +1,6 @@
 {
   "homepages": [],
-  "source_base_path": "C:/Work/Repositories/Titanium-Web-Proxy",
+  "source_base_path": "C:/projects/titanium-web-proxy/.build",
   "xrefmap": "xrefmap.yml",
   "files": [
     {
@@ -13,36 +13,12 @@
       "is_incremental": false
     },
     {
-      "type": "Conceptual",
-      "source_relative_path": "PULL_REQUEST_TEMPLATE.md",
-      "output": {
-        ".html": {
-          "relative_path": "PULL_REQUEST_TEMPLATE.html",
-          "hash": "7h1iyNFgVetCQOkDa7k9/g=="
-        }
-      },
-      "is_incremental": false,
-      "version": ""
-    },
-    {
-      "type": "Conceptual",
-      "source_relative_path": "README.md",
-      "output": {
-        ".html": {
-          "relative_path": "README.html",
-          "hash": "kzQ+WJwEOXRTzPdYLs9F6w=="
-        }
-      },
-      "is_incremental": false,
-      "version": ""
-    },
-    {
       "type": "ManagedReference",
       "source_relative_path": "obj/api/Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.yml",
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html",
-          "hash": "7Qi1AVcvQvocaVUyJ6Jmuw=="
+          "hash": "wHdzt1d3NTWZiDhu5Y93Vw=="
         }
       },
       "is_incremental": false,
@@ -54,7 +30,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html",
-          "hash": "xaH9EVpfIXHNQbrxzJQK2w=="
+          "hash": "UQup6Oz3TS/mGFA3jQrzqQ=="
         }
       },
       "is_incremental": false,
@@ -66,7 +42,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs.html",
-          "hash": "R4d5hHKhyvBdyQlJxe5Vqw=="
+          "hash": "6QlPUs3PwWdA+2DYnmhT6A=="
         }
       },
       "is_incremental": false,
@@ -78,7 +54,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.html",
-          "hash": "RHovjlm7Ma6D5+BMDfeZbw=="
+          "hash": "LBRCMDSMwGhoXwyCHcIIfQ=="
         }
       },
       "is_incremental": false,
@@ -90,7 +66,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.EventArguments.DataEventArgs.html",
-          "hash": "mtFz0gXvXWGjHN7wsm9lfg=="
+          "hash": "xWAQ7bOWDM28BnvXzVyJGA=="
         }
       },
       "is_incremental": false,
@@ -102,7 +78,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs.html",
-          "hash": "rhrXlfQgZMRc7kurgyf8lQ=="
+          "hash": "O8uH/K5OdVFfe+RJ3yS7XA=="
         }
       },
       "is_incremental": false,
@@ -114,7 +90,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html",
-          "hash": "QdyWaei/w9X8Z06Q2qlfUA=="
+          "hash": "56GVjN05MySJoaWoRmJeAw=="
         }
       },
       "is_incremental": false,
@@ -126,7 +102,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html",
-          "hash": "PZ3BLcAo1CW9+0icWyocCQ=="
+          "hash": "+jp0HPVtr+NpvYmT/cmyMw=="
         }
       },
       "is_incremental": false,
@@ -138,7 +114,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html",
-          "hash": "bE0X8UVBQrIr5pKe4sNtWw=="
+          "hash": "8w2p4JJU0wrr0oSI1z+mEg=="
         }
       },
       "is_incremental": false,
@@ -150,7 +126,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.EventArguments.html",
-          "hash": "YAxAaY1ZpgyjaBvV1WGiBQ=="
+          "hash": "KF37VsGxbZSLogMHtkCKRA=="
         }
       },
       "is_incremental": false,
@@ -162,7 +138,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.ExceptionHandler.html",
-          "hash": "PYtVNbD5KEvGYkf/mAfoYg=="
+          "hash": "3BbK8GWk+nnYbB5MAkaW1A=="
         }
       },
       "is_incremental": false,
@@ -174,7 +150,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Exceptions.BodyNotFoundException.html",
-          "hash": "a5G8eD3FsPWQjnheGlKLkw=="
+          "hash": "h1t+8p1ST8Hz3s1h5ioNSQ=="
         }
       },
       "is_incremental": false,
@@ -186,7 +162,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Exceptions.ProxyAuthorizationException.html",
-          "hash": "Nmyb3J+v3p8qsEnZ9P5tYQ=="
+          "hash": "A/lnu/wQxqD2wgSyR0Mwcg=="
         }
       },
       "is_incremental": false,
@@ -198,7 +174,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Exceptions.ProxyException.html",
-          "hash": "FcCa5PqUgDkpQH/eXcDYwA=="
+          "hash": "LMLDHkptkXVXZgDAk/McUw=="
         }
       },
       "is_incremental": false,
@@ -210,7 +186,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Exceptions.ProxyHttpException.html",
-          "hash": "yS1ONwKVM0CFQNFIWRbSaw=="
+          "hash": "ZMc4k0yWW/LsgGRxWYMplw=="
         }
       },
       "is_incremental": false,
@@ -222,7 +198,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Exceptions.html",
-          "hash": "P3wQSosA6HHdMK/y9PkO6w=="
+          "hash": "IDSI4dPdKDxKM4mG+0NSuw=="
         }
       },
       "is_incremental": false,
@@ -234,7 +210,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Extensions.SslApplicationProtocol.html",
-          "hash": "D/L/iKJdTLZlIMbtElrQtg=="
+          "hash": "GJQnhdnb7zih1GbEPi4x+w=="
         }
       },
       "is_incremental": false,
@@ -246,7 +222,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Extensions.SslClientAuthenticationOptions.html",
-          "hash": "f1jYJEF7SgwtbiCQyfBACw=="
+          "hash": "/pnNhR2yy3yCzO2RoITwtA=="
         }
       },
       "is_incremental": false,
@@ -258,7 +234,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Extensions.SslServerAuthenticationOptions.html",
-          "hash": "TMv6wSMrzORp941wTg94TQ=="
+          "hash": "2JumUzisCU+nHs52BFwkxQ=="
         }
       },
       "is_incremental": false,
@@ -270,7 +246,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Extensions.html",
-          "hash": "Xf3r3A5/0al1HC9W1rpgng=="
+          "hash": "ZvPtqJF59KmlExb0FoReaw=="
         }
       },
       "is_incremental": false,
@@ -282,7 +258,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Helpers.ProxyProtocolType.html",
-          "hash": "o494OVp3gLMl2pGNAVDWbw=="
+          "hash": "uMgcTdBddPVGDYOLhLvc6Q=="
         }
       },
       "is_incremental": false,
@@ -294,7 +270,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Helpers.Ref-1.html",
-          "hash": "jQy75hfj/1ELRh6RSYO8jA=="
+          "hash": "jBiYlH8OjnzlirW381evZg=="
         }
       },
       "is_incremental": false,
@@ -306,7 +282,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Helpers.html",
-          "hash": "4SGY7ptplIONYJ2D7Zpd1Q=="
+          "hash": "KwCnV6a/639xmimiEyS07w=="
         }
       },
       "is_incremental": false,
@@ -318,7 +294,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Http.ConnectRequest.html",
-          "hash": "a2YQKT9mdcoLG0DpgWFVKA=="
+          "hash": "BSoM5mxGu/KqOIvOc/LuLA=="
         }
       },
       "is_incremental": false,
@@ -330,7 +306,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Http.ConnectResponse.html",
-          "hash": "UjfFwfJM+6ENiIqxON7qBg=="
+          "hash": "IDu+8hfR0D4AdizXHwRCdQ=="
         }
       },
       "is_incremental": false,
@@ -342,7 +318,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Http.HeaderCollection.html",
-          "hash": "7imwnCcmbobF6XhM0da3zA=="
+          "hash": "0B/D7xygd2hrCvJbPxeXug=="
         }
       },
       "is_incremental": false,
@@ -354,7 +330,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Http.HttpWebClient.html",
-          "hash": "WbbX+sps9r7GZIflfoAlLQ=="
+          "hash": "wJSf8ZEw75vNCuvzrCa6sw=="
         }
       },
       "is_incremental": false,
@@ -366,7 +342,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Http.KnownHeaders.html",
-          "hash": "GfDAHJigukMhAPjeS0SjPA=="
+          "hash": "3kckHv1xYoan1VGKmh2nxA=="
         }
       },
       "is_incremental": false,
@@ -378,7 +354,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Http.Request.html",
-          "hash": "qaMM76s6wiM+9tvT+snTeA=="
+          "hash": "K9cawHaB9Hk8Zcf6R3NXJw=="
         }
       },
       "is_incremental": false,
@@ -390,7 +366,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Http.RequestResponseBase.html",
-          "hash": "9OwfhpOOTJFv8jIjHx81wA=="
+          "hash": "a2lt3aL5zQTRnPkjB4Visw=="
         }
       },
       "is_incremental": false,
@@ -402,7 +378,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Http.Response.html",
-          "hash": "WLGiXKZ8f3oMLhrTiCO89Q=="
+          "hash": "GlmpfE3rllQjJ4jD/AKeOQ=="
         }
       },
       "is_incremental": false,
@@ -414,7 +390,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Http.Responses.GenericResponse.html",
-          "hash": "4A8TdxG9IRxVaZFopqb4Nw=="
+          "hash": "Xvhyu5enT/7AH3RPPH9z6A=="
         }
       },
       "is_incremental": false,
@@ -426,7 +402,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Http.Responses.OkResponse.html",
-          "hash": "A/7P0aZUicLKqnhQzCrPRw=="
+          "hash": "idV6jr6oY0UqrP8khKuaYg=="
         }
       },
       "is_incremental": false,
@@ -438,7 +414,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Http.Responses.RedirectResponse.html",
-          "hash": "yxlJHEdCIbiV7pGLj5WcSA=="
+          "hash": "t7JVly9cJjUedTZGcl4VoQ=="
         }
       },
       "is_incremental": false,
@@ -450,7 +426,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Http.Responses.html",
-          "hash": "bOv5744WJ5fqP9KlchLugw=="
+          "hash": "hSuC/Pe/o5/mqwoUrNvzMQ=="
         }
       },
       "is_incremental": false,
@@ -462,7 +438,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Http.html",
-          "hash": "Sm1K6ER53+mHjeRjLX/Egg=="
+          "hash": "rQN35JuDelU1GkYY1RN3rA=="
         }
       },
       "is_incremental": false,
@@ -474,7 +450,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html",
-          "hash": "QrHAwzypavusluK2OH7e0g=="
+          "hash": "bsOa1W4YP6N54NEk+kfqUg=="
         }
       },
       "is_incremental": false,
@@ -486,7 +462,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Models.ExternalProxy.html",
-          "hash": "RGmK4+kktEY5SjpMorBcKA=="
+          "hash": "lR/duUbvn9ZP8xzF0r0MRA=="
         }
       },
       "is_incremental": false,
@@ -498,7 +474,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Models.HttpHeader.html",
-          "hash": "OMqRTooWs9vrBsLL5CK4Yw=="
+          "hash": "dA/OxMEJfXY3jLjHtxg8zA=="
         }
       },
       "is_incremental": false,
@@ -510,7 +486,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Models.ProxyEndPoint.html",
-          "hash": "oU+nVhTE50cjliBBZvYwWg=="
+          "hash": "Rr03BtBj0skSAxcBSWhonw=="
         }
       },
       "is_incremental": false,
@@ -522,7 +498,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html",
-          "hash": "a+80AdH0DAAvl2b2oGtfIg=="
+          "hash": "y6E5s/7K5U5bEkjV/hVbIg=="
         }
       },
       "is_incremental": false,
@@ -534,7 +510,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Models.html",
-          "hash": "ddaA6Wk/bH2x74QNCQe1Pg=="
+          "hash": "zMS7e47YZHnc0unsqEiaSw=="
         }
       },
       "is_incremental": false,
@@ -546,7 +522,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Network.CertificateEngine.html",
-          "hash": "oUIhrEWXrpzh9UPag372QA=="
+          "hash": "j8aFxOYlQsC5xqVjuJxxYA=="
         }
       },
       "is_incremental": false,
@@ -558,7 +534,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Network.CertificateManager.html",
-          "hash": "vROLB3T8DdpfUllnJjDGUg=="
+          "hash": "WDkICxdqgKaN9UomraS6dA=="
         }
       },
       "is_incremental": false,
@@ -570,7 +546,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.html",
-          "hash": "H/unjl143m7KHQCz/QjrSw=="
+          "hash": "mItvKfhyv3p0y1Yt9Q6tDw=="
         }
       },
       "is_incremental": false,
@@ -582,7 +558,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Network.WinAuth.html",
-          "hash": "Lq4MMsWWjsYgJ0StuKVEcw=="
+          "hash": "D70K5i6ZLreNyvsj56FZ5w=="
         }
       },
       "is_incremental": false,
@@ -594,7 +570,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.Network.html",
-          "hash": "MH+Nsy6vtt3kYNLPNoucqg=="
+          "hash": "ScAlC3Bz8lyhK4XoNUtuyw=="
         }
       },
       "is_incremental": false,
@@ -606,7 +582,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.ProxyServer.html",
-          "hash": "RSGKxSikIF/6MsJpxsf2Qg=="
+          "hash": "6UtzwMBtYHA4uA1hQcPz7g=="
         }
       },
       "is_incremental": false,
@@ -618,7 +594,7 @@
       "output": {
         ".html": {
           "relative_path": "api/Titanium.Web.Proxy.html",
-          "hash": "gu1qqTFxZ5XEpxhnvMPJ+g=="
+          "hash": "MGKipca/1hdKjdqvVJzV1w=="
         }
       },
       "is_incremental": false,
@@ -645,17 +621,13 @@
         "incrementalPhase": "build"
       },
       "processors": {
-        "ManagedReferenceDocumentProcessor": {
-          "can_incremental": false,
-          "incrementalPhase": "build"
-        },
-        "ConceptualDocumentProcessor": {
-          "can_incremental": false,
-          "incrementalPhase": "build"
-        },
         "TocDocumentProcessor": {
           "can_incremental": false,
           "details": "Processor TocDocumentProcessor cannot suppport incremental build because the processor doesn't implement ISupportIncrementalDocumentProcessor interface.",
+          "incrementalPhase": "build"
+        },
+        "ManagedReferenceDocumentProcessor": {
+          "can_incremental": false,
           "incrementalPhase": "build"
         }
       }
