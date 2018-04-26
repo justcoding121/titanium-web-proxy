@@ -52,7 +52,7 @@ Task Install-BuildTools -depends Clean  {
 
 #restore nuget packages
 Task Restore-Packages -depends Install-BuildTools  {
-    exec { . dotnet restore "$SolutionRoot\$ProjectName" }
+    exec { . dotnet restore "$SolutionRoot\$ProjectName.sln" }
 }
 
 #build
