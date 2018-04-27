@@ -15,10 +15,10 @@ using Titanium.Web.Proxy.Models;
 namespace Titanium.Web.Proxy.EventArguments
 {
     /// <summary>
-    /// Holds info related to a single proxy session (single request/response sequence)
-    /// A proxy session is bounded to a single connection from client
+    /// Holds info related to a single proxy session (single request/response sequence).
+    /// A proxy session is bounded to a single connection from client.
     /// A proxy session ends when client terminates connection to proxy
-    /// or when server terminates connection from proxy
+    /// or when server terminates connection from proxy.
     /// </summary>
     public class SessionEventArgs : SessionEventArgsBase
     {
@@ -47,7 +47,7 @@ namespace Titanium.Web.Proxy.EventArguments
         private bool hasMulipartEventSubscribers => MultipartRequestPartSent != null;
 
         /// <summary>
-        /// Should we send the request again 
+        /// Should we send the request again ?
         /// </summary>
         public bool ReRequest
         {
@@ -346,9 +346,10 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Gets the request body as bytes
+        /// Gets the request body as bytes.
         /// </summary>
-        /// <returns></returns>
+        /// <param name="cancellationToken"></param>
+        /// <returns>The body as bytes.</returns>
         public async Task<byte[]> GetRequestBody(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Request.IsBodyRead)
@@ -360,9 +361,10 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Gets the request body as string
+        /// Gets the request body as string.
         /// </summary>
-        /// <returns></returns>
+        /// <param name="cancellationToken">Cancellation token for this async task is optional.</param>
+        /// <returns>The body as string.</returns>
         public async Task<string> GetRequestBodyAsString(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Request.IsBodyRead)
@@ -374,9 +376,9 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Sets the request body
+        /// Sets the request body.
         /// </summary>
-        /// <param name="body"></param>
+        /// <param name="body">The request body bytes.</param>
         public void SetRequestBody(byte[] body)
         {
             var request = WebSession.Request;
@@ -389,9 +391,9 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Sets the body with the specified string
+        /// Sets the body with the specified string.
         /// </summary>
-        /// <param name="body"></param>
+        /// <param name="body">The request body string to set.</param>
         public void SetRequestBodyString(string body)
         {
             if (WebSession.Request.Locked)
@@ -403,7 +405,7 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Gets the response body as byte array
+        /// Gets the response body as bytes.
         /// </summary>
         /// <returns></returns>
         public async Task<byte[]> GetResponseBody(CancellationToken cancellationToken = default)
@@ -417,9 +419,9 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Gets the response body as string
+        /// Gets the response body as string.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The string body.</returns>
         public async Task<string> GetResponseBodyAsString(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Response.IsBodyRead)
@@ -431,7 +433,7 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Set the response body bytes
+        /// Set the response body bytes.
         /// </summary>
         /// <param name="body"></param>
         public void SetResponseBody(byte[] body)
@@ -446,7 +448,7 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Replace the response body with the specified string
+        /// Replace the response body with the specified string.
         /// </summary>
         /// <param name="body"></param>
         public void SetResponseBodyString(string body)
@@ -462,9 +464,8 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Before request is made to server 
-        /// Respond with the specified HTML string to client
-        /// and ignore the request 
+        /// Before request is made to server respond with the specified HTML string to client
+        /// and ignore the request. 
         /// </summary>
         /// <param name="html"></param>
         /// <param name="headers"></param>
@@ -483,9 +484,8 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Before request is made to server 
-        /// Respond with the specified byte[] to client
-        /// and ignore the request 
+        /// Before request is made to server respond with the specified byte[] to client
+        /// and ignore the request. 
         /// </summary>
         /// <param name="result"></param>
         /// <param name="headers"></param>
@@ -501,9 +501,8 @@ namespace Titanium.Web.Proxy.EventArguments
 
         /// <summary>
         /// Before request is made to server 
-        /// Respond with the specified HTML string to client
-        /// and the specified status
-        /// and ignore the request 
+        /// respond with the specified HTML string and the specified status to client.
+        /// And then ignore the request. 
         /// </summary>
         /// <param name="html"></param>
         /// <param name="status"></param>
@@ -520,10 +519,8 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Before request is made to server
-        /// Respond with the specified byte[] to client
-        /// and the specified status
-        /// and ignore the request
+        /// Before request is made to server respond with the specified byte[],
+        /// the specified status  to client. And then ignore the request.
         /// </summary>
         /// <param name="result"></param>
         /// <param name="status"></param>
@@ -540,7 +537,7 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Redirect to URL.
+        /// Redirect to provided URL.
         /// </summary>
         /// <param name="url"></param>
         /// <returns></returns>
