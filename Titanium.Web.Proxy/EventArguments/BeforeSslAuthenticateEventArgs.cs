@@ -3,6 +3,9 @@ using System.Threading;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
+    /// <summary>
+    /// This is used in transparent endpoint before authenticating client. 
+    /// </summary>
     public class BeforeSslAuthenticateEventArgs : EventArgs
     {
         internal readonly CancellationTokenSource TaskCancellationSource;
@@ -12,10 +15,21 @@ namespace Titanium.Web.Proxy.EventArguments
             TaskCancellationSource = taskCancellationSource;
         }
 
+        /// <summary>
+        /// The server name indication hostname.
+        /// </summary>
         public string SniHostName { get; internal set; }
 
+        /// <summary>
+        /// Should we decrypt the SSL request?
+        /// If true we decrypt with fake certificate.
+        /// If false we relay the connection to the hostname mentioned in SniHostname.
+        /// </summary>
         public bool DecryptSsl { get; set; } = true;
 
+        /// <summary>
+        /// Terminate the request abruptly.
+        /// </summary>
         public void TerminateSession()
         {
             TaskCancellationSource.Cancel();
