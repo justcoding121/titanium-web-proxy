@@ -83,7 +83,8 @@
   
   <h1 id="Titanium_Web_Proxy_ProxyServer" data-uid="Titanium.Web.Proxy.ProxyServer" class="text-break">Class ProxyServer
   </h1>
-  <div class="markdown level0 summary"><p>Proxy Server Main class</p>
+  <div class="markdown level0 summary"><p>This object is the backbone of proxy. One can create as many instances as needed.
+However care should be taken to avoid using the same listening ports across multiple instances. </p>
 </div>
   <div class="markdown level0 conceptual"></div>
   <div class="inheritance">
@@ -131,7 +132,7 @@
   
   <a id="Titanium_Web_Proxy_ProxyServer__ctor_" data-uid="Titanium.Web.Proxy.ProxyServer.#ctor*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer__ctor_System_Boolean_System_Boolean_System_Boolean_" data-uid="Titanium.Web.Proxy.ProxyServer.#ctor(System.Boolean,System.Boolean,System.Boolean)">ProxyServer(Boolean, Boolean, Boolean)</h4>
-  <div class="markdown level1 summary"><p>Constructor</p>
+  <div class="markdown level1 summary"><p>Initializes a new instance of ProxyServer class with provided parameters.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -151,19 +152,20 @@
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
         <td><span class="parametername">userTrustRootCertificate</span></td>
-        <td></td>
+        <td><p>Should fake HTTPS certificate be trusted by this machine&apos;s user certificate store?</p>
+</td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
         <td><span class="parametername">machineTrustRootCertificate</span></td>
-        <td><p>Note:setting machineTrustRootCertificate to true will force
-userTrustRootCertificate to true</p>
+        <td><p>Should fake HTTPS certificate be trusted by this machine&apos;s certificate store?</p>
 </td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
         <td><span class="parametername">trustRootCertificateAsAdmin</span></td>
-        <td></td>
+        <td><p>Should we attempt to trust certificates with elevated permissions by prompting for UAC if required?</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -171,7 +173,7 @@ userTrustRootCertificate to true</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer__ctor_" data-uid="Titanium.Web.Proxy.ProxyServer.#ctor*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer__ctor_System_String_System_String_System_Boolean_System_Boolean_System_Boolean_" data-uid="Titanium.Web.Proxy.ProxyServer.#ctor(System.String,System.String,System.Boolean,System.Boolean,System.Boolean)">ProxyServer(String, String, Boolean, Boolean, Boolean)</h4>
-  <div class="markdown level1 summary"><p>Constructor.</p>
+  <div class="markdown level1 summary"><p>Initializes a new instance of ProxyServer class with provided parameters.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -191,31 +193,32 @@ userTrustRootCertificate to true</p>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
         <td><span class="parametername">rootCertificateName</span></td>
-        <td><p>Name of root certificate.</p>
+        <td><p>Name of the root certificate.</p>
 </td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
         <td><span class="parametername">rootCertificateIssuerName</span></td>
-        <td><p>Name of root certificate issuer.</p>
+        <td><p>Name of the root certificate issuer.</p>
 </td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
         <td><span class="parametername">userTrustRootCertificate</span></td>
-        <td></td>
+        <td><p>Should fake HTTPS certificate be trusted by this machine&apos;s user certificate store?</p>
+</td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
         <td><span class="parametername">machineTrustRootCertificate</span></td>
-        <td><p>Note:setting machineTrustRootCertificate to true will force
-userTrustRootCertificate to true</p>
+        <td><p>Should fake HTTPS certificate be trusted by this machine&apos;s certificate store?</p>
 </td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
         <td><span class="parametername">trustRootCertificateAsAdmin</span></td>
-        <td></td>
+        <td><p>Should we attempt to trust certificates with elevated permissions by prompting for UAC if required?</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -225,10 +228,7 @@ userTrustRootCertificate to true</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_AuthenticateUserFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_AuthenticateUserFunc" data-uid="Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc">AuthenticateUserFunc</h4>
-  <div class="markdown level1 summary"><p>A callback to authenticate clients
-Parameters are username, password provided by client
-return true for successful authentication</p>
-</div>
+  <div class="markdown level1 summary"></div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
@@ -253,7 +253,7 @@ return true for successful authentication</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_BufferSize_" data-uid="Titanium.Web.Proxy.ProxyServer.BufferSize*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_BufferSize" data-uid="Titanium.Web.Proxy.ProxyServer.BufferSize">BufferSize</h4>
-  <div class="markdown level1 summary"><p>Buffer size used throughout this proxy</p>
+  <div class="markdown level1 summary"><p>Buffer size used throughout this proxy.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -279,7 +279,7 @@ return true for successful authentication</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_CertificateManager_" data-uid="Titanium.Web.Proxy.ProxyServer.CertificateManager*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_CertificateManager" data-uid="Titanium.Web.Proxy.ProxyServer.CertificateManager">CertificateManager</h4>
-  <div class="markdown level1 summary"><p>Manages certificates used by this proxy</p>
+  <div class="markdown level1 summary"><p>Manages certificates used by this proxy.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -306,7 +306,7 @@ return true for successful authentication</p>
   <a id="Titanium_Web_Proxy_ProxyServer_CheckCertificateRevocation_" data-uid="Titanium.Web.Proxy.ProxyServer.CheckCertificateRevocation*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_CheckCertificateRevocation" data-uid="Titanium.Web.Proxy.ProxyServer.CheckCertificateRevocation">CheckCertificateRevocation</h4>
   <div class="markdown level1 summary"><p>Should we check for certificare revocation during SSL authentication to servers
-Note: If enabled can reduce performance (Default: NoCheck)</p>
+Note: If enabled can reduce performance. Defaults to false.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -332,7 +332,7 @@ Note: If enabled can reduce performance (Default: NoCheck)</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_ClientConnectionCount_" data-uid="Titanium.Web.Proxy.ProxyServer.ClientConnectionCount*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ClientConnectionCount" data-uid="Titanium.Web.Proxy.ProxyServer.ClientConnectionCount">ClientConnectionCount</h4>
-  <div class="markdown level1 summary"><p>Total number of active client connections</p>
+  <div class="markdown level1 summary"><p>Total number of active client connections.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -358,7 +358,7 @@ Note: If enabled can reduce performance (Default: NoCheck)</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_ConnectionTimeOutSeconds_" data-uid="Titanium.Web.Proxy.ProxyServer.ConnectionTimeOutSeconds*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ConnectionTimeOutSeconds" data-uid="Titanium.Web.Proxy.ProxyServer.ConnectionTimeOutSeconds">ConnectionTimeOutSeconds</h4>
-  <div class="markdown level1 summary"><p>Seconds client/server connection are to be kept alive when waiting for read/write to complete</p>
+  <div class="markdown level1 summary"><p>Seconds client/server connection are to be kept alive when waiting for read/write to complete.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -385,7 +385,7 @@ Note: If enabled can reduce performance (Default: NoCheck)</p>
   <a id="Titanium_Web_Proxy_ProxyServer_Enable100ContinueBehaviour_" data-uid="Titanium.Web.Proxy.ProxyServer.Enable100ContinueBehaviour*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Enable100ContinueBehaviour" data-uid="Titanium.Web.Proxy.ProxyServer.Enable100ContinueBehaviour">Enable100ContinueBehaviour</h4>
   <div class="markdown level1 summary"><p>Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
-Broken 100 contunue implementations on server/client may cause problems if enabled</p>
+Broken 100 contunue implementations on server/client may cause problems if enabled.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -413,9 +413,8 @@ Broken 100 contunue implementations on server/client may cause problems if enabl
   <h4 id="Titanium_Web_Proxy_ProxyServer_EnableWinAuth" data-uid="Titanium.Web.Proxy.ProxyServer.EnableWinAuth">EnableWinAuth</h4>
   <div class="markdown level1 summary"><p>Enable disable Windows Authentication (NTLM/Kerberos)
 Note: NTLM/Kerberos will always send local credentials of current user
-who is running the proxy process. This is because a man
-in middle attack is not currently supported
-(which would require windows delegation enabled for this server process)</p>
+running the proxy process. This is because a man
+in middle attack with Windows domain authentication is not currently supported.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -441,7 +440,7 @@ in middle attack is not currently supported
   
   <a id="Titanium_Web_Proxy_ProxyServer_ExceptionFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.ExceptionFunc*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ExceptionFunc" data-uid="Titanium.Web.Proxy.ProxyServer.ExceptionFunc">ExceptionFunc</h4>
-  <div class="markdown level1 summary"><p>Callback for error events in proxy</p>
+  <div class="markdown level1 summary"><p>Callback for error events in this proxy instance.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -493,8 +492,8 @@ in middle attack is not currently supported
   
   <a id="Titanium_Web_Proxy_ProxyServer_GetCustomUpStreamProxyFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.GetCustomUpStreamProxyFunc*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_GetCustomUpStreamProxyFunc" data-uid="Titanium.Web.Proxy.ProxyServer.GetCustomUpStreamProxyFunc">GetCustomUpStreamProxyFunc</h4>
-  <div class="markdown level1 summary"><p>A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP(S) requests
-return the ExternalProxy object with valid credentials</p>
+  <div class="markdown level1 summary"><p>A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP(S) requests.
+User should return the ExternalProxy object with valid credentials.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -520,7 +519,7 @@ return the ExternalProxy object with valid credentials</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_ProxyEndPoints_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyEndPoints*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyEndPoints" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyEndPoints">ProxyEndPoints</h4>
-  <div class="markdown level1 summary"><p>A list of IpAddress and port this proxy is listening to</p>
+  <div class="markdown level1 summary"><p>A list of IpAddress and port this proxy is listening to.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -546,7 +545,7 @@ return the ExternalProxy object with valid credentials</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_ProxyRealm_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRealm*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyRealm" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRealm">ProxyRealm</h4>
-  <div class="markdown level1 summary"><p>Realm used during Proxy Basic Authentication</p>
+  <div class="markdown level1 summary"><p>Realm used during Proxy Basic Authentication.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -572,7 +571,7 @@ return the ExternalProxy object with valid credentials</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_ProxyRunning_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRunning*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyRunning" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRunning">ProxyRunning</h4>
-  <div class="markdown level1 summary"><p>Is the proxy currently running</p>
+  <div class="markdown level1 summary"><p>Is the proxy currently running?</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -598,7 +597,7 @@ return the ExternalProxy object with valid credentials</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_ServerConnectionCount_" data-uid="Titanium.Web.Proxy.ProxyServer.ServerConnectionCount*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ServerConnectionCount" data-uid="Titanium.Web.Proxy.ProxyServer.ServerConnectionCount">ServerConnectionCount</h4>
-  <div class="markdown level1 summary"><p>Total number of active server connections</p>
+  <div class="markdown level1 summary"><p>Total number of active server connections.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -624,7 +623,7 @@ return the ExternalProxy object with valid credentials</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_SupportedSslProtocols_" data-uid="Titanium.Web.Proxy.ProxyServer.SupportedSslProtocols*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_SupportedSslProtocols" data-uid="Titanium.Web.Proxy.ProxyServer.SupportedSslProtocols">SupportedSslProtocols</h4>
-  <div class="markdown level1 summary"><p>List of supported Ssl versions</p>
+  <div class="markdown level1 summary"><p>List of supported Ssl versions.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -650,8 +649,8 @@ return the ExternalProxy object with valid credentials</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_UpStreamEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamEndPoint*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_UpStreamEndPoint" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamEndPoint">UpStreamEndPoint</h4>
-  <div class="markdown level1 summary"><p>Local adapter/NIC endpoint (where proxy makes request via)
-default via any IP addresses of this machine</p>
+  <div class="markdown level1 summary"><p>Local adapter/NIC endpoint where proxy makes request via.
+Defaults via any IP addresses of this machine.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -677,7 +676,7 @@ default via any IP addresses of this machine</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_UpStreamHttpProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamHttpProxy*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_UpStreamHttpProxy" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamHttpProxy">UpStreamHttpProxy</h4>
-  <div class="markdown level1 summary"><p>External proxy for Http</p>
+  <div class="markdown level1 summary"><p>External proxy used for Http requests.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -703,7 +702,7 @@ default via any IP addresses of this machine</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_UpStreamHttpsProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamHttpsProxy*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_UpStreamHttpsProxy" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamHttpsProxy">UpStreamHttpsProxy</h4>
-  <div class="markdown level1 summary"><p>External proxy for Http</p>
+  <div class="markdown level1 summary"><p>External proxy used for Https requests.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -731,7 +730,7 @@ default via any IP addresses of this machine</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_AddEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.AddEndPoint*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_AddEndPoint_Titanium_Web_Proxy_Models_ProxyEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.AddEndPoint(Titanium.Web.Proxy.Models.ProxyEndPoint)">AddEndPoint(ProxyEndPoint)</h4>
-  <div class="markdown level1 summary"><p>Add a proxy end point</p>
+  <div class="markdown level1 summary"><p>Add a proxy end point.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -751,7 +750,8 @@ default via any IP addresses of this machine</p>
       <tr>
         <td><a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html">ProxyEndPoint</a></td>
         <td><span class="parametername">endPoint</span></td>
-        <td></td>
+        <td><p>The proxy endpoint.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -759,7 +759,7 @@ default via any IP addresses of this machine</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_DisableAllSystemProxies_" data-uid="Titanium.Web.Proxy.ProxyServer.DisableAllSystemProxies*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_DisableAllSystemProxies" data-uid="Titanium.Web.Proxy.ProxyServer.DisableAllSystemProxies">DisableAllSystemProxies()</h4>
-  <div class="markdown level1 summary"><p>Clear all proxy settings for current machine</p>
+  <div class="markdown level1 summary"><p>Clear all proxy settings for current machine.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -770,7 +770,7 @@ default via any IP addresses of this machine</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_DisableSystemHttpProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.DisableSystemHttpProxy*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_DisableSystemHttpProxy" data-uid="Titanium.Web.Proxy.ProxyServer.DisableSystemHttpProxy">DisableSystemHttpProxy()</h4>
-  <div class="markdown level1 summary"><p>Remove any HTTP proxy setting of current machien</p>
+  <div class="markdown level1 summary"><p>Clear HTTP proxy settings of current machine.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -781,7 +781,7 @@ default via any IP addresses of this machine</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_DisableSystemHttpsProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.DisableSystemHttpsProxy*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_DisableSystemHttpsProxy" data-uid="Titanium.Web.Proxy.ProxyServer.DisableSystemHttpsProxy">DisableSystemHttpsProxy()</h4>
-  <div class="markdown level1 summary"><p>Remove any HTTPS proxy setting for current machine</p>
+  <div class="markdown level1 summary"><p>Clear HTTPS proxy settings of current machine.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -792,7 +792,7 @@ default via any IP addresses of this machine</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_DisableSystemProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.DisableSystemProxy*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_DisableSystemProxy_Titanium_Web_Proxy_Helpers_ProxyProtocolType_" data-uid="Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(Titanium.Web.Proxy.Helpers.ProxyProtocolType)">DisableSystemProxy(ProxyProtocolType)</h4>
-  <div class="markdown level1 summary"><p>Remove the specified proxy settings for current machine</p>
+  <div class="markdown level1 summary"><p>Clear the specified proxy setting for current machine.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -831,7 +831,7 @@ default via any IP addresses of this machine</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_RemoveEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.RemoveEndPoint*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_RemoveEndPoint_Titanium_Web_Proxy_Models_ProxyEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.RemoveEndPoint(Titanium.Web.Proxy.Models.ProxyEndPoint)">RemoveEndPoint(ProxyEndPoint)</h4>
-  <div class="markdown level1 summary"><p>Remove a proxy end point
+  <div class="markdown level1 summary"><p>Remove a proxy end point.
 Will throw error if the end point does&apos;nt exist</p>
 </div>
   <div class="markdown level1 conceptual"></div>
@@ -852,7 +852,8 @@ Will throw error if the end point does&apos;nt exist</p>
       <tr>
         <td><a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html">ProxyEndPoint</a></td>
         <td><span class="parametername">endPoint</span></td>
-        <td></td>
+        <td><p>The existing endpoint to remove.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -860,7 +861,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_SetAsSystemHttpProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpProxy*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_SetAsSystemHttpProxy_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint)">SetAsSystemHttpProxy(ExplicitProxyEndPoint)</h4>
-  <div class="markdown level1 summary"><p>Set the given explicit end point as the default proxy server for current machine</p>
+  <div class="markdown level1 summary"><p>Set the given explicit end point as the default proxy server for current machine.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -888,7 +889,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_SetAsSystemHttpsProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpsProxy*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_SetAsSystemHttpsProxy_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpsProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint)">SetAsSystemHttpsProxy(ExplicitProxyEndPoint)</h4>
-  <div class="markdown level1 summary"><p>Set the given explicit end point as the default proxy server for current machine</p>
+  <div class="markdown level1 summary"><p>Set the given explicit end point as the default proxy server for current machine.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -916,7 +917,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_SetAsSystemProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_SetAsSystemProxy_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_Titanium_Web_Proxy_Helpers_ProxyProtocolType_" data-uid="Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,Titanium.Web.Proxy.Helpers.ProxyProtocolType)">SetAsSystemProxy(ExplicitProxyEndPoint, ProxyProtocolType)</h4>
-  <div class="markdown level1 summary"><p>Set the given explicit end point as the default proxy server for current machine</p>
+  <div class="markdown level1 summary"><p>Set the given explicit end point as the default proxy server for current machine.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -949,7 +950,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_Start_" data-uid="Titanium.Web.Proxy.ProxyServer.Start*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Start" data-uid="Titanium.Web.Proxy.ProxyServer.Start">Start()</h4>
-  <div class="markdown level1 summary"><p>Start this proxy server</p>
+  <div class="markdown level1 summary"><p>Start this proxy server instance.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -960,7 +961,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_Stop_" data-uid="Titanium.Web.Proxy.ProxyServer.Stop*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Stop" data-uid="Titanium.Web.Proxy.ProxyServer.Stop">Stop()</h4>
-  <div class="markdown level1 summary"><p>Stop this proxy server</p>
+  <div class="markdown level1 summary"><p>Stop this proxy server instance.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -972,7 +973,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   
   <h4 id="Titanium_Web_Proxy_ProxyServer_AfterResponse" data-uid="Titanium.Web.Proxy.ProxyServer.AfterResponse">AfterResponse</h4>
-  <div class="markdown level1 summary"><p>Intercept after response from server</p>
+  <div class="markdown level1 summary"><p>Intercept after response from server.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -997,7 +998,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   
   <h4 id="Titanium_Web_Proxy_ProxyServer_BeforeRequest" data-uid="Titanium.Web.Proxy.ProxyServer.BeforeRequest">BeforeRequest</h4>
-  <div class="markdown level1 summary"><p>Intercept request to server</p>
+  <div class="markdown level1 summary"><p>Intercept request to server.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -1022,7 +1023,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   
   <h4 id="Titanium_Web_Proxy_ProxyServer_BeforeResponse" data-uid="Titanium.Web.Proxy.ProxyServer.BeforeResponse">BeforeResponse</h4>
-  <div class="markdown level1 summary"><p>Intercept response from server</p>
+  <div class="markdown level1 summary"><p>Intercept response from server.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -1047,7 +1048,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   
   <h4 id="Titanium_Web_Proxy_ProxyServer_ClientCertificateSelectionCallback" data-uid="Titanium.Web.Proxy.ProxyServer.ClientCertificateSelectionCallback">ClientCertificateSelectionCallback</h4>
-  <div class="markdown level1 summary"><p>Callback tooverride client certificate during SSL mutual authentication</p>
+  <div class="markdown level1 summary"><p>Callback to override client certificate selection during mutual SSL authentication.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -1097,7 +1098,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   
   <h4 id="Titanium_Web_Proxy_ProxyServer_ServerCertificateValidationCallback" data-uid="Titanium.Web.Proxy.ProxyServer.ServerCertificateValidationCallback">ServerCertificateValidationCallback</h4>
-  <div class="markdown level1 summary"><p>Verifies the remote Secure Sockets Layer (SSL) certificate used for authentication</p>
+  <div class="markdown level1 summary"><p>Verifies the remote SSL certificate used for authentication.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>

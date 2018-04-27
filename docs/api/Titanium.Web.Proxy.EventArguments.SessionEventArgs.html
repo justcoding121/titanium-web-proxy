@@ -83,10 +83,10 @@
   
   <h1 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs" class="text-break">Class SessionEventArgs
   </h1>
-  <div class="markdown level0 summary"><p>Holds info related to a single proxy session (single request/response sequence)
-A proxy session is bounded to a single connection from client
+  <div class="markdown level0 summary"><p>Holds info related to a single proxy session (single request/response sequence).
+A proxy session is bounded to a single connection from client.
 A proxy session ends when client terminates connection to proxy
-or when server terminates connection from proxy</p>
+or when server terminates connection from proxy.</p>
 </div>
   <div class="markdown level0 conceptual"></div>
   <div class="inheritance">
@@ -227,7 +227,7 @@ or when server terminates connection from proxy</p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_ReRequest_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.ReRequest*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_ReRequest" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.ReRequest">ReRequest</h4>
-  <div class="markdown level1 summary"><p>Should we send the request again </p>
+  <div class="markdown level1 summary"><p>Should we send the request again ?</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -268,10 +268,8 @@ or when server terminates connection from proxy</p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader})">GenericResponse(Byte[], HttpStatusCode, Dictionary&lt;String, HttpHeader&gt;)</h4>
-  <div class="markdown level1 summary"><p>Before request is made to server
-Respond with the specified byte[] to client
-and the specified status
-and ignore the request</p>
+  <div class="markdown level1 summary"><p>Before request is made to server respond with the specified byte[],
+the specified status  to client. And then ignore the request.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -310,9 +308,8 @@ and ignore the request</p>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader})">GenericResponse(String, HttpStatusCode, Dictionary&lt;String, HttpHeader&gt;)</h4>
   <div class="markdown level1 summary"><p>Before request is made to server 
-Respond with the specified HTML string to client
-and the specified status
-and ignore the request </p>
+respond with the specified HTML string and the specified status to client.
+And then ignore the request. </p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -350,7 +347,7 @@ and ignore the request </p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBody_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBody*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBody_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBody(System.Threading.CancellationToken)">GetRequestBody(CancellationToken)</h4>
-  <div class="markdown level1 summary"><p>Gets the request body as bytes</p>
+  <div class="markdown level1 summary"><p>Gets the request body as bytes.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -385,7 +382,8 @@ and ignore the request </p>
     <tbody>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<span class="xref">System.Byte</span>[]&gt;</td>
-        <td></td>
+        <td><p>The body as bytes.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -393,7 +391,7 @@ and ignore the request </p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBodyAsString_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBodyAsString*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBodyAsString_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBodyAsString(System.Threading.CancellationToken)">GetRequestBodyAsString(CancellationToken)</h4>
-  <div class="markdown level1 summary"><p>Gets the request body as string</p>
+  <div class="markdown level1 summary"><p>Gets the request body as string.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -413,7 +411,8 @@ and ignore the request </p>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></td>
         <td><span class="parametername">cancellationToken</span></td>
-        <td></td>
+        <td><p>Cancellation token for this async task is optional.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -428,7 +427,8 @@ and ignore the request </p>
     <tbody>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>&gt;</td>
-        <td></td>
+        <td><p>The body as string.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -436,7 +436,7 @@ and ignore the request </p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBody_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBody*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBody_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBody(System.Threading.CancellationToken)">GetResponseBody(CancellationToken)</h4>
-  <div class="markdown level1 summary"><p>Gets the response body as byte array</p>
+  <div class="markdown level1 summary"><p>Gets the response body as bytes.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -479,7 +479,7 @@ and ignore the request </p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBodyAsString_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBodyAsString*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBodyAsString_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBodyAsString(System.Threading.CancellationToken)">GetResponseBodyAsString(CancellationToken)</h4>
-  <div class="markdown level1 summary"><p>Gets the response body as string</p>
+  <div class="markdown level1 summary"><p>Gets the response body as string.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -514,7 +514,8 @@ and ignore the request </p>
     <tbody>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>&gt;</td>
-        <td></td>
+        <td><p>The string body.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -522,9 +523,8 @@ and ignore the request </p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader})">Ok(Byte[], Dictionary&lt;String, HttpHeader&gt;)</h4>
-  <div class="markdown level1 summary"><p>Before request is made to server 
-Respond with the specified byte[] to client
-and ignore the request </p>
+  <div class="markdown level1 summary"><p>Before request is made to server respond with the specified byte[] to client
+and ignore the request. </p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -557,9 +557,8 @@ and ignore the request </p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader})">Ok(String, Dictionary&lt;String, HttpHeader&gt;)</h4>
-  <div class="markdown level1 summary"><p>Before request is made to server 
-Respond with the specified HTML string to client
-and ignore the request </p>
+  <div class="markdown level1 summary"><p>Before request is made to server respond with the specified HTML string to client
+and ignore the request. </p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -592,7 +591,7 @@ and ignore the request </p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Redirect_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Redirect*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Redirect_System_String_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Redirect(System.String)">Redirect(String)</h4>
-  <div class="markdown level1 summary"><p>Redirect to URL.</p>
+  <div class="markdown level1 summary"><p>Redirect to provided URL.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -647,7 +646,7 @@ and ignore the request </p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBody_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBody*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBody_System_Byte___" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBody(System.Byte[])">SetRequestBody(Byte[])</h4>
-  <div class="markdown level1 summary"><p>Sets the request body</p>
+  <div class="markdown level1 summary"><p>Sets the request body.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -667,7 +666,8 @@ and ignore the request </p>
       <tr>
         <td><span class="xref">System.Byte</span>[]</td>
         <td><span class="parametername">body</span></td>
-        <td></td>
+        <td><p>The request body bytes.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -675,7 +675,7 @@ and ignore the request </p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBodyString_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBodyString*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBodyString_System_String_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBodyString(System.String)">SetRequestBodyString(String)</h4>
-  <div class="markdown level1 summary"><p>Sets the body with the specified string</p>
+  <div class="markdown level1 summary"><p>Sets the body with the specified string.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -695,7 +695,8 @@ and ignore the request </p>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
         <td><span class="parametername">body</span></td>
-        <td></td>
+        <td><p>The request body string to set.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -703,7 +704,7 @@ and ignore the request </p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBody_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBody*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBody_System_Byte___" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBody(System.Byte[])">SetResponseBody(Byte[])</h4>
-  <div class="markdown level1 summary"><p>Set the response body bytes</p>
+  <div class="markdown level1 summary"><p>Set the response body bytes.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -731,7 +732,7 @@ and ignore the request </p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBodyString_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBodyString*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBodyString_System_String_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBodyString(System.String)">SetResponseBodyString(String)</h4>
-  <div class="markdown level1 summary"><p>Replace the response body with the specified string</p>
+  <div class="markdown level1 summary"><p>Replace the response body with the specified string.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
