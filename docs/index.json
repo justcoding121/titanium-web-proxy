@@ -102,17 +102,12 @@
   "api/Titanium.Web.Proxy.Helpers.html": {
     "href": "api/Titanium.Web.Proxy.Helpers.html",
     "title": "Namespace Titanium.Web.Proxy.Helpers | Titanium Web Proxy",
-    "keywords": "Namespace Titanium.Web.Proxy.Helpers Classes Ref<T> Enums ProxyProtocolType"
+    "keywords": "Namespace Titanium.Web.Proxy.Helpers Enums ProxyProtocolType"
   },
   "api/Titanium.Web.Proxy.Helpers.ProxyProtocolType.html": {
     "href": "api/Titanium.Web.Proxy.Helpers.ProxyProtocolType.html",
     "title": "Enum ProxyProtocolType | Titanium Web Proxy",
     "keywords": "Enum ProxyProtocolType Namespace : Titanium.Web.Proxy.Helpers Assembly : Titanium.Web.Proxy.dll Syntax [Flags] public enum ProxyProtocolType Fields Name Description AllHttp Both HTTP and HTTPS Http HTTP Https HTTPS None The none"
-  },
-  "api/Titanium.Web.Proxy.Helpers.Ref-1.html": {
-    "href": "api/Titanium.Web.Proxy.Helpers.Ref-1.html",
-    "title": "Class Ref<T> | Titanium Web Proxy",
-    "keywords": "Class Ref<T> Inheritance Object Ref<T> Inherited Members Object.Equals(Object) Object.Equals(Object, Object) Object.ReferenceEquals(Object, Object) Object.GetHashCode() Object.GetType() Object.MemberwiseClone() Namespace : Titanium.Web.Proxy.Helpers Assembly : Titanium.Web.Proxy.dll Syntax public class Ref<T> Type Parameters Name Description T Constructors Ref() Declaration public Ref() Ref(T) Declaration public Ref(T value) Parameters Type Name Description T value Properties Value Declaration public T Value { get; set; } Property Value Type Description T Methods ToString() Declaration public override string ToString() Returns Type Description String Overrides Object.ToString() Operators Implicit(T to Ref<T>) Declaration public static implicit operator Ref<T>(T value) Parameters Type Name Description T value Returns Type Description Ref <T> Implicit(Ref<T> to T) Declaration public static implicit operator T(Ref<T> r) Parameters Type Name Description Ref <T> r Returns Type Description T"
   },
   "api/Titanium.Web.Proxy.html": {
     "href": "api/Titanium.Web.Proxy.html",
