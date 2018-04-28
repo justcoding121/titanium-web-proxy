@@ -212,7 +212,7 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         ///     A callback to authenticate clients.
-        ///     Parameters are username & password as provided by client.
+        ///     Parameters are username and password as provided by client.
         ///     Return true for successful authentication.
         /// </summary>
         public Func<string, string, Task<bool>> AuthenticateUserFunc { get; set; }
