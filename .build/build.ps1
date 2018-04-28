@@ -109,7 +109,7 @@ Task Document -depends Build {
 		git config --global user.email $env:github_email
 		git config --global user.name "buildbot121"
 		git add . -A
-		git commit -m "Maintanance commit by build server"
+		git commit -m "API documentation update by build server"
 		git push origin master
 
 		#move cd back to current location
