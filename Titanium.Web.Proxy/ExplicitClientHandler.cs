@@ -24,9 +24,9 @@ namespace Titanium.Web.Proxy
         ///     This is called when client is aware of proxy
         ///     So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
         /// </summary>
-        /// <param name="endPoint"></param>
-        /// <param name="tcpClient"></param>
-        /// <returns></returns>
+        /// <param name="endPoint">The explicit endpoint.</param>
+        /// <param name="tcpClient">The client.</param>
+        /// <returns>The task.</returns>
         private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient tcpClient)
         {
             var cancellationTokenSource = new CancellationTokenSource();

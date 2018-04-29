@@ -13,8 +13,14 @@ namespace Titanium.Web.Proxy
 {
     public partial class ProxyServer
     {
+        /// <summary>
+        ///     Callback to authorize clients of this proxy instance.
+        /// </summary>
+        /// <param name="session">The session event arguments.</param>
+        /// <returns>True if authorized.</returns>
         private async Task<bool> CheckAuthorization(SessionEventArgsBase session)
         {
+            //If we are not authorizing clients return true
             if (AuthenticateUserFunc == null)
             {
                 return true;
@@ -70,6 +76,11 @@ namespace Titanium.Web.Proxy
             }
         }
 
+        /// <summary>
+        ///     Create an authentication required response.
+        /// </summary>
+        /// <param name="description">Response description.</param>
+        /// <returns></returns>
         private Response CreateAuthentication407Response(string description)
         {
             var response = new Response
