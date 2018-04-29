@@ -6,14 +6,14 @@ namespace Titanium.Web.Proxy.Extensions
 {
     internal static class FuncExtensions
     {
-        public static async Task InvokeAsync<T>(this AsyncEventHandler<T> callback, object sender, T args,
+        internal static async Task InvokeAsync<T>(this AsyncEventHandler<T> callback, object sender, T args,
             ExceptionHandler exceptionFunc)
         {
             var invocationList = callback.GetInvocationList();
 
-            for (int i = 0; i < invocationList.Length; i++)
+            foreach (var @delegate in invocationList)
             {
-                await InternalInvokeAsync((AsyncEventHandler<T>)invocationList[i], sender, args, exceptionFunc);
+                await InternalInvokeAsync((AsyncEventHandler<T>)@delegate, sender, args, exceptionFunc);
             }
         }
 

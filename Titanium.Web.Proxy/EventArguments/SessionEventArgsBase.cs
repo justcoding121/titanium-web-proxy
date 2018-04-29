@@ -9,10 +9,10 @@ using Titanium.Web.Proxy.Network;
 namespace Titanium.Web.Proxy.EventArguments
 {
     /// <summary>
-    ///     Holds info related to a single proxy session (single request/response sequence)
-    ///     A proxy session is bounded to a single connection from client
+    ///     Holds info related to a single proxy session (single request/response sequence).
+    ///     A proxy session is bounded to a single connection from client.
     ///     A proxy session ends when client terminates connection to proxy
-    ///     or when server terminates connection from proxy
+    ///     or when server terminates connection from proxy.
     /// </summary>
     public abstract class SessionEventArgsBase : EventArgs, IDisposable
     {
@@ -73,13 +73,13 @@ namespace Titanium.Web.Proxy.EventArguments
         internal ProxyClient ProxyClient { get; }
 
         /// <summary>
-        ///     Returns a unique Id for this request/response session
-        ///     same as RequestId of WebSession
+        ///     Returns a unique Id for this request/response session which is
+        ///     same as the RequestId of WebSession.
         /// </summary>
         public Guid Id => WebSession.RequestId;
 
         /// <summary>
-        ///     Does this session uses SSL
+        ///     Does this session uses SSL?
         /// </summary>
         public bool IsHttps => WebSession.Request.IsHttps;
 
@@ -90,7 +90,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         /// <summary>
         ///     A web session corresponding to a single request/response sequence
-        ///     within a proxy connection
+        ///     within a proxy connection.
         /// </summary>
         public HttpWebClient WebSession { get; }
 
@@ -99,14 +99,23 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public ExternalProxy CustomUpStreamProxyUsed { get; internal set; }
 
+        /// <summary>
+        /// Local endpoint via which we make the request.
+        /// </summary>
         public ProxyEndPoint LocalEndPoint { get; }
 
+        /// <summary>
+        /// Is this a transparent endpoint?
+        /// </summary>
         public bool IsTransparent => LocalEndPoint is TransparentProxyEndPoint;
 
+        /// <summary>
+        /// The last exception that happened.
+        /// </summary>
         public Exception Exception { get; internal set; }
 
         /// <summary>
-        ///     implement any cleanup here
+        ///     Implements cleanup here.
         /// </summary>
         public virtual void Dispose()
         {
@@ -119,8 +128,14 @@ namespace Titanium.Web.Proxy.EventArguments
             WebSession.FinishSession();
         }
 
+        /// <summary>
+        /// Fired when data is sent within this session to server/client.
+        /// </summary>
         public event EventHandler<DataEventArgs> DataSent;
 
+        /// <summary>
+        /// Fired when data is received within this session from client/server.
+        /// </summary>
         public event EventHandler<DataEventArgs> DataReceived;
 
         internal void OnDataSent(byte[] buffer, int offset, int count)
@@ -148,7 +163,7 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        ///     Terminates the session abruptly by terminating client/server connections
+        ///     Terminates the session abruptly by terminating client/server connections.
         /// </summary>
         public void TerminateSession()
         {

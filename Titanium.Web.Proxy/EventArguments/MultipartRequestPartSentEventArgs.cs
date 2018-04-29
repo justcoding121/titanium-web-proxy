@@ -8,14 +8,14 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public class MultipartRequestPartSentEventArgs : EventArgs
     {
-        public MultipartRequestPartSentEventArgs(string boundary, HeaderCollection headers)
+        internal MultipartRequestPartSentEventArgs(string boundary, HeaderCollection headers)
         {
             Boundary = boundary;
             Headers = headers;
         }
 
         /// <summary>
-        /// Boundary
+        /// Boundary.
         /// </summary>
         public string Boundary { get; }
 

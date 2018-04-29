@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Decompression
 
         private static readonly IDecompression deflate = new DeflateDecompression();
 
-        public static IDecompression Create(string type)
+        internal static IDecompression Create(string type)
         {
             switch (type)
             {

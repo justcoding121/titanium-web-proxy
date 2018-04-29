@@ -4,7 +4,7 @@ using System.Net;
 namespace Titanium.Web.Proxy.Models
 {
     /// <summary>
-    ///     An upstream proxy this proxy uses if any
+    ///     An upstream proxy this proxy uses if any.
     /// </summary>
     public class ExternalProxy
     {
@@ -69,6 +69,10 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         public int Port { get; set; }
 
+        /// <summary>
+        /// returns data in Hostname:port format.
+        /// </summary>
+        /// <returns></returns>
         public override string ToString()
         {
             return $"{HostName}:{Port}";

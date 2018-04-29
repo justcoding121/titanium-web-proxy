@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// The server name indication hostname.
+        /// The server name indication hostname if available. Otherwise the generic certificate hostname of TransparentEndPoint.
         /// </summary>
         public string SniHostName { get; internal set; }
 
@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.EventArguments
         public bool DecryptSsl { get; set; } = true;
 
         /// <summary>
-        /// Terminate the request abruptly.
+        /// Terminate the request abruptly by closing client/server connections.
         /// </summary>
         public void TerminateSession()
         {

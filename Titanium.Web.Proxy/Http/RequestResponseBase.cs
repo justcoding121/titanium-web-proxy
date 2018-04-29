@@ -12,12 +12,12 @@ namespace Titanium.Web.Proxy.Http
     public abstract class RequestResponseBase
     {
         /// <summary>
-        ///     Cached body content as byte array
+        ///     Cached body content as byte array.
         /// </summary>
         protected byte[] BodyInternal;
 
         /// <summary>
-        ///     Cached body as string
+        ///     Cached body as string.
         /// </summary>
         private string bodyString;
 
@@ -27,22 +27,22 @@ namespace Titanium.Web.Proxy.Http
         internal bool OriginalHasBody;
 
         /// <summary>
-        ///     Keeps the body data after the session is finished
+        ///     Keeps the body data after the session is finished.
         /// </summary>
         public bool KeepBody { get; set; }
 
         /// <summary>
-        ///     Http Version
+        ///     Http Version.
         /// </summary>
         public Version HttpVersion { get; set; } = HttpHeader.VersionUnknown;
 
         /// <summary>
-        ///     Collection of all headers
+        ///     Collection of all headers.
         /// </summary>
         public HeaderCollection Headers { get; } = new HeaderCollection();
 
         /// <summary>
-        ///     Length of the body
+        ///     Length of the body.
         /// </summary>
         public long ContentLength
         {
@@ -77,17 +77,17 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        ///     Content encoding for this request/response
+        ///     Content encoding for this request/response.
         /// </summary>
         public string ContentEncoding => Headers.GetHeaderValueOrNull(KnownHeaders.ContentEncoding)?.Trim();
 
         /// <summary>
-        ///     Encoding for this request/response
+        ///     Encoding for this request/response.
         /// </summary>
         public Encoding Encoding => HttpHelper.GetEncodingFromContentType(ContentType);
 
         /// <summary>
-        ///     Content-type of the request/response
+        ///     Content-type of the request/response.
         /// </summary>
         public string ContentType
         {
@@ -96,7 +96,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        ///     Is body send as chunked bytes
+        ///     Is body send as chunked bytes.
         /// </summary>
         public bool IsChunked
         {
@@ -119,6 +119,9 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// The header text.
+        /// </summary>
         public abstract string HeaderText { get; }
 
         /// <summary>
@@ -148,7 +151,7 @@ namespace Titanium.Web.Proxy.Http
         public abstract bool HasBody { get; }
 
         /// <summary>
-        ///     Body as string
+        ///     Body as string.
         ///     Use the encoding specified to decode the byte[] data to string
         /// </summary>
         [Browsable(false)]

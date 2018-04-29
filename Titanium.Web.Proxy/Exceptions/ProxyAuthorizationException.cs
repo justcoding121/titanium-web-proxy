@@ -6,14 +6,14 @@ using Titanium.Web.Proxy.Models;
 namespace Titanium.Web.Proxy.Exceptions
 {
     /// <summary>
-    ///     Proxy authorization exception
+    ///     Proxy authorization exception.
     /// </summary>
     public class ProxyAuthorizationException : ProxyException
     {
         /// <summary>
-        ///     Instantiate new instance
+        ///     Instantiate new instance.
         /// </summary>
-        /// <param name="message">Exception message</param>
+        /// <param name="message">Exception message.</param>
         /// <param name="session">The <see cref="SessionEventArgs" /> instance containing the event data.</param>
         /// <param name="innerException">Inner exception associated to upstream proxy authorization</param>
         /// <param name="headers">Http's headers associated</param>
@@ -24,10 +24,13 @@ namespace Titanium.Web.Proxy.Exceptions
             Headers = headers;
         }
 
+        /// <summary>
+        /// The current session within which this error happened.
+        /// </summary>
         public SessionEventArgsBase Session { get; }
 
         /// <summary>
-        ///     Headers associated with the authorization exception
+        ///     Headers associated with the authorization exception.
         /// </summary>
         public IEnumerable<HttpHeader> Headers { get; }
     }

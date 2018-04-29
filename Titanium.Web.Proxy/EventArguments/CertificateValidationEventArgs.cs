@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.EventArguments
         public SslPolicyErrors SslPolicyErrors { get; internal set; }
 
         /// <summary>
-        ///     Is the given server certificate is valid?
+        ///     Is the given server certificate valid?
         /// </summary>
         public bool IsValid { get; set; }
     }
