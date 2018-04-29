@@ -4,7 +4,7 @@ using Titanium.Web.Proxy.EventArguments;
 namespace Titanium.Web.Proxy.Exceptions
 {
     /// <summary>
-    ///     Proxy HTTP exception
+    ///     Proxy HTTP exception.
     /// </summary>
     public class ProxyHttpException : ProxyException
     {
@@ -21,10 +21,10 @@ namespace Titanium.Web.Proxy.Exceptions
         }
 
         /// <summary>
-        ///     Gets session info associated to the exception
+        ///     Gets session info associated to the exception.
         /// </summary>
         /// <remarks>
-        ///     This object should not be edited
+        ///     This object properties should not be edited.
         /// </remarks>
         public SessionEventArgs SessionEventArgs { get; }
     }

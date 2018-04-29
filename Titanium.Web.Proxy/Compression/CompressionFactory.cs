@@ -12,7 +12,7 @@ namespace Titanium.Web.Proxy.Compression
         private static readonly ICompression gzip = new GZipCompression();
         private static readonly ICompression deflate = new DeflateCompression();
 
-        public static ICompression GetCompression(string type)
+        internal static ICompression GetCompression(string type)
         {
             switch (type)
             {
