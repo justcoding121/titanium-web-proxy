@@ -83,8 +83,8 @@
   
   <h1 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint" class="text-break">Class TransparentProxyEndPoint
   </h1>
-  <div class="markdown level0 summary"><p>A proxy end point client is not aware of
-Usefull when requests are redirected to this proxy end point through port forwarding</p>
+  <div class="markdown level0 summary"><p>A proxy end point client is not aware of.
+Useful when requests are redirected to this proxy end point through port forwarding via router.</p>
 </div>
   <div class="markdown level0 conceptual"></div>
   <div class="inheritance">
@@ -141,7 +141,7 @@ Usefull when requests are redirected to this proxy end point through port forwar
   
   <a id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint__ctor_" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.#ctor*"></a>
   <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint__ctor_System_Net_IPAddress_System_Int32_System_Boolean_" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.#ctor(System.Net.IPAddress,System.Int32,System.Boolean)">TransparentProxyEndPoint(IPAddress, Int32, Boolean)</h4>
-  <div class="markdown level1 summary"><p>Constructor.</p>
+  <div class="markdown level1 summary"><p>Initialize a new instance.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -161,17 +161,20 @@ Usefull when requests are redirected to this proxy end point through port forwar
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.net.ipaddress">IPAddress</a></td>
         <td><span class="parametername">ipAddress</span></td>
-        <td></td>
+        <td><p>Listening Ip address.</p>
+</td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a></td>
         <td><span class="parametername">port</span></td>
-        <td></td>
+        <td><p>Listening port.</p>
+</td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
         <td><span class="parametername">decryptSsl</span></td>
-        <td></td>
+        <td><p>Should we decrypt ssl?</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -181,8 +184,8 @@ Usefull when requests are redirected to this proxy end point through port forwar
   
   <a id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_GenericCertificateName_" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.GenericCertificateName*"></a>
   <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_GenericCertificateName" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.GenericCertificateName">GenericCertificateName</h4>
-  <div class="markdown level1 summary"><p>Name of the Certificate need to be sent (same as the hostname we want to proxy)
-This is valid only when UseServerNameIndication is set to false</p>
+  <div class="markdown level1 summary"><p>Name of the Certificate need to be sent (same as the hostname we want to proxy).
+This is valid only when UseServerNameIndication is set to false.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -209,7 +212,7 @@ This is valid only when UseServerNameIndication is set to false</p>
   
   
   <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_BeforeSslAuthenticate" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeSslAuthenticate">BeforeSslAuthenticate</h4>
-  <div class="markdown level1 summary"><p>Before Ssl authentication</p>
+  <div class="markdown level1 summary"><p>Before Ssl authentication this event is fired.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
