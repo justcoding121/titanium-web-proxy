@@ -89,7 +89,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// Does this request contain multipart/form-data?
+        ///     Does this request contain multipart/form-data?
         /// </summary>
         public bool IsMultipartFormData => ContentType?.StartsWith("multipart/form-data") == true;
 

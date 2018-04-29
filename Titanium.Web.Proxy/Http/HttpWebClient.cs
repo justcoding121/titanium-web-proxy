@@ -80,7 +80,8 @@ namespace Titanium.Web.Proxy.Http
         ///     Prepare and send the http(s) request
         /// </summary>
         /// <returns></returns>
-        internal async Task SendRequest(bool enable100ContinueBehaviour, bool isTransparent, CancellationToken cancellationToken)
+        internal async Task SendRequest(bool enable100ContinueBehaviour, bool isTransparent,
+            CancellationToken cancellationToken)
         {
             var upstreamProxy = ServerConnection.UpStreamProxy;
 

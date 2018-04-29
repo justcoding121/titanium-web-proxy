@@ -3,7 +3,7 @@ using System;
 namespace Titanium.Web.Proxy.EventArguments
 {
     /// <summary>
-    /// Wraps the data sent/received by a proxy server instance.
+    ///     Wraps the data sent/received by a proxy server instance.
     /// </summary>
     public class DataEventArgs : EventArgs
     {
@@ -15,17 +15,17 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// The buffer with data.
+        ///     The buffer with data.
         /// </summary>
         public byte[] Buffer { get; }
 
         /// <summary>
-        /// Offset in buffer from which valid data begins.
+        ///     Offset in buffer from which valid data begins.
         /// </summary>
         public int Offset { get; }
 
         /// <summary>
-        /// Length from offset in buffer with valid data.
+        ///     Length from offset in buffer with valid data.
         /// </summary>
         public int Count { get; }
     }

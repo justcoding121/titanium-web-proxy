@@ -3,7 +3,7 @@
 namespace Titanium.Web.Proxy.EventArguments
 {
     /// <summary>
-    /// A generic asynchronous event handler used by the proxy.
+    ///     A generic asynchronous event handler used by the proxy.
     /// </summary>
     /// <typeparam name="TEventArgs">Event argument type.</typeparam>
     /// <param name="sender">The proxy server instance.</param>

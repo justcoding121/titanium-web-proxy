@@ -11,11 +11,11 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Call back to override server certificate validation
         /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="certificate"></param>
-        /// <param name="chain"></param>
-        /// <param name="sslPolicyErrors"></param>
-        /// <returns></returns>
+        /// <param name="sender">The sender object.</param>
+        /// <param name="certificate">The remote certificate.</param>
+        /// <param name="chain">The certificate chain.</param>
+        /// <param name="sslPolicyErrors">Ssl policy errors</param>
+        /// <returns>Return true if valid certificate.</returns>
         internal bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain,
             SslPolicyErrors sslPolicyErrors)
         {
@@ -47,11 +47,11 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Call back to select client certificate used for mutual authentication
         /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="targetHost"></param>
-        /// <param name="localCertificates"></param>
-        /// <param name="remoteCertificate"></param>
-        /// <param name="acceptableIssuers"></param>
+        /// <param name="sender">The sender.</param>
+        /// <param name="targetHost">The remote hostname.</param>
+        /// <param name="localCertificates">Selected local certificates by SslStream.</param>
+        /// <param name="remoteCertificate">The remote certificate of server.</param>
+        /// <param name="acceptableIssuers">The acceptable issues for client certificate as listed by server.</param>
         /// <returns></returns>
         internal X509Certificate SelectClientCertificate(object sender, string targetHost,
             X509CertificateCollection localCertificates,

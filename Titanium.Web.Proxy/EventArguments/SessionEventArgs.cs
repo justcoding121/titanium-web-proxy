@@ -554,7 +554,7 @@ namespace Titanium.Web.Proxy.EventArguments
             Respond(response);
         }
 
-      /// <summary>
+        /// <summary>
       /// Respond with given response object to client.
       /// </summary>
       /// <param name="response">The response object.</param>

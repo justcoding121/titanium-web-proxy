@@ -120,7 +120,7 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        /// The header text.
+        ///     The header text.
         /// </summary>
         public abstract string HeaderText { get; }
 
