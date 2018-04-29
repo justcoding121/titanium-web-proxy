@@ -255,7 +255,7 @@ or when server terminates connection from proxy.</p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Dispose_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Dispose*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Dispose" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Dispose">Dispose()</h4>
-  <div class="markdown level1 summary"><p>implement any cleanup here</p>
+  <div class="markdown level1 summary"><p>Implement any cleanup here</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -289,17 +289,20 @@ the specified status  to client. And then ignore the request.</p>
       <tr>
         <td><span class="xref">System.Byte</span>[]</td>
         <td><span class="parametername">result</span></td>
-        <td></td>
+        <td><p>The bytes to sent.</p>
+</td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.net.httpstatuscode">HttpStatusCode</a></td>
         <td><span class="parametername">status</span></td>
-        <td></td>
+        <td><p>The HTTP status code.</p>
+</td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.dictionary-2">Dictionary</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
         <td><span class="parametername">headers</span></td>
-        <td></td>
+        <td><p>The HTTP headers.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -329,17 +332,20 @@ And then ignore the request. </p>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
         <td><span class="parametername">html</span></td>
-        <td></td>
+        <td><p>The html content.</p>
+</td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.net.httpstatuscode">HttpStatusCode</a></td>
         <td><span class="parametername">status</span></td>
-        <td></td>
+        <td><p>The HTTP status code.</p>
+</td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.dictionary-2">Dictionary</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
         <td><span class="parametername">headers</span></td>
-        <td></td>
+        <td><p>The HTTP headers.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -367,7 +373,8 @@ And then ignore the request. </p>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></td>
         <td><span class="parametername">cancellationToken</span></td>
-        <td></td>
+        <td><p>Optional cancellation token for this async task.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -411,7 +418,7 @@ And then ignore the request. </p>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></td>
         <td><span class="parametername">cancellationToken</span></td>
-        <td><p>Cancellation token for this async task is optional.</p>
+        <td><p>Optional cancellation token for this async task.</p>
 </td>
       </tr>
     </tbody>
@@ -456,7 +463,8 @@ And then ignore the request. </p>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></td>
         <td><span class="parametername">cancellationToken</span></td>
-        <td></td>
+        <td><p>Optional cancellation token for this async task.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -471,7 +479,8 @@ And then ignore the request. </p>
     <tbody>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<span class="xref">System.Byte</span>[]&gt;</td>
-        <td></td>
+        <td><p>The resulting bytes.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -499,7 +508,8 @@ And then ignore the request. </p>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></td>
         <td><span class="parametername">cancellationToken</span></td>
-        <td></td>
+        <td><p>Optional cancellation token for this async task.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -544,12 +554,14 @@ and ignore the request. </p>
       <tr>
         <td><span class="xref">System.Byte</span>[]</td>
         <td><span class="parametername">result</span></td>
-        <td></td>
+        <td><p>The html content bytes.</p>
+</td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.dictionary-2">Dictionary</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
         <td><span class="parametername">headers</span></td>
-        <td></td>
+        <td><p>The HTTP headers.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -578,12 +590,14 @@ and ignore the request. </p>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
         <td><span class="parametername">html</span></td>
-        <td></td>
+        <td><p>HTML content to sent.</p>
+</td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.dictionary-2">Dictionary</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
         <td><span class="parametername">headers</span></td>
-        <td></td>
+        <td><p>HTTP response headers.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -611,7 +625,8 @@ and ignore the request. </p>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
         <td><span class="parametername">url</span></td>
-        <td></td>
+        <td><p>The URL to redirect.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -619,7 +634,8 @@ and ignore the request. </p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Respond*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_Titanium_Web_Proxy_Http_Response_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Respond(Titanium.Web.Proxy.Http.Response)">Respond(Response)</h4>
-  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 summary"><p>Respond with given response object to client.</p>
+</div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
@@ -638,7 +654,8 @@ and ignore the request. </p>
       <tr>
         <td><a class="xref" href="Titanium.Web.Proxy.Http.Response.html">Response</a></td>
         <td><span class="parametername">response</span></td>
-        <td></td>
+        <td><p>The response object.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -724,7 +741,8 @@ and ignore the request. </p>
       <tr>
         <td><span class="xref">System.Byte</span>[]</td>
         <td><span class="parametername">body</span></td>
-        <td></td>
+        <td><p>The body bytes to set.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -752,7 +770,8 @@ and ignore the request. </p>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
         <td><span class="parametername">body</span></td>
-        <td></td>
+        <td><p>The body string to set.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -760,7 +779,8 @@ and ignore the request. </p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_TerminateServerConnection_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.TerminateServerConnection*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_TerminateServerConnection" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.TerminateServerConnection">TerminateServerConnection()</h4>
-  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 summary"><p>Terminate the connection to server.</p>
+</div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
