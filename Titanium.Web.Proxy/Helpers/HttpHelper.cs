@@ -141,7 +141,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="clientStream">The client stream.</param>
         /// <param name="expectedStart">The expected start.</param>
         /// <returns>
-        /// 1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
+        ///     1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
         /// </returns>
         private static async Task<int> StartsWith(CustomBufferedStream clientStream, string expectedStart)
         {

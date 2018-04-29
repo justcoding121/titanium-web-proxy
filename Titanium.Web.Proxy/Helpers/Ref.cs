@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Titanium.Web.Proxy.Helpers
+﻿namespace Titanium.Web.Proxy.Helpers
 {
     internal class Ref<T>
     {
@@ -21,7 +15,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         public override string ToString()
         {
-            T value = Value;
+            var value = Value;
             return value == null ? string.Empty : value.ToString();
         }
 

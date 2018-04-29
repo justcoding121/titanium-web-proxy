@@ -290,7 +290,8 @@ namespace Titanium.Web.Proxy
                 if (request.ExpectContinue)
                 {
                     args.WebSession.SetConnection(connection);
-                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent, cancellationToken);
+                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
+                        cancellationToken);
                 }
 
                 //If 100 continue was the response inform that to the client
@@ -316,7 +317,8 @@ namespace Titanium.Web.Proxy
                 if (!request.ExpectContinue)
                 {
                     args.WebSession.SetConnection(connection);
-                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent, cancellationToken);
+                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
+                        cancellationToken);
                 }
 
                 //check if content-length is > 0
@@ -359,7 +361,8 @@ namespace Titanium.Web.Proxy
         /// <param name="isConnect"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task<TcpConnection> GetServerConnection(SessionEventArgsBase args, bool isConnect, CancellationToken cancellationToken)
+        private async Task<TcpConnection> GetServerConnection(SessionEventArgsBase args, bool isConnect,
+            CancellationToken cancellationToken)
         {
             ExternalProxy customUpStreamProxy = null;
 

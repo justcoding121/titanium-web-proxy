@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended.Network;
@@ -33,9 +32,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="externalProxy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        internal async Task<TcpConnection> CreateClient(string remoteHostName, int remotePort, 
-            List<SslApplicationProtocol> applicationProtocols, Version httpVersion, bool decryptSsl, bool isConnect, 
-            ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy, CancellationToken cancellationToken)
+        internal async Task<TcpConnection> CreateClient(string remoteHostName, int remotePort,
+            List<SslApplicationProtocol> applicationProtocols, Version httpVersion, bool decryptSsl, bool isConnect,
+            ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
+            CancellationToken cancellationToken)
         {
             bool useUpstreamProxy = false;
 
@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     var connectRequest = new ConnectRequest
                     {
                         OriginalUrl = $"{remoteHostName}:{remotePort}",
-                        HttpVersion = httpVersion,
+                        HttpVersion = httpVersion
                     };
 
                     connectRequest.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionKeepAlive);
@@ -87,7 +87,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
                     {
                         connectRequest.Headers.AddHeader(HttpHeader.ProxyConnectionKeepAlive);
-                        connectRequest.Headers.AddHeader(HttpHeader.GetProxyAuthorizationHeader(externalProxy.UserName, externalProxy.Password));
+                        connectRequest.Headers.AddHeader(
+                            HttpHeader.GetProxyAuthorizationHeader(externalProxy.UserName, externalProxy.Password));
                     }
 
                     await writer.WriteRequestAsync(connectRequest, cancellationToken: cancellationToken);

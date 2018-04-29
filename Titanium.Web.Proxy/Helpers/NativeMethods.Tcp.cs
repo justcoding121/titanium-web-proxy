@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        ///     <see href="https://msdn.microsoft.com/en-us/library/aa366896.aspx"/>
+        ///     <see href="https://msdn.microsoft.com/en-us/library/aa366896.aspx" />
         /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         internal unsafe struct Tcp6Row

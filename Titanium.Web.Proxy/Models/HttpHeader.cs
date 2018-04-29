@@ -22,11 +22,11 @@ namespace Titanium.Web.Proxy.Models
 
         internal static readonly HttpHeader ProxyConnectionKeepAlive = new HttpHeader("Proxy-Connection", "keep-alive");
 
-       /// <summary>
-       /// Initialize a new instance.
-       /// </summary>
-       /// <param name="name">Header name.</param>
-       /// <param name="value">Header value.</param>
+        /// <summary>
+        ///     Initialize a new instance.
+        /// </summary>
+        /// <param name="name">Header name.</param>
+        /// <param name="value">Header value.</param>
         public HttpHeader(string name, string value)
         {
             if (string.IsNullOrEmpty(name))

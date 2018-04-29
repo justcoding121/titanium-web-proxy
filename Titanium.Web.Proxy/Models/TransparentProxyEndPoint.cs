@@ -12,7 +12,7 @@ namespace Titanium.Web.Proxy.Models
     public class TransparentProxyEndPoint : ProxyEndPoint
     {
         /// <summary>
-        /// Initialize a new instance.
+        ///     Initialize a new instance.
         /// </summary>
         /// <param name="ipAddress">Listening Ip address.</param>
         /// <param name="port">Listening port.</param>

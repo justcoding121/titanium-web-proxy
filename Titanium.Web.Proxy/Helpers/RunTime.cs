@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Runtime.InteropServices;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -19,7 +18,8 @@ namespace Titanium.Web.Proxy.Helpers
 /// cache for Windows platform check
 /// </summary>
 /// <returns></returns>
-        private static readonly Lazy<bool> isRunningOnWindows = new Lazy<bool>(() => RuntimeInformation.IsOSPlatform(OSPlatform.Windows));
+        private static readonly Lazy<bool> isRunningOnWindows =
+ new Lazy<bool>(() => RuntimeInformation.IsOSPlatform(OSPlatform.Windows));
 
 #endif
 
