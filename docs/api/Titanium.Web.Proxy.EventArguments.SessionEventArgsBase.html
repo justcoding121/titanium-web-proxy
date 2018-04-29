@@ -83,10 +83,10 @@
   
   <h1 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase" class="text-break">Class SessionEventArgsBase
   </h1>
-  <div class="markdown level0 summary"><p>Holds info related to a single proxy session (single request/response sequence)
-A proxy session is bounded to a single connection from client
+  <div class="markdown level0 summary"><p>Holds info related to a single proxy session (single request/response sequence).
+A proxy session is bounded to a single connection from client.
 A proxy session ends when client terminates connection to proxy
-or when server terminates connection from proxy</p>
+or when server terminates connection from proxy.</p>
 </div>
   <div class="markdown level0 conceptual"></div>
   <div class="inheritance">
@@ -292,7 +292,8 @@ or when server terminates connection from proxy</p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Exception_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Exception*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Exception" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Exception">Exception</h4>
-  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 summary"><p>The last exception that happened.</p>
+</div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
@@ -317,8 +318,8 @@ or when server terminates connection from proxy</p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Id_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Id*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Id" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Id">Id</h4>
-  <div class="markdown level1 summary"><p>Returns a unique Id for this request/response session
-same as RequestId of WebSession</p>
+  <div class="markdown level1 summary"><p>Returns a unique Id for this request/response session which is
+same as the RequestId of WebSession.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -344,7 +345,7 @@ same as RequestId of WebSession</p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsHttps_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsHttps*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsHttps" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsHttps">IsHttps</h4>
-  <div class="markdown level1 summary"><p>Does this session uses SSL</p>
+  <div class="markdown level1 summary"><p>Does this session uses SSL?</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -370,7 +371,8 @@ same as RequestId of WebSession</p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsTransparent_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsTransparent*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsTransparent" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsTransparent">IsTransparent</h4>
-  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 summary"><p>Is this a transparent endpoint?</p>
+</div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
@@ -395,7 +397,8 @@ same as RequestId of WebSession</p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_LocalEndPoint_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.LocalEndPoint*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_LocalEndPoint" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.LocalEndPoint">LocalEndPoint</h4>
-  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 summary"><p>Local endpoint via which we make the request.</p>
+</div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
@@ -421,7 +424,7 @@ same as RequestId of WebSession</p>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_WebSession_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.WebSession*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_WebSession" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.WebSession">WebSession</h4>
   <div class="markdown level1 summary"><p>A web session corresponding to a single request/response sequence
-within a proxy connection</p>
+within a proxy connection.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -449,7 +452,7 @@ within a proxy connection</p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Dispose_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Dispose*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Dispose" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Dispose">Dispose()</h4>
-  <div class="markdown level1 summary"><p>implement any cleanup here</p>
+  <div class="markdown level1 summary"><p>Implements cleanup here.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -460,7 +463,7 @@ within a proxy connection</p>
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_TerminateSession_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TerminateSession*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_TerminateSession" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TerminateSession">TerminateSession()</h4>
-  <div class="markdown level1 summary"><p>Terminates the session abruptly by terminating client/server connections</p>
+  <div class="markdown level1 summary"><p>Terminates the session abruptly by terminating client/server connections.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -472,7 +475,8 @@ within a proxy connection</p>
   
   
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_DataReceived" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.DataReceived">DataReceived</h4>
-  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 summary"><p>Fired when data is received within this session from client/server.</p>
+</div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
@@ -496,7 +500,8 @@ within a proxy connection</p>
   
   
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_DataSent" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.DataSent">DataSent</h4>
-  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 summary"><p>Fired when data is sent within this session to server/client.</p>
+</div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">

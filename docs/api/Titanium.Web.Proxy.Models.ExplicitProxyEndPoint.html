@@ -83,8 +83,8 @@
   
   <h1 id="Titanium_Web_Proxy_Models_ExplicitProxyEndPoint" data-uid="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint" class="text-break">Class ExplicitProxyEndPoint
   </h1>
-  <div class="markdown level0 summary"><p>A proxy endpoint that the client is aware of
-So client application know that it is communicating with a proxy server</p>
+  <div class="markdown level0 summary"><p>A proxy endpoint that the client is aware of.
+So client application know that it is communicating with a proxy server.</p>
 </div>
   <div class="markdown level0 conceptual"></div>
   <div class="inheritance">
@@ -161,17 +161,20 @@ So client application know that it is communicating with a proxy server</p>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.net.ipaddress">IPAddress</a></td>
         <td><span class="parametername">ipAddress</span></td>
-        <td></td>
+        <td><p>Listening IP address.</p>
+</td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a></td>
         <td><span class="parametername">port</span></td>
-        <td></td>
+        <td><p>Listening port.</p>
+</td>
       </tr>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
         <td><span class="parametername">decryptSsl</span></td>
-        <td></td>
+        <td><p>Should we decrypt ssl?</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -208,10 +211,10 @@ So client application know that it is communicating with a proxy server</p>
   
   
   <h4 id="Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_BeforeTunnelConnectRequest" data-uid="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.BeforeTunnelConnectRequest">BeforeTunnelConnectRequest</h4>
-  <div class="markdown level1 summary"><p>Intercept tunnel connect request
-Valid only for explicit endpoints
+  <div class="markdown level1 summary"><p>Intercept tunnel connect request.
+Valid only for explicit endpoints.
 Set the <a class="xref" href="Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_DecryptSsl">DecryptSsl</a> property to false if this HTTP connect request
-should&apos;nt be decrypted and instead be relayed</p>
+should&apos;nt be decrypted and instead be relayed.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -236,8 +239,8 @@ should&apos;nt be decrypted and instead be relayed</p>
   
   
   <h4 id="Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_BeforeTunnelConnectResponse" data-uid="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.BeforeTunnelConnectResponse">BeforeTunnelConnectResponse</h4>
-  <div class="markdown level1 summary"><p>Intercept tunnel connect response
-Valid only for explicit endpoints</p>
+  <div class="markdown level1 summary"><p>Intercept tunnel connect response.
+Valid only for explicit endpoints.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
