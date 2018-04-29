@@ -9,15 +9,15 @@ using Titanium.Web.Proxy.Network.WinAuth.Security;
 namespace Titanium.Web.Proxy
 {
     /// <summary>
-    ///     Handle the response from server
+    ///     Handle the response from server.
     /// </summary>
     partial class ProxyServer
     {
         /// <summary>
-        ///     Called asynchronously when a request was successfully and we received the response
+        ///     Called asynchronously when a request was successfully and we received the response.
         /// </summary>
-        /// <param name="args"></param>
-        /// <returns>true if client/server connection was terminated (and disposed) </returns>
+        /// <param name="args">The session event arguments.</param>
+        /// <returns> The task.</returns>
         private async Task HandleHttpSessionResponse(SessionEventArgs args)
         {
             try
@@ -129,6 +129,11 @@ namespace Titanium.Web.Proxy
             }
         }
 
+        /// <summary>
+        ///     Invoke before response if it is set.
+        /// </summary>
+        /// <param name="args"></param>
+        /// <returns></returns>
         private async Task InvokeBeforeResponse(SessionEventArgs args)
         {
             if (BeforeResponse != null)
@@ -137,6 +142,11 @@ namespace Titanium.Web.Proxy
             }
         }
 
+        /// <summary>
+        ///     Invoke after response if it is set.
+        /// </summary>
+        /// <param name="args"></param>
+        /// <returns></returns>
         private async Task InvokeAfterResponse(SessionEventArgs args)
         {
             if (AfterResponse != null)

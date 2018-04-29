@@ -17,11 +17,11 @@ namespace Titanium.Web.Proxy
     partial class ProxyServer
     {
         /// <summary>
-        ///     This is called when this proxy acts as a reverse proxy (like a real http server)
+        ///     This is called when this proxy acts as a reverse proxy (like a real http server).
         ///     So for HTTPS requests we would start SSL negotiation right away without expecting a CONNECT request from client
         /// </summary>
-        /// <param name="endPoint"></param>
-        /// <param name="tcpClient"></param>
+        /// <param name="endPoint">The transparent endpoint.</param>
+        /// <param name="tcpClient">The client.</param>
         /// <returns></returns>
         private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
         {
@@ -44,8 +44,11 @@ namespace Titanium.Web.Proxy
                 {
                     httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
 
-                    var args = new BeforeSslAuthenticateEventArgs(cancellationTokenSource);
-                    args.SniHostName = httpsHostName;
+                    var args = new BeforeSslAuthenticateEventArgs(cancellationTokenSource)
+                    {
+                        SniHostName = httpsHostName
+                    };
+
                     await endPoint.InvokeBeforeSslAuthenticate(this, args, ExceptionFunc);
 
                     if (cancellationTokenSource.IsCancellationRequested)
