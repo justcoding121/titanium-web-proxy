@@ -204,16 +204,6 @@
     "title": "Namespace Titanium.Web.Proxy.Network | Titanium Web Proxy",
     "keywords": "Namespace Titanium.Web.Proxy.Network Classes CertificateManager A class to manage SSL certificates used by this proxy server. Enums CertificateEngine Certificate Engine option."
   },
-  "api/Titanium.Web.Proxy.Network.WinAuth.html": {
-    "href": "api/Titanium.Web.Proxy.Network.WinAuth.html",
-    "title": "Namespace Titanium.Web.Proxy.Network.WinAuth | Titanium Web Proxy",
-    "keywords": "Namespace Titanium.Web.Proxy.Network.WinAuth Classes WinAuthHandler A handler for NTLM/Kerberos windows authentication challenge from server NTLM process details below https://blogs.msdn.microsoft.com/chiranth/2013/09/20/ntlm-want-to-know-how-it-works/"
-  },
-  "api/Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.html": {
-    "href": "api/Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.html",
-    "title": "Class WinAuthHandler | Titanium Web Proxy",
-    "keywords": "Class WinAuthHandler A handler for NTLM/Kerberos windows authentication challenge from server NTLM process details below https://blogs.msdn.microsoft.com/chiranth/2013/09/20/ntlm-want-to-know-how-it-works/ Inheritance Object WinAuthHandler Inherited Members Object.ToString() Object.Equals(Object) Object.Equals(Object, Object) Object.ReferenceEquals(Object, Object) Object.GetHashCode() Object.GetType() Object.MemberwiseClone() Namespace : Titanium.Web.Proxy.Network.WinAuth Assembly : Titanium.Web.Proxy.dll Syntax public static class WinAuthHandler Methods GetFinalAuthToken(String, String, Guid) Get the final token given the server challenge token Declaration public static string GetFinalAuthToken(string serverHostname, string serverToken, Guid requestId) Parameters Type Name Description String serverHostname String serverToken Guid requestId Returns Type Description String GetInitialAuthToken(String, String, Guid) Get the initial client token for server using credentials of user running the proxy server process Declaration public static string GetInitialAuthToken(string serverHostname, string authScheme, Guid requestId) Parameters Type Name Description String serverHostname String authScheme Guid requestId Returns Type Description String"
-  },
   "api/Titanium.Web.Proxy.ProxyServer.html": {
     "href": "api/Titanium.Web.Proxy.ProxyServer.html",
     "title": "Class ProxyServer | Titanium Web Proxy",
