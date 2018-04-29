@@ -27,12 +27,12 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        ///     Unique Request header collection
+        ///     Unique Request header collection.
         /// </summary>
         public ReadOnlyDictionary<string, HttpHeader> Headers { get; }
 
         /// <summary>
-        ///     Non Unique headers
+        ///     Non Unique headers.
         /// </summary>
         public ReadOnlyDictionary<string, List<HttpHeader>> NonUniqueHeaders { get; }
 

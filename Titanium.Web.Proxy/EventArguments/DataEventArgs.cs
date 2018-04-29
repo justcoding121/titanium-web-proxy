@@ -20,12 +20,12 @@ namespace Titanium.Web.Proxy.EventArguments
         public byte[] Buffer { get; }
 
         /// <summary>
-        /// Offset in Buffer where valid data begins.
+        /// Offset in buffer from which valid data begins.
         /// </summary>
         public int Offset { get; }
 
         /// <summary>
-        /// Length from offset in Buffer with valid data.
+        /// Length from offset in buffer with valid data.
         /// </summary>
         public int Count { get; }
     }

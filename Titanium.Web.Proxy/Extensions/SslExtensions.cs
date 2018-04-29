@@ -13,9 +13,9 @@ namespace Titanium.Web.Proxy.Extensions
 {
     internal static class SslExtensions
     {
-        public static readonly List<SslApplicationProtocol> Http11ProtocolAsList = new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 };
+        internal static readonly List<SslApplicationProtocol> Http11ProtocolAsList = new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 };
 
-        public static string GetServerName(this ClientHelloInfo clientHelloInfo)
+        internal static string GetServerName(this ClientHelloInfo clientHelloInfo)
         {
             if (clientHelloInfo.Extensions != null &&
                 clientHelloInfo.Extensions.TryGetValue("server_name", out var serverNameExtension))
@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy.Extensions
         }
 
 #if NETCOREAPP2_1
-        public static List<SslApplicationProtocol> GetAlpn(this ClientHelloInfo clientHelloInfo)
+        internal static List<SslApplicationProtocol> GetAlpn(this ClientHelloInfo clientHelloInfo)
         {
             if (clientHelloInfo.Extensions != null && clientHelloInfo.Extensions.TryGetValue("ALPN", out var alpnExtension))
             {
@@ -55,17 +55,17 @@ namespace Titanium.Web.Proxy.Extensions
             return null;
         }
 #else
-        public static List<SslApplicationProtocol> GetAlpn(this ClientHelloInfo clientHelloInfo)
+        internal static List<SslApplicationProtocol> GetAlpn(this ClientHelloInfo clientHelloInfo)
         {
             return Http11ProtocolAsList;
         }
 
-        public static Task AuthenticateAsClientAsync(this SslStream sslStream, SslClientAuthenticationOptions option, CancellationToken token)
+        internal static Task AuthenticateAsClientAsync(this SslStream sslStream, SslClientAuthenticationOptions option, CancellationToken token)
         {
             return sslStream.AuthenticateAsClientAsync(option.TargetHost, option.ClientCertificates, option.EnabledSslProtocols, option.CertificateRevocationCheckMode != X509RevocationMode.NoCheck);
         }
 
-        public static Task AuthenticateAsServerAsync(this SslStream sslStream, SslServerAuthenticationOptions options, CancellationToken token)
+        internal static Task AuthenticateAsServerAsync(this SslStream sslStream, SslServerAuthenticationOptions options, CancellationToken token)
         {
             return sslStream.AuthenticateAsServerAsync(options.ServerCertificate, options.ClientCertificateRequired, options.EnabledSslProtocols, options.CertificateRevocationCheckMode != X509RevocationMode.NoCheck);
         }
@@ -73,49 +73,49 @@ namespace Titanium.Web.Proxy.Extensions
     }
 
 #if !NETCOREAPP2_1
-    public enum SslApplicationProtocol
+    internal enum SslApplicationProtocol
     {
         Http11, Http2
     }
 
-    public class SslClientAuthenticationOptions
+    internal class SslClientAuthenticationOptions
     {
-        public bool AllowRenegotiation { get; set; }
+        internal bool AllowRenegotiation { get; set; }
 
-        public string TargetHost { get; set; }
+        internal string TargetHost { get; set; }
 
-        public X509CertificateCollection ClientCertificates { get; set; }
+        internal X509CertificateCollection ClientCertificates { get; set; }
 
-        public LocalCertificateSelectionCallback LocalCertificateSelectionCallback { get; set; }
+        internal LocalCertificateSelectionCallback LocalCertificateSelectionCallback { get; set; }
 
-        public SslProtocols EnabledSslProtocols { get; set; }
+        internal SslProtocols EnabledSslProtocols { get; set; }
 
-        public X509RevocationMode CertificateRevocationCheckMode { get; set; }
+        internal X509RevocationMode CertificateRevocationCheckMode { get; set; }
 
-        public List<SslApplicationProtocol> ApplicationProtocols { get; set; }
+        internal List<SslApplicationProtocol> ApplicationProtocols { get; set; }
 
-        public RemoteCertificateValidationCallback RemoteCertificateValidationCallback { get; set; }
+        internal RemoteCertificateValidationCallback RemoteCertificateValidationCallback { get; set; }
 
-        public EncryptionPolicy EncryptionPolicy { get; set; }
+        internal EncryptionPolicy EncryptionPolicy { get; set; }
     }
 
-    public class SslServerAuthenticationOptions
+    internal class SslServerAuthenticationOptions
     {
-        public bool AllowRenegotiation { get; set; }
+        internal bool AllowRenegotiation { get; set; }
 
-        public X509Certificate ServerCertificate { get; set; }
+        internal X509Certificate ServerCertificate { get; set; }
 
-        public bool ClientCertificateRequired { get; set; }
+        internal bool ClientCertificateRequired { get; set; }
 
-        public SslProtocols EnabledSslProtocols { get; set; }
+        internal SslProtocols EnabledSslProtocols { get; set; }
 
-        public X509RevocationMode CertificateRevocationCheckMode { get; set; }
+        internal X509RevocationMode CertificateRevocationCheckMode { get; set; }
 
-        public List<SslApplicationProtocol> ApplicationProtocols { get; set; }
+        internal List<SslApplicationProtocol> ApplicationProtocols { get; set; }
 
-        public RemoteCertificateValidationCallback RemoteCertificateValidationCallback { get; set; }
+        internal RemoteCertificateValidationCallback RemoteCertificateValidationCallback { get; set; }
 
-        public EncryptionPolicy EncryptionPolicy { get; set; }
+        internal EncryptionPolicy EncryptionPolicy { get; set; }
     }
 #endif
 }

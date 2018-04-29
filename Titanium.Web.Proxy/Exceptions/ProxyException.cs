@@ -3,7 +3,7 @@
 namespace Titanium.Web.Proxy.Exceptions
 {
     /// <summary>
-    ///     Base class exception associated with this proxy implementation
+    ///     Base class exception associated with this proxy server.
     /// </summary>
     public abstract class ProxyException : Exception
     {

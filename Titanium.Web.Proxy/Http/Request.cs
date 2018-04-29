@@ -15,12 +15,12 @@ namespace Titanium.Web.Proxy.Http
     public class Request : RequestResponseBase
     {
         /// <summary>
-        ///     Request Method
+        ///     Request Method.
         /// </summary>
         public string Method { get; set; }
 
         /// <summary>
-        ///     Request HTTP Uri
+        ///     Request HTTP Uri.
         /// </summary>
         public Uri RequestUri { get; set; }
 
@@ -66,9 +66,9 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        ///     Http hostname header value if exists
-        ///     Note: Changing this does NOT change host in RequestUri
-        ///     Users can set new RequestUri separately
+        ///     Http hostname header value if exists.
+        ///     Note: Changing this does NOT change host in RequestUri.
+        ///     Users can set new RequestUri separately.
         /// </summary>
         public string Host
         {
@@ -88,15 +88,18 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
+        /// <summary>
+        /// Does this request contain multipart/form-data?
+        /// </summary>
         public bool IsMultipartFormData => ContentType?.StartsWith("multipart/form-data") == true;
 
         /// <summary>
-        ///     Request Url
+        ///     Request Url.
         /// </summary>
         public string Url => RequestUri.OriginalString;
 
         /// <summary>
-        ///     Terminates the underlying Tcp Connection to client after current request
+        ///     Terminates the underlying Tcp Connection to client after current request.
         /// </summary>
         internal bool CancelRequest { get; set; }
 
@@ -119,12 +122,12 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        ///     Does server responsed positively for 100 continue request
+        ///     Did server responsed positively for 100 continue request?
         /// </summary>
         public bool Is100Continue { get; internal set; }
 
         /// <summary>
-        ///     Server responsed negatively for the request for 100 continue
+        ///     Did server responsed negatively for the request for 100 continue?
         /// </summary>
         public bool ExpectationFailed { get; internal set; }
 

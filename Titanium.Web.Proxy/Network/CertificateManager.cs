@@ -14,23 +14,23 @@ using Titanium.Web.Proxy.Shared;
 namespace Titanium.Web.Proxy.Network
 {
     /// <summary>
-    ///     Certificate Engine option
+    ///     Certificate Engine option.
     /// </summary>
     public enum CertificateEngine
     {
         /// <summary>
-        ///     Uses Windows Certification Generation API
+        ///     Uses Windows Certification Generation API.
         /// </summary>
         DefaultWindows = 0,
 
         /// <summary>
-        ///     Uses BouncyCastle 3rd party library
+        ///     Uses BouncyCastle 3rd party library.
         /// </summary>
         BouncyCastle = 1
     }
 
     /// <summary>
-    ///     A class to manage SSL certificates used by this proxy server
+    ///     A class to manage SSL certificates used by this proxy server.
     /// </summary>
     public sealed class CertificateManager : IDisposable
     {
@@ -60,16 +60,13 @@ namespace Titanium.Web.Proxy.Network
 
 
         /// <summary>
-        ///     Constructor.
+        /// 
         /// </summary>
-        /// <param name="rootCertificateName">Name of root certificate.</param>
-        /// <param name="rootCertificateIssuerName">Name of root certificate issuer.</param>
-        /// <param name="userTrustRootCertificate"></param>
-        /// <param name="machineTrustRootCertificate">
-        ///     Note:setting machineTrustRootCertificate to true will force
-        ///     userTrustRootCertificate to true
-        /// </param>
-        /// <param name="trustRootCertificateAsAdmin"></param>
+        /// <param name="rootCertificateName"></param>
+        /// <param name="rootCertificateIssuerName"></param>
+        /// <param name="userTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's user certificate store?</param>
+        /// <param name="machineTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's certificate store?</param>
+        /// <param name="trustRootCertificateAsAdmin">Should we attempt to trust certificates with elevated permissions by prompting for UAC if required?</param>
         /// <param name="exceptionFunc"></param>
         internal CertificateManager(string rootCertificateName, string rootCertificateIssuerName,
             bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin,
@@ -134,9 +131,9 @@ namespace Titanium.Web.Proxy.Network
         internal bool TrustRootAsAdministrator { get; set; }
 
         /// <summary>
-        ///     Select Certificate Engine
-        ///     Optionally set to BouncyCastle
-        ///     Mono only support BouncyCastle and it is the default
+        ///     Select Certificate Engine.
+        ///     Optionally set to BouncyCastle.
+        ///     Mono only support BouncyCastle and it is the default.
         /// </summary>
         public CertificateEngine CertificateEngine
         {
@@ -165,13 +162,13 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        ///     Password of the Root certificate file
+        ///     Password of the Root certificate file.
         ///     <para>Set a password for the .pfx file</para>
         /// </summary>
         public string PfxPassword { get; set; } = string.Empty;
 
         /// <summary>
-        ///     Name(path) of the Root certificate file
+        ///     Name(path) of the Root certificate file.
         ///     <para>
         ///         Set the name(path) of the .pfx file. If it is string.Empty Root certificate file will be named as
         ///         "rootCert.pfx" (and will be saved in proxy dll directory)
@@ -180,8 +177,8 @@ namespace Titanium.Web.Proxy.Network
         public string PfxFilePath { get; set; } = string.Empty;
 
         /// <summary>
-        ///     Name of the root certificate issuer
-        ///     (This is valid only when RootCertificate property is not set)
+        ///     Name of the root certificate issuer.
+        ///     (This is valid only when RootCertificate property is not set.)
         /// </summary>
         public string RootCertificateIssuerName
         {
@@ -190,11 +187,11 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        ///     Name of the root certificate
-        ///     (This is valid only when RootCertificate property is not set)
-        ///     If no certificate is provided then a default Root Certificate will be created and used
-        ///     The provided root certificate will be stored in proxy exe directory with the private key
-        ///     Root certificate file will be named as "rootCert.pfx"
+        ///     Name of the root certificate.
+        ///     (This is valid only when RootCertificate property is not set.)
+        ///     If no certificate is provided then a default Root Certificate will be created and used.
+        ///     The provided root certificate will be stored in proxy exe directory with the private key.
+        ///     Root certificate file will be named as "rootCert.pfx".
         /// </summary>
         public string RootCertificateName
         {
@@ -203,7 +200,7 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        ///     The root certificate
+        ///     The root certificate.
         /// </summary>
         public X509Certificate2 RootCertificate
         {
@@ -216,24 +213,24 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        ///     Save all fake certificates in folder "crts"(will be created in proxy dll directory)
-        ///     <para>for can load the certificate and not make new certificate every time </para>
+        ///     Save all fake certificates in folder "crts" (will be created in proxy dll directory).
+        ///     <para>for can load the certificate and not make new certificate every time. </para>
         /// </summary>
         public bool SaveFakeCertificates { get; set; } = false;
 
         /// <summary>
-        ///     Overwrite Root certificate file
-        ///     <para>true : replace an existing .pfx file if password is incorect or if RootCertificate = null</para>
+        ///     Overwrite Root certificate file.
+        ///     <para>true : replace an existing .pfx file if password is incorect or if RootCertificate = null.</para>
         /// </summary>
         public bool OverwritePfxFile { get; set; } = true;
 
         /// <summary>
-        ///     Minutes certificates should be kept in cache when not used
+        ///     Minutes certificates should be kept in cache when not used.
         /// </summary>
         public int CertificateCacheTimeOutMinutes { get; set; } = 60;
 
         /// <summary>
-        ///     Adjust behaviour when certificates are saved to filesystem
+        ///     Adjust behaviour when certificates are saved to filesystem.
         /// </summary>
         public X509KeyStorageFlags StorageFlag { get; set; } = X509KeyStorageFlags.Exportable;
 
@@ -553,11 +550,11 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        ///     Attempts to create a RootCertificate
+        ///     Attempts to create a RootCertificate.
         /// </summary>
         /// <param name="persistToFile">if set to <c>true</c> try to load/save the certificate from rootCert.pfx.</param>
         /// <returns>
-        ///     true if succeeded, else false
+        ///     true if succeeded, else false.
         /// </returns>
         public bool CreateRootCertificate(bool persistToFile = true)
         {
@@ -611,7 +608,7 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        ///     Loads root certificate from current executing assembly location with expected name rootCert.pfx
+        ///     Loads root certificate from current executing assembly location with expected name rootCert.pfx.
         /// </summary>
         /// <returns></returns>
         public X509Certificate2 LoadRootCertificate()
@@ -635,17 +632,17 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        ///     Manually load a Root certificate file from give path (.pfx file)
+        ///     Manually load a Root certificate file from give path (.pfx file).
         /// </summary>
         /// <param name="pfxFilePath">
         ///     Set the name(path) of the .pfx file. If it is string.Empty Root certificate file will be
-        ///     named as "rootCert.pfx" (and will be saved in proxy dll directory)
+        ///     named as "rootCert.pfx" (and will be saved in proxy dll directory).
         /// </param>
-        /// <param name="password">Set a password for the .pfx file</param>
-        /// <param name="overwritePfXFile">true : replace an existing .pfx file if password is incorect or if RootCertificate==null</param>
+        /// <param name="password">Set a password for the .pfx file.</param>
+        /// <param name="overwritePfXFile">true : replace an existing .pfx file if password is incorect or if RootCertificate==null.</param>
         /// <param name="storageFlag"></param>
         /// <returns>
-        ///     true if succeeded, else false
+        ///     true if succeeded, else false.
         /// </returns>
         public bool LoadRootCertificate(string pfxFilePath, string password, bool overwritePfXFile = true,
             X509KeyStorageFlags storageFlag = X509KeyStorageFlags.Exportable)
@@ -661,8 +658,8 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        ///     Trusts the root certificate in user store, optionally also in machine store
-        ///     Machine trust would require elevated permissions (will silently fail otherwise)
+        ///     Trusts the root certificate in user store, optionally also in machine store.
+        ///     Machine trust would require elevated permissions (will silently fail otherwise).
         /// </summary>
         public void TrustRootCertificate(bool machineTrusted = false)
         {
@@ -685,10 +682,10 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        ///     Puts the certificate to the user store, optionally also to machine store
+        ///     Puts the certificate to the user store, optionally also to machine store.
         ///     Prompts with UAC if elevated permissions are required. Works only on Windows.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>True if success.</returns>
         public bool TrustRootCertificateAsAdmin(bool machineTrusted = false)
         {
             if (!RunTime.IsWindows || RunTime.IsRunningOnMono)
@@ -743,7 +740,7 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        ///     Ensure certificates are setup (creates root if required)
+        ///     Ensure certificates are setup (creates root if required).
         ///     Also makes root certificate trusted based on initial setup from proxy constructor for user/machine trust.
         /// </summary>
         public void EnsureRootCertificate()
@@ -764,12 +761,15 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        ///     Ensure certificates are setup (creates root if required)
-        ///     Also makes root certificate trusted based on provided parameters
-        ///     Note:setting machineTrustRootCertificate to true will force userTrustRootCertificate to true
+        ///     Ensure certificates are setup (creates root if required).
+        ///     Also makes root certificate trusted based on provided parameters.
+        ///     Note:setting machineTrustRootCertificate to true will force userTrustRootCertificate to true.
         /// </summary>
-        public void EnsureRootCertificate(bool userTrustRootCertificate = true,
-            bool machineTrustRootCertificate = false, bool trustRootCertificateAsAdmin = false)
+        /// <param name="userTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's user certificate store?</param>
+        /// <param name="machineTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's certificate store?</param>
+        /// <param name="trustRootCertificateAsAdmin">Should we attempt to trust certificates with elevated permissions by prompting for UAC if required?</param>
+        public void EnsureRootCertificate(bool userTrustRootCertificate,
+            bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin = false)
         {
             UserTrustRoot = userTrustRootCertificate;
             if (machineTrustRootCertificate)
@@ -801,9 +801,10 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        ///     Removes the trusted certificates from user store, optionally also from machine store
-        ///     To remove from machine store elevated permissions are required (will fail silently otherwise)
+        ///     Removes the trusted certificates from user store, optionally also from machine store.
+        ///     To remove from machine store elevated permissions are required (will fail silently otherwise).
         /// </summary>
+        /// <param name="machineTrusted">Should also remove from machine store?</param>
         public void RemoveTrustedRootCertificate(bool machineTrusted = false)
         {
             //currentUser\personal
@@ -827,7 +828,7 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         ///     Removes the trusted certificates from user store, optionally also from machine store
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Should also remove from machine store?</returns>
         public bool RemoveTrustedRootCertificateAsAdmin(bool machineTrusted = false)
         {
             if (!RunTime.IsWindows || RunTime.IsRunningOnMono)
@@ -905,6 +906,9 @@ namespace Titanium.Web.Proxy.Network
             return success;
         }
 
+        /// <summary>
+        /// Clear the root certificate and cache.
+        /// </summary>
         public void ClearRootCertificate()
         {
             certificateCache.Clear();

@@ -8,7 +8,7 @@ namespace Titanium.Web.Proxy.Helpers
 {
     internal class ProxyInfo
     {
-        public ProxyInfo(bool? autoDetect, string autoConfigUrl, int? proxyEnable, string proxyServer,
+        internal ProxyInfo(bool? autoDetect, string autoConfigUrl, int? proxyEnable, string proxyServer,
             string proxyOverride)
         {
             AutoDetect = autoDetect;
@@ -51,23 +51,23 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        public bool? AutoDetect { get; }
+        internal bool? AutoDetect { get; }
 
-        public string AutoConfigUrl { get; }
+        internal string AutoConfigUrl { get; }
 
-        public int? ProxyEnable { get; }
+        internal int? ProxyEnable { get; }
 
-        public string ProxyServer { get; }
+        internal string ProxyServer { get; }
 
-        public string ProxyOverride { get; }
+        internal string ProxyOverride { get; }
 
-        public bool BypassLoopback { get; }
+        internal bool BypassLoopback { get; }
 
-        public bool BypassOnLocal { get; }
+        internal bool BypassOnLocal { get; }
 
-        public Dictionary<ProxyProtocolType, HttpSystemProxyValue> Proxies { get; }
+        internal Dictionary<ProxyProtocolType, HttpSystemProxyValue> Proxies { get; }
 
-        public string[] BypassList { get; }
+        internal string[] BypassList { get; }
 
         private static string BypassStringEscape(string rawString)
         {
@@ -131,7 +131,7 @@ namespace Titanium.Web.Proxy.Helpers
             return stringBuilder.ToString();
         }
 
-        public static ProxyProtocolType? ParseProtocolType(string protocolTypeStr)
+        internal static ProxyProtocolType? ParseProtocolType(string protocolTypeStr)
         {
             if (protocolTypeStr == null)
             {
@@ -157,7 +157,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="proxyServerValues"></param>
         /// <returns></returns>
-        public static List<HttpSystemProxyValue> GetSystemProxyValues(string proxyServerValues)
+        internal static List<HttpSystemProxyValue> GetSystemProxyValues(string proxyServerValues)
         {
             var result = new List<HttpSystemProxyValue>();
 

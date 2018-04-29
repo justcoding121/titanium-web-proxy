@@ -6,17 +6,17 @@ using Titanium.Web.Proxy.Extensions;
 namespace Titanium.Web.Proxy.Models
 {
     /// <summary>
-    ///     A proxy end point client is not aware of
-    ///     Usefull when requests are redirected to this proxy end point through port forwarding
+    ///     A proxy end point client is not aware of.
+    ///     Useful when requests are redirected to this proxy end point through port forwarding via router.
     /// </summary>
     public class TransparentProxyEndPoint : ProxyEndPoint
     {
         /// <summary>
-        ///     Constructor.
+        /// Initialize a new instance.
         /// </summary>
-        /// <param name="ipAddress"></param>
-        /// <param name="port"></param>
-        /// <param name="decryptSsl"></param>
+        /// <param name="ipAddress">Listening Ip address.</param>
+        /// <param name="port">Listening port.</param>
+        /// <param name="decryptSsl">Should we decrypt ssl?</param>
         public TransparentProxyEndPoint(IPAddress ipAddress, int port, bool decryptSsl = true) : base(ipAddress, port,
             decryptSsl)
         {
@@ -24,13 +24,13 @@ namespace Titanium.Web.Proxy.Models
         }
 
         /// <summary>
-        ///     Name of the Certificate need to be sent (same as the hostname we want to proxy)
-        ///     This is valid only when UseServerNameIndication is set to false
+        ///     Name of the Certificate need to be sent (same as the hostname we want to proxy).
+        ///     This is valid only when UseServerNameIndication is set to false.
         /// </summary>
         public string GenericCertificateName { get; set; }
 
         /// <summary>
-        ///     Before Ssl authentication
+        ///     Before Ssl authentication this event is fired.
         /// </summary>
         public event AsyncEventHandler<BeforeSslAuthenticateEventArgs> BeforeSslAuthenticate;
 

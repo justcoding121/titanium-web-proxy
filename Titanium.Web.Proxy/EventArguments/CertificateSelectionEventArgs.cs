@@ -14,27 +14,27 @@ namespace Titanium.Web.Proxy.EventArguments
         public object Sender { get; internal set; }
 
         /// <summary>
-        ///     The host to which we are authenticating against.
+        ///     The remote hostname to which we are authenticating against.
         /// </summary>
         public string TargetHost { get; internal set; }
 
         /// <summary>
-        ///     Local certificates with matching issuers.
+        ///     Local certificates in store with matching issuers requested by TargetHost website.
         /// </summary>
         public X509CertificateCollection LocalCertificates { get; internal set; }
 
         /// <summary>
-        ///     Remote certificate of the server.
+        ///     Certificate of the remote server.
         /// </summary>
         public X509Certificate RemoteCertificate { get; internal set; }
 
         /// <summary>
-        ///     Acceptable issuers mentioned by server.
+        ///     Acceptable issuers as listed by remoted server.
         /// </summary>
         public string[] AcceptableIssuers { get; internal set; }
 
         /// <summary>
-        ///     Client Certificate we selected.
+        ///     Client Certificate we selected. Set this value to override.
         /// </summary>
         public X509Certificate ClientCertificate { get; set; }
     }
