@@ -4,7 +4,7 @@ using Titanium.Web.Proxy.Http;
 namespace Titanium.Web.Proxy.EventArguments
 {
     /// <summary>
-    /// Class that wraps the multipart sent request arguments.
+    ///     Class that wraps the multipart sent request arguments.
     /// </summary>
     public class MultipartRequestPartSentEventArgs : EventArgs
     {
@@ -15,12 +15,12 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Boundary.
+        ///     Boundary.
         /// </summary>
         public string Boundary { get; }
 
         /// <summary>
-        /// The header collection.
+        ///     The header collection.
         /// </summary>
         public HeaderCollection Headers { get; }
     }

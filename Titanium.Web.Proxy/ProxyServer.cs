@@ -20,14 +20,15 @@ namespace Titanium.Web.Proxy
 {
     /// <summary>
     ///     This object is the backbone of proxy. One can create as many instances as needed.
-    ///     However care should be taken to avoid using the same listening ports across multiple instances. 
+    ///     However care should be taken to avoid using the same listening ports across multiple instances.
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
         /// <summary>
-        /// HTTP & HTTPS scheme shorthands.
+        ///     HTTP & HTTPS scheme shorthands.
         /// </summary>
         internal static readonly string UriSchemeHttp = Uri.UriSchemeHttp;
+
         internal static readonly string UriSchemeHttps = Uri.UriSchemeHttps;
 
         /// <summary>
@@ -56,11 +57,17 @@ namespace Titanium.Web.Proxy
         private WinHttpWebProxyFinder systemProxyResolver;
 
         /// <summary>
-        /// Initializes a new instance of ProxyServer class with provided parameters.
+        ///     Initializes a new instance of ProxyServer class with provided parameters.
         /// </summary>
-        /// <param name="userTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's user certificate store?</param>
+        /// <param name="userTrustRootCertificate">
+        ///     Should fake HTTPS certificate be trusted by this machine's user certificate
+        ///     store?
+        /// </param>
         /// <param name="machineTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's certificate store?</param>
-        /// <param name="trustRootCertificateAsAdmin">Should we attempt to trust certificates with elevated permissions by prompting for UAC if required?</param>
+        /// <param name="trustRootCertificateAsAdmin">
+        ///     Should we attempt to trust certificates with elevated permissions by
+        ///     prompting for UAC if required?
+        /// </param>
         public ProxyServer(bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
             bool trustRootCertificateAsAdmin = false) : this(null, null, userTrustRootCertificate,
             machineTrustRootCertificate, trustRootCertificateAsAdmin)
@@ -68,13 +75,19 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        /// Initializes a new instance of ProxyServer class with provided parameters.
+        ///     Initializes a new instance of ProxyServer class with provided parameters.
         /// </summary>
         /// <param name="rootCertificateName">Name of the root certificate.</param>
         /// <param name="rootCertificateIssuerName">Name of the root certificate issuer.</param>
-        /// <param name="userTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's user certificate store?</param>
+        /// <param name="userTrustRootCertificate">
+        ///     Should fake HTTPS certificate be trusted by this machine's user certificate
+        ///     store?
+        /// </param>
         /// <param name="machineTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's certificate store?</param>
-        /// <param name="trustRootCertificateAsAdmin">Should we attempt to trust certificates with elevated permissions by prompting for UAC if required?</param>
+        /// <param name="trustRootCertificateAsAdmin">
+        ///     Should we attempt to trust certificates with elevated permissions by
+        ///     prompting for UAC if required?
+        /// </param>
         public ProxyServer(string rootCertificateName, string rootCertificateIssuerName,
             bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
             bool trustRootCertificateAsAdmin = false)
@@ -590,7 +603,7 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        /// Gets the system up stream proxy.
+        ///     Gets the system up stream proxy.
         /// </summary>
         private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
         {
@@ -599,7 +612,7 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        /// Act when a connection is received from client.
+        ///     Act when a connection is received from client.
         /// </summary>
         private void OnAcceptConnection(IAsyncResult asyn)
         {

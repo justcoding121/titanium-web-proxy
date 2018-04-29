@@ -118,7 +118,8 @@ namespace Titanium.Web.Proxy
                     //Write body if exists
                     if (response.HasBody)
                     {
-                        await args.CopyResponseBodyAsync(clientStreamWriter, TransformationMode.None, cancellationToken);
+                        await args.CopyResponseBodyAsync(clientStreamWriter, TransformationMode.None,
+                            cancellationToken);
                     }
                 }
             }

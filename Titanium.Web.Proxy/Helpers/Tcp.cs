@@ -41,7 +41,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                         if (ipVersion == IpVersion.Ipv4)
                         {
-                            NativeMethods.TcpRow* rowPtr = (NativeMethods.TcpRow*)(tcpTable + 4);
+                            var rowPtr = (NativeMethods.TcpRow*)(tcpTable + 4);
 
                             for (int i = 0; i < rowCount; ++i)
                             {
@@ -55,7 +55,7 @@ namespace Titanium.Web.Proxy.Helpers
                         }
                         else
                         {
-                            NativeMethods.Tcp6Row* rowPtr = (NativeMethods.Tcp6Row*)(tcpTable + 4);
+                            var rowPtr = (NativeMethods.Tcp6Row*)(tcpTable + 4);
 
                             for (int i = 0; i < rowCount; ++i)
                             {
@@ -82,9 +82,9 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Converts 32-bit integer from native byte order (little-endian)
-        /// to network byte order for port,
-        /// switches 0th and 1st bytes, and 2nd and 3rd bytes
+        ///     Converts 32-bit integer from native byte order (little-endian)
+        ///     to network byte order for port,
+        ///     switches 0th and 1st bytes, and 2nd and 3rd bytes
         /// </summary>
         /// <param name="port"></param>
         /// <returns></returns>
@@ -276,9 +276,11 @@ namespace Titanium.Web.Proxy.Helpers
 
             //Now async relay all server=>client & client=>server data
             var sendRelay =
-                CopyHttp2FrameAsync(clientStream, serverStream, onDataSend, bufferSize, connectionId, cancellationTokenSource.Token);
+                CopyHttp2FrameAsync(clientStream, serverStream, onDataSend, bufferSize, connectionId,
+                    cancellationTokenSource.Token);
             var receiveRelay =
-                CopyHttp2FrameAsync(serverStream, clientStream, onDataReceive, bufferSize, connectionId, cancellationTokenSource.Token);
+                CopyHttp2FrameAsync(serverStream, clientStream, onDataReceive, bufferSize, connectionId,
+                    cancellationTokenSource.Token);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             cancellationTokenSource.Cancel();
@@ -302,7 +304,8 @@ namespace Titanium.Web.Proxy.Helpers
                 int length = (headerBuffer[0] << 16) + (headerBuffer[1] << 8) + headerBuffer[2];
                 byte type = headerBuffer[3];
                 byte flags = headerBuffer[4];
-                int streamId = ((headerBuffer[5] & 0x7f) << 24) + (headerBuffer[6] << 16) + (headerBuffer[7] << 8) + headerBuffer[8];
+                int streamId = ((headerBuffer[5] & 0x7f) << 24) + (headerBuffer[6] << 16) + (headerBuffer[7] << 8) +
+                               headerBuffer[8];
 
                 read = await ForceRead(input, buffer, 0, length, cancellationToken);
                 if (read != length)
@@ -321,7 +324,8 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        private static async Task<int> ForceRead(Stream input, byte[] buffer, int offset, int bytesToRead, CancellationToken cancellationToken)
+        private static async Task<int> ForceRead(Stream input, byte[] buffer, int offset, int bytesToRead,
+            CancellationToken cancellationToken)
         {
             int totalRead = 0;
             while (bytesToRead > 0)

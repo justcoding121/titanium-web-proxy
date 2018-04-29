@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Models
     public class ExplicitProxyEndPoint : ProxyEndPoint
     {
         /// <summary>
-        /// Constructor.
+        ///     Constructor.
         /// </summary>
         /// <param name="ipAddress">Listening IP address.</param>
         /// <param name="port">Listening port.</param>

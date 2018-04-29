@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy.Exceptions
         }
 
         /// <summary>
-        /// The current session within which this error happened.
+        ///     The current session within which this error happened.
         /// </summary>
         public SessionEventArgsBase Session { get; }
 

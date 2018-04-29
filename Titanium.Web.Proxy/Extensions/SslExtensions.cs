@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Collections.Generic;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended;
@@ -13,7 +10,8 @@ namespace Titanium.Web.Proxy.Extensions
 {
     internal static class SslExtensions
     {
-        internal static readonly List<SslApplicationProtocol> Http11ProtocolAsList = new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 };
+        internal static readonly List<SslApplicationProtocol> Http11ProtocolAsList =
+            new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 };
 
         internal static string GetServerName(this ClientHelloInfo clientHelloInfo)
         {
@@ -60,14 +58,18 @@ namespace Titanium.Web.Proxy.Extensions
             return Http11ProtocolAsList;
         }
 
-        internal static Task AuthenticateAsClientAsync(this SslStream sslStream, SslClientAuthenticationOptions option, CancellationToken token)
+        internal static Task AuthenticateAsClientAsync(this SslStream sslStream, SslClientAuthenticationOptions option,
+            CancellationToken token)
         {
-            return sslStream.AuthenticateAsClientAsync(option.TargetHost, option.ClientCertificates, option.EnabledSslProtocols, option.CertificateRevocationCheckMode != X509RevocationMode.NoCheck);
+            return sslStream.AuthenticateAsClientAsync(option.TargetHost, option.ClientCertificates,
+                option.EnabledSslProtocols, option.CertificateRevocationCheckMode != X509RevocationMode.NoCheck);
         }
 
-        internal static Task AuthenticateAsServerAsync(this SslStream sslStream, SslServerAuthenticationOptions options, CancellationToken token)
+        internal static Task AuthenticateAsServerAsync(this SslStream sslStream, SslServerAuthenticationOptions options,
+            CancellationToken token)
         {
-            return sslStream.AuthenticateAsServerAsync(options.ServerCertificate, options.ClientCertificateRequired, options.EnabledSslProtocols, options.CertificateRevocationCheckMode != X509RevocationMode.NoCheck);
+            return sslStream.AuthenticateAsServerAsync(options.ServerCertificate, options.ClientCertificateRequired,
+                options.EnabledSslProtocols, options.CertificateRevocationCheckMode != X509RevocationMode.NoCheck);
         }
 #endif
     }
@@ -75,7 +77,8 @@ namespace Titanium.Web.Proxy.Extensions
 #if !NETCOREAPP2_1
     internal enum SslApplicationProtocol
     {
-        Http11, Http2
+        Http11,
+        Http2
     }
 
     internal class SslClientAuthenticationOptions

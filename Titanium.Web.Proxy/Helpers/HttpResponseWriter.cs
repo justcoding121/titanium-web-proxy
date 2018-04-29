@@ -35,7 +35,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="description">The HTTP status description.</param>
         /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
         /// <returns>The Task.</returns>
-        internal Task WriteResponseStatusAsync(Version version, int code, string description, CancellationToken cancellationToken)
+        internal Task WriteResponseStatusAsync(Version version, int code, string description,
+            CancellationToken cancellationToken)
         {
             return WriteLineAsync(Response.CreateResponseLine(version, code, description), cancellationToken);
         }
