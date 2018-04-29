@@ -1,99 +1,79 @@
-﻿using StreamExtended.Network;
-using System;
-using System.Globalization;
+﻿using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
+using StreamExtended.Helpers;
 
 namespace Titanium.Web.Proxy.Extensions
 {
     /// <summary>
-    /// Extensions used for Stream and CustomBinaryReader objects
+    ///     Extensions used for Stream and CustomBinaryReader objects
     /// </summary>
     internal static class StreamExtensions
     {
         /// <summary>
-        /// Copy streams asynchronously
+        ///     Copy streams asynchronously
         /// </summary>
         /// <param name="input"></param>
         /// <param name="output"></param>
         /// <param name="onCopy"></param>
-        internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy, int bufferSize)
+        /// <param name="bufferSize"></param>
+        internal static Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy,
+            int bufferSize)
         {
-            byte[] buffer = new byte[bufferSize];
-            while (true)
-            {
-                int num = await input.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
-                int bytesRead;
-                if ((bytesRead = num) != 0)
-                {
-                    await output.WriteAsync(buffer, 0, bytesRead).ConfigureAwait(false);
-                    onCopy?.Invoke(buffer, 0, bytesRead);
-                }
-                else
-                {
-                    break;
-                }
-            }
+            return CopyToAsync(input, output, onCopy, bufferSize, CancellationToken.None);
         }
 
         /// <summary>
-        /// copies the specified bytes to the stream from the input stream
+        ///     Copy streams asynchronously
         /// </summary>
-        /// <param name="streamReader"></param>
-        /// <param name="stream"></param>
-        /// <param name="totalBytesToRead"></param>
-        /// <returns></returns>
-        internal static async Task CopyBytesToStream(this CustomBinaryReader streamReader, Stream stream, long totalBytesToRead)
+        /// <param name="input"></param>
+        /// <param name="output"></param>
+        /// <param name="onCopy"></param>
+        /// <param name="bufferSize"></param>
+        /// <param name="cancellationToken"></param>
+        internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy,
+            int bufferSize, CancellationToken cancellationToken)
         {
-            var buffer = streamReader.Buffer;
-            long remainingBytes = totalBytesToRead;
-
-            while (remainingBytes > 0)
+            var buffer = BufferPool.GetBuffer(bufferSize);
+            try
             {
-                int bytesToRead = buffer.Length;
-                if (remainingBytes < bytesToRead)
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    bytesToRead = (int)remainingBytes;
+                    // cancellation is not working on Socket ReadAsync
+                    // https://github.com/dotnet/corefx/issues/15033
+                    int num = await input.ReadAsync(buffer, 0, buffer.Length, CancellationToken.None)
+                        .WithCancellation(cancellationToken);
+                    int bytesRead;
+                    if ((bytesRead = num) != 0 && !cancellationToken.IsCancellationRequested)
+                    {
+                        await output.WriteAsync(buffer, 0, bytesRead, CancellationToken.None);
+                        onCopy?.Invoke(buffer, 0, bytesRead);
+                    }
+                    else
+                    {
+                        break;
+                    }
                 }
-
-                int bytesRead = await streamReader.ReadBytesAsync(buffer, bytesToRead);
-                if (bytesRead == 0)
-                {
-                    break;
-                }
-
-                remainingBytes -= bytesRead;
-
-                await stream.WriteAsync(buffer, 0, bytesRead);
+            }
+            finally
+            {
+                BufferPool.ReturnBuffer(buffer);
             }
         }
 
-        /// <summary>
-        /// Copies the stream chunked
-        /// </summary>
-        /// <param name="clientStreamReader"></param>
-        /// <param name="stream"></param>
-        /// <returns></returns>
-        internal static async Task CopyBytesToStreamChunked(this CustomBinaryReader clientStreamReader, Stream stream)
+        private static async Task<T> WithCancellation<T>(this Task<T> task, CancellationToken cancellationToken)
         {
-            while (true)
+            var tcs = new TaskCompletionSource<bool>();
+            using (cancellationToken.Register(s => ((TaskCompletionSource<bool>)s).TrySetResult(true), tcs))
             {
-                string chuchkHead = await clientStreamReader.ReadLineAsync();
-                int chunkSize = int.Parse(chuchkHead, NumberStyles.HexNumber);
-
-                if (chunkSize != 0)
+                if (task != await Task.WhenAny(task, tcs.Task))
                 {
-                    await CopyBytesToStream(clientStreamReader, stream, chunkSize);
-
-                    //chunk trail
-                    await clientStreamReader.ReadLineAsync();
-                }
-                else
-                {
-                    await clientStreamReader.ReadLineAsync();
-                    break;
+                    return default;
                 }
             }
+
+            return await task;
         }
     }
 }

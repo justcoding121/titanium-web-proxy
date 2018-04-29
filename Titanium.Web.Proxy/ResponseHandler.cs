@@ -1,49 +1,76 @@
 ﻿using System;
 using System.Net;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy
 {
     /// <summary>
-    /// Handle the response from server
+    ///     Handle the response from server.
     /// </summary>
     partial class ProxyServer
     {
         /// <summary>
-        /// Called asynchronously when a request was successfully and we received the response 
+        ///     Called asynchronously when a request was successfully and we received the response.
         /// </summary>
-        /// <param name="args"></param>
-        /// <returns>true if client/server connection was terminated (and disposed) </returns>
-        private async Task<bool> HandleHttpSessionResponse(SessionEventArgs args)
+        /// <param name="args">The session event arguments.</param>
+        /// <returns> The task.</returns>
+        private async Task HandleHttpSessionResponse(SessionEventArgs args)
         {
             try
             {
+                var cancellationToken = args.CancellationTokenSource.Token;
                 //read response & headers from server
-                await args.WebSession.ReceiveResponse();
+                await args.WebSession.ReceiveResponse(cancellationToken);
 
                 var response = args.WebSession.Response;
+                args.ReRequest = false;
 
                 //check for windows authentication
-                if (isWindowsAuthenticationEnabledAndSupported && response.StatusCode == (int)HttpStatusCode.Unauthorized)
+                if (isWindowsAuthenticationEnabledAndSupported)
                 {
-                    bool disposed = await Handle401UnAuthorized(args);
-
-                    if (disposed)
+                    if (response.StatusCode == (int)HttpStatusCode.Unauthorized)
                     {
-                        return true;
+                        await Handle401UnAuthorized(args);
+                    }
+                    else
+                    {
+                        WinAuthEndPoint.AuthenticatedResponse(args.WebSession.RequestId);
                     }
                 }
 
-                args.ReRequest = false;
+                response.OriginalHasBody = response.HasBody;
 
-                //If user requested call back then do it
-                if (BeforeResponse != null && !response.ResponseLocked)
+                //if user requested call back then do it
+                if (!response.Locked)
                 {
-                    await BeforeResponse.InvokeParallelAsync(this, args, ExceptionFunc);
+                    await InvokeBeforeResponse(args);
+                }
+
+                // it may changed in the user event
+                response = args.WebSession.Response;
+
+                var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
+
+                if (response.TerminateResponse || response.Locked)
+                {
+                    await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
+
+                    if (!response.TerminateResponse)
+                    {
+                        //syphon out the response body from server before setting the new body
+                        await args.SyphonOutBodyAsync(false, cancellationToken);
+                    }
+                    else
+                    {
+                        args.WebSession.ServerConnection.Dispose();
+                        args.WebSession.ServerConnection = null;
+                    }
+
+                    return;
                 }
 
                 //if user requested to send request again
@@ -51,90 +78,81 @@ namespace Titanium.Web.Proxy
                 if (args.ReRequest)
                 {
                     //clear current response
-                    await args.ClearResponse();
-                    bool disposed = await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args, false);
-                    return disposed;
+                    await args.ClearResponse(cancellationToken);
+                    await HandleHttpSessionRequestInternal(args.WebSession.ServerConnection, args);
+                    return;
                 }
 
-                response.ResponseLocked = true;
-
-                var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
+                response.Locked = true;
 
                 //Write back to client 100-conitinue response if that's what server returned
                 if (response.Is100Continue)
                 {
-                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, (int)HttpStatusCode.Continue, "Continue");
-                    await clientStreamWriter.WriteLineAsync();
+                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion,
+                        (int)HttpStatusCode.Continue, "Continue", cancellationToken);
+                    await clientStreamWriter.WriteLineAsync(cancellationToken);
                 }
                 else if (response.ExpectationFailed)
                 {
-                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, (int)HttpStatusCode.ExpectationFailed, "Expectation Failed");
-                    await clientStreamWriter.WriteLineAsync();
+                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion,
+                        (int)HttpStatusCode.ExpectationFailed, "Expectation Failed", cancellationToken);
+                    await clientStreamWriter.WriteLineAsync(cancellationToken);
                 }
 
-                //Write back response status to client
-                await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.StatusCode, response.StatusDescription);
+                if (!args.IsTransparent)
+                {
+                    response.Headers.FixProxyHeaders();
+                }
 
-                response.Headers.FixProxyHeaders();
                 if (response.IsBodyRead)
                 {
-                    bool isChunked = response.IsChunked;
-                    string contentEncoding = response.ContentEncoding;
-
-                    if (contentEncoding != null)
-                    {
-                        response.Body = await GetCompressedResponseBody(contentEncoding, response.Body);
-
-                        if (isChunked == false)
-                        {
-                            response.ContentLength = response.Body.Length;
-                        }
-                        else
-                        {
-                            response.ContentLength = -1;
-                        }
-                    }
-
-                    await clientStreamWriter.WriteHeadersAsync(response.Headers);
-                    await clientStreamWriter.WriteResponseBodyAsync(response.Body, isChunked);
+                    await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
                 }
                 else
                 {
-                    await clientStreamWriter.WriteHeadersAsync(response.Headers);
+                    //Write back response status to client
+                    await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.StatusCode,
+                        response.StatusDescription, cancellationToken);
+                    await clientStreamWriter.WriteHeadersAsync(response.Headers, cancellationToken: cancellationToken);
 
                     //Write body if exists
                     if (response.HasBody)
                     {
-                        await clientStreamWriter.WriteResponseBodyAsync(BufferSize, args.WebSession.ServerConnection.StreamReader,
-                            response.IsChunked, response.ContentLength);
+                        await args.CopyResponseBodyAsync(clientStreamWriter, TransformationMode.None,
+                            cancellationToken);
                     }
                 }
-
-                await clientStreamWriter.FlushAsync();
             }
-            catch (Exception e)
+            catch (Exception e) when (!(e is ProxyHttpException))
             {
-                ExceptionFunc(new ProxyHttpException("Error occured whilst handling session response", e, args));
-                Dispose(args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamReader, args.ProxyClient.ClientStreamWriter,
-                    args.WebSession.ServerConnection);
-
-                return true;
+                throw new ProxyHttpException("Error occured whilst handling session response", e, args);
             }
-
-            return false;
         }
 
         /// <summary>
-        /// get the compressed response body from give response bytes
+        ///     Invoke before response if it is set.
         /// </summary>
-        /// <param name="encodingType"></param>
-        /// <param name="responseBodyStream"></param>
+        /// <param name="args"></param>
         /// <returns></returns>
-        private async Task<byte[]> GetCompressedResponseBody(string encodingType, byte[] responseBodyStream)
+        private async Task InvokeBeforeResponse(SessionEventArgs args)
         {
-            var compressionFactory = new CompressionFactory();
-            var compressor = compressionFactory.Create(encodingType);
-            return await compressor.Compress(responseBodyStream);
+            if (BeforeResponse != null)
+            {
+                await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
+            }
+        }
+
+        /// <summary>
+        ///     Invoke after response if it is set.
+        /// </summary>
+        /// <param name="args"></param>
+        /// <returns></returns>
+        private async Task InvokeAfterResponse(SessionEventArgs args)
+        {
+            if (AfterResponse != null)
+            {
+                await AfterResponse.InvokeAsync(this, args, ExceptionFunc);
+            }
         }
     }
 }

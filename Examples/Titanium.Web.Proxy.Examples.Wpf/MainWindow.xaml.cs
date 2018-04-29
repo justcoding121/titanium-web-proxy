@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Net;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -11,67 +12,58 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.Examples.Wpf
 {
     /// <summary>
-    /// Interaction logic for MainWindow.xaml
+    ///     Interaction logic for MainWindow.xaml
     /// </summary>
     public partial class MainWindow : Window
     {
-        private readonly ProxyServer proxyServer;
-
-        private int lastSessionNumber;
-
-        public ObservableCollection<SessionListItem> Sessions { get; } =  new ObservableCollection<SessionListItem>();
-
-        public SessionListItem SelectedSession
-        {
-            get { return selectedSession; }
-            set
-            {
-                if (value != selectedSession)
-                {
-                    selectedSession = value;
-                    SelectedSessionChanged();
-                }
-            }
-        }
-
         public static readonly DependencyProperty ClientConnectionCountProperty = DependencyProperty.Register(
             nameof(ClientConnectionCount), typeof(int), typeof(MainWindow), new PropertyMetadata(default(int)));
-
-        public int ClientConnectionCount
-        {
-            get { return (int)GetValue(ClientConnectionCountProperty); }
-            set { SetValue(ClientConnectionCountProperty, value); }
-        }
 
         public static readonly DependencyProperty ServerConnectionCountProperty = DependencyProperty.Register(
             nameof(ServerConnectionCount), typeof(int), typeof(MainWindow), new PropertyMetadata(default(int)));
 
-        public int ServerConnectionCount
-        {
-            get { return (int)GetValue(ServerConnectionCountProperty); }
-            set { SetValue(ServerConnectionCountProperty, value); }
-        }
+        private readonly ProxyServer proxyServer;
 
-        private readonly Dictionary<HttpWebClient, SessionListItem> sessionDictionary = new Dictionary<HttpWebClient, SessionListItem>();
+        private readonly Dictionary<HttpWebClient, SessionListItem> sessionDictionary =
+            new Dictionary<HttpWebClient, SessionListItem>();
+
+        private int lastSessionNumber;
         private SessionListItem selectedSession;
 
         public MainWindow()
         {
             proxyServer = new ProxyServer();
-            //proxyServer.CertificateEngine = CertificateEngine.BouncyCastle;
-            proxyServer.TrustRootCertificate = true;
-            proxyServer.CertificateManager.TrustRootCertificateAsAdministrator();
+            //proxyServer.CertificateManager.CertificateEngine = CertificateEngine.DefaultWindows;
+
+            ////Set a password for the .pfx file
+            //proxyServer.CertificateManager.PfxPassword = "PfxPassword";
+
+            ////Set Name(path) of the Root certificate file
+            //proxyServer.CertificateManager.PfxFilePath = @"C:\NameFolder\rootCert.pfx";
+
+            ////do you want Replace an existing Root certificate file(.pfx) if password is incorrect(RootCertificate=null)?  yes====>true
+            //proxyServer.CertificateManager.OverwritePfxFile = true;
+
+            ////save all fake certificates in folder "crts"(will be created in proxy dll directory)
+            ////if create new Root certificate file(.pfx) ====> delete folder "crts"
+            //proxyServer.CertificateManager.SaveFakeCertificates = true;
+
             proxyServer.ForwardToUpstreamGateway = true;
 
-            var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
-            {
-                //IncludedHttpsHostNameRegex = new string[0],
-            };
+            ////if you need Load or Create Certificate now. ////// "true" if you need Enable===> Trust the RootCertificate used by this proxy server
+            //proxyServer.CertificateManager.EnsureRootCertificate(true);
+
+            ////or load directly certificate(As Administrator if need this)
+            ////and At the same time chose path and password
+            ////if password is incorrect and (overwriteRootCert=true)(RootCertificate=null) ====> replace an existing .pfx file
+            ////note : load now (if existed)
+            //proxyServer.CertificateManager.LoadRootCertificate(@"C:\NameFolder\rootCert.pfx", "PfxPassword");
+
+            var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true);
 
             proxyServer.AddEndPoint(explicitEndPoint);
             //proxyServer.UpStreamHttpProxy = new ExternalProxy
@@ -84,10 +76,17 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             proxyServer.BeforeRequest += ProxyServer_BeforeRequest;
             proxyServer.BeforeResponse += ProxyServer_BeforeResponse;
-            proxyServer.TunnelConnectRequest += ProxyServer_TunnelConnectRequest;
-            proxyServer.TunnelConnectResponse += ProxyServer_TunnelConnectResponse;
-            proxyServer.ClientConnectionCountChanged += delegate { Dispatcher.Invoke(() => { ClientConnectionCount = proxyServer.ClientConnectionCount; }); };
-            proxyServer.ServerConnectionCountChanged += delegate { Dispatcher.Invoke(() => { ServerConnectionCount = proxyServer.ServerConnectionCount; }); };
+            proxyServer.AfterResponse += ProxyServer_AfterResponse;
+            explicitEndPoint.BeforeTunnelConnectRequest += ProxyServer_BeforeTunnelConnectRequest;
+            explicitEndPoint.BeforeTunnelConnectResponse += ProxyServer_BeforeTunnelConnectResponse;
+            proxyServer.ClientConnectionCountChanged += delegate
+            {
+                Dispatcher.Invoke(() => { ClientConnectionCount = proxyServer.ClientConnectionCount; });
+            };
+            proxyServer.ServerConnectionCountChanged += delegate
+            {
+                Dispatcher.Invoke(() => { ServerConnectionCount = proxyServer.ServerConnectionCount; });
+            };
             proxyServer.Start();
 
             proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
@@ -95,20 +94,49 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             InitializeComponent();
         }
 
-        private async Task ProxyServer_TunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
+        public ObservableCollection<SessionListItem> Sessions { get; } = new ObservableCollection<SessionListItem>();
+
+        public SessionListItem SelectedSession
         {
-            await Dispatcher.InvokeAsync(() =>
+            get => selectedSession;
+            set
             {
-                AddSession(e);
-            });
+                if (value != selectedSession)
+                {
+                    selectedSession = value;
+                    SelectedSessionChanged();
+                }
+            }
         }
 
-        private async Task ProxyServer_TunnelConnectResponse(object sender, SessionEventArgs e)
+        public int ClientConnectionCount
+        {
+            get => (int)GetValue(ClientConnectionCountProperty);
+            set => SetValue(ClientConnectionCountProperty, value);
+        }
+
+        public int ServerConnectionCount
+        {
+            get => (int)GetValue(ServerConnectionCountProperty);
+            set => SetValue(ServerConnectionCountProperty, value);
+        }
+
+        private async Task ProxyServer_BeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
+        {
+            string hostname = e.WebSession.Request.RequestUri.Host;
+            if (hostname.EndsWith("webex.com"))
+            {
+                e.DecryptSsl = false;
+            }
+
+            await Dispatcher.InvokeAsync(() => { AddSession(e); });
+        }
+
+        private async Task ProxyServer_BeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
         {
             await Dispatcher.InvokeAsync(() =>
             {
-                SessionListItem item;
-                if (sessionDictionary.TryGetValue(e.WebSession, out item))
+                if (sessionDictionary.TryGetValue(e.WebSession, out var item))
                 {
                     item.Update();
                 }
@@ -118,10 +146,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private async Task ProxyServer_BeforeRequest(object sender, SessionEventArgs e)
         {
             SessionListItem item = null;
-            await Dispatcher.InvokeAsync(() =>
-            {
-                item = AddSession(e);
-            });
+            await Dispatcher.InvokeAsync(() => { item = AddSession(e); });
 
             if (e.WebSession.Request.HasBody)
             {
@@ -135,11 +160,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() =>
             {
-                SessionListItem item2;
-                if (sessionDictionary.TryGetValue(e.WebSession, out item2))
+                if (sessionDictionary.TryGetValue(e.WebSession, out item))
                 {
-                    item2.Update();
-                    item = item2;
+                    item.Update();
                 }
             });
 
@@ -149,11 +172,24 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 {
                     e.WebSession.Response.KeepBody = true;
                     await e.GetResponseBody();
+
+                    await Dispatcher.InvokeAsync(() => { item.Update(); });
                 }
             }
         }
 
-        private SessionListItem AddSession(SessionEventArgs e)
+        private async Task ProxyServer_AfterResponse(object sender, SessionEventArgs e)
+        {
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (sessionDictionary.TryGetValue(e.WebSession, out var item))
+                {
+                    item.Exception = e.Exception;
+                }
+            });
+        }
+
+        private SessionListItem AddSession(SessionEventArgsBase e)
         {
             var item = CreateSessionListItem(e);
             Sessions.Add(item);
@@ -161,7 +197,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             return item;
         }
 
-        private SessionListItem CreateSessionListItem(SessionEventArgs e)
+        private SessionListItem CreateSessionListItem(SessionEventArgsBase e)
         {
             lastSessionNumber++;
             bool isTunnelConnect = e is TunnelConnectSessionEventArgs;
@@ -169,7 +205,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 Number = lastSessionNumber,
                 WebSession = e.WebSession,
-                IsTunnelConnect = isTunnelConnect,
+                IsTunnelConnect = isTunnelConnect
             };
 
             if (isTunnelConnect || e.WebSession.Request.UpgradeToWebSocket)
@@ -177,8 +213,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 e.DataReceived += (sender, args) =>
                 {
                     var session = (SessionEventArgs)sender;
-                    SessionListItem li;
-                    if (sessionDictionary.TryGetValue(session.WebSession, out li))
+                    if (sessionDictionary.TryGetValue(session.WebSession, out var li))
                     {
                         li.ReceivedDataCount += args.Count;
                     }
@@ -187,8 +222,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 e.DataSent += (sender, args) =>
                 {
                     var session = (SessionEventArgs)sender;
-                    SessionListItem li;
-                    if (sessionDictionary.TryGetValue(session.WebSession, out li))
+                    if (sessionDictionary.TryGetValue(session.WebSession, out var li))
                     {
                         li.SentDataCount += args.Count;
                     }
@@ -231,9 +265,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             }
 
             //string hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
-            TextBoxRequest.Text = request.HeaderText + request.Encoding.GetString(data) +
-                                  (truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null) +
-                                  (request as ConnectRequest)?.ClientHelloInfo;
+            var sb = new StringBuilder();
+            sb.Append(request.HeaderText);
+            sb.Append(request.Encoding.GetString(data));
+            sb.Append(truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null);
+            sb.Append((request as ConnectRequest)?.ClientHelloInfo);
+            TextBoxRequest.Text = sb.ToString();
 
             var response = session.Response;
             data = (response.IsBodyRead ? response.Body : null) ?? new byte[0];
@@ -244,9 +281,18 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             }
 
             //hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
-            TextBoxResponse.Text = session.Response.HeaderText + session.Response.Encoding.GetString(data) +
-                                   (truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null) +
-                                   (session.Response as ConnectResponse)?.ServerHelloInfo;
+            sb = new StringBuilder();
+            sb.Append(response.HeaderText);
+            sb.Append(response.Encoding.GetString(data));
+            sb.Append(truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null);
+            sb.Append((response as ConnectResponse)?.ServerHelloInfo);
+            if (SelectedSession.Exception != null)
+            {
+                sb.Append(Environment.NewLine);
+                sb.Append(SelectedSession.Exception);
+            }
+
+            TextBoxResponse.Text = sb.ToString();
         }
     }
 }

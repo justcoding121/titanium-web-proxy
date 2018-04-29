@@ -6,50 +6,51 @@
         xmlns:local="clr-namespace:Titanium.Web.Proxy.Examples.Wpf"
         mc:Ignorable="d"
         Title="MainWindow" Height="500" Width="1000" WindowState="Maximized"
-		DataContext="{Binding RelativeSource={RelativeSource Self}}">
+        DataContext="{Binding RelativeSource={RelativeSource Self}}">
     <Grid>
         <Grid.ColumnDefinitions>
-	        <ColumnDefinition Width="500" />
-	        <ColumnDefinition Width="3" />
-	        <ColumnDefinition />
-		</Grid.ColumnDefinitions>
-		<Grid.RowDefinitions>
-			<RowDefinition />
-			<RowDefinition Height="Auto" />
-		</Grid.RowDefinitions>
-		<GridSplitter Grid.Column="1" Grid.Row="0" HorizontalAlignment="Stretch" />
-		<ListView Grid.Column="0" Grid.Row="0" HorizontalAlignment="Stretch" ItemsSource="{Binding Sessions}" SelectedItem="{Binding SelectedSession}"
-				  KeyDown="ListViewSessions_OnKeyDown">
-			<ListView.View>
-				<GridView>
-					<GridViewColumn Header="Result" DisplayMemberBinding="{Binding StatusCode}" />
-					<GridViewColumn Header="Protocol" DisplayMemberBinding="{Binding Protocol}" />
-					<GridViewColumn Header="Host" DisplayMemberBinding="{Binding Host}" />
-					<GridViewColumn Header="Url" DisplayMemberBinding="{Binding Url}" />
-					<GridViewColumn Header="BodySize" DisplayMemberBinding="{Binding BodySize}" />
-					<GridViewColumn Header="Process" DisplayMemberBinding="{Binding Process}" />
-					<GridViewColumn Header="SentBytes" DisplayMemberBinding="{Binding SentDataCount}" />
-					<GridViewColumn Header="ReceivedBytes" DisplayMemberBinding="{Binding ReceivedDataCount}" />
-				</GridView>
-			</ListView.View>
-		</ListView>
-	    <TabControl Grid.Column="2" Grid.Row="0">
-		    <TabItem Header="Session">
-				<Grid Background="Red" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-					<Grid.RowDefinitions>
-						<RowDefinition />
-						<RowDefinition />
-					</Grid.RowDefinitions>
-				    <TextBox x:Name="TextBoxRequest" Grid.Row="0" />
-				    <TextBox x:Name="TextBoxResponse" Grid.Row="1" />
-				</Grid>
-		    </TabItem>
-	    </TabControl>
-		<StackPanel Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal">
-			<TextBlock Text="ClientConnectionCount:" />
-			<TextBlock Text="{Binding ClientConnectionCount}" Margin="10,0,20,0" />
-			<TextBlock Text="ServerConnectionCount:" />
-			<TextBlock Text="{Binding ServerConnectionCount}" Margin="10,0,20,0" />
-		</StackPanel>
+            <ColumnDefinition Width="500" />
+            <ColumnDefinition Width="3" />
+            <ColumnDefinition />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <GridSplitter Grid.Column="1" Grid.Row="0" HorizontalAlignment="Stretch" />
+        <ListView Grid.Column="0" Grid.Row="0" HorizontalAlignment="Stretch" ItemsSource="{Binding Sessions}"
+                  SelectedItem="{Binding SelectedSession}"
+                  KeyDown="ListViewSessions_OnKeyDown">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Result" DisplayMemberBinding="{Binding StatusCode}" />
+                    <GridViewColumn Header="Protocol" DisplayMemberBinding="{Binding Protocol}" />
+                    <GridViewColumn Header="Host" DisplayMemberBinding="{Binding Host}" />
+                    <GridViewColumn Header="Url" DisplayMemberBinding="{Binding Url}" />
+                    <GridViewColumn Header="BodySize" DisplayMemberBinding="{Binding BodySize}" />
+                    <GridViewColumn Header="Process" DisplayMemberBinding="{Binding Process}" />
+                    <GridViewColumn Header="SentBytes" DisplayMemberBinding="{Binding SentDataCount}" />
+                    <GridViewColumn Header="ReceivedBytes" DisplayMemberBinding="{Binding ReceivedDataCount}" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+        <TabControl Grid.Column="2" Grid.Row="0">
+            <TabItem Header="Session">
+                <Grid Background="Red" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Grid.RowDefinitions>
+                        <RowDefinition />
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+                    <TextBox x:Name="TextBoxRequest" Grid.Row="0" />
+                    <TextBox x:Name="TextBoxResponse" Grid.Row="1" />
+                </Grid>
+            </TabItem>
+        </TabControl>
+        <StackPanel Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal">
+            <TextBlock Text="ClientConnectionCount:" />
+            <TextBlock Text="{Binding ClientConnectionCount}" Margin="10,0,20,0" />
+            <TextBlock Text="ServerConnectionCount:" />
+            <TextBlock Text="{Binding ServerConnectionCount}" Margin="10,0,20,0" />
+        </StackPanel>
     </Grid>
 </Window>

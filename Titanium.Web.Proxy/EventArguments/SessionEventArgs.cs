@@ -2,35 +2,27 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
+using StreamExtended.Helpers;
+using StreamExtended.Network;
 using Titanium.Web.Proxy.Decompression;
-using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
     /// <summary>
-    /// Holds info related to a single proxy session (single request/response sequence)
-    /// A proxy session is bounded to a single connection from client
+    /// Holds info related to a single proxy session (single request/response sequence).
+    /// A proxy session is bounded to a single connection from client.
     /// A proxy session ends when client terminates connection to proxy
-    /// or when server terminates connection from proxy
+    /// or when server terminates connection from proxy.
     /// </summary>
-    public class SessionEventArgs : EventArgs, IDisposable
+    public class SessionEventArgs : SessionEventArgsBase
     {
-        /// <summary>
-        /// Size of Buffers used by this object
-        /// </summary>
-        private readonly int bufferSize;
-
-        /// <summary>
-        /// Holds a reference to proxy response handler method
-        /// </summary>
-        private Func<SessionEventArgs, Task> httpResponseHandler;
+        private static readonly byte[] emptyData = new byte[0];
 
         /// <summary>
         /// Backing field for corresponding public property
@@ -38,22 +30,28 @@ namespace Titanium.Web.Proxy.EventArguments
         private bool reRequest;
 
         /// <summary>
-        /// Holds a reference to client
+        /// Constructor to initialize the proxy
         /// </summary>
-        internal ProxyClient ProxyClient { get; set; }
+        internal SessionEventArgs(int bufferSize, ProxyEndPoint endPoint,
+            CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
+            : this(bufferSize, endPoint, null, cancellationTokenSource, exceptionFunc)
+        {
+        }
+
+        protected SessionEventArgs(int bufferSize, ProxyEndPoint endPoint,
+            Request request, CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
+            : base(bufferSize, endPoint, cancellationTokenSource, request, exceptionFunc)
+        {
+        }
+
+        private bool hasMulipartEventSubscribers => MultipartRequestPartSent != null;
 
         /// <summary>
-        /// Returns a unique Id for this request/response session
-        /// same as RequestId of WebSession
-        /// </summary>
-        public Guid Id => WebSession.RequestId;
-
-        /// <summary>
-        /// Should we send the request again 
+        /// Should we send the request again ?
         /// </summary>
         public bool ReRequest
         {
-            get { return reRequest; }
+            get => reRequest;
             set
             {
                 if (WebSession.Response.StatusCode == 0)
@@ -66,105 +64,43 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Does this session uses SSL
+        /// Occurs when multipart request part sent.
         /// </summary>
-        public bool IsHttps => WebSession.Request.IsHttps;
+        public event EventHandler<MultipartRequestPartSentEventArgs> MultipartRequestPartSent;
 
-        /// <summary>
-        /// Client End Point.
-        /// </summary>
-        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
-
-        /// <summary>
-        /// A web session corresponding to a single request/response sequence
-        /// within a proxy connection
-        /// </summary>
-        public HttpWebClient WebSession { get; }
-
-        /// <summary>
-        /// Are we using a custom upstream HTTP(S) proxy?
-        /// </summary>
-        public ExternalProxy CustomUpStreamProxyUsed { get; internal set; }
-
-        public event EventHandler<DataEventArgs> DataSent;
-
-        public event EventHandler<DataEventArgs> DataReceived;
-
-        public ProxyEndPoint LocalEndPoint;
-
-        /// <summary>
-        /// Constructor to initialize the proxy
-        /// </summary>
-        internal SessionEventArgs(int bufferSize, 
-            ProxyEndPoint endPoint,
-            Func<SessionEventArgs, Task> httpResponseHandler)
+        private CustomBufferedStream GetStream(bool isRequest)
         {
-            this.bufferSize = bufferSize;
-            this.httpResponseHandler = httpResponseHandler;
+            return isRequest ? ProxyClient.ClientStream : WebSession.ServerConnection.Stream;
+        }
 
-            ProxyClient = new ProxyClient();
-            WebSession = new HttpWebClient(bufferSize);
-            LocalEndPoint = endPoint;
+        private CustomBinaryReader GetStreamReader(bool isRequest)
+        {
+            return isRequest ? ProxyClient.ClientStreamReader : WebSession.ServerConnection.StreamReader;
+        }
 
-            WebSession.ProcessId = new Lazy<int>(() =>
-            {
-                if (RunTime.IsWindows)
-                {
-                    var remoteEndPoint = (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
-
-                    //If client is localhost get the process id
-                    if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
-                    {
-                        return NetworkHelper.GetProcessIdFromPort(remoteEndPoint.Port, endPoint.IpV6Enabled);
-                    }
-
-                    //can't access process Id of remote request from remote machine
-                    return -1;
-                }
-
-                throw new PlatformNotSupportedException();
-            });
+        private HttpWriter GetStreamWriter(bool isRequest)
+        {
+            return isRequest ? (HttpWriter)ProxyClient.ClientStreamWriter : WebSession.ServerConnection.StreamWriter;
         }
 
         /// <summary>
         /// Read request body content as bytes[] for current session
         /// </summary>
-        private async Task ReadRequestBody()
+        private async Task ReadRequestBodyAsync(CancellationToken cancellationToken)
         {
             WebSession.Request.EnsureBodyAvailable(false);
 
-            //Caching check
-            if (!WebSession.Request.IsBodyRead)
-            {
-                //If chunked then its easy just read the whole body with the content length mentioned in the request header
-                using (var requestBodyStream = new MemoryStream())
-                {
-                    //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
-                    if (WebSession.Request.IsChunked)
-                    {
-                        await ProxyClient.ClientStreamReader.CopyBytesToStreamChunked(requestBodyStream);
-                    }
-                    else
-                    {
-                        //If not chunked then its easy just read the whole body with the content length mentioned in the request header
-                        if (WebSession.Request.ContentLength > 0)
-                        {
-                            //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                            await ProxyClient.ClientStreamReader.CopyBytesToStream(requestBodyStream, WebSession.Request.ContentLength);
-                        }
-                        else if (WebSession.Request.HttpVersion.Major == 1 && WebSession.Request.HttpVersion.Minor == 0)
-                        {
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStream(requestBodyStream, long.MaxValue);
-                        }
-                    }
+            var request = WebSession.Request;
 
-                    WebSession.Request.Body = await GetDecompressedResponseBody(WebSession.Request.ContentEncoding, requestBodyStream.ToArray());
-                }
+            //If not already read (not cached yet)
+            if (!request.IsBodyRead)
+            {
+                var body = await ReadBodyAsync(true, cancellationToken);
+                request.Body = body;
 
                 //Now set the flag to true
                 //So that next time we can deliver body from cache
-                WebSession.Request.IsBodyRead = true;
-                var body = WebSession.Request.Body;
+                request.IsBodyRead = true;
                 OnDataSent(body, 0, body.Length);
             }
         }
@@ -172,351 +108,495 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// reinit response object
         /// </summary>
-        internal async Task ClearResponse()
+        internal async Task ClearResponse(CancellationToken cancellationToken)
         {
-            //siphon out the body
-            await ReadResponseBody();
+            //syphon out the response body from server
+            await SyphonOutBodyAsync(false, cancellationToken);
             WebSession.Response = new Response();
         }
 
-        internal void OnDataSent(byte[] buffer, int offset, int count)
+        internal void OnMultipartRequestPartSent(string boundary, HeaderCollection headers)
         {
-            DataSent?.Invoke(this, new DataEventArgs(buffer, offset, count));
-        }
-
-        internal void OnDataReceived(byte[] buffer, int offset, int count)
-        {
-            DataReceived?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            try
+            {
+                MultipartRequestPartSent?.Invoke(this, new MultipartRequestPartSentEventArgs(boundary, headers));
+            }
+            catch (Exception ex)
+            {
+                ExceptionFunc(new Exception("Exception thrown in user event", ex));
+            }
         }
 
         /// <summary>
         /// Read response body as byte[] for current response
         /// </summary>
-        private async Task ReadResponseBody()
+        private async Task ReadResponseBodyAsync(CancellationToken cancellationToken)
         {
-            if (!WebSession.Request.RequestLocked)
+            if (!WebSession.Request.Locked)
             {
                 throw new Exception("You cannot read the response body before request is made to server.");
             }
 
-            //If not already read (not cached yet)
-            if (!WebSession.Response.IsBodyRead)
+            var response = WebSession.Response;
+            if (!response.HasBody)
             {
-                if (WebSession.Response.HasBody)
-                {
-                    using (var responseBodyStream = new MemoryStream())
-                    {
-                        //If chuncked the read chunk by chunk until we hit chunk end symbol
-                        if (WebSession.Response.IsChunked)
-                        {
-                            await WebSession.ServerConnection.StreamReader.CopyBytesToStreamChunked(responseBodyStream);
-                        }
-                        else
-                        {
-                            if (WebSession.Response.ContentLength > 0)
-                            {
-                                //If not chunked then its easy just read the amount of bytes mentioned in content length header of response
-                                await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, WebSession.Response.ContentLength);
-                            }
-                            else if (WebSession.Response.HttpVersion.Major == 1 && WebSession.Response.HttpVersion.Minor == 0 ||
-                                     WebSession.Response.ContentLength == -1)
-                            {
-                                await WebSession.ServerConnection.StreamReader.CopyBytesToStream(responseBodyStream, long.MaxValue);
-                            }
-                        }
+                return;
+            }
 
-                        WebSession.Response.Body = await GetDecompressedResponseBody(WebSession.Response.ContentEncoding, responseBodyStream.ToArray());
-                    }
-                }
-                else
-                {
-                    WebSession.Response.Body = new byte[0];
-                }
+            //If not already read (not cached yet)
+            if (!response.IsBodyRead)
+            {
+                var body = await ReadBodyAsync(false, cancellationToken);
+                response.Body = body;
 
-                //set this to true for caching
-                WebSession.Response.IsBodyRead = true;
-                var body = WebSession.Response.Body;
+                //Now set the flag to true
+                //So that next time we can deliver body from cache
+                response.IsBodyRead = true;
                 OnDataReceived(body, 0, body.Length);
             }
         }
 
+        private async Task<byte[]> ReadBodyAsync(bool isRequest, CancellationToken cancellationToken)
+        {
+            using (var bodyStream = new MemoryStream())
+            {
+                var writer = new HttpWriter(bodyStream, BufferSize);
+
+                if (isRequest)
+                {
+                    await CopyRequestBodyAsync(writer, TransformationMode.Uncompress, cancellationToken);
+                }
+                else
+                {
+                    await CopyResponseBodyAsync(writer, TransformationMode.Uncompress, cancellationToken);
+                }
+
+                return bodyStream.ToArray();
+            }
+        }
+
+        internal async Task SyphonOutBodyAsync(bool isRequest, CancellationToken cancellationToken)
+        {
+            var requestResponse = isRequest ? (RequestResponseBase)WebSession.Request : WebSession.Response;
+            if (requestResponse.IsBodyRead || !requestResponse.OriginalHasBody)
+            {
+                return;
+            }
+
+            using (var bodyStream = new MemoryStream())
+            {
+                var writer = new HttpWriter(bodyStream, BufferSize);
+                await CopyBodyAsync(isRequest, writer, TransformationMode.None, null, cancellationToken);
+            }
+        }
+
         /// <summary>
-        /// Gets the request body as bytes
+        ///  This is called when the request is PUT/POST/PATCH to read the body
         /// </summary>
         /// <returns></returns>
-        public async Task<byte[]> GetRequestBody()
+        internal async Task CopyRequestBodyAsync(HttpWriter writer, TransformationMode transformation, CancellationToken cancellationToken)
+        {
+            var request = WebSession.Request;
+
+            long contentLength = request.ContentLength;
+
+            //send the request body bytes to server
+            if (contentLength > 0 && hasMulipartEventSubscribers && request.IsMultipartFormData)
+            {
+                var reader = GetStreamReader(true);
+                string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
+
+                using (var copyStream = new CopyStream(reader, writer, BufferSize))
+                using (var copyStreamReader = new CustomBinaryReader(copyStream, BufferSize))
+                {
+                    while (contentLength > copyStream.ReadBytes)
+                    {
+                        long read = await ReadUntilBoundaryAsync(copyStreamReader, contentLength, boundary, cancellationToken);
+                        if (read == 0)
+                        {
+                            break;
+                        }
+
+                        if (contentLength > copyStream.ReadBytes)
+                        {
+                            var headers = new HeaderCollection();
+                            await HeaderParser.ReadHeaders(copyStreamReader, headers, cancellationToken);
+                            OnMultipartRequestPartSent(boundary, headers);
+                        }
+                    }
+
+                    await copyStream.FlushAsync(cancellationToken);
+                }
+            }
+            else
+            {
+                await CopyBodyAsync(true, writer, transformation, OnDataSent, cancellationToken);
+            }
+        }
+
+        internal async Task CopyResponseBodyAsync(HttpWriter writer, TransformationMode transformation, CancellationToken cancellationToken)
+        {
+            await CopyBodyAsync(false, writer, transformation, OnDataReceived, cancellationToken);
+        }
+
+        private async Task CopyBodyAsync(bool isRequest, HttpWriter writer, TransformationMode transformation, Action<byte[], int, int> onCopy, CancellationToken cancellationToken)
+        {
+            var stream = GetStream(isRequest);
+            var reader = GetStreamReader(isRequest);
+
+            var requestResponse = isRequest ? (RequestResponseBase)WebSession.Request : WebSession.Response;
+
+            bool isChunked = requestResponse.IsChunked;
+            long contentLength = requestResponse.ContentLength;
+            if (transformation == TransformationMode.None)
+            {
+                await writer.CopyBodyAsync(reader, isChunked, contentLength, onCopy, cancellationToken);
+                return;
+            }
+
+            LimitedStream limitedStream;
+            Stream decompressStream = null;
+
+            string contentEncoding = requestResponse.ContentEncoding;
+
+            Stream s = limitedStream = new LimitedStream(stream, reader, isChunked, contentLength);
+
+            if (transformation == TransformationMode.Uncompress && contentEncoding != null)
+            {
+                s = decompressStream = DecompressionFactory.Create(contentEncoding).GetStream(s);
+            }
+
+            try
+            {
+                var bufStream = new CustomBufferedStream(s, BufferSize, true);
+                reader = new CustomBinaryReader(bufStream, BufferSize);
+
+                await writer.CopyBodyAsync(reader, false, -1, onCopy, cancellationToken);
+            }
+            finally
+            {
+                reader?.Dispose();
+                decompressStream?.Dispose();
+
+                await limitedStream.Finish();
+                limitedStream.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Read a line from the byte stream
+        /// </summary>
+        /// <returns></returns>
+        private async Task<long> ReadUntilBoundaryAsync(CustomBinaryReader reader, long totalBytesToRead, string boundary, CancellationToken cancellationToken)
+        {
+            int bufferDataLength = 0;
+
+            var buffer = BufferPool.GetBuffer(BufferSize);
+            try
+            {
+                int boundaryLength = boundary.Length + 4;
+                long bytesRead = 0;
+
+                while (bytesRead < totalBytesToRead && (reader.DataAvailable || await reader.FillBufferAsync(cancellationToken)))
+                {
+                    byte newChar = reader.ReadByteFromBuffer();
+                    buffer[bufferDataLength] = newChar;
+
+                    bufferDataLength++;
+                    bytesRead++;
+
+                    if (bufferDataLength >= boundaryLength)
+                    {
+                        int startIdx = bufferDataLength - boundaryLength;
+                        if (buffer[startIdx] == '-' && buffer[startIdx + 1] == '-')
+                        {
+                            startIdx += 2;
+                            bool ok = true;
+                            for (int i = 0; i < boundary.Length; i++)
+                            {
+                                if (buffer[startIdx + i] != boundary[i])
+                                {
+                                    ok = false;
+                                    break;
+                                }
+                            }
+
+                            if (ok)
+                            {
+                                break;
+                            }
+                        }
+                    }
+
+                    if (bufferDataLength == buffer.Length)
+                    {
+                        //boundary is not longer than 70 bytes according to the specification, so keeping the last 100 (minimum 74) bytes is enough
+                        const int bytesToKeep = 100;
+                        Buffer.BlockCopy(buffer, buffer.Length - bytesToKeep, buffer, 0, bytesToKeep);
+                        bufferDataLength = bytesToKeep;
+                    }
+                }
+
+                return bytesRead;
+            }
+            finally
+            {
+                BufferPool.ReturnBuffer(buffer);
+            }
+        }
+
+        /// <summary>
+        /// Gets the request body as bytes.
+        /// </summary>
+        /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
+        /// <returns>The body as bytes.</returns>
+        public async Task<byte[]> GetRequestBody(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Request.IsBodyRead)
             {
-                await ReadRequestBody();
+                await ReadRequestBodyAsync(cancellationToken);
             }
 
             return WebSession.Request.Body;
         }
 
         /// <summary>
-        /// Gets the request body as string
+        /// Gets the request body as string.
         /// </summary>
-        /// <returns></returns>
-        public async Task<string> GetRequestBodyAsString()
+        /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
+        /// <returns>The body as string.</returns>
+        public async Task<string> GetRequestBodyAsString(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Request.IsBodyRead)
             {
-                await ReadRequestBody();
+                await ReadRequestBodyAsync(cancellationToken);
             }
 
             return WebSession.Request.BodyString;
         }
 
         /// <summary>
-        /// Sets the request body
+        /// Sets the request body.
         /// </summary>
-        /// <param name="body"></param>
-        public async Task SetRequestBody(byte[] body)
+        /// <param name="body">The request body bytes.</param>
+        public void SetRequestBody(byte[] body)
         {
-            if (WebSession.Request.RequestLocked)
+            var request = WebSession.Request;
+            if (request.Locked)
             {
                 throw new Exception("You cannot call this function after request is made to server.");
             }
 
-            //syphon out the request body from client before setting the new body
-            if (!WebSession.Request.IsBodyRead)
-            {
-                await ReadRequestBody();
-            }
-
-            WebSession.Request.Body = body;
-            WebSession.Request.ContentLength = WebSession.Request.IsChunked ? -1 : body.Length;
+            request.Body = body;
         }
 
         /// <summary>
-        /// Sets the body with the specified string
+        /// Sets the body with the specified string.
         /// </summary>
-        /// <param name="body"></param>
-        public async Task SetRequestBodyString(string body)
+        /// <param name="body">The request body string to set.</param>
+        public void SetRequestBodyString(string body)
         {
-            if (WebSession.Request.RequestLocked)
+            if (WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function after request is made to server.");
             }
 
-            //syphon out the request body from client before setting the new body
-            if (!WebSession.Request.IsBodyRead)
-            {
-                await ReadRequestBody();
-            }
-
-            await SetRequestBody(WebSession.Request.Encoding.GetBytes(body));
+            SetRequestBody(WebSession.Request.Encoding.GetBytes(body));
         }
 
+
         /// <summary>
-        /// Gets the response body as byte array
+        /// Gets the response body as bytes.
         /// </summary>
-        /// <returns></returns>
-        public async Task<byte[]> GetResponseBody()
+        /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
+        /// <returns>The resulting bytes.</returns>
+        public async Task<byte[]> GetResponseBody(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Response.IsBodyRead)
             {
-                await ReadResponseBody();
+                await ReadResponseBodyAsync(cancellationToken);
             }
 
             return WebSession.Response.Body;
         }
 
         /// <summary>
-        /// Gets the response body as string
+        /// Gets the response body as string.
         /// </summary>
-        /// <returns></returns>
-        public async Task<string> GetResponseBodyAsString()
+        /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
+        /// <returns>The string body.</returns>
+        public async Task<string> GetResponseBodyAsString(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Response.IsBodyRead)
             {
-                await ReadResponseBody();
+                await ReadResponseBodyAsync(cancellationToken);
             }
 
             return WebSession.Response.BodyString;
         }
 
         /// <summary>
-        /// Set the response body bytes
+        /// Set the response body bytes.
         /// </summary>
-        /// <param name="body"></param>
-        public async Task SetResponseBody(byte[] body)
+        /// <param name="body">The body bytes to set.</param>
+        public void SetResponseBody(byte[] body)
         {
-            if (!WebSession.Request.RequestLocked)
+            if (!WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function before request is made to server.");
             }
 
-            //syphon out the response body from server before setting the new body
-            if (WebSession.Response.Body == null)
-            {
-                await GetResponseBody();
-            }
-
-            WebSession.Response.Body = body;
-
-            //If there is a content length header update it
-            if (WebSession.Response.IsChunked == false)
-            {
-                WebSession.Response.ContentLength = body.Length;
-            }
-            else
-            {
-                WebSession.Response.ContentLength = -1;
-            }
+            var response = WebSession.Response;
+            response.Body = body;
         }
 
         /// <summary>
-        /// Replace the response body with the specified string
+        /// Replace the response body with the specified string.
         /// </summary>
-        /// <param name="body"></param>
-        public async Task SetResponseBodyString(string body)
+        /// <param name="body">The body string to set.</param>
+        public void SetResponseBodyString(string body)
         {
-            if (!WebSession.Request.RequestLocked)
+            if (!WebSession.Request.Locked)
             {
                 throw new Exception("You cannot call this function before request is made to server.");
-            }
-
-            //syphon out the response body from server before setting the new body
-            if (!WebSession.Response.IsBodyRead)
-            {
-                await GetResponseBody();
             }
 
             var bodyBytes = WebSession.Response.Encoding.GetBytes(body);
 
-            await SetResponseBody(bodyBytes);
-        }
-
-        private async Task<byte[]> GetDecompressedResponseBody(string encodingType, byte[] responseBodyStream)
-        {
-            var decompressionFactory = new DecompressionFactory();
-            var decompressor = decompressionFactory.Create(encodingType);
-
-            return await decompressor.Decompress(responseBodyStream, bufferSize);
+            SetResponseBody(bodyBytes);
         }
 
         /// <summary>
-        /// Before request is made to server 
-        /// Respond with the specified HTML string to client
-        /// and ignore the request 
+        /// Before request is made to server respond with the specified HTML string to client
+        /// and ignore the request. 
         /// </summary>
-        /// <param name="html"></param>
-        /// <param name="headers"></param>
-        public async Task Ok(string html, Dictionary<string, HttpHeader> headers)
+        /// <param name="html">HTML content to sent.</param>
+        /// <param name="headers">HTTP response headers.</param>
+        public void Ok(string html, Dictionary<string, HttpHeader> headers = null)
         {
             var response = new OkResponse();
-            response.Headers.AddHeaders(headers);
+            if (headers != null)
+            {
+                response.Headers.AddHeaders(headers);
+            }
+
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Body = response.Encoding.GetBytes(html ?? string.Empty);
 
-            await Respond(response);
-
-            WebSession.Request.CancelRequest = true;
+            Respond(response);
         }
 
         /// <summary>
-        /// Before request is made to server 
-        /// Respond with the specified byte[] to client
-        /// and ignore the request 
+        /// Before request is made to server respond with the specified byte[] to client
+        /// and ignore the request. 
         /// </summary>
-        /// <param name="result"></param>
-        /// <param name="headers"></param>
-        public async Task Ok(byte[] result, Dictionary<string, HttpHeader> headers = null)
+        /// <param name="result">The html content bytes.</param>
+        /// <param name="headers">The HTTP headers.</param>
+        public void Ok(byte[] result, Dictionary<string, HttpHeader> headers = null)
         {
             var response = new OkResponse();
             response.Headers.AddHeaders(headers);
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Body = result;
 
-            await Respond(response);
+            Respond(response);
         }
 
         /// <summary>
         /// Before request is made to server 
-        /// Respond with the specified HTML string to client
-        /// and the specified status
-        /// and ignore the request 
+        /// respond with the specified HTML string and the specified status to client.
+        /// And then ignore the request. 
         /// </summary>
-        /// <param name="html"></param>
-        /// <param name="status"></param>
-        /// <param name="headers"></param>
+        /// <param name="html">The html content.</param>
+        /// <param name="status">The HTTP status code.</param>
+        /// <param name="headers">The HTTP headers.</param>
         /// <returns></returns>
-        public async Task GenericResponse(string html, HttpStatusCode status, Dictionary<string, HttpHeader> headers = null)
+        public void GenericResponse(string html, HttpStatusCode status, Dictionary<string, HttpHeader> headers = null)
         {
             var response = new GenericResponse(status);
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Headers.AddHeaders(headers);
             response.Body = response.Encoding.GetBytes(html ?? string.Empty);
 
-            await Respond(response);
+            Respond(response);
         }
 
         /// <summary>
-        /// Before request is made to server
-        /// Respond with the specified byte[] to client
-        /// and the specified status
-        /// and ignore the request
+        /// Before request is made to server respond with the specified byte[],
+        /// the specified status  to client. And then ignore the request.
         /// </summary>
-        /// <param name="result"></param>
-        /// <param name="status"></param>
-        /// <param name="headers"></param>
+        /// <param name="result">The bytes to sent.</param>
+        /// <param name="status">The HTTP status code.</param>
+        /// <param name="headers">The HTTP headers.</param>
         /// <returns></returns>
-        public async Task GenericResponse(byte[] result, HttpStatusCode status, Dictionary<string, HttpHeader> headers)
+        public void GenericResponse(byte[] result, HttpStatusCode status, Dictionary<string, HttpHeader> headers)
         {
             var response = new GenericResponse(status);
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Headers.AddHeaders(headers);
             response.Body = result;
 
-            await Respond(response);
+            Respond(response);
         }
 
         /// <summary>
-        /// Redirect to URL.
+        /// Redirect to provided URL.
         /// </summary>
-        /// <param name="url"></param>
+        /// <param name="url">The URL to redirect.</param>
         /// <returns></returns>
-        public async Task Redirect(string url)
+        public void Redirect(string url)
         {
             var response = new RedirectResponse();
             response.HttpVersion = WebSession.Request.HttpVersion;
-            response.Headers.AddHeader("Location", url);
-            response.Body = new byte[0];
+            response.Headers.AddHeader(KnownHeaders.Location, url);
+            response.Body = emptyData;
 
-            await Respond(response);
-        }
-
-        /// a generic responder method 
-        public async Task Respond(Response response)
-        {
-            if (WebSession.Request.RequestLocked)
-            {
-                throw new Exception("You cannot call this function after request is made to server.");
-            }
-
-            WebSession.Request.RequestLocked = true;
-
-            response.ResponseLocked = true;
-            response.IsBodyRead = true;
-
-            WebSession.Response = response;
-
-            await httpResponseHandler(this);
-
-            WebSession.Request.CancelRequest = true;
+            Respond(response);
         }
 
         /// <summary>
-        /// implement any cleanup here
-        /// </summary>
-        public void Dispose()
+      /// Respond with given response object to client.
+      /// </summary>
+      /// <param name="response">The response object.</param>
+        public void Respond(Response response)
         {
-            httpResponseHandler = null;
-            CustomUpStreamProxyUsed = null;
+            if (WebSession.Request.Locked)
+            {
+                if (WebSession.Response.Locked)
+                {
+                    throw new Exception("You cannot call this function after response is sent to the client.");
+                }
 
-            WebSession.FinishSession();
+                response.Locked = true;
+                response.TerminateResponse = WebSession.Response.TerminateResponse;
+                WebSession.Response = response;
+            }
+            else
+            {
+                WebSession.Request.Locked = true;
+
+                response.Locked = true;
+                WebSession.Response = response;
+
+                WebSession.Request.CancelRequest = true;
+            }
+        }
+
+        /// <summary>
+        /// Terminate the connection to server.
+        /// </summary>
+        public void TerminateServerConnection()
+        {
+            WebSession.Response.TerminateResponse = true;
+        }
+
+        /// <summary>
+        /// Implement any cleanup here
+        /// </summary>
+        public override void Dispose()
+        {
+            MultipartRequestPartSent = null;
+            base.Dispose();
         }
     }
 }

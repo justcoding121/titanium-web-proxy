@@ -5,7 +5,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Security.Claims;
 using System.Security.Principal;
 using System.Threading.Tasks;
 
@@ -16,13 +15,13 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
     internal class WinAuthEndPoint
     {
         /// <summary>
-        /// Keep track of auth states for reuse in final challenge response
+        ///     Keep track of auth states for reuse in final challenge response
         /// </summary>
         private static readonly IDictionary<Guid, State> authStates = new ConcurrentDictionary<Guid, State>();
 
 
         /// <summary>
-        /// Acquire the intial client token to send
+        ///     Acquire the intial client token to send
         /// </summary>
         /// <param name="hostname"></param>
         /// <param name="authScheme"></param>
@@ -39,11 +38,9 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
             try
             {
-                int result;
-
                 var state = new State();
 
-                result = AcquireCredentialsHandle(
+                int result = AcquireCredentialsHandle(
                     WindowsIdentity.GetCurrent().Name,
                     authScheme,
                     SecurityCredentialsOutbound,
@@ -56,7 +53,6 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
                 if (result != SuccessfulResult)
                 {
-                    // Credentials acquire operation failed.
                     return null;
                 }
 
@@ -76,10 +72,10 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
                 if (result != IntermediateResult)
                 {
-                    // Client challenge issue operation failed.
                     return null;
                 }
 
+                state.AuthState = State.WinAuthState.INITIAL_TOKEN;
                 token = clientToken.GetBytes();
                 authStates.Add(requestId, state);
             }
@@ -93,7 +89,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         }
 
         /// <summary>
-        /// Acquire the final token to send
+        ///     Acquire the final token to send
         /// </summary>
         /// <param name="hostname"></param>
         /// <param name="serverChallenge"></param>
@@ -110,13 +106,11 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
             try
             {
-                int result;
-
                 var state = authStates[requestId];
 
                 state.UpdatePresence();
 
-                result = InitializeSecurityContext(ref state.Credentials,
+                int result = InitializeSecurityContext(ref state.Credentials,
                     ref state.Context,
                     hostname,
                     StandardContextAttributes,
@@ -132,11 +126,10 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
                 if (result != SuccessfulResult)
                 {
-                    // Client challenge issue operation failed.
                     return null;
                 }
 
-                authStates.Remove(requestId);
+                state.AuthState = State.WinAuthState.FINAL_TOKEN;
                 token = clientToken.GetBytes();
             }
             finally
@@ -149,7 +142,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         }
 
         /// <summary>
-        /// Clear any hanging states
+        ///     Clear any hanging states
         /// </summary>
         /// <param name="stateCacheTimeOutMinutes"></param>
         internal static async void ClearIdleStates(int stateCacheTimeOutMinutes)
@@ -167,10 +160,53 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             await Task.Delay(1000 * 60);
         }
 
+        /// <summary>
+        ///     Validates that the current WinAuth state of the connection matches the
+        ///     expectation, used to detect failed authentication
+        /// </summary>
+        /// <param name="requestId"></param>
+        /// <param name="expectedAuthState"></param>
+        /// <returns></returns>
+        internal static bool ValidateWinAuthState(Guid requestId, State.WinAuthState expectedAuthState)
+        {
+            bool stateExists = authStates.TryGetValue(requestId, out var state);
+
+            if (expectedAuthState == State.WinAuthState.UNAUTHORIZED)
+            {
+                return stateExists == false ||
+                       state.AuthState == State.WinAuthState.UNAUTHORIZED ||
+                       state.AuthState ==
+                       State.WinAuthState.AUTHORIZED; // Server may require re-authentication on an open connection
+            }
+
+            if (expectedAuthState == State.WinAuthState.INITIAL_TOKEN)
+            {
+                return stateExists &&
+                       (state.AuthState == State.WinAuthState.INITIAL_TOKEN ||
+                        state.AuthState == State.WinAuthState.AUTHORIZED
+                       ); // Server may require re-authentication on an open connection
+            }
+
+            throw new Exception("Unsupported validation of WinAuthState");
+        }
+
+        /// <summary>
+        ///     Set the AuthState to authorized and update the connection state lifetime
+        /// </summary>
+        /// <param name="requestId"></param>
+        internal static void AuthenticatedResponse(Guid requestId)
+        {
+            if (authStates.TryGetValue(requestId, out var state))
+            {
+                state.AuthState = State.WinAuthState.AUTHORIZED;
+                state.UpdatePresence();
+            }
+        }
+
         #region Native calls to secur32.dll
 
         [DllImport("secur32.dll", SetLastError = true)]
-        static extern int InitializeSecurityContext(ref SecurityHandle phCredential, //PCredHandle
+        private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, //PCredHandle
             IntPtr phContext, //PCtxtHandle
             string pszTargetName,
             int fContextReq,
@@ -184,7 +220,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             out SecurityInteger ptsExpiry); //PTimeStamp
 
         [DllImport("secur32", CharSet = CharSet.Auto, SetLastError = true)]
-        static extern int InitializeSecurityContext(ref SecurityHandle phCredential, //PCredHandle
+        private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, //PCredHandle
             ref SecurityHandle phContext, //PCtxtHandle
             string pszTargetName,
             int fContextReq,

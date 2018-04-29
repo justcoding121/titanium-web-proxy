@@ -2,19 +2,20 @@
 
 A light weight HTTP(S) proxy server written in C#
 
-<a href="https://ci.appveyor.com/project/justcoding121/titanium-web-proxy">![Build Status](https://ci.appveyor.com/api/projects/status/rvlxv8xgj0m7lkr4?svg=true)</a>
+<a href="https://ci.appveyor.com/project/justcoding121/titanium-web-proxy">![Build Status](https://ci.appveyor.com/api/projects/status/rvlxv8xgj0m7lkr4?svg=true)</a> [![Join the chat at https://gitter.im/Titanium-Web-Proxy/Lobby](https://badges.gitter.im/Titanium-Web-Proxy/Lobby.svg)](https://gitter.im/Titanium-Web-Proxy/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 Kindly report only issues/bugs here . For programming help or questions use [StackOverflow](http://stackoverflow.com/questions/tagged/titanium-web-proxy) with the tag Titanium-Web-Proxy.
 
-([Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki))
+* [API Documentation](https://justcoding121.github.io/Titanium-Web-Proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html)
+* [Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki)
 
 **Console example application screenshot**
 
-![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/develop/Examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
+![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/Examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
 
 **GUI example application screenshot**
 
-![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/develop/Examples/Titanium.Web.Proxy.Examples.Wpf/Capture.PNG)
+![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/Examples/Titanium.Web.Proxy.Examples.Wpf/Capture.PNG)
 
 ### Features
 
@@ -52,11 +53,11 @@ Setup HTTP proxy:
 var proxyServer = new ProxyServer();
 
 //locally trust root certificate used by this proxy 
-proxyServer.TrustRootCertificate = true;
+proxyServer.CertificateManager.TrustRootCertificate = true;
 
 //optionally set the Certificate Engine
 //Under Mono only BouncyCastle will be supported
-//proxyServer.CertificateEngine = Network.CertificateEngine.BouncyCastle;
+//proxyServer.CertificateManager.CertificateEngine = Network.CertificateEngine.BouncyCastle;
 
 proxyServer.BeforeRequest += OnRequest;
 proxyServer.BeforeResponse += OnResponse;
@@ -66,16 +67,14 @@ proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
 var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
 {
-//Exclude HTTPS addresses you don't want to proxy
-//Useful for clients that use certificate pinning
-//for example dropbox.com
-// ExcludedHttpsHostNameRegex = new List<string>() { "google.com", "dropbox.com" }
-
-//Use self-issued generic certificate on all HTTPS requests
-//Optimizes performance by not creating a certificate for each HTTPS-enabled domain
+//Use self-issued generic certificate on all https requests
+//Optimizes performance by not creating a certificate for each https-enabled domain
 //Useful when certificate trust is not required by proxy clients
-// GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
+//GenericCertificate = new X509Certificate2(Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "genericcert.pfx"), "password")
 };
+
+//Fired when a CONNECT request is received
+explicitEndPoint.BeforeTunnelConnect += OnBeforeTunnelConnect;
 
 //An explicit endpoint is where the client knows about the existence of a proxy
 //So client sends request in a proxy friendly manner
@@ -109,6 +108,7 @@ proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
 Console.Read();
 
 //Unsubscribe & Quit
+explicitEndPoint.BeforeTunnelConnect -= OnBeforeTunnelConnect;
 proxyServer.BeforeRequest -= OnRequest;
 proxyServer.BeforeResponse -= OnResponse;
 proxyServer.ServerCertificateValidationCallback -= OnCertificateValidation;
@@ -124,6 +124,19 @@ Sample request and response event handlers
 //To access requestBody from OnResponse handler
 private IDictionary<Guid, string> requestBodyHistory 
         = new ConcurrentDictionary<Guid, string>();
+
+private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
+{
+    string hostname = e.WebSession.Request.RequestUri.Host;
+
+    if (hostname.Contains("dropbox.com"))
+    {
+         //Exclude Https addresses you don't want to proxy
+         //Useful for clients that use certificate pinning
+         //for example dropbox.com
+         e.DecryptSsl = false;
+    }
+}
 
 public async Task OnRequest(object sender, SessionEventArgs e)
 {
@@ -152,7 +165,7 @@ public async Task OnRequest(object sender, SessionEventArgs e)
     //Filter URL
     if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
     {
-	await e.Ok("<!DOCTYPE html>" +
+	e.Ok("<!DOCTYPE html>" +
 	      "<html><body><h1>" +
 	      "Website Blocked" +
 	      "</h1>" +
@@ -163,7 +176,7 @@ public async Task OnRequest(object sender, SessionEventArgs e)
     //Redirect example
     if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
     {
-	await e.Redirect("https://www.paypal.com");
+	e.Redirect("https://www.paypal.com");
     }
 }
 
@@ -218,7 +231,6 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
 #### Roadmap
 
 * Support HTTP 2.0 
-* Support SOCKS protocol
 
 #### Collaborators
 

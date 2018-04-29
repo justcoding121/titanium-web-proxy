@@ -9,193 +9,165 @@ using Titanium.Web.Proxy.Shared;
 namespace Titanium.Web.Proxy.Http
 {
     /// <summary>
-    /// A HTTP(S) request object
+    ///     Http(s) request object
     /// </summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
-    public class Request
+    public class Request : RequestResponseBase
     {
         /// <summary>
-        /// Cached request body as byte array
-        /// </summary>
-        private byte[] body;
-
-        /// <summary>
-        /// Cached request body as string
-        /// </summary>
-        private string bodyString;
-
-        /// <summary>
-        /// Request Method
+        ///     Request Method.
         /// </summary>
         public string Method { get; set; }
 
         /// <summary>
-        /// Request HTTP Uri
+        ///     Request HTTP Uri.
         /// </summary>
         public Uri RequestUri { get; set; }
 
         /// <summary>
-        /// Is Https?
+        ///     Is Https?
         /// </summary>
         public bool IsHttps => RequestUri.Scheme == ProxyServer.UriSchemeHttps;
 
         /// <summary>
-        /// The original request Url.
+        ///     The original request Url.
         /// </summary>
         public string OriginalUrl { get; set; }
 
         /// <summary>
-        /// Request Http Version
+        ///     Has request body?
         /// </summary>
-        public Version HttpVersion { get; set; }
+        public override bool HasBody
+        {
+            get
+            {
+                long contentLength = ContentLength;
+
+                //If content length is set to 0 the request has no body
+                if (contentLength == 0)
+                {
+                    return false;
+                }
+
+                //Has body only if request is chunked or content length >0
+                if (IsChunked || contentLength > 0)
+                {
+                    return true;
+                }
+
+                //has body if POST and when version is http/1.0
+                if (Method == "POST" && HttpVersion == HttpHeader.Version10)
+                {
+                    return true;
+                }
+
+                return false;
+            }
+        }
 
         /// <summary>
-        /// Keeps the request body data after the session is finished
-        /// </summary>
-        public bool KeepBody { get; set; }
-
-        /// <summary>
-        /// Has request body?
-        /// </summary>
-        public bool HasBody => Method == "POST" || Method == "PUT" || Method == "PATCH";
-
-        /// <summary>
-        /// Http hostname header value if exists
-        /// Note: Changing this does NOT change host in RequestUri
-        /// Users can set new RequestUri separately
+        ///     Http hostname header value if exists.
+        ///     Note: Changing this does NOT change host in RequestUri.
+        ///     Users can set new RequestUri separately.
         /// </summary>
         public string Host
         {
-            get
-            {
-                return Headers.GetHeaderValueOrNull("host");
-            }
-            set
-            {
-                Headers.SetOrAddHeaderValue("host", value);
-            }
+            get => Headers.GetHeaderValueOrNull(KnownHeaders.Host);
+            set => Headers.SetOrAddHeaderValue(KnownHeaders.Host, value);
         }
 
         /// <summary>
-        /// Content encoding header value
-        /// </summary>
-        public string ContentEncoding => Headers.GetHeaderValueOrNull("content-encoding");
-
-        /// <summary>
-        /// Request content-length
-        /// </summary>
-        public long ContentLength
-        {
-            get
-            {
-                string headerValue = Headers.GetHeaderValueOrNull("content-length");
-
-                if (headerValue == null)
-                {
-                    return -1;
-                }
-
-                long contentLen;
-                long.TryParse(headerValue, out contentLen);
-                if (contentLen >= 0)
-                {
-                    return contentLen;
-                }
-
-                return -1;
-            }
-            set
-            {
-                if (value >= 0)
-                {
-                    Headers.SetOrAddHeaderValue("content-length", value.ToString());
-                    IsChunked = false;
-                }
-                else
-                {
-                    Headers.RemoveHeader("content-length");
-                }
-            }
-        }
-
-        /// <summary>
-        /// Request content-type
-        /// </summary>
-        public string ContentType
-        {
-            get
-            {
-                return Headers.GetHeaderValueOrNull("content-type");
-            }
-            set
-            {
-                Headers.SetOrAddHeaderValue("content-type", value);
-            }
-        }
-
-        /// <summary>
-        /// Is request body send as chunked bytes
-        /// </summary>
-        public bool IsChunked
-        {
-            get
-            {
-                string headerValue = Headers.GetHeaderValueOrNull("transfer-encoding");
-                return headerValue != null && headerValue.ContainsIgnoreCase("chunked");
-            }
-            set
-            {
-                if (value)
-                {
-                    Headers.SetOrAddHeaderValue("transfer-encoding", "chunked");
-                    ContentLength = -1;
-                }
-                else
-                {
-                    Headers.RemoveHeader("transfer-encoding");
-                }
-            }
-        }
-
-        /// <summary>
-        /// Does this request has a 100-continue header?
+        ///     Does this request has a 100-continue header?
         /// </summary>
         public bool ExpectContinue
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull("expect");
-                return headerValue != null && headerValue.Equals("100-continue");
+                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Expect);
+                return headerValue != null && headerValue.Equals(KnownHeaders.Expect100Continue);
             }
         }
 
         /// <summary>
-        /// Request Url
+        ///     Does this request contain multipart/form-data?
+        /// </summary>
+        public bool IsMultipartFormData => ContentType?.StartsWith("multipart/form-data") == true;
+
+        /// <summary>
+        ///     Request Url.
         /// </summary>
         public string Url => RequestUri.OriginalString;
 
         /// <summary>
-        /// Encoding for this request
-        /// </summary>
-        public Encoding Encoding => this.GetEncoding();
-
-        /// <summary>
-        /// Terminates the underlying Tcp Connection to client after current request
+        ///     Terminates the underlying Tcp Connection to client after current request.
         /// </summary>
         internal bool CancelRequest { get; set; }
 
-        internal void EnsureBodyAvailable(bool throwWhenNotReadYet = true)
+        /// <summary>
+        ///     Does this request has an upgrade to websocket header?
+        /// </summary>
+        public bool UpgradeToWebSocket
         {
+            get
+            {
+                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
+
+                if (headerValue == null)
+                {
+                    return false;
+                }
+
+                return headerValue.EqualsIgnoreCase(KnownHeaders.UpgradeWebsocket);
+            }
+        }
+
+        /// <summary>
+        ///     Did server responsed positively for 100 continue request?
+        /// </summary>
+        public bool Is100Continue { get; internal set; }
+
+        /// <summary>
+        ///     Did server responsed negatively for the request for 100 continue?
+        /// </summary>
+        public bool ExpectationFailed { get; internal set; }
+
+        /// <summary>
+        ///     Gets the header text.
+        /// </summary>
+        public override string HeaderText
+        {
+            get
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine(CreateRequestLine(Method, OriginalUrl, HttpVersion));
+                foreach (var header in Headers)
+                {
+                    sb.AppendLine(header.ToString());
+                }
+
+                sb.AppendLine();
+                return sb.ToString();
+            }
+        }
+
+        internal override void EnsureBodyAvailable(bool throwWhenNotReadYet = true)
+        {
+            if (BodyInternal != null)
+            {
+                return;
+            }
+
             //GET request don't have a request body to read
             if (!HasBody)
             {
-                throw new BodyNotFoundException("Request don't have a body. " + "Please verify that this request is a Http POST/PUT/PATCH and request " +
+                throw new BodyNotFoundException("Request don't have a body. " +
+                                                "Please verify that this request is a Http POST/PUT/PATCH and request " +
                                                 "content length is greater than zero before accessing the body.");
             }
 
             if (!IsBodyRead)
             {
-                if (RequestLocked)
+                if (Locked)
                 {
                     throw new Exception("You cannot get the request body after request is made to server.");
                 }
@@ -209,94 +181,13 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        /// <summary>
-        /// Request body as byte array
-        /// </summary>
-        [Browsable(false)]
-        public byte[] Body
+        internal static string CreateRequestLine(string httpMethod, string httpUrl, Version version)
         {
-            get
-            {
-                EnsureBodyAvailable();
-                return body;
-            }
-            internal set
-            {
-                body = value;
-                bodyString = null;
-            }
+            return $"{httpMethod} {httpUrl} HTTP/{version.Major}.{version.Minor}";
         }
 
-        /// <summary>
-        /// Request body as string
-        /// Use the encoding specified in request to decode the byte[] data to string
-        /// </summary>
-        [Browsable(false)]
-        public string BodyString => bodyString ?? (bodyString = Encoding.GetString(Body));
-
-        /// <summary>
-        /// Request body was read by user?
-        /// </summary>
-        public bool IsBodyRead { get; internal set; }
-
-        /// <summary>
-        /// Request is ready to be sent (user callbacks are complete?)
-        /// </summary>
-        internal bool RequestLocked { get; set; }
-
-        /// <summary>
-        /// Does this request has an upgrade to websocket header?
-        /// </summary>
-        public bool UpgradeToWebSocket
-        {
-            get
-            {
-                string headerValue = Headers.GetHeaderValueOrNull("upgrade");
-
-                if (headerValue == null)
-                {
-                    return false;
-                }
-
-                return headerValue.Equals("websocket", StringComparison.CurrentCultureIgnoreCase);
-            }
-        }
-
-        /// <summary>
-        /// Request header collection
-        /// </summary>
-        public HeaderCollection Headers { get; } = new HeaderCollection();
-
-        /// <summary>
-        /// Does server responsed positively for 100 continue request
-        /// </summary>
-        public bool Is100Continue { get; internal set; }
-
-        /// <summary>
-        /// Server responsed negatively for the request for 100 continue
-        /// </summary>
-        public bool ExpectationFailed { get; internal set; }
-
-        /// <summary>
-        /// Gets the header text.
-        /// </summary>
-        public string HeaderText
-        {
-            get
-            {
-                var sb = new StringBuilder();
-                sb.AppendLine($"{Method} {OriginalUrl} HTTP/{HttpVersion.Major}.{HttpVersion.Minor}");
-                foreach (var header in Headers)
-                {
-                    sb.AppendLine(header.ToString());
-                }
-
-                sb.AppendLine();
-                return sb.ToString();
-            }
-        }
-
-        internal static void ParseRequestLine(string httpCmd, out string httpMethod, out string httpUrl, out Version version)
+        internal static void ParseRequestLine(string httpCmd, out string httpMethod, out string httpUrl,
+            out Version version)
         {
             //break up the line into three components (method, remote URL & Http Version)
             var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
@@ -310,11 +201,6 @@ namespace Titanium.Web.Proxy.Http
             httpMethod = httpCmdSplit[0];
             if (!IsAllUpper(httpMethod))
             {
-                //method should be upper cased: https://tools.ietf.org/html/rfc7231#section-4
-
-                //todo: create protocol violation message
-
-                //fix it
                 httpMethod = httpMethod.ToUpper();
             }
 
@@ -345,23 +231,6 @@ namespace Titanium.Web.Proxy.Http
             }
 
             return true;
-        }
-
-        /// <summary>
-        /// Finish the session
-        /// </summary>
-        public void FinishSession()
-        {
-            if (!KeepBody)
-            {
-                body = null;
-                bodyString = null;
-            }
-        }
-
-        public override string ToString()
-        {
-            return HeaderText;
         }
     }
 }

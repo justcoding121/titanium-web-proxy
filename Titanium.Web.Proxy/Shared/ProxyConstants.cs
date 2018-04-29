@@ -1,9 +1,9 @@
-﻿using System.Text;
+﻿using System.Text.RegularExpressions;
 
 namespace Titanium.Web.Proxy.Shared
 {
     /// <summary>
-    /// Literals shared by Proxy Server
+    ///     Literals shared by Proxy Server
     /// </summary>
     internal class ProxyConstants
     {
@@ -14,10 +14,9 @@ namespace Titanium.Web.Proxy.Shared
         internal static readonly char[] SemiColonSplit = { ';' };
         internal static readonly char[] EqualSplit = { '=' };
 
-        internal static readonly byte[] NewLineBytes = Encoding.ASCII.GetBytes(NewLine);
+        internal static readonly byte[] NewLine = { (byte)'\r', (byte)'\n' };
 
-        internal static readonly byte[] ChunkEnd = Encoding.ASCII.GetBytes(0.ToString("x2") + NewLine + NewLine);
-
-        internal const string NewLine = "\r\n";
+        public static readonly Regex CNRemoverRegex =
+            new Regex(@"^CN\s*=\s*", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     }
 }

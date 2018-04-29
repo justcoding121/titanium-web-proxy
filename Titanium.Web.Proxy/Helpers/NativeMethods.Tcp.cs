@@ -9,6 +9,13 @@ namespace Titanium.Web.Proxy.Helpers
         internal const int AfInet = 2;
         internal const int AfInet6 = 23;
 
+        /// <summary>
+        ///     <see href="http://msdn2.microsoft.com/en-us/library/aa365928.aspx" />
+        /// </summary>
+        [DllImport("iphlpapi.dll", SetLastError = true)]
+        internal static extern uint GetExtendedTcpTable(IntPtr tcpTable, ref int size, bool sort, int ipVersion,
+            int tableClass, int reserved);
+
         internal enum TcpTableType
         {
             BasicListener,
@@ -19,43 +26,37 @@ namespace Titanium.Web.Proxy.Helpers
             OwnerPidAll,
             OwnerModuleListener,
             OwnerModuleConnections,
-            OwnerModuleAll,
+            OwnerModuleAll
         }
 
         /// <summary>
-        /// <see href="http://msdn2.microsoft.com/en-us/library/aa366921.aspx"/>
-        /// </summary>
-        [StructLayout(LayoutKind.Sequential)]
-        internal struct TcpTable
-        {
-            public uint length;
-            public TcpRow row;
-        }
-
-        /// <summary>
-        /// <see href="http://msdn2.microsoft.com/en-us/library/aa366913.aspx"/>
+        ///     <see href="http://msdn2.microsoft.com/en-us/library/aa366913.aspx" />
         /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         internal struct TcpRow
         {
             public TcpState state;
             public uint localAddr;
-            public byte localPort1;
-            public byte localPort2;
-            public byte localPort3;
-            public byte localPort4;
+            public uint localPort; // in network byte order (order of bytes - 1,0,3,2)
             public uint remoteAddr;
-            public byte remotePort1;
-            public byte remotePort2;
-            public byte remotePort3;
-            public byte remotePort4;
+            public uint remotePort; // in network byte order (order of bytes - 1,0,3,2)
             public int owningPid;
         }
 
         /// <summary>
-        /// <see href="http://msdn2.microsoft.com/en-us/library/aa365928.aspx"/>
+        ///     <see href="https://msdn.microsoft.com/en-us/library/aa366896.aspx" />
         /// </summary>
-        [DllImport("iphlpapi.dll", SetLastError = true)]
-        internal static extern uint GetExtendedTcpTable(IntPtr tcpTable, ref int size, bool sort, int ipVersion, int tableClass, int reserved);
+        [StructLayout(LayoutKind.Sequential)]
+        internal unsafe struct Tcp6Row
+        {
+            public fixed byte localAddr[16];
+            public uint localScopeId;
+            public uint localPort; // in network byte order (order of bytes - 1,0,3,2)
+            public fixed byte remoteAddr[16];
+            public uint remoteScopeId;
+            public uint remotePort; // in network byte order (order of bytes - 1,0,3,2)
+            public TcpState state;
+            public int owningPid;
+        }
     }
 }

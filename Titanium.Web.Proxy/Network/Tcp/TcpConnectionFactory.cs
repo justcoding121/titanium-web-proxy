@@ -1,42 +1,47 @@
-﻿using StreamExtended.Network;
-using System;
-using System.Linq;
+﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Network.Tcp
 {
     /// <summary>
-    /// A class that manages Tcp Connection to server used by this proxy server
+    ///     A class that manages Tcp Connection to server used by this proxy server
     /// </summary>
     internal class TcpConnectionFactory
     {
         /// <summary>
-        ///  Creates a TCP connection to server
+        ///     Creates a TCP connection to server
         /// </summary>
-        /// <param name="server"></param>
         /// <param name="remoteHostName"></param>
         /// <param name="remotePort"></param>
+        /// <param name="applicationProtocols"></param>
         /// <param name="httpVersion"></param>
-        /// <param name="isHttps"></param>
+        /// <param name="decryptSsl"></param>
         /// <param name="isConnect"></param>
+        /// <param name="proxyServer"></param>
         /// <param name="upStreamEndPoint"></param>
         /// <param name="externalProxy"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        internal async Task<TcpConnection> CreateClient(ProxyServer server, 
-            string remoteHostName, int remotePort, Version httpVersion, bool isHttps,
-            bool isConnect, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy)
+        internal async Task<TcpConnection> CreateClient(string remoteHostName, int remotePort,
+            List<SslApplicationProtocol> applicationProtocols, Version httpVersion, bool decryptSsl, bool isConnect,
+            ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
+            CancellationToken cancellationToken)
         {
             bool useUpstreamProxy = false;
 
             //check if external proxy is set for HTTP/HTTPS
-            if (externalProxy != null && !(externalProxy.HostName == remoteHostName && externalProxy.Port == remotePort))
+            if (externalProxy != null &&
+                !(externalProxy.HostName == remoteHostName && externalProxy.Port == remotePort))
             {
                 useUpstreamProxy = true;
 
@@ -49,6 +54,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             TcpClient client = null;
             CustomBufferedStream stream = null;
+
+            bool http2Supported = false;
 
             try
             {
@@ -64,52 +71,69 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     await client.ConnectAsync(remoteHostName, remotePort);
                 }
 
-                stream = new CustomBufferedStream(client.GetStream(), server.BufferSize);
+                stream = new CustomBufferedStream(client.GetStream(), proxyServer.BufferSize);
 
-                if (useUpstreamProxy && (isConnect || isHttps))
+                if (useUpstreamProxy && (isConnect || decryptSsl))
                 {
-                    using (var writer = new HttpRequestWriter(stream, server.BufferSize))
+                    var writer = new HttpRequestWriter(stream, proxyServer.BufferSize);
+                    var connectRequest = new ConnectRequest
                     {
-                        await writer.WriteLineAsync($"CONNECT {remoteHostName}:{remotePort} HTTP/{httpVersion}");
-                        await writer.WriteLineAsync($"Host: {remoteHostName}:{remotePort}");
-                        await writer.WriteLineAsync("Connection: Keep-Alive");
+                        OriginalUrl = $"{remoteHostName}:{remotePort}",
+                        HttpVersion = httpVersion
+                    };
 
-                        if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
-                        {
-                            await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer);
-                            await writer.WriteLineAsync("Proxy-Authorization" + ": Basic " +
-                                                        Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                                                            externalProxy.UserName + ":" + externalProxy.Password)));
-                        }
+                    connectRequest.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionKeepAlive);
 
-                        await writer.WriteLineAsync();
-                        await writer.FlushAsync();
+                    if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
+                    {
+                        connectRequest.Headers.AddHeader(HttpHeader.ProxyConnectionKeepAlive);
+                        connectRequest.Headers.AddHeader(
+                            HttpHeader.GetProxyAuthorizationHeader(externalProxy.UserName, externalProxy.Password));
                     }
 
-                    using (var reader = new CustomBinaryReader(stream, server.BufferSize))
-                    {
-                        string result = await reader.ReadLineAsync();
+                    await writer.WriteRequestAsync(connectRequest, cancellationToken: cancellationToken);
 
-                        if (!new[] { "200 OK", "connection established" }.Any(s => result.ContainsIgnoreCase(s)))
+                    using (var reader = new CustomBinaryReader(stream, proxyServer.BufferSize))
+                    {
+                        string httpStatus = await reader.ReadLineAsync(cancellationToken);
+
+                        Response.ParseResponseLine(httpStatus, out _, out int statusCode, out string statusDescription);
+
+                        if (statusCode != 200 && !statusDescription.EqualsIgnoreCase("OK")
+                                              && !statusDescription.EqualsIgnoreCase("Connection Established"))
                         {
                             throw new Exception("Upstream proxy failed to create a secure tunnel");
                         }
 
-                        await reader.ReadAndIgnoreAllLinesAsync();
+                        await reader.ReadAndIgnoreAllLinesAsync(cancellationToken);
                     }
                 }
 
-                if (isHttps)
+                if (decryptSsl)
                 {
+                    var sslStream = new SslStream(stream, false, proxyServer.ValidateServerCertificate,
+                        proxyServer.SelectClientCertificate);
+                    stream = new CustomBufferedStream(sslStream, proxyServer.BufferSize);
 
-                    var sslStream = new SslStream(stream, false, server.ValidateServerCertificate, server.SelectClientCertificate);
-                    stream = new CustomBufferedStream(sslStream, server.BufferSize);
+                    var options = new SslClientAuthenticationOptions();
+                    options.ApplicationProtocols = applicationProtocols;
+                    if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)
+                    {
+                        options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
+                    }
 
-                    await sslStream.AuthenticateAsClientAsync(remoteHostName, null, server.SupportedSslProtocols, server.CheckCertificateRevocation);
+                    options.TargetHost = remoteHostName;
+                    options.ClientCertificates = null;
+                    options.EnabledSslProtocols = proxyServer.SupportedSslProtocols;
+                    options.CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation;
+                    await sslStream.AuthenticateAsClientAsync(options, cancellationToken);
+#if NETCOREAPP2_1
+                    http2Supported = sslStream.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
+#endif
                 }
 
-                client.ReceiveTimeout = server.ConnectionTimeOutSeconds * 1000;
-                client.SendTimeout = server.ConnectionTimeOutSeconds * 1000;
+                client.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                client.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
             }
             catch (Exception)
             {
@@ -118,18 +142,18 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 throw;
             }
 
-            server.UpdateServerConnectionCount(true);
-
-            return new TcpConnection
+            return new TcpConnection(proxyServer)
             {
                 UpStreamProxy = externalProxy,
                 UpStreamEndPoint = upStreamEndPoint,
                 HostName = remoteHostName,
                 Port = remotePort,
-                IsHttps = isHttps,
+                IsHttps = decryptSsl,
+                IsHttp2Supported = http2Supported,
                 UseUpstreamProxy = useUpstreamProxy,
                 TcpClient = client,
-                StreamReader = new CustomBinaryReader(stream, server.BufferSize),
+                StreamReader = new CustomBinaryReader(stream, proxyServer.BufferSize),
+                StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferSize),
                 Stream = stream,
                 Version = httpVersion
             };

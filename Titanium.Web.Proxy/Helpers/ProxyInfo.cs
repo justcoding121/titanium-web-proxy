@@ -3,30 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Helpers
 {
     internal class ProxyInfo
     {
-        public bool? AutoDetect { get; }
-
-        public string AutoConfigUrl { get; }
-
-        public int? ProxyEnable { get; }
-
-        public string ProxyServer { get; }
-
-        public string ProxyOverride { get; }
-
-        public bool BypassLoopback { get; }
-
-        public bool BypassOnLocal { get; }
-
-        public Dictionary<ProxyProtocolType, HttpSystemProxyValue> Proxies { get; }
-
-        public string[] BypassList { get; }
-
-        public ProxyInfo(bool? autoDetect, string autoConfigUrl, int? proxyEnable, string proxyServer, string proxyOverride)
+        internal ProxyInfo(bool? autoDetect, string autoConfigUrl, int? proxyEnable, string proxyServer,
+            string proxyOverride)
         {
             AutoDetect = autoDetect;
             AutoConfigUrl = autoConfigUrl;
@@ -68,10 +52,29 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
+        internal bool? AutoDetect { get; }
+
+        internal string AutoConfigUrl { get; }
+
+        internal int? ProxyEnable { get; }
+
+        internal string ProxyServer { get; }
+
+        internal string ProxyOverride { get; }
+
+        internal bool BypassLoopback { get; }
+
+        internal bool BypassOnLocal { get; }
+
+        internal Dictionary<ProxyProtocolType, HttpSystemProxyValue> Proxies { get; }
+
+        internal string[] BypassList { get; }
+
         private static string BypassStringEscape(string rawString)
         {
             var match =
-                new Regex("^(?<scheme>.*://)?(?<host>[^:]*)(?<port>:[0-9]{1,5})?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Match(rawString);
+                new Regex("^(?<scheme>.*://)?(?<host>[^:]*)(?<port>:[0-9]{1,5})?$",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Match(rawString);
             string empty1;
             string rawString1;
             string empty2;
@@ -92,10 +95,14 @@ namespace Titanium.Web.Proxy.Helpers
             string str2 = ConvertRegexReservedChars(rawString1);
             string str3 = ConvertRegexReservedChars(empty2);
             if (str1 == string.Empty)
+            {
                 str1 = "(?:.*://)?";
+            }
 
             if (str3 == string.Empty)
+            {
                 str3 = "(?::[0-9]{1,5})?";
+            }
 
             return "^" + str1 + str2 + str3 + "$";
         }
@@ -103,15 +110,21 @@ namespace Titanium.Web.Proxy.Helpers
         private static string ConvertRegexReservedChars(string rawString)
         {
             if (rawString.Length == 0)
+            {
                 return rawString;
+            }
 
             var stringBuilder = new StringBuilder();
             foreach (char ch in rawString)
             {
                 if ("#$()+.?[\\^{|".IndexOf(ch) != -1)
+                {
                     stringBuilder.Append('\\');
+                }
                 else if (ch == 42)
+                {
                     stringBuilder.Append('.');
+                }
 
                 stringBuilder.Append(ch);
             }
@@ -119,7 +132,7 @@ namespace Titanium.Web.Proxy.Helpers
             return stringBuilder.ToString();
         }
 
-        public static ProxyProtocolType? ParseProtocolType(string protocolTypeStr)
+        internal static ProxyProtocolType? ParseProtocolType(string protocolTypeStr)
         {
             if (protocolTypeStr == null)
             {
@@ -131,7 +144,8 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 protocolType = ProxyProtocolType.Http;
             }
-            else if (protocolTypeStr.Equals(Proxy.ProxyServer.UriSchemeHttps, StringComparison.InvariantCultureIgnoreCase))
+            else if (protocolTypeStr.Equals(Proxy.ProxyServer.UriSchemeHttps,
+                StringComparison.InvariantCultureIgnoreCase))
             {
                 protocolType = ProxyProtocolType.Https;
             }
@@ -140,16 +154,18 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        /// Parse the system proxy setting values
+        ///     Parse the system proxy setting values
         /// </summary>
         /// <param name="proxyServerValues"></param>
         /// <returns></returns>
-        public static List<HttpSystemProxyValue> GetSystemProxyValues(string proxyServerValues)
+        internal static List<HttpSystemProxyValue> GetSystemProxyValues(string proxyServerValues)
         {
             var result = new List<HttpSystemProxyValue>();
 
             if (string.IsNullOrWhiteSpace(proxyServerValues))
+            {
                 return result;
+            }
 
             var proxyValues = proxyServerValues.Split(';');
 
@@ -161,14 +177,16 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 var parsedValue = ParseProxyValue(proxyServerValues);
                 if (parsedValue != null)
+                {
                     result.Add(parsedValue);
+                }
             }
 
             return result;
         }
 
         /// <summary>
-        /// Parses the system proxy setting string
+        ///     Parses the system proxy setting string
         /// </summary>
         /// <param name="value"></param>
         /// <returns></returns>
@@ -189,7 +207,7 @@ namespace Titanium.Web.Proxy.Helpers
                     {
                         HostName = endPointParts[0],
                         Port = int.Parse(endPointParts[1]),
-                        ProtocolType = protocolType.Value,
+                        ProtocolType = protocolType.Value
                     };
                 }
             }

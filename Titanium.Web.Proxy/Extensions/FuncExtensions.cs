@@ -1,46 +1,32 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.EventArguments;
 
 namespace Titanium.Web.Proxy.Extensions
 {
     internal static class FuncExtensions
     {
-        public static void InvokeParallel<T>(this Func<object, T, Task> callback, object sender, T args)
+        internal static async Task InvokeAsync<T>(this AsyncEventHandler<T> callback, object sender, T args,
+            ExceptionHandler exceptionFunc)
         {
             var invocationList = callback.GetInvocationList();
-            var handlerTasks = new Task[invocationList.Length];
 
-            for (int i = 0; i < invocationList.Length; i++)
+            foreach (var @delegate in invocationList)
             {
-                handlerTasks[i] = ((Func<object, T, Task>)invocationList[i])(sender, args);
+                await InternalInvokeAsync((AsyncEventHandler<T>)@delegate, sender, args, exceptionFunc);
             }
-
-            Task.WhenAll(handlerTasks).Wait();
         }
 
-        public static async Task InvokeParallelAsync<T>(this Func<object, T, Task> callback, object sender, T args, Action<Exception> exceptionFunc)
-        {
-            var invocationList = callback.GetInvocationList();
-            var handlerTasks = new Task[invocationList.Length];
-
-            for (int i = 0; i < invocationList.Length; i++)
-            {
-                handlerTasks[i] = InvokeAsync((Func<object, T, Task>)invocationList[i], sender, args, exceptionFunc);
-            }
-
-            await Task.WhenAll(handlerTasks);
-        }
-
-        private static async Task InvokeAsync<T>(Func<object, T, Task> callback, object sender, T args, Action<Exception> exceptionFunc)
+        private static async Task InternalInvokeAsync<T>(AsyncEventHandler<T> callback, object sender, T args,
+            ExceptionHandler exceptionFunc)
         {
             try
             {
                 await callback(sender, args);
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                var ex2 = new Exception("Exception thrown in user event", ex);
-                exceptionFunc(ex2);
+                exceptionFunc(new Exception("Exception thrown in user event", e));
             }
         }
     }

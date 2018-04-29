@@ -1,6 +1,6 @@
-﻿using StreamExtended;
-using System;
+﻿using System;
 using System.Net;
+using StreamExtended;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.Http
         public ServerHelloInfo ServerHelloInfo { get; set; }
 
         /// <summary>
-        /// Creates a successfull CONNECT response
+        ///     Creates a successfull CONNECT response
         /// </summary>
         /// <param name="httpVersion"></param>
         /// <returns></returns>
@@ -22,7 +22,6 @@ namespace Titanium.Web.Proxy.Http
                 StatusDescription = "Connection Established"
             };
 
-            response.Headers.AddHeader("Timestamp", DateTime.Now.ToString());
             return response;
         }
     }

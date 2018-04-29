@@ -1,4 +1,5 @@
 using System.Net;
+using System.Web;
 
 namespace Titanium.Web.Proxy.Http.Responses
 {
@@ -15,9 +16,13 @@ namespace Titanium.Web.Proxy.Http.Responses
         {
             StatusCode = (int)status;
 
+#if NET45
+            StatusDescription = HttpWorkerRequest.GetStatusDescription(StatusCode);
+#else
             //todo: this is not really correct, status description should contain spaces, too
             //see: https://tools.ietf.org/html/rfc7231#section-6.1
             StatusDescription = status.ToString();
+#endif
         }
 
         /// <summary>

@@ -3,12 +3,12 @@
 namespace Titanium.Web.Proxy.Exceptions
 {
     /// <summary>
-    /// Base class exception associated with this proxy implementation
+    ///     Base class exception associated with this proxy server.
     /// </summary>
     public abstract class ProxyException : Exception
     {
         /// <summary>
-        /// Instantiate a new instance of this exception - must be invoked by derived classes' constructors
+        ///     Instantiate a new instance of this exception - must be invoked by derived classes' constructors
         /// </summary>
         /// <param name="message">Exception message</param>
         protected ProxyException(string message) : base(message)
@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.Exceptions
         }
 
         /// <summary>
-        /// Instantiate this exception - must be invoked by derived classes' constructors
+        ///     Instantiate this exception - must be invoked by derived classes' constructors
         /// </summary>
         /// <param name="message">Excception message</param>
         /// <param name="innerException">Inner exception associated</param>

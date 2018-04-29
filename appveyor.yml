@@ -24,7 +24,7 @@ configuration: Release
 
 # to run your custom scripts instead of automatic MSBuild
 build_script:
-  - cmd: .\build.bat Package
+  - cmd: build.bat Package
 
 assembly_info:
   patch: true
@@ -39,7 +39,9 @@ test: on
 # skip building commits that add tags (such as release tag)
 skip_tags: true
 
-
+skip_commits:
+  author: buildbot121
+  
 #---------------------------------#
 #       artifacts configuration   #
 #---------------------------------#
@@ -50,14 +52,19 @@ nuget:
 artifacts:
   - path: '**\Titanium.Web.Proxy.*.nupkg'
 
+environment:
+  github_access_token:
+    secure: BGdKiI7FwHGkFt+/OmgZDkE1hzLqLrTxcc9c+joVqGyO4LvesHb1sR6hzisVwVPm
+  github_email:
+    secure: wvYod3JLufbIBkavRXlCP724wJkhqR2RRuLLaPnqfps=
+  nuget_access_token:
+    secure: ZbRmjOcp+TDllRV1wxqLZjdRV7hld388rXlWVJuGGiQleomP9Ku+Nsy3a75E7/9k
 deploy:
 - provider: GitHub
-  auth_token:
-    secure: ItVm+50ASpDXx1w+FCe2NTpZxqCbjRWfugLjk/bqBIi00DvPnSGOV1rIQ5hnwBW3
+  auth_token: $(github_access_token)
   on:
     branch: /(stable|beta)/ 
 - provider: NuGet
-  api_key:
-    secure: ZbRmjOcp+TDllRV1wxqLZjdRV7hld388rXlWVJuGGiQleomP9Ku+Nsy3a75E7/9k
+  api_key: $(nuget_access_token)
   on:
     branch: /(stable|beta)/
