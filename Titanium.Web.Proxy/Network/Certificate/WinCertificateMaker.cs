@@ -2,9 +2,11 @@
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Network.Certificate
 {
+    /// <inheritdoc />
     /// <summary>
     ///     Certificate Maker - uses MakeCert
     ///     Calls COM objects using reflection
@@ -104,8 +106,8 @@ namespace Titanium.Web.Proxy.Network.Certificate
             }
 
             typeX500DN.InvokeMember("Encode", BindingFlags.InvokeMethod, null, x500RootCertDN, typeValue);
-            object sharedPrivateKey = null;
 
+            object sharedPrivateKey = null;
             if (!isRoot)
             {
                 sharedPrivateKey = this.sharedPrivateKey;
@@ -276,49 +278,27 @@ namespace Titanium.Web.Proxy.Network.Certificate
             bool switchToMTAIfNeeded, X509Certificate2 signingCert = null,
             CancellationToken cancellationToken = default)
         {
-            X509Certificate2 certificate = null;
             if (switchToMTAIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
             {
-                using (var manualResetEvent = new ManualResetEventSlim(false))
-                {
-                    ThreadPool.QueueUserWorkItem(o =>
-                    {
-                        try
-                        {
-                            certificate = MakeCertificateInternal(sSubjectCN, isRoot, false, signingCert);
-                        }
-                        catch (Exception ex)
-                        {
-                            exceptionFunc(new Exception("Failed to create Win certificate", ex));
-                        }
-
-                        if (!cancellationToken.IsCancellationRequested)
-                        {
-                            manualResetEvent.Set();
-                        }
-                    });
-
-                    manualResetEvent.Wait(TimeSpan.FromMinutes(1), cancellationToken);
-                }
-
-                return certificate;
+                return Task.Run(() => MakeCertificateInternal(sSubjectCN, isRoot, false, signingCert),
+                    cancellationToken).Result;
             }
 
             //Subject
             string fullSubject = $"CN={sSubjectCN}";
             //Sig Algo
-            string HashAlgo = "SHA256";
+            const string hashAlgo = "SHA256";
             //Grace Days
-            int GraceDays = -366;
+            const int graceDays = -366;
             //ValiDays
-            int ValidDays = 1825;
+            const int validDays = 1825;
             //KeyLength
-            int keyLength = 2048;
+            const int keyLength = 2048;
 
-            var graceTime = DateTime.Now.AddDays(GraceDays);
+            var graceTime = DateTime.Now.AddDays(graceDays);
             var now = DateTime.Now;
-            certificate = MakeCertificate(isRoot, sSubjectCN, fullSubject, keyLength, HashAlgo, graceTime,
-                now.AddDays(ValidDays), isRoot ? null : signingCert);
+            var certificate = MakeCertificate(isRoot, sSubjectCN, fullSubject, keyLength, hashAlgo, graceTime,
+                now.AddDays(validDays), isRoot ? null : signingCert);
             return certificate;
         }
     }
