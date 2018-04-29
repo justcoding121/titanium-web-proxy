@@ -680,6 +680,10 @@ namespace Titanium.Web.Proxy
             endPoint.Listener.Server.Dispose();
         }
 
+        /// <summary>
+        ///     Update client connection count.
+        /// </summary>
+        /// <param name="increment"></param>
         internal void UpdateClientConnectionCount(bool increment)
         {
             if (increment)
@@ -694,6 +698,10 @@ namespace Titanium.Web.Proxy
             ClientConnectionCountChanged?.Invoke(this, EventArgs.Empty);
         }
 
+        /// <summary>
+        ///     Update server connection count.
+        /// </summary>
+        /// <param name="increment"></param>
         internal void UpdateServerConnectionCount(bool increment)
         {
             if (increment)
