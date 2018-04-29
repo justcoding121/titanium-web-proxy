@@ -2601,44 +2601,6 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.TrustRootCertificateAsAdmin
   nameWithType: CertificateManager.TrustRootCertificateAsAdmin
-- uid: Titanium.Web.Proxy.Network.WinAuth
-  name: Titanium.Web.Proxy.Network.WinAuth
-  href: api/Titanium.Web.Proxy.Network.WinAuth.html
-  commentId: N:Titanium.Web.Proxy.Network.WinAuth
-  fullName: Titanium.Web.Proxy.Network.WinAuth
-  nameWithType: Titanium.Web.Proxy.Network.WinAuth
-- uid: Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler
-  name: WinAuthHandler
-  href: api/Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.html
-  commentId: T:Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler
-  fullName: Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler
-  nameWithType: WinAuthHandler
-- uid: Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.GetFinalAuthToken(System.String,System.String,System.Guid)
-  name: GetFinalAuthToken(String, String, Guid)
-  href: api/Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.html#Titanium_Web_Proxy_Network_WinAuth_WinAuthHandler_GetFinalAuthToken_System_String_System_String_System_Guid_
-  commentId: M:Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.GetFinalAuthToken(System.String,System.String,System.Guid)
-  fullName: Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.GetFinalAuthToken(System.String, System.String, System.Guid)
-  nameWithType: WinAuthHandler.GetFinalAuthToken(String, String, Guid)
-- uid: Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.GetFinalAuthToken*
-  name: GetFinalAuthToken
-  href: api/Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.html#Titanium_Web_Proxy_Network_WinAuth_WinAuthHandler_GetFinalAuthToken_
-  commentId: Overload:Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.GetFinalAuthToken
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.GetFinalAuthToken
-  nameWithType: WinAuthHandler.GetFinalAuthToken
-- uid: Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.GetInitialAuthToken(System.String,System.String,System.Guid)
-  name: GetInitialAuthToken(String, String, Guid)
-  href: api/Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.html#Titanium_Web_Proxy_Network_WinAuth_WinAuthHandler_GetInitialAuthToken_System_String_System_String_System_Guid_
-  commentId: M:Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.GetInitialAuthToken(System.String,System.String,System.Guid)
-  fullName: Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.GetInitialAuthToken(System.String, System.String, System.Guid)
-  nameWithType: WinAuthHandler.GetInitialAuthToken(String, String, Guid)
-- uid: Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.GetInitialAuthToken*
-  name: GetInitialAuthToken
-  href: api/Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.html#Titanium_Web_Proxy_Network_WinAuth_WinAuthHandler_GetInitialAuthToken_
-  commentId: Overload:Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.GetInitialAuthToken
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler.GetInitialAuthToken
-  nameWithType: WinAuthHandler.GetInitialAuthToken
 - uid: Titanium.Web.Proxy.ProxyServer
   name: ProxyServer
   href: api/Titanium.Web.Proxy.ProxyServer.html
