@@ -1,0 +1,855 @@
+﻿<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+  
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>Class SessionEventArgs
+   | Titanium Web Proxy </title>
+    <meta name="viewport" content="width=device-width">
+    <meta name="title" content="Class SessionEventArgs
+   | Titanium Web Proxy ">
+    <meta name="generator" content="docfx 2.35.2.0">
+    
+    <link rel="shortcut icon" href="../favicon.ico">
+    <link rel="stylesheet" href="../styles/docfx.vendor.css">
+    <link rel="stylesheet" href="../styles/docfx.css">
+    <link rel="stylesheet" href="../styles/main.css">
+    <meta property="docfx:navrel" content="">
+    <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+        
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+              
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+        
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+        
+        <div id="search-results">
+          <div class="search-list"></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination"></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+        
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs">
+  
+  
+  <h1 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs" class="text-break">Class SessionEventArgs
+  </h1>
+  <div class="markdown level0 summary"><p>Holds info related to a single proxy session (single request/response sequence).
+A proxy session is bounded to a single connection from client.
+A proxy session ends when client terminates connection to proxy
+or when server terminates connection from proxy.</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritance">
+    <h5>Inheritance</h5>
+    <div class="level0"><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object">Object</a></div>
+    <div class="level1"><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.eventargs">EventArgs</a></div>
+    <div class="level2"><a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a></div>
+    <div class="level3"><span class="xref">SessionEventArgs</span></div>
+  </div>
+  <div classs="implements">
+    <h5>Implements</h5>
+    <div><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.idisposable">IDisposable</a></div>
+  </div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_BufferSize">SessionEventArgsBase.BufferSize</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ExceptionFunc">SessionEventArgsBase.ExceptionFunc</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Id">SessionEventArgsBase.Id</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsHttps">SessionEventArgsBase.IsHttps</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ClientEndPoint">SessionEventArgsBase.ClientEndPoint</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_WebSession">SessionEventArgsBase.WebSession</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_CustomUpStreamProxyUsed">SessionEventArgsBase.CustomUpStreamProxyUsed</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_LocalEndPoint">SessionEventArgsBase.LocalEndPoint</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsTransparent">SessionEventArgsBase.IsTransparent</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Exception">SessionEventArgsBase.Exception</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_DataSent">SessionEventArgsBase.DataSent</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_DataReceived">SessionEventArgsBase.DataReceived</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_TerminateSession">SessionEventArgsBase.TerminateSession()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.eventargs.empty">EventArgs.Empty</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.tostring#System_Object_ToString">Object.ToString()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.equals#System_Object_Equals_System_Object_">Object.Equals(Object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.equals#System_Object_Equals_System_Object_System_Object_">Object.Equals(Object, Object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.referenceequals#System_Object_ReferenceEquals_System_Object_System_Object_">Object.ReferenceEquals(Object, Object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.gethashcode#System_Object_GetHashCode">Object.GetHashCode()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.gettype#System_Object_GetType">Object.GetType()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.memberwiseclone#System_Object_MemberwiseClone">Object.MemberwiseClone()</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.Web.Proxy.EventArguments.html">Titanium.Web.Proxy.EventArguments</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public class SessionEventArgs : SessionEventArgsBase, IDisposable</code></pre>
+  </div>
+  <h3 id="constructors">Constructors
+  </h3>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs__ctor_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.#ctor*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs__ctor_System_Int32_Titanium_Web_Proxy_Models_ProxyEndPoint_Titanium_Web_Proxy_Http_Request_System_Threading_CancellationTokenSource_Titanium_Web_Proxy_ExceptionHandler_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.#ctor(System.Int32,Titanium.Web.Proxy.Models.ProxyEndPoint,Titanium.Web.Proxy.Http.Request,System.Threading.CancellationTokenSource,Titanium.Web.Proxy.ExceptionHandler)">SessionEventArgs(Int32, ProxyEndPoint, Request, CancellationTokenSource, ExceptionHandler)</h4>
+  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">protected SessionEventArgs(int bufferSize, ProxyEndPoint endPoint, Request request, CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a></td>
+        <td><span class="parametername">bufferSize</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html">ProxyEndPoint</a></td>
+        <td><span class="parametername">endPoint</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Http.Request.html">Request</a></td>
+        <td><span class="parametername">request</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.cancellationtokensource">CancellationTokenSource</a></td>
+        <td><span class="parametername">cancellationTokenSource</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.ExceptionHandler.html">ExceptionHandler</a></td>
+        <td><span class="parametername">exceptionFunc</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="properties">Properties
+  </h3>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_ReRequest_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.ReRequest*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_ReRequest" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.ReRequest">ReRequest</h4>
+  <div class="markdown level1 summary"><p>Should we send the request again ?</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool ReRequest { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="methods">Methods
+  </h3>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Dispose_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Dispose*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Dispose" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Dispose">Dispose()</h4>
+  <div class="markdown level1 summary"><p>Implement any cleanup here</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public override void Dispose()</code></pre>
+  </div>
+  <h5 class="overrides">Overrides</h5>
+  <div><a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Dispose">SessionEventArgsBase.Dispose()</a></div>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader})">GenericResponse(Byte[], HttpStatusCode, Dictionary&lt;String, HttpHeader&gt;)</h4>
+  <div class="markdown level1 summary"><p>Before request is made to server respond with the specified byte[],
+the specified status  to client. And then ignore the request.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void GenericResponse(byte[] result, HttpStatusCode status, Dictionary&lt;string, HttpHeader&gt; headers)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">System.Byte</span>[]</td>
+        <td><span class="parametername">result</span></td>
+        <td><p>The bytes to sent.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.net.httpstatuscode">HttpStatusCode</a></td>
+        <td><span class="parametername">status</span></td>
+        <td><p>The HTTP status code.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.dictionary-2">Dictionary</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
+        <td><span class="parametername">headers</span></td>
+        <td><p>The HTTP headers.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader})">GenericResponse(String, HttpStatusCode, Dictionary&lt;String, HttpHeader&gt;)</h4>
+  <div class="markdown level1 summary"><p>Before request is made to server 
+respond with the specified HTML string and the specified status to client.
+And then ignore the request. </p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void GenericResponse(string html, HttpStatusCode status, Dictionary&lt;string, HttpHeader&gt; headers = null)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><span class="parametername">html</span></td>
+        <td><p>The html content.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.net.httpstatuscode">HttpStatusCode</a></td>
+        <td><span class="parametername">status</span></td>
+        <td><p>The HTTP status code.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.dictionary-2">Dictionary</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
+        <td><span class="parametername">headers</span></td>
+        <td><p>The HTTP headers.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBody_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBody*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBody_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBody(System.Threading.CancellationToken)">GetRequestBody(CancellationToken)</h4>
+  <div class="markdown level1 summary"><p>Gets the request body as bytes.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task&lt;byte[]&gt; GetRequestBody(CancellationToken cancellationToken = default(CancellationToken))</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></td>
+        <td><span class="parametername">cancellationToken</span></td>
+        <td><p>Optional cancellation token for this async task.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<span class="xref">System.Byte</span>[]&gt;</td>
+        <td><p>The body as bytes.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBodyAsString_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBodyAsString*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBodyAsString_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBodyAsString(System.Threading.CancellationToken)">GetRequestBodyAsString(CancellationToken)</h4>
+  <div class="markdown level1 summary"><p>Gets the request body as string.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task&lt;string&gt; GetRequestBodyAsString(CancellationToken cancellationToken = default(CancellationToken))</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></td>
+        <td><span class="parametername">cancellationToken</span></td>
+        <td><p>Optional cancellation token for this async task.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>&gt;</td>
+        <td><p>The body as string.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBody_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBody*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBody_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBody(System.Threading.CancellationToken)">GetResponseBody(CancellationToken)</h4>
+  <div class="markdown level1 summary"><p>Gets the response body as bytes.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task&lt;byte[]&gt; GetResponseBody(CancellationToken cancellationToken = default(CancellationToken))</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></td>
+        <td><span class="parametername">cancellationToken</span></td>
+        <td><p>Optional cancellation token for this async task.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<span class="xref">System.Byte</span>[]&gt;</td>
+        <td><p>The resulting bytes.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBodyAsString_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBodyAsString*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBodyAsString_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBodyAsString(System.Threading.CancellationToken)">GetResponseBodyAsString(CancellationToken)</h4>
+  <div class="markdown level1 summary"><p>Gets the response body as string.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task&lt;string&gt; GetResponseBodyAsString(CancellationToken cancellationToken = default(CancellationToken))</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></td>
+        <td><span class="parametername">cancellationToken</span></td>
+        <td><p>Optional cancellation token for this async task.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>&gt;</td>
+        <td><p>The string body.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader})">Ok(Byte[], Dictionary&lt;String, HttpHeader&gt;)</h4>
+  <div class="markdown level1 summary"><p>Before request is made to server respond with the specified byte[] to client
+and ignore the request. </p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void Ok(byte[] result, Dictionary&lt;string, HttpHeader&gt; headers = null)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">System.Byte</span>[]</td>
+        <td><span class="parametername">result</span></td>
+        <td><p>The html content bytes.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.dictionary-2">Dictionary</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
+        <td><span class="parametername">headers</span></td>
+        <td><p>The HTTP headers.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader})">Ok(String, Dictionary&lt;String, HttpHeader&gt;)</h4>
+  <div class="markdown level1 summary"><p>Before request is made to server respond with the specified HTML string to client
+and ignore the request. </p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void Ok(string html, Dictionary&lt;string, HttpHeader&gt; headers = null)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><span class="parametername">html</span></td>
+        <td><p>HTML content to sent.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.dictionary-2">Dictionary</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
+        <td><span class="parametername">headers</span></td>
+        <td><p>HTTP response headers.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Redirect_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Redirect*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Redirect_System_String_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Redirect(System.String)">Redirect(String)</h4>
+  <div class="markdown level1 summary"><p>Redirect to provided URL.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void Redirect(string url)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><span class="parametername">url</span></td>
+        <td><p>The URL to redirect.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Respond*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_Titanium_Web_Proxy_Http_Response_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Respond(Titanium.Web.Proxy.Http.Response)">Respond(Response)</h4>
+  <div class="markdown level1 summary"><p>Respond with given response object to client.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void Respond(Response response)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Http.Response.html">Response</a></td>
+        <td><span class="parametername">response</span></td>
+        <td><p>The response object.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBody_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBody*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBody_System_Byte___" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBody(System.Byte[])">SetRequestBody(Byte[])</h4>
+  <div class="markdown level1 summary"><p>Sets the request body.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void SetRequestBody(byte[] body)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">System.Byte</span>[]</td>
+        <td><span class="parametername">body</span></td>
+        <td><p>The request body bytes.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBodyString_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBodyString*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBodyString_System_String_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBodyString(System.String)">SetRequestBodyString(String)</h4>
+  <div class="markdown level1 summary"><p>Sets the body with the specified string.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void SetRequestBodyString(string body)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><span class="parametername">body</span></td>
+        <td><p>The request body string to set.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBody_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBody*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBody_System_Byte___" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBody(System.Byte[])">SetResponseBody(Byte[])</h4>
+  <div class="markdown level1 summary"><p>Set the response body bytes.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void SetResponseBody(byte[] body)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">System.Byte</span>[]</td>
+        <td><span class="parametername">body</span></td>
+        <td><p>The body bytes to set.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBodyString_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBodyString*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBodyString_System_String_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBodyString(System.String)">SetResponseBodyString(String)</h4>
+  <div class="markdown level1 summary"><p>Replace the response body with the specified string.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void SetResponseBodyString(string body)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><span class="parametername">body</span></td>
+        <td><p>The body string to set.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_TerminateServerConnection_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.TerminateServerConnection*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_TerminateServerConnection" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.TerminateServerConnection">TerminateServerConnection()</h4>
+  <div class="markdown level1 summary"><p>Terminate the connection to server.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void TerminateServerConnection()</code></pre>
+  </div>
+  <h3 id="events">Events
+  </h3>
+  
+  
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_MultipartRequestPartSent" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.MultipartRequestPartSent">MultipartRequestPartSent</h4>
+  <div class="markdown level1 summary"><p>Occurs when multipart request part sent.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event EventHandler&lt;MultipartRequestPartSentEventArgs&gt; MultipartRequestPartSent</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.eventhandler-1">EventHandler</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs.html">MultipartRequestPartSentEventArgs</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="implements">Implements</h3>
+  <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.idisposable">System.IDisposable</a>
+  </div>
+</article>
+          </div>
+          
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+              <!-- <p><a class="back-to-top" href="#top">Back to top</a><p> -->
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+            
+            <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+    
+    <script type="text/javascript" src="../styles/docfx.vendor.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

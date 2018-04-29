@@ -6,18 +6,18 @@ using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    public class Ref<T>
+    internal class Ref<T>
     {
-        public Ref()
+        internal Ref()
         {
         }
 
-        public Ref(T value)
+        internal Ref(T value)
         {
             Value = value;
         }
 
-        public T Value { get; set; }
+        internal T Value { get; set; }
 
         public override string ToString()
         {

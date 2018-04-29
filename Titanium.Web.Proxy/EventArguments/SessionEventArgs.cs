@@ -15,10 +15,10 @@ using Titanium.Web.Proxy.Models;
 namespace Titanium.Web.Proxy.EventArguments
 {
     /// <summary>
-    /// Holds info related to a single proxy session (single request/response sequence)
-    /// A proxy session is bounded to a single connection from client
+    /// Holds info related to a single proxy session (single request/response sequence).
+    /// A proxy session is bounded to a single connection from client.
     /// A proxy session ends when client terminates connection to proxy
-    /// or when server terminates connection from proxy
+    /// or when server terminates connection from proxy.
     /// </summary>
     public class SessionEventArgs : SessionEventArgsBase
     {
@@ -47,7 +47,7 @@ namespace Titanium.Web.Proxy.EventArguments
         private bool hasMulipartEventSubscribers => MultipartRequestPartSent != null;
 
         /// <summary>
-        /// Should we send the request again 
+        /// Should we send the request again ?
         /// </summary>
         public bool ReRequest
         {
@@ -346,9 +346,10 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Gets the request body as bytes
+        /// Gets the request body as bytes.
         /// </summary>
-        /// <returns></returns>
+        /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
+        /// <returns>The body as bytes.</returns>
         public async Task<byte[]> GetRequestBody(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Request.IsBodyRead)
@@ -360,9 +361,10 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Gets the request body as string
+        /// Gets the request body as string.
         /// </summary>
-        /// <returns></returns>
+        /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
+        /// <returns>The body as string.</returns>
         public async Task<string> GetRequestBodyAsString(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Request.IsBodyRead)
@@ -374,9 +376,9 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Sets the request body
+        /// Sets the request body.
         /// </summary>
-        /// <param name="body"></param>
+        /// <param name="body">The request body bytes.</param>
         public void SetRequestBody(byte[] body)
         {
             var request = WebSession.Request;
@@ -389,9 +391,9 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Sets the body with the specified string
+        /// Sets the body with the specified string.
         /// </summary>
-        /// <param name="body"></param>
+        /// <param name="body">The request body string to set.</param>
         public void SetRequestBodyString(string body)
         {
             if (WebSession.Request.Locked)
@@ -402,10 +404,12 @@ namespace Titanium.Web.Proxy.EventArguments
             SetRequestBody(WebSession.Request.Encoding.GetBytes(body));
         }
 
+
         /// <summary>
-        /// Gets the response body as byte array
+        /// Gets the response body as bytes.
         /// </summary>
-        /// <returns></returns>
+        /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
+        /// <returns>The resulting bytes.</returns>
         public async Task<byte[]> GetResponseBody(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Response.IsBodyRead)
@@ -417,9 +421,10 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Gets the response body as string
+        /// Gets the response body as string.
         /// </summary>
-        /// <returns></returns>
+        /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
+        /// <returns>The string body.</returns>
         public async Task<string> GetResponseBodyAsString(CancellationToken cancellationToken = default)
         {
             if (!WebSession.Response.IsBodyRead)
@@ -431,9 +436,9 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Set the response body bytes
+        /// Set the response body bytes.
         /// </summary>
-        /// <param name="body"></param>
+        /// <param name="body">The body bytes to set.</param>
         public void SetResponseBody(byte[] body)
         {
             if (!WebSession.Request.Locked)
@@ -446,9 +451,9 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Replace the response body with the specified string
+        /// Replace the response body with the specified string.
         /// </summary>
-        /// <param name="body"></param>
+        /// <param name="body">The body string to set.</param>
         public void SetResponseBodyString(string body)
         {
             if (!WebSession.Request.Locked)
@@ -462,12 +467,11 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Before request is made to server 
-        /// Respond with the specified HTML string to client
-        /// and ignore the request 
+        /// Before request is made to server respond with the specified HTML string to client
+        /// and ignore the request. 
         /// </summary>
-        /// <param name="html"></param>
-        /// <param name="headers"></param>
+        /// <param name="html">HTML content to sent.</param>
+        /// <param name="headers">HTTP response headers.</param>
         public void Ok(string html, Dictionary<string, HttpHeader> headers = null)
         {
             var response = new OkResponse();
@@ -483,12 +487,11 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Before request is made to server 
-        /// Respond with the specified byte[] to client
-        /// and ignore the request 
+        /// Before request is made to server respond with the specified byte[] to client
+        /// and ignore the request. 
         /// </summary>
-        /// <param name="result"></param>
-        /// <param name="headers"></param>
+        /// <param name="result">The html content bytes.</param>
+        /// <param name="headers">The HTTP headers.</param>
         public void Ok(byte[] result, Dictionary<string, HttpHeader> headers = null)
         {
             var response = new OkResponse();
@@ -501,13 +504,12 @@ namespace Titanium.Web.Proxy.EventArguments
 
         /// <summary>
         /// Before request is made to server 
-        /// Respond with the specified HTML string to client
-        /// and the specified status
-        /// and ignore the request 
+        /// respond with the specified HTML string and the specified status to client.
+        /// And then ignore the request. 
         /// </summary>
-        /// <param name="html"></param>
-        /// <param name="status"></param>
-        /// <param name="headers"></param>
+        /// <param name="html">The html content.</param>
+        /// <param name="status">The HTTP status code.</param>
+        /// <param name="headers">The HTTP headers.</param>
         /// <returns></returns>
         public void GenericResponse(string html, HttpStatusCode status, Dictionary<string, HttpHeader> headers = null)
         {
@@ -520,14 +522,12 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Before request is made to server
-        /// Respond with the specified byte[] to client
-        /// and the specified status
-        /// and ignore the request
+        /// Before request is made to server respond with the specified byte[],
+        /// the specified status  to client. And then ignore the request.
         /// </summary>
-        /// <param name="result"></param>
-        /// <param name="status"></param>
-        /// <param name="headers"></param>
+        /// <param name="result">The bytes to sent.</param>
+        /// <param name="status">The HTTP status code.</param>
+        /// <param name="headers">The HTTP headers.</param>
         /// <returns></returns>
         public void GenericResponse(byte[] result, HttpStatusCode status, Dictionary<string, HttpHeader> headers)
         {
@@ -540,9 +540,9 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Redirect to URL.
+        /// Redirect to provided URL.
         /// </summary>
-        /// <param name="url"></param>
+        /// <param name="url">The URL to redirect.</param>
         /// <returns></returns>
         public void Redirect(string url)
         {
@@ -554,7 +554,10 @@ namespace Titanium.Web.Proxy.EventArguments
             Respond(response);
         }
 
-        /// a generic responder method 
+      /// <summary>
+      /// Respond with given response object to client.
+      /// </summary>
+      /// <param name="response">The response object.</param>
         public void Respond(Response response)
         {
             if (WebSession.Request.Locked)
@@ -579,13 +582,16 @@ namespace Titanium.Web.Proxy.EventArguments
             }
         }
 
+        /// <summary>
+        /// Terminate the connection to server.
+        /// </summary>
         public void TerminateServerConnection()
         {
             WebSession.Response.TerminateResponse = true;
         }
 
         /// <summary>
-        /// implement any cleanup here
+        /// Implement any cleanup here
         /// </summary>
         public override void Dispose()
         {

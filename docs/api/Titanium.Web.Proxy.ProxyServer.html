@@ -1,0 +1,1190 @@
+﻿<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+  
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>Class ProxyServer
+   | Titanium Web Proxy </title>
+    <meta name="viewport" content="width=device-width">
+    <meta name="title" content="Class ProxyServer
+   | Titanium Web Proxy ">
+    <meta name="generator" content="docfx 2.35.2.0">
+    
+    <link rel="shortcut icon" href="../favicon.ico">
+    <link rel="stylesheet" href="../styles/docfx.vendor.css">
+    <link rel="stylesheet" href="../styles/docfx.css">
+    <link rel="stylesheet" href="../styles/main.css">
+    <meta property="docfx:navrel" content="">
+    <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+        
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+              
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+        
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+        
+        <div id="search-results">
+          <div class="search-list"></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination"></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+        
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.ProxyServer">
+  
+  
+  <h1 id="Titanium_Web_Proxy_ProxyServer" data-uid="Titanium.Web.Proxy.ProxyServer" class="text-break">Class ProxyServer
+  </h1>
+  <div class="markdown level0 summary"><p>This object is the backbone of proxy. One can create as many instances as needed.
+However care should be taken to avoid using the same listening ports across multiple instances. </p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritance">
+    <h5>Inheritance</h5>
+    <div class="level0"><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object">Object</a></div>
+    <div class="level1"><span class="xref">ProxyServer</span></div>
+  </div>
+  <div classs="implements">
+    <h5>Implements</h5>
+    <div><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.idisposable">IDisposable</a></div>
+  </div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.tostring#System_Object_ToString">Object.ToString()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.equals#System_Object_Equals_System_Object_">Object.Equals(Object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.equals#System_Object_Equals_System_Object_System_Object_">Object.Equals(Object, Object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.referenceequals#System_Object_ReferenceEquals_System_Object_System_Object_">Object.ReferenceEquals(Object, Object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.gethashcode#System_Object_GetHashCode">Object.GetHashCode()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.gettype#System_Object_GetType">Object.GetType()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.memberwiseclone#System_Object_MemberwiseClone">Object.MemberwiseClone()</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.Web.Proxy.html">Titanium.Web.Proxy</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_ProxyServer_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public class ProxyServer : IDisposable</code></pre>
+  </div>
+  <h3 id="constructors">Constructors
+  </h3>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer__ctor_" data-uid="Titanium.Web.Proxy.ProxyServer.#ctor*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer__ctor_System_Boolean_System_Boolean_System_Boolean_" data-uid="Titanium.Web.Proxy.ProxyServer.#ctor(System.Boolean,System.Boolean,System.Boolean)">ProxyServer(Boolean, Boolean, Boolean)</h4>
+  <div class="markdown level1 summary"><p>Initializes a new instance of ProxyServer class with provided parameters.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public ProxyServer(bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false, bool trustRootCertificateAsAdmin = false)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">userTrustRootCertificate</span></td>
+        <td><p>Should fake HTTPS certificate be trusted by this machine&apos;s user certificate store?</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">machineTrustRootCertificate</span></td>
+        <td><p>Should fake HTTPS certificate be trusted by this machine&apos;s certificate store?</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">trustRootCertificateAsAdmin</span></td>
+        <td><p>Should we attempt to trust certificates with elevated permissions by prompting for UAC if required?</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer__ctor_" data-uid="Titanium.Web.Proxy.ProxyServer.#ctor*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer__ctor_System_String_System_String_System_Boolean_System_Boolean_System_Boolean_" data-uid="Titanium.Web.Proxy.ProxyServer.#ctor(System.String,System.String,System.Boolean,System.Boolean,System.Boolean)">ProxyServer(String, String, Boolean, Boolean, Boolean)</h4>
+  <div class="markdown level1 summary"><p>Initializes a new instance of ProxyServer class with provided parameters.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public ProxyServer(string rootCertificateName, string rootCertificateIssuerName, bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false, bool trustRootCertificateAsAdmin = false)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><span class="parametername">rootCertificateName</span></td>
+        <td><p>Name of the root certificate.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><span class="parametername">rootCertificateIssuerName</span></td>
+        <td><p>Name of the root certificate issuer.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">userTrustRootCertificate</span></td>
+        <td><p>Should fake HTTPS certificate be trusted by this machine&apos;s user certificate store?</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">machineTrustRootCertificate</span></td>
+        <td><p>Should fake HTTPS certificate be trusted by this machine&apos;s certificate store?</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">trustRootCertificateAsAdmin</span></td>
+        <td><p>Should we attempt to trust certificates with elevated permissions by prompting for UAC if required?</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="properties">Properties
+  </h3>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_AuthenticateUserFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_AuthenticateUserFunc" data-uid="Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc">AuthenticateUserFunc</h4>
+  <div class="markdown level1 summary"><p>A callback to authenticate clients.
+Parameters are username and password as provided by client.
+Return true for successful authentication.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Func&lt;string, string, Task&lt;bool&gt;&gt; AuthenticateUserFunc { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-3">Func</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a>&gt;&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_BufferSize_" data-uid="Titanium.Web.Proxy.ProxyServer.BufferSize*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_BufferSize" data-uid="Titanium.Web.Proxy.ProxyServer.BufferSize">BufferSize</h4>
+  <div class="markdown level1 summary"><p>Buffer size used throughout this proxy.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int BufferSize { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_CertificateManager_" data-uid="Titanium.Web.Proxy.ProxyServer.CertificateManager*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_CertificateManager" data-uid="Titanium.Web.Proxy.ProxyServer.CertificateManager">CertificateManager</h4>
+  <div class="markdown level1 summary"><p>Manages certificates used by this proxy.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public CertificateManager CertificateManager { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Network.CertificateManager.html">CertificateManager</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_CheckCertificateRevocation_" data-uid="Titanium.Web.Proxy.ProxyServer.CheckCertificateRevocation*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_CheckCertificateRevocation" data-uid="Titanium.Web.Proxy.ProxyServer.CheckCertificateRevocation">CheckCertificateRevocation</h4>
+  <div class="markdown level1 summary"><p>Should we check for certificare revocation during SSL authentication to servers
+Note: If enabled can reduce performance. Defaults to false.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public X509RevocationMode CheckCertificateRevocation { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.x509revocationmode">X509RevocationMode</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ClientConnectionCount_" data-uid="Titanium.Web.Proxy.ProxyServer.ClientConnectionCount*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ClientConnectionCount" data-uid="Titanium.Web.Proxy.ProxyServer.ClientConnectionCount">ClientConnectionCount</h4>
+  <div class="markdown level1 summary"><p>Total number of active client connections.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int ClientConnectionCount { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ConnectionTimeOutSeconds_" data-uid="Titanium.Web.Proxy.ProxyServer.ConnectionTimeOutSeconds*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ConnectionTimeOutSeconds" data-uid="Titanium.Web.Proxy.ProxyServer.ConnectionTimeOutSeconds">ConnectionTimeOutSeconds</h4>
+  <div class="markdown level1 summary"><p>Seconds client/server connection are to be kept alive when waiting for read/write to complete.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int ConnectionTimeOutSeconds { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_Enable100ContinueBehaviour_" data-uid="Titanium.Web.Proxy.ProxyServer.Enable100ContinueBehaviour*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_Enable100ContinueBehaviour" data-uid="Titanium.Web.Proxy.ProxyServer.Enable100ContinueBehaviour">Enable100ContinueBehaviour</h4>
+  <div class="markdown level1 summary"><p>Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
+Broken 100 contunue implementations on server/client may cause problems if enabled.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool Enable100ContinueBehaviour { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_EnableWinAuth_" data-uid="Titanium.Web.Proxy.ProxyServer.EnableWinAuth*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_EnableWinAuth" data-uid="Titanium.Web.Proxy.ProxyServer.EnableWinAuth">EnableWinAuth</h4>
+  <div class="markdown level1 summary"><p>Enable disable Windows Authentication (NTLM/Kerberos)
+Note: NTLM/Kerberos will always send local credentials of current user
+running the proxy process. This is because a man
+in middle attack with Windows domain authentication is not currently supported.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool EnableWinAuth { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ExceptionFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.ExceptionFunc*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ExceptionFunc" data-uid="Titanium.Web.Proxy.ProxyServer.ExceptionFunc">ExceptionFunc</h4>
+  <div class="markdown level1 summary"><p>Callback for error events in this proxy instance.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public ExceptionHandler ExceptionFunc { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.ExceptionHandler.html">ExceptionHandler</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ForwardToUpstreamGateway_" data-uid="Titanium.Web.Proxy.ProxyServer.ForwardToUpstreamGateway*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ForwardToUpstreamGateway" data-uid="Titanium.Web.Proxy.ProxyServer.ForwardToUpstreamGateway">ForwardToUpstreamGateway</h4>
+  <div class="markdown level1 summary"><p>Gets or sets a value indicating whether requests will be chained to upstream gateway.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool ForwardToUpstreamGateway { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_GetCustomUpStreamProxyFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.GetCustomUpStreamProxyFunc*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_GetCustomUpStreamProxyFunc" data-uid="Titanium.Web.Proxy.ProxyServer.GetCustomUpStreamProxyFunc">GetCustomUpStreamProxyFunc</h4>
+  <div class="markdown level1 summary"><p>A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP(S) requests.
+User should return the ExternalProxy object with valid credentials.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Func&lt;SessionEventArgsBase, Task&lt;ExternalProxy&gt;&gt; GetCustomUpStreamProxyFunc { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-2">Func</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="Titanium.Web.Proxy.Models.ExternalProxy.html">ExternalProxy</a>&gt;&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ProxyEndPoints_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyEndPoints*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyEndPoints" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyEndPoints">ProxyEndPoints</h4>
+  <div class="markdown level1 summary"><p>A list of IpAddress and port this proxy is listening to.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public List&lt;ProxyEndPoint&gt; ProxyEndPoints { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.list-1">List</a>&lt;<a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html">ProxyEndPoint</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ProxyRealm_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRealm*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyRealm" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRealm">ProxyRealm</h4>
+  <div class="markdown level1 summary"><p>Realm used during Proxy Basic Authentication.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public string ProxyRealm { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ProxyRunning_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRunning*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyRunning" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRunning">ProxyRunning</h4>
+  <div class="markdown level1 summary"><p>Is the proxy currently running?</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool ProxyRunning { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ServerConnectionCount_" data-uid="Titanium.Web.Proxy.ProxyServer.ServerConnectionCount*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ServerConnectionCount" data-uid="Titanium.Web.Proxy.ProxyServer.ServerConnectionCount">ServerConnectionCount</h4>
+  <div class="markdown level1 summary"><p>Total number of active server connections.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int ServerConnectionCount { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_SupportedSslProtocols_" data-uid="Titanium.Web.Proxy.ProxyServer.SupportedSslProtocols*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_SupportedSslProtocols" data-uid="Titanium.Web.Proxy.ProxyServer.SupportedSslProtocols">SupportedSslProtocols</h4>
+  <div class="markdown level1 summary"><p>List of supported Ssl versions.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public SslProtocols SupportedSslProtocols { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.security.authentication.sslprotocols">SslProtocols</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_UpStreamEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamEndPoint*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_UpStreamEndPoint" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamEndPoint">UpStreamEndPoint</h4>
+  <div class="markdown level1 summary"><p>Local adapter/NIC endpoint where proxy makes request via.
+Defaults via any IP addresses of this machine.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public IPEndPoint UpStreamEndPoint { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.net.ipendpoint">IPEndPoint</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_UpStreamHttpProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamHttpProxy*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_UpStreamHttpProxy" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamHttpProxy">UpStreamHttpProxy</h4>
+  <div class="markdown level1 summary"><p>External proxy used for Http requests.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public ExternalProxy UpStreamHttpProxy { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.ExternalProxy.html">ExternalProxy</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_UpStreamHttpsProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamHttpsProxy*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_UpStreamHttpsProxy" data-uid="Titanium.Web.Proxy.ProxyServer.UpStreamHttpsProxy">UpStreamHttpsProxy</h4>
+  <div class="markdown level1 summary"><p>External proxy used for Https requests.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public ExternalProxy UpStreamHttpsProxy { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.ExternalProxy.html">ExternalProxy</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="methods">Methods
+  </h3>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_AddEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.AddEndPoint*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_AddEndPoint_Titanium_Web_Proxy_Models_ProxyEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.AddEndPoint(Titanium.Web.Proxy.Models.ProxyEndPoint)">AddEndPoint(ProxyEndPoint)</h4>
+  <div class="markdown level1 summary"><p>Add a proxy end point.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void AddEndPoint(ProxyEndPoint endPoint)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html">ProxyEndPoint</a></td>
+        <td><span class="parametername">endPoint</span></td>
+        <td><p>The proxy endpoint.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_DisableAllSystemProxies_" data-uid="Titanium.Web.Proxy.ProxyServer.DisableAllSystemProxies*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_DisableAllSystemProxies" data-uid="Titanium.Web.Proxy.ProxyServer.DisableAllSystemProxies">DisableAllSystemProxies()</h4>
+  <div class="markdown level1 summary"><p>Clear all proxy settings for current machine.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void DisableAllSystemProxies()</code></pre>
+  </div>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_DisableSystemHttpProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.DisableSystemHttpProxy*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_DisableSystemHttpProxy" data-uid="Titanium.Web.Proxy.ProxyServer.DisableSystemHttpProxy">DisableSystemHttpProxy()</h4>
+  <div class="markdown level1 summary"><p>Clear HTTP proxy settings of current machine.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void DisableSystemHttpProxy()</code></pre>
+  </div>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_DisableSystemHttpsProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.DisableSystemHttpsProxy*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_DisableSystemHttpsProxy" data-uid="Titanium.Web.Proxy.ProxyServer.DisableSystemHttpsProxy">DisableSystemHttpsProxy()</h4>
+  <div class="markdown level1 summary"><p>Clear HTTPS proxy settings of current machine.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void DisableSystemHttpsProxy()</code></pre>
+  </div>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_DisableSystemProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.DisableSystemProxy*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_DisableSystemProxy_Titanium_Web_Proxy_Helpers_ProxyProtocolType_" data-uid="Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(Titanium.Web.Proxy.Helpers.ProxyProtocolType)">DisableSystemProxy(ProxyProtocolType)</h4>
+  <div class="markdown level1 summary"><p>Clear the specified proxy setting for current machine.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void DisableSystemProxy(ProxyProtocolType protocolType)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Helpers.ProxyProtocolType.html">ProxyProtocolType</a></td>
+        <td><span class="parametername">protocolType</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_Dispose_" data-uid="Titanium.Web.Proxy.ProxyServer.Dispose*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_Dispose" data-uid="Titanium.Web.Proxy.ProxyServer.Dispose">Dispose()</h4>
+  <div class="markdown level1 summary"><p>Dispose Proxy.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void Dispose()</code></pre>
+  </div>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_RemoveEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.RemoveEndPoint*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_RemoveEndPoint_Titanium_Web_Proxy_Models_ProxyEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.RemoveEndPoint(Titanium.Web.Proxy.Models.ProxyEndPoint)">RemoveEndPoint(ProxyEndPoint)</h4>
+  <div class="markdown level1 summary"><p>Remove a proxy end point.
+Will throw error if the end point does&apos;nt exist</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void RemoveEndPoint(ProxyEndPoint endPoint)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html">ProxyEndPoint</a></td>
+        <td><span class="parametername">endPoint</span></td>
+        <td><p>The existing endpoint to remove.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_SetAsSystemHttpProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpProxy*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_SetAsSystemHttpProxy_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint)">SetAsSystemHttpProxy(ExplicitProxyEndPoint)</h4>
+  <div class="markdown level1 summary"><p>Set the given explicit end point as the default proxy server for current machine.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html">ExplicitProxyEndPoint</a></td>
+        <td><span class="parametername">endPoint</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_SetAsSystemHttpsProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpsProxy*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_SetAsSystemHttpsProxy_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpsProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint)">SetAsSystemHttpsProxy(ExplicitProxyEndPoint)</h4>
+  <div class="markdown level1 summary"><p>Set the given explicit end point as the default proxy server for current machine.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html">ExplicitProxyEndPoint</a></td>
+        <td><span class="parametername">endPoint</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_SetAsSystemProxy_" data-uid="Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_SetAsSystemProxy_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_Titanium_Web_Proxy_Helpers_ProxyProtocolType_" data-uid="Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,Titanium.Web.Proxy.Helpers.ProxyProtocolType)">SetAsSystemProxy(ExplicitProxyEndPoint, ProxyProtocolType)</h4>
+  <div class="markdown level1 summary"><p>Set the given explicit end point as the default proxy server for current machine.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html">ExplicitProxyEndPoint</a></td>
+        <td><span class="parametername">endPoint</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Helpers.ProxyProtocolType.html">ProxyProtocolType</a></td>
+        <td><span class="parametername">protocolType</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_Start_" data-uid="Titanium.Web.Proxy.ProxyServer.Start*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_Start" data-uid="Titanium.Web.Proxy.ProxyServer.Start">Start()</h4>
+  <div class="markdown level1 summary"><p>Start this proxy server instance.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void Start()</code></pre>
+  </div>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_Stop_" data-uid="Titanium.Web.Proxy.ProxyServer.Stop*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_Stop" data-uid="Titanium.Web.Proxy.ProxyServer.Stop">Stop()</h4>
+  <div class="markdown level1 summary"><p>Stop this proxy server instance.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void Stop()</code></pre>
+  </div>
+  <h3 id="events">Events
+  </h3>
+  
+  
+  <h4 id="Titanium_Web_Proxy_ProxyServer_AfterResponse" data-uid="Titanium.Web.Proxy.ProxyServer.AfterResponse">AfterResponse</h4>
+  <div class="markdown level1 summary"><p>Intercept after response from server.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event AsyncEventHandler&lt;SessionEventArgs&gt; AfterResponse</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html">AsyncEventHandler</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html">SessionEventArgs</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <h4 id="Titanium_Web_Proxy_ProxyServer_BeforeRequest" data-uid="Titanium.Web.Proxy.ProxyServer.BeforeRequest">BeforeRequest</h4>
+  <div class="markdown level1 summary"><p>Intercept request to server.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event AsyncEventHandler&lt;SessionEventArgs&gt; BeforeRequest</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html">AsyncEventHandler</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html">SessionEventArgs</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <h4 id="Titanium_Web_Proxy_ProxyServer_BeforeResponse" data-uid="Titanium.Web.Proxy.ProxyServer.BeforeResponse">BeforeResponse</h4>
+  <div class="markdown level1 summary"><p>Intercept response from server.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event AsyncEventHandler&lt;SessionEventArgs&gt; BeforeResponse</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html">AsyncEventHandler</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html">SessionEventArgs</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ClientCertificateSelectionCallback" data-uid="Titanium.Web.Proxy.ProxyServer.ClientCertificateSelectionCallback">ClientCertificateSelectionCallback</h4>
+  <div class="markdown level1 summary"><p>Callback to override client certificate selection during mutual SSL authentication.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event AsyncEventHandler&lt;CertificateSelectionEventArgs&gt; ClientCertificateSelectionCallback</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html">AsyncEventHandler</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs.html">CertificateSelectionEventArgs</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ClientConnectionCountChanged" data-uid="Titanium.Web.Proxy.ProxyServer.ClientConnectionCountChanged">ClientConnectionCountChanged</h4>
+  <div class="markdown level1 summary"><p>Occurs when client connection count changed.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event EventHandler ClientConnectionCountChanged</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.eventhandler">EventHandler</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ServerCertificateValidationCallback" data-uid="Titanium.Web.Proxy.ProxyServer.ServerCertificateValidationCallback">ServerCertificateValidationCallback</h4>
+  <div class="markdown level1 summary"><p>Verifies the remote SSL certificate used for authentication.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event AsyncEventHandler&lt;CertificateValidationEventArgs&gt; ServerCertificateValidationCallback</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html">AsyncEventHandler</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.html">CertificateValidationEventArgs</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ServerConnectionCountChanged" data-uid="Titanium.Web.Proxy.ProxyServer.ServerConnectionCountChanged">ServerConnectionCountChanged</h4>
+  <div class="markdown level1 summary"><p>Occurs when server connection count changed.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event EventHandler ServerConnectionCountChanged</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.eventhandler">EventHandler</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="implements">Implements</h3>
+  <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.idisposable">System.IDisposable</a>
+  </div>
+</article>
+          </div>
+          
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+              <!-- <p><a class="back-to-top" href="#top">Back to top</a><p> -->
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+            
+            <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+    
+    <script type="text/javascript" src="../styles/docfx.vendor.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>
