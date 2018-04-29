@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.Helpers
         internal int BufferSize { get; }
 
         /// <summary>
-        /// Writes a line async
+        ///     Writes a line async
         /// </summary>
         /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
         /// <returns></returns>
@@ -98,7 +98,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="flush"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        internal async Task WriteHeadersAsync(HeaderCollection headers, bool flush = true, CancellationToken cancellationToken = default)
+        internal async Task WriteHeadersAsync(HeaderCollection headers, bool flush = true,
+            CancellationToken cancellationToken = default)
         {
             foreach (var header in headers)
             {
@@ -121,7 +122,8 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        internal async Task WriteAsync(byte[] data, int offset, int count, bool flush, CancellationToken cancellationToken = default)
+        internal async Task WriteAsync(byte[] data, int offset, int count, bool flush,
+            CancellationToken cancellationToken = default)
         {
             await WriteAsync(data, offset, count, cancellationToken);
             if (flush)
@@ -202,7 +204,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onCopy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task CopyBodyChunkedAsync(CustomBinaryReader reader, Action<byte[], int, int> onCopy, CancellationToken cancellationToken)
+        private async Task CopyBodyChunkedAsync(CustomBinaryReader reader, Action<byte[], int, int> onCopy,
+            CancellationToken cancellationToken)
         {
             while (true)
             {
@@ -242,7 +245,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onCopy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task CopyBytesFromStream(CustomBinaryReader reader, long count, Action<byte[], int, int> onCopy, CancellationToken cancellationToken)
+        private async Task CopyBytesFromStream(CustomBinaryReader reader, long count, Action<byte[], int, int> onCopy,
+            CancellationToken cancellationToken)
         {
             var buffer = reader.Buffer;
             long remainingBytes = count;
@@ -276,7 +280,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="flush"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        protected async Task WriteAsync(RequestResponseBase requestResponse, bool flush = true, CancellationToken cancellationToken = default)
+        protected async Task WriteAsync(RequestResponseBase requestResponse, bool flush = true,
+            CancellationToken cancellationToken = default)
         {
             var body = requestResponse.CompressBodyAndUpdateContentLength();
             await WriteHeadersAsync(requestResponse.Headers, flush, cancellationToken);

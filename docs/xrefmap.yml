@@ -848,42 +848,6 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Exceptions.ProxyHttpException.SessionEventArgs
   nameWithType: ProxyHttpException.SessionEventArgs
-- uid: Titanium.Web.Proxy.Helpers
-  name: Titanium.Web.Proxy.Helpers
-  href: api/Titanium.Web.Proxy.Helpers.html
-  commentId: N:Titanium.Web.Proxy.Helpers
-  fullName: Titanium.Web.Proxy.Helpers
-  nameWithType: Titanium.Web.Proxy.Helpers
-- uid: Titanium.Web.Proxy.Helpers.ProxyProtocolType
-  name: ProxyProtocolType
-  href: api/Titanium.Web.Proxy.Helpers.ProxyProtocolType.html
-  commentId: T:Titanium.Web.Proxy.Helpers.ProxyProtocolType
-  fullName: Titanium.Web.Proxy.Helpers.ProxyProtocolType
-  nameWithType: ProxyProtocolType
-- uid: Titanium.Web.Proxy.Helpers.ProxyProtocolType.AllHttp
-  name: AllHttp
-  href: api/Titanium.Web.Proxy.Helpers.ProxyProtocolType.html#Titanium_Web_Proxy_Helpers_ProxyProtocolType_AllHttp
-  commentId: F:Titanium.Web.Proxy.Helpers.ProxyProtocolType.AllHttp
-  fullName: Titanium.Web.Proxy.Helpers.ProxyProtocolType.AllHttp
-  nameWithType: ProxyProtocolType.AllHttp
-- uid: Titanium.Web.Proxy.Helpers.ProxyProtocolType.Http
-  name: Http
-  href: api/Titanium.Web.Proxy.Helpers.ProxyProtocolType.html#Titanium_Web_Proxy_Helpers_ProxyProtocolType_Http
-  commentId: F:Titanium.Web.Proxy.Helpers.ProxyProtocolType.Http
-  fullName: Titanium.Web.Proxy.Helpers.ProxyProtocolType.Http
-  nameWithType: ProxyProtocolType.Http
-- uid: Titanium.Web.Proxy.Helpers.ProxyProtocolType.Https
-  name: Https
-  href: api/Titanium.Web.Proxy.Helpers.ProxyProtocolType.html#Titanium_Web_Proxy_Helpers_ProxyProtocolType_Https
-  commentId: F:Titanium.Web.Proxy.Helpers.ProxyProtocolType.Https
-  fullName: Titanium.Web.Proxy.Helpers.ProxyProtocolType.Https
-  nameWithType: ProxyProtocolType.Https
-- uid: Titanium.Web.Proxy.Helpers.ProxyProtocolType.None
-  name: None
-  href: api/Titanium.Web.Proxy.Helpers.ProxyProtocolType.html#Titanium_Web_Proxy_Helpers_ProxyProtocolType_None
-  commentId: F:Titanium.Web.Proxy.Helpers.ProxyProtocolType.None
-  fullName: Titanium.Web.Proxy.Helpers.ProxyProtocolType.None
-  nameWithType: ProxyProtocolType.None
 - uid: Titanium.Web.Proxy.Http
   name: Titanium.Web.Proxy.Http
   href: api/Titanium.Web.Proxy.Http.html
@@ -2786,11 +2750,11 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.DisableSystemHttpsProxy
   nameWithType: ProxyServer.DisableSystemHttpsProxy
-- uid: Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(Titanium.Web.Proxy.Helpers.ProxyProtocolType)
+- uid: Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(ProxyProtocolType)
   name: DisableSystemProxy(ProxyProtocolType)
-  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DisableSystemProxy_Titanium_Web_Proxy_Helpers_ProxyProtocolType_
-  commentId: M:Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(Titanium.Web.Proxy.Helpers.ProxyProtocolType)
-  fullName: Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(Titanium.Web.Proxy.Helpers.ProxyProtocolType)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DisableSystemProxy_ProxyProtocolType_
+  commentId: M:Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(ProxyProtocolType)
+  fullName: Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(ProxyProtocolType)
   nameWithType: ProxyServer.DisableSystemProxy(ProxyProtocolType)
 - uid: Titanium.Web.Proxy.ProxyServer.DisableSystemProxy*
   name: DisableSystemProxy
@@ -2980,11 +2944,11 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpsProxy
   nameWithType: ProxyServer.SetAsSystemHttpsProxy
-- uid: Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,Titanium.Web.Proxy.Helpers.ProxyProtocolType)
+- uid: Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,ProxyProtocolType)
   name: SetAsSystemProxy(ExplicitProxyEndPoint, ProxyProtocolType)
-  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SetAsSystemProxy_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_Titanium_Web_Proxy_Helpers_ProxyProtocolType_
-  commentId: M:Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,Titanium.Web.Proxy.Helpers.ProxyProtocolType)
-  fullName: Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint, Titanium.Web.Proxy.Helpers.ProxyProtocolType)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SetAsSystemProxy_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_ProxyProtocolType_
+  commentId: M:Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,ProxyProtocolType)
+  fullName: Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint, ProxyProtocolType)
   nameWithType: ProxyServer.SetAsSystemProxy(ExplicitProxyEndPoint, ProxyProtocolType)
 - uid: Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy*
   name: SetAsSystemProxy

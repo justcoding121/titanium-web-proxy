@@ -1,33 +1,11 @@
 ﻿using System;
 using System.Linq;
 using Microsoft.Win32;
+using Titanium.Web.Proxy.Models;
 
 // Helper classes for setting system proxy settings
 namespace Titanium.Web.Proxy.Helpers
 {
-    [Flags]
-    public enum ProxyProtocolType
-    {
-        /// <summary>
-        ///     The none
-        /// </summary>
-        None = 0,
-
-        /// <summary>
-        ///     HTTP
-        /// </summary>
-        Http = 1,
-
-        /// <summary>
-        ///     HTTPS
-        /// </summary>
-        Https = 2,
-
-        /// <summary>
-        ///     Both HTTP and HTTPS
-        /// </summary>
-        AllHttp = Http | Https
-    }
 
     internal class HttpSystemProxyValue
     {

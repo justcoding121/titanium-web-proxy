@@ -60,13 +60,18 @@ namespace Titanium.Web.Proxy.Network
 
 
         /// <summary>
-        /// 
         /// </summary>
         /// <param name="rootCertificateName"></param>
         /// <param name="rootCertificateIssuerName"></param>
-        /// <param name="userTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's user certificate store?</param>
+        /// <param name="userTrustRootCertificate">
+        ///     Should fake HTTPS certificate be trusted by this machine's user certificate
+        ///     store?
+        /// </param>
         /// <param name="machineTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's certificate store?</param>
-        /// <param name="trustRootCertificateAsAdmin">Should we attempt to trust certificates with elevated permissions by prompting for UAC if required?</param>
+        /// <param name="trustRootCertificateAsAdmin">
+        ///     Should we attempt to trust certificates with elevated permissions by
+        ///     prompting for UAC if required?
+        /// </param>
         /// <param name="exceptionFunc"></param>
         internal CertificateManager(string rootCertificateName, string rootCertificateIssuerName,
             bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin,
@@ -639,7 +644,10 @@ namespace Titanium.Web.Proxy.Network
         ///     named as "rootCert.pfx" (and will be saved in proxy dll directory).
         /// </param>
         /// <param name="password">Set a password for the .pfx file.</param>
-        /// <param name="overwritePfXFile">true : replace an existing .pfx file if password is incorect or if RootCertificate==null.</param>
+        /// <param name="overwritePfXFile">
+        ///     true : replace an existing .pfx file if password is incorect or if
+        ///     RootCertificate==null.
+        /// </param>
         /// <param name="storageFlag"></param>
         /// <returns>
         ///     true if succeeded, else false.
@@ -765,9 +773,15 @@ namespace Titanium.Web.Proxy.Network
         ///     Also makes root certificate trusted based on provided parameters.
         ///     Note:setting machineTrustRootCertificate to true will force userTrustRootCertificate to true.
         /// </summary>
-        /// <param name="userTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's user certificate store?</param>
+        /// <param name="userTrustRootCertificate">
+        ///     Should fake HTTPS certificate be trusted by this machine's user certificate
+        ///     store?
+        /// </param>
         /// <param name="machineTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's certificate store?</param>
-        /// <param name="trustRootCertificateAsAdmin">Should we attempt to trust certificates with elevated permissions by prompting for UAC if required?</param>
+        /// <param name="trustRootCertificateAsAdmin">
+        ///     Should we attempt to trust certificates with elevated permissions by
+        ///     prompting for UAC if required?
+        /// </param>
         public void EnsureRootCertificate(bool userTrustRootCertificate,
             bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin = false)
         {
@@ -907,7 +921,7 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        /// Clear the root certificate and cache.
+        ///     Clear the root certificate and cache.
         /// </summary>
         public void ClearRootCertificate()
         {

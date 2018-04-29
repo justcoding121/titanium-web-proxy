@@ -27,19 +27,22 @@ namespace Titanium.Web.Proxy
             EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
 
         /// <summary>
-        ///     This is the core request handler method for a particular connection from client
+        ///     This is the core request handler method for a particular connection from client.
         ///     Will create new session (request/response) sequence until
-        ///     client/server abruptly terminates connection or by normal HTTP termination
+        ///     client/server abruptly terminates connection or by normal HTTP termination.
         /// </summary>
-        /// <param name="client"></param>
-        /// <param name="clientStream"></param>
-        /// <param name="clientStreamReader"></param>
-        /// <param name="clientStreamWriter"></param>
-        /// <param name="cancellationTokenSource"></param>
-        /// <param name="httpsConnectHostname"></param>
-        /// <param name="endPoint"></param>
-        /// <param name="connectRequest"></param>
-        /// <param name="isTransparentEndPoint"></param>
+        /// <param name="endPoint">The proxy endpoint.</param>
+        /// <param name="client">The client.</param>
+        /// <param name="clientStream">The client stream.</param>
+        /// <param name="clientStreamReader">The client stream reader.</param>
+        /// <param name="clientStreamWriter">The client stream writer.</param>
+        /// <param name="cancellationTokenSource">The cancellation token source for this async task.</param>
+        /// <param name="httpsConnectHostname">
+        ///     The https hostname as appeared in CONNECT request if this is a HTTPS request from
+        ///     explicit endpoint.
+        /// </param>
+        /// <param name="connectRequest">The Connect request if this is a HTTPS request from explicit endpoint.</param>
+        /// <param name="isTransparentEndPoint">Is this a request from transparent endpoint?</param>
         /// <returns></returns>
         private async Task HandleHttpSessionRequest(ProxyEndPoint endPoint, TcpClient client,
             CustomBufferedStream clientStream, CustomBinaryReader clientStreamReader,
@@ -272,9 +275,9 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Handle a specific session (request/response sequence)
         /// </summary>
-        /// <param name="connection"></param>
-        /// <param name="args"></param>
-        /// <returns>True if close the connection</returns>
+        /// <param name="connection">The tcp connection.</param>
+        /// <param name="args">The session event arguments.</param>
+        /// <returns></returns>
         private async Task HandleHttpSessionRequestInternal(TcpConnection connection, SessionEventArgs args)
         {
             try
@@ -290,7 +293,8 @@ namespace Titanium.Web.Proxy
                 if (request.ExpectContinue)
                 {
                     args.WebSession.SetConnection(connection);
-                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent, cancellationToken);
+                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
+                        cancellationToken);
                 }
 
                 //If 100 continue was the response inform that to the client
@@ -316,7 +320,8 @@ namespace Titanium.Web.Proxy
                 if (!request.ExpectContinue)
                 {
                     args.WebSession.SetConnection(connection);
-                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent, cancellationToken);
+                    await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
+                        cancellationToken);
                 }
 
                 //check if content-length is > 0
@@ -353,13 +358,14 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///     Create a Server Connection
+        ///     Create a server connection.
         /// </summary>
-        /// <param name="args"></param>
-        /// <param name="isConnect"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="args">The session event arguments.</param>
+        /// <param name="isConnect">Is this a CONNECT request.</param>
+        /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
-        private async Task<TcpConnection> GetServerConnection(SessionEventArgsBase args, bool isConnect, CancellationToken cancellationToken)
+        private async Task<TcpConnection> GetServerConnection(SessionEventArgsBase args, bool isConnect,
+            CancellationToken cancellationToken)
         {
             ExternalProxy customUpStreamProxy = null;
 
@@ -382,7 +388,7 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///     prepare the request headers so that we can avoid encodings not parsable by this proxy
+        ///     Prepare the request headers so that we can avoid encodings not parsable by this proxy
         /// </summary>
         /// <param name="requestHeaders"></param>
         private void PrepareRequestHeaders(HeaderCollection requestHeaders)
@@ -395,6 +401,11 @@ namespace Titanium.Web.Proxy
             requestHeaders.FixProxyHeaders();
         }
 
+        /// <summary>
+        ///     Invoke before request handler if it is set.
+        /// </summary>
+        /// <param name="args">The session event arguments.</param>
+        /// <returns></returns>
         private async Task InvokeBeforeRequest(SessionEventArgs args)
         {
             if (BeforeRequest != null)

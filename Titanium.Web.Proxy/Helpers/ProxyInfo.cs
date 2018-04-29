@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Helpers
 {

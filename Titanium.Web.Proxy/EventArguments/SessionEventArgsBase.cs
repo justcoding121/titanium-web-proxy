@@ -21,9 +21,9 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         protected readonly int BufferSize;
 
-        protected readonly ExceptionHandler ExceptionFunc;
-
         internal readonly CancellationTokenSource CancellationTokenSource;
+
+        protected readonly ExceptionHandler ExceptionFunc;
 
         /// <summary>
         ///     Constructor to initialize the proxy
@@ -100,17 +100,17 @@ namespace Titanium.Web.Proxy.EventArguments
         public ExternalProxy CustomUpStreamProxyUsed { get; internal set; }
 
         /// <summary>
-        /// Local endpoint via which we make the request.
+        ///     Local endpoint via which we make the request.
         /// </summary>
         public ProxyEndPoint LocalEndPoint { get; }
 
         /// <summary>
-        /// Is this a transparent endpoint?
+        ///     Is this a transparent endpoint?
         /// </summary>
         public bool IsTransparent => LocalEndPoint is TransparentProxyEndPoint;
 
         /// <summary>
-        /// The last exception that happened.
+        ///     The last exception that happened.
         /// </summary>
         public Exception Exception { get; internal set; }
 
@@ -129,12 +129,12 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         /// <summary>
-        /// Fired when data is sent within this session to server/client.
+        ///     Fired when data is sent within this session to server/client.
         /// </summary>
         public event EventHandler<DataEventArgs> DataSent;
 
         /// <summary>
-        /// Fired when data is received within this session from client/server.
+        ///     Fired when data is received within this session from client/server.
         /// </summary>
         public event EventHandler<DataEventArgs> DataReceived;
 

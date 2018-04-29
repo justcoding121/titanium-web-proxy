@@ -13,7 +13,9 @@ namespace Titanium.Web.Proxy
 {
     public partial class ProxyServer
     {
-        //possible header names
+        /// <summary>
+        ///     possible header names.
+        /// </summary>
         private static readonly HashSet<string> authHeaderNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "WWW-Authenticate",
@@ -24,6 +26,9 @@ namespace Titanium.Web.Proxy
             "KerberosAuthorization"
         };
 
+        /// <summary>
+        ///     supported authentication schemes.
+        /// </summary>
         private static readonly HashSet<string> authSchemes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "NTLM",
@@ -32,13 +37,12 @@ namespace Titanium.Web.Proxy
         };
 
         /// <summary>
-        ///     Handle windows NTLM authentication
-        ///     Can expand this for Kerberos in future
+        ///     Handle windows NTLM/Kerberos authentication.
         ///     Note: NTLM/Kerberos cannot do a man in middle operation
         ///     we do for HTTPS requests.
         ///     As such we will be sending local credentials of current
         ///     User to server to authenticate requests.
-        ///     To disable this set ProxyServer.EnableWinAuth to false
+        ///     To disable this set ProxyServer.EnableWinAuth to false.
         /// </summary>
         internal async Task Handle401UnAuthorized(SessionEventArgs args)
         {

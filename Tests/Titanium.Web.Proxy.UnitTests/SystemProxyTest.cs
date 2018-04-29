@@ -3,6 +3,7 @@ using System.Net;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.UnitTests
 {

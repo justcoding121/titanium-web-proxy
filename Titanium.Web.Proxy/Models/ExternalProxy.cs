@@ -70,7 +70,7 @@ namespace Titanium.Web.Proxy.Models
         public int Port { get; set; }
 
         /// <summary>
-        /// returns data in Hostname:port format.
+        ///     returns data in Hostname:port format.
         /// </summary>
         /// <returns></returns>
         public override string ToString()
