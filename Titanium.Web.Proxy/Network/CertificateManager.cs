@@ -79,11 +79,7 @@ namespace Titanium.Web.Proxy.Network
         {
             this.exceptionFunc = exceptionFunc;
 
-            UserTrustRoot = userTrustRootCertificate;
-            if (machineTrustRootCertificate)
-            {
-                userTrustRootCertificate = true;
-            }
+            UserTrustRoot = userTrustRootCertificate || machineTrustRootCertificate;
 
             MachineTrustRoot = machineTrustRootCertificate;
             TrustRootAsAdministrator = trustRootCertificateAsAdmin;
@@ -338,14 +334,14 @@ namespace Titanium.Web.Proxy.Network
                 return;
             }
 
-            var x509store = new X509Store(storeName, storeLocation);
+            var x509Store = new X509Store(storeName, storeLocation);
 
             //TODO
             //also it should do not duplicate if certificate already exists
             try
             {
-                x509store.Open(OpenFlags.ReadWrite);
-                x509store.Add(RootCertificate);
+                x509Store.Open(OpenFlags.ReadWrite);
+                x509Store.Add(RootCertificate);
             }
             catch (Exception e)
             {
@@ -356,7 +352,7 @@ namespace Titanium.Web.Proxy.Network
             }
             finally
             {
-                x509store.Close();
+                x509Store.Close();
             }
         }
 
@@ -436,7 +432,7 @@ namespace Titanium.Web.Proxy.Network
 
                     if (!File.Exists(certificatePath))
                     {
-                        certificate = MakeCertificate(certificateName, isRootCertificate);
+                        certificate = MakeCertificate(certificateName, false);
 
                         //store as cache
                         Task.Run(() =>
@@ -460,7 +456,7 @@ namespace Titanium.Web.Proxy.Network
                         //if load failed create again
                         catch
                         {
-                            certificate = MakeCertificate(certificateName, isRootCertificate);
+                            certificate = MakeCertificate(certificateName, false);
                         }
                     }
                 }
@@ -485,8 +481,7 @@ namespace Titanium.Web.Proxy.Network
         internal async Task<X509Certificate2> CreateCertificateAsync(string certificateName)
         {
             //check in cache first
-            CachedCertificate cached;
-            if (certificateCache.TryGetValue(certificateName, out cached))
+            if (certificateCache.TryGetValue(certificateName, out var cached))
             {
                 cached.LastAccess = DateTime.Now;
                 return cached.Certificate;
@@ -494,8 +489,7 @@ namespace Titanium.Web.Proxy.Network
 
             //handle burst requests with same certificate name
             //by checking for existing task for same certificate name
-            Task<X509Certificate2> task;
-            if (pendingCertificateCreationTasks.TryGetValue(certificateName, out task))
+            if (pendingCertificateCreationTasks.TryGetValue(certificateName, out var task))
             {
                 return await task;
             }
@@ -785,12 +779,7 @@ namespace Titanium.Web.Proxy.Network
         public void EnsureRootCertificate(bool userTrustRootCertificate,
             bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin = false)
         {
-            UserTrustRoot = userTrustRootCertificate;
-            if (machineTrustRootCertificate)
-            {
-                userTrustRootCertificate = true;
-            }
-
+            UserTrustRoot = userTrustRootCertificate || machineTrustRootCertificate;
             MachineTrustRoot = machineTrustRootCertificate;
             TrustRootAsAdministrator = trustRootCertificateAsAdmin;
 
@@ -909,7 +898,7 @@ namespace Titanium.Web.Proxy.Network
                         success = false;
                     }
 
-                    process.WaitForExit();
+                    process?.WaitForExit();
                 }
             }
             catch
