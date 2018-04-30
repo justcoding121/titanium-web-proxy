@@ -9,18 +9,16 @@ namespace Titanium.Web.Proxy.EventArguments
 {
     internal class LimitedStream : Stream
     {
-        private readonly CustomBinaryReader baseReader;
-        private readonly CustomBufferedStream baseStream;
+        private readonly ICustomStreamReader baseStream;
         private readonly bool isChunked;
         private long bytesRemaining;
 
         private bool readChunkTrail;
 
-        internal LimitedStream(CustomBufferedStream baseStream, CustomBinaryReader baseReader, bool isChunked,
+        internal LimitedStream(ICustomStreamReader baseStream, bool isChunked,
             long contentLength)
         {
             this.baseStream = baseStream;
-            this.baseReader = baseReader;
             this.isChunked = isChunked;
             bytesRemaining = isChunked
                 ? 0
@@ -48,12 +46,12 @@ namespace Titanium.Web.Proxy.EventArguments
             if (readChunkTrail)
             {
                 // read the chunk trail of the previous chunk
-                string s = baseReader.ReadLineAsync().Result;
+                string s = baseStream.ReadLineAsync().Result;
             }
 
             readChunkTrail = true;
 
-            string chunkHead = baseReader.ReadLineAsync().Result;
+            string chunkHead = baseStream.ReadLineAsync().Result;
             int idx = chunkHead.IndexOf(";", StringComparison.Ordinal);
             if (idx >= 0)
             {
@@ -68,7 +66,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 bytesRemaining = -1;
 
                 //chunk trail
-                baseReader.ReadLineAsync().Wait();
+                baseStream.ReadLineAsync().Wait();
             }
         }
 
@@ -127,7 +125,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (bytesRemaining != -1)
             {
-                var buffer = BufferPool.GetBuffer(baseReader.Buffer.Length);
+                var buffer = BufferPool.GetBuffer(baseStream.BufferSize);
                 try
                 {
                     int res = await ReadAsync(buffer, 0, buffer.Length);

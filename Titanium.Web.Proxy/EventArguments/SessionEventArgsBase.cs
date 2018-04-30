@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net;
 using System.Threading;
+using StreamExtended.Network;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -50,7 +51,7 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 if (RunTime.IsWindows)
                 {
-                    var remoteEndPoint = (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
+                    var remoteEndPoint = ClientEndPoint;
 
                     //If client is localhost get the process id
                     if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))

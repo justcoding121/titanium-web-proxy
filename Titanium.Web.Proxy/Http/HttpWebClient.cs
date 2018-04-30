@@ -121,7 +121,7 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (Request.ExpectContinue)
                 {
-                    string httpStatus = await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
+                    string httpStatus = await ServerConnection.Stream.ReadLineAsync(cancellationToken);
 
                     Response.ParseResponseLine(httpStatus, out _, out int responseStatusCode,
                         out string responseStatusDescription);
@@ -131,13 +131,13 @@ namespace Titanium.Web.Proxy.Http
                         && responseStatusDescription.EqualsIgnoreCase("continue"))
                     {
                         Request.Is100Continue = true;
-                        await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
+                        await ServerConnection.Stream.ReadLineAsync(cancellationToken);
                     }
                     else if (responseStatusCode == (int)HttpStatusCode.ExpectationFailed
                              && responseStatusDescription.EqualsIgnoreCase("expectation failed"))
                     {
                         Request.ExpectationFailed = true;
-                        await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
+                        await ServerConnection.Stream.ReadLineAsync(cancellationToken);
                     }
                 }
             }
@@ -155,7 +155,7 @@ namespace Titanium.Web.Proxy.Http
                 return;
             }
 
-            string httpStatus = await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
+            string httpStatus = await ServerConnection.Stream.ReadLineAsync(cancellationToken);
             if (httpStatus == null)
             {
                 throw new IOException();
@@ -163,7 +163,7 @@ namespace Titanium.Web.Proxy.Http
 
             if (httpStatus == string.Empty)
             {
-                httpStatus = await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
+                httpStatus = await ServerConnection.Stream.ReadLineAsync(cancellationToken);
             }
 
             Response.ParseResponseLine(httpStatus, out var version, out int statusCode, out string statusDescription);
@@ -179,7 +179,7 @@ namespace Titanium.Web.Proxy.Http
                 //Read the next line after 100-continue 
                 Response.Is100Continue = true;
                 Response.StatusCode = 0;
-                await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
+                await ServerConnection.Stream.ReadLineAsync(cancellationToken);
 
                 //now receive response
                 await ReceiveResponse(cancellationToken);
@@ -192,7 +192,7 @@ namespace Titanium.Web.Proxy.Http
                 //read next line after expectation failed response
                 Response.ExpectationFailed = true;
                 Response.StatusCode = 0;
-                await ServerConnection.StreamReader.ReadLineAsync(cancellationToken);
+                await ServerConnection.Stream.ReadLineAsync(cancellationToken);
 
                 //now receive response 
                 await ReceiveResponse(cancellationToken);
@@ -200,7 +200,7 @@ namespace Titanium.Web.Proxy.Http
             }
 
             //Read the response headers in to unique and non-unique header collections
-            await HeaderParser.ReadHeaders(ServerConnection.StreamReader, Response.Headers, cancellationToken);
+            await HeaderParser.ReadHeaders(ServerConnection.Stream, Response.Headers, cancellationToken);
         }
 
         /// <summary>

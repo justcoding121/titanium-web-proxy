@@ -30,7 +30,6 @@ namespace Titanium.Web.Proxy
 
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
-            var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
             var clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
 
             try
@@ -73,8 +72,6 @@ namespace Titanium.Web.Proxy
                             //HTTPS server created - we can now decrypt the client's traffic
                             clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
-                            clientStreamReader.Dispose();
-                            clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
                             clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
                         }
                         catch (Exception e)
@@ -126,12 +123,11 @@ namespace Titanium.Web.Proxy
 
                 //HTTPS server created - we can now decrypt the client's traffic
                 //Now create the request
-                await HandleHttpSessionRequest(endPoint, tcpClient, clientStream, clientStreamReader,
-                    clientStreamWriter, cancellationTokenSource, isHttps ? httpsHostName : null, null, true);
+                await HandleHttpSessionRequest(endPoint, tcpClient, clientStream, clientStreamWriter,
+                    cancellationTokenSource, isHttps ? httpsHostName : null, null, true);
             }
             finally
             {
-                clientStreamReader.Dispose();
                 clientStream.Dispose();
                 if (!cancellationTokenSource.IsCancellationRequested)
                 {

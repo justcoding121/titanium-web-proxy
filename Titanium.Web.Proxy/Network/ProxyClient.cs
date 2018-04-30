@@ -20,11 +20,6 @@ namespace Titanium.Web.Proxy.Network
         internal CustomBufferedStream ClientStream { get; set; }
 
         /// <summary>
-        ///     Used to read line by line from client
-        /// </summary>
-        internal CustomBinaryReader ClientStreamReader { get; set; }
-
-        /// <summary>
         ///     Used to write line by line to client
         /// </summary>
         internal HttpResponseWriter ClientStreamWriter { get; set; }
