@@ -209,51 +209,6 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.SslPolicyErrors
   nameWithType: CertificateValidationEventArgs.SslPolicyErrors
-- uid: Titanium.Web.Proxy.EventArguments.DataEventArgs
-  name: DataEventArgs
-  href: api/Titanium.Web.Proxy.EventArguments.DataEventArgs.html
-  commentId: T:Titanium.Web.Proxy.EventArguments.DataEventArgs
-  fullName: Titanium.Web.Proxy.EventArguments.DataEventArgs
-  nameWithType: DataEventArgs
-- uid: Titanium.Web.Proxy.EventArguments.DataEventArgs.Buffer
-  name: Buffer
-  href: api/Titanium.Web.Proxy.EventArguments.DataEventArgs.html#Titanium_Web_Proxy_EventArguments_DataEventArgs_Buffer
-  commentId: P:Titanium.Web.Proxy.EventArguments.DataEventArgs.Buffer
-  fullName: Titanium.Web.Proxy.EventArguments.DataEventArgs.Buffer
-  nameWithType: DataEventArgs.Buffer
-- uid: Titanium.Web.Proxy.EventArguments.DataEventArgs.Buffer*
-  name: Buffer
-  href: api/Titanium.Web.Proxy.EventArguments.DataEventArgs.html#Titanium_Web_Proxy_EventArguments_DataEventArgs_Buffer_
-  commentId: Overload:Titanium.Web.Proxy.EventArguments.DataEventArgs.Buffer
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.EventArguments.DataEventArgs.Buffer
-  nameWithType: DataEventArgs.Buffer
-- uid: Titanium.Web.Proxy.EventArguments.DataEventArgs.Count
-  name: Count
-  href: api/Titanium.Web.Proxy.EventArguments.DataEventArgs.html#Titanium_Web_Proxy_EventArguments_DataEventArgs_Count
-  commentId: P:Titanium.Web.Proxy.EventArguments.DataEventArgs.Count
-  fullName: Titanium.Web.Proxy.EventArguments.DataEventArgs.Count
-  nameWithType: DataEventArgs.Count
-- uid: Titanium.Web.Proxy.EventArguments.DataEventArgs.Count*
-  name: Count
-  href: api/Titanium.Web.Proxy.EventArguments.DataEventArgs.html#Titanium_Web_Proxy_EventArguments_DataEventArgs_Count_
-  commentId: Overload:Titanium.Web.Proxy.EventArguments.DataEventArgs.Count
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.EventArguments.DataEventArgs.Count
-  nameWithType: DataEventArgs.Count
-- uid: Titanium.Web.Proxy.EventArguments.DataEventArgs.Offset
-  name: Offset
-  href: api/Titanium.Web.Proxy.EventArguments.DataEventArgs.html#Titanium_Web_Proxy_EventArguments_DataEventArgs_Offset
-  commentId: P:Titanium.Web.Proxy.EventArguments.DataEventArgs.Offset
-  fullName: Titanium.Web.Proxy.EventArguments.DataEventArgs.Offset
-  nameWithType: DataEventArgs.Offset
-- uid: Titanium.Web.Proxy.EventArguments.DataEventArgs.Offset*
-  name: Offset
-  href: api/Titanium.Web.Proxy.EventArguments.DataEventArgs.html#Titanium_Web_Proxy_EventArguments_DataEventArgs_Offset_
-  commentId: Overload:Titanium.Web.Proxy.EventArguments.DataEventArgs.Offset
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.EventArguments.DataEventArgs.Offset
-  nameWithType: DataEventArgs.Offset
 - uid: Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs
   name: MultipartRequestPartSentEventArgs
   href: api/Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs.html
