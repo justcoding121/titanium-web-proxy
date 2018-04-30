@@ -93,20 +93,17 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                     await writer.WriteRequestAsync(connectRequest, cancellationToken: cancellationToken);
 
-                    using (var reader = new CustomBinaryReader(stream, proxyServer.BufferSize))
+                    string httpStatus = await stream.ReadLineAsync(cancellationToken);
+
+                    Response.ParseResponseLine(httpStatus, out _, out int statusCode, out string statusDescription);
+
+                    if (statusCode != 200 && !statusDescription.EqualsIgnoreCase("OK")
+                                          && !statusDescription.EqualsIgnoreCase("Connection Established"))
                     {
-                        string httpStatus = await reader.ReadLineAsync(cancellationToken);
-
-                        Response.ParseResponseLine(httpStatus, out _, out int statusCode, out string statusDescription);
-
-                        if (statusCode != 200 && !statusDescription.EqualsIgnoreCase("OK")
-                                              && !statusDescription.EqualsIgnoreCase("Connection Established"))
-                        {
-                            throw new Exception("Upstream proxy failed to create a secure tunnel");
-                        }
-
-                        await reader.ReadAndIgnoreAllLinesAsync(cancellationToken);
+                        throw new Exception("Upstream proxy failed to create a secure tunnel");
                     }
+
+                    await stream.ReadAndIgnoreAllLinesAsync(cancellationToken);
                 }
 
                 if (decryptSsl)
@@ -152,7 +149,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 IsHttp2Supported = http2Supported,
                 UseUpstreamProxy = useUpstreamProxy,
                 TcpClient = client,
-                StreamReader = new CustomBinaryReader(stream, proxyServer.BufferSize),
                 StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferSize),
                 Stream = stream,
                 Version = httpVersion

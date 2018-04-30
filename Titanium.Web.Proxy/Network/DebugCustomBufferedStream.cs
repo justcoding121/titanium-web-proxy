@@ -24,12 +24,12 @@ namespace Titanium.Web.Proxy.Network
 
         public int Counter { get; }
 
-        protected override void OnDataSent(byte[] buffer, int offset, int count)
+        protected override void OnDataWrite(byte[] buffer, int offset, int count)
         {
             fileStreamSent.Write(buffer, offset, count);
         }
 
-        protected override void OnDataReceived(byte[] buffer, int offset, int count)
+        protected override void OnDataRead(byte[] buffer, int offset, int count)
         {
             fileStreamReceived.Write(buffer, offset, count);
         }

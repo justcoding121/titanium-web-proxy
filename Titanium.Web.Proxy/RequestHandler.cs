@@ -34,7 +34,6 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint">The proxy endpoint.</param>
         /// <param name="client">The client.</param>
         /// <param name="clientStream">The client stream.</param>
-        /// <param name="clientStreamReader">The client stream reader.</param>
         /// <param name="clientStreamWriter">The client stream writer.</param>
         /// <param name="cancellationTokenSource">The cancellation token source for this async task.</param>
         /// <param name="httpsConnectHostname">
@@ -45,8 +44,7 @@ namespace Titanium.Web.Proxy
         /// <param name="isTransparentEndPoint">Is this a request from transparent endpoint?</param>
         /// <returns></returns>
         private async Task HandleHttpSessionRequest(ProxyEndPoint endPoint, TcpClient client,
-            CustomBufferedStream clientStream, CustomBinaryReader clientStreamReader,
-            HttpResponseWriter clientStreamWriter,
+            CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
             CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, ConnectRequest connectRequest,
             bool isTransparentEndPoint = false)
         {
@@ -60,7 +58,7 @@ namespace Titanium.Web.Proxy
                 while (true)
                 {
                     // read the request line
-                    string httpCmd = await clientStreamReader.ReadLineAsync(cancellationToken);
+                    string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
 
                     if (string.IsNullOrEmpty(httpCmd))
                     {
@@ -81,7 +79,7 @@ namespace Titanium.Web.Proxy
                                 out var version);
 
                             //Read the request headers in to unique and non-unique header collections
-                            await HeaderParser.ReadHeaders(clientStreamReader, args.WebSession.Request.Headers,
+                            await HeaderParser.ReadHeaders(clientStream, args.WebSession.Request.Headers,
                                 cancellationToken);
 
                             Uri httpRemoteUri;
@@ -124,7 +122,6 @@ namespace Titanium.Web.Proxy
                             request.Method = httpMethod;
                             request.HttpVersion = version;
                             args.ProxyClient.ClientStream = clientStream;
-                            args.ProxyClient.ClientStreamReader = clientStreamReader;
                             args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                             //proxy authorization check
@@ -198,7 +195,7 @@ namespace Titanium.Web.Proxy
                                 await connection.StreamWriter.WriteLineAsync(httpCmd, cancellationToken);
                                 await connection.StreamWriter.WriteHeadersAsync(request.Headers,
                                     cancellationToken: cancellationToken);
-                                string httpStatus = await connection.StreamReader.ReadLineAsync(cancellationToken);
+                                string httpStatus = await connection.Stream.ReadLineAsync(cancellationToken);
 
                                 Response.ParseResponseLine(httpStatus, out var responseVersion,
                                     out int responseStatusCode,
@@ -207,7 +204,7 @@ namespace Titanium.Web.Proxy
                                 response.StatusCode = responseStatusCode;
                                 response.StatusDescription = responseStatusDescription;
 
-                                await HeaderParser.ReadHeaders(connection.StreamReader, response.Headers,
+                                await HeaderParser.ReadHeaders(connection.Stream, response.Headers,
                                     cancellationToken);
 
                                 if (!args.IsTransparent)

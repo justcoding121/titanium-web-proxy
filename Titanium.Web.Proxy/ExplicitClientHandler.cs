@@ -34,7 +34,6 @@ namespace Titanium.Web.Proxy
 
             var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
 
-            var clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
             var clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
 
             try
@@ -46,7 +45,7 @@ namespace Titanium.Web.Proxy
                 if (await HttpHelper.IsConnectMethod(clientStream) == 1)
                 {
                     //read the first line HTTP command
-                    string httpCmd = await clientStreamReader.ReadLineAsync(cancellationToken);
+                    string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
                     if (string.IsNullOrEmpty(httpCmd))
                     {
                         return;
@@ -64,7 +63,7 @@ namespace Titanium.Web.Proxy
                         HttpVersion = version
                     };
 
-                    await HeaderParser.ReadHeaders(clientStreamReader, connectRequest.Headers, cancellationToken);
+                    await HeaderParser.ReadHeaders(clientStream, connectRequest.Headers, cancellationToken);
 
                     connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest,
                         cancellationTokenSource, ExceptionFunc);
@@ -159,7 +158,7 @@ namespace Titanium.Web.Proxy
                                 options.ApplicationProtocols = clientHelloInfo.GetAlpn();
                                 if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)
                                 {
-                                    options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
+                                    options.ApplicationProtocols = Titanium.Web.Proxy.Extensions.SslExtensions.Http11ProtocolAsList;
                                 }
                             }
 
@@ -172,8 +171,6 @@ namespace Titanium.Web.Proxy
                             //HTTPS server created - we can now decrypt the client's traffic
                             clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
-                            clientStreamReader.Dispose();
-                            clientStreamReader = new CustomBinaryReader(clientStream, BufferSize);
                             clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
                         }
                         catch (Exception e)
@@ -240,23 +237,23 @@ namespace Titanium.Web.Proxy
                 if (connectArgs != null && await HttpHelper.IsPriMethod(clientStream) == 1)
                 {
                     // todo
-                    string httpCmd = await clientStreamReader.ReadLineAsync(cancellationToken);
+                    string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
                     if (httpCmd == "PRI * HTTP/2.0")
                     {
                         // HTTP/2 Connection Preface
-                        string line = await clientStreamReader.ReadLineAsync(cancellationToken);
+                        string line = await clientStream.ReadLineAsync(cancellationToken);
                         if (line != string.Empty)
                         {
                             throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
                         }
 
-                        line = await clientStreamReader.ReadLineAsync(cancellationToken);
+                        line = await clientStream.ReadLineAsync(cancellationToken);
                         if (line != "SM")
                         {
                             throw new Exception($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
                         }
 
-                        line = await clientStreamReader.ReadLineAsync(cancellationToken);
+                        line = await clientStream.ReadLineAsync(cancellationToken);
                         if (line != string.Empty)
                         {
                             throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
@@ -279,7 +276,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 //Now create the request
-                await HandleHttpSessionRequest(endPoint, tcpClient, clientStream, clientStreamReader,
+                await HandleHttpSessionRequest(endPoint, tcpClient, clientStream,
                     clientStreamWriter, cancellationTokenSource, connectHostname,
                     connectArgs?.WebSession.ConnectRequest);
             }
@@ -301,7 +298,6 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                clientStreamReader.Dispose();
                 clientStream.Dispose();
                 if (!cancellationTokenSource.IsCancellationRequested)
                 {
