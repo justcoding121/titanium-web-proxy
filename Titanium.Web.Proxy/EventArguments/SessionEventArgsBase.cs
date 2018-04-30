@@ -87,7 +87,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Client End Point.
         /// </summary>
-        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
+        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.ClientConnection.RemoteEndPoint;
 
         /// <summary>
         ///     A web session corresponding to a single request/response sequence

@@ -15,6 +15,8 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
+using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy
 {
@@ -25,14 +27,14 @@ namespace Titanium.Web.Proxy
         ///     So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
         /// </summary>
         /// <param name="endPoint">The explicit endpoint.</param>
-        /// <param name="tcpClient">The client.</param>
+        /// <param name="clientConnection">The client connection.</param>
         /// <returns>The task.</returns>
-        private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClient tcpClient)
+        private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClientConnection clientConnection)
         {
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
 
-            var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
+            var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferSize);
 
             var clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
 
@@ -67,7 +69,7 @@ namespace Titanium.Web.Proxy
 
                     connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest,
                         cancellationTokenSource, ExceptionFunc);
-                    connectArgs.ProxyClient.TcpClient = tcpClient;
+                    connectArgs.ProxyClient.ClientConnection = clientConnection;
                     connectArgs.ProxyClient.ClientStream = clientStream;
 
                     await endPoint.InvokeBeforeTunnelConnectRequest(this, connectArgs, ExceptionFunc);
@@ -158,7 +160,7 @@ namespace Titanium.Web.Proxy
                                 options.ApplicationProtocols = clientHelloInfo.GetAlpn();
                                 if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)
                                 {
-                                    options.ApplicationProtocols = Titanium.Web.Proxy.Extensions.SslExtensions.Http11ProtocolAsList;
+                                    options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
                                 }
                             }
 
@@ -270,13 +272,13 @@ namespace Titanium.Web.Proxy
                             await TcpHelper.SendHttp2(clientStream, connection.Stream, BufferSize,
                                 (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
                                 (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
-                                connectArgs.CancellationTokenSource, ExceptionFunc);
+                                connectArgs.CancellationTokenSource, clientConnection.Id, ExceptionFunc);
                         }
                     }
                 }
 
                 //Now create the request
-                await HandleHttpSessionRequest(endPoint, tcpClient, clientStream,
+                await HandleHttpSessionRequest(endPoint, clientConnection, clientStream,
                     clientStreamWriter, cancellationTokenSource, connectHostname,
                     connectArgs?.WebSession.ConnectRequest);
             }

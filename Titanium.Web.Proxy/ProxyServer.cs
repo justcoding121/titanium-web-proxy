@@ -8,7 +8,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Models;
@@ -648,26 +647,19 @@ namespace Titanium.Web.Proxy
 
         private async Task HandleClient(TcpClient tcpClient, ProxyEndPoint endPoint)
         {
-            UpdateClientConnectionCount(true);
-
             tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
             tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
 
-            try
+            using (var clientConnection = new TcpClientConnection(this, tcpClient))
             {
                 if (endPoint is TransparentProxyEndPoint tep)
                 {
-                    await HandleClient(tep, tcpClient);
+                    await HandleClient(tep, clientConnection);
                 }
                 else
                 {
-                    await HandleClient((ExplicitProxyEndPoint)endPoint, tcpClient);
+                    await HandleClient((ExplicitProxyEndPoint)endPoint, clientConnection);
                 }
-            }
-            finally
-            {
-                UpdateClientConnectionCount(false);
-                tcpClient.CloseSocket();
             }
         }
 

@@ -11,6 +11,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy
 {
@@ -21,14 +22,14 @@ namespace Titanium.Web.Proxy
         ///     So for HTTPS requests we would start SSL negotiation right away without expecting a CONNECT request from client
         /// </summary>
         /// <param name="endPoint">The transparent endpoint.</param>
-        /// <param name="tcpClient">The client.</param>
+        /// <param name="clientConnection">The client connection.</param>
         /// <returns></returns>
-        private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClient tcpClient)
+        private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClientConnection clientConnection)
         {
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
 
-            var clientStream = new CustomBufferedStream(tcpClient.GetStream(), BufferSize);
+            var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferSize);
 
             var clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
 
@@ -123,7 +124,7 @@ namespace Titanium.Web.Proxy
 
                 //HTTPS server created - we can now decrypt the client's traffic
                 //Now create the request
-                await HandleHttpSessionRequest(endPoint, tcpClient, clientStream, clientStreamWriter,
+                await HandleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
                     cancellationTokenSource, isHttps ? httpsHostName : null, null, true);
             }
             finally

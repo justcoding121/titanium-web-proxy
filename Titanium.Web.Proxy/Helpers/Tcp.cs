@@ -265,15 +265,14 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
         /// <param name="cancellationTokenSource"></param>
+        /// <param name="connectionId"></param>
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static async Task SendHttp2(Stream clientStream, Stream serverStream, int bufferSize,
             Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive,
-            CancellationTokenSource cancellationTokenSource,
+            CancellationTokenSource cancellationTokenSource, Guid connectionId,
             ExceptionHandler exceptionFunc)
         {
-            var connectionId = Guid.NewGuid();
-
             //Now async relay all server=>client & client=>server data
             var sendRelay =
                 CopyHttp2FrameAsync(clientStream, serverStream, onDataSend, bufferSize, connectionId,
