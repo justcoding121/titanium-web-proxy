@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended.Helpers;
 using StreamExtended.Network;
-using Titanium.Web.Proxy.Decompression;
+using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
@@ -256,13 +256,15 @@ namespace Titanium.Web.Proxy.EventArguments
 
             if (transformation == TransformationMode.Uncompress && contentEncoding != null)
             {
-                s = decompressStream = DecompressionFactory.Create(contentEncoding).GetStream(s);
+                s = decompressStream = DecompressionFactory.Create(contentEncoding, s);
             }
 
             try
             {
-                var bufStream = new CustomBufferedStream(s, BufferSize, true);
-                await writer.CopyBodyAsync(bufStream, false, -1, onCopy, cancellationToken);
+                using (var bufStream = new CustomBufferedStream(s, BufferSize, true))
+                {
+                    await writer.CopyBodyAsync(bufStream, false, -1, onCopy, cancellationToken);
+                }
             }
             finally
             {

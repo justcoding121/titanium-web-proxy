@@ -177,10 +177,9 @@ namespace Titanium.Web.Proxy.Http
         /// <returns></returns>
         internal byte[] GetCompressedBody(string encodingType, byte[] body)
         {
-            var compressor = CompressionFactory.GetCompression(encodingType);
             using (var ms = new MemoryStream())
             {
-                using (var zip = compressor.GetStream(ms))
+                using (var zip = CompressionFactory.Create(encodingType, ms))
                 {
                     zip.Write(body, 0, body.Length);
                 }

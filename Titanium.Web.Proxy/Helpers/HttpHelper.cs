@@ -118,38 +118,38 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         ///     Determines whether is connect method.
         /// </summary>
-        /// <param name="clientStream">The client stream.</param>
+        /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsConnectMethod(CustomBufferedStream clientStream)
+        internal static Task<int> IsConnectMethod(ICustomStreamReader clientStreamReader)
         {
-            return StartsWith(clientStream, "CONNECT");
+            return StartsWith(clientStreamReader, "CONNECT");
         }
 
         /// <summary>
         ///     Determines whether is pri method (HTTP/2).
         /// </summary>
-        /// <param name="clientStream">The client stream.</param>
+        /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when PRI, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsPriMethod(CustomBufferedStream clientStream)
+        internal static Task<int> IsPriMethod(ICustomStreamReader clientStreamReader)
         {
-            return StartsWith(clientStream, "PRI");
+            return StartsWith(clientStreamReader, "PRI");
         }
 
         /// <summary>
         ///     Determines whether the stream starts with the given string.
         /// </summary>
-        /// <param name="clientStream">The client stream.</param>
+        /// <param name="clientStreamReader">The client stream reader.</param>
         /// <param name="expectedStart">The expected start.</param>
         /// <returns>
         ///     1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
         /// </returns>
-        private static async Task<int> StartsWith(CustomBufferedStream clientStream, string expectedStart)
+        private static async Task<int> StartsWith(ICustomStreamReader clientStreamReader, string expectedStart)
         {
             bool isExpected = true;
             int legthToCheck = 10;
             for (int i = 0; i < legthToCheck; i++)
             {
-                int b = await clientStream.PeekByteAsync(i);
+                int b = await clientStreamReader.PeekByteAsync(i);
                 if (b == -1)
                 {
                     return -1;
