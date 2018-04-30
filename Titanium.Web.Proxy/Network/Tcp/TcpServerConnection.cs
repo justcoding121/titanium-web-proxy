@@ -11,10 +11,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// <summary>
     ///     An object that holds TcpConnection to a particular server and port
     /// </summary>
-    internal class TcpConnection : IDisposable
+    internal class TcpServerConnection : IDisposable
     {
-        internal TcpConnection(ProxyServer proxyServer)
+        internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient)
         {
+            this.tcpClient = tcpClient;
             LastAccess = DateTime.Now;
             this.proxyServer = proxyServer;
             this.proxyServer.UpdateServerConnectionCount(true);
@@ -44,7 +45,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         internal Version Version { get; set; }
 
-        internal TcpClient TcpClient { private get; set; }
+        private readonly TcpClient tcpClient;
 
         /// <summary>
         ///     Used to write lines to server
@@ -68,7 +69,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         {
             Stream?.Dispose();
 
-            TcpClient.CloseSocket();
+            tcpClient.CloseSocket();
 
             proxyServer.UpdateServerConnectionCount(false);
         }

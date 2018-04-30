@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Connection to server
         /// </summary>
-        internal TcpConnection ServerConnection { get; set; }
+        internal TcpServerConnection ServerConnection { get; set; }
 
         /// <summary>
         ///     Request ID.
@@ -69,11 +69,11 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Set the tcp connection to server used by this webclient
         /// </summary>
-        /// <param name="connection">Instance of <see cref="TcpConnection" /></param>
-        internal void SetConnection(TcpConnection connection)
+        /// <param name="serverConnection">Instance of <see cref="TcpServerConnection" /></param>
+        internal void SetConnection(TcpServerConnection serverConnection)
         {
-            connection.LastAccess = DateTime.Now;
-            ServerConnection = connection;
+            serverConnection.LastAccess = DateTime.Now;
+            ServerConnection = serverConnection;
         }
 
         /// <summary>

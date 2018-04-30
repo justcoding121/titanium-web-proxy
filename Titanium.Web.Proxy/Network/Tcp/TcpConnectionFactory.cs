@@ -32,7 +32,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="externalProxy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        internal async Task<TcpConnection> CreateClient(string remoteHostName, int remotePort,
+        internal async Task<TcpServerConnection> CreateClient(string remoteHostName, int remotePort,
             List<SslApplicationProtocol> applicationProtocols, Version httpVersion, bool decryptSsl, bool isConnect,
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
             CancellationToken cancellationToken)
@@ -52,26 +52,26 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
             }
 
-            TcpClient client = null;
+            TcpClient tcpClient = null;
             CustomBufferedStream stream = null;
 
             bool http2Supported = false;
 
             try
             {
-                client = new TcpClient(upStreamEndPoint);
+                tcpClient = new TcpClient(upStreamEndPoint);
 
                 //If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections
                 if (useUpstreamProxy)
                 {
-                    await client.ConnectAsync(externalProxy.HostName, externalProxy.Port);
+                    await tcpClient.ConnectAsync(externalProxy.HostName, externalProxy.Port);
                 }
                 else
                 {
-                    await client.ConnectAsync(remoteHostName, remotePort);
+                    await tcpClient.ConnectAsync(remoteHostName, remotePort);
                 }
 
-                stream = new CustomBufferedStream(client.GetStream(), proxyServer.BufferSize);
+                stream = new CustomBufferedStream(tcpClient.GetStream(), proxyServer.BufferSize);
 
                 if (useUpstreamProxy && (isConnect || decryptSsl))
                 {
@@ -129,17 +129,17 @@ namespace Titanium.Web.Proxy.Network.Tcp
 #endif
                 }
 
-                client.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
-                client.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                tcpClient.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                tcpClient.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
             }
             catch (Exception)
             {
                 stream?.Dispose();
-                client?.Close();
+                tcpClient?.Close();
                 throw;
             }
 
-            return new TcpConnection(proxyServer)
+            return new TcpServerConnection(proxyServer, tcpClient)
             {
                 UpStreamProxy = externalProxy,
                 UpStreamEndPoint = upStreamEndPoint,
@@ -148,7 +148,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 IsHttps = decryptSsl,
                 IsHttp2Supported = http2Supported,
                 UseUpstreamProxy = useUpstreamProxy,
-                TcpClient = client,
                 StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferSize),
                 Stream = stream,
                 Version = httpVersion
