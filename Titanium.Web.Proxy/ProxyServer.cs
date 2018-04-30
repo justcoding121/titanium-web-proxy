@@ -92,7 +92,7 @@ namespace Titanium.Web.Proxy
             bool trustRootCertificateAsAdmin = false)
         {
             //default values
-            ConnectionTimeOutSeconds = 30;
+            ConnectionTimeOutSeconds = 60;
 
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory();
