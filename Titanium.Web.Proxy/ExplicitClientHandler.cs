@@ -136,9 +136,9 @@ namespace Titanium.Web.Proxy
                         {
                             // test server HTTP/2 support
                             // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
-                            using (var connection = await GetServerConnection(connectArgs, true, cancellationToken))
+                            using (var connection = await GetServerConnection(connectArgs, true, SslExtensions.Http2ProtocolAsList, cancellationToken))
                             {
-                                http2Supproted = connection.IsHttp2Supported;
+                                http2Supproted = connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
                             }
                         }
 
@@ -170,6 +170,10 @@ namespace Titanium.Web.Proxy
                             options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;
                             await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
 
+#if NETCOREAPP2_1
+                            clientConnection.NegotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
+#endif
+                            
                             // HTTPS server created - we can now decrypt the client's traffic
                             clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
@@ -197,7 +201,7 @@ namespace Titanium.Web.Proxy
                     if (!decryptSsl || !isClientHello)
                     {
                         // create new connection
-                        using (var connection = await GetServerConnection(connectArgs, true, cancellationToken))
+                        using (var connection = await GetServerConnection(connectArgs, true, clientConnection.NegotiatedApplicationProtocol, cancellationToken))
                         {
                             if (isClientHello)
                             {
@@ -261,7 +265,7 @@ namespace Titanium.Web.Proxy
                         }
 
                         // create new connection
-                        using (var connection = await GetServerConnection(connectArgs, true, cancellationToken))
+                        using (var connection = await GetServerConnection(connectArgs, true, SslExtensions.Http2ProtocolAsList, cancellationToken))
                         {
                             await connection.StreamWriter.WriteLineAsync("PRI * HTTP/2.0", cancellationToken);
                             await connection.StreamWriter.WriteLineAsync(cancellationToken);

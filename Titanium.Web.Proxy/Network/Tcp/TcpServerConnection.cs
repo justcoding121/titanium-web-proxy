@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
@@ -31,7 +32,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         internal bool IsHttps { get; set; }
 
-        internal bool IsHttp2Supported { get; set; }
+        internal SslApplicationProtocol NegotiatedApplicationProtocol { get; set; }
 
         internal bool UseUpstreamProxy { get; set; }
 

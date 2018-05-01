@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using Titanium.Web.Proxy.Extensions;
 
@@ -25,6 +26,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
         public EndPoint LocalEndPoint => tcpClient.Client.LocalEndPoint;
 
         public EndPoint RemoteEndPoint => tcpClient.Client.RemoteEndPoint;
+
+        internal SslApplicationProtocol NegotiatedApplicationProtocol { get; set; }
 
         private readonly TcpClient tcpClient;
 

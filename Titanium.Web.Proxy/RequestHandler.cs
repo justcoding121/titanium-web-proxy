@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
+using System.Net.Security;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -179,7 +181,7 @@ namespace Titanium.Web.Proxy
 
                             if (serverConnection == null)
                             {
-                                serverConnection = await GetServerConnection(args, false, cancellationToken);
+                                serverConnection = await GetServerConnection(args, false, clientConnection.NegotiatedApplicationProtocol, cancellationToken);
                             }
 
                             // if upgrading to websocket then relay the requet without reading the contents
@@ -353,10 +355,31 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="args">The session event arguments.</param>
         /// <param name="isConnect">Is this a CONNECT request.</param>
+        /// <param name="applicationProtocol"></param>
+        /// <param name="cancellationToken">The cancellation token for this async task.</param>
+        /// <returns></returns>
+        private Task<TcpServerConnection> GetServerConnection(SessionEventArgsBase args, bool isConnect,
+            SslApplicationProtocol applicationProtocol, CancellationToken cancellationToken)
+        {
+            List<SslApplicationProtocol> applicationProtocols = null;
+            if (applicationProtocol != default)
+            {
+                applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
+            }
+
+            return GetServerConnection(args, isConnect, applicationProtocols, cancellationToken);
+        }
+
+        /// <summary>
+        ///     Create a server connection.
+        /// </summary>
+        /// <param name="args">The session event arguments.</param>
+        /// <param name="isConnect">Is this a CONNECT request.</param>
+        /// <param name="applicationProtocols"></param>
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
         private async Task<TcpServerConnection> GetServerConnection(SessionEventArgsBase args, bool isConnect,
-            CancellationToken cancellationToken)
+        List<SslApplicationProtocol> applicationProtocols, CancellationToken cancellationToken)
         {
             ExternalProxy customUpStreamProxy = null;
 
@@ -371,8 +394,8 @@ namespace Titanium.Web.Proxy
             return await tcpConnectionFactory.CreateClient(
                 args.WebSession.Request.RequestUri.Host,
                 args.WebSession.Request.RequestUri.Port,
-                args.WebSession.ConnectRequest?.ClientHelloInfo?.GetAlpn(),
-                args.WebSession.Request.HttpVersion, isHttps, isConnect,
+                args.WebSession.Request.HttpVersion, 
+                isHttps, applicationProtocols, isConnect,
                 this, args.WebSession.UpStreamEndPoint ?? UpStreamEndPoint,
                 customUpStreamProxy ?? (isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy),
                 cancellationToken);
