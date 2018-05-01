@@ -19,8 +19,8 @@ namespace Titanium.Web.Proxy.Http.Responses
 #if NET45
             StatusDescription = HttpWorkerRequest.GetStatusDescription(StatusCode);
 #else
-            //todo: this is not really correct, status description should contain spaces, too
-            //see: https://tools.ietf.org/html/rfc7231#section-6.1
+            // todo: this is not really correct, status description should contain spaces, too
+            // see: https://tools.ietf.org/html/rfc7231#section-6.1
             StatusDescription = status.ToString();
 #endif
         }

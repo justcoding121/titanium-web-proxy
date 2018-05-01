@@ -66,7 +66,7 @@ namespace Titanium.Web.Proxy.Helpers
                     return false;
                 };
 
-                //On Console exit make sure we also exit the proxy
+                // On Console exit make sure we also exit the proxy
                 NativeMethods.SetConsoleCtrlHandler(NativeMethods.Handler, true);
             }
         }

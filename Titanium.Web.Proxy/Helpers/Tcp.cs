@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy.Helpers
             var taskCompletionSource = new TaskCompletionSource<bool>();
             cancellationTokenSource.Token.Register(() => taskCompletionSource.TrySetResult(true));
 
-            //Now async relay all server=>client & client=>server data
+            // Now async relay all server=>client & client=>server data
             var clientBuffer = BufferPool.GetBuffer(bufferSize);
             var serverBuffer = BufferPool.GetBuffer(bufferSize);
             try
@@ -217,7 +217,7 @@ namespace Titanium.Web.Proxy.Helpers
             CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)
         {
-            //Now async relay all server=>client & client=>server data
+            // Now async relay all server=>client & client=>server data
             var sendRelay =
                 clientStream.CopyToAsync(serverStream, onDataSend, bufferSize, cancellationTokenSource.Token);
             var receiveRelay =
@@ -273,7 +273,7 @@ namespace Titanium.Web.Proxy.Helpers
             CancellationTokenSource cancellationTokenSource, Guid connectionId,
             ExceptionHandler exceptionFunc)
         {
-            //Now async relay all server=>client & client=>server data
+            // Now async relay all server=>client & client=>server data
             var sendRelay =
                 CopyHttp2FrameAsync(clientStream, serverStream, onDataSend, bufferSize, connectionId,
                     cancellationTokenSource.Token);

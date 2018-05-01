@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy
         internal bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain,
             SslPolicyErrors sslPolicyErrors)
         {
-            //if user callback is registered then do it
+            // if user callback is registered then do it
             if (ServerCertificateValidationCallback != null)
             {
                 var args = new CertificateValidationEventArgs
@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy
                     SslPolicyErrors = sslPolicyErrors
                 };
 
-                //why is the sender null?
+                // why is the sender null?
                 ServerCertificateValidationCallback.InvokeAsync(this, args, exceptionFunc).Wait();
                 return args.IsValid;
             }
@@ -39,8 +39,8 @@ namespace Titanium.Web.Proxy
                 return true;
             }
 
-            //By default
-            //do not allow this client to communicate with unauthenticated servers.
+            // By default
+            // do not allow this client to communicate with unauthenticated servers.
             return false;
         }
 
@@ -77,7 +77,7 @@ namespace Titanium.Web.Proxy
                 clientCertificate = localCertificates[0];
             }
 
-            //If user call back is registered
+            // If user call back is registered
             if (ClientCertificateSelectionCallback != null)
             {
                 var args = new CertificateSelectionEventArgs
@@ -89,7 +89,7 @@ namespace Titanium.Web.Proxy
                     ClientCertificate = clientCertificate
                 };
 
-                //why is the sender null?
+                // why is the sender null?
                 ClientCertificateSelectionCallback.InvokeAsync(this, args, exceptionFunc).Wait();
                 return args.ClientCertificate;
             }

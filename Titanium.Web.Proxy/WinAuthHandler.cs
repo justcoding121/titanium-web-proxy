@@ -19,7 +19,8 @@ namespace Titanium.Web.Proxy
         private static readonly HashSet<string> authHeaderNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "WWW-Authenticate",
-            //IIS 6.0 messed up names below
+
+            // IIS 6.0 messed up names below
             "WWWAuthenticate",
             "NTLMAuthorization",
             "NegotiateAuthorization",
@@ -51,7 +52,7 @@ namespace Titanium.Web.Proxy
 
             var response = args.WebSession.Response;
 
-            //check in non-unique headers first
+            // check in non-unique headers first
             var header = response.Headers.NonUniqueHeaders.FirstOrDefault(x => authHeaderNames.Contains(x.Key));
 
             if (!header.Equals(new KeyValuePair<string, List<HttpHeader>>()))
@@ -66,12 +67,12 @@ namespace Titanium.Web.Proxy
                         x => authSchemes.Any(y => x.Value.StartsWith(y, StringComparison.OrdinalIgnoreCase)));
             }
 
-            //check in unique headers
+            // check in unique headers
             if (authHeader == null)
             {
                 headerName = null;
 
-                //check in non-unique headers first
+                // check in non-unique headers first
                 var uHeader = response.Headers.Headers.FirstOrDefault(x => authHeaderNames.Contains(x.Key));
 
                 if (!uHeader.Equals(new KeyValuePair<string, HttpHeader>()))
@@ -104,26 +105,26 @@ namespace Titanium.Web.Proxy
 
                 var request = args.WebSession.Request;
 
-                //clear any existing headers to avoid confusing bad servers
+                // clear any existing headers to avoid confusing bad servers
                 request.Headers.RemoveHeader(KnownHeaders.Authorization);
 
-                //initial value will match exactly any of the schemes
+                // initial value will match exactly any of the schemes
                 if (scheme != null)
                 {
                     string clientToken = WinAuthHandler.GetInitialAuthToken(request.Host, scheme, args.Id);
 
                     string auth = string.Concat(scheme, clientToken);
 
-                    //replace existing authorization header if any
+                    // replace existing authorization header if any
                     request.Headers.SetOrAddHeaderValue(KnownHeaders.Authorization, auth);
 
-                    //don't need to send body for Authorization request
+                    // don't need to send body for Authorization request
                     if (request.HasBody)
                     {
                         request.ContentLength = 0;
                     }
                 }
-                //challenge value will start with any of the scheme selected
+                // challenge value will start with any of the scheme selected
                 else
                 {
                     scheme = authSchemes.First(x =>
@@ -135,19 +136,19 @@ namespace Titanium.Web.Proxy
 
                     string auth = string.Concat(scheme, clientToken);
 
-                    //there will be an existing header from initial client request 
+                    // there will be an existing header from initial client request 
                     request.Headers.SetOrAddHeaderValue(KnownHeaders.Authorization, auth);
 
-                    //send body for final auth request
+                    // send body for final auth request
                     if (request.OriginalHasBody)
                     {
                         request.ContentLength = request.Body.Length;
                     }
                 }
 
-                //Need to revisit this.
-                //Should we cache all Set-Cokiee headers from server during auth process
-                //and send it to client after auth?
+                // Need to revisit this.
+                // Should we cache all Set-Cokiee headers from server during auth process
+                // and send it to client after auth?
 
                 // Let ResponseHandler send the updated request
                 args.ReRequest = true;

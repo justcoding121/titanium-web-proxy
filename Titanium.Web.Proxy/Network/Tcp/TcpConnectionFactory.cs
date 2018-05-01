@@ -39,13 +39,13 @@ namespace Titanium.Web.Proxy.Network.Tcp
         {
             bool useUpstreamProxy = false;
 
-            //check if external proxy is set for HTTP/HTTPS
+            // check if external proxy is set for HTTP/HTTPS
             if (externalProxy != null &&
                 !(externalProxy.HostName == remoteHostName && externalProxy.Port == remotePort))
             {
                 useUpstreamProxy = true;
 
-                //check if we need to ByPass
+                // check if we need to ByPass
                 if (externalProxy.BypassLocalhost && NetworkHelper.IsLocalIpAddress(remoteHostName))
                 {
                     useUpstreamProxy = false;
@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 tcpClient = new TcpClient(upStreamEndPoint);
 
-                //If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections
+                // If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections
                 if (useUpstreamProxy)
                 {
                     await tcpClient.ConnectAsync(externalProxy.HostName, externalProxy.Port);
