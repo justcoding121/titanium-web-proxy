@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
@@ -8,6 +9,7 @@ using StreamExtended;
 using StreamExtended.Helpers;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
@@ -77,10 +79,9 @@ namespace Titanium.Web.Proxy
                         }
                         catch (Exception e)
                         {
-                            ExceptionFunc(new Exception(
-                                $"Could'nt authenticate client '{httpsHostName}' with fake certificate.", e));
                             sslStream?.Dispose();
-                            return;
+                            throw new ProxyConnectException(
+                                $"Could'nt authenticate client '{httpsHostName}' with fake certificate.", e, null);
                         }
                     }
                     else
@@ -126,6 +127,22 @@ namespace Titanium.Web.Proxy
                 //Now create the request
                 await HandleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
                     cancellationTokenSource, isHttps ? httpsHostName : null, null, true);
+            }
+            catch (ProxyException e)
+            {
+                OnException(clientStream, e);
+            }
+            catch (IOException e)
+            {
+                OnException(clientStream, new Exception("Connection was aborted", e));
+            }
+            catch (SocketException e)
+            {
+                OnException(clientStream, new Exception("Could not connect", e));
+            }
+            catch (Exception e)
+            {
+                OnException(clientStream, new Exception("Error occured in whilst handling the client", e));
             }
             finally
             {

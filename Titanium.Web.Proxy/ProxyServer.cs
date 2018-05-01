@@ -7,6 +7,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
@@ -661,6 +662,18 @@ namespace Titanium.Web.Proxy
                     await HandleClient((ExplicitProxyEndPoint)endPoint, clientConnection);
                 }
             }
+        }
+
+        private void OnException(CustomBufferedStream clientStream, Exception exception)
+        {
+#if DEBUG
+            if (clientStream is DebugCustomBufferedStream debugStream)
+            {
+                debugStream.LogException(exception);
+            }
+#endif
+
+            ExceptionFunc(exception);
         }
 
         /// <summary>
