@@ -14,6 +14,9 @@ namespace Titanium.Web.Proxy.Extensions
         internal static readonly List<SslApplicationProtocol> Http11ProtocolAsList =
             new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 };
 
+        internal static readonly List<SslApplicationProtocol> Http2ProtocolAsList =
+            new List<SslApplicationProtocol> { SslApplicationProtocol.Http2 };
+
         internal static string GetServerName(this ClientHelloInfo clientHelloInfo)
         {
             if (clientHelloInfo.Extensions != null &&
