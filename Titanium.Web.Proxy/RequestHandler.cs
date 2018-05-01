@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy
     /// <summary>
     ///     Handle the request
     /// </summary>
-    partial class ProxyServer
+    public partial class ProxyServer
     {
         private static readonly Regex uriSchemeRegex =
             new Regex("^[a-z]*://", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -40,8 +40,6 @@ namespace Titanium.Web.Proxy
         ///     explicit endpoint.
         /// </param>
         /// <param name="connectRequest">The Connect request if this is a HTTPS request from explicit endpoint.</param>
-        /// <param name="isTransparentEndPoint">Is this a request from transparent endpoint?</param>
-        /// <returns></returns>
         private async Task HandleHttpSessionRequest(ProxyEndPoint endPoint, TcpClientConnection clientConnection,
             CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
             CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, ConnectRequest connectRequest)
@@ -171,10 +169,9 @@ namespace Titanium.Web.Proxy
 
                             // create a new connection if hostname/upstream end point changes
                             if (serverConnection != null
-                                && (!serverConnection.HostName.Equals(request.RequestUri.Host,
-                                        StringComparison.OrdinalIgnoreCase)
-                                    || args.WebSession.UpStreamEndPoint != null
-                                    && !args.WebSession.UpStreamEndPoint.Equals(serverConnection.UpStreamEndPoint)))
+                                && (!serverConnection.HostName.EqualsIgnoreCase(request.RequestUri.Host)
+                                    || args.WebSession.UpStreamEndPoint?.Equals(serverConnection.UpStreamEndPoint) ==
+                                    false))
                             {
                                 serverConnection.Dispose();
                                 serverConnection = null;

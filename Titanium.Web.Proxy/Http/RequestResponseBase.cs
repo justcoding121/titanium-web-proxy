@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text;
 using Titanium.Web.Proxy.Compression;
@@ -14,7 +15,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Cached body content as byte array.
         /// </summary>
-        protected byte[] BodyInternal;
+        protected byte[] BodyInternal { get; private set; }
 
         /// <summary>
         ///     Cached body as string.
@@ -24,7 +25,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Store weather the original request/response has body or not, since the user may change the parameters
         /// </summary>
-        internal bool OriginalHasBody;
+        internal bool OriginalHasBody { get; set; }
 
         /// <summary>
         ///     Keeps the body data after the session is finished.
@@ -62,6 +63,7 @@ namespace Titanium.Web.Proxy.Http
 
                 return -1;
             }
+
             set
             {
                 if (value >= 0)
@@ -105,6 +107,7 @@ namespace Titanium.Web.Proxy.Http
                 string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
                 return headerValue != null && headerValue.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked);
             }
+
             set
             {
                 if (value)
@@ -135,6 +138,7 @@ namespace Titanium.Web.Proxy.Http
                 EnsureBodyAvailable();
                 return BodyInternal;
             }
+
             internal set
             {
                 BodyInternal = value;

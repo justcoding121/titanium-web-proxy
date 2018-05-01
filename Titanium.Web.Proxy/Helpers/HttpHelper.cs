@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy.Helpers
                     if (split.Length == 2 && split[0].Trim().EqualsIgnoreCase(KnownHeaders.ContentTypeCharset))
                     {
                         string value = split[1];
-                        if (value.Equals("x-user-defined", StringComparison.OrdinalIgnoreCase))
+                        if (value.EqualsIgnoreCase("x-user-defined"))
                         {
                             continue;
                         }

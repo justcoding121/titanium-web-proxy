@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy.EventArguments
         protected readonly ExceptionHandler ExceptionFunc;
 
         /// <summary>
-        ///     Constructor to initialize the proxy
+        ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
         /// </summary>
         internal SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint,
             CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)

@@ -3,9 +3,9 @@ using System.Web;
 
 namespace Titanium.Web.Proxy.Http.Responses
 {
-    /// <summary>
-    /// Anything other than a 200 or 302 response
-    /// </summary>
+    /// <summary>
+    /// Anything other than a 200 or 302 response
+    /// </summary>
     public class GenericResponse : Response
     {
         /// <summary>

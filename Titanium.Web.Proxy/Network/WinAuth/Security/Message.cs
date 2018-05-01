@@ -65,8 +65,6 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         // methods
         private void Decode(byte[] message)
         {
-            //base.Decode (message);
-
             if (message == null)
             {
                 throw new ArgumentNullException(nameof(message));

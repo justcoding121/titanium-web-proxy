@@ -57,9 +57,9 @@ namespace Titanium.Web.Proxy.Network
         private X509Certificate2 rootCertificate;
 
         private string rootCertificateName;
-
-
+        
         /// <summary>
+        ///     Initializes a new instance of the <see cref="CertificateManager"/> class.
         /// </summary>
         /// <param name="rootCertificateName"></param>
         /// <param name="rootCertificateIssuerName"></param>
@@ -241,8 +241,7 @@ namespace Titanium.Web.Proxy.Network
         public void Dispose()
         {
         }
-
-
+        
         private string GetRootCertificateDirectory()
         {
             string assemblyLocation = Assembly.GetExecutingAssembly().Location;
@@ -254,7 +253,7 @@ namespace Titanium.Web.Proxy.Network
             }
 
             string path = Path.GetDirectoryName(assemblyLocation);
-            if (null == path)
+            if (path == null)
             {
                 throw new NullReferenceException();
             }
@@ -322,7 +321,6 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="storeName"></param>
         /// <param name="storeLocation"></param>
-        /// <returns></returns>
         private void InstallCertificate(StoreName storeName, StoreLocation storeLocation)
         {
             if (RootCertificate == null)
@@ -359,7 +357,6 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="storeName"></param>
         /// <param name="storeLocation"></param>
         /// <param name="certificate"></param>
-        /// <returns></returns>
         private void UninstallCertificate(StoreName storeName, StoreLocation storeLocation,
             X509Certificate2 certificate)
         {
@@ -447,9 +444,9 @@ namespace Titanium.Web.Proxy.Network
                         {
                             certificate = new X509Certificate2(certificatePath, string.Empty, StorageFlag);
                         }
-                        // if load failed create again
                         catch
                         {
+                            // if load failed create again
                             certificate = MakeCertificate(certificateName, false);
                         }
                     }
@@ -532,8 +529,7 @@ namespace Titanium.Web.Proxy.Network
                 await Task.Delay(1000 * 60);
             }
         }
-
-
+        
         /// <summary>
         ///     Stops the certificate cache clear process
         /// </summary>
@@ -779,8 +775,7 @@ namespace Titanium.Web.Proxy.Network
 
             EnsureRootCertificate();
         }
-
-
+        
         /// <summary>
         ///     Determines whether the root certificate is trusted.
         /// </summary>
@@ -866,6 +861,7 @@ namespace Titanium.Web.Proxy.Network
                             ErrorDialog = false,
                             WindowStyle = ProcessWindowStyle.Hidden
                         },
+                        
                         // currentUser\Personal & currentMachine\Personal
                         new ProcessStartInfo
                         {

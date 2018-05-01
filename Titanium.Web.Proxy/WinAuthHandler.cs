@@ -124,9 +124,10 @@ namespace Titanium.Web.Proxy
                         request.ContentLength = 0;
                     }
                 }
-                // challenge value will start with any of the scheme selected
                 else
                 {
+                    // challenge value will start with any of the scheme selected
+
                     scheme = authSchemes.First(x =>
                         authHeader.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase) &&
                         authHeader.Value.Length > x.Length + 1);

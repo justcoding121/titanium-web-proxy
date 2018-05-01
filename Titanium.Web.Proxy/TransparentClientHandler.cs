@@ -17,7 +17,7 @@ using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy
 {
-    partial class ProxyServer
+    public partial class ProxyServer
     {
         /// <summary>
         ///     This is called when this proxy acts as a reverse proxy (like a real http server).
@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy
                                 }
                             }
 
-                            //var serverHelloInfo = await SslTools.PeekServerHello(serverStream);
+                            ////var serverHelloInfo = await SslTools.PeekServerHello(serverStream);
 
                             await TcpHelper.SendRaw(clientStream, serverStream, BufferSize,
                                 null, null, cancellationTokenSource, ExceptionFunc);

@@ -37,6 +37,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             get => isHttpsConnect ??
                    throw new Exception("The value of this property is known in the BeforeTunnectConnectResponse event");
+
             internal set => isHttpsConnect = value;
         }
     }
