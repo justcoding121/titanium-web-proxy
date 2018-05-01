@@ -119,19 +119,21 @@
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public abstract class RequestResponseBase</code></pre>
   </div>
-  <h3 id="fields">Fields
+  <h3 id="properties">Properties
   </h3>
   
   
-  <h4 id="Titanium_Web_Proxy_Http_RequestResponseBase_BodyInternal" data-uid="Titanium.Web.Proxy.Http.RequestResponseBase.BodyInternal">BodyInternal</h4>
-  <div class="markdown level1 summary"><p>Cached body content as byte array.</p>
+  <a id="Titanium_Web_Proxy_Http_RequestResponseBase_Body_" data-uid="Titanium.Web.Proxy.Http.RequestResponseBase.Body*"></a>
+  <h4 id="Titanium_Web_Proxy_Http_RequestResponseBase_Body" data-uid="Titanium.Web.Proxy.Http.RequestResponseBase.Body">Body</h4>
+  <div class="markdown level1 summary"><p>Body as byte array</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">protected byte[] BodyInternal</code></pre>
+    <pre><code class="lang-csharp hljs">[Browsable(false)]
+public byte[] Body { get; }</code></pre>
   </div>
-  <h5 class="fieldValue">Field Value</h5>
+  <h5 class="propertyValue">Property Value</h5>
   <table class="table table-bordered table-striped table-condensed">
     <thead>
       <tr>
@@ -146,19 +148,16 @@
       </tr>
     </tbody>
   </table>
-  <h3 id="properties">Properties
-  </h3>
   
   
-  <a id="Titanium_Web_Proxy_Http_RequestResponseBase_Body_" data-uid="Titanium.Web.Proxy.Http.RequestResponseBase.Body*"></a>
-  <h4 id="Titanium_Web_Proxy_Http_RequestResponseBase_Body" data-uid="Titanium.Web.Proxy.Http.RequestResponseBase.Body">Body</h4>
-  <div class="markdown level1 summary"><p>Body as byte array</p>
+  <a id="Titanium_Web_Proxy_Http_RequestResponseBase_BodyInternal_" data-uid="Titanium.Web.Proxy.Http.RequestResponseBase.BodyInternal*"></a>
+  <h4 id="Titanium_Web_Proxy_Http_RequestResponseBase_BodyInternal" data-uid="Titanium.Web.Proxy.Http.RequestResponseBase.BodyInternal">BodyInternal</h4>
+  <div class="markdown level1 summary"><p>Cached body content as byte array.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">[Browsable(false)]
-public byte[] Body { get; }</code></pre>
+    <pre><code class="lang-csharp hljs">protected byte[] BodyInternal { get; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
   <table class="table table-bordered table-striped table-condensed">
