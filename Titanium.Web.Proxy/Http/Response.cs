@@ -155,7 +155,7 @@ namespace Titanium.Web.Proxy.Http
             string httpVersion = httpResult[0];
 
             version = HttpHeader.Version11;
-            if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
+            if (httpVersion.EqualsIgnoreCase("HTTP/1.0"))
             {
                 version = HttpHeader.Version10;
             }

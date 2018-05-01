@@ -93,8 +93,7 @@ namespace Titanium.Web.Proxy.Http
             await writer.WriteLineAsync(Request.CreateRequestLine(Request.Method,
                 useUpstreamProxy || isTransparent ? Request.OriginalUrl : Request.RequestUri.PathAndQuery,
                 Request.HttpVersion), cancellationToken);
-
-
+            
             // Send Authentication to Upstream proxy if needed
             if (!isTransparent && upstreamProxy != null
                                && ServerConnection.IsHttps == false

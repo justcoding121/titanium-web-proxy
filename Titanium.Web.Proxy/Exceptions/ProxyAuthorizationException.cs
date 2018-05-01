@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.Exceptions
     public class ProxyAuthorizationException : ProxyException
     {
         /// <summary>
-        ///     Instantiate new instance.
+        ///     Initializes a new instance of the <see cref="ProxyAuthorizationException" /> class.
         /// </summary>
         /// <param name="message">Exception message.</param>
         /// <param name="session">The <see cref="SessionEventArgs" /> instance containing the event data.</param>

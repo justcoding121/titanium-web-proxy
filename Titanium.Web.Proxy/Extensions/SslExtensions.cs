@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
@@ -81,6 +82,7 @@ namespace Titanium.Web.Proxy.Extensions
         Http2
     }
 
+    [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType", Justification = "Reviewed.")]
     internal class SslClientAuthenticationOptions
     {
         internal bool AllowRenegotiation { get; set; }

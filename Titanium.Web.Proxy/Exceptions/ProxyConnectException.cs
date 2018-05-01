@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.Exceptions
     public class ProxyConnectException : ProxyException
     {
         /// <summary>
-        ///     Instantiate new instance
+        ///     Initializes a new instance of the <see cref="ProxyConnectException" /> class.
         /// </summary>
         /// <param name="message">Message for this exception</param>
         /// <param name="innerException">Associated inner exception</param>

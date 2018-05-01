@@ -18,8 +18,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         ///     Keep track of auth states for reuse in final challenge response
         /// </summary>
         private static readonly IDictionary<Guid, State> authStates = new ConcurrentDictionary<Guid, State>();
-
-
+        
         /// <summary>
         ///     Acquire the intial client token to send
         /// </summary>
@@ -68,8 +67,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                     out clientToken,
                     out NewContextAttributes,
                     out NewLifeTime);
-
-
+                
                 if (result != IntermediateResult)
                 {
                     return null;
@@ -122,8 +120,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                     out clientToken,
                     out NewContextAttributes,
                     out NewLifeTime);
-
-
+                
                 if (result != SuccessfulResult)
                 {
                     return null;
@@ -173,18 +170,16 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
             if (expectedAuthState == State.WinAuthState.UNAUTHORIZED)
             {
-                return stateExists == false ||
+                return !stateExists ||
                        state.AuthState == State.WinAuthState.UNAUTHORIZED ||
-                       state.AuthState ==
-                       State.WinAuthState.AUTHORIZED; // Server may require re-authentication on an open connection
+                       state.AuthState == State.WinAuthState.AUTHORIZED; // Server may require re-authentication on an open connection
             }
 
             if (expectedAuthState == State.WinAuthState.INITIAL_TOKEN)
             {
                 return stateExists &&
                        (state.AuthState == State.WinAuthState.INITIAL_TOKEN ||
-                        state.AuthState == State.WinAuthState.AUTHORIZED
-                       ); // Server may require re-authentication on an open connection
+                        state.AuthState == State.WinAuthState.AUTHORIZED); // Server may require re-authentication on an open connection
             }
 
             throw new Exception("Unsupported validation of WinAuthState");

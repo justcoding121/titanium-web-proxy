@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy
     /// <summary>
     ///     Handle the response from server.
     /// </summary>
-    partial class ProxyServer
+    public partial class ProxyServer
     {
         /// <summary>
         ///     Called asynchronously when a request was successfully and we received the response.
@@ -23,6 +23,7 @@ namespace Titanium.Web.Proxy
             try
             {
                 var cancellationToken = args.CancellationTokenSource.Token;
+                
                 // read response & headers from server
                 await args.WebSession.ReceiveResponse(cancellationToken);
 

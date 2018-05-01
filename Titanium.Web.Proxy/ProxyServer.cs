@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Models;
@@ -25,7 +26,7 @@ namespace Titanium.Web.Proxy
     public partial class ProxyServer : IDisposable
     {
         /// <summary>
-        ///     HTTP & HTTPS scheme shorthands.
+        ///     HTTP &amp; HTTPS scheme shorthands.
         /// </summary>
         internal static readonly string UriSchemeHttp = Uri.UriSchemeHttp;
 
@@ -170,8 +171,7 @@ namespace Titanium.Web.Proxy
         ///     Realm used during Proxy Basic Authentication.
         /// </summary>
         public string ProxyRealm { get; set; } = "TitaniumProxy";
-
-
+        
         /// <summary>
         ///     List of supported Ssl versions.
         /// </summary>
@@ -180,7 +180,6 @@ namespace Titanium.Web.Proxy
             SslProtocols.Ssl3 |
 #endif
             SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12;
-
 
         /// <summary>
         ///     Manages certificates used by this proxy.
@@ -483,7 +482,7 @@ namespace Titanium.Web.Proxy
                     foreach (var proxy in proxyInfo.Proxies.Values)
                     {
                         if ((proxy.HostName == "127.0.0.1"
-                             || proxy.HostName.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+                             || proxy.HostName.EqualsIgnoreCase("localhost"))
                             && ProxyEndPoints.Any(x => x.Port == proxy.Port))
                         {
                             protocolToRemove |= proxy.ProtocolType;

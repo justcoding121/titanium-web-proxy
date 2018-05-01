@@ -20,7 +20,7 @@ using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy
 {
-    partial class ProxyServer
+    public partial class ProxyServer
     {
         /// <summary>
         ///     This is called when client is aware of proxy
@@ -278,7 +278,7 @@ namespace Titanium.Web.Proxy
 
                 // Now create the request
                 await HandleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
-				    cancellationTokenSource, connectHostname, connectArgs?.WebSession.ConnectRequest);
+                    cancellationTokenSource, connectHostname, connectArgs?.WebSession.ConnectRequest);
             }
             catch (ProxyException e)
             {

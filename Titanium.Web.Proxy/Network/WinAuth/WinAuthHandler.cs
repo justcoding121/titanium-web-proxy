@@ -23,8 +23,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth
             var tokenBytes = WinAuthEndPoint.AcquireInitialSecurityToken(serverHostname, authScheme, requestId);
             return string.Concat(" ", Convert.ToBase64String(tokenBytes));
         }
-
-
+        
         /// <summary>
         ///     Get the final token given the server challenge token
         /// </summary>
