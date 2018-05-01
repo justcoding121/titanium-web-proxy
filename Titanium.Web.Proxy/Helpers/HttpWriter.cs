@@ -165,19 +165,19 @@ namespace Titanium.Web.Proxy.Helpers
         internal Task CopyBodyAsync(ICustomStreamReader streamReader, bool isChunked, long contentLength,
             Action<byte[], int, int> onCopy, CancellationToken cancellationToken)
         {
-            //For chunked request we need to read data as they arrive, until we reach a chunk end symbol
+            // For chunked request we need to read data as they arrive, until we reach a chunk end symbol
             if (isChunked)
             {
                 return CopyBodyChunkedAsync(streamReader, onCopy, cancellationToken);
             }
 
-            //http 1.0 or the stream reader limits the stream
+            // http 1.0 or the stream reader limits the stream
             if (contentLength == -1)
             {
                 contentLength = long.MaxValue;
             }
 
-            //If not chunked then its easy just read the amount of bytes mentioned in content length header
+            // If not chunked then its easy just read the amount of bytes mentioned in content length header
             return CopyBytesFromStream(streamReader, contentLength, onCopy, cancellationToken);
         }
 
@@ -230,7 +230,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 await WriteLineAsync(cancellationToken);
 
-                //chunk trail
+                // chunk trail
                 await reader.ReadLineAsync(cancellationToken);
 
                 if (chunkSize == 0)

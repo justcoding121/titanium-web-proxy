@@ -69,10 +69,10 @@ namespace Titanium.Web.Proxy
                             string certName = HttpHelper.GetWildCardDomainName(httpsHostName);
                             var certificate = await CertificateManager.CreateCertificateAsync(certName);
 
-                            //Successfully managed to authenticate the client using the fake certificate
+                            // Successfully managed to authenticate the client using the fake certificate
                             await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
 
-                            //HTTPS server created - we can now decrypt the client's traffic
+                            // HTTPS server created - we can now decrypt the client's traffic
                             clientStream = new CustomBufferedStream(sslStream, BufferSize);
 
                             clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
@@ -86,7 +86,7 @@ namespace Titanium.Web.Proxy
                     }
                     else
                     {
-                        //create new connection
+                        // create new connection
                         var connection = new TcpClient(UpStreamEndPoint);
                         await connection.ConnectAsync(httpsHostName, endPoint.Port);
                         connection.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
@@ -123,8 +123,8 @@ namespace Titanium.Web.Proxy
                     }
                 }
 
-                //HTTPS server created - we can now decrypt the client's traffic
-                //Now create the request
+                // HTTPS server created - we can now decrypt the client's traffic
+                // Now create the request
                 await HandleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
                     cancellationTokenSource, isHttps ? httpsHostName : null, null);
             }

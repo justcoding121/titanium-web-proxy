@@ -31,7 +31,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         {
             byte[] token;
 
-            //null for initial call
+            // null for initial call
             var serverToken = new SecurityBufferDesciption();
 
             var clientToken = new SecurityBufferDesciption(MaximumTokenSize);
@@ -99,7 +99,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         {
             byte[] token;
 
-            //user server challenge
+            // user server challenge
             var serverToken = new SecurityBufferDesciption(serverChallenge);
 
             var clientToken = new SecurityBufferDesciption(MaximumTokenSize);
@@ -156,7 +156,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                 authStates.Remove(cache.Key);
             }
 
-            //after a minute come back to check for outdated certificates in cache
+            // after a minute come back to check for outdated certificates in cache
             await Task.Delay(1000 * 60);
         }
 
@@ -206,44 +206,44 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         #region Native calls to secur32.dll
 
         [DllImport("secur32.dll", SetLastError = true)]
-        private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, //PCredHandle
-            IntPtr phContext, //PCtxtHandle
+        private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, // PCredHandle
+            IntPtr phContext, // PCtxtHandle
             string pszTargetName,
             int fContextReq,
             int reserved1,
             int targetDataRep,
-            ref SecurityBufferDesciption pInput, //PSecBufferDesc SecBufferDesc
+            ref SecurityBufferDesciption pInput, // PSecBufferDesc SecBufferDesc
             int reserved2,
-            out SecurityHandle phNewContext, //PCtxtHandle
-            out SecurityBufferDesciption pOutput, //PSecBufferDesc SecBufferDesc
-            out uint pfContextAttr, //managed ulong == 64 bits!!!
-            out SecurityInteger ptsExpiry); //PTimeStamp
+            out SecurityHandle phNewContext, // PCtxtHandle
+            out SecurityBufferDesciption pOutput, // PSecBufferDesc SecBufferDesc
+            out uint pfContextAttr, // managed ulong == 64 bits!!!
+            out SecurityInteger ptsExpiry); // PTimeStamp
 
         [DllImport("secur32", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, //PCredHandle
-            ref SecurityHandle phContext, //PCtxtHandle
+        private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, // PCredHandle
+            ref SecurityHandle phContext, // PCtxtHandle
             string pszTargetName,
             int fContextReq,
             int reserved1,
             int targetDataRep,
-            ref SecurityBufferDesciption secBufferDesc, //PSecBufferDesc SecBufferDesc
+            ref SecurityBufferDesciption secBufferDesc, // PSecBufferDesc SecBufferDesc
             int reserved2,
-            out SecurityHandle phNewContext, //PCtxtHandle
-            out SecurityBufferDesciption pOutput, //PSecBufferDesc SecBufferDesc
-            out uint pfContextAttr, //managed ulong == 64 bits!!!
-            out SecurityInteger ptsExpiry); //PTimeStamp
+            out SecurityHandle phNewContext, // PCtxtHandle
+            out SecurityBufferDesciption pOutput, // PSecBufferDesc SecBufferDesc
+            out uint pfContextAttr, // managed ulong == 64 bits!!!
+            out SecurityInteger ptsExpiry); // PTimeStamp
 
         [DllImport("secur32.dll", CharSet = CharSet.Auto, SetLastError = false)]
         private static extern int AcquireCredentialsHandle(
-            string pszPrincipal, //SEC_CHAR*
-            string pszPackage, //SEC_CHAR* //"Kerberos","NTLM","Negotiative"
+            string pszPrincipal, // SEC_CHAR*
+            string pszPackage, // SEC_CHAR* // "Kerberos","NTLM","Negotiative"
             int fCredentialUse,
-            IntPtr pAuthenticationId, //_LUID AuthenticationID,//pvLogonID, //PLUID
-            IntPtr pAuthData, //PVOID
-            int pGetKeyFn, //SEC_GET_KEY_FN
-            IntPtr pvGetKeyArgument, //PVOID
-            ref SecurityHandle phCredential, //SecHandle //PCtxtHandle ref
-            ref SecurityInteger ptsExpiry); //PTimeStamp //TimeStamp ref
+            IntPtr pAuthenticationId, // _LUID AuthenticationID,//pvLogonID, // PLUID
+            IntPtr pAuthData, // PVOID
+            int pGetKeyFn, // SEC_GET_KEY_FN
+            IntPtr pvGetKeyArgument, // PVOID
+            ref SecurityHandle phCredential, // SecHandle // PCtxtHandle ref
+            ref SecurityInteger ptsExpiry); // PTimeStamp // TimeStamp ref
 
         #endregion
     }

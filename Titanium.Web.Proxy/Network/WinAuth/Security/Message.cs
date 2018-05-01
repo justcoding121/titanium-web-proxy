@@ -69,25 +69,25 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
             if (message == null)
             {
-                throw new ArgumentNullException("message");
+                throw new ArgumentNullException(nameof(message));
             }
 
             if (message.Length < 12)
             {
                 string msg = "Minimum Type3 message length is 12 bytes.";
-                throw new ArgumentOutOfRangeException("message", message.Length, msg);
+                throw new ArgumentOutOfRangeException(nameof(message), message.Length, msg);
             }
 
             if (!CheckHeader(message))
             {
                 string msg = "Invalid Type3 message header.";
-                throw new ArgumentException(msg, "message");
+                throw new ArgumentException(msg, nameof(message));
             }
 
             if (LittleEndian.ToUInt16(message, 56) != message.Length)
             {
                 string msg = "Invalid Type3 message length.";
-                throw new ArgumentException(msg, "message");
+                throw new ArgumentException(msg, nameof(message));
             }
 
             if (message.Length >= 64)

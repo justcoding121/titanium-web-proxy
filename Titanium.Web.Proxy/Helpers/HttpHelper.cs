@@ -21,13 +21,13 @@ namespace Titanium.Web.Proxy.Helpers
         {
             try
             {
-                //return default if not specified
+                // return default if not specified
                 if (contentType == null)
                 {
                     return defaultEncoding;
                 }
 
-                //extract the encoding by finding the charset
+                // extract the encoding by finding the charset
                 var parameters = contentType.Split(ProxyConstants.SemiColonSplit);
                 foreach (string parameter in parameters)
                 {
@@ -51,11 +51,11 @@ namespace Titanium.Web.Proxy.Helpers
             }
             catch
             {
-                //parsing errors
+                // parsing errors
                 // ignored
             }
 
-            //return default if not specified
+            // return default if not specified
             return defaultEncoding;
         }
 
@@ -63,7 +63,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             if (contentType != null)
             {
-                //extract the boundary
+                // extract the boundary
                 var parameters = contentType.Split(ProxyConstants.SemiColonSplit);
                 foreach (string parameter in parameters)
                 {
@@ -81,7 +81,7 @@ namespace Titanium.Web.Proxy.Helpers
                 }
             }
 
-            //return null if not specified
+            // return null if not specified
             return null;
         }
 
@@ -94,14 +94,14 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         internal static string GetWildCardDomainName(string hostname)
         {
-            //only for subdomains we need wild card
-            //example www.google.com or gstatic.google.com
-            //but NOT for google.com
+            // only for subdomains we need wild card
+            // example www.google.com or gstatic.google.com
+            // but NOT for google.com
             if (hostname.Split(ProxyConstants.DotSplit).Length > 2)
             {
                 int idx = hostname.IndexOf(ProxyConstants.DotSplit);
 
-                //issue #352
+                // issue #352
                 if (hostname.Substring(0, idx).Contains("-"))
                 {
                     return hostname;
@@ -111,7 +111,7 @@ namespace Titanium.Web.Proxy.Helpers
                 return "*." + rootDomain;
             }
 
-            //return as it is
+            // return as it is
             return hostname;
         }
 

@@ -173,7 +173,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         {
             internal int ulVersion;
             internal int cBuffers;
-            internal IntPtr pBuffers; //Point to SecBuffer
+            internal IntPtr pBuffers; // Point to SecBuffer
 
             internal SecurityBufferDesciption(int bufferSize)
             {
@@ -206,12 +206,12 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                     {
                         for (int index = 0; index < cBuffers; index++)
                         {
-                            //The bits were written out the following order:
-                            //int cbBuffer;
-                            //int BufferType;
-                            //pvBuffer;
+                            // The bits were written out the following order:
+                            // int cbBuffer;
+                            // int BufferType;
+                            // pvBuffer;
                             //What we need to do here is to grab a hold of the pvBuffer allocate by the individual
-                            //SecBuffer and release it...
+                            // SecBuffer and release it...
                             int currentOffset = index * Marshal.SizeOf(typeof(Buffer));
                             var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers,
                                 currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
@@ -249,11 +249,11 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
                     for (int index = 0; index < cBuffers; index++)
                     {
-                        //The bits were written out the following order:
-                        //int cbBuffer;
-                        //int BufferType;
-                        //pvBuffer;
-                        //What we need to do here calculate the total number of bytes we need to copy...
+                        // The bits were written out the following order:
+                        // int cbBuffer;
+                        // int BufferType;
+                        // pvBuffer;
+                        // What we need to do here calculate the total number of bytes we need to copy...
                         int currentOffset = index * Marshal.SizeOf(typeof(Buffer));
                         bytesToAllocate += Marshal.ReadInt32(pBuffers, currentOffset);
                     }
@@ -262,12 +262,12 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
                     for (int index = 0, bufferIndex = 0; index < cBuffers; index++)
                     {
-                        //The bits were written out the following order:
-                        //int cbBuffer;
-                        //int BufferType;
-                        //pvBuffer;
-                        //Now iterate over the individual buffers and put them together into a
-                        //byte array...
+                        // The bits were written out the following order:
+                        // int cbBuffer;
+                        // int BufferType;
+                        // pvBuffer;
+                        // Now iterate over the individual buffers and put them together into a
+                        // byte array...
                         int currentOffset = index * Marshal.SizeOf(typeof(Buffer));
                         int bytesToCopy = Marshal.ReadInt32(pBuffers, currentOffset);
                         var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers,

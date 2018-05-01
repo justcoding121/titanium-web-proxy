@@ -92,7 +92,7 @@ namespace Titanium.Web.Proxy
             bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
             bool trustRootCertificateAsAdmin = false)
         {
-            //default values
+            // default values
             ConnectionTimeOutSeconds = 60;
 
             ProxyEndPoints = new List<ProxyEndPoint>();
@@ -357,7 +357,7 @@ namespace Titanium.Web.Proxy
             {
                 CertificateManager.EnsureRootCertificate();
 
-                //If certificate was trusted by the machine
+                // If certificate was trusted by the machine
                 if (!CertificateManager.CertValidated)
                 {
                     protocolType = protocolType & ~ProxyProtocolType.Https;
@@ -365,7 +365,7 @@ namespace Titanium.Web.Proxy
                 }
             }
 
-            //clear any settings previously added
+            // clear any settings previously added
             if (isHttp)
             {
                 ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpProxy = false);
@@ -472,8 +472,8 @@ namespace Titanium.Web.Proxy
                 CertificateManager.EnsureRootCertificate();
             }
 
-            //clear any system proxy settings which is pointing to our own endpoint (causing a cycle)
-            //due to non gracious proxy shutdown before or something else
+            // clear any system proxy settings which is pointing to our own endpoint (causing a cycle)
+            // due to non gracious proxy shutdown before or something else
             if (systemProxySettingsManager != null && RunTime.IsWindows)
             {
                 var proxyInfo = systemProxySettingsManager.GetProxyInfoFromRegistry();
@@ -622,7 +622,7 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                //based on end point type call appropriate request handlers
+                // based on end point type call appropriate request handlers
                 tcpClient = endPoint.Listener.EndAcceptTcpClient(asyn);
             }
             catch (ObjectDisposedException)
@@ -634,7 +634,7 @@ namespace Titanium.Web.Proxy
             }
             catch
             {
-                //Other errors are discarded to keep proxy running
+                // Other errors are discarded to keep proxy running
             }
 
             if (tcpClient != null)

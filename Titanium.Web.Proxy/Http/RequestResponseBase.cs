@@ -140,7 +140,7 @@ namespace Titanium.Web.Proxy.Http
                 BodyInternal = value;
                 bodyString = null;
 
-                //If there is a content length header update it
+                // If there is a content length header update it
                 UpdateContentLength();
             }
         }

@@ -89,13 +89,13 @@ namespace Titanium.Web.Proxy.Http
 
             var writer = ServerConnection.StreamWriter;
 
-            //prepare the request & headers
+            // prepare the request & headers
             await writer.WriteLineAsync(Request.CreateRequestLine(Request.Method,
                 useUpstreamProxy || isTransparent ? Request.OriginalUrl : Request.RequestUri.PathAndQuery,
                 Request.HttpVersion), cancellationToken);
 
 
-            //Send Authentication to Upstream proxy if needed
+            // Send Authentication to Upstream proxy if needed
             if (!isTransparent && upstreamProxy != null
                                && ServerConnection.IsHttps == false
                                && !string.IsNullOrEmpty(upstreamProxy.UserName)
@@ -106,7 +106,7 @@ namespace Titanium.Web.Proxy.Http
                     .WriteToStreamAsync(writer, cancellationToken);
             }
 
-            //write request headers
+            // write request headers
             foreach (var header in Request.Headers)
             {
                 if (isTransparent || header.Name != KnownHeaders.ProxyAuthorization)
@@ -126,7 +126,7 @@ namespace Titanium.Web.Proxy.Http
                     Response.ParseResponseLine(httpStatus, out _, out int responseStatusCode,
                         out string responseStatusDescription);
 
-                    //find if server is willing for expect continue
+                    // find if server is willing for expect continue
                     if (responseStatusCode == (int)HttpStatusCode.Continue
                         && responseStatusDescription.EqualsIgnoreCase("continue"))
                     {
@@ -149,7 +149,7 @@ namespace Titanium.Web.Proxy.Http
         /// <returns></returns>
         internal async Task ReceiveResponse(CancellationToken cancellationToken)
         {
-            //return if this is already read
+            // return if this is already read
             if (Response.StatusCode != 0)
             {
                 return;
@@ -172,16 +172,16 @@ namespace Titanium.Web.Proxy.Http
             Response.StatusCode = statusCode;
             Response.StatusDescription = statusDescription;
 
-            //For HTTP 1.1 comptibility server may send expect-continue even if not asked for it in request
+            // For HTTP 1.1 comptibility server may send expect-continue even if not asked for it in request
             if (Response.StatusCode == (int)HttpStatusCode.Continue
                 && Response.StatusDescription.EqualsIgnoreCase("continue"))
             {
-                //Read the next line after 100-continue 
+                // Read the next line after 100-continue 
                 Response.Is100Continue = true;
                 Response.StatusCode = 0;
                 await ServerConnection.Stream.ReadLineAsync(cancellationToken);
 
-                //now receive response
+                // now receive response
                 await ReceiveResponse(cancellationToken);
                 return;
             }
@@ -189,17 +189,17 @@ namespace Titanium.Web.Proxy.Http
             if (Response.StatusCode == (int)HttpStatusCode.ExpectationFailed
                 && Response.StatusDescription.EqualsIgnoreCase("expectation failed"))
             {
-                //read next line after expectation failed response
+                // read next line after expectation failed response
                 Response.ExpectationFailed = true;
                 Response.StatusCode = 0;
                 await ServerConnection.Stream.ReadLineAsync(cancellationToken);
 
-                //now receive response 
+                // now receive response 
                 await ReceiveResponse(cancellationToken);
                 return;
             }
 
-            //Read the response headers in to unique and non-unique header collections
+            // Read the response headers in to unique and non-unique header collections
             await HeaderParser.ReadHeaders(ServerConnection.Stream, Response.Headers, cancellationToken);
         }
 

@@ -51,8 +51,8 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                //Loop through each subsequest request on this particular client connection
-                //(assuming HTTP connection is kept alive by client)
+                // Loop through each subsequest request on this particular client connection
+                // (assuming HTTP connection is kept alive by client)
                 while (true)
                 {
                     // read the request line
@@ -76,7 +76,7 @@ namespace Titanium.Web.Proxy
                             Request.ParseRequestLine(httpCmd, out string httpMethod, out string httpUrl,
                                 out var version);
 
-                            //Read the request headers in to unique and non-unique header collections
+                            // Read the request headers in to unique and non-unique header collections
                             await HeaderParser.ReadHeaders(clientStream, args.WebSession.Request.Headers,
                                 cancellationToken);
 
@@ -124,12 +124,12 @@ namespace Titanium.Web.Proxy
 
                             if (!args.IsTransparent)
                             {
-                                //proxy authorization check
+                                // proxy authorization check
                                 if (httpsConnectHostname == null && await CheckAuthorization(args) == false)
                                 {
                                     await InvokeBeforeResponse(args);
 
-                                    //send the response
+                                    // send the response
                                     await clientStreamWriter.WriteResponseAsync(args.WebSession.Response,
                                         cancellationToken: cancellationToken);
                                     return;
@@ -139,9 +139,9 @@ namespace Titanium.Web.Proxy
                                 request.Host = request.RequestUri.Authority;
                             }
 
-                            //if win auth is enabled
-                            //we need a cache of request body
-                            //so that we can send it after authentication in WinAuthHandler.cs
+                            // if win auth is enabled
+                            // we need a cache of request body
+                            // so that we can send it after authentication in WinAuthHandler.cs
                             if (isWindowsAuthenticationEnabledAndSupported && request.HasBody)
                             {
                                 await args.GetRequestBody(cancellationToken);
@@ -149,14 +149,14 @@ namespace Titanium.Web.Proxy
 
                             request.OriginalHasBody = request.HasBody;
 
-                            //If user requested interception do it
+                            // If user requested interception do it
                             await InvokeBeforeRequest(args);
 
                             var response = args.WebSession.Response;
 
                             if (request.CancelRequest)
                             {
-                                //syphon out the request body from client before setting the new body
+                                // syphon out the request body from client before setting the new body
                                 await args.SyphonOutBodyAsync(true, cancellationToken);
 
                                 await HandleHttpSessionResponse(args);
@@ -169,7 +169,7 @@ namespace Titanium.Web.Proxy
                                 continue;
                             }
 
-                            //create a new connection if hostname/upstream end point changes
+                            // create a new connection if hostname/upstream end point changes
                             if (serverConnection != null
                                 && (!serverConnection.HostName.Equals(request.RequestUri.Host,
                                         StringComparison.OrdinalIgnoreCase)
@@ -185,10 +185,10 @@ namespace Titanium.Web.Proxy
                                 serverConnection = await GetServerConnection(args, false, cancellationToken);
                             }
 
-                            //if upgrading to websocket then relay the requet without reading the contents
+                            // if upgrading to websocket then relay the requet without reading the contents
                             if (request.UpgradeToWebSocket)
                             {
-                                //prepare the prefix content
+                                // prepare the prefix content
                                 await serverConnection.StreamWriter.WriteLineAsync(httpCmd, cancellationToken);
                                 await serverConnection.StreamWriter.WriteHeadersAsync(request.Headers,
                                     cancellationToken: cancellationToken);
@@ -210,7 +210,7 @@ namespace Titanium.Web.Proxy
                                         cancellationToken: cancellationToken);
                                 }
 
-                                //If user requested call back then do it
+                                // If user requested call back then do it
                                 if (!args.WebSession.Response.Locked)
                                 {
                                     await InvokeBeforeResponse(args);
@@ -224,7 +224,7 @@ namespace Titanium.Web.Proxy
                                 return;
                             }
 
-                            //construct the web request that we are going to issue on behalf of the client.
+                            // construct the web request that we are going to issue on behalf of the client.
                             await HandleHttpSessionRequestInternal(serverConnection, args);
 
                             if (args.WebSession.ServerConnection == null)
@@ -232,7 +232,7 @@ namespace Titanium.Web.Proxy
                                 return;
                             }
 
-                            //if connection is closing exit
+                            // if connection is closing exit
                             if (!response.KeepAlive)
                             {
                                 return;
@@ -282,8 +282,8 @@ namespace Titanium.Web.Proxy
 
                 var body = request.CompressBodyAndUpdateContentLength();
 
-                //if expect continue is enabled then send the headers first 
-                //and see if server would return 100 conitinue
+                // if expect continue is enabled then send the headers first 
+                // and see if server would return 100 conitinue
                 if (request.ExpectContinue)
                 {
                     args.WebSession.SetConnection(serverConnection);
@@ -291,7 +291,7 @@ namespace Titanium.Web.Proxy
                         cancellationToken);
                 }
 
-                //If 100 continue was the response inform that to the client
+                // If 100 continue was the response inform that to the client
                 if (Enable100ContinueBehaviour)
                 {
                     var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
@@ -310,7 +310,7 @@ namespace Titanium.Web.Proxy
                     }
                 }
 
-                //If expect continue is not enabled then set the connectio and send request headers
+                // If expect continue is not enabled then set the connectio and send request headers
                 if (!request.ExpectContinue)
                 {
                     args.WebSession.SetConnection(serverConnection);
@@ -318,7 +318,7 @@ namespace Titanium.Web.Proxy
                         cancellationToken);
                 }
 
-                //check if content-length is > 0
+                // check if content-length is > 0
                 if (request.ContentLength > 0)
                 {
                     if (request.IsBodyRead)
@@ -339,7 +339,7 @@ namespace Titanium.Web.Proxy
                     }
                 }
 
-                //If not expectation failed response was returned by server then parse response
+                // If not expectation failed response was returned by server then parse response
                 if (!request.ExpectationFailed)
                 {
                     await HandleHttpSessionResponse(args);

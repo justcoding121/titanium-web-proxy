@@ -18,26 +18,26 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private readonly ProxyServer proxyServer;
 
-        //keep track of request headers
+        // keep track of request headers
         private readonly IDictionary<Guid, HeaderCollection> requestHeaderHistory =
             new ConcurrentDictionary<Guid, HeaderCollection>();
 
-        //keep track of response headers
+        // keep track of response headers
         private readonly IDictionary<Guid, HeaderCollection> responseHeaderHistory =
             new ConcurrentDictionary<Guid, HeaderCollection>();
 
         private ExplicitProxyEndPoint explicitEndPoint;
 
-        //share requestBody outside handlers
-        //Using a dictionary is not a good idea since it can cause memory overflow
-        //ideally the data should be moved out of memory
-        //private readonly IDictionary<Guid, string> requestBodyHistory = new ConcurrentDictionary<Guid, string>();
+        // share requestBody outside handlers
+        // Using a dictionary is not a good idea since it can cause memory overflow
+        // ideally the data should be moved out of memory
+        // private readonly IDictionary<Guid, string> requestBodyHistory = new ConcurrentDictionary<Guid, string>();
 
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
 
-            //generate root certificate without storing it in file system
+            // generate root certificate without storing it in file system
             //proxyServer.CertificateManager.CreateRootCertificate(false);
 
             //proxyServer.CertificateManager.TrustRootCertificate();
@@ -63,11 +63,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
             };
             proxyServer.ForwardToUpstreamGateway = true;
             proxyServer.CertificateManager.SaveFakeCertificates = true;
-            //optionally set the Certificate Engine
-            //Under Mono or Non-Windows runtimes only BouncyCastle will be supported
+            
+            // optionally set the Certificate Engine
+            // Under Mono or Non-Windows runtimes only BouncyCastle will be supported
             //proxyServer.CertificateManager.CertificateEngine = Network.CertificateEngine.BouncyCastle;
 
-            //optionally set the Root Certificate
+            // optionally set the Root Certificate
             //proxyServer.CertificateManager.RootCertificate = new X509Certificate2("myCert.pfx", string.Empty, X509KeyStorageFlags.Exportable);
         }
 
@@ -83,27 +84,26 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000);
 
-            //Fired when a CONNECT request is received
+            // Fired when a CONNECT request is received
             explicitEndPoint.BeforeTunnelConnectRequest += OnBeforeTunnelConnectRequest;
             explicitEndPoint.BeforeTunnelConnectResponse += OnBeforeTunnelConnectResponse;
 
-            //An explicit endpoint is where the client knows about the existence of a proxy
-            //So client sends request in a proxy friendly manner
+            // An explicit endpoint is where the client knows about the existence of a proxy
+            // So client sends request in a proxy friendly manner
             proxyServer.AddEndPoint(explicitEndPoint);
             proxyServer.Start();
 
-            //Transparent endpoint is useful for reverse proxy (client is not aware of the existence of proxy)
-            //A transparent endpoint usually requires a network router port forwarding HTTP(S) packets or DNS
-            //to send data to this endPoint
+            // Transparent endpoint is useful for reverse proxy (client is not aware of the existence of proxy)
+            // A transparent endpoint usually requires a network router port forwarding HTTP(S) packets or DNS
+            // to send data to this endPoint
             //var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 443, true)
-            //{
-            //    //Generic Certificate hostname to use
-            //    //When SNI is disabled by client
+            //{ 
+            //    // Generic Certificate hostname to use
+            //    // When SNI is disabled by client
             //    GenericCertificateName = "google.com"
             //};
 
             //proxyServer.AddEndPoint(transparentEndPoint);
-
             //proxyServer.UpStreamHttpProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
             //proxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
 
@@ -117,7 +117,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 #endif
             {
-                //Only explicit proxies can be set as system proxy!
+                // Only explicit proxies can be set as system proxy!
                 //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
                 //proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
                 proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
@@ -135,8 +135,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;
 
             proxyServer.Stop();
-
-            //remove the generated certificates
+            
+            // remove the generated certificates
             //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
         }
 
@@ -147,9 +147,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             if (hostname.Contains("dropbox.com"))
             {
-                //Exclude Https addresses you don't want to proxy
-                //Useful for clients that use certificate pinning
-                //for example dropbox.com
+                // Exclude Https addresses you don't want to proxy
+                // Useful for clients that use certificate pinning
+                // for example dropbox.com
                 e.DecryptSsl = false;
             }
         }
@@ -158,13 +158,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
         }
 
-        //intecept & cancel redirect or update requests
+        // intecept & cancel redirect or update requests
         private async Task OnRequest(object sender, SessionEventArgs e)
         {
             WriteToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
             WriteToConsole(e.WebSession.Request.Url);
 
-            //read request headers
+            // read request headers
             requestHeaderHistory[e.Id] = e.WebSession.Request.Headers;
 
             ////This sample shows how to get the multipart form data headers
@@ -174,22 +174,22 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //}
 
             //if (e.WebSession.Request.HasBody)
-            //{
-            //    //Get/Set request body bytes
+            //{ 
+            //    // Get/Set request body bytes
             //    var bodyBytes = await e.GetRequestBody();
             //    await e.SetRequestBody(bodyBytes);
 
-            //    //Get/Set request body as string
+            //    // Get/Set request body as string
             //    string bodyString = await e.GetRequestBodyAsString();
             //    await e.SetRequestBodyString(bodyString);
 
             //    //requestBodyHistory[e.Id] = bodyString;
-            //}
+            //} 
 
-            //To cancel a request with a custom HTML content
-            //Filter URL
+            // To cancel a request with a custom HTML content
+            // Filter URL
             //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("yahoo.com"))
-            //{
+            //{ 
             //    e.Ok("<!DOCTYPE html>" +
             //          "<html><body><h1>" +
             //          "Website Blocked" +
@@ -197,16 +197,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //          "<p>Blocked by titanium web proxy.</p>" +
             //          "</body>" +
             //          "</html>");
-            //}
+            //} 
 
             ////Redirect example
             //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
-            //{
+            //{ 
             //   e.Redirect("https://www.paypal.com");
-            //}
+            //} 
         }
 
-        //Modify response
+        // Modify response
         private void MultipartRequestPartSent(object sender, MultipartRequestPartSentEventArgs e)
         {
             var session = (SessionEventArgs)sender;
@@ -221,11 +221,30 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             WriteToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
+            var ext = System.IO.Path.GetExtension(e.WebSession.Request.RequestUri.AbsolutePath);
+
+            //if (ext == ".gif" || ext == ".png" || ext == ".jpg")
+            //{ 
+            //    byte[] btBody = Encoding.UTF8.GetBytes("<!DOCTYPE html>" +
+            //                                           "<html><body><h1>" +
+            //                                           "Image is blocked" +
+            //                                           "</h1>" +
+            //                                           "<p>Blocked by Titanium</p>" +
+            //                                           "</body>" +
+            //                                           "</html>");
+
+            //    var response = new OkResponse(btBody);
+            //    response.HttpVersion = e.WebSession.Request.HttpVersion;
+
+            //    e.Respond(response);
+            //    e.TerminateServerConnection();
+            //} 
+            
             //if (requestBodyHistory.ContainsKey(e.Id))
-            //{
-            //    //access request body by looking up the shared dictionary using requestId
+            //{ 
+            //    // access request body by looking up the shared dictionary using requestId
             //    var requestBody = requestBodyHistory[e.Id];
-            //}
+            //} 
 
             ////read response headers
             //responseHeaderHistory[e.Id] = e.WebSession.Response.Headers;
@@ -235,7 +254,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             ////if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
             //if (e.WebSession.Request.Method == "GET" || e.WebSession.Request.Method == "POST")
-            //{
+            //{ 
             //    if (e.WebSession.Response.StatusCode == (int)HttpStatusCode.OK)
             //    {
             //        if (e.WebSession.Response.ContentType != null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
@@ -247,7 +266,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //            await e.SetResponseBodyString(body);
             //        }
             //    }
-            //}
+            //} 
         }
 
         /// <summary>
@@ -257,7 +276,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         /// <param name="e"></param>
         public Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
         {
-            //set IsValid to true/false based on Certificate Errors
+            // set IsValid to true/false based on Certificate Errors
             if (e.SslPolicyErrors == SslPolicyErrors.None)
             {
                 e.IsValid = true;
@@ -273,7 +292,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         /// <param name="e"></param>
         public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs e)
         {
-            //set e.clientCertificate to override
+            // set e.clientCertificate to override
 
             return Task.FromResult(0);
         }
