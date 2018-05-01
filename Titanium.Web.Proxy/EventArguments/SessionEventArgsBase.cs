@@ -53,14 +53,14 @@ namespace Titanium.Web.Proxy.EventArguments
                 {
                     var remoteEndPoint = ClientEndPoint;
 
-                    //If client is localhost get the process id
+                    // If client is localhost get the process id
                     if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
                     {
                         var ipVersion = endPoint.IpV6Enabled ? IpVersion.Ipv6 : IpVersion.Ipv4;
                         return TcpHelper.GetProcessIdByLocalPort(ipVersion, remoteEndPoint.Port);
                     }
 
-                    //can't access process Id of remote request from remote machine
+                    // can't access process Id of remote request from remote machine
                     return -1;
                 }
 

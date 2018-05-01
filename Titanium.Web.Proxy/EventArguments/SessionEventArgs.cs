@@ -88,14 +88,14 @@ namespace Titanium.Web.Proxy.EventArguments
 
             var request = WebSession.Request;
 
-            //If not already read (not cached yet)
+            // If not already read (not cached yet)
             if (!request.IsBodyRead)
             {
                 var body = await ReadBodyAsync(true, cancellationToken);
                 request.Body = body;
 
-                //Now set the flag to true
-                //So that next time we can deliver body from cache
+                // Now set the flag to true
+                // So that next time we can deliver body from cache
                 request.IsBodyRead = true;
                 OnDataSent(body, 0, body.Length);
             }
@@ -106,7 +106,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         internal async Task ClearResponse(CancellationToken cancellationToken)
         {
-            //syphon out the response body from server
+            // syphon out the response body from server
             await SyphonOutBodyAsync(false, cancellationToken);
             WebSession.Response = new Response();
         }
@@ -139,14 +139,14 @@ namespace Titanium.Web.Proxy.EventArguments
                 return;
             }
 
-            //If not already read (not cached yet)
+            // If not already read (not cached yet)
             if (!response.IsBodyRead)
             {
                 var body = await ReadBodyAsync(false, cancellationToken);
                 response.Body = body;
 
-                //Now set the flag to true
-                //So that next time we can deliver body from cache
+                // Now set the flag to true
+                // So that next time we can deliver body from cache
                 response.IsBodyRead = true;
                 OnDataReceived(body, 0, body.Length);
             }
@@ -196,7 +196,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             long contentLength = request.ContentLength;
 
-            //send the request body bytes to server
+            // send the request body bytes to server
             if (contentLength > 0 && hasMulipartEventSubscribers && request.IsMultipartFormData)
             {
                 var reader = GetStreamReader(true);
@@ -323,7 +323,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
                     if (bufferDataLength == buffer.Length)
                     {
-                        //boundary is not longer than 70 bytes according to the specification, so keeping the last 100 (minimum 74) bytes is enough
+                        // boundary is not longer than 70 bytes according to the specification, so keeping the last 100 (minimum 74) bytes is enough
                         const int bytesToKeep = 100;
                         Buffer.BlockCopy(buffer, buffer.Length - bytesToKeep, buffer, 0, bytesToKeep);
                         bufferDataLength = bytesToKeep;
