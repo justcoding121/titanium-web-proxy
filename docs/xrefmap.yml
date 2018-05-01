@@ -1522,7 +1522,14 @@ references:
 - uid: Titanium.Web.Proxy.Http.RequestResponseBase.BodyInternal
   name: BodyInternal
   href: api/Titanium.Web.Proxy.Http.RequestResponseBase.html#Titanium_Web_Proxy_Http_RequestResponseBase_BodyInternal
-  commentId: F:Titanium.Web.Proxy.Http.RequestResponseBase.BodyInternal
+  commentId: P:Titanium.Web.Proxy.Http.RequestResponseBase.BodyInternal
+  fullName: Titanium.Web.Proxy.Http.RequestResponseBase.BodyInternal
+  nameWithType: RequestResponseBase.BodyInternal
+- uid: Titanium.Web.Proxy.Http.RequestResponseBase.BodyInternal*
+  name: BodyInternal
+  href: api/Titanium.Web.Proxy.Http.RequestResponseBase.html#Titanium_Web_Proxy_Http_RequestResponseBase_BodyInternal_
+  commentId: Overload:Titanium.Web.Proxy.Http.RequestResponseBase.BodyInternal
+  isSpec: "True"
   fullName: Titanium.Web.Proxy.Http.RequestResponseBase.BodyInternal
   nameWithType: RequestResponseBase.BodyInternal
 - uid: Titanium.Web.Proxy.Http.RequestResponseBase.BodyString
