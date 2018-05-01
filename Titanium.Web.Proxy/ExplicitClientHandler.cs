@@ -177,10 +177,9 @@ namespace Titanium.Web.Proxy
                         }
                         catch (Exception e)
                         {
-                            ExceptionFunc(new Exception(
-                                $"Could'nt authenticate client '{connectHostname}' with fake certificate.", e));
                             sslStream?.Dispose();
-                            return;
+                            throw new ProxyConnectException(
+                                $"Could'nt authenticate client '{connectHostname}' with fake certificate.", e, connectArgs);
                         }
 
                         if (await HttpHelper.IsConnectMethod(clientStream) == -1)
@@ -282,21 +281,21 @@ namespace Titanium.Web.Proxy
                     clientStreamWriter, cancellationTokenSource, connectHostname,
                     connectArgs?.WebSession.ConnectRequest);
             }
-            catch (ProxyHttpException e)
+            catch (ProxyException e)
             {
-                ExceptionFunc(e);
+                OnException(clientStream, e);
             }
             catch (IOException e)
             {
-                ExceptionFunc(new Exception("Connection was aborted", e));
+                OnException(clientStream, new Exception("Connection was aborted", e));
             }
             catch (SocketException e)
             {
-                ExceptionFunc(new Exception("Could not connect", e));
+                OnException(clientStream, new Exception("Could not connect", e));
             }
             catch (Exception e)
             {
-                ExceptionFunc(new Exception("Error occured in whilst handling the client", e));
+                OnException(clientStream, new Exception("Error occured in whilst handling the client", e));
             }
             finally
             {

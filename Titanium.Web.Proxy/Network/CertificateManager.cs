@@ -327,10 +327,7 @@ namespace Titanium.Web.Proxy.Network
         {
             if (RootCertificate == null)
             {
-                exceptionFunc(
-                    new Exception("Could not install certificate"
-                                  + " as it is null or empty."));
-
+                exceptionFunc(new Exception("Could not install certificate as it is null or empty."));
                 return;
             }
 
@@ -368,10 +365,7 @@ namespace Titanium.Web.Proxy.Network
         {
             if (certificate == null)
             {
-                exceptionFunc(
-                    new Exception("Could not remove certificate"
-                                  + " as it is null or empty."));
-
+                exceptionFunc(new Exception("Could not remove certificate as it is null or empty."));
                 return;
             }
 
