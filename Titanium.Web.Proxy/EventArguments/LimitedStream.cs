@@ -65,7 +65,7 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 bytesRemaining = -1;
 
-                //chunk trail
+                // chunk trail
                 baseStream.ReadLineAsync().Wait();
             }
         }

@@ -44,8 +44,7 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         private async Task HandleHttpSessionRequest(ProxyEndPoint endPoint, TcpClientConnection clientConnection,
             CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
-            CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, ConnectRequest connectRequest,
-            bool isTransparentEndPoint = false)
+            CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, ConnectRequest connectRequest)
         {
             var cancellationToken = cancellationTokenSource.Token;
             TcpServerConnection serverConnection = null;
@@ -123,20 +122,19 @@ namespace Titanium.Web.Proxy
                             args.ProxyClient.ClientStream = clientStream;
                             args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
-                            //proxy authorization check
-                            if (!args.IsTransparent && httpsConnectHostname == null &&
-                                await CheckAuthorization(args) == false)
+                            if (!args.IsTransparent)
                             {
-                                await InvokeBeforeResponse(args);
+                                //proxy authorization check
+                                if (httpsConnectHostname == null && await CheckAuthorization(args) == false)
+                                {
+                                    await InvokeBeforeResponse(args);
 
-                                //send the response
-                                await clientStreamWriter.WriteResponseAsync(args.WebSession.Response,
-                                    cancellationToken: cancellationToken);
-                                return;
-                            }
+                                    //send the response
+                                    await clientStreamWriter.WriteResponseAsync(args.WebSession.Response,
+                                        cancellationToken: cancellationToken);
+                                    return;
+                                }
 
-                            if (!isTransparentEndPoint)
-                            {
                                 PrepareRequestHeaders(request.Headers);
                                 request.Host = request.RequestUri.Authority;
                             }

@@ -99,7 +99,7 @@ namespace Titanium.Web.Proxy
                             int available = clientStream.Available;
                             if (available > 0)
                             {
-                                //send the buffered data
+                                // send the buffered data
                                 var data = BufferPool.GetBuffer(BufferSize);
 
                                 try
@@ -126,7 +126,7 @@ namespace Titanium.Web.Proxy
                 //HTTPS server created - we can now decrypt the client's traffic
                 //Now create the request
                 await HandleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
-                    cancellationTokenSource, isHttps ? httpsHostName : null, null, true);
+                    cancellationTokenSource, isHttps ? httpsHostName : null, null);
             }
             catch (ProxyException e)
             {
