@@ -18,20 +18,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private readonly ProxyServer proxyServer;
 
-        // keep track of request headers
-        private readonly IDictionary<Guid, HeaderCollection> requestHeaderHistory =
-            new ConcurrentDictionary<Guid, HeaderCollection>();
-
-        // keep track of response headers
-        private readonly IDictionary<Guid, HeaderCollection> responseHeaderHistory =
-            new ConcurrentDictionary<Guid, HeaderCollection>();
-
         private ExplicitProxyEndPoint explicitEndPoint;
-
-        // share requestBody outside handlers
-        // Using a dictionary is not a good idea since it can cause memory overflow
-        // ideally the data should be moved out of memory
-        // private readonly IDictionary<Guid, string> requestBodyHistory = new ConcurrentDictionary<Guid, string>();
 
         public ProxyTestController()
         {
@@ -164,31 +151,20 @@ namespace Titanium.Web.Proxy.Examples.Basic
             WriteToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
             WriteToConsole(e.WebSession.Request.Url);
 
-            // create custom id for the request and store it in the UserData property
+            // store it in the UserData property
             // It can be a simple integer, Guid, or any type
-            e.UserData = Guid.NewGuid();
-
-            // read request headers
-            requestHeaderHistory[(Guid)e.UserData] = e.WebSession.Request.Headers;
+            //e.UserData = new CustomUserData()
+            //{
+            //    RequestHeaders = e.WebSession.Request.Headers,
+            //    RequestBody = e.WebSession.Request.HasBody ? e.WebSession.Request.Body:null,
+            //    RequestBodyString = e.WebSession.Request.HasBody? e.WebSession.Request.BodyString:null
+            //};
 
             ////This sample shows how to get the multipart form data headers
             //if (e.WebSession.Request.Host == "mail.yahoo.com" && e.WebSession.Request.IsMultipartFormData)
             //{
             //    e.MultipartRequestPartSent += MultipartRequestPartSent;
             //}
-
-            //if (e.WebSession.Request.HasBody)
-            //{ 
-            //    // Get/Set request body bytes
-            //    var bodyBytes = await e.GetRequestBody();
-            //    await e.SetRequestBody(bodyBytes);
-
-            //    // Get/Set request body as string
-            //    string bodyString = await e.GetRequestBodyAsString();
-            //    await e.SetRequestBodyString(bodyString);
-
-            //    //requestBodyHistory[e.Id] = bodyString;
-            //} 
 
             // To cancel a request with a custom HTML content
             // Filter URL
@@ -227,6 +203,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             string ext = System.IO.Path.GetExtension(e.WebSession.Request.RequestUri.AbsolutePath);
 
+            //access user data set in request to do something with it
+            //var userData = e.WebSession.UserData as CustomUserData;
+
             //if (ext == ".gif" || ext == ".png" || ext == ".jpg")
             //{ 
             //    byte[] btBody = Encoding.UTF8.GetBytes("<!DOCTYPE html>" +
@@ -243,15 +222,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //    e.Respond(response);
             //    e.TerminateServerConnection();
             //} 
-            
-            //if (requestBodyHistory.ContainsKey(e.Id))
-            //{ 
-            //    // access request body by looking up the shared dictionary using requestId
-            //    var requestBody = requestBodyHistory[e.Id];
-            //} 
-
-            ////read response headers
-            //responseHeaderHistory[e.Id] = e.WebSession.Response.Headers;
 
             //// print out process id of current session
             ////WriteToConsole($"PID: {e.WebSession.ProcessId.Value}");
@@ -308,5 +278,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 Console.WriteLine(message);
             }
         }
+
+        ///// <summary>
+        ///// User data object as defined by user.
+        ///// User data can be set to each SessionEventArgs.WebSession.UserData property
+        ///// </summary>
+        //public class CustomUserData
+        //{
+        //    public HeaderCollection RequestHeaders { get; set; }
+        //    public byte[] RequestBody { get; set; }
+        //    public string RequestBodyString { get; set; }
+        //}
     }
 }

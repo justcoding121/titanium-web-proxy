@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
-using System.Net.Security;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,9 +25,15 @@ namespace Titanium.Web.Proxy
         private static readonly Regex uriSchemeRegex =
             new Regex("^[a-z]*://", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        private static readonly HashSet<string> proxySupportedCompressions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "gzip",
+            "deflate"
+        };
+
         private bool isWindowsAuthenticationEnabledAndSupported =>
             EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
-
+      
         /// <summary>
         ///     This is the core request handler method for a particular connection from client.
         ///     Will create new session (request/response) sequence until
@@ -404,12 +411,23 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Prepare the request headers so that we can avoid encodings not parsable by this proxy
         /// </summary>
-        /// <param name="requestHeaders"></param>
         private void PrepareRequestHeaders(HeaderCollection requestHeaders)
         {
-            if (requestHeaders.HeaderExists(KnownHeaders.AcceptEncoding))
+            var acceptEncoding = requestHeaders.GetHeaderValueOrNull(KnownHeaders.AcceptEncoding);
+
+            if (acceptEncoding != null)
             {
-                requestHeaders.SetOrAddHeaderValue(KnownHeaders.AcceptEncoding, "gzip,deflate");
+                var supporedAcceptEncoding = new List<string>();
+
+                //only allow proxy supported compressions
+                supporedAcceptEncoding.AddRange(acceptEncoding.Split(',')
+                    .Select(x => x.Trim())
+                    .Where(x => proxySupportedCompressions.Contains(x)));
+
+                //uncompressed is always supported by proxy
+                supporedAcceptEncoding.Add("identity");
+
+                requestHeaders.SetOrAddHeaderValue(KnownHeaders.AcceptEncoding, string.Join(",", supporedAcceptEncoding));
             }
 
             requestHeaders.FixProxyHeaders();
