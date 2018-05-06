@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy
                     }
                     else
                     {
-                        WinAuthEndPoint.AuthenticatedResponse(args.WebSession.RequestId);
+                        WinAuthEndPoint.AuthenticatedResponse(args.WebSession.Data);
                     }
                 }
 

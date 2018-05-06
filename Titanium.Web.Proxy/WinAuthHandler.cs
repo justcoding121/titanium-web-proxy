@@ -96,7 +96,7 @@ namespace Titanium.Web.Proxy
                 var expectedAuthState =
                     scheme == null ? State.WinAuthState.INITIAL_TOKEN : State.WinAuthState.UNAUTHORIZED;
 
-                if (!WinAuthEndPoint.ValidateWinAuthState(args.WebSession.RequestId, expectedAuthState))
+                if (!WinAuthEndPoint.ValidateWinAuthState(args.WebSession.Data, expectedAuthState))
                 {
                     // Invalid state, create proper error message to client
                     await RewriteUnauthorizedResponse(args);
@@ -111,7 +111,7 @@ namespace Titanium.Web.Proxy
                 // initial value will match exactly any of the schemes
                 if (scheme != null)
                 {
-                    string clientToken = WinAuthHandler.GetInitialAuthToken(request.Host, scheme, args.Id);
+                    string clientToken = WinAuthHandler.GetInitialAuthToken(request.Host, scheme, args.WebSession.Data);
 
                     string auth = string.Concat(scheme, clientToken);
 
@@ -133,7 +133,7 @@ namespace Titanium.Web.Proxy
                         authHeader.Value.Length > x.Length + 1);
 
                     string serverToken = authHeader.Value.Substring(scheme.Length + 1);
-                    string clientToken = WinAuthHandler.GetFinalAuthToken(request.Host, serverToken, args.Id);
+                    string clientToken = WinAuthHandler.GetFinalAuthToken(request.Host, serverToken, args.WebSession.Data);
 
                     string auth = string.Concat(scheme, clientToken);
 

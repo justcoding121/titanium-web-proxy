@@ -164,8 +164,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
             WriteToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
             WriteToConsole(e.WebSession.Request.Url);
 
+            // create custom id for the request and store it in the UserData property
+            // It can be a simple integer, Guid, or any type
+            e.UserData = Guid.NewGuid();
+
             // read request headers
-            requestHeaderHistory[e.Id] = e.WebSession.Request.Headers;
+            requestHeaderHistory[(Guid)e.UserData] = e.WebSession.Request.Headers;
 
             ////This sample shows how to get the multipart form data headers
             //if (e.WebSession.Request.Host == "mail.yahoo.com" && e.WebSession.Request.IsMultipartFormData)
@@ -221,7 +225,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             WriteToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
-            var ext = System.IO.Path.GetExtension(e.WebSession.Request.RequestUri.AbsolutePath);
+            string ext = System.IO.Path.GetExtension(e.WebSession.Request.RequestUri.AbsolutePath);
 
             //if (ext == ".gif" || ext == ".png" || ext == ".jpg")
             //{ 

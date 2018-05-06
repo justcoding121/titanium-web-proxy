@@ -74,10 +74,14 @@ namespace Titanium.Web.Proxy.EventArguments
         internal ProxyClient ProxyClient { get; }
 
         /// <summary>
-        ///     Returns a unique Id for this request/response session which is
-        ///     same as the RequestId of WebSession.
+        ///     Returns a user data for this request/response session which is
+        ///     same as the user data of WebSession.
         /// </summary>
-        public Guid Id => WebSession.RequestId;
+        public object UserData
+        {
+            get => WebSession.UserData;
+            set => WebSession.UserData = value;
+        }
 
         /// <summary>
         ///     Does this session uses SSL?
