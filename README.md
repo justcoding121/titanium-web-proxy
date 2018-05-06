@@ -198,8 +198,11 @@ public async Task OnResponse(object sender, SessionEventArgs e)
 	}
     }
     
-    //access request from UserData property where we stored it in RequestHandler
-    var request = (Request)e.UserData;
+    if(e.UserData!=null)
+    {
+	    //access request from UserData property where we stored it in RequestHandler
+	    var request = (Request)e.UserData;
+    }
     
 }
 
