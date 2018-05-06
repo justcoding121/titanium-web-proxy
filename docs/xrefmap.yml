@@ -586,19 +586,6 @@ references:
   commentId: F:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ExceptionFunc
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ExceptionFunc
   nameWithType: SessionEventArgsBase.ExceptionFunc
-- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Id
-  name: Id
-  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Id
-  commentId: P:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Id
-  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Id
-  nameWithType: SessionEventArgsBase.Id
-- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Id*
-  name: Id
-  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Id_
-  commentId: Overload:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Id
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Id
-  nameWithType: SessionEventArgsBase.Id
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsHttps
   name: IsHttps
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsHttps
@@ -651,6 +638,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TerminateSession
   nameWithType: SessionEventArgsBase.TerminateSession
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UserData
+  name: UserData
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UserData
+  commentId: P:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UserData
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UserData
+  nameWithType: SessionEventArgsBase.UserData
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UserData*
+  name: UserData
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UserData_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UserData
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UserData
+  nameWithType: SessionEventArgsBase.UserData
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.WebSession
   name: WebSession
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_WebSession
@@ -1130,19 +1130,6 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http.HttpWebClient.Request
   nameWithType: HttpWebClient.Request
-- uid: Titanium.Web.Proxy.Http.HttpWebClient.RequestId
-  name: RequestId
-  href: api/Titanium.Web.Proxy.Http.HttpWebClient.html#Titanium_Web_Proxy_Http_HttpWebClient_RequestId
-  commentId: P:Titanium.Web.Proxy.Http.HttpWebClient.RequestId
-  fullName: Titanium.Web.Proxy.Http.HttpWebClient.RequestId
-  nameWithType: HttpWebClient.RequestId
-- uid: Titanium.Web.Proxy.Http.HttpWebClient.RequestId*
-  name: RequestId
-  href: api/Titanium.Web.Proxy.Http.HttpWebClient.html#Titanium_Web_Proxy_Http_HttpWebClient_RequestId_
-  commentId: Overload:Titanium.Web.Proxy.Http.HttpWebClient.RequestId
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.Http.HttpWebClient.RequestId
-  nameWithType: HttpWebClient.RequestId
 - uid: Titanium.Web.Proxy.Http.HttpWebClient.Response
   name: Response
   href: api/Titanium.Web.Proxy.Http.HttpWebClient.html#Titanium_Web_Proxy_Http_HttpWebClient_Response
@@ -1169,6 +1156,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http.HttpWebClient.UpStreamEndPoint
   nameWithType: HttpWebClient.UpStreamEndPoint
+- uid: Titanium.Web.Proxy.Http.HttpWebClient.UserData
+  name: UserData
+  href: api/Titanium.Web.Proxy.Http.HttpWebClient.html#Titanium_Web_Proxy_Http_HttpWebClient_UserData
+  commentId: P:Titanium.Web.Proxy.Http.HttpWebClient.UserData
+  fullName: Titanium.Web.Proxy.Http.HttpWebClient.UserData
+  nameWithType: HttpWebClient.UserData
+- uid: Titanium.Web.Proxy.Http.HttpWebClient.UserData*
+  name: UserData
+  href: api/Titanium.Web.Proxy.Http.HttpWebClient.html#Titanium_Web_Proxy_Http_HttpWebClient_UserData_
+  commentId: Overload:Titanium.Web.Proxy.Http.HttpWebClient.UserData
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.HttpWebClient.UserData
+  nameWithType: HttpWebClient.UserData
 - uid: Titanium.Web.Proxy.Http.KnownHeaders
   name: KnownHeaders
   href: api/Titanium.Web.Proxy.Http.KnownHeaders.html
