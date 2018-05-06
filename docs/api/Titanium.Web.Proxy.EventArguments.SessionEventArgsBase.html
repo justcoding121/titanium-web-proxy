@@ -316,33 +316,6 @@ or when server terminates connection from proxy.</p>
   </table>
   
   
-  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Id_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Id*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Id" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Id">Id</h4>
-  <div class="markdown level1 summary"><p>Returns a unique Id for this request/response session which is
-same as the RequestId of WebSession.</p>
-</div>
-  <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
-  <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public Guid Id { get; }</code></pre>
-  </div>
-  <h5 class="propertyValue">Property Value</h5>
-  <table class="table table-bordered table-striped table-condensed">
-    <thead>
-      <tr>
-        <th>Type</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.guid">Guid</a></td>
-        <td></td>
-      </tr>
-    </tbody>
-  </table>
-  
-  
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsHttps_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsHttps*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsHttps" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsHttps">IsHttps</h4>
   <div class="markdown level1 summary"><p>Does this session uses SSL?</p>
@@ -415,6 +388,33 @@ same as the RequestId of WebSession.</p>
     <tbody>
       <tr>
         <td><a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html">ProxyEndPoint</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UserData_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UserData*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UserData" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UserData">UserData</h4>
+  <div class="markdown level1 summary"><p>Returns a user data for this request/response session which is
+same as the user data of WebSession.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public object UserData { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object">Object</a></td>
         <td></td>
       </tr>
     </tbody>
