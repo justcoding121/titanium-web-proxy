@@ -417,17 +417,17 @@ namespace Titanium.Web.Proxy
 
             if (acceptEncoding != null)
             {
-                var supporedAcceptEncoding = new List<string>();
+                var supportedAcceptEncoding = new List<string>();
 
                 //only allow proxy supported compressions
-                supporedAcceptEncoding.AddRange(acceptEncoding.Split(',')
+                supportedAcceptEncoding.AddRange(acceptEncoding.Split(',')
                     .Select(x => x.Trim())
                     .Where(x => proxySupportedCompressions.Contains(x)));
 
                 //uncompressed is always supported by proxy
-                supporedAcceptEncoding.Add("identity");
+                supportedAcceptEncoding.Add("identity");
 
-                requestHeaders.SetOrAddHeaderValue(KnownHeaders.AcceptEncoding, string.Join(",", supporedAcceptEncoding));
+                requestHeaders.SetOrAddHeaderValue(KnownHeaders.AcceptEncoding, string.Join(",", supportedAcceptEncoding));
             }
 
             requestHeaders.FixProxyHeaders();
