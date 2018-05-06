@@ -511,11 +511,6 @@ namespace Titanium.Web.Proxy
 
             CertificateManager.ClearIdleCertificates();
 
-            if (RunTime.IsWindows && !RunTime.IsRunningOnMono)
-            {
-                WinAuthEndPoint.ClearIdleStates(2);
-            }
-
             foreach (var endPoint in ProxyEndPoints)
             {
                 Listen(endPoint);

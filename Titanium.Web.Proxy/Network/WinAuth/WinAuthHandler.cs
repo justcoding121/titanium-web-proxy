@@ -1,4 +1,5 @@
 ﻿using System;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy.Network.WinAuth
@@ -16,26 +17,26 @@ namespace Titanium.Web.Proxy.Network.WinAuth
         /// </summary>
         /// <param name="serverHostname"></param>
         /// <param name="authScheme"></param>
-        /// <param name="requestId"></param>
+        /// <param name="data"></param>
         /// <returns></returns>
-        internal static string GetInitialAuthToken(string serverHostname, string authScheme, Guid requestId)
+        internal static string GetInitialAuthToken(string serverHostname, string authScheme, InternalDataStore data)
         {
-            var tokenBytes = WinAuthEndPoint.AcquireInitialSecurityToken(serverHostname, authScheme, requestId);
+            var tokenBytes = WinAuthEndPoint.AcquireInitialSecurityToken(serverHostname, authScheme, data);
             return string.Concat(" ", Convert.ToBase64String(tokenBytes));
         }
-        
+
         /// <summary>
         ///     Get the final token given the server challenge token
         /// </summary>
         /// <param name="serverHostname"></param>
         /// <param name="serverToken"></param>
-        /// <param name="requestId"></param>
+        /// <param name="data"></param>
         /// <returns></returns>
-        internal static string GetFinalAuthToken(string serverHostname, string serverToken, Guid requestId)
+        internal static string GetFinalAuthToken(string serverHostname, string serverToken, InternalDataStore data)
         {
             var tokenBytes =
                 WinAuthEndPoint.AcquireFinalSecurityToken(serverHostname, Convert.FromBase64String(serverToken),
-                    requestId);
+                    data);
 
             return string.Concat(" ", Convert.ToBase64String(tokenBytes));
         }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Threading;
@@ -20,7 +21,6 @@ namespace Titanium.Web.Proxy.Http
         {
             this.bufferSize = bufferSize;
 
-            RequestId = Guid.NewGuid();
             Request = request ?? new Request();
             Response = response ?? new Response();
         }
@@ -31,9 +31,14 @@ namespace Titanium.Web.Proxy.Http
         internal TcpServerConnection ServerConnection { get; set; }
 
         /// <summary>
-        ///     Request ID.
+        ///     Stores internal data for the session.
         /// </summary>
-        public Guid RequestId { get; }
+        internal InternalDataStore Data { get; } = new InternalDataStore();
+
+        /// <summary>
+        ///     Gets or sets the user data.
+        /// </summary>
+        public object UserData { get; set; }
 
         /// <summary>
         ///     Override UpStreamEndPoint for this request; Local NIC via request is made

@@ -272,10 +272,12 @@ namespace Titanium.Web.Proxy
                             await connection.StreamWriter.WriteLineAsync("SM", cancellationToken);
                             await connection.StreamWriter.WriteLineAsync(cancellationToken);
 
-                            await TcpHelper.SendHttp2(clientStream, connection.Stream, BufferSize,
+#if NETCOREAPP2_1
+                            await Http2Helper.SendHttp2(clientStream, connection.Stream, BufferSize,
                                 (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
                                 (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
                                 connectArgs.CancellationTokenSource, clientConnection.Id, ExceptionFunc);
+#endif
                         }
                     }
                 }
