@@ -122,8 +122,8 @@ Sample request and response event handlers
 ```csharp		
 
 //To access requestBody from OnResponse handler
-private IDictionary<Guid, string> requestBodyHistory 
-        = new ConcurrentDictionary<Guid, string>();
+private HashSet<SessionEventArgs> requestHistory 
+        = new HashSet<SessionEventArgs>();
 
 private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
 {
@@ -156,9 +156,10 @@ public async Task OnRequest(object sender, SessionEventArgs e)
 	string bodyString = await e.GetRequestBodyAsString();
 	await e.SetRequestBodyString(bodyString);
 	
-	//store request Body/request headers etc with request Id as key
+	//store request 
 	//so that you can find it from response handler using request Id
-  	requestBodyHistory[e.Id] = bodyString;
+	//You can also use e.UserData to set any user data and access it from response
+  	requestHistory.Add(e);
     }
 
     //To cancel a request with a custom HTML content
@@ -202,10 +203,10 @@ public async Task OnResponse(object sender, SessionEventArgs e)
 	}
     }
     
-    //access request body/request headers etc by looking up using requestId
-    if(requestBodyHistory.ContainsKey(e.Id))
+    //access request by looking up HashSet
+    if(requestHistory.ContainsKey(e))
     {
-	var requestBody = requestBodyHistory[e.Id];
+	var request = requestHistory[e];
     }
 }
 
