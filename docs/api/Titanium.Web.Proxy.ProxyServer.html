@@ -1109,6 +1109,56 @@ Will throw error if the end point does&apos;nt exist.</p>
   </table>
   
   
+  <h4 id="Titanium_Web_Proxy_ProxyServer_OnClientConnectionCreate" data-uid="Titanium.Web.Proxy.ProxyServer.OnClientConnectionCreate">OnClientConnectionCreate</h4>
+  <div class="markdown level1 summary"><p>Customize TcpClient used for client connection upon create.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event AsyncEventHandler&lt;TcpClient&gt; OnClientConnectionCreate</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html">AsyncEventHandler</a>&lt;<span class="xref">System.Net.Sockets.TcpClient</span>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <h4 id="Titanium_Web_Proxy_ProxyServer_OnServerConnectionCreate" data-uid="Titanium.Web.Proxy.ProxyServer.OnServerConnectionCreate">OnServerConnectionCreate</h4>
+  <div class="markdown level1 summary"><p>Customize TcpClient used for server connection upon create.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event AsyncEventHandler&lt;TcpClient&gt; OnServerConnectionCreate</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html">AsyncEventHandler</a>&lt;<span class="xref">System.Net.Sockets.TcpClient</span>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
   <h4 id="Titanium_Web_Proxy_ProxyServer_ServerCertificateValidationCallback" data-uid="Titanium.Web.Proxy.ProxyServer.ServerCertificateValidationCallback">ServerCertificateValidationCallback</h4>
   <div class="markdown level1 summary"><p>Event to override the default verification logic of remote SSL certificate received during authentication.</p>
 </div>
