@@ -8,7 +8,7 @@ namespace Titanium.Web.Proxy.Http.Responses
     public sealed class RedirectResponse : Response
     {
         /// <summary>
-        ///     Constructor.
+        ///     Initializes a new instance of the <see cref="RedirectResponse" /> class.
         /// </summary>
         public RedirectResponse()
         {

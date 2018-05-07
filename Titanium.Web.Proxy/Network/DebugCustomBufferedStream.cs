@@ -1,5 +1,7 @@
 ﻿#if DEBUG
+using System;
 using System.IO;
+using System.Text;
 using System.Threading;
 using StreamExtended.Network;
 
@@ -15,30 +17,54 @@ namespace Titanium.Web.Proxy.Network
 
         private readonly FileStream fileStreamSent;
 
-        public DebugCustomBufferedStream(Stream baseStream, int bufferSize) : base(baseStream, bufferSize)
+        public DebugCustomBufferedStream(Guid connectionId, string type, Stream baseStream, int bufferSize, bool leaveOpen = false) : base(baseStream, bufferSize, leaveOpen)
         {
             Counter = Interlocked.Increment(ref counter);
-            fileStreamSent = new FileStream(Path.Combine(basePath, $"{Counter}_sent.dat"), FileMode.Create);
-            fileStreamReceived = new FileStream(Path.Combine(basePath, $"{Counter}_received.dat"), FileMode.Create);
+            fileStreamSent = new FileStream(Path.Combine(basePath, $"{connectionId}_{type}_{Counter}_sent.dat"), FileMode.Create);
+            fileStreamReceived = new FileStream(Path.Combine(basePath, $"{connectionId}_{type}_{Counter}_received.dat"), FileMode.Create);
         }
 
         public int Counter { get; }
 
-        protected override void OnDataSent(byte[] buffer, int offset, int count)
+        protected override void OnDataWrite(byte[] buffer, int offset, int count)
         {
             fileStreamSent.Write(buffer, offset, count);
+            Flush();
         }
 
-        protected override void OnDataReceived(byte[] buffer, int offset, int count)
+        protected override void OnDataRead(byte[] buffer, int offset, int count)
         {
             fileStreamReceived.Write(buffer, offset, count);
+            Flush();
         }
 
+        public void LogException(Exception ex)
+        {
+            var data = Encoding.UTF8.GetBytes("EXCEPTION: " + ex);
+            fileStreamReceived.Write(data, 0, data.Length);
+            fileStreamReceived.Flush();
+        }
         public override void Flush()
         {
             fileStreamSent.Flush(true);
             fileStreamReceived.Flush(true);
-            base.Flush();
+
+            if (CanWrite)
+            {
+                base.Flush();
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                Flush();
+                fileStreamSent.Dispose();
+                fileStreamReceived.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 }

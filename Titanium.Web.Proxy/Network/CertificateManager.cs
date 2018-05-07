@@ -57,9 +57,9 @@ namespace Titanium.Web.Proxy.Network
         private X509Certificate2 rootCertificate;
 
         private string rootCertificateName;
-
-
+        
         /// <summary>
+        ///     Initializes a new instance of the <see cref="CertificateManager"/> class.
         /// </summary>
         /// <param name="rootCertificateName"></param>
         /// <param name="rootCertificateIssuerName"></param>
@@ -141,7 +141,7 @@ namespace Titanium.Web.Proxy.Network
             get => engine;
             set
             {
-                //For Mono (or Non-Windows) only Bouncy Castle is supported
+                // For Mono (or Non-Windows) only Bouncy Castle is supported
                 if (!RunTime.IsWindows || RunTime.IsRunningOnMono)
                 {
                     value = CertificateEngine.BouncyCastle;
@@ -241,8 +241,7 @@ namespace Titanium.Web.Proxy.Network
         public void Dispose()
         {
         }
-
-
+        
         private string GetRootCertificateDirectory()
         {
             string assemblyLocation = Assembly.GetExecutingAssembly().Location;
@@ -254,7 +253,7 @@ namespace Titanium.Web.Proxy.Network
             }
 
             string path = Path.GetDirectoryName(assemblyLocation);
-            if (null == path)
+            if (path == null)
             {
                 throw new NullReferenceException();
             }
@@ -322,22 +321,18 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="storeName"></param>
         /// <param name="storeLocation"></param>
-        /// <returns></returns>
         private void InstallCertificate(StoreName storeName, StoreLocation storeLocation)
         {
             if (RootCertificate == null)
             {
-                exceptionFunc(
-                    new Exception("Could not install certificate"
-                                  + " as it is null or empty."));
-
+                exceptionFunc(new Exception("Could not install certificate as it is null or empty."));
                 return;
             }
 
             var x509Store = new X509Store(storeName, storeLocation);
 
-            //TODO
-            //also it should do not duplicate if certificate already exists
+            // todo
+            // also it should do not duplicate if certificate already exists
             try
             {
                 x509Store.Open(OpenFlags.ReadWrite);
@@ -362,16 +357,12 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="storeName"></param>
         /// <param name="storeLocation"></param>
         /// <param name="certificate"></param>
-        /// <returns></returns>
         private void UninstallCertificate(StoreName storeName, StoreLocation storeLocation,
             X509Certificate2 certificate)
         {
             if (certificate == null)
             {
-                exceptionFunc(
-                    new Exception("Could not remove certificate"
-                                  + " as it is null or empty."));
-
+                exceptionFunc(new Exception("Could not remove certificate as it is null or empty."));
                 return;
             }
 
@@ -434,7 +425,7 @@ namespace Titanium.Web.Proxy.Network
                     {
                         certificate = MakeCertificate(certificateName, false);
 
-                        //store as cache
+                        // store as cache
                         Task.Run(() =>
                         {
                             try
@@ -453,9 +444,9 @@ namespace Titanium.Web.Proxy.Network
                         {
                             certificate = new X509Certificate2(certificatePath, string.Empty, StorageFlag);
                         }
-                        //if load failed create again
                         catch
                         {
+                            // if load failed create again
                             certificate = MakeCertificate(certificateName, false);
                         }
                     }
@@ -480,21 +471,21 @@ namespace Titanium.Web.Proxy.Network
         /// <returns></returns>
         internal async Task<X509Certificate2> CreateCertificateAsync(string certificateName)
         {
-            //check in cache first
+            // check in cache first
             if (certificateCache.TryGetValue(certificateName, out var cached))
             {
                 cached.LastAccess = DateTime.Now;
                 return cached.Certificate;
             }
 
-            //handle burst requests with same certificate name
-            //by checking for existing task for same certificate name
+            // handle burst requests with same certificate name
+            // by checking for existing task for same certificate name
             if (pendingCertificateCreationTasks.TryGetValue(certificateName, out var task))
             {
                 return await task;
             }
 
-            //run certificate creation task & add it to pending tasks
+            // run certificate creation task & add it to pending tasks
             task = Task.Run(() =>
             {
                 var result = CreateCertificate(certificateName, false);
@@ -510,7 +501,7 @@ namespace Titanium.Web.Proxy.Network
             });
             pendingCertificateCreationTasks.TryAdd(certificateName, task);
 
-            //cleanup pending tasks & return result
+            // cleanup pending tasks & return result
             var certificate = await task;
             pendingCertificateCreationTasks.TryRemove(certificateName, out task);
 
@@ -534,12 +525,11 @@ namespace Titanium.Web.Proxy.Network
                     certificateCache.TryRemove(cache.Key, out _);
                 }
 
-                //after a minute come back to check for outdated certificates in cache
+                // after a minute come back to check for outdated certificates in cache
                 await Task.Delay(1000 * 60);
             }
         }
-
-
+        
         /// <summary>
         ///     Stops the certificate cache clear process
         /// </summary>
@@ -665,20 +655,20 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         public void TrustRootCertificate(bool machineTrusted = false)
         {
-            //currentUser\personal
+            // currentUser\personal
             InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
 
             if (!machineTrusted)
             {
-                //currentUser\Root
+                // currentUser\Root
                 InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
             }
             else
             {
-                //current system
+                // current system
                 InstallCertificate(StoreName.My, StoreLocation.LocalMachine);
 
-                //this adds to both currentUser\Root & currentMachine\Root
+                // this adds to both currentUser\Root & currentMachine\Root
                 InstallCertificate(StoreName.Root, StoreLocation.LocalMachine);
             }
         }
@@ -695,13 +685,13 @@ namespace Titanium.Web.Proxy.Network
                 return false;
             }
 
-            //currentUser\Personal
+            // currentUser\Personal
             InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
 
             string pfxFileName = Path.GetTempFileName();
             File.WriteAllBytes(pfxFileName, RootCertificate.Export(X509ContentType.Pkcs12, PfxPassword));
 
-            //currentUser\Root, currentMachine\Personal &  currentMachine\Root
+            // currentUser\Root, currentMachine\Personal &  currentMachine\Root
             var info = new ProcessStartInfo
             {
                 FileName = "certutil.exe",
@@ -785,8 +775,7 @@ namespace Titanium.Web.Proxy.Network
 
             EnsureRootCertificate();
         }
-
-
+        
         /// <summary>
         ///     Determines whether the root certificate is trusted.
         /// </summary>
@@ -810,20 +799,20 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="machineTrusted">Should also remove from machine store?</param>
         public void RemoveTrustedRootCertificate(bool machineTrusted = false)
         {
-            //currentUser\personal
+            // currentUser\personal
             UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
 
             if (!machineTrusted)
             {
-                //currentUser\Root
+                // currentUser\Root
                 UninstallCertificate(StoreName.Root, StoreLocation.CurrentUser, RootCertificate);
             }
             else
             {
-                //current system
+                // current system
                 UninstallCertificate(StoreName.My, StoreLocation.LocalMachine, RootCertificate);
 
-                //this adds to both currentUser\Root & currentMachine\Root
+                // this adds to both currentUser\Root & currentMachine\Root
                 UninstallCertificate(StoreName.Root, StoreLocation.LocalMachine, RootCertificate);
             }
         }
@@ -839,7 +828,7 @@ namespace Titanium.Web.Proxy.Network
                 return false;
             }
 
-            //currentUser\Personal
+            // currentUser\Personal
             UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
 
             var infos = new List<ProcessStartInfo>();
@@ -861,7 +850,7 @@ namespace Titanium.Web.Proxy.Network
                 infos.AddRange(
                     new List<ProcessStartInfo>
                     {
-                        //currentMachine\Personal
+                        // currentMachine\Personal
                         new ProcessStartInfo
                         {
                             FileName = "certutil.exe",
@@ -872,7 +861,8 @@ namespace Titanium.Web.Proxy.Network
                             ErrorDialog = false,
                             WindowStyle = ProcessWindowStyle.Hidden
                         },
-                        //currentUser\Personal & currentMachine\Personal
+                        
+                        // currentUser\Personal & currentMachine\Personal
                         new ProcessStartInfo
                         {
                             FileName = "certutil.exe",

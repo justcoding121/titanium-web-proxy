@@ -7,6 +7,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -18,17 +19,17 @@ using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy
 {
+    /// <inheritdoc />
     /// <summary>
-    ///     This object is the backbone of proxy. One can create as many instances as needed.
+    ///     This class is the backbone of proxy. One can create as many instances as needed.
     ///     However care should be taken to avoid using the same listening ports across multiple instances.
     /// </summary>
     public partial class ProxyServer : IDisposable
     {
         /// <summary>
-        ///     HTTP & HTTPS scheme shorthands.
+        ///     HTTP &amp; HTTPS scheme shorthands.
         /// </summary>
         internal static readonly string UriSchemeHttp = Uri.UriSchemeHttp;
-
         internal static readonly string UriSchemeHttps = Uri.UriSchemeHttps;
 
         /// <summary>
@@ -56,6 +57,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private WinHttpWebProxyFinder systemProxyResolver;
 
+        /// <inheritdoc />
         /// <summary>
         ///     Initializes a new instance of ProxyServer class with provided parameters.
         /// </summary>
@@ -92,8 +94,8 @@ namespace Titanium.Web.Proxy
             bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
             bool trustRootCertificateAsAdmin = false)
         {
-            //default values
-            ConnectionTimeOutSeconds = 30;
+            // default values
+            ConnectionTimeOutSeconds = 60;
 
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory();
@@ -107,7 +109,7 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///     An object that creates tcp connection to server.
+        ///     An factory that creates tcp connection to server.
         /// </summary>
         private TcpConnectionFactory tcpConnectionFactory { get; }
 
@@ -127,7 +129,7 @@ namespace Titanium.Web.Proxy
         public bool ForwardToUpstreamGateway { get; set; }
 
         /// <summary>
-        ///     Enable disable Windows Authentication (NTLM/Kerberos)
+        ///     Enable disable Windows Authentication (NTLM/Kerberos).
         ///     Note: NTLM/Kerberos will always send local credentials of current user
         ///     running the proxy process. This is because a man
         ///     in middle attack with Windows domain authentication is not currently supported.
@@ -143,6 +145,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
         ///     Broken 100 contunue implementations on server/client may cause problems if enabled.
+        ///     Defaults to false.
         /// </summary>
         public bool Enable100ContinueBehaviour { get; set; }
 
@@ -170,8 +173,7 @@ namespace Titanium.Web.Proxy
         ///     Realm used during Proxy Basic Authentication.
         /// </summary>
         public string ProxyRealm { get; set; } = "TitaniumProxy";
-
-
+        
         /// <summary>
         ///     List of supported Ssl versions.
         /// </summary>
@@ -180,7 +182,6 @@ namespace Titanium.Web.Proxy
             SslProtocols.Ssl3 |
 #endif
             SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12;
-
 
         /// <summary>
         ///     Manages certificates used by this proxy.
@@ -226,12 +227,12 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     A callback to authenticate clients.
         ///     Parameters are username and password as provided by client.
-        ///     Return true for successful authentication.
+        ///     Should return true for successful authentication.
         /// </summary>
         public Func<string, string, Task<bool>> AuthenticateUserFunc { get; set; }
 
         /// <summary>
-        ///     Dispose Proxy.
+        ///     Dispose the Proxy instance.
         /// </summary>
         public void Dispose()
         {
@@ -244,37 +245,37 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///     Occurs when client connection count changed.
+        ///     Event occurs when client connection count changed.
         /// </summary>
         public event EventHandler ClientConnectionCountChanged;
 
         /// <summary>
-        ///     Occurs when server connection count changed.
+        ///     Event occurs when server connection count changed.
         /// </summary>
         public event EventHandler ServerConnectionCountChanged;
 
         /// <summary>
-        ///     Verifies the remote SSL certificate used for authentication.
+        ///     Event to override the default verification logic of remote SSL certificate received during authentication.
         /// </summary>
         public event AsyncEventHandler<CertificateValidationEventArgs> ServerCertificateValidationCallback;
 
         /// <summary>
-        ///     Callback to override client certificate selection during mutual SSL authentication.
+        ///     Event to override client certificate selection during mutual SSL authentication.
         /// </summary>
         public event AsyncEventHandler<CertificateSelectionEventArgs> ClientCertificateSelectionCallback;
 
         /// <summary>
-        ///     Intercept request to server.
+        ///     Intercept request event to server.
         /// </summary>
         public event AsyncEventHandler<SessionEventArgs> BeforeRequest;
 
         /// <summary>
-        ///     Intercept response from server.
+        ///     Intercept response event from server.
         /// </summary>
         public event AsyncEventHandler<SessionEventArgs> BeforeResponse;
 
         /// <summary>
-        ///     Intercept after response from server.
+        ///     Intercept after response event from server.
         /// </summary>
         public event AsyncEventHandler<SessionEventArgs> AfterResponse;
 
@@ -300,7 +301,7 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         ///     Remove a proxy end point.
-        ///     Will throw error if the end point does'nt exist
+        ///     Will throw error if the end point does'nt exist.
         /// </summary>
         /// <param name="endPoint">The existing endpoint to remove.</param>
         public void RemoveEndPoint(ProxyEndPoint endPoint)
@@ -321,7 +322,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Set the given explicit end point as the default proxy server for current machine.
         /// </summary>
-        /// <param name="endPoint"></param>
+        /// <param name="endPoint">The explicit endpoint.</param>
         public void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint)
         {
             SetAsSystemProxy(endPoint, ProxyProtocolType.Http);
@@ -330,7 +331,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Set the given explicit end point as the default proxy server for current machine.
         /// </summary>
-        /// <param name="endPoint"></param>
+        /// <param name="endPoint">The explicit endpoint.</param>
         public void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint)
         {
             SetAsSystemProxy(endPoint, ProxyProtocolType.Https);
@@ -339,8 +340,8 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Set the given explicit end point as the default proxy server for current machine.
         /// </summary>
-        /// <param name="endPoint"></param>
-        /// <param name="protocolType"></param>
+        /// <param name="endPoint">The explicit endpoint.</param>
+        /// <param name="protocolType">The proxy protocol type.</param>
         public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType)
         {
             if (RunTime.IsRunningOnMono)
@@ -357,7 +358,7 @@ namespace Titanium.Web.Proxy
             {
                 CertificateManager.EnsureRootCertificate();
 
-                //If certificate was trusted by the machine
+                // If certificate was trusted by the machine
                 if (!CertificateManager.CertValidated)
                 {
                     protocolType = protocolType & ~ProxyProtocolType.Https;
@@ -365,7 +366,7 @@ namespace Titanium.Web.Proxy
                 }
             }
 
-            //clear any settings previously added
+            // clear any settings previously added
             if (isHttp)
             {
                 ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpProxy = false);
@@ -472,8 +473,8 @@ namespace Titanium.Web.Proxy
                 CertificateManager.EnsureRootCertificate();
             }
 
-            //clear any system proxy settings which is pointing to our own endpoint (causing a cycle)
-            //due to non gracious proxy shutdown before or something else
+            // clear any system proxy settings which is pointing to our own endpoint (causing a cycle)
+            // due to ungracious proxy shutdown before or something else
             if (systemProxySettingsManager != null && RunTime.IsWindows)
             {
                 var proxyInfo = systemProxySettingsManager.GetProxyInfoFromRegistry();
@@ -483,7 +484,7 @@ namespace Titanium.Web.Proxy
                     foreach (var proxy in proxyInfo.Proxies.Values)
                     {
                         if ((proxy.HostName == "127.0.0.1"
-                             || proxy.HostName.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+                             || proxy.HostName.EqualsIgnoreCase("localhost"))
                             && ProxyEndPoints.Any(x => x.Port == proxy.Port))
                         {
                             protocolToRemove |= proxy.ProtocolType;
@@ -508,16 +509,11 @@ namespace Titanium.Web.Proxy
 
             ProxyRunning = true;
 
+            CertificateManager.ClearIdleCertificates();
+
             foreach (var endPoint in ProxyEndPoints)
             {
                 Listen(endPoint);
-            }
-
-            CertificateManager.ClearIdleCertificates();
-
-            if (RunTime.IsWindows && !RunTime.IsRunningOnMono)
-            {
-                WinAuthEndPoint.ClearIdleStates(2);
             }
         }
 
@@ -603,8 +599,10 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///     Gets the system up stream proxy.
+        ///  Gets the system up stream proxy.
         /// </summary>
+        /// <param name="sessionEventArgs">The session.</param>
+        /// <returns>The external proxy as task result.</returns>
         private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
         {
             var proxy = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
@@ -622,7 +620,7 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                //based on end point type call appropriate request handlers
+                // based on end point type call appropriate request handlers
                 tcpClient = endPoint.Listener.EndAcceptTcpClient(asyn);
             }
             catch (ObjectDisposedException)
@@ -634,7 +632,7 @@ namespace Titanium.Web.Proxy
             }
             catch
             {
-                //Other errors are discarded to keep proxy running
+                // Other errors are discarded to keep proxy running
             }
 
             if (tcpClient != null)
@@ -646,29 +644,45 @@ namespace Titanium.Web.Proxy
             endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
         }
 
+        /// <summary>
+        ///     Handle the client.
+        /// </summary>
+        /// <param name="tcpClient">The client.</param>
+        /// <param name="endPoint">The proxy endpoint.</param>
+        /// <returns>The task.</returns>
         private async Task HandleClient(TcpClient tcpClient, ProxyEndPoint endPoint)
         {
-            UpdateClientConnectionCount(true);
-
             tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
             tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
 
-            try
+            using (var clientConnection = new TcpClientConnection(this, tcpClient))
             {
                 if (endPoint is TransparentProxyEndPoint tep)
                 {
-                    await HandleClient(tep, tcpClient);
+                    await HandleClient(tep, clientConnection);
                 }
                 else
                 {
-                    await HandleClient((ExplicitProxyEndPoint)endPoint, tcpClient);
+                    await HandleClient((ExplicitProxyEndPoint)endPoint, clientConnection);
                 }
             }
-            finally
+        }
+
+        /// <summary>
+        /// Handle exception.
+        /// </summary>
+        /// <param name="clientStream">The client stream.</param>
+        /// <param name="exception">The exception.</param>
+        private void OnException(CustomBufferedStream clientStream, Exception exception)
+        {
+#if DEBUG
+            if (clientStream is DebugCustomBufferedStream debugStream)
             {
-                UpdateClientConnectionCount(false);
-                tcpClient.CloseSocket();
+                debugStream.LogException(exception);
             }
+#endif
+
+            ExceptionFunc(exception);
         }
 
         /// <summary>
@@ -683,7 +697,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Update client connection count.
         /// </summary>
-        /// <param name="increment"></param>
+        /// <param name="increment">Should we increment/decrement?</param>
         internal void UpdateClientConnectionCount(bool increment)
         {
             if (increment)
@@ -701,7 +715,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Update server connection count.
         /// </summary>
-        /// <param name="increment"></param>
+        /// <param name="increment">Should we increment/decrement?</param>
         internal void UpdateServerConnectionCount(bool increment)
         {
             if (increment)

@@ -33,7 +33,7 @@ namespace Titanium.Web.Proxy.UnitTests
             {
                 tasks.AddRange(hostNames.Select(host => Task.Run(() =>
                 {
-                    //get the connection
+                    // get the connection
                     var certificate = mgr.CreateCertificate(host, false);
                     Assert.IsNotNull(certificate);
                 })));
@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy.UnitTests
             mgr.StopClearIdleCertificates();
         }
 
-        //uncomment this to compare WinCert maker performance with BC (BC takes more time for same test above)
+        // uncomment this to compare WinCert maker performance with BC (BC takes more time for same test above)
         [TestMethod]
         public async Task Simple_Create_Win_Certificate_Test()
         {
@@ -66,7 +66,7 @@ namespace Titanium.Web.Proxy.UnitTests
             {
                 tasks.AddRange(hostNames.Select(host => Task.Run(() =>
                 {
-                    //get the connection
+                    // get the connection
                     var certificate = mgr.CreateCertificate(host, false);
                     Assert.IsNotNull(certificate);
                 })));
