@@ -6,11 +6,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended.Helpers;
 using StreamExtended.Network;
-using Titanium.Web.Proxy.Decompression;
+using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -68,14 +69,9 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public event EventHandler<MultipartRequestPartSentEventArgs> MultipartRequestPartSent;
 
-        private CustomBufferedStream GetStream(bool isRequest)
+        private ICustomStreamReader GetStreamReader(bool isRequest)
         {
             return isRequest ? ProxyClient.ClientStream : WebSession.ServerConnection.Stream;
-        }
-
-        private CustomBinaryReader GetStreamReader(bool isRequest)
-        {
-            return isRequest ? ProxyClient.ClientStreamReader : WebSession.ServerConnection.StreamReader;
         }
 
         private HttpWriter GetStreamWriter(bool isRequest)
@@ -92,14 +88,14 @@ namespace Titanium.Web.Proxy.EventArguments
 
             var request = WebSession.Request;
 
-            //If not already read (not cached yet)
+            // If not already read (not cached yet)
             if (!request.IsBodyRead)
             {
                 var body = await ReadBodyAsync(true, cancellationToken);
                 request.Body = body;
 
-                //Now set the flag to true
-                //So that next time we can deliver body from cache
+                // Now set the flag to true
+                // So that next time we can deliver body from cache
                 request.IsBodyRead = true;
                 OnDataSent(body, 0, body.Length);
             }
@@ -110,7 +106,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         internal async Task ClearResponse(CancellationToken cancellationToken)
         {
-            //syphon out the response body from server
+            // syphon out the response body from server
             await SyphonOutBodyAsync(false, cancellationToken);
             WebSession.Response = new Response();
         }
@@ -143,14 +139,14 @@ namespace Titanium.Web.Proxy.EventArguments
                 return;
             }
 
-            //If not already read (not cached yet)
+            // If not already read (not cached yet)
             if (!response.IsBodyRead)
             {
                 var body = await ReadBodyAsync(false, cancellationToken);
                 response.Body = body;
 
-                //Now set the flag to true
-                //So that next time we can deliver body from cache
+                // Now set the flag to true
+                // So that next time we can deliver body from cache
                 response.IsBodyRead = true;
                 OnDataReceived(body, 0, body.Length);
             }
@@ -200,18 +196,17 @@ namespace Titanium.Web.Proxy.EventArguments
 
             long contentLength = request.ContentLength;
 
-            //send the request body bytes to server
+            // send the request body bytes to server
             if (contentLength > 0 && hasMulipartEventSubscribers && request.IsMultipartFormData)
             {
                 var reader = GetStreamReader(true);
                 string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
 
                 using (var copyStream = new CopyStream(reader, writer, BufferSize))
-                using (var copyStreamReader = new CustomBinaryReader(copyStream, BufferSize))
                 {
                     while (contentLength > copyStream.ReadBytes)
                     {
-                        long read = await ReadUntilBoundaryAsync(copyStreamReader, contentLength, boundary, cancellationToken);
+                        long read = await ReadUntilBoundaryAsync(copyStream, contentLength, boundary, cancellationToken);
                         if (read == 0)
                         {
                             break;
@@ -220,7 +215,7 @@ namespace Titanium.Web.Proxy.EventArguments
                         if (contentLength > copyStream.ReadBytes)
                         {
                             var headers = new HeaderCollection();
-                            await HeaderParser.ReadHeaders(copyStreamReader, headers, cancellationToken);
+                            await HeaderParser.ReadHeaders(copyStream, headers, cancellationToken);
                             OnMultipartRequestPartSent(boundary, headers);
                         }
                     }
@@ -241,8 +236,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         private async Task CopyBodyAsync(bool isRequest, HttpWriter writer, TransformationMode transformation, Action<byte[], int, int> onCopy, CancellationToken cancellationToken)
         {
-            var stream = GetStream(isRequest);
-            var reader = GetStreamReader(isRequest);
+            var stream = GetStreamReader(isRequest);
 
             var requestResponse = isRequest ? (RequestResponseBase)WebSession.Request : WebSession.Response;
 
@@ -250,7 +244,7 @@ namespace Titanium.Web.Proxy.EventArguments
             long contentLength = requestResponse.ContentLength;
             if (transformation == TransformationMode.None)
             {
-                await writer.CopyBodyAsync(reader, isChunked, contentLength, onCopy, cancellationToken);
+                await writer.CopyBodyAsync(stream, isChunked, contentLength, onCopy, cancellationToken);
                 return;
             }
 
@@ -259,23 +253,22 @@ namespace Titanium.Web.Proxy.EventArguments
 
             string contentEncoding = requestResponse.ContentEncoding;
 
-            Stream s = limitedStream = new LimitedStream(stream, reader, isChunked, contentLength);
+            Stream s = limitedStream = new LimitedStream(stream, isChunked, contentLength);
 
             if (transformation == TransformationMode.Uncompress && contentEncoding != null)
             {
-                s = decompressStream = DecompressionFactory.Create(contentEncoding).GetStream(s);
+                s = decompressStream = DecompressionFactory.Create(contentEncoding, s);
             }
 
             try
             {
-                var bufStream = new CustomBufferedStream(s, BufferSize, true);
-                reader = new CustomBinaryReader(bufStream, BufferSize);
-
-                await writer.CopyBodyAsync(reader, false, -1, onCopy, cancellationToken);
+                using (var bufStream = new CustomBufferedStream(s, BufferSize, true))
+                {
+                    await writer.CopyBodyAsync(bufStream, false, -1, onCopy, cancellationToken);
+                }
             }
             finally
             {
-                reader?.Dispose();
                 decompressStream?.Dispose();
 
                 await limitedStream.Finish();
@@ -287,7 +280,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        private async Task<long> ReadUntilBoundaryAsync(CustomBinaryReader reader, long totalBytesToRead, string boundary, CancellationToken cancellationToken)
+        private async Task<long> ReadUntilBoundaryAsync(ICustomStreamReader reader, long totalBytesToRead, string boundary, CancellationToken cancellationToken)
         {
             int bufferDataLength = 0;
 
@@ -330,7 +323,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
                     if (bufferDataLength == buffer.Length)
                     {
-                        //boundary is not longer than 70 bytes according to the specification, so keeping the last 100 (minimum 74) bytes is enough
+                        // boundary is not longer than 70 bytes according to the specification, so keeping the last 100 (minimum 74) bytes is enough
                         const int bytesToKeep = 100;
                         Buffer.BlockCopy(buffer, buffer.Length - bytesToKeep, buffer, 0, bytesToKeep);
                         bufferDataLength = bytesToKeep;

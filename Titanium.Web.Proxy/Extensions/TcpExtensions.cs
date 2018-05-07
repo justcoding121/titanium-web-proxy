@@ -31,10 +31,10 @@ namespace Titanium.Web.Proxy.Extensions
 
             try
             {
-                //This line is important!
-                //contributors please don't remove it without discussion
-                //It helps to avoid eventual deterioration of performance due to TCP port exhaustion
-                //due to default TCP CLOSE_WAIT timeout for 4 minutes
+                // This line is important!
+                // contributors please don't remove it without discussion
+                // It helps to avoid eventual deterioration of performance due to TCP port exhaustion
+                // due to default TCP CLOSE_WAIT timeout for 4 minutes
                 if (socketCleanedUpGetter == null || !socketCleanedUpGetter(tcpClient.Client))
                 {
                     tcpClient.LingerState = new LingerOption(true, 0);

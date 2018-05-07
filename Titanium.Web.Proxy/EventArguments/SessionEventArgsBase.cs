@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net;
 using System.Threading;
+using StreamExtended.Network;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -26,7 +27,7 @@ namespace Titanium.Web.Proxy.EventArguments
         protected readonly ExceptionHandler ExceptionFunc;
 
         /// <summary>
-        ///     Constructor to initialize the proxy
+        ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
         /// </summary>
         internal SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint,
             CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
@@ -50,16 +51,16 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 if (RunTime.IsWindows)
                 {
-                    var remoteEndPoint = (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
+                    var remoteEndPoint = ClientEndPoint;
 
-                    //If client is localhost get the process id
+                    // If client is localhost get the process id
                     if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
                     {
                         var ipVersion = endPoint.IpV6Enabled ? IpVersion.Ipv6 : IpVersion.Ipv4;
                         return TcpHelper.GetProcessIdByLocalPort(ipVersion, remoteEndPoint.Port);
                     }
 
-                    //can't access process Id of remote request from remote machine
+                    // can't access process Id of remote request from remote machine
                     return -1;
                 }
 
@@ -73,10 +74,14 @@ namespace Titanium.Web.Proxy.EventArguments
         internal ProxyClient ProxyClient { get; }
 
         /// <summary>
-        ///     Returns a unique Id for this request/response session which is
-        ///     same as the RequestId of WebSession.
+        ///     Returns a user data for this request/response session which is
+        ///     same as the user data of WebSession.
         /// </summary>
-        public Guid Id => WebSession.RequestId;
+        public object UserData
+        {
+            get => WebSession.UserData;
+            set => WebSession.UserData = value;
+        }
 
         /// <summary>
         ///     Does this session uses SSL?
@@ -86,7 +91,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Client End Point.
         /// </summary>
-        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.TcpClient.Client.RemoteEndPoint;
+        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.ClientConnection.RemoteEndPoint;
 
         /// <summary>
         ///     A web session corresponding to a single request/response sequence

@@ -296,7 +296,7 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         internal void FixProxyHeaders()
         {
-            //If proxy-connection close was returned inform to close the connection
+            // If proxy-connection close was returned inform to close the connection
             string proxyHeader = GetHeaderValueOrNull(KnownHeaders.ProxyConnection);
             RemoveHeader(KnownHeaders.ProxyConnection);
 

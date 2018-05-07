@@ -64,7 +64,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             typeSignerCertificate = Type.GetTypeFromProgID("X509Enrollment.CSignerCertificate");
             typeX509Enrollment = Type.GetTypeFromProgID("X509Enrollment.CX509Enrollment");
 
-            //for alternative names
+            // for alternative names
             typeAltNamesCollection = Type.GetTypeFromProgID("X509Enrollment.CAlternativeNames");
             typeExtNames = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionAlternativeNames");
             typeCAlternativeName = Type.GetTypeFromProgID("X509Enrollment.CAlternativeName");
@@ -192,7 +192,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             if (!isRoot)
             {
-                //add alternative names 
+                // add alternative names 
                 // https://forums.iis.net/t/1180823.aspx
 
                 var altNameCollection = Activator.CreateInstance(typeAltNamesCollection);
@@ -284,15 +284,19 @@ namespace Titanium.Web.Proxy.Network.Certificate
                     cancellationToken).Result;
             }
 
-            //Subject
+            // Subject
             string fullSubject = $"CN={sSubjectCN}";
-            //Sig Algo
+
+            // Sig Algo
             const string hashAlgo = "SHA256";
-            //Grace Days
+            
+            // Grace Days
             const int graceDays = -366;
-            //ValiDays
+            
+            // ValiDays
             const int validDays = 1825;
-            //KeyLength
+            
+            // KeyLength
             const int keyLength = 2048;
 
             var graceTime = DateTime.Now.AddDays(graceDays);

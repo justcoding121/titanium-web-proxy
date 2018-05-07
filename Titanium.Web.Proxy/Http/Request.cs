@@ -43,19 +43,19 @@ namespace Titanium.Web.Proxy.Http
             {
                 long contentLength = ContentLength;
 
-                //If content length is set to 0 the request has no body
+                // If content length is set to 0 the request has no body
                 if (contentLength == 0)
                 {
                     return false;
                 }
 
-                //Has body only if request is chunked or content length >0
+                // Has body only if request is chunked or content length >0
                 if (IsChunked || contentLength > 0)
                 {
                     return true;
                 }
 
-                //has body if POST and when version is http/1.0
+                // has body if POST and when version is http/1.0
                 if (Method == "POST" && HttpVersion == HttpHeader.Version10)
                 {
                     return true;
@@ -157,7 +157,7 @@ namespace Titanium.Web.Proxy.Http
                 return;
             }
 
-            //GET request don't have a request body to read
+            // GET request don't have a request body to read
             if (!HasBody)
             {
                 throw new BodyNotFoundException("Request don't have a body. " +
@@ -189,7 +189,7 @@ namespace Titanium.Web.Proxy.Http
         internal static void ParseRequestLine(string httpCmd, out string httpMethod, out string httpUrl,
             out Version version)
         {
-            //break up the line into three components (method, remote URL & Http Version)
+            // break up the line into three components (method, remote URL & Http Version)
             var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
 
             if (httpCmdSplit.Length < 2)
@@ -197,7 +197,7 @@ namespace Titanium.Web.Proxy.Http
                 throw new Exception("Invalid HTTP request line: " + httpCmd);
             }
 
-            //Find the request Verb
+            // Find the request Verb
             httpMethod = httpCmdSplit[0];
             if (!IsAllUpper(httpMethod))
             {
@@ -206,13 +206,13 @@ namespace Titanium.Web.Proxy.Http
 
             httpUrl = httpCmdSplit[1];
 
-            //parse the HTTP version
+            // parse the HTTP version
             version = HttpHeader.Version11;
             if (httpCmdSplit.Length == 3)
             {
                 string httpVersion = httpCmdSplit[2].Trim();
 
-                if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
+                if (httpVersion.EqualsIgnoreCase("HTTP/1.0"))
                 {
                     version = HttpHeader.Version10;
                 }

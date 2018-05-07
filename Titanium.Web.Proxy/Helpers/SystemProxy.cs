@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Microsoft.Win32;
 using Titanium.Web.Proxy.Models;
@@ -6,7 +7,6 @@ using Titanium.Web.Proxy.Models;
 // Helper classes for setting system proxy settings
 namespace Titanium.Web.Proxy.Helpers
 {
-
     internal class HttpSystemProxyValue
     {
         internal string HostName { get; set; }
@@ -37,6 +37,7 @@ namespace Titanium.Web.Proxy.Helpers
     /// <summary>
     ///     Manage system proxy settings
     /// </summary>
+    [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType", Justification = "Reviewed.")]
     internal class SystemProxyManager
     {
         private const string regKeyInternetSettings = "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
@@ -66,7 +67,7 @@ namespace Titanium.Web.Proxy.Helpers
                     return false;
                 };
 
-                //On Console exit make sure we also exit the proxy
+                // On Console exit make sure we also exit the proxy
                 NativeMethods.SetConsoleCtrlHandler(NativeMethods.Handler, true);
             }
         }

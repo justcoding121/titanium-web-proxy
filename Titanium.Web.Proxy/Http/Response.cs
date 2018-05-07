@@ -47,21 +47,21 @@ namespace Titanium.Web.Proxy.Http
             {
                 long contentLength = ContentLength;
 
-                //If content length is set to 0 the response has no body
+                // If content length is set to 0 the response has no body
                 if (contentLength == 0)
                 {
                     return false;
                 }
 
-                //Has body only if response is chunked or content length >0
-                //If none are true then check if connection:close header exist, if so write response until server or client terminates the connection
+                // Has body only if response is chunked or content length >0
+                // If none are true then check if connection:close header exist, if so write response until server or client terminates the connection
                 if (IsChunked || contentLength > 0 || !KeepAlive)
                 {
                     return true;
                 }
 
-                //has response if connection:keep-alive header exist and when version is http/1.0
-                //Because in Http 1.0 server can return a response without content-length (expectation being client would read until end of stream)
+                // has response if connection:keep-alive header exist and when version is http/1.0
+                // Because in Http 1.0 server can return a response without content-length (expectation being client would read until end of stream)
                 if (KeepAlive && HttpVersion == HttpHeader.Version10)
                 {
                     return true;
@@ -155,7 +155,7 @@ namespace Titanium.Web.Proxy.Http
             string httpVersion = httpResult[0];
 
             version = HttpHeader.Version11;
-            if (string.Equals(httpVersion, "HTTP/1.0", StringComparison.OrdinalIgnoreCase))
+            if (httpVersion.EqualsIgnoreCase("HTTP/1.0"))
             {
                 version = HttpHeader.Version10;
             }

@@ -1,6 +1,6 @@
-﻿using System.Net.Sockets;
-using StreamExtended.Network;
+﻿using StreamExtended.Network;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy.Network
 {
@@ -10,19 +10,14 @@ namespace Titanium.Web.Proxy.Network
     internal class ProxyClient
     {
         /// <summary>
-        ///     TcpClient used to communicate with client
+        ///     TcpClient connection used to communicate with client
         /// </summary>
-        internal TcpClient TcpClient { get; set; }
+        internal TcpClientConnection ClientConnection { get; set; }
 
         /// <summary>
         ///     Holds the stream to client
         /// </summary>
         internal CustomBufferedStream ClientStream { get; set; }
-
-        /// <summary>
-        ///     Used to read line by line from client
-        /// </summary>
-        internal CustomBinaryReader ClientStreamReader { get; set; }
 
         /// <summary>
         ///     Used to write line by line to client

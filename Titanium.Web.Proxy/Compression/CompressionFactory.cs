@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using System.IO.Compression;
 using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Compression
@@ -8,18 +10,14 @@ namespace Titanium.Web.Proxy.Compression
     /// </summary>
     internal static class CompressionFactory
     {
-        //cache
-        private static readonly ICompression gzip = new GZipCompression();
-        private static readonly ICompression deflate = new DeflateCompression();
-
-        internal static ICompression GetCompression(string type)
+        internal static Stream Create(string type, Stream stream, bool leaveOpen = true)
         {
             switch (type)
             {
                 case KnownHeaders.ContentEncodingGzip:
-                    return gzip;
+                    return new GZipStream(stream, CompressionMode.Compress, leaveOpen);
                 case KnownHeaders.ContentEncodingDeflate:
-                    return deflate;
+                    return new DeflateStream(stream, CompressionMode.Compress, leaveOpen);
                 default:
                     throw new Exception($"Unsupported compression mode: {type}");
             }

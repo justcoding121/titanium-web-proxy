@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
@@ -11,10 +12,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// <summary>
     ///     An object that holds TcpConnection to a particular server and port
     /// </summary>
-    internal class TcpConnection : IDisposable
+    internal class TcpServerConnection : IDisposable
     {
-        internal TcpConnection(ProxyServer proxyServer)
+        internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient)
         {
+            this.tcpClient = tcpClient;
             LastAccess = DateTime.Now;
             this.proxyServer = proxyServer;
             this.proxyServer.UpdateServerConnectionCount(true);
@@ -30,7 +32,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         internal bool IsHttps { get; set; }
 
-        internal bool IsHttp2Supported { get; set; }
+        internal SslApplicationProtocol NegotiatedApplicationProtocol { get; set; }
 
         internal bool UseUpstreamProxy { get; set; }
 
@@ -44,12 +46,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         internal Version Version { get; set; }
 
-        internal TcpClient TcpClient { private get; set; }
-
-        /// <summary>
-        ///     Used to read lines from server
-        /// </summary>
-        internal CustomBinaryReader StreamReader { get; set; }
+        private readonly TcpClient tcpClient;
 
         /// <summary>
         ///     Used to write lines to server
@@ -71,11 +68,9 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         public void Dispose()
         {
-            StreamReader?.Dispose();
-
             Stream?.Dispose();
 
-            TcpClient.CloseSocket();
+            tcpClient.CloseSocket();
 
             proxyServer.UpdateServerConnectionCount(false);
         }
