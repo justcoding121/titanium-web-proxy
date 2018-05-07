@@ -280,6 +280,16 @@ namespace Titanium.Web.Proxy
         public event AsyncEventHandler<SessionEventArgs> AfterResponse;
 
         /// <summary>
+        ///     Customize TcpClient used for client connection upon create.
+        /// </summary>
+        public event AsyncEventHandler<TcpClient> OnClientConnectionCreate;
+
+        /// <summary>
+        ///     Customize TcpClient used for server connection upon create.
+        /// </summary>
+        public event AsyncEventHandler<TcpClient> OnServerConnectionCreate;
+
+        /// <summary>
         ///     Add a proxy end point.
         /// </summary>
         /// <param name="endPoint">The proxy endpoint.</param>
@@ -654,6 +664,10 @@ namespace Titanium.Web.Proxy
         {
             tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
             tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
+            tcpClient.SendBufferSize = BufferSize;
+            tcpClient.ReceiveBufferSize = BufferSize;
+
+            await InvokeConnectionCreateEvent(tcpClient, true);
 
             using (var clientConnection = new TcpClientConnection(this, tcpClient))
             {
@@ -728,6 +742,27 @@ namespace Titanium.Web.Proxy
             }
 
             ServerConnectionCountChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        ///     Invoke client/server tcp connection events if subscribed by API user.
+        /// </summary>
+        /// <param name="client">The TcpClient object.</param>
+        /// <param name="isClientConnection">Is this a client connection created event? If not then we would assume that its a server connection create event.</param>
+        /// <returns></returns>
+        internal async Task InvokeConnectionCreateEvent(TcpClient client, bool isClientConnection)
+        {
+            //client connection created
+            if (isClientConnection && OnClientConnectionCreate != null)
+            {
+                await OnClientConnectionCreate.InvokeAsync(this, client, ExceptionFunc);
+            }
+
+            //server connection created
+            if (!isClientConnection && OnServerConnectionCreate != null)
+            {
+                await OnServerConnectionCreate.InvokeAsync(this, client, ExceptionFunc);
+            }
         }
     }
 }
