@@ -61,6 +61,13 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 tcpClient = new TcpClient(upStreamEndPoint);
 
+                tcpClient.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                tcpClient.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                tcpClient.SendBufferSize = proxyServer.BufferSize;
+                tcpClient.ReceiveBufferSize = proxyServer.BufferSize;
+
+                await proxyServer.InvokeConnectionCreateEvent(tcpClient, false);
+
                 // If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections
                 if (useUpstreamProxy)
                 {
@@ -124,8 +131,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
 #endif
                 }
 
-                tcpClient.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
-                tcpClient.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
             }
             catch (Exception)
             {
