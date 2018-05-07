@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy
         /// <returns>True if authorized.</returns>
         private async Task<bool> CheckAuthorization(SessionEventArgsBase session)
         {
-            //If we are not authorizing clients return true
+            // If we are not authorizing clients return true
             if (AuthenticateUserFunc == null)
             {
                 return true;
@@ -41,7 +41,7 @@ namespace Titanium.Web.Proxy
                 if (headerValueParts.Length != 2 ||
                     !headerValueParts[0].EqualsIgnoreCase(KnownHeaders.ProxyAuthorizationBasic))
                 {
-                    //Return not authorized
+                    // Return not authorized
                     session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
                     return false;
                 }
@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy
                 int colonIndex = decoded.IndexOf(':');
                 if (colonIndex == -1)
                 {
-                    //Return not authorized
+                    // Return not authorized
                     session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
                     return false;
                 }
@@ -70,7 +70,7 @@ namespace Titanium.Web.Proxy
                 ExceptionFunc(new ProxyAuthorizationException("Error whilst authorizing request", session, e,
                     httpHeaders));
 
-                //Return not authorized
+                // Return not authorized
                 session.WebSession.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
                 return false;
             }

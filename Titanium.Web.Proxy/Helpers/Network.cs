@@ -21,6 +21,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             // get local IP addresses
             var localIPs = Dns.GetHostAddresses(Dns.GetHostName());
+            
             // test if any host IP equals to any local IP or to localhost
             return localIPs.Contains(address);
         }

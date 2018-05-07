@@ -95,7 +95,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             if (hostName != null)
             {
-                //add subject alternative names
+                // add subject alternative names
                 var subjectAlternativeNames = new Asn1Encodable[] { new GeneralName(GeneralName.DnsName, hostName) };
 
                 var subjectAlternativeNamesExtension = new DerSequence(subjectAlternativeNames);

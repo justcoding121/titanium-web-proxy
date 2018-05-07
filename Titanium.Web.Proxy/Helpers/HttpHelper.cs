@@ -21,13 +21,13 @@ namespace Titanium.Web.Proxy.Helpers
         {
             try
             {
-                //return default if not specified
+                // return default if not specified
                 if (contentType == null)
                 {
                     return defaultEncoding;
                 }
 
-                //extract the encoding by finding the charset
+                // extract the encoding by finding the charset
                 var parameters = contentType.Split(ProxyConstants.SemiColonSplit);
                 foreach (string parameter in parameters)
                 {
@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy.Helpers
                     if (split.Length == 2 && split[0].Trim().EqualsIgnoreCase(KnownHeaders.ContentTypeCharset))
                     {
                         string value = split[1];
-                        if (value.Equals("x-user-defined", StringComparison.OrdinalIgnoreCase))
+                        if (value.EqualsIgnoreCase("x-user-defined"))
                         {
                             continue;
                         }
@@ -51,11 +51,11 @@ namespace Titanium.Web.Proxy.Helpers
             }
             catch
             {
-                //parsing errors
+                // parsing errors
                 // ignored
             }
 
-            //return default if not specified
+            // return default if not specified
             return defaultEncoding;
         }
 
@@ -63,7 +63,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             if (contentType != null)
             {
-                //extract the boundary
+                // extract the boundary
                 var parameters = contentType.Split(ProxyConstants.SemiColonSplit);
                 foreach (string parameter in parameters)
                 {
@@ -81,7 +81,7 @@ namespace Titanium.Web.Proxy.Helpers
                 }
             }
 
-            //return null if not specified
+            // return null if not specified
             return null;
         }
 
@@ -94,14 +94,14 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         internal static string GetWildCardDomainName(string hostname)
         {
-            //only for subdomains we need wild card
-            //example www.google.com or gstatic.google.com
-            //but NOT for google.com
+            // only for subdomains we need wild card
+            // example www.google.com or gstatic.google.com
+            // but NOT for google.com
             if (hostname.Split(ProxyConstants.DotSplit).Length > 2)
             {
                 int idx = hostname.IndexOf(ProxyConstants.DotSplit);
 
-                //issue #352
+                // issue #352
                 if (hostname.Substring(0, idx).Contains("-"))
                 {
                     return hostname;
@@ -111,45 +111,45 @@ namespace Titanium.Web.Proxy.Helpers
                 return "*." + rootDomain;
             }
 
-            //return as it is
+            // return as it is
             return hostname;
         }
 
         /// <summary>
         ///     Determines whether is connect method.
         /// </summary>
-        /// <param name="clientStream">The client stream.</param>
+        /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsConnectMethod(CustomBufferedStream clientStream)
+        internal static Task<int> IsConnectMethod(ICustomStreamReader clientStreamReader)
         {
-            return StartsWith(clientStream, "CONNECT");
+            return StartsWith(clientStreamReader, "CONNECT");
         }
 
         /// <summary>
         ///     Determines whether is pri method (HTTP/2).
         /// </summary>
-        /// <param name="clientStream">The client stream.</param>
+        /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when PRI, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsPriMethod(CustomBufferedStream clientStream)
+        internal static Task<int> IsPriMethod(ICustomStreamReader clientStreamReader)
         {
-            return StartsWith(clientStream, "PRI");
+            return StartsWith(clientStreamReader, "PRI");
         }
 
         /// <summary>
         ///     Determines whether the stream starts with the given string.
         /// </summary>
-        /// <param name="clientStream">The client stream.</param>
+        /// <param name="clientStreamReader">The client stream reader.</param>
         /// <param name="expectedStart">The expected start.</param>
         /// <returns>
         ///     1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
         /// </returns>
-        private static async Task<int> StartsWith(CustomBufferedStream clientStream, string expectedStart)
+        private static async Task<int> StartsWith(ICustomStreamReader clientStreamReader, string expectedStart)
         {
             bool isExpected = true;
             int legthToCheck = 10;
             for (int i = 0; i < legthToCheck; i++)
             {
-                int b = await clientStream.PeekByteAsync(i);
+                int b = await clientStreamReader.PeekByteAsync(i);
                 if (b == -1)
                 {
                     return -1;

@@ -17,8 +17,8 @@ namespace Titanium.Web.Proxy.IntegrationTests
         //disable this test until CI is prepared to handle
         public void TestSsl()
         {
-            //expand this to stress test to find
-            //why in long run proxy becomes unresponsive as per issue #184
+            // expand this to stress test to find
+            // why in long run proxy becomes unresponsive as per issue #184
             string testUrl = "https://google.com";
             int proxyPort = 8086;
             var proxy = new ProxyTestController();
@@ -62,8 +62,8 @@ namespace Titanium.Web.Proxy.IntegrationTests
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, proxyPort, true);
 
-            //An explicit endpoint is where the client knows about the existance of a proxy
-            //So client sends request in a proxy friendly manner
+            // An explicit endpoint is where the client knows about the existance of a proxy
+            // So client sends request in a proxy friendly manner
             proxyServer.AddEndPoint(explicitEndPoint);
             proxyServer.Start();
 
@@ -84,14 +84,14 @@ namespace Titanium.Web.Proxy.IntegrationTests
             proxyServer.Stop();
         }
 
-        //intecept & cancel, redirect or update requests
+        // intecept & cancel, redirect or update requests
         public async Task OnRequest(object sender, SessionEventArgs e)
         {
             Debug.WriteLine(e.WebSession.Request.Url);
             await Task.FromResult(0);
         }
 
-        //Modify response
+        // Modify response
         public async Task OnResponse(object sender, SessionEventArgs e)
         {
             await Task.FromResult(0);
@@ -104,7 +104,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
         /// <param name="e"></param>
         public Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
         {
-            //set IsValid to true/false based on Certificate Errors
+            // set IsValid to true/false based on Certificate Errors
             if (e.SslPolicyErrors == SslPolicyErrors.None)
             {
                 e.IsValid = true;
@@ -120,7 +120,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
         /// <param name="e"></param>
         public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs e)
         {
-            //set e.clientCertificate to override
+            // set e.clientCertificate to override
 
             return Task.FromResult(0);
         }

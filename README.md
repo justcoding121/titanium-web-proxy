@@ -121,10 +121,6 @@ Sample request and response event handlers
 
 ```csharp		
 
-//To access requestBody from OnResponse handler
-private IDictionary<Guid, string> requestBodyHistory 
-        = new ConcurrentDictionary<Guid, string>();
-
 private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
 {
     string hostname = e.WebSession.Request.RequestUri.Host;
@@ -156,9 +152,9 @@ public async Task OnRequest(object sender, SessionEventArgs e)
 	string bodyString = await e.GetRequestBodyAsString();
 	await e.SetRequestBodyString(bodyString);
 	
-	//store request Body/request headers etc with request Id as key
-	//so that you can find it from response handler using request Id
-  	requestBodyHistory[e.Id] = bodyString;
+	//store request 
+	//so that you can find it from response handler 
+  	e.UserData = e.WebSession.Request;
     }
 
     //To cancel a request with a custom HTML content
@@ -202,11 +198,12 @@ public async Task OnResponse(object sender, SessionEventArgs e)
 	}
     }
     
-    //access request body/request headers etc by looking up using requestId
-    if(requestBodyHistory.ContainsKey(e.Id))
+    if(e.UserData!=null)
     {
-	var requestBody = requestBodyHistory[e.Id];
+	    //access request from UserData property where we stored it in RequestHandler
+	    var request = (Request)e.UserData;
     }
+    
 }
 
 /// Allows overriding default certificate validation logic

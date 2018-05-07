@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.Exceptions
     public class ProxyHttpException : ProxyException
     {
         /// <summary>
-        ///     Instantiate new instance
+        ///     Initializes a new instance of the <see cref="ProxyHttpException" /> class.
         /// </summary>
         /// <param name="message">Message for this exception</param>
         /// <param name="innerException">Associated inner exception</param>

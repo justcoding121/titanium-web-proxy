@@ -10,7 +10,7 @@
     <meta name="viewport" content="width=device-width">
     <meta name="title" content="Class ProxyServer
    | Titanium Web Proxy ">
-    <meta name="generator" content="docfx 2.35.2.0">
+    <meta name="generator" content="docfx 2.35.4.0">
     
     <link rel="shortcut icon" href="../favicon.ico">
     <link rel="stylesheet" href="../styles/docfx.vendor.css">
@@ -83,7 +83,7 @@
   
   <h1 id="Titanium_Web_Proxy_ProxyServer" data-uid="Titanium.Web.Proxy.ProxyServer" class="text-break">Class ProxyServer
   </h1>
-  <div class="markdown level0 summary"><p>This object is the backbone of proxy. One can create as many instances as needed.
+  <div class="markdown level0 summary"><p>This class is the backbone of proxy. One can create as many instances as needed.
 However care should be taken to avoid using the same listening ports across multiple instances.</p>
 </div>
   <div class="markdown level0 conceptual"></div>
@@ -234,7 +234,7 @@ prompting for UAC if required?</p>
   <h4 id="Titanium_Web_Proxy_ProxyServer_AuthenticateUserFunc" data-uid="Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc">AuthenticateUserFunc</h4>
   <div class="markdown level1 summary"><p>A callback to authenticate clients.
 Parameters are username and password as provided by client.
-Return true for successful authentication.</p>
+Should return true for successful authentication.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -392,7 +392,8 @@ Note: If enabled can reduce performance. Defaults to false.</p>
   <a id="Titanium_Web_Proxy_ProxyServer_Enable100ContinueBehaviour_" data-uid="Titanium.Web.Proxy.ProxyServer.Enable100ContinueBehaviour*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Enable100ContinueBehaviour" data-uid="Titanium.Web.Proxy.ProxyServer.Enable100ContinueBehaviour">Enable100ContinueBehaviour</h4>
   <div class="markdown level1 summary"><p>Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
-Broken 100 contunue implementations on server/client may cause problems if enabled.</p>
+Broken 100 contunue implementations on server/client may cause problems if enabled.
+Defaults to false.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -418,7 +419,7 @@ Broken 100 contunue implementations on server/client may cause problems if enabl
   
   <a id="Titanium_Web_Proxy_ProxyServer_EnableWinAuth_" data-uid="Titanium.Web.Proxy.ProxyServer.EnableWinAuth*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_EnableWinAuth" data-uid="Titanium.Web.Proxy.ProxyServer.EnableWinAuth">EnableWinAuth</h4>
-  <div class="markdown level1 summary"><p>Enable disable Windows Authentication (NTLM/Kerberos)
+  <div class="markdown level1 summary"><p>Enable disable Windows Authentication (NTLM/Kerberos).
 Note: NTLM/Kerberos will always send local credentials of current user
 running the proxy process. This is because a man
 in middle attack with Windows domain authentication is not currently supported.</p>
@@ -827,7 +828,7 @@ Defaults via any IP addresses of this machine.</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_Dispose_" data-uid="Titanium.Web.Proxy.ProxyServer.Dispose*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Dispose" data-uid="Titanium.Web.Proxy.ProxyServer.Dispose">Dispose()</h4>
-  <div class="markdown level1 summary"><p>Dispose Proxy.</p>
+  <div class="markdown level1 summary"><p>Dispose the Proxy instance.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -839,7 +840,7 @@ Defaults via any IP addresses of this machine.</p>
   <a id="Titanium_Web_Proxy_ProxyServer_RemoveEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.RemoveEndPoint*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_RemoveEndPoint_Titanium_Web_Proxy_Models_ProxyEndPoint_" data-uid="Titanium.Web.Proxy.ProxyServer.RemoveEndPoint(Titanium.Web.Proxy.Models.ProxyEndPoint)">RemoveEndPoint(ProxyEndPoint)</h4>
   <div class="markdown level1 summary"><p>Remove a proxy end point.
-Will throw error if the end point does&apos;nt exist</p>
+Will throw error if the end point does&apos;nt exist.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -888,7 +889,8 @@ Will throw error if the end point does&apos;nt exist</p>
       <tr>
         <td><a class="xref" href="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html">ExplicitProxyEndPoint</a></td>
         <td><span class="parametername">endPoint</span></td>
-        <td></td>
+        <td><p>The explicit endpoint.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -916,7 +918,8 @@ Will throw error if the end point does&apos;nt exist</p>
       <tr>
         <td><a class="xref" href="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html">ExplicitProxyEndPoint</a></td>
         <td><span class="parametername">endPoint</span></td>
-        <td></td>
+        <td><p>The explicit endpoint.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -944,12 +947,14 @@ Will throw error if the end point does&apos;nt exist</p>
       <tr>
         <td><a class="xref" href="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html">ExplicitProxyEndPoint</a></td>
         <td><span class="parametername">endPoint</span></td>
-        <td></td>
+        <td><p>The explicit endpoint.</p>
+</td>
       </tr>
       <tr>
         <td><span class="xref">ProxyProtocolType</span></td>
         <td><span class="parametername">protocolType</span></td>
-        <td></td>
+        <td><p>The proxy protocol type.</p>
+</td>
       </tr>
     </tbody>
   </table>
@@ -980,7 +985,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   
   <h4 id="Titanium_Web_Proxy_ProxyServer_AfterResponse" data-uid="Titanium.Web.Proxy.ProxyServer.AfterResponse">AfterResponse</h4>
-  <div class="markdown level1 summary"><p>Intercept after response from server.</p>
+  <div class="markdown level1 summary"><p>Intercept after response event from server.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -1005,7 +1010,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   
   <h4 id="Titanium_Web_Proxy_ProxyServer_BeforeRequest" data-uid="Titanium.Web.Proxy.ProxyServer.BeforeRequest">BeforeRequest</h4>
-  <div class="markdown level1 summary"><p>Intercept request to server.</p>
+  <div class="markdown level1 summary"><p>Intercept request event to server.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -1030,7 +1035,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   
   <h4 id="Titanium_Web_Proxy_ProxyServer_BeforeResponse" data-uid="Titanium.Web.Proxy.ProxyServer.BeforeResponse">BeforeResponse</h4>
-  <div class="markdown level1 summary"><p>Intercept response from server.</p>
+  <div class="markdown level1 summary"><p>Intercept response event from server.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -1055,7 +1060,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   
   <h4 id="Titanium_Web_Proxy_ProxyServer_ClientCertificateSelectionCallback" data-uid="Titanium.Web.Proxy.ProxyServer.ClientCertificateSelectionCallback">ClientCertificateSelectionCallback</h4>
-  <div class="markdown level1 summary"><p>Callback to override client certificate selection during mutual SSL authentication.</p>
+  <div class="markdown level1 summary"><p>Event to override client certificate selection during mutual SSL authentication.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -1080,7 +1085,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   
   <h4 id="Titanium_Web_Proxy_ProxyServer_ClientConnectionCountChanged" data-uid="Titanium.Web.Proxy.ProxyServer.ClientConnectionCountChanged">ClientConnectionCountChanged</h4>
-  <div class="markdown level1 summary"><p>Occurs when client connection count changed.</p>
+  <div class="markdown level1 summary"><p>Event occurs when client connection count changed.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -1105,7 +1110,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   
   <h4 id="Titanium_Web_Proxy_ProxyServer_ServerCertificateValidationCallback" data-uid="Titanium.Web.Proxy.ProxyServer.ServerCertificateValidationCallback">ServerCertificateValidationCallback</h4>
-  <div class="markdown level1 summary"><p>Verifies the remote SSL certificate used for authentication.</p>
+  <div class="markdown level1 summary"><p>Event to override the default verification logic of remote SSL certificate received during authentication.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -1130,7 +1135,7 @@ Will throw error if the end point does&apos;nt exist</p>
   
   
   <h4 id="Titanium_Web_Proxy_ProxyServer_ServerConnectionCountChanged" data-uid="Titanium.Web.Proxy.ProxyServer.ServerConnectionCountChanged">ServerConnectionCountChanged</h4>
-  <div class="markdown level1 summary"><p>Occurs when server connection count changed.</p>
+  <div class="markdown level1 summary"><p>Event occurs when server connection count changed.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
