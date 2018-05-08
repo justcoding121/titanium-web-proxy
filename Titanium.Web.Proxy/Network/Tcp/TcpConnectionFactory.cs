@@ -88,8 +88,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     while (existingConnections.TryDequeue(out var recentConnection))
                     {
-                        //+1 seconds for potential delay after getting connection
-                        var cutOff = DateTime.Now.AddSeconds((-1 * proxyServer.ConnectionTimeOutSeconds) + 1);
+                        //+3 seconds for potential delay after getting connection
+                        var cutOff = DateTime.Now.AddSeconds((-1 * proxyServer.ConnectionTimeOutSeconds) + 3);
 
                         if (recentConnection.LastAccess > cutOff
                             && IsGoodConnection(recentConnection.TcpClient))
@@ -333,6 +333,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
         private static bool IsGoodConnection(TcpClient client)
         {
             var socket = client.Client;
+
+            if (!client.Connected || socket.Connected)
+            {
+                return false;
+            }
+        
             // This is how you can determine whether a socket is still connected.
             bool blockingState = socket.Blocking;
             try
