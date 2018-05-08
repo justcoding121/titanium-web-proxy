@@ -2326,19 +2326,6 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.EnsureRootCertificate
   nameWithType: CertificateManager.EnsureRootCertificate
-- uid: Titanium.Web.Proxy.Network.CertificateManager.ExceptionFunc
-  name: ExceptionFunc
-  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ExceptionFunc
-  commentId: P:Titanium.Web.Proxy.Network.CertificateManager.ExceptionFunc
-  fullName: Titanium.Web.Proxy.Network.CertificateManager.ExceptionFunc
-  nameWithType: CertificateManager.ExceptionFunc
-- uid: Titanium.Web.Proxy.Network.CertificateManager.ExceptionFunc*
-  name: ExceptionFunc
-  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ExceptionFunc_
-  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.ExceptionFunc
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.Network.CertificateManager.ExceptionFunc
-  nameWithType: CertificateManager.ExceptionFunc
 - uid: Titanium.Web.Proxy.Network.CertificateManager.IsRootCertificateMachineTrusted
   name: IsRootCertificateMachineTrusted()
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_IsRootCertificateMachineTrusted
@@ -2764,6 +2751,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.Enable100ContinueBehaviour
   nameWithType: ProxyServer.Enable100ContinueBehaviour
+- uid: Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
+  name: EnableConnectionPool
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableConnectionPool
+  commentId: P:Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
+  nameWithType: ProxyServer.EnableConnectionPool
+- uid: Titanium.Web.Proxy.ProxyServer.EnableConnectionPool*
+  name: EnableConnectionPool
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableConnectionPool_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
+  nameWithType: ProxyServer.EnableConnectionPool
 - uid: Titanium.Web.Proxy.ProxyServer.EnableWinAuth
   name: EnableWinAuth
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableWinAuth
