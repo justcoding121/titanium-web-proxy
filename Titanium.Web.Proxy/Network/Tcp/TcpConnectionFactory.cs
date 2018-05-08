@@ -33,9 +33,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
         //cache object race operations lock
         private readonly SemaphoreSlim @lock = new SemaphoreSlim(1);
 
-        internal TcpConnectionFactory(int connectionTimeOutSeconds)
+        internal ProxyServer server { get; set; }
+
+        internal TcpConnectionFactory(ProxyServer server)
         {
-            Task.Run(async () => await ClearOutdatedConnections(connectionTimeOutSeconds));
+            this.server = server;
+            Task.Run(async () => await ClearOutdatedConnections());
         }
 
         /// <summary>
@@ -58,26 +61,27 @@ namespace Titanium.Web.Proxy.Network.Tcp
             CancellationToken cancellationToken)
         {
             string cacheKey = null;
+
+            var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}" +
+                                                    $"-{(httpVersion == null ? string.Empty : httpVersion.ToString())}" +
+                                                    $"-{isHttps}-{isConnect}-");
+            if (applicationProtocols != null)
+            {
+                foreach (var protocol in applicationProtocols)
+                {
+                    cacheKeyBuilder.Append($"{protocol}-");
+                }
+            }
+
+            cacheKeyBuilder.Append(upStreamEndPoint != null
+                ? $"{upStreamEndPoint.Address}-{upStreamEndPoint.Port}-"
+                : string.Empty);
+            cacheKeyBuilder.Append(externalProxy != null ? $"{externalProxy.GetCacheKey()}-" : string.Empty);
+
+            cacheKey = cacheKeyBuilder.ToString();
+
             if (proxyServer.EnableConnectionPool)
             {
-                var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}" +
-                                                        $"-{(httpVersion == null ? string.Empty : httpVersion.ToString())}" +
-                                                        $"-{isHttps}-{isConnect}-");
-                if (applicationProtocols != null)
-                {
-                    foreach (var protocol in applicationProtocols)
-                    {
-                        cacheKeyBuilder.Append($"{protocol}-");
-                    }
-                }
-
-                cacheKeyBuilder.Append(upStreamEndPoint != null
-                    ? $"{upStreamEndPoint.Address}-{upStreamEndPoint.Port}-"
-                    : string.Empty);
-                cacheKeyBuilder.Append(externalProxy != null ? $"{externalProxy.GetCacheKey()}-" : string.Empty);
-
-                cacheKey = cacheKeyBuilder.ToString();
-
                 if (cache.TryGetValue(cacheKey, out var existingConnections))
                 {
                     while (existingConnections.TryDequeue(out var recentConnection))
@@ -278,7 +282,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             @lock.Release();
         }
 
-        private async Task ClearOutdatedConnections(int connectionTimeOutSeconds)
+        private async Task ClearOutdatedConnections()
         {
 
             while (true)
@@ -288,7 +292,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     var queue = item.Value;
                     while (queue.TryDequeue(out var connection))
                     {
-                        var cutOff = DateTime.Now.AddSeconds(-1 * connectionTimeOutSeconds);
+                        var cutOff = DateTime.Now.AddSeconds(-1 * server.ConnectionTimeOutSeconds);
                         if (connection.LastAccess < cutOff)
                         {
                             disposalBag.Add(connection);

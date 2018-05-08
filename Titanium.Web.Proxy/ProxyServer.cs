@@ -98,7 +98,7 @@ namespace Titanium.Web.Proxy
             ConnectionTimeOutSeconds = 60;
 
             ProxyEndPoints = new List<ProxyEndPoint>();
-            tcpConnectionFactory = new TcpConnectionFactory(ConnectionTimeOutSeconds);
+            tcpConnectionFactory = new TcpConnectionFactory(this);
             if (!RunTime.IsRunningOnMono && RunTime.IsWindows)
             {
                 systemProxySettingsManager = new SystemProxyManager();
