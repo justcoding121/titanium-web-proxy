@@ -104,12 +104,15 @@ namespace Titanium.Web.Proxy.Helpers
         internal async Task WriteHeadersAsync(HeaderCollection headers, bool flush = true,
             CancellationToken cancellationToken = default)
         {
+            var headerBuilder = new StringBuilder();
             foreach (var header in headers)
             {
-                await header.WriteToStreamAsync(this, cancellationToken);
+                header.Write(headerBuilder);
             }
+            headerBuilder.AppendLine();
 
-            await WriteLineAsync(cancellationToken);
+            await WriteAsync(headerBuilder.ToString(), cancellationToken);
+
             if (flush)
             {
                 await stream.FlushAsync(cancellationToken);

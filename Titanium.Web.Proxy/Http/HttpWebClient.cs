@@ -1,7 +1,7 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
@@ -15,12 +15,9 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class HttpWebClient
     {
-        private readonly int bufferSize;
 
         internal HttpWebClient(int bufferSize, Request request = null, Response response = null)
         {
-            this.bufferSize = bufferSize;
-
             Request = request ?? new Request();
             Response = response ?? new Response();
         }
@@ -98,16 +95,17 @@ namespace Titanium.Web.Proxy.Http
             await writer.WriteLineAsync(Request.CreateRequestLine(Request.Method,
                 useUpstreamProxy || isTransparent ? Request.OriginalUrl : Request.RequestUri.PathAndQuery,
                 Request.HttpVersion), cancellationToken);
-            
+
+            var headerBuilder = new StringBuilder();
             // Send Authentication to Upstream proxy if needed
             if (!isTransparent && upstreamProxy != null
                                && ServerConnection.IsHttps == false
                                && !string.IsNullOrEmpty(upstreamProxy.UserName)
                                && upstreamProxy.Password != null)
             {
-                await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer, cancellationToken);
-                await HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password)
-                    .WriteToStreamAsync(writer, cancellationToken);
+                HttpHeader.ProxyConnectionKeepAlive.Write(headerBuilder);
+                HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password)
+                    .Write(headerBuilder);
             }
 
             // write request headers
@@ -115,11 +113,12 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (isTransparent || header.Name != KnownHeaders.ProxyAuthorization)
                 {
-                    await header.WriteToStreamAsync(writer, cancellationToken);
+                    header.Write(headerBuilder);
                 }
             }
 
-            await writer.WriteLineAsync(cancellationToken);
+            headerBuilder.AppendLine();
+            await writer.WriteAsync(headerBuilder.ToString(), cancellationToken);
 
             if (enable100ContinueBehaviour)
             {
