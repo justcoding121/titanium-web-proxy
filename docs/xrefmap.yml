@@ -2326,6 +2326,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.EnsureRootCertificate
   nameWithType: CertificateManager.EnsureRootCertificate
+- uid: Titanium.Web.Proxy.Network.CertificateManager.ExceptionFunc
+  name: ExceptionFunc
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ExceptionFunc
+  commentId: P:Titanium.Web.Proxy.Network.CertificateManager.ExceptionFunc
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.ExceptionFunc
+  nameWithType: CertificateManager.ExceptionFunc
+- uid: Titanium.Web.Proxy.Network.CertificateManager.ExceptionFunc*
+  name: ExceptionFunc
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ExceptionFunc_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.ExceptionFunc
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.ExceptionFunc
+  nameWithType: CertificateManager.ExceptionFunc
 - uid: Titanium.Web.Proxy.Network.CertificateManager.IsRootCertificateMachineTrusted
   name: IsRootCertificateMachineTrusted()
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_IsRootCertificateMachineTrusted
