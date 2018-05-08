@@ -334,7 +334,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         {
             var socket = client.Client;
 
-            if (!client.Connected || socket.Connected)
+            if (!client.Connected || !socket.Connected)
             {
                 return false;
             }
