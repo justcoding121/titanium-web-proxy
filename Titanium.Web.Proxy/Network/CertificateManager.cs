@@ -43,7 +43,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         private readonly ConcurrentDictionary<string, CachedCertificate> certificateCache;
 
-        private readonly ExceptionHandler exceptionFunc;
+        private ExceptionHandler exceptionFunc;
         private readonly ConcurrentDictionary<string, Task<X509Certificate2>> pendingCertificateCreationTasks;
 
         private ICertificateMaker certEngine;
@@ -234,6 +234,10 @@ namespace Titanium.Web.Proxy.Network
         ///     Adjust behaviour when certificates are saved to filesystem.
         /// </summary>
         public X509KeyStorageFlags StorageFlag { get; set; } = X509KeyStorageFlags.Exportable;
+
+        public ExceptionHandler ExceptionFunc {
+            set => exceptionFunc = value;
+        }
 
         /// <summary>
         ///     Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
