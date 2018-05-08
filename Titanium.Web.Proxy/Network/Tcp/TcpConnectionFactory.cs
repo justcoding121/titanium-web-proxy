@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended.Network;
@@ -21,9 +22,21 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpConnectionFactory
     {
-        //private readonly ConcurrentDictionary<string, List<TcpServerConnection>> cache
-        //    = new ConcurrentDictionary<string, List<TcpServerConnection>>();
+        //Tcp server connection pool cache
+        private readonly ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>> cache
+            = new ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>>();
 
+        //Tcp connections waiting to be disposed by cleanup task
+        private readonly ConcurrentBag<TcpServerConnection> disposalBag =
+                      new ConcurrentBag<TcpServerConnection>();
+
+        //cache object race operations lock
+        private readonly SemaphoreSlim @lock = new SemaphoreSlim(1);
+
+        internal TcpConnectionFactory(int connectionTimeOutSeconds)
+        {
+            Task.Run(async () => await ClearOutdatedConnections(connectionTimeOutSeconds));
+        }
 
         /// <summary>
         ///     Gets a TCP connection to server from connection pool.
@@ -35,7 +48,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="applicationProtocols">The list of HTTPS application level protocol to negotiate if needed.</param>
         /// <param name="isConnect">Is this a CONNECT request.</param>
         /// <param name="proxyServer">The current ProxyServer instance.</param>
-        /// <param name="upStreamEndPoint">The upstream endpoint to make request via.</param>
+        /// <param name="upStreamEndPoint">The local upstream endpoint to make request via.</param>
         /// <param name="externalProxy">The external proxy to make request via.</param>
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
@@ -44,23 +57,51 @@ namespace Titanium.Web.Proxy.Network.Tcp
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
             CancellationToken cancellationToken)
         {
-            //TODO fix cacheKey with all possible properties that uniquely identify a connection
-            //var cacheKey = $"{remoteHostName}{remotePort}{httpVersion}" +
-            //               $"{isHttps}{isConnect}";
+            string cacheKey = null;
+            if (proxyServer.EnableConnectionPool)
+            {
+                var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}" +
+                                                        $"-{(httpVersion == null ? string.Empty : httpVersion.ToString())}" +
+                                                        $"-{isHttps}-{isConnect}-");
+                if (applicationProtocols != null)
+                {
+                    foreach (var protocol in applicationProtocols)
+                    {
+                        cacheKeyBuilder.Append($"{protocol}-");
+                    }
+                }
 
+                cacheKeyBuilder.Append(upStreamEndPoint != null
+                    ? $"{upStreamEndPoint.Address}-{upStreamEndPoint.Port}-"
+                    : string.Empty);
+                cacheKeyBuilder.Append(externalProxy != null ? $"{externalProxy.GetCacheKey()}-" : string.Empty);
 
-            //if (cache.TryGetValue(cacheKey, out var existingConnections))
-            //{
-            //    var recentConnection = existingConnections.Last();
-            //    existingConnections.RemoveAt(existingConnections.Count - 1);
-            //    //TODO check if connection is still active before returning
-            //    return recentConnection;
-            //}
+                cacheKey = cacheKeyBuilder.ToString();
+
+                if (cache.TryGetValue(cacheKey, out var existingConnections))
+                {
+                    while (existingConnections.TryDequeue(out var recentConnection))
+                    {
+                        //+1 seconds for potential delay after getting connection
+                        var cutOff = DateTime.Now.AddSeconds((-1 * proxyServer.ConnectionTimeOutSeconds) + 1);
+
+                        if (recentConnection.LastAccess > cutOff
+                            && IsGoodConnection(recentConnection.TcpClient))
+                        {
+                            return recentConnection;
+                        }
+
+                        disposalBag.Add(recentConnection);
+                    }
+
+                }
+            }
 
             var connection = await CreateClient(remoteHostName, remotePort, httpVersion, isHttps,
                 applicationProtocols, isConnect, proxyServer, upStreamEndPoint, externalProxy, cancellationToken);
 
-            //connection.CacheKey = cacheKey;
+            connection.CacheKey = cacheKey;
+
             return connection;
         }
 
@@ -74,7 +115,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="applicationProtocols">The list of HTTPS application level protocol to negotiate if needed.</param>
         /// <param name="isConnect">Is this a CONNECT request.</param>
         /// <param name="proxyServer">The current ProxyServer instance.</param>
-        /// <param name="upStreamEndPoint">The upstream endpoint to make request via.</param>
+        /// <param name="upStreamEndPoint">The local upstream endpoint to make request via.</param>
         /// <param name="externalProxy">The external proxy to make request via.</param>
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
@@ -113,7 +154,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     SendBufferSize = proxyServer.BufferSize,
                     ReceiveBufferSize = proxyServer.BufferSize
                 };
-
 
                 await proxyServer.InvokeConnectionCreateEvent(tcpClient, false);
 
@@ -192,7 +232,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             return new TcpServerConnection(proxyServer, tcpClient)
             {
-                //CacheKey = cacheKey,
                 UpStreamProxy = externalProxy,
                 UpStreamEndPoint = upStreamEndPoint,
                 HostName = remoteHostName,
@@ -210,24 +249,106 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// Release connection back to cache.
         /// </summary>
         /// <param name="connection">The Tcp server connection to return.</param>
-        internal void Release(TcpServerConnection connection)
+        /// <param name="close">Should we just close the connection instead of reusing?</param>
+        internal void Release(TcpServerConnection connection, bool close = false)
         {
-            //while (true)
-            //{
-            //    if (cache.TryGetValue(connection.Key, out var existingConnections))
-            //    {
-            //        existingConnections.Add(connection);
-            //        break;
-            //    }
+            if (close || connection.IsWinAuthenticated)
+            {
+                disposalBag.Add(connection);
+                return;
+            }
 
-            //    if (cache.TryAdd(connection.Key, new List<TcpServerConnection> { connection }))
-            //    {
-            //        break;
-            //    };
-            //}
+            connection.LastAccess = DateTime.Now;
 
-            connection?.Dispose();
+            @lock.Wait();
+            while (true)
+            {
+                if (cache.TryGetValue(connection.CacheKey, out var existingConnections))
+                {
+                    existingConnections.Enqueue(connection);
+                    break;
+                }
 
+                if (cache.TryAdd(connection.CacheKey, new ConcurrentQueue<TcpServerConnection>(new[] { connection })))
+                {
+                    break;
+                };
+
+            }
+            @lock.Release();
+        }
+
+        private async Task ClearOutdatedConnections(int connectionTimeOutSeconds)
+        {
+
+            while (true)
+            {
+                foreach (var item in cache)
+                {
+                    var queue = item.Value;
+                    while (queue.TryDequeue(out var connection))
+                    {
+                        var cutOff = DateTime.Now.AddSeconds(-1 * connectionTimeOutSeconds);
+                        if (connection.LastAccess < cutOff)
+                        {
+                            disposalBag.Add(connection);
+                            continue;
+                        }
+                        queue.Enqueue(connection);
+                        break;
+                    }
+                }
+
+                //clear empty queues
+                await @lock.WaitAsync();
+                var emptyKeys = cache.Where(x => x.Value.Count == 0).Select(x => x.Key).ToList();
+                foreach (var key in emptyKeys)
+                {
+                    cache.TryRemove(key, out var _);
+                }
+                @lock.Release();
+
+                while (disposalBag.TryTake(out TcpServerConnection connection))
+                {
+                    connection?.Dispose();
+                }
+
+                //cleanup every ten seconds by default
+                await Task.Delay(1000 * 10);
+            }
+
+        }
+
+        /// <summary>
+        /// Check if a TcpClient is good to be used.
+        /// https://msdn.microsoft.com/en-us/library/system.net.sockets.socket.connected(v=vs.110).aspx
+        /// </summary>
+        /// <param name="client"></param>
+        /// <returns></returns>
+        private static bool IsGoodConnection(TcpClient client)
+        {
+            var socket = client.Client;
+            // This is how you can determine whether a socket is still connected.
+            bool blockingState = socket.Blocking;
+            try
+            {
+                var tmp = new byte[1];
+
+                socket.Blocking = false;
+                socket.Send(tmp, 0, 0);
+                //Connected!
+            }
+            catch
+            {
+                //Should we let 10035 == WSAEWOULDBLOCK as valid connection?
+                return false;
+            }
+            finally
+            {
+                socket.Blocking = blockingState;
+            }
+
+            return true;
         }
     }
 }

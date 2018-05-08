@@ -140,7 +140,7 @@ namespace Titanium.Web.Proxy
                                 SslExtensions.Http2ProtocolAsList, cancellationToken);
 
                             http2Supproted = connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
-                            tcpConnectionFactory.Release(connection);
+                            tcpConnectionFactory.Release(connection, true);
                         }
 
                         SslStream sslStream = null;
@@ -235,7 +235,7 @@ namespace Titanium.Web.Proxy
                             (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
                             connectArgs.CancellationTokenSource, ExceptionFunc);
 
-                        tcpConnectionFactory.Release(connection);
+                        tcpConnectionFactory.Release(connection, true);
                         return;
                     }
                 }
@@ -280,7 +280,7 @@ namespace Titanium.Web.Proxy
                                 (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
                                 connectArgs.CancellationTokenSource, clientConnection.Id, ExceptionFunc);
 #endif
-                       tcpConnectionFactory.Release(connection);
+                       tcpConnectionFactory.Release(connection, true);
                     }
                 }
 

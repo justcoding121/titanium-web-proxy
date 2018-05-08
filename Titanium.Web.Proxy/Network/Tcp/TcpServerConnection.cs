@@ -49,6 +49,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         private readonly TcpClient tcpClient;
 
         /// <summary>
+        /// The TcpClient.
+        /// </summary>
+        internal TcpClient TcpClient => tcpClient;
+
+        /// <summary>
         ///     Used to write lines to server
         /// </summary>
         internal HttpRequestWriter StreamWriter { get; set; }
@@ -67,6 +72,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// The cache key used to uniquely identify this connection properties
         /// </summary>
         internal string CacheKey { get; set; }
+
+        /// <summary>
+        /// Is this connection authenticated via WinAuth
+        /// </summary>
+        internal bool IsWinAuthenticated { get; set; }
 
         /// <summary>
         ///     Dispose.

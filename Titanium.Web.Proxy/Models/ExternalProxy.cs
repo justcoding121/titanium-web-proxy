@@ -70,6 +70,15 @@ namespace Titanium.Web.Proxy.Models
         public int Port { get; set; }
 
         /// <summary>
+        /// Get cache key for Tcp connection cahe.
+        /// </summary>
+        /// <returns></returns>
+        internal string GetCacheKey()
+        {
+            return $"{HostName}-{Port}" + (UseDefaultCredentials ? $"-{UserName}-{Password}" : string.Empty);
+        }
+
+        /// <summary>
         ///     returns data in Hostname:port format.
         /// </summary>
         /// <returns></returns>

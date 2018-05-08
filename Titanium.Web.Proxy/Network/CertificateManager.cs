@@ -43,7 +43,6 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         private readonly ConcurrentDictionary<string, CachedCertificate> certificateCache;
 
-        private ExceptionHandler exceptionFunc;
         private readonly ConcurrentDictionary<string, Task<X509Certificate2>> pendingCertificateCreationTasks;
 
         private ICertificateMaker certEngine;
@@ -77,7 +76,7 @@ namespace Titanium.Web.Proxy.Network
             bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin,
             ExceptionHandler exceptionFunc)
         {
-            this.exceptionFunc = exceptionFunc;
+            ExceptionFunc = exceptionFunc;
 
             UserTrustRoot = userTrustRootCertificate || machineTrustRootCertificate;
 
@@ -94,14 +93,7 @@ namespace Titanium.Web.Proxy.Network
                 RootCertificateIssuerName = rootCertificateIssuerName;
             }
 
-            if (RunTime.IsWindows)
-            {
-                CertificateEngine = CertificateEngine.DefaultWindows;
-            }
-            else
-            {
-                CertificateEngine = CertificateEngine.BouncyCastle;
-            }
+            CertificateEngine = RunTime.IsWindows ? CertificateEngine.DefaultWindows : CertificateEngine.BouncyCastle;
 
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
             pendingCertificateCreationTasks = new ConcurrentDictionary<string, Task<X509Certificate2>>();
@@ -132,6 +124,11 @@ namespace Titanium.Web.Proxy.Network
         internal bool TrustRootAsAdministrator { get; set; }
 
         /// <summary>
+        /// Exception handler
+        /// </summary>
+        internal ExceptionHandler ExceptionFunc { get; set; }
+
+        /// <summary>
         ///     Select Certificate Engine.
         ///     Optionally set to BouncyCastle.
         ///     Mono only support BouncyCastle and it is the default.
@@ -156,8 +153,8 @@ namespace Titanium.Web.Proxy.Network
                 if (certEngine == null)
                 {
                     certEngine = engine == CertificateEngine.BouncyCastle
-                        ? (ICertificateMaker)new BCCertificateMaker(exceptionFunc)
-                        : new WinCertificateMaker(exceptionFunc);
+                        ? (ICertificateMaker)new BCCertificateMaker(ExceptionFunc)
+                        : new WinCertificateMaker(ExceptionFunc);
                 }
             }
         }
@@ -234,10 +231,6 @@ namespace Titanium.Web.Proxy.Network
         ///     Adjust behaviour when certificates are saved to filesystem.
         /// </summary>
         public X509KeyStorageFlags StorageFlag { get; set; } = X509KeyStorageFlags.Exportable;
-
-        public ExceptionHandler ExceptionFunc {
-            set => exceptionFunc = value;
-        }
 
         /// <summary>
         ///     Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
@@ -329,7 +322,7 @@ namespace Titanium.Web.Proxy.Network
         {
             if (RootCertificate == null)
             {
-                exceptionFunc(new Exception("Could not install certificate as it is null or empty."));
+                ExceptionFunc(new Exception("Could not install certificate as it is null or empty."));
                 return;
             }
 
@@ -344,7 +337,7 @@ namespace Titanium.Web.Proxy.Network
             }
             catch (Exception e)
             {
-                exceptionFunc(
+                ExceptionFunc(
                     new Exception("Failed to make system trust root certificate "
                                   + $" for {storeName}\\{storeLocation} store location. You may need admin rights.",
                         e));
@@ -366,7 +359,7 @@ namespace Titanium.Web.Proxy.Network
         {
             if (certificate == null)
             {
-                exceptionFunc(new Exception("Could not remove certificate as it is null or empty."));
+                ExceptionFunc(new Exception("Could not remove certificate as it is null or empty."));
                 return;
             }
 
@@ -380,7 +373,7 @@ namespace Titanium.Web.Proxy.Network
             }
             catch (Exception e)
             {
-                exceptionFunc(
+                ExceptionFunc(
                     new Exception("Failed to remove root certificate trust "
                                   + $" for {storeLocation} store location. You may need admin rights.", e));
             }
@@ -438,7 +431,7 @@ namespace Titanium.Web.Proxy.Network
                             }
                             catch (Exception e)
                             {
-                                exceptionFunc(new Exception("Failed to save fake certificate.", e));
+                                ExceptionFunc(new Exception("Failed to save fake certificate.", e));
                             }
                         });
                     }
@@ -462,7 +455,7 @@ namespace Titanium.Web.Proxy.Network
             }
             catch (Exception e)
             {
-                exceptionFunc(e);
+                ExceptionFunc(e);
             }
 
             return certificate;
@@ -572,7 +565,7 @@ namespace Titanium.Web.Proxy.Network
             }
             catch (Exception e)
             {
-                exceptionFunc(e);
+                ExceptionFunc(e);
             }
 
             if (persistToFile && RootCertificate != null)
@@ -593,7 +586,7 @@ namespace Titanium.Web.Proxy.Network
                 }
                 catch (Exception e)
                 {
-                    exceptionFunc(e);
+                    ExceptionFunc(e);
                 }
             }
 
@@ -619,7 +612,7 @@ namespace Titanium.Web.Proxy.Network
             }
             catch (Exception e)
             {
-                exceptionFunc(e);
+                ExceptionFunc(e);
                 return null;
             }
         }
@@ -728,7 +721,7 @@ namespace Titanium.Web.Proxy.Network
             }
             catch (Exception e)
             {
-                exceptionFunc(e);
+                ExceptionFunc(e);
                 return false;
             }
 

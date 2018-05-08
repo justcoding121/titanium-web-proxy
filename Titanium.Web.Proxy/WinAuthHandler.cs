@@ -145,6 +145,8 @@ namespace Titanium.Web.Proxy
                     {
                         request.ContentLength = request.Body.Length;
                     }
+
+                    args.WebSession.ServerConnection.IsWinAuthenticated = true;
                 }
 
                 // Need to revisit this.

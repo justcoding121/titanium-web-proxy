@@ -98,7 +98,7 @@ namespace Titanium.Web.Proxy
             ConnectionTimeOutSeconds = 60;
 
             ProxyEndPoints = new List<ProxyEndPoint>();
-            tcpConnectionFactory = new TcpConnectionFactory();
+            tcpConnectionFactory = new TcpConnectionFactory(ConnectionTimeOutSeconds);
             if (!RunTime.IsRunningOnMono && RunTime.IsWindows)
             {
                 systemProxySettingsManager = new SystemProxyManager();
@@ -148,6 +148,12 @@ namespace Titanium.Web.Proxy
         ///     Defaults to false.
         /// </summary>
         public bool Enable100ContinueBehaviour { get; set; }
+
+        /// <summary>
+        ///     Should we enable experimental Tcp server connection pool?
+        ///     Defaults to false.
+        /// </summary>
+        public bool EnableConnectionPool { get; set; }
 
         /// <summary>
         ///     Buffer size used throughout this proxy.
