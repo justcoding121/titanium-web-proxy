@@ -89,7 +89,7 @@ namespace Titanium.Web.Proxy
                     {
                         // create new connection
                         var connection = await tcpConnectionFactory.GetClient(httpsHostName, endPoint.Port,
-                            null, false, new List<SslApplicationProtocol> { clientConnection.NegotiatedApplicationProtocol },
+                            null, false, null,
                             true, this, UpStreamEndPoint, UpStreamHttpsProxy, cancellationToken);
 
 
@@ -117,7 +117,7 @@ namespace Titanium.Web.Proxy
                         await TcpHelper.SendRaw(clientStream, serverStream, BufferSize,
                             null, null, cancellationTokenSource, ExceptionFunc);
 
-                        tcpConnectionFactory.Release(connection);
+                        tcpConnectionFactory.Release(connection, true);
                         return;
 
                     }
