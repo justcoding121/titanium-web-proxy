@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// <summary>
     ///     A class that manages Tcp Connection to server used by this proxy server.
     /// </summary>
-    internal class TcpConnectionFactory
+    internal class TcpConnectionFactory : IDisposable
     {
         //Tcp server connection pool cache
         private readonly ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>> cache
@@ -32,6 +32,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         //cache object race operations lock
         private readonly SemaphoreSlim @lock = new SemaphoreSlim(1);
+
+        private bool runCleanUpTask = true;
 
         internal ProxyServer server { get; set; }
 
@@ -284,8 +286,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         private async Task ClearOutdatedConnections()
         {
-
-            while (true)
+            while (runCleanUpTask)
             {
                 foreach (var item in cache)
                 {
@@ -353,6 +354,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
             }
 
             return true;
+        }
+
+        public void Dispose()
+        {
+            runCleanUpTask = false;
         }
     }
 }

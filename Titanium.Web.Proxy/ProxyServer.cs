@@ -565,6 +565,7 @@ namespace Titanium.Web.Proxy
             ProxyEndPoints.Clear();
 
             CertificateManager?.StopClearIdleCertificates();
+            tcpConnectionFactory.Dispose();
 
             ProxyRunning = false;
         }
