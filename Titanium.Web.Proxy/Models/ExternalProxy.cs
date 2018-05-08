@@ -77,5 +77,6 @@ namespace Titanium.Web.Proxy.Models
         {
             return $"{HostName}:{Port}";
         }
+
     }
 }

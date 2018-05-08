@@ -64,6 +64,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal DateTime LastAccess { get; set; }
 
         /// <summary>
+        /// The cache key used to uniquely identify this connection properties
+        /// </summary>
+        internal string CacheKey { get; set; }
+
+        /// <summary>
         ///     Dispose.
         /// </summary>
         public void Dispose()

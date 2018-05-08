@@ -268,7 +268,7 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                serverConnection?.Dispose();
+                tcpConnectionFactory.Release(serverConnection);
             }
         }
 
@@ -398,7 +398,7 @@ namespace Titanium.Web.Proxy
 
             args.CustomUpStreamProxyUsed = customUpStreamProxy;
 
-            return await tcpConnectionFactory.CreateClient(
+            return await tcpConnectionFactory.GetClient(
                 args.WebSession.Request.RequestUri.Host,
                 args.WebSession.Request.RequestUri.Port,
                 args.WebSession.Request.HttpVersion, 

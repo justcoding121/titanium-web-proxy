@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -87,39 +88,38 @@ namespace Titanium.Web.Proxy
                     else
                     {
                         // create new connection
-                        var connection = new TcpClient(UpStreamEndPoint);
-                        await connection.ConnectAsync(httpsHostName, endPoint.Port);
-                        connection.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
-                        connection.SendTimeout = ConnectionTimeOutSeconds * 1000;
+                        var connection = await tcpConnectionFactory.GetClient(httpsHostName, endPoint.Port,
+                            null, false, new List<SslApplicationProtocol> { clientConnection.NegotiatedApplicationProtocol },
+                            true, this, UpStreamEndPoint, UpStreamHttpsProxy, cancellationToken);
 
-                        using (connection)
+
+                        var serverStream = connection.Stream;
+
+                        int available = clientStream.Available;
+                        if (available > 0)
                         {
-                            var serverStream = connection.GetStream();
+                            // send the buffered data
+                            var data = BufferPool.GetBuffer(BufferSize);
 
-                            int available = clientStream.Available;
-                            if (available > 0)
+                            try
                             {
-                                // send the buffered data
-                                var data = BufferPool.GetBuffer(BufferSize);
-
-                                try
-                                {
-                                    // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
-                                    await clientStream.ReadAsync(data, 0, available, cancellationToken);
-                                    await serverStream.WriteAsync(data, 0, available, cancellationToken);
-                                    await serverStream.FlushAsync(cancellationToken);
-                                }
-                                finally
-                                {
-                                    BufferPool.ReturnBuffer(data);
-                                }
+                                // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
+                                await clientStream.ReadAsync(data, 0, available, cancellationToken);
+                                await serverStream.WriteAsync(data, 0, available, cancellationToken);
+                                await serverStream.FlushAsync(cancellationToken);
                             }
-
-                            ////var serverHelloInfo = await SslTools.PeekServerHello(serverStream);
-
-                            await TcpHelper.SendRaw(clientStream, serverStream, BufferSize,
-                                null, null, cancellationTokenSource, ExceptionFunc);
+                            finally
+                            {
+                                BufferPool.ReturnBuffer(data);
+                            }
                         }
+
+                        await TcpHelper.SendRaw(clientStream, serverStream, BufferSize,
+                            null, null, cancellationTokenSource, ExceptionFunc);
+
+                        tcpConnectionFactory.Release(connection);
+                        return;
+
                     }
                 }
 
