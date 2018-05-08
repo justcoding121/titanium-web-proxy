@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Models
@@ -64,11 +61,9 @@ namespace Titanium.Web.Proxy.Models
             return result;
         }
 
-        internal async Task WriteToStreamAsync(HttpWriter writer, CancellationToken cancellationToken)
+        internal void Write(StringBuilder writer)
         {
-            await writer.WriteAsync(Name, cancellationToken);
-            await writer.WriteAsync(": ", cancellationToken);
-            await writer.WriteLineAsync(Value, cancellationToken);
+            writer.AppendLine($"{Name}: {Value}");
         }
     }
 }
