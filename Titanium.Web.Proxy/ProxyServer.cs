@@ -221,7 +221,10 @@ namespace Titanium.Web.Proxy
         public ExceptionHandler ExceptionFunc
         {
             get => exceptionFunc ?? defaultExceptionFunc;
-            set => exceptionFunc = value;
+            set {
+                exceptionFunc = value;
+                CertificateManager.ExceptionFunc = value;
+            }
         }
 
         /// <summary>
