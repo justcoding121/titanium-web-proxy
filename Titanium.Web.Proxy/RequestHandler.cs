@@ -196,13 +196,16 @@ namespace Titanium.Web.Proxy
                                 connectionChanged = true;
                             }
 
-                            //for connection pool retry attempt until we get a good connection
-                            int attemt = 0;
-                            while (attemt < 3)
+                            //for connection pool retry fails until cache is exhausted
+                            //In future once connection pool becomes stable
+                            //we can get connection for each HTTP session instead of per client connection
+                            //That will be more efficient especially when client is holding connection but not using it
+                            int attempt = 0;
+                            while (attempt < MaxCachedConnections + 1)
                             {
                                 try
                                 {
-                                    // if upgrading to websocket then relay the requet without reading the contents
+                                    // if upgrading to websocket then relay the request without reading the contents
                                     if (request.UpgradeToWebSocket)
                                     {
                                         await handleWebSocketUpgrade(httpCmd, args, request,
@@ -217,7 +220,7 @@ namespace Titanium.Web.Proxy
                                 //connection pool retry 
                                 catch (ServerConnectionException)
                                 {
-                                    if (!connectionChanged || !EnableConnectionPool || attemt == 3)
+                                    if (!connectionChanged || !EnableConnectionPool || attempt == MaxCachedConnections + 1)
                                     {
                                         throw;
                                     }
@@ -226,7 +229,7 @@ namespace Titanium.Web.Proxy
                                     tcpConnectionFactory.Release(serverConnection, true);
                                     serverConnection = await getServerConnection(args, false,
                                         clientConnection.NegotiatedApplicationProtocol, cancellationToken);
-                                    attemt++;
+                                    attempt++;
                                     continue;
                                 }
 
