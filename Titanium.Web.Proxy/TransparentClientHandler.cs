@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -27,7 +26,7 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint">The transparent endpoint.</param>
         /// <param name="clientConnection">The client connection.</param>
         /// <returns></returns>
-        private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClientConnection clientConnection)
+        private async Task handleClient(TransparentProxyEndPoint endPoint, TcpClientConnection clientConnection)
         {
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
@@ -125,24 +124,24 @@ namespace Titanium.Web.Proxy
 
                 // HTTPS server created - we can now decrypt the client's traffic
                 // Now create the request
-                await HandleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
+                await handleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
                     cancellationTokenSource, isHttps ? httpsHostName : null, null);
             }
             catch (ProxyException e)
             {
-                OnException(clientStream, e);
+                onException(clientStream, e);
             }
             catch (IOException e)
             {
-                OnException(clientStream, new Exception("Connection was aborted", e));
+                onException(clientStream, new Exception("Connection was aborted", e));
             }
             catch (SocketException e)
             {
-                OnException(clientStream, new Exception("Could not connect", e));
+                onException(clientStream, new Exception("Could not connect", e));
             }
             catch (Exception e)
             {
-                OnException(clientStream, new Exception("Error occured in whilst handling the client", e));
+                onException(clientStream, new Exception("Error occured in whilst handling the client", e));
             }
             finally
             {

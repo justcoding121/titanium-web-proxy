@@ -314,7 +314,7 @@ namespace Titanium.Web.Proxy
 
             if (ProxyRunning)
             {
-                Listen(endPoint);
+                listen(endPoint);
             }
         }
 
@@ -334,7 +334,7 @@ namespace Titanium.Web.Proxy
 
             if (ProxyRunning)
             {
-                QuitListen(endPoint);
+                quitListen(endPoint);
             }
         }
 
@@ -368,7 +368,7 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
 
-            ValidateEndPointAsSystemProxy(endPoint);
+            validateEndPointAsSystemProxy(endPoint);
 
             bool isHttp = (protocolType & ProxyProtocolType.Http) > 0;
             bool isHttps = (protocolType & ProxyProtocolType.Https) > 0;
@@ -523,7 +523,7 @@ namespace Titanium.Web.Proxy
                 systemProxyResolver = new WinHttpWebProxyFinder();
                 systemProxyResolver.LoadFromIE();
 
-                GetCustomUpStreamProxyFunc = GetSystemUpStreamProxy;
+                GetCustomUpStreamProxyFunc = getSystemUpStreamProxy;
             }
 
             ProxyRunning = true;
@@ -532,7 +532,7 @@ namespace Titanium.Web.Proxy
 
             foreach (var endPoint in ProxyEndPoints)
             {
-                Listen(endPoint);
+                listen(endPoint);
             }
         }
 
@@ -559,7 +559,7 @@ namespace Titanium.Web.Proxy
 
             foreach (var endPoint in ProxyEndPoints)
             {
-                QuitListen(endPoint);
+                quitListen(endPoint);
             }
 
             ProxyEndPoints.Clear();
@@ -574,7 +574,7 @@ namespace Titanium.Web.Proxy
         ///     Listen on given end point of local machine.
         /// </summary>
         /// <param name="endPoint">The end point to listen.</param>
-        private void Listen(ProxyEndPoint endPoint)
+        private void listen(ProxyEndPoint endPoint)
         {
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
             try
@@ -584,7 +584,7 @@ namespace Titanium.Web.Proxy
                 endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
 
                 // accept clients asynchronously
-                endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
+                endPoint.Listener.BeginAcceptTcpClient(onAcceptConnection, endPoint);
             }
             catch (SocketException ex)
             {
@@ -600,7 +600,7 @@ namespace Titanium.Web.Proxy
         ///     Verify if its safe to set this end point as system proxy.
         /// </summary>
         /// <param name="endPoint">The end point to validate.</param>
-        private void ValidateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
+        private void validateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
         {
             if (endPoint == null)
             {
@@ -623,7 +623,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="sessionEventArgs">The session.</param>
         /// <returns>The external proxy as task result.</returns>
-        private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
+        private Task<ExternalProxy> getSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
         {
             var proxy = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
             return Task.FromResult(proxy);
@@ -632,7 +632,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Act when a connection is received from client.
         /// </summary>
-        private void OnAcceptConnection(IAsyncResult asyn)
+        private void onAcceptConnection(IAsyncResult asyn)
         {
             var endPoint = (ProxyEndPoint)asyn.AsyncState;
 
@@ -657,11 +657,11 @@ namespace Titanium.Web.Proxy
 
             if (tcpClient != null)
             {
-                Task.Run(async () => { await HandleClient(tcpClient, endPoint); });
+                Task.Run(async () => { await handleClient(tcpClient, endPoint); });
             }
 
             // Get the listener that handles the client request.
-            endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
+            endPoint.Listener.BeginAcceptTcpClient(onAcceptConnection, endPoint);
         }
 
         /// <summary>
@@ -670,7 +670,7 @@ namespace Titanium.Web.Proxy
         /// <param name="tcpClient">The client.</param>
         /// <param name="endPoint">The proxy endpoint.</param>
         /// <returns>The task.</returns>
-        private async Task HandleClient(TcpClient tcpClient, ProxyEndPoint endPoint)
+        private async Task handleClient(TcpClient tcpClient, ProxyEndPoint endPoint)
         {
             tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
             tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
@@ -683,11 +683,11 @@ namespace Titanium.Web.Proxy
             {
                 if (endPoint is TransparentProxyEndPoint tep)
                 {
-                    await HandleClient(tep, clientConnection);
+                    await handleClient(tep, clientConnection);
                 }
                 else
                 {
-                    await HandleClient((ExplicitProxyEndPoint)endPoint, clientConnection);
+                    await handleClient((ExplicitProxyEndPoint)endPoint, clientConnection);
                 }
             }
         }
@@ -697,7 +697,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="clientStream">The client stream.</param>
         /// <param name="exception">The exception.</param>
-        private void OnException(CustomBufferedStream clientStream, Exception exception)
+        private void onException(CustomBufferedStream clientStream, Exception exception)
         {
 #if DEBUG
             if (clientStream is DebugCustomBufferedStream debugStream)
@@ -712,7 +712,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Quit listening on the given end point.
         /// </summary>
-        private void QuitListen(ProxyEndPoint endPoint)
+        private void quitListen(ProxyEndPoint endPoint)
         {
             endPoint.Listener.Stop();
             endPoint.Listener.Server.Dispose();

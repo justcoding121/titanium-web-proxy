@@ -24,7 +24,7 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         /// <param name="buffer"></param>
         /// <param name="size"></param>
-        private static void ResizeBuffer(ref byte[] buffer, long size)
+        private static void resizeBuffer(ref byte[] buffer, long size)
         {
             var newBuffer = new byte[size];
             Buffer.BlockCopy(buffer, 0, newBuffer, 0, buffer.Length);
