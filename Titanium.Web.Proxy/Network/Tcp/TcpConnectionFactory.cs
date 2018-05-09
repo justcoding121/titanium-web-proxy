@@ -62,8 +62,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
             CancellationToken cancellationToken)
         {
-            string cacheKey = null;
-
             var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}" +
                                                     $"-{(httpVersion == null ? string.Empty : httpVersion.ToString())}" +
                                                     $"-{isHttps}-{isConnect}-");
@@ -75,12 +73,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
             }
 
-            cacheKeyBuilder.Append(upStreamEndPoint != null
-                ? $"{upStreamEndPoint.Address}-{upStreamEndPoint.Port}-"
-                : string.Empty);
+            cacheKeyBuilder.Append(upStreamEndPoint != null ? $"{upStreamEndPoint.Address}-{upStreamEndPoint.Port}-" : string.Empty);
             cacheKeyBuilder.Append(externalProxy != null ? $"{externalProxy.GetCacheKey()}-" : string.Empty);
 
-            cacheKey = cacheKeyBuilder.ToString();
+            var cacheKey = cacheKeyBuilder.ToString();
 
             if (proxyServer.EnableConnectionPool)
             {
@@ -89,7 +85,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     while (existingConnections.TryDequeue(out var recentConnection))
                     {
                         //+3 seconds for potential delay after getting connection
-                        var cutOff = DateTime.Now.AddSeconds((-1 * proxyServer.ConnectionTimeOutSeconds) + 3);
+                        var cutOff = DateTime.Now.AddSeconds(-1 * proxyServer.ConnectionTimeOutSeconds + 3);
 
                         if (recentConnection.LastAccess > cutOff
                             && IsGoodConnection(recentConnection.TcpClient))
@@ -338,7 +334,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 return false;
             }
-        
+
             // This is how you can determine whether a socket is still connected.
             bool blockingState = socket.Blocking;
             try
