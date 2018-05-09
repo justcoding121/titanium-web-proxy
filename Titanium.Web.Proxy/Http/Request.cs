@@ -25,6 +25,16 @@ namespace Titanium.Web.Proxy.Http
         public Uri RequestUri { get; set; }
 
         /// <summary>
+        ///     Request External Proxy for Https (this overwrites any server-wide upstream https proxy)
+        /// </summary>
+        public ExternalProxy UpStreamHttpsProxy { get; set; }
+
+        /// <summary>
+        ///     Request External Proxy for Http (this overwrites any server-wide upstream http proxy)
+        /// </summary>
+        public ExternalProxy UpStreamHttpProxy { get; set; }
+
+        /// <summary>
         ///     Is Https?
         /// </summary>
         public bool IsHttps => RequestUri.Scheme == ProxyServer.UriSchemeHttps;
