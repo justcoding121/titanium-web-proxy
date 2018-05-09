@@ -16,7 +16,6 @@ using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Network.Tcp
 {
-
     /// <summary>
     ///     A class that manages Tcp Connection to server used by this proxy server.
     /// </summary>
@@ -28,20 +27,20 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         //Tcp connections waiting to be disposed by cleanup task
         private readonly ConcurrentBag<TcpServerConnection> disposalBag =
-                      new ConcurrentBag<TcpServerConnection>();
+            new ConcurrentBag<TcpServerConnection>();
 
         //cache object race operations lock
         private readonly SemaphoreSlim @lock = new SemaphoreSlim(1);
 
         private bool runCleanUpTask = true;
 
-        internal ProxyServer server { get; set; }
-
         internal TcpConnectionFactory(ProxyServer server)
         {
             this.server = server;
             Task.Run(async () => await clearOutdatedConnections());
         }
+
+        internal ProxyServer server { get; set; }
 
         /// <summary>
         ///     Gets a TCP connection to server from connection pool.
@@ -73,10 +72,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
             }
 
-            cacheKeyBuilder.Append(upStreamEndPoint != null ? $"{upStreamEndPoint.Address}-{upStreamEndPoint.Port}-" : string.Empty);
+            cacheKeyBuilder.Append(upStreamEndPoint != null
+                ? $"{upStreamEndPoint.Address}-{upStreamEndPoint.Port}-"
+                : string.Empty);
             cacheKeyBuilder.Append(externalProxy != null ? $"{externalProxy.GetCacheKey()}-" : string.Empty);
 
-            var cacheKey = cacheKeyBuilder.ToString();
+            string cacheKey = cacheKeyBuilder.ToString();
 
             if (proxyServer.EnableConnectionPool)
             {
@@ -95,7 +96,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                         disposalBag.Add(recentConnection);
                     }
-
                 }
             }
 
@@ -126,7 +126,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
             CancellationToken cancellationToken)
         {
-
             bool useUpstreamProxy = false;
 
             // check if external proxy is set for HTTP/HTTPS
@@ -223,7 +222,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     negotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
 #endif
                 }
-
             }
             catch (Exception)
             {
@@ -248,7 +246,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         }
 
         /// <summary>
-        /// Release connection back to cache.
+        ///     Release connection back to cache.
         /// </summary>
         /// <param name="connection">The Tcp server connection to return.</param>
         /// <param name="close">Should we just close the connection instead of reusing?</param>
@@ -274,9 +272,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 if (cache.TryAdd(connection.CacheKey, new ConcurrentQueue<TcpServerConnection>(new[] { connection })))
                 {
                     break;
-                };
+                }
 
+                ;
             }
+
             @lock.Release();
         }
 
@@ -295,6 +295,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                             disposalBag.Add(connection);
                             continue;
                         }
+
                         queue.Enqueue(connection);
                         break;
                     }
@@ -303,13 +304,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 //clear empty queues
                 await @lock.WaitAsync();
                 var emptyKeys = cache.Where(x => x.Value.Count == 0).Select(x => x.Key).ToList();
-                foreach (var key in emptyKeys)
+                foreach (string key in emptyKeys)
                 {
                     cache.TryRemove(key, out var _);
                 }
+
                 @lock.Release();
 
-                while (disposalBag.TryTake(out TcpServerConnection connection))
+                while (disposalBag.TryTake(out var connection))
                 {
                     connection?.Dispose();
                 }
@@ -317,12 +319,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 //cleanup every ten seconds by default
                 await Task.Delay(1000 * 10);
             }
-
         }
 
         /// <summary>
-        /// Check if a TcpClient is good to be used.
-        /// https://msdn.microsoft.com/en-us/library/system.net.sockets.socket.connected(v=vs.110).aspx
+        ///     Check if a TcpClient is good to be used.
+        ///     https://msdn.microsoft.com/en-us/library/system.net.sockets.socket.connected(v=vs.110).aspx
         /// </summary>
         /// <param name="client"></param>
         /// <returns></returns>
