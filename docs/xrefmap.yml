@@ -2816,6 +2816,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.GetCustomUpStreamProxyFunc
   nameWithType: ProxyServer.GetCustomUpStreamProxyFunc
+- uid: Titanium.Web.Proxy.ProxyServer.MaxCachedConnections
+  name: MaxCachedConnections
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_MaxCachedConnections
+  commentId: P:Titanium.Web.Proxy.ProxyServer.MaxCachedConnections
+  fullName: Titanium.Web.Proxy.ProxyServer.MaxCachedConnections
+  nameWithType: ProxyServer.MaxCachedConnections
+- uid: Titanium.Web.Proxy.ProxyServer.MaxCachedConnections*
+  name: MaxCachedConnections
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_MaxCachedConnections_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.MaxCachedConnections
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.MaxCachedConnections
+  nameWithType: ProxyServer.MaxCachedConnections
 - uid: Titanium.Web.Proxy.ProxyServer.OnClientConnectionCreate
   name: OnClientConnectionCreate
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_OnClientConnectionCreate
