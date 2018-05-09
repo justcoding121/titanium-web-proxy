@@ -60,10 +60,5 @@ namespace Titanium.Web.Proxy.Models
                 "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{userName}:{password}")));
             return result;
         }
-
-        internal void Write(StringBuilder writer)
-        {
-            writer.AppendLine($"{Name}: {Value}");
-        }
     }
 }

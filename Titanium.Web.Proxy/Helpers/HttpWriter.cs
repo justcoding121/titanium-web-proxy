@@ -107,7 +107,7 @@ namespace Titanium.Web.Proxy.Helpers
             var headerBuilder = new StringBuilder();
             foreach (var header in headers)
             {
-                header.Write(headerBuilder);
+                headerBuilder.AppendLine(header.ToString());
             }
             headerBuilder.AppendLine();
 
