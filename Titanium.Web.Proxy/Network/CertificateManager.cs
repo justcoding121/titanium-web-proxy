@@ -239,7 +239,7 @@ namespace Titanium.Web.Proxy.Network
         {
         }
         
-        private string GetRootCertificateDirectory()
+        private string getRootCertificateDirectory()
         {
             string assemblyLocation = Assembly.GetExecutingAssembly().Location;
 
@@ -258,9 +258,9 @@ namespace Titanium.Web.Proxy.Network
             return path;
         }
 
-        private string GetCertificatePath()
+        private string getCertificatePath()
         {
-            string path = GetRootCertificateDirectory();
+            string path = getRootCertificateDirectory();
 
             string certPath = Path.Combine(path, "crts");
             if (!Directory.Exists(certPath))
@@ -271,9 +271,9 @@ namespace Titanium.Web.Proxy.Network
             return certPath;
         }
 
-        private string GetRootCertificatePath()
+        private string getRootCertificatePath()
         {
-            string path = GetRootCertificateDirectory();
+            string path = getRootCertificateDirectory();
 
             string fileName = PfxFilePath;
             if (fileName == string.Empty)
@@ -290,15 +290,15 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="storeLocation"></param>
         /// <returns></returns>
-        private bool RootCertificateInstalled(StoreLocation storeLocation)
+        private bool rootCertificateInstalled(StoreLocation storeLocation)
         {
             string value = $"{RootCertificate.Issuer}";
-            return FindCertificates(StoreName.Root, storeLocation, value).Count > 0
+            return findCertificates(StoreName.Root, storeLocation, value).Count > 0
                    && (CertificateEngine != CertificateEngine.DefaultWindows
-                       || FindCertificates(StoreName.My, storeLocation, value).Count > 0);
+                       || findCertificates(StoreName.My, storeLocation, value).Count > 0);
         }
 
-        private X509Certificate2Collection FindCertificates(StoreName storeName, StoreLocation storeLocation,
+        private static X509Certificate2Collection findCertificates(StoreName storeName, StoreLocation storeLocation,
             string findValue)
         {
             var x509Store = new X509Store(storeName, storeLocation);
@@ -318,7 +318,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="storeName"></param>
         /// <param name="storeLocation"></param>
-        private void InstallCertificate(StoreName storeName, StoreLocation storeLocation)
+        private void installCertificate(StoreName storeName, StoreLocation storeLocation)
         {
             if (RootCertificate == null)
             {
@@ -354,7 +354,7 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="storeName"></param>
         /// <param name="storeLocation"></param>
         /// <param name="certificate"></param>
-        private void UninstallCertificate(StoreName storeName, StoreLocation storeLocation,
+        private void uninstallCertificate(StoreName storeName, StoreLocation storeLocation,
             X509Certificate2 certificate)
         {
             if (certificate == null)
@@ -383,7 +383,7 @@ namespace Titanium.Web.Proxy.Network
             }
         }
 
-        private X509Certificate2 MakeCertificate(string certificateName, bool isRootCertificate)
+        private X509Certificate2 makeCertificate(string certificateName, bool isRootCertificate)
         {
             if (!isRootCertificate && RootCertificate == null)
             {
@@ -394,7 +394,7 @@ namespace Titanium.Web.Proxy.Network
 
             if (CertificateEngine == CertificateEngine.DefaultWindows)
             {
-                Task.Run(() => UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, certificate));
+                Task.Run(() => uninstallCertificate(StoreName.My, StoreLocation.CurrentUser, certificate));
             }
 
             return certificate;
@@ -413,14 +413,14 @@ namespace Titanium.Web.Proxy.Network
             {
                 if (!isRootCertificate && SaveFakeCertificates)
                 {
-                    string path = GetCertificatePath();
+                    string path = getCertificatePath();
                     string subjectName = ProxyConstants.CNRemoverRegex.Replace(certificateName, string.Empty);
                     subjectName = subjectName.Replace("*", "$x$");
                     string certificatePath = Path.Combine(path, subjectName + ".pfx");
 
                     if (!File.Exists(certificatePath))
                     {
-                        certificate = MakeCertificate(certificateName, false);
+                        certificate = makeCertificate(certificateName, false);
 
                         // store as cache
                         Task.Run(() =>
@@ -444,13 +444,13 @@ namespace Titanium.Web.Proxy.Network
                         catch
                         {
                             // if load failed create again
-                            certificate = MakeCertificate(certificateName, false);
+                            certificate = makeCertificate(certificateName, false);
                         }
                     }
                 }
                 else
                 {
-                    certificate = MakeCertificate(certificateName, isRootCertificate);
+                    certificate = makeCertificate(certificateName, isRootCertificate);
                 }
             }
             catch (Exception e)
@@ -574,14 +574,14 @@ namespace Titanium.Web.Proxy.Network
                 {
                     try
                     {
-                        Directory.Delete(GetCertificatePath(), true);
+                        Directory.Delete(getCertificatePath(), true);
                     }
                     catch
                     {
                         // ignore
                     }
 
-                    string fileName = GetRootCertificatePath();
+                    string fileName = getRootCertificatePath();
                     File.WriteAllBytes(fileName, RootCertificate.Export(X509ContentType.Pkcs12, PfxPassword));
                 }
                 catch (Exception e)
@@ -599,7 +599,7 @@ namespace Titanium.Web.Proxy.Network
         /// <returns></returns>
         public X509Certificate2 LoadRootCertificate()
         {
-            string fileName = GetRootCertificatePath();
+            string fileName = getRootCertificatePath();
             pfxFileExists = File.Exists(fileName);
             if (!pfxFileExists)
             {
@@ -653,20 +653,20 @@ namespace Titanium.Web.Proxy.Network
         public void TrustRootCertificate(bool machineTrusted = false)
         {
             // currentUser\personal
-            InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
+            installCertificate(StoreName.My, StoreLocation.CurrentUser);
 
             if (!machineTrusted)
             {
                 // currentUser\Root
-                InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
+                installCertificate(StoreName.Root, StoreLocation.CurrentUser);
             }
             else
             {
                 // current system
-                InstallCertificate(StoreName.My, StoreLocation.LocalMachine);
+                installCertificate(StoreName.My, StoreLocation.LocalMachine);
 
                 // this adds to both currentUser\Root & currentMachine\Root
-                InstallCertificate(StoreName.Root, StoreLocation.LocalMachine);
+                installCertificate(StoreName.Root, StoreLocation.LocalMachine);
             }
         }
 
@@ -683,7 +683,7 @@ namespace Titanium.Web.Proxy.Network
             }
 
             // currentUser\Personal
-            InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
+            installCertificate(StoreName.My, StoreLocation.CurrentUser);
 
             string pfxFileName = Path.GetTempFileName();
             File.WriteAllBytes(pfxFileName, RootCertificate.Export(X509ContentType.Pkcs12, PfxPassword));
@@ -778,7 +778,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         public bool IsRootCertificateUserTrusted()
         {
-            return RootCertificateInstalled(StoreLocation.CurrentUser) || IsRootCertificateMachineTrusted();
+            return rootCertificateInstalled(StoreLocation.CurrentUser) || IsRootCertificateMachineTrusted();
         }
 
         /// <summary>
@@ -786,7 +786,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         public bool IsRootCertificateMachineTrusted()
         {
-            return RootCertificateInstalled(StoreLocation.LocalMachine);
+            return rootCertificateInstalled(StoreLocation.LocalMachine);
         }
 
         /// <summary>
@@ -797,20 +797,20 @@ namespace Titanium.Web.Proxy.Network
         public void RemoveTrustedRootCertificate(bool machineTrusted = false)
         {
             // currentUser\personal
-            UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
+            uninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
 
             if (!machineTrusted)
             {
                 // currentUser\Root
-                UninstallCertificate(StoreName.Root, StoreLocation.CurrentUser, RootCertificate);
+                uninstallCertificate(StoreName.Root, StoreLocation.CurrentUser, RootCertificate);
             }
             else
             {
                 // current system
-                UninstallCertificate(StoreName.My, StoreLocation.LocalMachine, RootCertificate);
+                uninstallCertificate(StoreName.My, StoreLocation.LocalMachine, RootCertificate);
 
                 // this adds to both currentUser\Root & currentMachine\Root
-                UninstallCertificate(StoreName.Root, StoreLocation.LocalMachine, RootCertificate);
+                uninstallCertificate(StoreName.Root, StoreLocation.LocalMachine, RootCertificate);
             }
         }
 
@@ -826,7 +826,7 @@ namespace Titanium.Web.Proxy.Network
             }
 
             // currentUser\Personal
-            UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
+            uninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
 
             var infos = new List<ProcessStartInfo>();
             if (!machineTrusted)

@@ -122,7 +122,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
         internal static Task<int> IsConnectMethod(ICustomStreamReader clientStreamReader)
         {
-            return StartsWith(clientStreamReader, "CONNECT");
+            return startsWith(clientStreamReader, "CONNECT");
         }
 
         /// <summary>
@@ -132,7 +132,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns>1: when PRI, 0: when valid HTTP method, -1: otherwise</returns>
         internal static Task<int> IsPriMethod(ICustomStreamReader clientStreamReader)
         {
-            return StartsWith(clientStreamReader, "PRI");
+            return startsWith(clientStreamReader, "PRI");
         }
 
         /// <summary>
@@ -143,7 +143,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns>
         ///     1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
         /// </returns>
-        private static async Task<int> StartsWith(ICustomStreamReader clientStreamReader, string expectedStart)
+        private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, string expectedStart)
         {
             bool isExpected = true;
             int legthToCheck = 10;

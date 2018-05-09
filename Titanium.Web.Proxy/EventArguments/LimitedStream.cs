@@ -41,7 +41,7 @@ namespace Titanium.Web.Proxy.EventArguments
             set => throw new NotSupportedException();
         }
 
-        private void GetNextChunk()
+        private void getNextChunk()
         {
             if (readChunkTrail)
             {
@@ -96,7 +96,7 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 if (isChunked)
                 {
-                    GetNextChunk();
+                    getNextChunk();
                 }
                 else
                 {

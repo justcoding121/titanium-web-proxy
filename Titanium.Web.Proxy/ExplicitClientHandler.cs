@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint">The explicit endpoint.</param>
         /// <param name="clientConnection">The client connection.</param>
         /// <returns>The task.</returns>
-        private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClientConnection clientConnection)
+        private async Task handleClient(ExplicitProxyEndPoint endPoint, TcpClientConnection clientConnection)
         {
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
@@ -95,7 +95,7 @@ namespace Titanium.Web.Proxy
                         return;
                     }
 
-                    if (await CheckAuthorization(connectArgs) == false)
+                    if (await checkAuthorization(connectArgs) == false)
                     {
                         await endPoint.InvokeBeforeTunnectConnectResponse(this, connectArgs, ExceptionFunc);
 
@@ -136,7 +136,7 @@ namespace Titanium.Web.Proxy
                         {
                             // test server HTTP/2 support
                             // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
-                            var connection = await GetServerConnection(connectArgs, true,
+                            var connection = await getServerConnection(connectArgs, true,
                                 SslExtensions.Http2ProtocolAsList, cancellationToken);
 
                             http2Supproted = connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
@@ -201,7 +201,7 @@ namespace Titanium.Web.Proxy
                     if (!decryptSsl || !isClientHello)
                     {
                         // create new connection
-                        var connection = await GetServerConnection(connectArgs, true,
+                        var connection = await getServerConnection(connectArgs, true,
                             clientConnection.NegotiatedApplicationProtocol, cancellationToken);
 
                         if (isClientHello)
@@ -266,7 +266,7 @@ namespace Titanium.Web.Proxy
                         }
 
                         // create new connection
-                        var connection = await GetServerConnection(connectArgs, true, SslExtensions.Http2ProtocolAsList,
+                        var connection = await getServerConnection(connectArgs, true, SslExtensions.Http2ProtocolAsList,
                             cancellationToken);
                         
                             await connection.StreamWriter.WriteLineAsync("PRI * HTTP/2.0", cancellationToken);
@@ -285,24 +285,24 @@ namespace Titanium.Web.Proxy
                 }
 
                 // Now create the request
-                await HandleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
+                await handleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
                     cancellationTokenSource, connectHostname, connectArgs?.WebSession.ConnectRequest);
             }
             catch (ProxyException e)
             {
-                OnException(clientStream, e);
+                onException(clientStream, e);
             }
             catch (IOException e)
             {
-                OnException(clientStream, new Exception("Connection was aborted", e));
+                onException(clientStream, new Exception("Connection was aborted", e));
             }
             catch (SocketException e)
             {
-                OnException(clientStream, new Exception("Could not connect", e));
+                onException(clientStream, new Exception("Could not connect", e));
             }
             catch (Exception e)
             {
-                OnException(clientStream, new Exception("Error occured in whilst handling the client", e));
+                onException(clientStream, new Exception("Error occured in whilst handling the client", e));
             }
             finally
             {

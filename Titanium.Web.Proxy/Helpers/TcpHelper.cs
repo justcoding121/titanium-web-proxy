@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Helpers
                             0) == 0)
                     {
                         int rowCount = *(int*)tcpTable;
-                        uint portInNetworkByteOrder = ToNetworkByteOrder((uint)localPort);
+                        uint portInNetworkByteOrder = toNetworkByteOrder((uint)localPort);
 
                         if (ipVersion == IpVersion.Ipv4)
                         {
@@ -90,7 +90,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="port"></param>
         /// <returns></returns>
-        private static uint ToNetworkByteOrder(uint port)
+        private static uint toNetworkByteOrder(uint port)
         {
             return ((port >> 8) & 0x00FF00FFu) | ((port << 8) & 0xFF00FF00u);
         }
@@ -122,8 +122,8 @@ namespace Titanium.Web.Proxy.Helpers
             var serverBuffer = BufferPool.GetBuffer(bufferSize);
             try
             {
-                BeginRead(clientStream, serverStream, clientBuffer, onDataSend, cancellationTokenSource, exceptionFunc);
-                BeginRead(serverStream, clientStream, serverBuffer, onDataReceive, cancellationTokenSource,
+                beginRead(clientStream, serverStream, clientBuffer, onDataSend, cancellationTokenSource, exceptionFunc);
+                beginRead(serverStream, clientStream, serverBuffer, onDataReceive, cancellationTokenSource,
                     exceptionFunc);
                 await taskCompletionSource.Task;
             }
@@ -134,7 +134,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        private static void BeginRead(Stream inputStream, Stream outputStream, byte[] buffer,
+        private static void beginRead(Stream inputStream, Stream outputStream, byte[] buffer,
             Action<byte[], int, int> onCopy, CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)
         {
@@ -174,7 +174,7 @@ namespace Titanium.Web.Proxy.Helpers
                         try
                         {
                             outputStream.EndWrite(ar2);
-                            BeginRead(inputStream, outputStream, buffer, onCopy, cancellationTokenSource,
+                            beginRead(inputStream, outputStream, buffer, onCopy, cancellationTokenSource,
                                 exceptionFunc);
                         }
                         catch (IOException ex)
@@ -214,7 +214,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="cancellationTokenSource"></param>
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
-        private static async Task SendRawTap(Stream clientStream, Stream serverStream, int bufferSize,
+        private static async Task sendRawTap(Stream clientStream, Stream serverStream, int bufferSize,
             Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive,
             CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)
@@ -250,7 +250,7 @@ namespace Titanium.Web.Proxy.Helpers
             ExceptionHandler exceptionFunc)
         {
             // todo: fix APM mode
-            return SendRawTap(clientStream, serverStream, bufferSize, onDataSend, onDataReceive,
+            return sendRawTap(clientStream, serverStream, bufferSize, onDataSend, onDataReceive,
                 cancellationTokenSource,
                 exceptionFunc);
         }

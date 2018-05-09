@@ -40,7 +40,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal TcpConnectionFactory(ProxyServer server)
         {
             this.server = server;
-            Task.Run(async () => await ClearOutdatedConnections());
+            Task.Run(async () => await clearOutdatedConnections());
         }
 
         /// <summary>
@@ -88,7 +88,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         var cutOff = DateTime.Now.AddSeconds(-1 * proxyServer.ConnectionTimeOutSeconds + 3);
 
                         if (recentConnection.LastAccess > cutOff
-                            && IsGoodConnection(recentConnection.TcpClient))
+                            && isGoodConnection(recentConnection.TcpClient))
                         {
                             return recentConnection;
                         }
@@ -99,7 +99,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
             }
 
-            var connection = await CreateClient(remoteHostName, remotePort, httpVersion, isHttps,
+            var connection = await createClient(remoteHostName, remotePort, httpVersion, isHttps,
                 applicationProtocols, isConnect, proxyServer, upStreamEndPoint, externalProxy, cancellationToken);
 
             connection.CacheKey = cacheKey;
@@ -121,7 +121,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="externalProxy">The external proxy to make request via.</param>
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
-        private async Task<TcpServerConnection> CreateClient(string remoteHostName, int remotePort,
+        private async Task<TcpServerConnection> createClient(string remoteHostName, int remotePort,
             Version httpVersion, bool isHttps, List<SslApplicationProtocol> applicationProtocols, bool isConnect,
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
             CancellationToken cancellationToken)
@@ -280,7 +280,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             @lock.Release();
         }
 
-        private async Task ClearOutdatedConnections()
+        private async Task clearOutdatedConnections()
         {
             while (runCleanUpTask)
             {
@@ -326,7 +326,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         /// <param name="client"></param>
         /// <returns></returns>
-        private static bool IsGoodConnection(TcpClient client)
+        private static bool isGoodConnection(TcpClient client)
         {
             var socket = client.Client;
 

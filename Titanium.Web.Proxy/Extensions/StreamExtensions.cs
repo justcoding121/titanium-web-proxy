@@ -43,7 +43,7 @@ namespace Titanium.Web.Proxy.Extensions
                     // cancellation is not working on Socket ReadAsync
                     // https://github.com/dotnet/corefx/issues/15033
                     int num = await input.ReadAsync(buffer, 0, buffer.Length, CancellationToken.None)
-                        .WithCancellation(cancellationToken);
+                        .withCancellation(cancellationToken);
                     int bytesRead;
                     if ((bytesRead = num) != 0 && !cancellationToken.IsCancellationRequested)
                     {
@@ -62,7 +62,7 @@ namespace Titanium.Web.Proxy.Extensions
             }
         }
 
-        private static async Task<T> WithCancellation<T>(this Task<T> task, CancellationToken cancellationToken)
+        private static async Task<T> withCancellation<T>(this Task<T> task, CancellationToken cancellationToken)
         {
             var tcs = new TaskCompletionSource<bool>();
             using (cancellationToken.Register(s => ((TaskCompletionSource<bool>)s).TrySetResult(true), tcs))
