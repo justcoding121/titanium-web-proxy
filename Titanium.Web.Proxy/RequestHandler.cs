@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,11 +24,12 @@ namespace Titanium.Web.Proxy
         private static readonly Regex uriSchemeRegex =
             new Regex("^[a-z]*://", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        private static readonly HashSet<string> proxySupportedCompressions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "gzip",
-            "deflate"
-        };
+        private static readonly HashSet<string> proxySupportedCompressions =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "gzip",
+                "deflate"
+            };
 
         private bool isWindowsAuthenticationEnabledAndSupported =>
             EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
@@ -178,6 +177,7 @@ namespace Titanium.Web.Proxy
                                 continue;
                             }
 
+                            bool connectionChanged = false;
                             // create a new connection if hostname/upstream end point changes
                             if (serverConnection != null
                                 && (!serverConnection.HostName.EqualsIgnoreCase(request.RequestUri.Host)
@@ -186,17 +186,18 @@ namespace Titanium.Web.Proxy
                             {
                                 tcpConnectionFactory.Release(serverConnection, true);
                                 serverConnection = null;
+                                connectionChanged = true;
                             }
 
-                            var connectionChanged = false;
                             if (serverConnection == null)
                             {
-                                serverConnection = await getServerConnection(args, false, clientConnection.NegotiatedApplicationProtocol, cancellationToken);
+                                serverConnection = await getServerConnection(args, false,
+                                    clientConnection.NegotiatedApplicationProtocol, cancellationToken);
                                 connectionChanged = true;
                             }
 
                             //for connection pool retry attempt until we get a good connection
-                            var attemt = 0;
+                            int attemt = 0;
                             while (attemt < 3)
                             {
                                 try
@@ -223,7 +224,8 @@ namespace Titanium.Web.Proxy
 
                                     //get new connection from pool
                                     tcpConnectionFactory.Release(serverConnection, true);
-                                    serverConnection = await getServerConnection(args, false, clientConnection.NegotiatedApplicationProtocol, cancellationToken);
+                                    serverConnection = await getServerConnection(args, false,
+                                        clientConnection.NegotiatedApplicationProtocol, cancellationToken);
                                     attemt++;
                                     continue;
                                 }
@@ -348,7 +350,6 @@ namespace Titanium.Web.Proxy
             {
                 await handleHttpSessionResponse(args);
             }
-
         }
 
         /// <summary>
@@ -380,7 +381,7 @@ namespace Titanium.Web.Proxy
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
         private async Task<TcpServerConnection> getServerConnection(SessionEventArgsBase args, bool isConnect,
-        List<SslApplicationProtocol> applicationProtocols, CancellationToken cancellationToken)
+            List<SslApplicationProtocol> applicationProtocols, CancellationToken cancellationToken)
         {
             ExternalProxy customUpStreamProxy = null;
 
@@ -407,7 +408,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private void prepareRequestHeaders(HeaderCollection requestHeaders)
         {
-            var acceptEncoding = requestHeaders.GetHeaderValueOrNull(KnownHeaders.AcceptEncoding);
+            string acceptEncoding = requestHeaders.GetHeaderValueOrNull(KnownHeaders.AcceptEncoding);
 
             if (acceptEncoding != null)
             {
@@ -421,22 +422,22 @@ namespace Titanium.Web.Proxy
                 //uncompressed is always supported by proxy
                 supportedAcceptEncoding.Add("identity");
 
-                requestHeaders.SetOrAddHeaderValue(KnownHeaders.AcceptEncoding, string.Join(",", supportedAcceptEncoding));
+                requestHeaders.SetOrAddHeaderValue(KnownHeaders.AcceptEncoding,
+                    string.Join(",", supportedAcceptEncoding));
             }
 
             requestHeaders.FixProxyHeaders();
         }
 
         /// <summary>
-        /// Handle upgrade to websocket
+        ///     Handle upgrade to websocket
         /// </summary>
         private async Task handleWebSocketUpgrade(string httpCmd,
-                SessionEventArgs args, Request request, Response response,
-                CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
-                TcpServerConnection serverConnection,
-                CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
+            SessionEventArgs args, Request request, Response response,
+            CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
+            TcpServerConnection serverConnection,
+            CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
         {
-          
             // prepare the prefix content
             await serverConnection.StreamWriter.WriteLineAsync(httpCmd, cancellationToken);
             await serverConnection.StreamWriter.WriteHeadersAsync(request.Headers,
