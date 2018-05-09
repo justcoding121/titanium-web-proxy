@@ -273,10 +273,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     break;
                 }
-
-                ;
             }
-
             @lock.Release();
         }
 
@@ -308,7 +305,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     cache.TryRemove(key, out var _);
                 }
-
                 @lock.Release();
 
                 while (disposalBag.TryTake(out var connection))
@@ -344,7 +340,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                 socket.Blocking = false;
                 socket.Send(tmp, 0, 0);
-                //Connected!
+                //Connected.
             }
             catch
             {
