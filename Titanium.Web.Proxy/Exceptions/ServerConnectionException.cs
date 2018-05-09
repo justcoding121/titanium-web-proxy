@@ -3,7 +3,8 @@
 namespace Titanium.Web.Proxy.Exceptions
 {
     /// <summary>
-    /// The server connection was closed. 
+    /// The server connection was closed upon first read with the new connection from pool.
+    /// Should retry the request with a new connection.
     /// </summary>
     public class ServerConnectionException : ProxyException
     {

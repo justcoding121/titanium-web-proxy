@@ -195,8 +195,8 @@ namespace Titanium.Web.Proxy
                                 connectionChanged = true;
                             }
 
+                            //for connection pool retry attempt until we get a good connection
                             var attemt = 0;
-                            //for connection pool retry 
                             while (attemt < 3)
                             {
                                 try
@@ -436,6 +436,7 @@ namespace Titanium.Web.Proxy
                 TcpServerConnection serverConnection,
                 CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
         {
+          
             // prepare the prefix content
             await serverConnection.StreamWriter.WriteLineAsync(httpCmd, cancellationToken);
             await serverConnection.StreamWriter.WriteHeadersAsync(request.Headers,
