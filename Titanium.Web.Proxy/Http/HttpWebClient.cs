@@ -103,9 +103,8 @@ namespace Titanium.Web.Proxy.Http
                                && !string.IsNullOrEmpty(upstreamProxy.UserName)
                                && upstreamProxy.Password != null)
             {
-                HttpHeader.ProxyConnectionKeepAlive.Write(headerBuilder);
-                HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password)
-                    .Write(headerBuilder);
+                headerBuilder.AppendLine(HttpHeader.ProxyConnectionKeepAlive.ToString());
+                headerBuilder.AppendLine(HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password).ToString());
             }
 
             // write request headers
@@ -113,7 +112,7 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (isTransparent || header.Name != KnownHeaders.ProxyAuthorization)
                 {
-                    header.Write(headerBuilder);
+                    headerBuilder.AppendLine(header.ToString());
                 }
             }
 
