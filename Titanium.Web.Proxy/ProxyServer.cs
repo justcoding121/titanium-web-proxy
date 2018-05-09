@@ -165,6 +165,14 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public int ConnectionTimeOutSeconds { get; set; }
 
+
+        /// <summary>
+        ///     Maximum number of concurrent connections per remote host in cache.
+        ///     Only valid when connection pooling is enabled.
+        ///     Default value is 3.
+        /// </summary>
+        public int MaxCachedConnections { get; set; } = 3;
+
         /// <summary>
         ///     Total number of active client connections.
         /// </summary>

@@ -127,6 +127,13 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 if (cache.TryGetValue(connection.CacheKey, out var existingConnections))
                 {
+                    while (existingConnections.Count >= server.MaxCachedConnections)
+                    {
+                        if (existingConnections.TryDequeue(out var staleConnection))
+                        {
+                            disposalBag.Add(staleConnection);
+                        }                    
+                    }
                     existingConnections.Enqueue(connection);
                     break;
                 }

@@ -129,7 +129,7 @@ namespace Titanium.Web.Proxy
                     {
                         connectRequest.RequestUri = new Uri("https://" + httpUrl);
 
-                        bool http2Supproted = false;
+                        bool http2Supported = false;
 
                         var alpn = clientHelloInfo.GetAlpn();
                         if (alpn != null && alpn.Contains(SslApplicationProtocol.Http2))
@@ -139,8 +139,12 @@ namespace Titanium.Web.Proxy
                             var connection = await getServerConnection(connectArgs, true,
                                 SslExtensions.Http2ProtocolAsList, cancellationToken);
 
-                            http2Supproted = connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
-                            tcpConnectionFactory.Release(connection, true);
+                            http2Supported = connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
+
+                            //release connection back to pool intead of closing when connection pool is enabled
+                            //In future we can connect to server preemptively here for all HTTPS connections using connect hostname
+                            //and then release it back to pool so that we can save time when reading client headers
+                            tcpConnectionFactory.Release(connection, !EnableConnectionPool);
                         }
 
                         SslStream sslStream = null;
@@ -156,7 +160,7 @@ namespace Titanium.Web.Proxy
 
                             // Successfully managed to authenticate the client using the fake certificate
                             var options = new SslServerAuthenticationOptions();
-                            if (http2Supproted)
+                            if (http2Supported)
                             {
                                 options.ApplicationProtocols = clientHelloInfo.GetAlpn();
                                 if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)
@@ -202,7 +206,7 @@ namespace Titanium.Web.Proxy
                     {
                         // create new connection
                         var connection = await getServerConnection(connectArgs, true,
-                            clientConnection.NegotiatedApplicationProtocol, cancellationToken);
+                            null, cancellationToken);
 
                         if (isClientHello)
                         {
