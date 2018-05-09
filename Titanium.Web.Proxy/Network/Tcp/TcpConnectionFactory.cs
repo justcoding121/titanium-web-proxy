@@ -108,6 +108,78 @@ namespace Titanium.Web.Proxy.Network.Tcp
         }
 
         /// <summary>
+        ///     Release connection back to cache.
+        /// </summary>
+        /// <param name="connection">The Tcp server connection to return.</param>
+        /// <param name="close">Should we just close the connection instead of reusing?</param>
+        internal void Release(TcpServerConnection connection, bool close = false)
+        {
+            if (close || connection.IsWinAuthenticated)
+            {
+                disposalBag.Add(connection);
+                return;
+            }
+
+            connection.LastAccess = DateTime.Now;
+
+            @lock.Wait();
+            while (true)
+            {
+                if (cache.TryGetValue(connection.CacheKey, out var existingConnections))
+                {
+                    existingConnections.Enqueue(connection);
+                    break;
+                }
+
+                if (cache.TryAdd(connection.CacheKey, new ConcurrentQueue<TcpServerConnection>(new[] { connection })))
+                {
+                    break;
+                }
+            }
+            @lock.Release();
+        }
+
+        private async Task clearOutdatedConnections()
+        {
+            while (runCleanUpTask)
+            {
+                foreach (var item in cache)
+                {
+                    var queue = item.Value;
+                    while (queue.TryDequeue(out var connection))
+                    {
+                        var cutOff = DateTime.Now.AddSeconds(-1 * server.ConnectionTimeOutSeconds);
+                        if (connection.LastAccess < cutOff)
+                        {
+                            disposalBag.Add(connection);
+                            continue;
+                        }
+
+                        queue.Enqueue(connection);
+                        break;
+                    }
+                }
+
+                //clear empty queues
+                await @lock.WaitAsync();
+                var emptyKeys = cache.Where(x => x.Value.Count == 0).Select(x => x.Key).ToList();
+                foreach (string key in emptyKeys)
+                {
+                    cache.TryRemove(key, out var _);
+                }
+                @lock.Release();
+
+                while (disposalBag.TryTake(out var connection))
+                {
+                    connection?.Dispose();
+                }
+
+                //cleanup every ten seconds by default
+                await Task.Delay(1000 * 10);
+            }
+        }
+
+        /// <summary>
         ///     Creates a TCP connection to server
         /// </summary>
         /// <param name="remoteHostName">The remote hostname.</param>
@@ -244,79 +316,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 Version = httpVersion
             };
         }
-
-        /// <summary>
-        ///     Release connection back to cache.
-        /// </summary>
-        /// <param name="connection">The Tcp server connection to return.</param>
-        /// <param name="close">Should we just close the connection instead of reusing?</param>
-        internal void Release(TcpServerConnection connection, bool close = false)
-        {
-            if (close || connection.IsWinAuthenticated)
-            {
-                disposalBag.Add(connection);
-                return;
-            }
-
-            connection.LastAccess = DateTime.Now;
-
-            @lock.Wait();
-            while (true)
-            {
-                if (cache.TryGetValue(connection.CacheKey, out var existingConnections))
-                {
-                    existingConnections.Enqueue(connection);
-                    break;
-                }
-
-                if (cache.TryAdd(connection.CacheKey, new ConcurrentQueue<TcpServerConnection>(new[] { connection })))
-                {
-                    break;
-                }
-            }
-            @lock.Release();
-        }
-
-        private async Task clearOutdatedConnections()
-        {
-            while (runCleanUpTask)
-            {
-                foreach (var item in cache)
-                {
-                    var queue = item.Value;
-                    while (queue.TryDequeue(out var connection))
-                    {
-                        var cutOff = DateTime.Now.AddSeconds(-1 * server.ConnectionTimeOutSeconds);
-                        if (connection.LastAccess < cutOff)
-                        {
-                            disposalBag.Add(connection);
-                            continue;
-                        }
-
-                        queue.Enqueue(connection);
-                        break;
-                    }
-                }
-
-                //clear empty queues
-                await @lock.WaitAsync();
-                var emptyKeys = cache.Where(x => x.Value.Count == 0).Select(x => x.Key).ToList();
-                foreach (string key in emptyKeys)
-                {
-                    cache.TryRemove(key, out var _);
-                }
-                @lock.Release();
-
-                while (disposalBag.TryTake(out var connection))
-                {
-                    connection?.Dispose();
-                }
-
-                //cleanup every ten seconds by default
-                await Task.Delay(1000 * 10);
-            }
-        }
-
         /// <summary>
         ///     Check if a TcpClient is good to be used.
         ///     https://msdn.microsoft.com/en-us/library/system.net.sockets.socket.connected(v=vs.110).aspx
