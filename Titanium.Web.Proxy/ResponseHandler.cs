@@ -67,7 +67,7 @@ namespace Titanium.Web.Proxy
                     }
                     else
                     {
-                        args.WebSession.ServerConnection.Dispose();
+                        tcpConnectionFactory.Release(args.WebSession.ServerConnection, true);
                         args.WebSession.ServerConnection = null;
                     }
 
