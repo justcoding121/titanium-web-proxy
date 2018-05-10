@@ -177,7 +177,7 @@ namespace Titanium.Web.Proxy
                                 continue;
                             }
 
-                            bool connectionChanged = false;
+                            bool newConnection = false;
                             // create a new connection if hostname/upstream end point changes
                             if (serverConnection != null
                                 && (!serverConnection.HostName.EqualsIgnoreCase(request.RequestUri.Host)
@@ -186,14 +186,14 @@ namespace Titanium.Web.Proxy
                             {
                                 await tcpConnectionFactory.Release(serverConnection, true);
                                 serverConnection = null;
-                                connectionChanged = true;
+                                newConnection = true;
                             }
 
                             if (serverConnection == null)
                             {
                                 serverConnection = await getServerConnection(args, false,
                                     clientConnection.NegotiatedApplicationProtocol, cancellationToken);
-                                connectionChanged = true;
+                                newConnection = true;
                             }
 
                             //for connection pool retry fails until cache is exhausted
@@ -220,7 +220,8 @@ namespace Titanium.Web.Proxy
                                 //connection pool retry 
                                 catch (ServerConnectionException)
                                 {
-                                    if (!connectionChanged || !EnableConnectionPool || attempt == MaxCachedConnections + 1)
+                                    attempt++;
+                                    if (!newConnection || !EnableConnectionPool || attempt == MaxCachedConnections + 1)
                                     {
                                         throw;
                                     }
@@ -229,7 +230,7 @@ namespace Titanium.Web.Proxy
                                     await tcpConnectionFactory.Release(serverConnection, true);
                                     serverConnection = await getServerConnection(args, false,
                                         clientConnection.NegotiatedApplicationProtocol, cancellationToken);
-                                    attempt++;
+                                   
                                     continue;
                                 }
 
