@@ -203,7 +203,9 @@ namespace Titanium.Web.Proxy
                     // Hostname is excluded or it is not an HTTPS connect
                     if (!decryptSsl || !isClientHello)
                     {
-                        // create new connection
+                        // create new connection to server.
+                        // If we detected that client tunnel CONNECTs without SSL by checking for empty client hello then 
+                        // this connection should not be HTTPS.
                         var connection = await getServerConnection(connectArgs, true,
                             null, cancellationToken);
 
