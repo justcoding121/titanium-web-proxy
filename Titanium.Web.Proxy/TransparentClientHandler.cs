@@ -31,8 +31,10 @@ namespace Titanium.Web.Proxy
             var cancellationToken = cancellationTokenSource.Token;
 
             var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferPool, BufferSize);
-
             var clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool, BufferSize);
+
+            Task<TcpServerConnection> prefetchConnectionTask = null;
+            bool closeServerConnection = false;
 
             try
             {
@@ -59,11 +61,11 @@ namespace Titanium.Web.Proxy
 
                     if (endPoint.DecryptSsl && args.DecryptSsl)
                     {
-                        SslStream sslStream = null;
+                        prefetchConnectionTask = tcpConnectionFactory.GetClient(httpsHostName, endPoint.Port,
+                            null, true, null,
+                            false, this, UpStreamEndPoint, UpStreamHttpsProxy, cancellationToken);
 
-                        // When connection pool becomes stable we can connect to server preemptively in a separate task here without awaiting
-                        // for all HTTPS requests using SNI hostname. Then by releasing server connection
-                        // back to connection pool we can authenticate against client/server concurrently and save time.
+                        SslStream sslStream = null;
 
                         //do client authentication using fake certificate
                         try
@@ -129,27 +131,38 @@ namespace Titanium.Web.Proxy
                 // HTTPS server created - we can now decrypt the client's traffic
                 // Now create the request
                 await handleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
-                    cancellationTokenSource, isHttps ? httpsHostName : null, null);
+                    cancellationTokenSource, isHttps ? httpsHostName : null, null, prefetchConnectionTask);
             }
             catch (ProxyException e)
             {
+                closeServerConnection = true;
                 onException(clientStream, e);
             }
             catch (IOException e)
             {
+                closeServerConnection = true;
                 onException(clientStream, new Exception("Connection was aborted", e));
             }
             catch (SocketException e)
             {
+                closeServerConnection = true;
                 onException(clientStream, new Exception("Could not connect", e));
             }
             catch (Exception e)
             {
+                closeServerConnection = true;
                 onException(clientStream, new Exception("Error occured in whilst handling the client", e));
             }
             finally
             {
                 clientStream.Dispose();
+
+                if (prefetchConnectionTask != null)
+                {
+                    var connection = await prefetchConnectionTask;
+                    await tcpConnectionFactory.Release(connection, closeServerConnection || !EnableConnectionPool);
+                }
+
                 if (!cancellationTokenSource.IsCancellationRequested)
                 {
                     cancellationTokenSource.Cancel();

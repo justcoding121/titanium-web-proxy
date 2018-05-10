@@ -114,6 +114,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="close">Should we just close the connection instead of reusing?</param>
         internal async Task Release(TcpServerConnection connection, bool close = false)
         {
+            if (connection == null)
+            {
+                return;
+            }
+
             if (close || connection.IsWinAuthenticated)
             {
                 disposalBag.Add(connection);
