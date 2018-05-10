@@ -267,8 +267,9 @@ namespace Titanium.Web.Proxy
             {
                 Stop();
             }
-
+            
             CertificateManager?.Dispose();
+            BufferPool?.Dispose();
         }
 
         /// <summary>

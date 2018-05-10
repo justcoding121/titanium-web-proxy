@@ -32,7 +32,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         //cache object race operations lock
         private readonly SemaphoreSlim @lock = new SemaphoreSlim(1);
 
-        private bool runCleanUpTask = true;
+        private volatile bool runCleanUpTask = true;
 
         internal TcpConnectionFactory(ProxyServer server)
         {
@@ -112,7 +112,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         /// <param name="connection">The Tcp server connection to return.</param>
         /// <param name="close">Should we just close the connection instead of reusing?</param>
-        internal void Release(TcpServerConnection connection, bool close = false)
+        internal async Task Release(TcpServerConnection connection, bool close = false)
         {
             if (close || connection.IsWinAuthenticated)
             {
@@ -122,28 +122,38 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             connection.LastAccess = DateTime.Now;
 
-            @lock.Wait();
-            while (true)
+            try
             {
-                if (cache.TryGetValue(connection.CacheKey, out var existingConnections))
-                {
-                    while (existingConnections.Count >= server.MaxCachedConnections)
-                    {
-                        if (existingConnections.TryDequeue(out var staleConnection))
-                        {
-                            disposalBag.Add(staleConnection);
-                        }                    
-                    }
-                    existingConnections.Enqueue(connection);
-                    break;
-                }
+                await @lock.WaitAsync();
 
-                if (cache.TryAdd(connection.CacheKey, new ConcurrentQueue<TcpServerConnection>(new[] { connection })))
+                while (true)
                 {
-                    break;
+                    if (cache.TryGetValue(connection.CacheKey, out var existingConnections))
+                    {
+                        while (existingConnections.Count >= server.MaxCachedConnections)
+                        {
+                            if (existingConnections.TryDequeue(out var staleConnection))
+                            {
+                                disposalBag.Add(staleConnection);
+                            }
+                        }
+
+                        existingConnections.Enqueue(connection);
+                        break;
+                    }
+
+                    if (cache.TryAdd(connection.CacheKey,
+                        new ConcurrentQueue<TcpServerConnection>(new[] { connection })))
+                    {
+                        break;
+                    }
                 }
+             
             }
-            @lock.Release();
+            finally
+            {
+                @lock.Release();
+            }
         }
 
         private async Task clearOutdatedConnections()
@@ -167,14 +177,21 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     }
                 }
 
-                //clear empty queues
-                await @lock.WaitAsync();
-                var emptyKeys = cache.Where(x => x.Value.Count == 0).Select(x => x.Key).ToList();
-                foreach (string key in emptyKeys)
+                try
                 {
-                    cache.TryRemove(key, out var _);
+                    await @lock.WaitAsync();
+
+                    //clear empty queues
+                    var emptyKeys = cache.Where(x => x.Value.Count == 0).Select(x => x.Key).ToList();
+                    foreach (string key in emptyKeys)
+                    {
+                        cache.TryRemove(key, out var _);
+                    }
                 }
-                @lock.Release();
+                finally
+                {
+                    @lock.Release();
+                }
 
                 while (disposalBag.TryTake(out var connection))
                 {
