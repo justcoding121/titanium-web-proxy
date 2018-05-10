@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading;
+using StreamExtended;
 using StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Network
@@ -17,7 +18,8 @@ namespace Titanium.Web.Proxy.Network
 
         private readonly FileStream fileStreamSent;
 
-        public DebugCustomBufferedStream(Guid connectionId, string type, Stream baseStream, int bufferSize, bool leaveOpen = false) : base(baseStream, bufferSize, leaveOpen)
+        public DebugCustomBufferedStream(Guid connectionId, string type, Stream baseStream, IBufferPool bufferPool, int bufferSize, bool leaveOpen = false) 
+            : base(baseStream, bufferPool, bufferSize, leaveOpen)
         {
             Counter = Interlocked.Increment(ref counter);
             fileStreamSent = new FileStream(Path.Combine(basePath, $"{connectionId}_{type}_{Counter}_sent.dat"), FileMode.Create);
