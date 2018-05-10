@@ -184,7 +184,7 @@ namespace Titanium.Web.Proxy
                                     || args.WebSession.UpStreamEndPoint?.Equals(serverConnection.UpStreamEndPoint) ==
                                     false))
                             {
-                                tcpConnectionFactory.Release(serverConnection, true);
+                                await tcpConnectionFactory.Release(serverConnection, true);
                                 serverConnection = null;
                                 connectionChanged = true;
                             }
@@ -226,7 +226,7 @@ namespace Titanium.Web.Proxy
                                     }
 
                                     //get new connection from pool
-                                    tcpConnectionFactory.Release(serverConnection, true);
+                                    await tcpConnectionFactory.Release(serverConnection, true);
                                     serverConnection = await getServerConnection(args, false,
                                         clientConnection.NegotiatedApplicationProtocol, cancellationToken);
                                     attempt++;
@@ -273,7 +273,7 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                tcpConnectionFactory.Release(serverConnection, serverConnectionClose || !EnableConnectionPool);
+                await tcpConnectionFactory.Release(serverConnection, serverConnectionClose || !EnableConnectionPool);
             }
         }
 

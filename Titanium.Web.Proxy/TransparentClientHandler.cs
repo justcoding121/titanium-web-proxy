@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy
                         await TcpHelper.SendRaw(clientStream, serverStream, BufferPool, BufferSize,
                             null, null, cancellationTokenSource, ExceptionFunc);
 
-                        tcpConnectionFactory.Release(connection, true);
+                        await tcpConnectionFactory.Release(connection, true);
                         return;
 
                     }

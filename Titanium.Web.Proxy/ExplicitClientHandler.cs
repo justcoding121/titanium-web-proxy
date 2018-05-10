@@ -143,7 +143,7 @@ namespace Titanium.Web.Proxy
                             //release connection back to pool intead of closing when connection pool is enabled
                             //In future we can connect to server preemptively here for all HTTPS connections using connect hostname
                             //and then release it back to pool so that we can save time when reading client headers
-                            tcpConnectionFactory.Release(connection, !EnableConnectionPool);
+                            await tcpConnectionFactory.Release(connection, !EnableConnectionPool);
                         }
 
                         SslStream sslStream = null;
@@ -238,7 +238,7 @@ namespace Titanium.Web.Proxy
                             (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
                             connectArgs.CancellationTokenSource, ExceptionFunc);
 
-                        tcpConnectionFactory.Release(connection, true);
+                        await tcpConnectionFactory.Release(connection, true);
                         return;
                     }
                 }
@@ -283,7 +283,7 @@ namespace Titanium.Web.Proxy
                                 (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
                                 connectArgs.CancellationTokenSource, clientConnection.Id, ExceptionFunc);
 #endif
-                       tcpConnectionFactory.Release(connection, true);
+                       await tcpConnectionFactory.Release(connection, true);
                     }
                 }
 
