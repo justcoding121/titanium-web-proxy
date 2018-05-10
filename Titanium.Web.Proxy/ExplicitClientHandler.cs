@@ -14,7 +14,6 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy
@@ -34,13 +33,16 @@ namespace Titanium.Web.Proxy
             var cancellationToken = cancellationTokenSource.Token;
 
             var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferPool, BufferSize);
-
             var clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool, BufferSize);
+
+            Task<TcpServerConnection> prefetchConnectionTask = null;
+            bool closeServerConnection = false;
 
             try
             {
                 string connectHostname = null;
                 TunnelConnectSessionEventArgs connectArgs = null;
+               
 
                 // Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
                 if (await HttpHelper.IsConnectMethod(clientStream) == 1)
@@ -135,9 +137,6 @@ namespace Titanium.Web.Proxy
                         {
                             // test server HTTP/2 support
                             // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
-                            // When connection pool becomes stable we can connect to server preemptively in a separate task here without awaiting
-                            // using HTTPS CONNECT hostname. Then by releasing server connection
-                            // back to connection pool we can authenticate against client/server concurrently and save time.
                             var connection = await getServerConnection(connectArgs, true,
                                 SslExtensions.Http2ProtocolAsList, cancellationToken);
 
@@ -148,7 +147,8 @@ namespace Titanium.Web.Proxy
                         }
 
                         SslStream sslStream = null;
-
+                        prefetchConnectionTask = getServerConnection(connectArgs, true,
+                            null, cancellationToken);
                         try
                         {
                             sslStream = new SslStream(clientStream);
@@ -292,27 +292,38 @@ namespace Titanium.Web.Proxy
 
                 // Now create the request
                 await handleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
-                    cancellationTokenSource, connectHostname, connectArgs?.WebSession.ConnectRequest);
+                    cancellationTokenSource, connectHostname, connectArgs?.WebSession.ConnectRequest, prefetchConnectionTask);
             }
             catch (ProxyException e)
             {
+                closeServerConnection = true;
                 onException(clientStream, e);
             }
             catch (IOException e)
             {
+                closeServerConnection = true;
                 onException(clientStream, new Exception("Connection was aborted", e));
             }
             catch (SocketException e)
             {
+                closeServerConnection = true;
                 onException(clientStream, new Exception("Could not connect", e));
             }
             catch (Exception e)
             {
+                closeServerConnection = true;
                 onException(clientStream, new Exception("Error occured in whilst handling the client", e));
             }
             finally
             {
                 clientStream.Dispose();
+
+                if (prefetchConnectionTask != null)
+                {
+                    var connection = await prefetchConnectionTask;
+                    await tcpConnectionFactory.Release(connection, closeServerConnection || !EnableConnectionPool);
+                }
+
                 if (!cancellationTokenSource.IsCancellationRequested)
                 {
                     cancellationTokenSource.Cancel();

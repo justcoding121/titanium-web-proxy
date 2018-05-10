@@ -49,13 +49,16 @@ namespace Titanium.Web.Proxy
         ///     explicit endpoint.
         /// </param>
         /// <param name="connectRequest">The Connect request if this is a HTTPS request from explicit endpoint.</param>
+        /// <param name="prefetchConnectionTask">Prefected server connection for current client using Connect/SNI headers.</param>
         private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, TcpClientConnection clientConnection,
             CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
-            CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, ConnectRequest connectRequest)
+            CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, ConnectRequest connectRequest,
+            Task<TcpServerConnection> prefetchConnectionTask = null)
         {
             var cancellationToken = cancellationTokenSource.Token;
+
             TcpServerConnection serverConnection = null;
-            bool serverConnectionClose = false;
+            bool closeServerConnection = false;
 
             try
             {
@@ -178,6 +181,13 @@ namespace Titanium.Web.Proxy
                             }
 
                             bool newConnection = false;
+
+                            if (serverConnection == null && prefetchConnectionTask != null)
+                            {
+                                serverConnection = await prefetchConnectionTask;
+                                newConnection = true;
+                            }
+
                             // create a new connection if hostname/upstream end point changes
                             if (serverConnection != null
                                 && (!serverConnection.HostName.EqualsIgnoreCase(request.RequestUri.Host)
@@ -230,7 +240,7 @@ namespace Titanium.Web.Proxy
                                     await tcpConnectionFactory.Release(serverConnection, true);
                                     serverConnection = await getServerConnection(args, false,
                                         clientConnection.NegotiatedApplicationProtocol, cancellationToken);
-                                   
+
                                     continue;
                                 }
 
@@ -245,7 +255,7 @@ namespace Titanium.Web.Proxy
                             // if connection is closing exit
                             if (!response.KeepAlive)
                             {
-                                serverConnectionClose = true;
+                                closeServerConnection = true;
                                 return;
                             }
 
@@ -262,7 +272,7 @@ namespace Titanium.Web.Proxy
                     catch (Exception e)
                     {
                         args.Exception = e;
-                        serverConnectionClose = true;
+                        closeServerConnection = true;
                         throw;
                     }
                     finally
@@ -274,7 +284,15 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                await tcpConnectionFactory.Release(serverConnection, serverConnectionClose || !EnableConnectionPool);
+                //don't release prefetched connection here.
+                //it will be handled by the parent method which created it.
+                if (prefetchConnectionTask == null 
+                    || serverConnection != await prefetchConnectionTask)
+                {
+                    await tcpConnectionFactory.Release(serverConnection,
+                        closeServerConnection || !EnableConnectionPool);
+                }
+
             }
         }
 
