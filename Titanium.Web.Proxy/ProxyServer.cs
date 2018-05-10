@@ -7,6 +7,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using StreamExtended;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
@@ -15,7 +16,6 @@ using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy
 {
@@ -96,6 +96,11 @@ namespace Titanium.Web.Proxy
         {
             // default values
             ConnectionTimeOutSeconds = 60;
+
+            if (BufferPool == null)
+            {
+                BufferPool = new DefaultBufferPool();
+            }
 
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory(this);
@@ -196,6 +201,11 @@ namespace Titanium.Web.Proxy
             SslProtocols.Ssl3 |
 #endif
             SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12;
+
+        /// <summary>
+        ///     The buffer pool used throughout this proxy instance.
+        /// </summary>
+        public IBufferPool BufferPool { get; set; }
 
         /// <summary>
         ///     Manages certificates used by this proxy.

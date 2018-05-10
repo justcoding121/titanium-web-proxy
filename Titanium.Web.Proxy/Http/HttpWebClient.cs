@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Http
     public class HttpWebClient
     {
 
-        internal HttpWebClient(int bufferSize, Request request = null, Response response = null)
+        internal HttpWebClient(Request request = null, Response response = null)
         {
             Request = request ?? new Request();
             Response = response ?? new Response();

@@ -4,7 +4,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended.Helpers;
+using StreamExtended;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Shared;
@@ -14,6 +14,7 @@ namespace Titanium.Web.Proxy.Helpers
     internal class HttpWriter : ICustomStreamWriter
     {
         private readonly Stream stream;
+        private readonly IBufferPool bufferPool;
 
         private static readonly byte[] newLine = ProxyConstants.NewLine;
 
@@ -21,10 +22,11 @@ namespace Titanium.Web.Proxy.Helpers
 
         private readonly char[] charBuffer;
 
-        internal HttpWriter(Stream stream, int bufferSize)
+        internal HttpWriter(Stream stream, IBufferPool bufferPool, int bufferSize)
         {
             BufferSize = bufferSize;
             this.stream = stream;
+            this.bufferPool = bufferPool;
 
             // ASCII encoder max byte count is char count + 1
             charBuffer = new char[BufferSize - 1];
@@ -55,7 +57,7 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 value.CopyTo(0, charBuffer, 0, charCount);
 
-                var buffer = BufferPool.GetBuffer(BufferSize);
+                var buffer = bufferPool.GetBuffer(BufferSize);
                 try
                 {
                     int idx = encoder.GetBytes(charBuffer, 0, charCount, buffer, 0, true);
@@ -69,7 +71,7 @@ namespace Titanium.Web.Proxy.Helpers
                 }
                 finally
                 {
-                    BufferPool.ReturnBuffer(buffer);
+                    bufferPool.ReturnBuffer(buffer);
                 }
             }
             else
@@ -254,7 +256,7 @@ namespace Titanium.Web.Proxy.Helpers
         private async Task copyBytesFromStream(ICustomStreamReader reader, long count, Action<byte[], int, int> onCopy,
             CancellationToken cancellationToken)
         {
-            var buffer = BufferPool.GetBuffer(BufferSize);
+            var buffer = bufferPool.GetBuffer(BufferSize);
 
             try
             {
@@ -283,7 +285,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
             finally
             {
-                BufferPool.ReturnBuffer(buffer);
+                bufferPool.ReturnBuffer(buffer);
             }
         }
 

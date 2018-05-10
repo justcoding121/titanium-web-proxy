@@ -7,7 +7,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended;
-using StreamExtended.Helpers;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -34,9 +33,9 @@ namespace Titanium.Web.Proxy
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
 
-            var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferSize);
+            var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferPool, BufferSize);
 
-            var clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
+            var clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool, BufferSize);
 
             try
             {
@@ -67,8 +66,8 @@ namespace Titanium.Web.Proxy
 
                     await HeaderParser.ReadHeaders(clientStream, connectRequest.Headers, cancellationToken);
 
-                    connectArgs = new TunnelConnectSessionEventArgs(BufferSize, endPoint, connectRequest,
-                        cancellationTokenSource, ExceptionFunc);
+                    connectArgs = new TunnelConnectSessionEventArgs(this, endPoint, connectRequest,
+                        cancellationTokenSource);
                     connectArgs.ProxyClient.ClientConnection = clientConnection;
                     connectArgs.ProxyClient.ClientStream = clientStream;
 
@@ -115,7 +114,7 @@ namespace Titanium.Web.Proxy
 
                     await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
 
-                    var clientHelloInfo = await SslTools.PeekClientHello(clientStream, cancellationToken);
+                    var clientHelloInfo = await SslTools.PeekClientHello(clientStream, BufferPool, cancellationToken);
 
                     bool isClientHello = clientHelloInfo != null;
                     if (isClientHello)
@@ -180,8 +179,8 @@ namespace Titanium.Web.Proxy
 #endif
 
                             // HTTPS server created - we can now decrypt the client's traffic
-                            clientStream = new CustomBufferedStream(sslStream, BufferSize);
-                            clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
+                            clientStream = new CustomBufferedStream(sslStream, BufferPool, BufferSize);
+                            clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool, BufferSize);
                         }
                         catch (Exception e)
                         {
@@ -230,11 +229,11 @@ namespace Titanium.Web.Proxy
                             }
 
                             var serverHelloInfo =
-                                await SslTools.PeekServerHello(connection.Stream, cancellationToken);
+                                await SslTools.PeekServerHello(connection.Stream, BufferPool, cancellationToken);
                             ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
                         }
 
-                        await TcpHelper.SendRaw(clientStream, connection.Stream, BufferSize,
+                        await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool, BufferSize,
                             (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
                             (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
                             connectArgs.CancellationTokenSource, ExceptionFunc);

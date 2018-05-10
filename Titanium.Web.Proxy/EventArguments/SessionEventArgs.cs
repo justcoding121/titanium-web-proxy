@@ -4,14 +4,12 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended.Helpers;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -33,15 +31,15 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgs(int bufferSize, ProxyEndPoint endPoint,
-            CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
-            : this(bufferSize, endPoint, null, cancellationTokenSource, exceptionFunc)
+        internal SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint,
+            CancellationTokenSource cancellationTokenSource)
+            : this(server, endPoint, null, cancellationTokenSource)
         {
         }
 
-        protected SessionEventArgs(int bufferSize, ProxyEndPoint endPoint,
-            Request request, CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
-            : base(bufferSize, endPoint, cancellationTokenSource, request, exceptionFunc)
+        protected SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint,
+            Request request, CancellationTokenSource cancellationTokenSource)
+            : base(server, endPoint, cancellationTokenSource, request)
         {
         }
 
@@ -119,7 +117,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                ExceptionFunc(new Exception("Exception thrown in user event", ex));
+                exceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -156,7 +154,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             using (var bodyStream = new MemoryStream())
             {
-                var writer = new HttpWriter(bodyStream, BufferSize);
+                var writer = new HttpWriter(bodyStream, bufferPool, bufferSize);
 
                 if (isRequest)
                 {
@@ -181,7 +179,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             using (var bodyStream = new MemoryStream())
             {
-                var writer = new HttpWriter(bodyStream, BufferSize);
+                var writer = new HttpWriter(bodyStream, bufferPool, bufferSize);
                 await copyBodyAsync(isRequest, writer, TransformationMode.None, null, cancellationToken);
             }
         }
@@ -202,7 +200,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 var reader = getStreamReader(true);
                 string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
 
-                using (var copyStream = new CopyStream(reader, writer, BufferSize))
+                using (var copyStream = new CopyStream(reader, writer, bufferPool, bufferSize))
                 {
                     while (contentLength > copyStream.ReadBytes)
                     {
@@ -253,7 +251,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             string contentEncoding = requestResponse.ContentEncoding;
 
-            Stream s = limitedStream = new LimitedStream(stream, isChunked, contentLength);
+            Stream s = limitedStream = new LimitedStream(stream, bufferPool, isChunked, contentLength);
 
             if (transformation == TransformationMode.Uncompress && contentEncoding != null)
             {
@@ -262,7 +260,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             try
             {
-                using (var bufStream = new CustomBufferedStream(s, BufferSize, true))
+                using (var bufStream = new CustomBufferedStream(s, bufferPool, bufferSize, true))
                 {
                     await writer.CopyBodyAsync(bufStream, false, -1, onCopy, cancellationToken);
                 }
@@ -284,7 +282,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             int bufferDataLength = 0;
 
-            var buffer = BufferPool.GetBuffer(BufferSize);
+            var buffer = bufferPool.GetBuffer(bufferSize);
             try
             {
                 int boundaryLength = boundary.Length + 4;
@@ -334,7 +332,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             finally
             {
-                BufferPool.ReturnBuffer(buffer);
+                bufferPool.ReturnBuffer(buffer);
             }
         }
 

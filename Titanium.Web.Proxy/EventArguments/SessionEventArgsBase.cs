@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net;
 using System.Threading;
+using StreamExtended;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -17,34 +18,33 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public abstract class SessionEventArgsBase : EventArgs, IDisposable
     {
-        /// <summary>
-        ///     Size of Buffers used by this object
-        /// </summary>
-        protected readonly int BufferSize;
 
         internal readonly CancellationTokenSource CancellationTokenSource;
 
-        protected readonly ExceptionHandler ExceptionFunc;
+        protected readonly int bufferSize;
+        protected readonly IBufferPool bufferPool;
+        protected readonly ExceptionHandler exceptionFunc;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
         /// </summary>
-        internal SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint,
-            CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
-            : this(bufferSize, endPoint, cancellationTokenSource, null, exceptionFunc)
+        internal SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
+            CancellationTokenSource cancellationTokenSource)
+            : this(server, endPoint, cancellationTokenSource, null)
         {
+            bufferSize = server.BufferSize;
+            bufferPool = server.BufferPool;
+            exceptionFunc = server.ExceptionFunc;
         }
 
-        protected SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint,
+        protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
             CancellationTokenSource cancellationTokenSource,
-            Request request, ExceptionHandler exceptionFunc)
+            Request request)
         {
-            BufferSize = bufferSize;
-            ExceptionFunc = exceptionFunc;
             CancellationTokenSource = cancellationTokenSource;
 
             ProxyClient = new ProxyClient();
-            WebSession = new HttpWebClient(bufferSize, request);
+            WebSession = new HttpWebClient(request);
             LocalEndPoint = endPoint;
 
             WebSession.ProcessId = new Lazy<int>(() =>
@@ -151,7 +151,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                ExceptionFunc(new Exception("Exception thrown in user event", ex));
+                exceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -163,7 +163,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                ExceptionFunc(new Exception("Exception thrown in user event", ex));
+                exceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 

@@ -247,11 +247,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     await tcpClient.ConnectAsync(remoteHostName, remotePort);
                 }
 
-                stream = new CustomBufferedStream(tcpClient.GetStream(), proxyServer.BufferSize);
+                stream = new CustomBufferedStream(tcpClient.GetStream(), proxyServer.BufferPool, proxyServer.BufferSize);
 
                 if (useUpstreamProxy && (isConnect || isHttps))
                 {
-                    var writer = new HttpRequestWriter(stream, proxyServer.BufferSize);
+                    var writer = new HttpRequestWriter(stream, proxyServer.BufferPool, proxyServer.BufferSize);
                     var connectRequest = new ConnectRequest
                     {
                         OriginalUrl = $"{remoteHostName}:{remotePort}",
@@ -286,7 +286,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     var sslStream = new SslStream(stream, false, proxyServer.ValidateServerCertificate,
                         proxyServer.SelectClientCertificate);
-                    stream = new CustomBufferedStream(sslStream, proxyServer.BufferSize);
+                    stream = new CustomBufferedStream(sslStream, proxyServer.BufferPool, proxyServer.BufferSize);
 
                     var options = new SslClientAuthenticationOptions
                     {
@@ -318,7 +318,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 IsHttps = isHttps,
                 NegotiatedApplicationProtocol = negotiatedApplicationProtocol,
                 UseUpstreamProxy = useUpstreamProxy,
-                StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferSize),
+                StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferPool, proxyServer.BufferSize),
                 Stream = stream,
                 Version = httpVersion
             };
