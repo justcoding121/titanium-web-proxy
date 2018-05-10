@@ -61,6 +61,11 @@ namespace Titanium.Web.Proxy
                     {
                         SslStream sslStream = null;
 
+                        // When connection pool becomes stable we can connect to server preemptively in a separate task here without awaiting
+                        // for all HTTPS requests using SNI hostname. Then by releasing server connection
+                        // back to connection pool we can authenticate against client/server concurrently and save time.
+
+                        //do client authentication using fake certificate
                         try
                         {
                             sslStream = new SslStream(clientStream);

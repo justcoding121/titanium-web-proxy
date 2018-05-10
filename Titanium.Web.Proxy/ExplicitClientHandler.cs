@@ -135,14 +135,15 @@ namespace Titanium.Web.Proxy
                         {
                             // test server HTTP/2 support
                             // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
+                            // When connection pool becomes stable we can connect to server preemptively in a separate task here without awaiting
+                            // using HTTPS CONNECT hostname. Then by releasing server connection
+                            // back to connection pool we can authenticate against client/server concurrently and save time.
                             var connection = await getServerConnection(connectArgs, true,
                                 SslExtensions.Http2ProtocolAsList, cancellationToken);
 
                             http2Supported = connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
 
-                            //release connection back to pool intead of closing when connection pool is enabled
-                            //In future we can connect to server preemptively here for all HTTPS connections using connect hostname
-                            //and then release it back to pool so that we can save time when reading client headers
+                            //release connection back to pool intead of closing when connection pool is enabled.
                             await tcpConnectionFactory.Release(connection, !EnableConnectionPool);
                         }
 
