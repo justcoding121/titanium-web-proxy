@@ -238,6 +238,7 @@ namespace Titanium.Web.Proxy
 
                                     //get new connection from pool
                                     await tcpConnectionFactory.Release(serverConnection, true);
+                                    serverConnection = null;
                                     serverConnection = await getServerConnection(args, false,
                                         clientConnection.NegotiatedApplicationProtocol, cancellationToken);
 
