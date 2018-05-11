@@ -181,12 +181,12 @@ namespace Titanium.Web.Proxy
                                 continue;
                             }
 
-                            bool newConnection = false;
-
+                            //If prefetch task is available.
+                            //Delay awaiting prefect task as far as possible.
                             if (serverConnection == null && prefetchTask != null)
                             {
                                 serverConnection = await prefetchTask;
-                                newConnection = true;
+                                prefetchTask = null;
                             }
 
                             // create a new connection if cache key changes
@@ -197,14 +197,13 @@ namespace Titanium.Web.Proxy
                             {
                                 await tcpConnectionFactory.Release(serverConnection);
                                 serverConnection = null;
-                                newConnection = true;
                             }
 
+                            //create
                             if (serverConnection == null)
                             {
                                 serverConnection = await getServerConnection(args, false,
                                     clientConnection.NegotiatedApplicationProtocol, cancellationToken);
-                                newConnection = true;
                             }
 
                             //for connection pool retry fails until cache is exhausted                
@@ -229,7 +228,7 @@ namespace Titanium.Web.Proxy
                                 catch (ServerConnectionException)
                                 {
                                     attempt++;
-                                    if (!newConnection || !EnableConnectionPool || attempt == MaxCachedConnections + 1)
+                                    if (!EnableConnectionPool || attempt == MaxCachedConnections + 1)
                                     {
                                         throw;
                                     }
@@ -263,13 +262,13 @@ namespace Titanium.Web.Proxy
                                 throw new Exception("Session was terminated by user.");
                             }
 
-                            //With connection pool get connection for each HTTP session instead of per client connection.
-                            //That will be more efficient especially when client is holding connection but not using it
+                            //Get/release server connection for each HTTP session instead of per client connection.
+                            //This will be more efficient especially when client is idly holding server connection 
+                            //between sessions without using it.
                             if (EnableConnectionPool)
                             {
                                 await tcpConnectionFactory.Release(serverConnection);
-                                serverConnection = null;
-                                prefetchTask = null;
+                                serverConnection = null;   
                             }
 
                         }
@@ -295,6 +294,12 @@ namespace Titanium.Web.Proxy
             {
                 await tcpConnectionFactory.Release(serverConnection,
                     closeServerConnection);
+
+                if (prefetchTask!=null)
+                {
+                    await tcpConnectionFactory.Release(await prefetchTask,
+                            closeServerConnection);
+                }
             }
         }
 
