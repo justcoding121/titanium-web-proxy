@@ -143,7 +143,7 @@ namespace Titanium.Web.Proxy
                             http2Supported = connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
 
                             //release connection back to pool intead of closing when connection pool is enabled.
-                            await tcpConnectionFactory.Release(connection, !EnableConnectionPool);
+                            await tcpConnectionFactory.Release(connection);
                         }
 
                         SslStream sslStream = null;
@@ -316,13 +316,13 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                clientStream.Dispose();
-
                 if (prefetchConnectionTask != null)
                 {
                     var connection = await prefetchConnectionTask;
-                    await tcpConnectionFactory.Release(connection, closeServerConnection || !EnableConnectionPool);
+                    await tcpConnectionFactory.Release(connection, closeServerConnection);
                 }
+
+                clientStream.Dispose();
 
                 if (!cancellationTokenSource.IsCancellationRequested)
                 {

@@ -119,7 +119,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 return;
             }
 
-            if (close || connection.IsWinAuthenticated)
+            if (close || connection.IsWinAuthenticated || !server.EnableConnectionPool)
             {
                 disposalBag.Add(connection);
                 return;
@@ -392,3 +392,4 @@ namespace Titanium.Web.Proxy.Network.Tcp
         }
     }
 }
+

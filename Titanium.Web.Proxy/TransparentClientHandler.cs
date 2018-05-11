@@ -155,13 +155,13 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                clientStream.Dispose();
-
                 if (prefetchConnectionTask != null)
                 {
                     var connection = await prefetchConnectionTask;
-                    await tcpConnectionFactory.Release(connection, closeServerConnection || !EnableConnectionPool);
+                    await tcpConnectionFactory.Release(connection, closeServerConnection);
                 }
+
+                clientStream.Dispose();
 
                 if (!cancellationTokenSource.IsCancellationRequested)
                 {

@@ -290,7 +290,7 @@ namespace Titanium.Web.Proxy
                     || serverConnection != await prefetchConnectionTask)
                 {
                     await tcpConnectionFactory.Release(serverConnection,
-                        closeServerConnection || !EnableConnectionPool);
+                        closeServerConnection);
                 }
 
             }
