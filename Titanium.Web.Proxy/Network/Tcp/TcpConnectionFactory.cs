@@ -171,7 +171,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     while (queue.TryDequeue(out var connection))
                     {
                         var cutOff = DateTime.Now.AddSeconds(-1 * server.ConnectionTimeOutSeconds);
-                        if (connection.LastAccess < cutOff)
+                        if (!server.EnableConnectionPool 
+                            || connection.LastAccess < cutOff)
                         {
                             disposalBag.Add(connection);
                             continue;
