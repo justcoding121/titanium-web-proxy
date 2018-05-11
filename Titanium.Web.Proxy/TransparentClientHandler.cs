@@ -35,6 +35,7 @@ namespace Titanium.Web.Proxy
 
             Task<TcpServerConnection> prefetchConnectionTask = null;
             bool closeServerConnection = false;
+            bool calledRequestHandler = false;
 
             try
             {
@@ -127,7 +128,7 @@ namespace Titanium.Web.Proxy
 
                     }
                 }
-
+                calledRequestHandler = true;
                 // HTTPS server created - we can now decrypt the client's traffic
                 // Now create the request
                 await handleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
@@ -155,7 +156,8 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                if (prefetchConnectionTask != null)
+                if (!calledRequestHandler
+                   && prefetchConnectionTask != null)
                 {
                     var connection = await prefetchConnectionTask;
                     await tcpConnectionFactory.Release(connection, closeServerConnection);

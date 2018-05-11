@@ -42,6 +42,29 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         internal ProxyServer server { get; set; }
 
+        internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
+            Version httpVersion, bool isHttps, List<SslApplicationProtocol> applicationProtocols, bool isConnect,
+            ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy)
+        {
+            var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}" +
+                                                  $"-{(httpVersion == null ? string.Empty : httpVersion.ToString())}" +
+                                                  $"-{isHttps}-{isConnect}-");
+            if (applicationProtocols != null)
+            {
+                foreach (var protocol in applicationProtocols)
+                {
+                    cacheKeyBuilder.Append($"{protocol}-");
+                }
+            }
+
+            cacheKeyBuilder.Append(upStreamEndPoint != null
+                ? $"{upStreamEndPoint.Address}-{upStreamEndPoint.Port}-"
+                : string.Empty);
+            cacheKeyBuilder.Append(externalProxy != null ? $"{externalProxy.GetCacheKey()}-" : string.Empty);
+
+            return cacheKeyBuilder.ToString();
+
+        }
         /// <summary>
         ///     Gets a TCP connection to server from connection pool.
         /// </summary>
@@ -61,23 +84,9 @@ namespace Titanium.Web.Proxy.Network.Tcp
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
             CancellationToken cancellationToken)
         {
-            var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}" +
-                                                    $"-{(httpVersion == null ? string.Empty : httpVersion.ToString())}" +
-                                                    $"-{isHttps}-{isConnect}-");
-            if (applicationProtocols != null)
-            {
-                foreach (var protocol in applicationProtocols)
-                {
-                    cacheKeyBuilder.Append($"{protocol}-");
-                }
-            }
-
-            cacheKeyBuilder.Append(upStreamEndPoint != null
-                ? $"{upStreamEndPoint.Address}-{upStreamEndPoint.Port}-"
-                : string.Empty);
-            cacheKeyBuilder.Append(externalProxy != null ? $"{externalProxy.GetCacheKey()}-" : string.Empty);
-
-            string cacheKey = cacheKeyBuilder.ToString();
+            var cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
+                httpVersion, isHttps, applicationProtocols, isConnect,
+                proxyServer, upStreamEndPoint, externalProxy);
 
             if (proxyServer.EnableConnectionPool)
             {
