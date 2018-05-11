@@ -2,23 +2,25 @@
 using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
-using StreamExtended.Helpers;
+using StreamExtended;
 using StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
     internal class LimitedStream : Stream
     {
+        private readonly IBufferPool bufferPool;
         private readonly ICustomStreamReader baseStream;
         private readonly bool isChunked;
         private long bytesRemaining;
 
         private bool readChunkTrail;
 
-        internal LimitedStream(ICustomStreamReader baseStream, bool isChunked,
+        internal LimitedStream(ICustomStreamReader baseStream, IBufferPool bufferPool, bool isChunked,
             long contentLength)
-        {
+        {  
             this.baseStream = baseStream;
+            this.bufferPool = bufferPool;
             this.isChunked = isChunked;
             bytesRemaining = isChunked
                 ? 0
@@ -41,7 +43,7 @@ namespace Titanium.Web.Proxy.EventArguments
             set => throw new NotSupportedException();
         }
 
-        private void GetNextChunk()
+        private void getNextChunk()
         {
             if (readChunkTrail)
             {
@@ -96,7 +98,7 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 if (isChunked)
                 {
-                    GetNextChunk();
+                    getNextChunk();
                 }
                 else
                 {
@@ -125,7 +127,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (bytesRemaining != -1)
             {
-                var buffer = BufferPool.GetBuffer(baseStream.BufferSize);
+                var buffer = bufferPool.GetBuffer(baseStream.BufferSize);
                 try
                 {
                     int res = await ReadAsync(buffer, 0, buffer.Length);
@@ -136,7 +138,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 }
                 finally
                 {
-                    BufferPool.ReturnBuffer(buffer);
+                    bufferPool.ReturnBuffer(buffer);
                 }
             }
         }

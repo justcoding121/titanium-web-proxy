@@ -103,10 +103,13 @@ or when server terminates connection from proxy.</p>
   <div class="inheritedMembers">
     <h5>Inherited Members</h5>
     <div>
-      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_BufferSize">SessionEventArgsBase.BufferSize</a>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_bufferSize">SessionEventArgsBase.bufferSize</a>
     </div>
     <div>
-      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ExceptionFunc">SessionEventArgsBase.ExceptionFunc</a>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_bufferPool">SessionEventArgsBase.bufferPool</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_exceptionFunc">SessionEventArgsBase.exceptionFunc</a>
     </div>
     <div>
       <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UserData">SessionEventArgsBase.UserData</a>
@@ -177,12 +180,12 @@ or when server terminates connection from proxy.</p>
   
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs__ctor_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.#ctor*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs__ctor_System_Int32_Titanium_Web_Proxy_Models_ProxyEndPoint_Titanium_Web_Proxy_Http_Request_System_Threading_CancellationTokenSource_Titanium_Web_Proxy_ExceptionHandler_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.#ctor(System.Int32,Titanium.Web.Proxy.Models.ProxyEndPoint,Titanium.Web.Proxy.Http.Request,System.Threading.CancellationTokenSource,Titanium.Web.Proxy.ExceptionHandler)">SessionEventArgs(Int32, ProxyEndPoint, Request, CancellationTokenSource, ExceptionHandler)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs__ctor_Titanium_Web_Proxy_ProxyServer_Titanium_Web_Proxy_Models_ProxyEndPoint_Titanium_Web_Proxy_Http_Request_System_Threading_CancellationTokenSource_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.#ctor(Titanium.Web.Proxy.ProxyServer,Titanium.Web.Proxy.Models.ProxyEndPoint,Titanium.Web.Proxy.Http.Request,System.Threading.CancellationTokenSource)">SessionEventArgs(ProxyServer, ProxyEndPoint, Request, CancellationTokenSource)</h4>
   <div class="markdown level1 summary"></div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">protected SessionEventArgs(int bufferSize, ProxyEndPoint endPoint, Request request, CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)</code></pre>
+    <pre><code class="lang-csharp hljs">protected SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint, Request request, CancellationTokenSource cancellationTokenSource)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -195,8 +198,8 @@ or when server terminates connection from proxy.</p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a></td>
-        <td><span class="parametername">bufferSize</span></td>
+        <td><a class="xref" href="Titanium.Web.Proxy.ProxyServer.html">ProxyServer</a></td>
+        <td><span class="parametername">server</span></td>
         <td></td>
       </tr>
       <tr>
@@ -212,11 +215,6 @@ or when server terminates connection from proxy.</p>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.cancellationtokensource">CancellationTokenSource</a></td>
         <td><span class="parametername">cancellationTokenSource</span></td>
-        <td></td>
-      </tr>
-      <tr>
-        <td><a class="xref" href="Titanium.Web.Proxy.ExceptionHandler.html">ExceptionHandler</a></td>
-        <td><span class="parametername">exceptionFunc</span></td>
         <td></td>
       </tr>
     </tbody>

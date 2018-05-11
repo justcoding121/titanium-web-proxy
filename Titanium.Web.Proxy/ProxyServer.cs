@@ -7,6 +7,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using StreamExtended;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
@@ -15,7 +16,6 @@ using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy
 {
@@ -97,8 +97,13 @@ namespace Titanium.Web.Proxy
             // default values
             ConnectionTimeOutSeconds = 60;
 
+            if (BufferPool == null)
+            {
+                BufferPool = new DefaultBufferPool();
+            }
+
             ProxyEndPoints = new List<ProxyEndPoint>();
-            tcpConnectionFactory = new TcpConnectionFactory();
+            tcpConnectionFactory = new TcpConnectionFactory(this);
             if (!RunTime.IsRunningOnMono && RunTime.IsWindows)
             {
                 systemProxySettingsManager = new SystemProxyManager();
@@ -150,6 +155,12 @@ namespace Titanium.Web.Proxy
         public bool Enable100ContinueBehaviour { get; set; }
 
         /// <summary>
+        ///     Should we enable experimental Tcp server connection pool?
+        ///     Defaults to false.
+        /// </summary>
+        public bool EnableConnectionPool { get; set; }
+
+        /// <summary>
         ///     Buffer size used throughout this proxy.
         /// </summary>
         public int BufferSize { get; set; } = 8192;
@@ -158,6 +169,14 @@ namespace Titanium.Web.Proxy
         ///     Seconds client/server connection are to be kept alive when waiting for read/write to complete.
         /// </summary>
         public int ConnectionTimeOutSeconds { get; set; }
+
+
+        /// <summary>
+        ///     Maximum number of concurrent connections per remote host in cache.
+        ///     Only valid when connection pooling is enabled.
+        ///     Default value is 3.
+        /// </summary>
+        public int MaxCachedConnections { get; set; } = 3;
 
         /// <summary>
         ///     Total number of active client connections.
@@ -182,6 +201,11 @@ namespace Titanium.Web.Proxy
             SslProtocols.Ssl3 |
 #endif
             SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12;
+
+        /// <summary>
+        ///     The buffer pool used throughout this proxy instance.
+        /// </summary>
+        public IBufferPool BufferPool { get; set; }
 
         /// <summary>
         ///     Manages certificates used by this proxy.
@@ -221,7 +245,10 @@ namespace Titanium.Web.Proxy
         public ExceptionHandler ExceptionFunc
         {
             get => exceptionFunc ?? defaultExceptionFunc;
-            set => exceptionFunc = value;
+            set {
+                exceptionFunc = value;
+                CertificateManager.ExceptionFunc = value;
+            }
         }
 
         /// <summary>
@@ -240,8 +267,9 @@ namespace Titanium.Web.Proxy
             {
                 Stop();
             }
-
+            
             CertificateManager?.Dispose();
+            BufferPool?.Dispose();
         }
 
         /// <summary>
@@ -280,6 +308,16 @@ namespace Titanium.Web.Proxy
         public event AsyncEventHandler<SessionEventArgs> AfterResponse;
 
         /// <summary>
+        ///     Customize TcpClient used for client connection upon create.
+        /// </summary>
+        public event AsyncEventHandler<TcpClient> OnClientConnectionCreate;
+
+        /// <summary>
+        ///     Customize TcpClient used for server connection upon create.
+        /// </summary>
+        public event AsyncEventHandler<TcpClient> OnServerConnectionCreate;
+
+        /// <summary>
         ///     Add a proxy end point.
         /// </summary>
         /// <param name="endPoint">The proxy endpoint.</param>
@@ -295,7 +333,7 @@ namespace Titanium.Web.Proxy
 
             if (ProxyRunning)
             {
-                Listen(endPoint);
+                listen(endPoint);
             }
         }
 
@@ -315,7 +353,7 @@ namespace Titanium.Web.Proxy
 
             if (ProxyRunning)
             {
-                QuitListen(endPoint);
+                quitListen(endPoint);
             }
         }
 
@@ -349,7 +387,7 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Mono Runtime do not support system proxy settings.");
             }
 
-            ValidateEndPointAsSystemProxy(endPoint);
+            validateEndPointAsSystemProxy(endPoint);
 
             bool isHttp = (protocolType & ProxyProtocolType.Http) > 0;
             bool isHttps = (protocolType & ProxyProtocolType.Https) > 0;
@@ -504,7 +542,7 @@ namespace Titanium.Web.Proxy
                 systemProxyResolver = new WinHttpWebProxyFinder();
                 systemProxyResolver.LoadFromIE();
 
-                GetCustomUpStreamProxyFunc = GetSystemUpStreamProxy;
+                GetCustomUpStreamProxyFunc = getSystemUpStreamProxy;
             }
 
             ProxyRunning = true;
@@ -513,7 +551,7 @@ namespace Titanium.Web.Proxy
 
             foreach (var endPoint in ProxyEndPoints)
             {
-                Listen(endPoint);
+                listen(endPoint);
             }
         }
 
@@ -540,12 +578,13 @@ namespace Titanium.Web.Proxy
 
             foreach (var endPoint in ProxyEndPoints)
             {
-                QuitListen(endPoint);
+                quitListen(endPoint);
             }
 
             ProxyEndPoints.Clear();
 
             CertificateManager?.StopClearIdleCertificates();
+            tcpConnectionFactory.Dispose();
 
             ProxyRunning = false;
         }
@@ -554,7 +593,7 @@ namespace Titanium.Web.Proxy
         ///     Listen on given end point of local machine.
         /// </summary>
         /// <param name="endPoint">The end point to listen.</param>
-        private void Listen(ProxyEndPoint endPoint)
+        private void listen(ProxyEndPoint endPoint)
         {
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
             try
@@ -564,7 +603,7 @@ namespace Titanium.Web.Proxy
                 endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
 
                 // accept clients asynchronously
-                endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
+                endPoint.Listener.BeginAcceptTcpClient(onAcceptConnection, endPoint);
             }
             catch (SocketException ex)
             {
@@ -580,7 +619,7 @@ namespace Titanium.Web.Proxy
         ///     Verify if its safe to set this end point as system proxy.
         /// </summary>
         /// <param name="endPoint">The end point to validate.</param>
-        private void ValidateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
+        private void validateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
         {
             if (endPoint == null)
             {
@@ -603,7 +642,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="sessionEventArgs">The session.</param>
         /// <returns>The external proxy as task result.</returns>
-        private Task<ExternalProxy> GetSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
+        private Task<ExternalProxy> getSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
         {
             var proxy = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
             return Task.FromResult(proxy);
@@ -612,7 +651,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Act when a connection is received from client.
         /// </summary>
-        private void OnAcceptConnection(IAsyncResult asyn)
+        private void onAcceptConnection(IAsyncResult asyn)
         {
             var endPoint = (ProxyEndPoint)asyn.AsyncState;
 
@@ -637,11 +676,11 @@ namespace Titanium.Web.Proxy
 
             if (tcpClient != null)
             {
-                Task.Run(async () => { await HandleClient(tcpClient, endPoint); });
+                Task.Run(async () => { await handleClient(tcpClient, endPoint); });
             }
 
             // Get the listener that handles the client request.
-            endPoint.Listener.BeginAcceptTcpClient(OnAcceptConnection, endPoint);
+            endPoint.Listener.BeginAcceptTcpClient(onAcceptConnection, endPoint);
         }
 
         /// <summary>
@@ -650,20 +689,24 @@ namespace Titanium.Web.Proxy
         /// <param name="tcpClient">The client.</param>
         /// <param name="endPoint">The proxy endpoint.</param>
         /// <returns>The task.</returns>
-        private async Task HandleClient(TcpClient tcpClient, ProxyEndPoint endPoint)
+        private async Task handleClient(TcpClient tcpClient, ProxyEndPoint endPoint)
         {
             tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
             tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
+            tcpClient.SendBufferSize = BufferSize;
+            tcpClient.ReceiveBufferSize = BufferSize;
+
+            await InvokeConnectionCreateEvent(tcpClient, true);
 
             using (var clientConnection = new TcpClientConnection(this, tcpClient))
             {
                 if (endPoint is TransparentProxyEndPoint tep)
                 {
-                    await HandleClient(tep, clientConnection);
+                    await handleClient(tep, clientConnection);
                 }
                 else
                 {
-                    await HandleClient((ExplicitProxyEndPoint)endPoint, clientConnection);
+                    await handleClient((ExplicitProxyEndPoint)endPoint, clientConnection);
                 }
             }
         }
@@ -673,7 +716,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="clientStream">The client stream.</param>
         /// <param name="exception">The exception.</param>
-        private void OnException(CustomBufferedStream clientStream, Exception exception)
+        private void onException(CustomBufferedStream clientStream, Exception exception)
         {
 #if DEBUG
             if (clientStream is DebugCustomBufferedStream debugStream)
@@ -688,7 +731,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Quit listening on the given end point.
         /// </summary>
-        private void QuitListen(ProxyEndPoint endPoint)
+        private void quitListen(ProxyEndPoint endPoint)
         {
             endPoint.Listener.Stop();
             endPoint.Listener.Server.Dispose();
@@ -728,6 +771,27 @@ namespace Titanium.Web.Proxy
             }
 
             ServerConnectionCountChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        ///     Invoke client/server tcp connection events if subscribed by API user.
+        /// </summary>
+        /// <param name="client">The TcpClient object.</param>
+        /// <param name="isClientConnection">Is this a client connection created event? If not then we would assume that its a server connection create event.</param>
+        /// <returns></returns>
+        internal async Task InvokeConnectionCreateEvent(TcpClient client, bool isClientConnection)
+        {
+            //client connection created
+            if (isClientConnection && OnClientConnectionCreate != null)
+            {
+                await OnClientConnectionCreate.InvokeAsync(this, client, ExceptionFunc);
+            }
+
+            //server connection created
+            if (!isClientConnection && OnServerConnectionCreate != null)
+            {
+                await OnServerConnectionCreate.InvokeAsync(this, client, ExceptionFunc);
+            }
         }
     }
 }

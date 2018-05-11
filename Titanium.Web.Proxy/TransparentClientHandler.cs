@@ -6,7 +6,6 @@ using System.Security.Authentication;
 using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended;
-using StreamExtended.Helpers;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -26,18 +25,21 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint">The transparent endpoint.</param>
         /// <param name="clientConnection">The client connection.</param>
         /// <returns></returns>
-        private async Task HandleClient(TransparentProxyEndPoint endPoint, TcpClientConnection clientConnection)
+        private async Task handleClient(TransparentProxyEndPoint endPoint, TcpClientConnection clientConnection)
         {
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
 
-            var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferSize);
+            var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferPool, BufferSize);
+            var clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool, BufferSize);
 
-            var clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
+            Task<TcpServerConnection> prefetchConnectionTask = null;
+            bool closeServerConnection = false;
+            bool calledRequestHandler = false;
 
             try
             {
-                var clientHelloInfo = await SslTools.PeekClientHello(clientStream, cancellationToken);
+                var clientHelloInfo = await SslTools.PeekClientHello(clientStream, BufferPool, cancellationToken);
 
                 bool isHttps = clientHelloInfo != null;
                 string httpsHostName = null;
@@ -60,8 +62,13 @@ namespace Titanium.Web.Proxy
 
                     if (endPoint.DecryptSsl && args.DecryptSsl)
                     {
+                        prefetchConnectionTask = tcpConnectionFactory.GetClient(httpsHostName, endPoint.Port,
+                            null, true, null,
+                            false, this, UpStreamEndPoint, UpStreamHttpsProxy, cancellationToken);
+
                         SslStream sslStream = null;
 
+                        //do client authentication using fake certificate
                         try
                         {
                             sslStream = new SslStream(clientStream);
@@ -73,9 +80,9 @@ namespace Titanium.Web.Proxy
                             await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
 
                             // HTTPS server created - we can now decrypt the client's traffic
-                            clientStream = new CustomBufferedStream(sslStream, BufferSize);
+                            clientStream = new CustomBufferedStream(sslStream, BufferPool, BufferSize);
 
-                            clientStreamWriter = new HttpResponseWriter(clientStream, BufferSize);
+                            clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool, BufferSize);
                         }
                         catch (Exception e)
                         {
@@ -87,66 +94,77 @@ namespace Titanium.Web.Proxy
                     else
                     {
                         // create new connection
-                        var connection = new TcpClient(UpStreamEndPoint);
-                        await connection.ConnectAsync(httpsHostName, endPoint.Port);
-                        connection.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
-                        connection.SendTimeout = ConnectionTimeOutSeconds * 1000;
+                        var connection = await tcpConnectionFactory.GetClient(httpsHostName, endPoint.Port,
+                            null, false, null,
+                            true, this, UpStreamEndPoint, UpStreamHttpsProxy, cancellationToken);
 
-                        using (connection)
+
+                        var serverStream = connection.Stream;
+
+                        int available = clientStream.Available;
+                        if (available > 0)
                         {
-                            var serverStream = connection.GetStream();
+                            // send the buffered data
+                            var data = BufferPool.GetBuffer(BufferSize);
 
-                            int available = clientStream.Available;
-                            if (available > 0)
+                            try
                             {
-                                // send the buffered data
-                                var data = BufferPool.GetBuffer(BufferSize);
-
-                                try
-                                {
-                                    // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
-                                    await clientStream.ReadAsync(data, 0, available, cancellationToken);
-                                    await serverStream.WriteAsync(data, 0, available, cancellationToken);
-                                    await serverStream.FlushAsync(cancellationToken);
-                                }
-                                finally
-                                {
-                                    BufferPool.ReturnBuffer(data);
-                                }
+                                // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
+                                await clientStream.ReadAsync(data, 0, available, cancellationToken);
+                                await serverStream.WriteAsync(data, 0, available, cancellationToken);
+                                await serverStream.FlushAsync(cancellationToken);
                             }
-
-                            ////var serverHelloInfo = await SslTools.PeekServerHello(serverStream);
-
-                            await TcpHelper.SendRaw(clientStream, serverStream, BufferSize,
-                                null, null, cancellationTokenSource, ExceptionFunc);
+                            finally
+                            {
+                                BufferPool.ReturnBuffer(data);
+                            }
                         }
+
+                        await TcpHelper.SendRaw(clientStream, serverStream, BufferPool, BufferSize,
+                            null, null, cancellationTokenSource, ExceptionFunc);
+
+                        await tcpConnectionFactory.Release(connection, true);
+                        return;
+
                     }
                 }
-
+                calledRequestHandler = true;
                 // HTTPS server created - we can now decrypt the client's traffic
                 // Now create the request
-                await HandleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
-                    cancellationTokenSource, isHttps ? httpsHostName : null, null);
+                await handleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
+                    cancellationTokenSource, isHttps ? httpsHostName : null, null, prefetchConnectionTask);
             }
             catch (ProxyException e)
             {
-                OnException(clientStream, e);
+                closeServerConnection = true;
+                onException(clientStream, e);
             }
             catch (IOException e)
             {
-                OnException(clientStream, new Exception("Connection was aborted", e));
+                closeServerConnection = true;
+                onException(clientStream, new Exception("Connection was aborted", e));
             }
             catch (SocketException e)
             {
-                OnException(clientStream, new Exception("Could not connect", e));
+                closeServerConnection = true;
+                onException(clientStream, new Exception("Could not connect", e));
             }
             catch (Exception e)
             {
-                OnException(clientStream, new Exception("Error occured in whilst handling the client", e));
+                closeServerConnection = true;
+                onException(clientStream, new Exception("Error occured in whilst handling the client", e));
             }
             finally
             {
+                if (!calledRequestHandler
+                   && prefetchConnectionTask != null)
+                {
+                    var connection = await prefetchConnectionTask;
+                    await tcpConnectionFactory.Release(connection, closeServerConnection);
+                }
+
                 clientStream.Dispose();
+
                 if (!cancellationTokenSource.IsCancellationRequested)
                 {
                     cancellationTokenSource.Cancel();

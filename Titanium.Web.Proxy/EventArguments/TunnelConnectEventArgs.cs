@@ -12,9 +12,9 @@ namespace Titanium.Web.Proxy.EventArguments
     {
         private bool? isHttpsConnect;
 
-        internal TunnelConnectSessionEventArgs(int bufferSize, ProxyEndPoint endPoint, ConnectRequest connectRequest,
-            CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
-            : base(bufferSize, endPoint, cancellationTokenSource, connectRequest, exceptionFunc)
+        internal TunnelConnectSessionEventArgs(ProxyServer server, ProxyEndPoint endPoint, ConnectRequest connectRequest,
+            CancellationTokenSource cancellationTokenSource)
+            : base(server, endPoint, cancellationTokenSource, connectRequest)
         {
             WebSession.ConnectRequest = connectRequest;
         }
