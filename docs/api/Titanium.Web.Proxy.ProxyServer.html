@@ -258,6 +258,32 @@ Should return true for successful authentication.</p>
   </table>
   
   
+  <a id="Titanium_Web_Proxy_ProxyServer_BufferPool_" data-uid="Titanium.Web.Proxy.ProxyServer.BufferPool*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_BufferPool" data-uid="Titanium.Web.Proxy.ProxyServer.BufferPool">BufferPool</h4>
+  <div class="markdown level1 summary"><p>The buffer pool used throughout this proxy instance.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public IBufferPool BufferPool { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">StreamExtended.IBufferPool</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
   <a id="Titanium_Web_Proxy_ProxyServer_BufferSize_" data-uid="Titanium.Web.Proxy.ProxyServer.BufferSize*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_BufferSize" data-uid="Titanium.Web.Proxy.ProxyServer.BufferSize">BufferSize</h4>
   <div class="markdown level1 summary"><p>Buffer size used throughout this proxy.</p>
@@ -417,6 +443,33 @@ Defaults to false.</p>
   </table>
   
   
+  <a id="Titanium_Web_Proxy_ProxyServer_EnableConnectionPool_" data-uid="Titanium.Web.Proxy.ProxyServer.EnableConnectionPool*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_EnableConnectionPool" data-uid="Titanium.Web.Proxy.ProxyServer.EnableConnectionPool">EnableConnectionPool</h4>
+  <div class="markdown level1 summary"><p>Should we enable experimental Tcp server connection pool?
+Defaults to false.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool EnableConnectionPool { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
   <a id="Titanium_Web_Proxy_ProxyServer_EnableWinAuth_" data-uid="Titanium.Web.Proxy.ProxyServer.EnableWinAuth*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_EnableWinAuth" data-uid="Titanium.Web.Proxy.ProxyServer.EnableWinAuth">EnableWinAuth</h4>
   <div class="markdown level1 summary"><p>Enable disable Windows Authentication (NTLM/Kerberos).
@@ -519,6 +572,34 @@ User should return the ExternalProxy object with valid credentials.</p>
     <tbody>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-2">Func</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="Titanium.Web.Proxy.Models.ExternalProxy.html">ExternalProxy</a>&gt;&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_MaxCachedConnections_" data-uid="Titanium.Web.Proxy.ProxyServer.MaxCachedConnections*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_MaxCachedConnections" data-uid="Titanium.Web.Proxy.ProxyServer.MaxCachedConnections">MaxCachedConnections</h4>
+  <div class="markdown level1 summary"><p>Maximum number of concurrent connections per remote host in cache.
+Only valid when connection pooling is enabled.
+Default value is 3.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int MaxCachedConnections { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a></td>
         <td></td>
       </tr>
     </tbody>
@@ -1103,6 +1184,56 @@ Will throw error if the end point does&apos;nt exist.</p>
     <tbody>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.eventhandler">EventHandler</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <h4 id="Titanium_Web_Proxy_ProxyServer_OnClientConnectionCreate" data-uid="Titanium.Web.Proxy.ProxyServer.OnClientConnectionCreate">OnClientConnectionCreate</h4>
+  <div class="markdown level1 summary"><p>Customize TcpClient used for client connection upon create.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event AsyncEventHandler&lt;TcpClient&gt; OnClientConnectionCreate</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html">AsyncEventHandler</a>&lt;<span class="xref">System.Net.Sockets.TcpClient</span>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <h4 id="Titanium_Web_Proxy_ProxyServer_OnServerConnectionCreate" data-uid="Titanium.Web.Proxy.ProxyServer.OnServerConnectionCreate">OnServerConnectionCreate</h4>
+  <div class="markdown level1 summary"><p>Customize TcpClient used for server connection upon create.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event AsyncEventHandler&lt;TcpClient&gt; OnServerConnectionCreate</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html">AsyncEventHandler</a>&lt;<span class="xref">System.Net.Sockets.TcpClient</span>&gt;</td>
         <td></td>
       </tr>
     </tbody>

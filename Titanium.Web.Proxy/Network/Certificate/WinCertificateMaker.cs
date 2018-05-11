@@ -80,10 +80,10 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <returns></returns>
         public X509Certificate2 MakeCertificate(string sSubjectCN, bool isRoot, X509Certificate2 signingCert = null)
         {
-            return MakeCertificateInternal(sSubjectCN, isRoot, true, signingCert);
+            return makeCertificateInternal(sSubjectCN, isRoot, true, signingCert);
         }
 
-        private X509Certificate2 MakeCertificate(bool isRoot, string subject, string fullSubject,
+        private X509Certificate2 makeCertificate(bool isRoot, string subject, string fullSubject,
             int privateKeyLength, string hashAlg, DateTime validFrom, DateTime validTo,
             X509Certificate2 signingCertificate)
         {
@@ -274,13 +274,13 @@ namespace Titanium.Web.Proxy.Network.Certificate
             return new X509Certificate2(Convert.FromBase64String(empty), string.Empty, X509KeyStorageFlags.Exportable);
         }
 
-        private X509Certificate2 MakeCertificateInternal(string sSubjectCN, bool isRoot,
+        private X509Certificate2 makeCertificateInternal(string sSubjectCN, bool isRoot,
             bool switchToMTAIfNeeded, X509Certificate2 signingCert = null,
             CancellationToken cancellationToken = default)
         {
             if (switchToMTAIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
             {
-                return Task.Run(() => MakeCertificateInternal(sSubjectCN, isRoot, false, signingCert),
+                return Task.Run(() => makeCertificateInternal(sSubjectCN, isRoot, false, signingCert),
                     cancellationToken).Result;
             }
 
@@ -301,7 +301,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             var graceTime = DateTime.Now.AddDays(graceDays);
             var now = DateTime.Now;
-            var certificate = MakeCertificate(isRoot, sSubjectCN, fullSubject, keyLength, hashAlgo, graceTime,
+            var certificate = makeCertificate(isRoot, sSubjectCN, fullSubject, keyLength, hashAlgo, graceTime,
                 now.AddDays(validDays), isRoot ? null : signingCert);
             return certificate;
         }

@@ -4,14 +4,12 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended.Helpers;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -33,15 +31,15 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgs(int bufferSize, ProxyEndPoint endPoint,
-            CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
-            : this(bufferSize, endPoint, null, cancellationTokenSource, exceptionFunc)
+        internal SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint,
+            CancellationTokenSource cancellationTokenSource)
+            : this(server, endPoint, null, cancellationTokenSource)
         {
         }
 
-        protected SessionEventArgs(int bufferSize, ProxyEndPoint endPoint,
-            Request request, CancellationTokenSource cancellationTokenSource, ExceptionHandler exceptionFunc)
-            : base(bufferSize, endPoint, cancellationTokenSource, request, exceptionFunc)
+        protected SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint,
+            Request request, CancellationTokenSource cancellationTokenSource)
+            : base(server, endPoint, cancellationTokenSource, request)
         {
         }
 
@@ -69,12 +67,12 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public event EventHandler<MultipartRequestPartSentEventArgs> MultipartRequestPartSent;
 
-        private ICustomStreamReader GetStreamReader(bool isRequest)
+        private ICustomStreamReader getStreamReader(bool isRequest)
         {
             return isRequest ? ProxyClient.ClientStream : WebSession.ServerConnection.Stream;
         }
 
-        private HttpWriter GetStreamWriter(bool isRequest)
+        private HttpWriter getStreamWriter(bool isRequest)
         {
             return isRequest ? (HttpWriter)ProxyClient.ClientStreamWriter : WebSession.ServerConnection.StreamWriter;
         }
@@ -82,7 +80,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Read request body content as bytes[] for current session
         /// </summary>
-        private async Task ReadRequestBodyAsync(CancellationToken cancellationToken)
+        private async Task readRequestBodyAsync(CancellationToken cancellationToken)
         {
             WebSession.Request.EnsureBodyAvailable(false);
 
@@ -91,7 +89,7 @@ namespace Titanium.Web.Proxy.EventArguments
             // If not already read (not cached yet)
             if (!request.IsBodyRead)
             {
-                var body = await ReadBodyAsync(true, cancellationToken);
+                var body = await readBodyAsync(true, cancellationToken);
                 request.Body = body;
 
                 // Now set the flag to true
@@ -119,14 +117,14 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                ExceptionFunc(new Exception("Exception thrown in user event", ex));
+                exceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
         /// <summary>
         /// Read response body as byte[] for current response
         /// </summary>
-        private async Task ReadResponseBodyAsync(CancellationToken cancellationToken)
+        private async Task readResponseBodyAsync(CancellationToken cancellationToken)
         {
             if (!WebSession.Request.Locked)
             {
@@ -142,7 +140,7 @@ namespace Titanium.Web.Proxy.EventArguments
             // If not already read (not cached yet)
             if (!response.IsBodyRead)
             {
-                var body = await ReadBodyAsync(false, cancellationToken);
+                var body = await readBodyAsync(false, cancellationToken);
                 response.Body = body;
 
                 // Now set the flag to true
@@ -152,11 +150,11 @@ namespace Titanium.Web.Proxy.EventArguments
             }
         }
 
-        private async Task<byte[]> ReadBodyAsync(bool isRequest, CancellationToken cancellationToken)
+        private async Task<byte[]> readBodyAsync(bool isRequest, CancellationToken cancellationToken)
         {
             using (var bodyStream = new MemoryStream())
             {
-                var writer = new HttpWriter(bodyStream, BufferSize);
+                var writer = new HttpWriter(bodyStream, bufferPool, bufferSize);
 
                 if (isRequest)
                 {
@@ -181,8 +179,8 @@ namespace Titanium.Web.Proxy.EventArguments
 
             using (var bodyStream = new MemoryStream())
             {
-                var writer = new HttpWriter(bodyStream, BufferSize);
-                await CopyBodyAsync(isRequest, writer, TransformationMode.None, null, cancellationToken);
+                var writer = new HttpWriter(bodyStream, bufferPool, bufferSize);
+                await copyBodyAsync(isRequest, writer, TransformationMode.None, null, cancellationToken);
             }
         }
 
@@ -199,14 +197,14 @@ namespace Titanium.Web.Proxy.EventArguments
             // send the request body bytes to server
             if (contentLength > 0 && hasMulipartEventSubscribers && request.IsMultipartFormData)
             {
-                var reader = GetStreamReader(true);
+                var reader = getStreamReader(true);
                 string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
 
-                using (var copyStream = new CopyStream(reader, writer, BufferSize))
+                using (var copyStream = new CopyStream(reader, writer, bufferPool, bufferSize))
                 {
                     while (contentLength > copyStream.ReadBytes)
                     {
-                        long read = await ReadUntilBoundaryAsync(copyStream, contentLength, boundary, cancellationToken);
+                        long read = await readUntilBoundaryAsync(copyStream, contentLength, boundary, cancellationToken);
                         if (read == 0)
                         {
                             break;
@@ -225,18 +223,18 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             else
             {
-                await CopyBodyAsync(true, writer, transformation, OnDataSent, cancellationToken);
+                await copyBodyAsync(true, writer, transformation, OnDataSent, cancellationToken);
             }
         }
 
         internal async Task CopyResponseBodyAsync(HttpWriter writer, TransformationMode transformation, CancellationToken cancellationToken)
         {
-            await CopyBodyAsync(false, writer, transformation, OnDataReceived, cancellationToken);
+            await copyBodyAsync(false, writer, transformation, OnDataReceived, cancellationToken);
         }
 
-        private async Task CopyBodyAsync(bool isRequest, HttpWriter writer, TransformationMode transformation, Action<byte[], int, int> onCopy, CancellationToken cancellationToken)
+        private async Task copyBodyAsync(bool isRequest, HttpWriter writer, TransformationMode transformation, Action<byte[], int, int> onCopy, CancellationToken cancellationToken)
         {
-            var stream = GetStreamReader(isRequest);
+            var stream = getStreamReader(isRequest);
 
             var requestResponse = isRequest ? (RequestResponseBase)WebSession.Request : WebSession.Response;
 
@@ -253,7 +251,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             string contentEncoding = requestResponse.ContentEncoding;
 
-            Stream s = limitedStream = new LimitedStream(stream, isChunked, contentLength);
+            Stream s = limitedStream = new LimitedStream(stream, bufferPool, isChunked, contentLength);
 
             if (transformation == TransformationMode.Uncompress && contentEncoding != null)
             {
@@ -262,7 +260,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             try
             {
-                using (var bufStream = new CustomBufferedStream(s, BufferSize, true))
+                using (var bufStream = new CustomBufferedStream(s, bufferPool, bufferSize, true))
                 {
                     await writer.CopyBodyAsync(bufStream, false, -1, onCopy, cancellationToken);
                 }
@@ -280,11 +278,11 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        private async Task<long> ReadUntilBoundaryAsync(ICustomStreamReader reader, long totalBytesToRead, string boundary, CancellationToken cancellationToken)
+        private async Task<long> readUntilBoundaryAsync(ICustomStreamReader reader, long totalBytesToRead, string boundary, CancellationToken cancellationToken)
         {
             int bufferDataLength = 0;
 
-            var buffer = BufferPool.GetBuffer(BufferSize);
+            var buffer = bufferPool.GetBuffer(bufferSize);
             try
             {
                 int boundaryLength = boundary.Length + 4;
@@ -334,7 +332,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             finally
             {
-                BufferPool.ReturnBuffer(buffer);
+                bufferPool.ReturnBuffer(buffer);
             }
         }
 
@@ -347,7 +345,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (!WebSession.Request.IsBodyRead)
             {
-                await ReadRequestBodyAsync(cancellationToken);
+                await readRequestBodyAsync(cancellationToken);
             }
 
             return WebSession.Request.Body;
@@ -362,7 +360,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (!WebSession.Request.IsBodyRead)
             {
-                await ReadRequestBodyAsync(cancellationToken);
+                await readRequestBodyAsync(cancellationToken);
             }
 
             return WebSession.Request.BodyString;
@@ -407,7 +405,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (!WebSession.Response.IsBodyRead)
             {
-                await ReadResponseBodyAsync(cancellationToken);
+                await readResponseBodyAsync(cancellationToken);
             }
 
             return WebSession.Response.Body;
@@ -422,7 +420,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (!WebSession.Response.IsBodyRead)
             {
-                await ReadResponseBodyAsync(cancellationToken);
+                await readResponseBodyAsync(cancellationToken);
             }
 
             return WebSession.Response.BodyString;

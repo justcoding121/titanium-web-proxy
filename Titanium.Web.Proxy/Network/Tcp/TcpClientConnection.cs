@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Net;
-using System.Net.Security;
 using System.Net.Sockets;
 using Titanium.Web.Proxy.Extensions;
 
@@ -41,9 +40,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         public void Dispose()
         {
-            tcpClient.CloseSocket();
-
             proxyServer.UpdateClientConnectionCount(false);
+            tcpClient.CloseSocket();
         }
     }
 }

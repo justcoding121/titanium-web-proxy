@@ -247,12 +247,12 @@ references:
   commentId: T:Titanium.Web.Proxy.EventArguments.SessionEventArgs
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs
   nameWithType: SessionEventArgs
-- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.#ctor(System.Int32,Titanium.Web.Proxy.Models.ProxyEndPoint,Titanium.Web.Proxy.Http.Request,System.Threading.CancellationTokenSource,Titanium.Web.Proxy.ExceptionHandler)
-  name: SessionEventArgs(Int32, ProxyEndPoint, Request, CancellationTokenSource, ExceptionHandler)
-  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs__ctor_System_Int32_Titanium_Web_Proxy_Models_ProxyEndPoint_Titanium_Web_Proxy_Http_Request_System_Threading_CancellationTokenSource_Titanium_Web_Proxy_ExceptionHandler_
-  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.#ctor(System.Int32,Titanium.Web.Proxy.Models.ProxyEndPoint,Titanium.Web.Proxy.Http.Request,System.Threading.CancellationTokenSource,Titanium.Web.Proxy.ExceptionHandler)
-  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.SessionEventArgs(System.Int32, Titanium.Web.Proxy.Models.ProxyEndPoint, Titanium.Web.Proxy.Http.Request, System.Threading.CancellationTokenSource, Titanium.Web.Proxy.ExceptionHandler)
-  nameWithType: SessionEventArgs.SessionEventArgs(Int32, ProxyEndPoint, Request, CancellationTokenSource, ExceptionHandler)
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.#ctor(Titanium.Web.Proxy.ProxyServer,Titanium.Web.Proxy.Models.ProxyEndPoint,Titanium.Web.Proxy.Http.Request,System.Threading.CancellationTokenSource)
+  name: SessionEventArgs(ProxyServer, ProxyEndPoint, Request, CancellationTokenSource)
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs__ctor_Titanium_Web_Proxy_ProxyServer_Titanium_Web_Proxy_Models_ProxyEndPoint_Titanium_Web_Proxy_Http_Request_System_Threading_CancellationTokenSource_
+  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.#ctor(Titanium.Web.Proxy.ProxyServer,Titanium.Web.Proxy.Models.ProxyEndPoint,Titanium.Web.Proxy.Http.Request,System.Threading.CancellationTokenSource)
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.SessionEventArgs(Titanium.Web.Proxy.ProxyServer, Titanium.Web.Proxy.Models.ProxyEndPoint, Titanium.Web.Proxy.Http.Request, System.Threading.CancellationTokenSource)
+  nameWithType: SessionEventArgs.SessionEventArgs(ProxyServer, ProxyEndPoint, Request, CancellationTokenSource)
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.#ctor*
   name: SessionEventArgs
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs__ctor_
@@ -497,12 +497,12 @@ references:
   commentId: T:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase
   nameWithType: SessionEventArgsBase
-- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.#ctor(System.Int32,Titanium.Web.Proxy.Models.ProxyEndPoint,System.Threading.CancellationTokenSource,Titanium.Web.Proxy.Http.Request,Titanium.Web.Proxy.ExceptionHandler)
-  name: SessionEventArgsBase(Int32, ProxyEndPoint, CancellationTokenSource, Request, ExceptionHandler)
-  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase__ctor_System_Int32_Titanium_Web_Proxy_Models_ProxyEndPoint_System_Threading_CancellationTokenSource_Titanium_Web_Proxy_Http_Request_Titanium_Web_Proxy_ExceptionHandler_
-  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.#ctor(System.Int32,Titanium.Web.Proxy.Models.ProxyEndPoint,System.Threading.CancellationTokenSource,Titanium.Web.Proxy.Http.Request,Titanium.Web.Proxy.ExceptionHandler)
-  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.SessionEventArgsBase(System.Int32, Titanium.Web.Proxy.Models.ProxyEndPoint, System.Threading.CancellationTokenSource, Titanium.Web.Proxy.Http.Request, Titanium.Web.Proxy.ExceptionHandler)
-  nameWithType: SessionEventArgsBase.SessionEventArgsBase(Int32, ProxyEndPoint, CancellationTokenSource, Request, ExceptionHandler)
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.#ctor(Titanium.Web.Proxy.ProxyServer,Titanium.Web.Proxy.Models.ProxyEndPoint,System.Threading.CancellationTokenSource,Titanium.Web.Proxy.Http.Request)
+  name: SessionEventArgsBase(ProxyServer, ProxyEndPoint, CancellationTokenSource, Request)
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase__ctor_Titanium_Web_Proxy_ProxyServer_Titanium_Web_Proxy_Models_ProxyEndPoint_System_Threading_CancellationTokenSource_Titanium_Web_Proxy_Http_Request_
+  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.#ctor(Titanium.Web.Proxy.ProxyServer,Titanium.Web.Proxy.Models.ProxyEndPoint,System.Threading.CancellationTokenSource,Titanium.Web.Proxy.Http.Request)
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.SessionEventArgsBase(Titanium.Web.Proxy.ProxyServer, Titanium.Web.Proxy.Models.ProxyEndPoint, System.Threading.CancellationTokenSource, Titanium.Web.Proxy.Http.Request)
+  nameWithType: SessionEventArgsBase.SessionEventArgsBase(ProxyServer, ProxyEndPoint, CancellationTokenSource, Request)
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.#ctor*
   name: SessionEventArgsBase
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase__ctor_
@@ -510,12 +510,18 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.SessionEventArgsBase
   nameWithType: SessionEventArgsBase.SessionEventArgsBase
-- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.BufferSize
-  name: BufferSize
-  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_BufferSize
-  commentId: F:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.BufferSize
-  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.BufferSize
-  nameWithType: SessionEventArgsBase.BufferSize
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.bufferPool
+  name: bufferPool
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_bufferPool
+  commentId: F:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.bufferPool
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.bufferPool
+  nameWithType: SessionEventArgsBase.bufferPool
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.bufferSize
+  name: bufferSize
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_bufferSize
+  commentId: F:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.bufferSize
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.bufferSize
+  nameWithType: SessionEventArgsBase.bufferSize
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientEndPoint
   name: ClientEndPoint
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ClientEndPoint
@@ -580,12 +586,12 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Exception
   nameWithType: SessionEventArgsBase.Exception
-- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ExceptionFunc
-  name: ExceptionFunc
-  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ExceptionFunc
-  commentId: F:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ExceptionFunc
-  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ExceptionFunc
-  nameWithType: SessionEventArgsBase.ExceptionFunc
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.exceptionFunc
+  name: exceptionFunc
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_exceptionFunc
+  commentId: F:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.exceptionFunc
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.exceptionFunc
+  nameWithType: SessionEventArgsBase.exceptionFunc
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsHttps
   name: IsHttps
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsHttps
@@ -2596,6 +2602,19 @@ references:
   commentId: E:Titanium.Web.Proxy.ProxyServer.BeforeResponse
   fullName: Titanium.Web.Proxy.ProxyServer.BeforeResponse
   nameWithType: ProxyServer.BeforeResponse
+- uid: Titanium.Web.Proxy.ProxyServer.BufferPool
+  name: BufferPool
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BufferPool
+  commentId: P:Titanium.Web.Proxy.ProxyServer.BufferPool
+  fullName: Titanium.Web.Proxy.ProxyServer.BufferPool
+  nameWithType: ProxyServer.BufferPool
+- uid: Titanium.Web.Proxy.ProxyServer.BufferPool*
+  name: BufferPool
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BufferPool_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.BufferPool
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.BufferPool
+  nameWithType: ProxyServer.BufferPool
 - uid: Titanium.Web.Proxy.ProxyServer.BufferSize
   name: BufferSize
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BufferSize
@@ -2751,6 +2770,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.Enable100ContinueBehaviour
   nameWithType: ProxyServer.Enable100ContinueBehaviour
+- uid: Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
+  name: EnableConnectionPool
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableConnectionPool
+  commentId: P:Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
+  nameWithType: ProxyServer.EnableConnectionPool
+- uid: Titanium.Web.Proxy.ProxyServer.EnableConnectionPool*
+  name: EnableConnectionPool
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableConnectionPool_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
+  nameWithType: ProxyServer.EnableConnectionPool
 - uid: Titanium.Web.Proxy.ProxyServer.EnableWinAuth
   name: EnableWinAuth
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableWinAuth
@@ -2803,6 +2835,31 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.GetCustomUpStreamProxyFunc
   nameWithType: ProxyServer.GetCustomUpStreamProxyFunc
+- uid: Titanium.Web.Proxy.ProxyServer.MaxCachedConnections
+  name: MaxCachedConnections
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_MaxCachedConnections
+  commentId: P:Titanium.Web.Proxy.ProxyServer.MaxCachedConnections
+  fullName: Titanium.Web.Proxy.ProxyServer.MaxCachedConnections
+  nameWithType: ProxyServer.MaxCachedConnections
+- uid: Titanium.Web.Proxy.ProxyServer.MaxCachedConnections*
+  name: MaxCachedConnections
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_MaxCachedConnections_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.MaxCachedConnections
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.MaxCachedConnections
+  nameWithType: ProxyServer.MaxCachedConnections
+- uid: Titanium.Web.Proxy.ProxyServer.OnClientConnectionCreate
+  name: OnClientConnectionCreate
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_OnClientConnectionCreate
+  commentId: E:Titanium.Web.Proxy.ProxyServer.OnClientConnectionCreate
+  fullName: Titanium.Web.Proxy.ProxyServer.OnClientConnectionCreate
+  nameWithType: ProxyServer.OnClientConnectionCreate
+- uid: Titanium.Web.Proxy.ProxyServer.OnServerConnectionCreate
+  name: OnServerConnectionCreate
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_OnServerConnectionCreate
+  commentId: E:Titanium.Web.Proxy.ProxyServer.OnServerConnectionCreate
+  fullName: Titanium.Web.Proxy.ProxyServer.OnServerConnectionCreate
+  nameWithType: ProxyServer.OnServerConnectionCreate
 - uid: Titanium.Web.Proxy.ProxyServer.ProxyEndPoints
   name: ProxyEndPoints
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxyEndPoints
