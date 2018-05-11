@@ -57,6 +57,7 @@ namespace Titanium.Web.Proxy
         {
             var cancellationToken = cancellationTokenSource.Token;
 
+            var prefetchTask = prefetchConnectionTask;
             TcpServerConnection serverConnection = null;
             bool closeServerConnection = false;
 
@@ -182,9 +183,9 @@ namespace Titanium.Web.Proxy
 
                             bool newConnection = false;
 
-                            if (serverConnection == null && prefetchConnectionTask != null)
+                            if (serverConnection == null && prefetchTask != null)
                             {
-                                serverConnection = await prefetchConnectionTask;
+                                serverConnection = await prefetchTask;
                                 newConnection = true;
                             }
 
@@ -206,10 +207,7 @@ namespace Titanium.Web.Proxy
                                 newConnection = true;
                             }
 
-                            //for connection pool retry fails until cache is exhausted
-                            //In future once connection pool becomes stable
-                            //we can get connection for each HTTP session instead of per client connection
-                            //That will be more efficient especially when client is holding connection but not using it
+                            //for connection pool retry fails until cache is exhausted                
                             int attempt = 0;
                             while (attempt < MaxCachedConnections + 1)
                             {
@@ -264,6 +262,16 @@ namespace Titanium.Web.Proxy
                             {
                                 throw new Exception("Session was terminated by user.");
                             }
+
+                            //With connection pool get connection for each HTTP session instead of per client connection.
+                            //That will be more efficient especially when client is holding connection but not using it
+                            if (EnableConnectionPool)
+                            {
+                                await tcpConnectionFactory.Release(serverConnection);
+                                serverConnection = null;
+                                prefetchTask = null;
+                            }
+                            
                         }
                         catch (Exception e) when (!(e is ProxyHttpException))
                         {
