@@ -40,9 +40,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         public void Dispose()
         {
-            tcpClient.CloseSocket();
-
             proxyServer.UpdateClientConnectionCount(false);
+            tcpClient.CloseSocket();
         }
     }
 }
