@@ -390,6 +390,35 @@ namespace Titanium.Web.Proxy.Network.Tcp
         public void Dispose()
         {
             runCleanUpTask = false;
+
+            try
+            {
+                @lock.Wait();
+
+                foreach (var queue in cache.Select(x => x.Value).ToList())
+                {
+                    while (!queue.IsEmpty)
+                    {
+                        if (queue.TryDequeue(out var connection))
+                        {
+                            disposalBag.Add(connection);
+                        }
+                    }
+                }
+                cache.Clear();
+            }
+            finally
+            {
+                @lock.Release();
+            }
+
+            while (!disposalBag.IsEmpty)
+            {
+                if (disposalBag.TryTake(out var connection))
+                {
+                    connection?.Dispose();
+                }
+            }
         }
     }
 }
