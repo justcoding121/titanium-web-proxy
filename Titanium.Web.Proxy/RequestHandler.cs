@@ -263,14 +263,16 @@ namespace Titanium.Web.Proxy
                                 throw new Exception("Session was terminated by user.");
                             }
 
+                            //TODO find why enabling this cause server connection count to go -ive
+                            //TODO find why enabling this causes invalid httpCmd exception occationally
                             //With connection pool get connection for each HTTP session instead of per client connection.
                             //That will be more efficient especially when client is holding connection but not using it
-                            if (EnableConnectionPool)
-                            {
-                                await tcpConnectionFactory.Release(serverConnection);
-                                serverConnection = null;
-                                prefetchTask = null;
-                            }
+                            //if (EnableConnectionPool)
+                            //{
+                            //    await tcpConnectionFactory.Release(serverConnection);
+                            //    serverConnection = null;
+                            //    prefetchTask = null;
+                            //}
                             
                         }
                         catch (Exception e) when (!(e is ProxyHttpException))
