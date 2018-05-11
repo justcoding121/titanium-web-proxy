@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy
         ///     explicit endpoint.
         /// </param>
         /// <param name="connectRequest">The Connect request if this is a HTTPS request from explicit endpoint.</param>
-        /// <param name="prefetchConnectionTask">Prefected server connection for current client using Connect/SNI headers.</param>
+        /// <param name="prefetchConnectionTask">Prefetched server connection for current client using Connect/SNI headers.</param>
         private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, TcpClientConnection clientConnection,
             CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
             CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, ConnectRequest connectRequest,
@@ -194,7 +194,7 @@ namespace Titanium.Web.Proxy
                                     || args.WebSession.UpStreamEndPoint?.Equals(serverConnection.UpStreamEndPoint) ==
                                     false))
                             {
-                                await tcpConnectionFactory.Release(serverConnection, true);
+                                await tcpConnectionFactory.Release(serverConnection);
                                 serverConnection = null;
                                 newConnection = true;
                             }
