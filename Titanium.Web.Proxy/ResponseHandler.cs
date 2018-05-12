@@ -62,11 +62,6 @@ namespace Titanium.Web.Proxy
                     // syphon out the response body from server before setting the new body
                     await args.SyphonOutBodyAsync(false, cancellationToken);
                 }
-                else
-                {
-                    await tcpConnectionFactory.Release(args.WebSession.ServerConnection, true);
-                    args.WebSession.ServerConnection = null;
-                }
 
                 return;
             }

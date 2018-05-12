@@ -182,14 +182,15 @@ namespace Titanium.Web.Proxy
                             }
 
                             //If prefetch task is available.
-                            //Delay awaiting prefect task as far as possible.
                             if (serverConnection == null && prefetchTask != null)
                             {
                                 serverConnection = await prefetchTask;
                                 prefetchTask = null;
                             }
 
-                            // create a new connection if cache key changes
+                            // create a new connection if cache key changes.
+                            // only gets hit when connection pool is disabled.
+                            // or when prefetch task has a unexpectedly different connection.
                             if (serverConnection != null
                                 && (await getConnectionCacheKey(args, false,
                                     clientConnection.NegotiatedApplicationProtocol)
@@ -218,6 +219,7 @@ namespace Titanium.Web.Proxy
                                         await handleWebSocketUpgrade(httpCmd, args, request,
                                             response, clientStream, clientStreamWriter,
                                             serverConnection, cancellationTokenSource, cancellationToken);
+                                        closeServerConnection = true;
                                         return;
                                     }
 
@@ -245,8 +247,10 @@ namespace Titanium.Web.Proxy
                                 break;
                             }
 
-                            if (args.WebSession.ServerConnection == null)
+                            //user requested
+                            if (args.WebSession.Response.TerminateResponse)
                             {
+                                closeServerConnection = true;
                                 return;
                             }
 
