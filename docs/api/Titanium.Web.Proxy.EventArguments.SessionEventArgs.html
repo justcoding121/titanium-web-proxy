@@ -265,14 +265,14 @@ or when server terminates connection from proxy.</p>
   
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader})">GenericResponse(Byte[], HttpStatusCode, Dictionary&lt;String, HttpHeader&gt;)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">GenericResponse(Byte[], HttpStatusCode, Dictionary&lt;String, HttpHeader&gt;, Boolean)</h4>
   <div class="markdown level1 summary"><p>Before request is made to server respond with the specified byte[],
 the specified status  to client. And then ignore the request.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void GenericResponse(byte[] result, HttpStatusCode status, Dictionary&lt;string, HttpHeader&gt; headers)</code></pre>
+    <pre><code class="lang-csharp hljs">public void GenericResponse(byte[] result, HttpStatusCode status, Dictionary&lt;string, HttpHeader&gt; headers, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -302,12 +302,18 @@ the specified status  to client. And then ignore the request.</p>
         <td><p>The HTTP headers.</p>
 </td>
       </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">closeServerConnection</span></td>
+        <td><p>Close the server connection?</p>
+</td>
+      </tr>
     </tbody>
   </table>
   
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader})">GenericResponse(String, HttpStatusCode, Dictionary&lt;String, HttpHeader&gt;)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">GenericResponse(String, HttpStatusCode, Dictionary&lt;String, HttpHeader&gt;, Boolean)</h4>
   <div class="markdown level1 summary"><p>Before request is made to server 
 respond with the specified HTML string and the specified status to client.
 And then ignore the request. </p>
@@ -315,7 +321,7 @@ And then ignore the request. </p>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void GenericResponse(string html, HttpStatusCode status, Dictionary&lt;string, HttpHeader&gt; headers = null)</code></pre>
+    <pre><code class="lang-csharp hljs">public void GenericResponse(string html, HttpStatusCode status, Dictionary&lt;string, HttpHeader&gt; headers = null, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -343,6 +349,12 @@ And then ignore the request. </p>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.dictionary-2">Dictionary</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
         <td><span class="parametername">headers</span></td>
         <td><p>The HTTP headers.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">closeServerConnection</span></td>
+        <td><p>Close the server connection?</p>
 </td>
       </tr>
     </tbody>
@@ -530,14 +542,14 @@ And then ignore the request. </p>
   
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader})">Ok(Byte[], Dictionary&lt;String, HttpHeader&gt;)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">Ok(Byte[], Dictionary&lt;String, HttpHeader&gt;, Boolean)</h4>
   <div class="markdown level1 summary"><p>Before request is made to server respond with the specified byte[] to client
 and ignore the request. </p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void Ok(byte[] result, Dictionary&lt;string, HttpHeader&gt; headers = null)</code></pre>
+    <pre><code class="lang-csharp hljs">public void Ok(byte[] result, Dictionary&lt;string, HttpHeader&gt; headers = null, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -561,19 +573,25 @@ and ignore the request. </p>
         <td><p>The HTTP headers.</p>
 </td>
       </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">closeServerConnection</span></td>
+        <td><p>Close the server connection?</p>
+</td>
+      </tr>
     </tbody>
   </table>
   
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader})">Ok(String, Dictionary&lt;String, HttpHeader&gt;)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">Ok(String, Dictionary&lt;String, HttpHeader&gt;, Boolean)</h4>
   <div class="markdown level1 summary"><p>Before request is made to server respond with the specified HTML string to client
 and ignore the request. </p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void Ok(string html, Dictionary&lt;string, HttpHeader&gt; headers = null)</code></pre>
+    <pre><code class="lang-csharp hljs">public void Ok(string html, Dictionary&lt;string, HttpHeader&gt; headers = null, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -597,18 +615,24 @@ and ignore the request. </p>
         <td><p>HTTP response headers.</p>
 </td>
       </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">closeServerConnection</span></td>
+        <td><p>Close the server connection?</p>
+</td>
+      </tr>
     </tbody>
   </table>
   
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Redirect_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Redirect*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Redirect_System_String_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Redirect(System.String)">Redirect(String)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Redirect_System_String_System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Redirect(System.String,System.Boolean)">Redirect(String, Boolean)</h4>
   <div class="markdown level1 summary"><p>Redirect to provided URL.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void Redirect(string url)</code></pre>
+    <pre><code class="lang-csharp hljs">public void Redirect(string url, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -626,18 +650,24 @@ and ignore the request. </p>
         <td><p>The URL to redirect.</p>
 </td>
       </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">closeServerConnection</span></td>
+        <td><p>Close the server connection?</p>
+</td>
+      </tr>
     </tbody>
   </table>
   
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Respond*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_Titanium_Web_Proxy_Http_Response_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Respond(Titanium.Web.Proxy.Http.Response)">Respond(Response)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_Titanium_Web_Proxy_Http_Response_System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Respond(Titanium.Web.Proxy.Http.Response,System.Boolean)">Respond(Response, Boolean)</h4>
   <div class="markdown level1 summary"><p>Respond with given response object to client.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void Respond(Response response)</code></pre>
+    <pre><code class="lang-csharp hljs">public void Respond(Response response, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -653,6 +683,12 @@ and ignore the request. </p>
         <td><a class="xref" href="Titanium.Web.Proxy.Http.Response.html">Response</a></td>
         <td><span class="parametername">response</span></td>
         <td><p>The response object.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">closeServerConnection</span></td>
+        <td><p>Close the server connection?</p>
 </td>
       </tr>
     </tbody>
