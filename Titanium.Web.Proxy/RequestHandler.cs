@@ -182,7 +182,6 @@ namespace Titanium.Web.Proxy
                             }
 
                             //If prefetch task is available.
-                            //Delay awaiting prefect task as far as possible.
                             if (serverConnection == null && prefetchTask != null)
                             {
                                 serverConnection = await prefetchTask;
