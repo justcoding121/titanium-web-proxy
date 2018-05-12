@@ -189,7 +189,8 @@ namespace Titanium.Web.Proxy
                                 prefetchTask = null;
                             }
 
-                            // create a new connection if cache key changes
+                            // create a new connection if cache key changes.
+                            // only gets hit when connection pool is disabled.
                             if (serverConnection != null
                                 && (await getConnectionCacheKey(args, false,
                                     clientConnection.NegotiatedApplicationProtocol)
@@ -245,7 +246,8 @@ namespace Titanium.Web.Proxy
                                 break;
                             }
 
-                            if (args.WebSession.ServerConnection == null)
+                            //user requested
+                            if (args.WebSession.Response.TerminateResponse)
                             {
                                 closeServerConnection = true;
                                 return;
