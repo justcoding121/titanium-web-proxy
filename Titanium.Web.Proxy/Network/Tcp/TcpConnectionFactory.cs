@@ -43,22 +43,19 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal ProxyServer server { get; set; }
 
         internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
-            Version httpVersion, bool isHttps, List<SslApplicationProtocol> applicationProtocols, bool isConnect,
+            bool isHttps, List<SslApplicationProtocol> applicationProtocols,
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy)
         {
             //http version is ignored since its an application level decision b/w HTTP 1.0/1.1
             //also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
             //That can create cache miss for same server connection unneccessarily expecially when prefetcing with Connect.
             //http version 2 is separated using applicationProtocols below.
-            var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}" +
-                                                  //when creating Tcp client if isHttps is true then isConnect won't matter
-                                                  //using {isHttps||isConnect} will prevent getting different cacheKeys
-                                                  //in Explicit client handler for prefetch and in Request handler
-                                                  //when checking for changed cache key!
-                                                  $"-{isHttps}-{isHttps||isConnect}-");
+            var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}-" +
+                                                  //when creating Tcp client isConnect won't matter
+                                                  $"{isHttps}-");
             if (applicationProtocols != null)
             {
-                foreach (var protocol in applicationProtocols)
+                foreach (var protocol in applicationProtocols.OrderBy(x=>x))
                 {
                     cacheKeyBuilder.Append($"{protocol}-");
                 }
@@ -92,7 +89,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             CancellationToken cancellationToken)
         {
             var cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
-                httpVersion, isHttps, applicationProtocols, isConnect,
+                isHttps, applicationProtocols,
                 proxyServer, upStreamEndPoint, externalProxy);
 
             if (proxyServer.EnableConnectionPool)
