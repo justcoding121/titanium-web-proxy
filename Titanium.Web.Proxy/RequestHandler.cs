@@ -247,6 +247,7 @@ namespace Titanium.Web.Proxy
 
                             if (args.WebSession.ServerConnection == null)
                             {
+                                closeServerConnection = true;
                                 return;
                             }
 
