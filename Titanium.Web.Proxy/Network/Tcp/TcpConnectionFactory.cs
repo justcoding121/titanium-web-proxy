@@ -46,9 +46,16 @@ namespace Titanium.Web.Proxy.Network.Tcp
             Version httpVersion, bool isHttps, List<SslApplicationProtocol> applicationProtocols, bool isConnect,
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy)
         {
+            //http version is ignored since its an application level decision b/w HTTP 1.0/1.1
+            //also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
+            //That can create cache miss for same server connection unneccessarily expecially when prefetcing with Connect.
+            //http version 2 is separated using applicationProtocols below.
             var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}" +
-                                                  $"-{(httpVersion == null ? string.Empty : httpVersion.ToString())}" +
-                                                  $"-{isHttps}-{isConnect}-");
+                                                  //when creating Tcp client if isHttps is true then isConnect won't matter
+                                                  //using {isHttps||isConnect} will prevent getting different cacheKeys
+                                                  //in Explicit client handler for prefetch and in Request handler
+                                                  //when checking for changed cache key!
+                                                  $"-{isHttps}-{isHttps||isConnect}-");
             if (applicationProtocols != null)
             {
                 foreach (var protocol in applicationProtocols)
