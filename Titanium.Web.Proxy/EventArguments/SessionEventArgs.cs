@@ -463,7 +463,9 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         /// <param name="html">HTML content to sent.</param>
         /// <param name="headers">HTTP response headers.</param>
-        public void Ok(string html, Dictionary<string, HttpHeader> headers = null)
+        /// <param name="closeServerConnection">Close the server connection?</param>
+        public void Ok(string html, Dictionary<string, HttpHeader> headers = null,
+            bool closeServerConnection = false)
         {
             var response = new OkResponse();
             if (headers != null)
@@ -474,7 +476,7 @@ namespace Titanium.Web.Proxy.EventArguments
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Body = response.Encoding.GetBytes(html ?? string.Empty);
 
-            Respond(response);
+            Respond(response, closeServerConnection);
         }
 
         /// <summary>
@@ -483,14 +485,16 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         /// <param name="result">The html content bytes.</param>
         /// <param name="headers">The HTTP headers.</param>
-        public void Ok(byte[] result, Dictionary<string, HttpHeader> headers = null)
+        /// <param name="closeServerConnection">Close the server connection?</param>
+        public void Ok(byte[] result, Dictionary<string, HttpHeader> headers = null,
+            bool closeServerConnection = false)
         {
             var response = new OkResponse();
             response.Headers.AddHeaders(headers);
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Body = result;
 
-            Respond(response);
+            Respond(response, closeServerConnection);
         }
 
         /// <summary>
@@ -501,15 +505,16 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="html">The html content.</param>
         /// <param name="status">The HTTP status code.</param>
         /// <param name="headers">The HTTP headers.</param>
-        /// <returns></returns>
-        public void GenericResponse(string html, HttpStatusCode status, Dictionary<string, HttpHeader> headers = null)
+        /// <param name="closeServerConnection">Close the server connection?</param>
+        public void GenericResponse(string html, HttpStatusCode status, 
+            Dictionary<string, HttpHeader> headers = null, bool closeServerConnection = false)
         {
             var response = new GenericResponse(status);
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Headers.AddHeaders(headers);
             response.Body = response.Encoding.GetBytes(html ?? string.Empty);
 
-            Respond(response);
+            Respond(response, closeServerConnection);
         }
 
         /// <summary>
@@ -519,57 +524,68 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="result">The bytes to sent.</param>
         /// <param name="status">The HTTP status code.</param>
         /// <param name="headers">The HTTP headers.</param>
-        /// <returns></returns>
-        public void GenericResponse(byte[] result, HttpStatusCode status, Dictionary<string, HttpHeader> headers)
+        /// <param name="closeServerConnection">Close the server connection?</param>
+        public void GenericResponse(byte[] result, HttpStatusCode status,
+            Dictionary<string, HttpHeader> headers, bool closeServerConnection = false)
         {
             var response = new GenericResponse(status);
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Headers.AddHeaders(headers);
             response.Body = result;
 
-            Respond(response);
+            Respond(response, closeServerConnection);
         }
 
         /// <summary>
         /// Redirect to provided URL.
         /// </summary>
         /// <param name="url">The URL to redirect.</param>
-        /// <returns></returns>
-        public void Redirect(string url)
+        /// <param name="closeServerConnection">Close the server connection?</param>
+        public void Redirect(string url, bool closeServerConnection = false)
         {
             var response = new RedirectResponse();
             response.HttpVersion = WebSession.Request.HttpVersion;
             response.Headers.AddHeader(KnownHeaders.Location, url);
             response.Body = emptyData;
 
-            Respond(response);
+            Respond(response, closeServerConnection);
         }
 
         /// <summary>
       /// Respond with given response object to client.
       /// </summary>
       /// <param name="response">The response object.</param>
-        public void Respond(Response response)
+      /// <param name="closeServerConnection">Close the server connection?</param>
+        public void Respond(Response response, bool closeServerConnection = false)
         {
+            //request already send.
             if (WebSession.Request.Locked)
             {
+                //response already received from server and ready to be sent to client.
                 if (WebSession.Response.Locked)
                 {
                     throw new Exception("You cannot call this function after response is sent to the client.");
                 }
 
+                //response already received from server but not yet ready to sent to client.
                 response.Locked = true;
                 response.TerminateResponse = WebSession.Response.TerminateResponse;
                 WebSession.Response = response;
             }
             else
             {
+                //request not yet sent.
                 WebSession.Request.Locked = true;
 
                 response.Locked = true;
                 WebSession.Response = response;
 
                 WebSession.Request.CancelRequest = true;
+            }
+
+            if(closeServerConnection)
+            {
+                TerminateServerConnection();
             }
         }
 
