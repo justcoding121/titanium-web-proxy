@@ -219,6 +219,7 @@ namespace Titanium.Web.Proxy
                                         await handleWebSocketUpgrade(httpCmd, args, request,
                                             response, clientStream, clientStreamWriter,
                                             serverConnection, cancellationTokenSource, cancellationToken);
+                                        closeServerConnection = true;
                                         return;
                                     }
 
