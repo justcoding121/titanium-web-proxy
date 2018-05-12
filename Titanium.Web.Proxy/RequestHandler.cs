@@ -191,6 +191,7 @@ namespace Titanium.Web.Proxy
 
                             // create a new connection if cache key changes.
                             // only gets hit when connection pool is disabled.
+                            // or when prefetch task has a unexpectedly different connection.
                             if (serverConnection != null
                                 && (await getConnectionCacheKey(args, false,
                                     clientConnection.NegotiatedApplicationProtocol)
