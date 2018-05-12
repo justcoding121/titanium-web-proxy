@@ -192,7 +192,7 @@ namespace Titanium.Web.Proxy
                             // only gets hit when connection pool is disabled.
                             // or when prefetch task has a unexpectedly different connection.
                             if (serverConnection != null
-                                && (await getConnectionCacheKey(args, false,
+                                && (await getConnectionCacheKey(args,
                                     clientConnection.NegotiatedApplicationProtocol)
                                                 != serverConnection.CacheKey))
                             {
@@ -475,7 +475,7 @@ namespace Titanium.Web.Proxy
         /// <param name="isConnect">Is this a CONNECT request.</param>
         /// <param name="applicationProtocol"></param>
         /// <returns></returns>
-        private async Task<string> getConnectionCacheKey(SessionEventArgsBase args, bool isConnect,
+        private async Task<string> getConnectionCacheKey(SessionEventArgsBase args,
             SslApplicationProtocol applicationProtocol)
         {
             List<SslApplicationProtocol> applicationProtocols = null;
@@ -497,8 +497,7 @@ namespace Titanium.Web.Proxy
             return tcpConnectionFactory.GetConnectionCacheKey(
                 args.WebSession.Request.RequestUri.Host,
                 args.WebSession.Request.RequestUri.Port,
-                args.WebSession.Request.HttpVersion,
-                isHttps, applicationProtocols, isConnect,
+                isHttps, applicationProtocols,
                 this, args.WebSession.UpStreamEndPoint ?? UpStreamEndPoint,
                 customUpStreamProxy ?? (isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy));
         }
