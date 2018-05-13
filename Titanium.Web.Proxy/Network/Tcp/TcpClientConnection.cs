@@ -1,6 +1,9 @@
 ﻿using System;
 using System.IO;
 using System.Net;
+#if NETCOREAPP2_1
+using System.Net.Security;
+#endif
 using System.Net.Sockets;
 using Titanium.Web.Proxy.Extensions;
 
