@@ -552,7 +552,7 @@ namespace Titanium.Web.Proxy
                 args.WebSession.Request.HttpVersion,
                 isHttps, applicationProtocols, isConnect,
                 this, args.WebSession.UpStreamEndPoint ?? UpStreamEndPoint,
-                customUpStreamProxy ?? (isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy),
+                customUpStreamProxy ?? (isHttps ? args.WebSession.Request.UpStreamHttpsProxy ?? UpStreamHttpsProxy : args.WebSession.Request.UpStreamHttpProxy ?? UpStreamHttpProxy),
                 cancellationToken);
         }
 
