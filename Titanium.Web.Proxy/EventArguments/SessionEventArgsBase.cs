@@ -28,9 +28,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
         /// </summary>
-        internal SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
+        private SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
             CancellationTokenSource cancellationTokenSource)
-            : this(server, endPoint, cancellationTokenSource, null)
         {
             bufferSize = server.BufferSize;
             bufferPool = server.BufferPool;
@@ -39,7 +38,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
             CancellationTokenSource cancellationTokenSource,
-            Request request)
+            Request request) : this(server, endPoint, cancellationTokenSource)
         {
             CancellationTokenSource = cancellationTokenSource;
 
