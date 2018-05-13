@@ -30,7 +30,6 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
             CancellationTokenSource cancellationTokenSource)
-            
         {
             bufferSize = server.BufferSize;
             bufferPool = server.BufferPool;
