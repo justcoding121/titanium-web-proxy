@@ -92,8 +92,6 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal bool TerminateResponse { get; set; }
-
         /// <summary>
         ///     Is response 100-continue
         /// </summary>

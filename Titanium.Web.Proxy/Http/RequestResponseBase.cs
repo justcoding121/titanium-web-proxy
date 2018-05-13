@@ -23,9 +23,28 @@ namespace Titanium.Web.Proxy.Http
         private string bodyString;
 
         /// <summary>
-        ///     Store weather the original request/response has body or not, since the user may change the parameters
+        ///     Store whether the original request/response has body or not, since the user may change the parameters.
+        ///     We need this detail to tcp syphon out attached connection for reuse.
         /// </summary>
         internal bool OriginalHasBody { get; set; }
+
+        /// <summary>
+        ///     Store original content-length, since the user setting the body may change the parameters.
+        ///     We need this detail to tcp syphon out attached connection for reuse.
+        /// </summary>
+        internal long OriginalContentLength { get; set; }
+
+        /// <summary>
+        ///     Store whether the original request/response was a chunked body, since the user may change the parameters.
+        ///     We need this detail to tcp syphon out attached connection for reuse.
+        /// </summary>
+        internal bool OriginalIsChunked { get; set; }
+
+        /// <summary>
+        ///     Store whether the original request/response content-encoding, since the user may change the parameters.
+        ///     We need this detail to tcp syphon out attached connection for reuse.
+        /// </summary>
+        internal string OriginalContentEncoding { get; set; }
 
         /// <summary>
         ///     Keeps the body data after the session is finished.
@@ -168,6 +187,7 @@ namespace Titanium.Web.Proxy.Http
 
         /// <summary>
         ///     Is the request/response no more modifyable by user (user callbacks complete?)
+        ///     Also if user set this as a custom response then this should be true.
         /// </summary>
         internal bool Locked { get; set; }
 
