@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Net;
+#if NETCOREAPP2_1
+using System.Net.Security;
+#endif
 using System.Net.Sockets;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
