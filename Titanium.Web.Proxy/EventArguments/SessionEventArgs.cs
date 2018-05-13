@@ -179,7 +179,7 @@ namespace Titanium.Web.Proxy.EventArguments
         internal async Task SyphonOutBodyAsync(bool isRequest, CancellationToken cancellationToken)
         {
             var requestResponse = isRequest ? (RequestResponseBase)WebSession.Request : WebSession.Response;
-            if (requestResponse.IsBodyRead || !requestResponse.OriginalHasBody)
+            if (requestResponse.OriginalIsBodyRead || !requestResponse.OriginalHasBody)
             {
                 return;
             }
@@ -583,10 +583,7 @@ namespace Titanium.Web.Proxy.EventArguments
                     TerminateServerConnection();
                 }
 
-                response.OriginalHasBody = WebSession.Response.OriginalHasBody;
-                response.OriginalIsChunked = WebSession.Response.OriginalIsChunked;
-                response.OriginalContentLength = WebSession.Response.OriginalContentLength;
-                response.OriginalContentEncoding = WebSession.Response.OriginalContentEncoding;
+                response.SetOriginalHeaders(WebSession.Response);
 
                 //response already received from server but not yet ready to sent to client.         
                 WebSession.Response = response;

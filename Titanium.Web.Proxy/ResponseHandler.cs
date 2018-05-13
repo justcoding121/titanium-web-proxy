@@ -41,10 +41,7 @@ namespace Titanium.Web.Proxy
 
             //save original values so that if user changes them
             //we can still use original values when syphoning out data from attached tcp connection.
-            response.OriginalHasBody = response.HasBody;
-            response.OriginalContentLength = response.ContentLength;
-            response.OriginalIsChunked = response.IsChunked;
-            response.OriginalContentEncoding = response.ContentEncoding;
+            response.SetOriginalHeaders();
 
             // if user requested call back then do it
             if (!response.Locked)

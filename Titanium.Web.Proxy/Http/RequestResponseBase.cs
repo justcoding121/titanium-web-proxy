@@ -24,7 +24,7 @@ namespace Titanium.Web.Proxy.Http
 
         /// <summary>
         ///     Store whether the original request/response has body or not, since the user may change the parameters.
-        ///     We need this detail to tcp syphon out attached connection for reuse.
+        ///     We need this detail to syphon out attached tcp connection for reuse.
         /// </summary>
         internal bool OriginalHasBody { get; set; }
 
@@ -36,15 +36,21 @@ namespace Titanium.Web.Proxy.Http
 
         /// <summary>
         ///     Store whether the original request/response was a chunked body, since the user may change the parameters.
-        ///     We need this detail to tcp syphon out attached connection for reuse.
+        ///     We need this detail to syphon out attached tcp connection for reuse.
         /// </summary>
         internal bool OriginalIsChunked { get; set; }
 
         /// <summary>
         ///     Store whether the original request/response content-encoding, since the user may change the parameters.
-        ///     We need this detail to tcp syphon out attached connection for reuse.
+        ///     We need this detail to syphon out attached tcp connection for reuse.
         /// </summary>
         internal string OriginalContentEncoding { get; set; }
+
+        /// <summary>
+        ///     Store whether the original request/response body was read by user.
+        ///     We need this detail to syphon out attached tcp connection for reuse.
+        /// </summary>
+        public bool OriginalIsBodyRead { get; internal set; }
 
         /// <summary>
         ///     Keeps the body data after the session is finished.
@@ -249,6 +255,31 @@ namespace Titanium.Web.Proxy.Http
         internal void UpdateContentLength()
         {
             ContentLength = IsChunked ? -1 : BodyInternal?.Length ?? 0;
+        }
+
+        /// <summary>
+        ///     Set values for original headers using current headers.
+        /// </summary>
+        internal void SetOriginalHeaders()
+        {
+            OriginalHasBody = HasBody;
+            OriginalContentLength = ContentLength;
+            OriginalIsChunked = IsChunked;
+            OriginalContentEncoding = ContentEncoding;
+            OriginalIsBodyRead = IsBodyRead;
+        }
+
+        /// <summary>
+        ///     Copy original header values. 
+        /// </summary>
+        /// <param name="requestResponseBase"></param>
+        internal void SetOriginalHeaders(RequestResponseBase requestResponseBase)
+        {
+            OriginalHasBody = requestResponseBase.OriginalHasBody;
+            OriginalContentLength = requestResponseBase.OriginalContentLength;
+            OriginalIsChunked = requestResponseBase.OriginalIsChunked;
+            OriginalContentEncoding = requestResponseBase.OriginalContentEncoding;
+            OriginalIsBodyRead = requestResponseBase.OriginalIsBodyRead;
         }
 
         /// <summary>
