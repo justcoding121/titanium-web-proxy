@@ -2,6 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+#if NETCOREAPP2_1
+using System.Net.Security;
+#endif
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -472,7 +475,6 @@ namespace Titanium.Web.Proxy
         ///     Gets the connection cache key.
         /// </summary>
         /// <param name="args">The session event arguments.</param>
-        /// <param name="isConnect">Is this a CONNECT request.</param>
         /// <param name="applicationProtocol"></param>
         /// <returns></returns>
         private async Task<string> getConnectionCacheKey(SessionEventArgsBase args,

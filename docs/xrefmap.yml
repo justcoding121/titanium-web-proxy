@@ -2070,6 +2070,12 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.HttpHeader.HttpHeader
   nameWithType: HttpHeader.HttpHeader
+- uid: Titanium.Web.Proxy.Models.HttpHeader.HttpHeaderOverhead
+  name: HttpHeaderOverhead
+  href: api/Titanium.Web.Proxy.Models.HttpHeader.html#Titanium_Web_Proxy_Models_HttpHeader_HttpHeaderOverhead
+  commentId: F:Titanium.Web.Proxy.Models.HttpHeader.HttpHeaderOverhead
+  fullName: Titanium.Web.Proxy.Models.HttpHeader.HttpHeaderOverhead
+  nameWithType: HttpHeader.HttpHeaderOverhead
 - uid: Titanium.Web.Proxy.Models.HttpHeader.Name
   name: Name
   href: api/Titanium.Web.Proxy.Models.HttpHeader.html#Titanium_Web_Proxy_Models_HttpHeader_Name
@@ -2083,6 +2089,32 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.HttpHeader.Name
   nameWithType: HttpHeader.Name
+- uid: Titanium.Web.Proxy.Models.HttpHeader.Size
+  name: Size
+  href: api/Titanium.Web.Proxy.Models.HttpHeader.html#Titanium_Web_Proxy_Models_HttpHeader_Size
+  commentId: P:Titanium.Web.Proxy.Models.HttpHeader.Size
+  fullName: Titanium.Web.Proxy.Models.HttpHeader.Size
+  nameWithType: HttpHeader.Size
+- uid: Titanium.Web.Proxy.Models.HttpHeader.Size*
+  name: Size
+  href: api/Titanium.Web.Proxy.Models.HttpHeader.html#Titanium_Web_Proxy_Models_HttpHeader_Size_
+  commentId: Overload:Titanium.Web.Proxy.Models.HttpHeader.Size
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.HttpHeader.Size
+  nameWithType: HttpHeader.Size
+- uid: Titanium.Web.Proxy.Models.HttpHeader.SizeOf(System.String,System.String)
+  name: SizeOf(String, String)
+  href: api/Titanium.Web.Proxy.Models.HttpHeader.html#Titanium_Web_Proxy_Models_HttpHeader_SizeOf_System_String_System_String_
+  commentId: M:Titanium.Web.Proxy.Models.HttpHeader.SizeOf(System.String,System.String)
+  fullName: Titanium.Web.Proxy.Models.HttpHeader.SizeOf(System.String, System.String)
+  nameWithType: HttpHeader.SizeOf(String, String)
+- uid: Titanium.Web.Proxy.Models.HttpHeader.SizeOf*
+  name: SizeOf
+  href: api/Titanium.Web.Proxy.Models.HttpHeader.html#Titanium_Web_Proxy_Models_HttpHeader_SizeOf_
+  commentId: Overload:Titanium.Web.Proxy.Models.HttpHeader.SizeOf
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.HttpHeader.SizeOf
+  nameWithType: HttpHeader.SizeOf
 - uid: Titanium.Web.Proxy.Models.HttpHeader.ToString
   name: ToString()
   href: api/Titanium.Web.Proxy.Models.HttpHeader.html#Titanium_Web_Proxy_Models_HttpHeader_ToString
