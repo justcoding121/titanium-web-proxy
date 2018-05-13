@@ -163,10 +163,7 @@ namespace Titanium.Web.Proxy
                             }
 
                             //we need this to syphon out data from connection if API user changes them.
-                            request.OriginalHasBody = request.HasBody;
-                            request.OriginalContentLength = request.ContentLength;
-                            request.OriginalIsChunked = request.IsChunked;
-                            request.OriginalContentEncoding = request.ContentEncoding;
+                            request.SetOriginalHeaders();
 
                             // If user requested interception do it
                             await invokeBeforeRequest(args);
