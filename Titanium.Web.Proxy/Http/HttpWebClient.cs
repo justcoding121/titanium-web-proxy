@@ -29,6 +29,11 @@ namespace Titanium.Web.Proxy.Http
         internal TcpServerConnection ServerConnection { get; set; }
 
         /// <summary>
+        ///     Should we close the server connection at the end of this HTTP request/response session.
+        /// </summary>
+        internal bool CloseServerConnection { get; set; }
+
+        /// <summary>
         ///     Stores internal data for the session.
         /// </summary>
         internal InternalDataStore Data { get; } = new InternalDataStore();

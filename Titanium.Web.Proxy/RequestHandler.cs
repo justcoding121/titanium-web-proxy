@@ -162,7 +162,11 @@ namespace Titanium.Web.Proxy
                                 await args.GetRequestBody(cancellationToken);
                             }
 
+                            //we need this to syphon out data from connection if API user changes them.
                             request.OriginalHasBody = request.HasBody;
+                            request.OriginalContentLength = request.ContentLength;
+                            request.OriginalIsChunked = request.IsChunked;
+                            request.OriginalContentEncoding = request.ContentEncoding;
 
                             // If user requested interception do it
                             await invokeBeforeRequest(args);
@@ -251,7 +255,7 @@ namespace Titanium.Web.Proxy
                             }
 
                             //user requested
-                            if (args.WebSession.Response.TerminateResponse)
+                            if (args.WebSession.CloseServerConnection)
                             {
                                 closeServerConnection = true;
                                 return;

@@ -18,7 +18,6 @@ namespace Titanium.Web.Proxy
         /// <returns> The task.</returns>
         private async Task handleHttpSessionResponse(SessionEventArgs args)
         {
-
             var cancellationToken = args.CancellationTokenSource.Token;
 
             // read response & headers from server
@@ -40,7 +39,12 @@ namespace Titanium.Web.Proxy
                 }
             }
 
+            //save original values so that if user changes them
+            //we can still use original values when syphoning out data from attached tcp connection.
             response.OriginalHasBody = response.HasBody;
+            response.OriginalContentLength = response.ContentLength;
+            response.OriginalIsChunked = response.IsChunked;
+            response.OriginalContentEncoding = response.ContentEncoding;
 
             // if user requested call back then do it
             if (!response.Locked)
@@ -53,13 +57,17 @@ namespace Titanium.Web.Proxy
 
             var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
 
-            if (response.TerminateResponse || response.Locked)
+            //user set custom response by ignoring original response from server.
+            if (response.Locked)
             {
+                //write custom user response with body and return.
                 await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
 
-                if (!response.TerminateResponse)
+                if(args.WebSession.ServerConnection != null
+                    && !args.WebSession.CloseServerConnection)
                 {
-                    // syphon out the response body from server before setting the new body
+                    // syphon out the original response body from server connection
+                    // so that connection will be good to be reused.
                     await args.SyphonOutBodyAsync(false, cancellationToken);
                 }
 
