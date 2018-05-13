@@ -9,6 +9,13 @@ namespace Titanium.Web.Proxy.Models
     /// </summary>
     public class HttpHeader
     {
+        /// <summary>
+        /// HPACK: Header Compression for HTTP/2
+        /// Section 4.1. Calculating Table Size
+        /// The additional 32 octets account for an estimated overhead associated with an entry.        
+        /// </summary>
+        public const int HttpHeaderOverhead = 32;
+
         internal static readonly Version VersionUnknown = new Version(0, 0);
 
         internal static readonly Version Version10 = new Version(1, 0);
@@ -44,6 +51,13 @@ namespace Titanium.Web.Proxy.Models
         ///     Header Value.
         /// </summary>
         public string Value { get; set; }
+
+        public int Size => Name.Length + Value.Length + HttpHeaderOverhead;
+
+        public static int SizeOf(string name, string value)
+        {
+            return name.Length + value.Length + HttpHeaderOverhead;
+        }
 
         /// <summary>
         ///     Returns header as a valid header string.
