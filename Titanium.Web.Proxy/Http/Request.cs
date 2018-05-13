@@ -99,7 +99,8 @@ namespace Titanium.Web.Proxy.Http
         public string Url => RequestUri.OriginalString;
 
         /// <summary>
-        ///     Terminates the underlying Tcp Connection to client after current request.
+        ///     Cancels the client HTTP request without sending to server.
+        ///     This should be set when API user responds with custom response.
         /// </summary>
         internal bool CancelRequest { get; set; }
 
