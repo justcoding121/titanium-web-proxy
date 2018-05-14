@@ -98,34 +98,38 @@ namespace Titanium.Web.Proxy
                             null, false, null,
                             true, this, UpStreamEndPoint, UpStreamHttpsProxy, cancellationToken);
 
-
-                        var serverStream = connection.Stream;
-
-                        int available = clientStream.Available;
-                        if (available > 0)
+                        try
                         {
-                            // send the buffered data
-                            var data = BufferPool.GetBuffer(BufferSize);
+                            var serverStream = connection.Stream;
 
-                            try
+                            int available = clientStream.Available;
+                            if (available > 0)
                             {
-                                // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
-                                await clientStream.ReadAsync(data, 0, available, cancellationToken);
-                                await serverStream.WriteAsync(data, 0, available, cancellationToken);
-                                await serverStream.FlushAsync(cancellationToken);
+                                // send the buffered data
+                                var data = BufferPool.GetBuffer(BufferSize);
+
+                                try
+                                {
+                                    // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
+                                    await clientStream.ReadAsync(data, 0, available, cancellationToken);
+                                    await serverStream.WriteAsync(data, 0, available, cancellationToken);
+                                    await serverStream.FlushAsync(cancellationToken);
+                                }
+                                finally
+                                {
+                                    BufferPool.ReturnBuffer(data);
+                                }
                             }
-                            finally
-                            {
-                                BufferPool.ReturnBuffer(data);
-                            }
+
+                            await TcpHelper.SendRaw(clientStream, serverStream, BufferPool, BufferSize,
+                                null, null, cancellationTokenSource, ExceptionFunc);
+                        }
+                        finally
+                        {
+                            await tcpConnectionFactory.Release(connection, true);
                         }
 
-                        await TcpHelper.SendRaw(clientStream, serverStream, BufferPool, BufferSize,
-                            null, null, cancellationTokenSource, ExceptionFunc);
-
-                        await tcpConnectionFactory.Release(connection, true);
                         return;
-
                     }
                 }
                 calledRequestHandler = true;

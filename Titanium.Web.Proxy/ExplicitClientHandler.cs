@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy
             {
                 string connectHostname = null;
                 TunnelConnectSessionEventArgs connectArgs = null;
-               
+
 
                 // Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
                 if (await HttpHelper.IsConnectMethod(clientStream) == 1)
@@ -212,38 +212,43 @@ namespace Titanium.Web.Proxy
                         var connection = await getServerConnection(connectArgs, true,
                             null, cancellationToken);
 
-                        if (isClientHello)
+                        try
                         {
-                            int available = clientStream.Available;
-                            if (available > 0)
+                            if (isClientHello)
                             {
-                                // send the buffered data
-                                var data = BufferPool.GetBuffer(BufferSize);
+                                int available = clientStream.Available;
+                                if (available > 0)
+                                {
+                                    // send the buffered data
+                                    var data = BufferPool.GetBuffer(BufferSize);
 
-                                try
-                                {
-                                    // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
-                                    await clientStream.ReadAsync(data, 0, available, cancellationToken);
-                                    await connection.StreamWriter.WriteAsync(data, 0, available, true,
-                                        cancellationToken);
+                                    try
+                                    {
+                                        // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
+                                        await clientStream.ReadAsync(data, 0, available, cancellationToken);
+                                        await connection.StreamWriter.WriteAsync(data, 0, available, true,
+                                            cancellationToken);
+                                    }
+                                    finally
+                                    {
+                                        BufferPool.ReturnBuffer(data);
+                                    }
                                 }
-                                finally
-                                {
-                                    BufferPool.ReturnBuffer(data);
-                                }
+
+                                var serverHelloInfo =
+                                    await SslTools.PeekServerHello(connection.Stream, BufferPool, cancellationToken);
+                                ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
                             }
 
-                            var serverHelloInfo =
-                                await SslTools.PeekServerHello(connection.Stream, BufferPool, cancellationToken);
-                            ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
+                            await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool, BufferSize,
+                                (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
+                                (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
+                                connectArgs.CancellationTokenSource, ExceptionFunc);
                         }
-
-                        await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool, BufferSize,
-                            (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
-                            (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
-                            connectArgs.CancellationTokenSource, ExceptionFunc);
-
-                        await tcpConnectionFactory.Release(connection, true);
+                        finally
+                        {
+                            await tcpConnectionFactory.Release(connection, true);
+                        }
                         return;
                     }
                 }
@@ -276,7 +281,8 @@ namespace Titanium.Web.Proxy
                         // create new connection
                         var connection = await getServerConnection(connectArgs, true, SslExtensions.Http2ProtocolAsList,
                             cancellationToken);
-                        
+                        try
+                        {
                             await connection.StreamWriter.WriteLineAsync("PRI * HTTP/2.0", cancellationToken);
                             await connection.StreamWriter.WriteLineAsync(cancellationToken);
                             await connection.StreamWriter.WriteLineAsync("SM", cancellationToken);
@@ -288,7 +294,11 @@ namespace Titanium.Web.Proxy
                                 (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
                                 connectArgs.CancellationTokenSource, clientConnection.Id, ExceptionFunc);
 #endif
-                       await tcpConnectionFactory.Release(connection, true);
+                        }
+                        finally
+                        {
+                            await tcpConnectionFactory.Release(connection, true);
+                        }
                     }
                 }
                 calledRequestHandler = true;
@@ -318,7 +328,7 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                if (!calledRequestHandler 
+                if (!calledRequestHandler
                     && prefetchConnectionTask != null)
                 {
                     var connection = await prefetchConnectionTask;
