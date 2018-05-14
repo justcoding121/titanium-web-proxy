@@ -94,33 +94,24 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             if (proxyServer.EnableConnectionPool)
             {
-                try
+                if (cache.TryGetValue(cacheKey, out var existingConnections))
                 {
-                    await @lock.WaitAsync();
-
-                    if (cache.TryGetValue(cacheKey, out var existingConnections))
+                    while (existingConnections.Count > 0)
                     {
-                        while (existingConnections.Count > 0)
+                        if (existingConnections.TryDequeue(out var recentConnection))
                         {
-                            if (existingConnections.TryDequeue(out var recentConnection))
+                            //+3 seconds for potential delay after getting connection
+                            var cutOff = DateTime.Now.AddSeconds(-1 * proxyServer.ConnectionTimeOutSeconds + 3);
+
+                            if (recentConnection.LastAccess > cutOff
+                                && isGoodConnection(recentConnection.TcpClient))
                             {
-                                //+3 seconds for potential delay after getting connection
-                                var cutOff = DateTime.Now.AddSeconds(-1 * proxyServer.ConnectionTimeOutSeconds + 3);
-
-                                if (recentConnection.LastAccess > cutOff
-                                    && isGoodConnection(recentConnection.TcpClient))
-                                {
-                                    return recentConnection;
-                                }
-
-                                disposalBag.Add(recentConnection);
+                                return recentConnection;
                             }
+
+                            disposalBag.Add(recentConnection);
                         }
                     }
-                }
-                finally
-                {
-                    @lock.Release();
                 }
             }
 
