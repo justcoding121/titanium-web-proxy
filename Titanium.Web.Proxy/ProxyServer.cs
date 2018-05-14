@@ -130,6 +130,7 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         ///     Gets or sets a value indicating whether requests will be chained to upstream gateway.
+        ///     Defaults to false.
         /// </summary>
         public bool ForwardToUpstreamGateway { get; set; }
 
@@ -138,6 +139,7 @@ namespace Titanium.Web.Proxy
         ///     Note: NTLM/Kerberos will always send local credentials of current user
         ///     running the proxy process. This is because a man
         ///     in middle attack with Windows domain authentication is not currently supported.
+        ///     Defaults to false.
         /// </summary>
         public bool EnableWinAuth { get; set; }
 
@@ -161,12 +163,15 @@ namespace Titanium.Web.Proxy
         public bool EnableConnectionPool { get; set; } = true;
 
         /// <summary>
-        ///     Buffer size used throughout this proxy.
+        ///     Buffer size in bytes used throughout this proxy.
+        ///     Default value is 8192 bytes.
         /// </summary>
         public int BufferSize { get; set; } = 8192;
 
         /// <summary>
         ///     Seconds client/server connection are to be kept alive when waiting for read/write to complete.
+        ///     This will also determine the pool eviction time when connection pool is enabled.
+        ///     Default value is 60 seconds.
         /// </summary>
         public int ConnectionTimeOutSeconds { get; set; }
 
@@ -174,9 +179,9 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Maximum number of concurrent connections per remote host in cache.
         ///     Only valid when connection pooling is enabled.
-        ///     Default value is 3.
+        ///     Default value is 2.
         /// </summary>
-        public int MaxCachedConnections { get; set; } = 3;
+        public int MaxCachedConnections { get; set; } = 2;
 
         /// <summary>
         ///     Total number of active client connections.
@@ -204,6 +209,8 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         ///     The buffer pool used throughout this proxy instance.
+        ///     Set custom implementations by implementing this interface.
+        ///     By default this uses DefaultBufferPool implementation available in StreamExtended library package.
         /// </summary>
         public IBufferPool BufferPool { get; set; }
 
