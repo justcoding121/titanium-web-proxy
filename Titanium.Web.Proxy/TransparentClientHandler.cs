@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -63,8 +64,8 @@ namespace Titanium.Web.Proxy
                     if (endPoint.DecryptSsl && args.DecryptSsl)
                     {
                         prefetchConnectionTask = tcpConnectionFactory.GetClient(httpsHostName, endPoint.Port,
-                            null, true, null,
-                            false, this, UpStreamEndPoint, UpStreamHttpsProxy, cancellationToken);
+                                null, true, null, false, this,
+                                UpStreamEndPoint, UpStreamHttpsProxy, false, cancellationToken);
 
                         SslStream sslStream = null;
 
@@ -93,25 +94,24 @@ namespace Titanium.Web.Proxy
                     }
                     else
                     {
-                        // create new connection
                         var connection = await tcpConnectionFactory.GetClient(httpsHostName, endPoint.Port,
-                            null, false, null,
-                            true, this, UpStreamEndPoint, UpStreamHttpsProxy, cancellationToken);
+                                    null, false, null,
+                                    true, this, UpStreamEndPoint, UpStreamHttpsProxy, true, cancellationToken);
 
                         try
                         {
-                            var serverStream = connection.Stream;
-
+                            CustomBufferedStream serverStream = null;
                             int available = clientStream.Available;
+
                             if (available > 0)
                             {
                                 // send the buffered data
                                 var data = BufferPool.GetBuffer(BufferSize);
-
                                 try
                                 {
                                     // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
                                     await clientStream.ReadAsync(data, 0, available, cancellationToken);
+                                    serverStream = connection.Stream;
                                     await serverStream.WriteAsync(data, 0, available, cancellationToken);
                                     await serverStream.FlushAsync(cancellationToken);
                                 }
