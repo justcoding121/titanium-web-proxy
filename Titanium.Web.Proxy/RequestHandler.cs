@@ -213,13 +213,14 @@ namespace Titanium.Web.Proxy
                             //for connection pool retry fails until cache is exhausted   
                             await retryPolicy<ServerConnectionException>().ExecuteAsync(async (context) =>
                             {
-                                if (connection == null)
-                                {
-                                    connection = await getServerConnection(args, false,
-                                                       clientConnection.NegotiatedApplicationProtocol, false, cancellationToken);
 
-                                    context["connection"] = connection;
-                                }
+                               connection = context.ContainsKey("connection")? 
+                                    (TcpServerConnection)context["connection"]
+                                    : await getServerConnection(args, false,
+                                                     clientConnection.NegotiatedApplicationProtocol, 
+                                                     false, cancellationToken);
+
+                                context["connection"] = connection;
 
                                 // if upgrading to websocket then relay the request without reading the contents
                                 if (request.UpgradeToWebSocket)
