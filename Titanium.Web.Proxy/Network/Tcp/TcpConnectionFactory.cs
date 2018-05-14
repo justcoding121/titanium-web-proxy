@@ -212,9 +212,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     @lock.Release();
                 }
 
-                while (disposalBag.TryTake(out var connection))
+                while (!disposalBag.IsEmpty)
                 {
-                    connection?.Dispose();
+                    if (disposalBag.TryTake(out var connection))
+                    {
+                        connection?.Dispose();
+                    }
                 }
 
                 //cleanup every ten seconds by default
