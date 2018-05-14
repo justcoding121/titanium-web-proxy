@@ -157,10 +157,10 @@ namespace Titanium.Web.Proxy
         public bool Enable100ContinueBehaviour { get; set; }
 
         /// <summary>
-        ///     Should we enable server connection pool?
-        ///     Defaults to true.
+        ///     Should we enable experimental server connection pool?
+        ///     Defaults to disable.
         /// </summary>
-        public bool EnableConnectionPool { get; set; } = true;
+        public bool EnableConnectionPool { get; set; }
 
         /// <summary>
         ///     Buffer size in bytes used throughout this proxy.
