@@ -55,7 +55,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                                                   $"{isHttps}-");
             if (applicationProtocols != null)
             {
-                foreach (var protocol in applicationProtocols.OrderBy(x=>x))
+                foreach (var protocol in applicationProtocols.OrderBy(x => x))
                 {
                     cacheKeyBuilder.Append($"{protocol}-");
                 }
@@ -94,21 +94,33 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             if (proxyServer.EnableConnectionPool)
             {
-                if (cache.TryGetValue(cacheKey, out var existingConnections))
+                try
                 {
-                    while (existingConnections.TryDequeue(out var recentConnection))
+                    await @lock.WaitAsync();
+
+                    if (cache.TryGetValue(cacheKey, out var existingConnections))
                     {
-                        //+3 seconds for potential delay after getting connection
-                        var cutOff = DateTime.Now.AddSeconds(-1 * proxyServer.ConnectionTimeOutSeconds + 3);
-
-                        if (recentConnection.LastAccess > cutOff
-                            && isGoodConnection(recentConnection.TcpClient))
+                        while (existingConnections.Count > 0)
                         {
-                            return recentConnection;
-                        }
+                            if (existingConnections.TryDequeue(out var recentConnection))
+                            {
+                                //+3 seconds for potential delay after getting connection
+                                var cutOff = DateTime.Now.AddSeconds(-1 * proxyServer.ConnectionTimeOutSeconds + 3);
 
-                        disposalBag.Add(recentConnection);
+                                if (recentConnection.LastAccess > cutOff
+                                    && isGoodConnection(recentConnection.TcpClient))
+                                {
+                                    return recentConnection;
+                                }
+
+                                disposalBag.Add(recentConnection);
+                            }
+                        }
                     }
+                }
+                finally
+                {
+                    @lock.Release();
                 }
             }
 
@@ -166,7 +178,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         break;
                     }
                 }
-             
+
             }
             finally
             {
@@ -181,18 +193,22 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 foreach (var item in cache)
                 {
                     var queue = item.Value;
-                    while (queue.TryDequeue(out var connection))
-                    {
-                        var cutOff = DateTime.Now.AddSeconds(-1 * server.ConnectionTimeOutSeconds);
-                        if (!server.EnableConnectionPool 
-                            || connection.LastAccess < cutOff)
-                        {
-                            disposalBag.Add(connection);
-                            continue;
-                        }
 
-                        queue.Enqueue(connection);
-                        break;
+                    while (queue.Count > 0)
+                    {
+                        if (queue.TryDequeue(out var connection))
+                        {
+                            var cutOff = DateTime.Now.AddSeconds(-1 * server.ConnectionTimeOutSeconds);
+                            if (!server.EnableConnectionPool
+                                || connection.LastAccess < cutOff)
+                            {
+                                disposalBag.Add(connection);
+                                continue;
+                            }
+
+                            queue.Enqueue(connection);
+                            break;
+                        }
                     }
                 }
 
@@ -220,8 +236,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     }
                 }
 
-                //cleanup every ten seconds by default
-                await Task.Delay(1000 * 10);
+                //cleanup every 3 seconds by default
+                await Task.Delay(1000 * 3);
             }
         }
 
