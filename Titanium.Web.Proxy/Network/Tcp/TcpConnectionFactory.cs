@@ -81,18 +81,19 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="proxyServer">The current ProxyServer instance.</param>
         /// <param name="upStreamEndPoint">The local upstream endpoint to make request via.</param>
         /// <param name="externalProxy">The external proxy to make request via.</param>
+        /// <param name="noCache">Not from cache/create new connection.</param>
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
         internal async Task<TcpServerConnection> GetClient(string remoteHostName, int remotePort,
             Version httpVersion, bool isHttps, List<SslApplicationProtocol> applicationProtocols, bool isConnect,
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
-            CancellationToken cancellationToken)
+            bool noCache, CancellationToken cancellationToken)
         {
             var cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
                 isHttps, applicationProtocols,
                 proxyServer, upStreamEndPoint, externalProxy);
 
-            if (proxyServer.EnableConnectionPool)
+            if (proxyServer.EnableConnectionPool && !noCache)
             {
                 if (cache.TryGetValue(cacheKey, out var existingConnections))
                 {
