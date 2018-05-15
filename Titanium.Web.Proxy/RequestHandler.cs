@@ -58,14 +58,14 @@ namespace Titanium.Web.Proxy
             CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, ConnectRequest connectRequest,
             Task<TcpServerConnection> prefetchConnectionTask = null)
         {
-            var cancellationToken = cancellationTokenSource.Token;
-
             var prefetchTask = prefetchConnectionTask;
             TcpServerConnection connection = null;
             bool closeServerConnection = false;
 
             try
             {
+                var cancellationToken = cancellationTokenSource.Token;
+
                 // Loop through each subsequest request on this particular client connection
                 // (assuming HTTP connection is kept alive by client)
                 while (true)
@@ -278,14 +278,23 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                if (prefetchTask != null)
-                {
-                    await tcpConnectionFactory.Release(await prefetchTask,
-                            closeServerConnection);
-                }
-
                 await tcpConnectionFactory.Release(connection,
                         closeServerConnection);
+
+
+                if (prefetchTask != null)
+                {
+                    TcpServerConnection prefetchedConnection = null;
+                    try
+                    {
+                        prefetchedConnection = await prefetchTask;
+
+                    }
+                    finally
+                    {
+                        await tcpConnectionFactory.Release(prefetchedConnection, closeServerConnection);
+                    }
+                }
             }
         }
 
