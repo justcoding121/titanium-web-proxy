@@ -278,14 +278,14 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                await tcpConnectionFactory.Release(connection,
-                    closeServerConnection);
-
                 if (prefetchTask != null)
                 {
                     await tcpConnectionFactory.Release(await prefetchTask,
                             closeServerConnection);
                 }
+
+                await tcpConnectionFactory.Release(connection,
+                        closeServerConnection);
             }
         }
 
