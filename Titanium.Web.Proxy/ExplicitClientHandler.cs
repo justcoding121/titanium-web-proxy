@@ -338,8 +338,16 @@ namespace Titanium.Web.Proxy
                 if (!calledRequestHandler
                         && prefetchConnectionTask != null)
                 {
-                    var connection = await prefetchConnectionTask;
-                    await tcpConnectionFactory.Release(connection, closeServerConnection);
+                    TcpServerConnection prefetchedConnection = null;
+                    try
+                    {
+                        prefetchedConnection = await prefetchConnectionTask;
+
+                    }
+                    finally
+                    {
+                        await tcpConnectionFactory.Release(prefetchedConnection, closeServerConnection);
+                    }
                 }
 
                 clientStream.Dispose();
