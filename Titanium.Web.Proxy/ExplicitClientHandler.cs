@@ -150,8 +150,11 @@ namespace Titanium.Web.Proxy
                         }
 
                         SslStream sslStream = null;
+
+                        //don't pass cancellation token here
+                        //it could cause floating server connections when client exits
                         prefetchConnectionTask = getServerConnection(connectArgs, true,
-                                null, false, cancellationToken);
+                                null, false, CancellationToken.None);
                         try
                         {
                             sslStream = new SslStream(clientStream);
@@ -333,16 +336,16 @@ namespace Titanium.Web.Proxy
             {
                 clientStream.Dispose();
 
-                if (!cancellationTokenSource.IsCancellationRequested)
-                {
-                    cancellationTokenSource.Cancel();
-                }
-
                 if (!calledRequestHandler
                         && prefetchConnectionTask != null)
                 {
                     var connection = await prefetchConnectionTask;
                     await tcpConnectionFactory.Release(connection, closeServerConnection);
+                }
+
+                if (!cancellationTokenSource.IsCancellationRequested)
+                {
+                    cancellationTokenSource.Cancel();
                 }
             }
         }

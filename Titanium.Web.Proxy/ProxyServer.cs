@@ -815,12 +815,12 @@ namespace Titanium.Web.Proxy
                 .RetryAsync(retries,
                     onRetryAsync: async (ex, i, context) =>
                     {
-                        if (context.ContainsKey("connection"))
+                        if (context["connection"] != null)
                         {
                             //close connection on error
                             var connection = (TcpServerConnection)context["connection"];
                             await tcpConnectionFactory.Release(connection, true);
-                            context.Remove("connection");
+                            context["connection"] = null;
                         }
 
                     });
