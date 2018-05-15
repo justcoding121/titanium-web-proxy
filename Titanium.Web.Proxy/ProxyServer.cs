@@ -7,6 +7,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using Polly;
 using StreamExtended;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
@@ -123,6 +124,9 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private SystemProxyManager systemProxySettingsManager { get; }
 
+        //Number of exception retries when connection pool is enabled.
+        private int retries => EnableConnectionPool ? MaxCachedConnections + 1 : 0;
+
         /// <summary>
         ///     Is the proxy currently running?
         /// </summary>
@@ -197,7 +201,7 @@ namespace Titanium.Web.Proxy
         ///     Realm used during Proxy Basic Authentication.
         /// </summary>
         public string ProxyRealm { get; set; } = "TitaniumProxy";
-        
+
         /// <summary>
         ///     List of supported Ssl versions.
         /// </summary>
@@ -252,7 +256,8 @@ namespace Titanium.Web.Proxy
         public ExceptionHandler ExceptionFunc
         {
             get => exceptionFunc ?? defaultExceptionFunc;
-            set {
+            set
+            {
                 exceptionFunc = value;
                 CertificateManager.ExceptionFunc = value;
             }
@@ -274,7 +279,7 @@ namespace Titanium.Web.Proxy
             {
                 Stop();
             }
-            
+
             CertificateManager?.Dispose();
             BufferPool?.Dispose();
         }
@@ -799,6 +804,27 @@ namespace Titanium.Web.Proxy
             {
                 await OnServerConnectionCreate.InvokeAsync(this, client, ExceptionFunc);
             }
+        }
+
+        /// <summary>
+        ///     Connection retry policy when using connection pool.
+        /// </summary>
+        private Policy retryPolicy<T>() where T : Exception
+        {
+            return Policy.Handle<T>()
+                .RetryAsync(retries,
+                    onRetryAsync: async (ex, i, context) =>
+                    {
+                        if (context.ContainsKey("connection"))
+                        {
+                            //close connection on error
+                            var connection = (TcpServerConnection)context["connection"];
+                            await tcpConnectionFactory.Release(connection, true);
+                            context.Remove("connection");
+                        }
+
+                    });
+
         }
     }
 }

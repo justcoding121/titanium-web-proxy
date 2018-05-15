@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy
             var cancellationToken = cancellationTokenSource.Token;
 
             var prefetchTask = prefetchConnectionTask;
-            TcpServerConnection serverConnection = null;
+            TcpServerConnection connection = null;
             bool closeServerConnection = false;
 
             try
@@ -186,70 +186,57 @@ namespace Titanium.Web.Proxy
                             }
 
                             //If prefetch task is available.
-                            if (serverConnection == null && prefetchTask != null)
+                            if (connection == null && prefetchTask != null)
                             {
-                                serverConnection = await prefetchTask;
+                                connection = await prefetchTask;
                                 prefetchTask = null;
                             }
 
                             // create a new connection if cache key changes.
                             // only gets hit when connection pool is disabled.
                             // or when prefetch task has a unexpectedly different connection.
-                            if (serverConnection != null
+                            if (connection != null
                                 && (await getConnectionCacheKey(args,
                                     clientConnection.NegotiatedApplicationProtocol)
-                                                != serverConnection.CacheKey))
+                                                != connection.CacheKey))
                             {
-                                await tcpConnectionFactory.Release(serverConnection);
-                                serverConnection = null;
+                                await tcpConnectionFactory.Release(connection);
+                                connection = null;
                             }
 
-                            //create
-                            if (serverConnection == null)
+                            var contextData = new Dictionary<string, object>();
+                            if (connection != null)
                             {
-                                serverConnection = await getServerConnection(args, false,
-                                    clientConnection.NegotiatedApplicationProtocol, cancellationToken);
+                                contextData.Add("connection", connection);
                             }
 
-                            //for connection pool retry fails until cache is exhausted                
-                            int attempt = 0;
-                            while (attempt < MaxCachedConnections + 1)
+                            //for connection pool retry fails until cache is exhausted   
+                            await retryPolicy<ServerConnectionException>().ExecuteAsync(async (context) =>
                             {
-                                try
+
+                               connection = context.ContainsKey("connection")? 
+                                    (TcpServerConnection)context["connection"]
+                                    : await getServerConnection(args, false,
+                                                     clientConnection.NegotiatedApplicationProtocol, 
+                                                     false, cancellationToken);
+
+                                context["connection"] = connection;
+
+                                // if upgrading to websocket then relay the request without reading the contents
+                                if (request.UpgradeToWebSocket)
                                 {
-                                    // if upgrading to websocket then relay the request without reading the contents
-                                    if (request.UpgradeToWebSocket)
-                                    {
-                                        await handleWebSocketUpgrade(httpCmd, args, request,
-                                            response, clientStream, clientStreamWriter,
-                                            serverConnection, cancellationTokenSource, cancellationToken);
-                                        closeServerConnection = true;
-                                        return;
-                                    }
-
-                                    // construct the web request that we are going to issue on behalf of the client.
-                                    await handleHttpSessionRequestInternal(serverConnection, args);
-                                }
-                                //connection pool retry 
-                                catch (ServerConnectionException)
-                                {
-                                    attempt++;
-                                    if (!EnableConnectionPool || attempt == MaxCachedConnections + 1)
-                                    {
-                                        throw;
-                                    }
-
-                                    //get new connection from pool
-                                    await tcpConnectionFactory.Release(serverConnection, true);
-                                    serverConnection = null;
-                                    serverConnection = await getServerConnection(args, false,
-                                        clientConnection.NegotiatedApplicationProtocol, cancellationToken);
-
-                                    continue;
+                                    await handleWebSocketUpgrade(httpCmd, args, request,
+                                        response, clientStream, clientStreamWriter,
+                                        connection, cancellationTokenSource, cancellationToken);
+                                    closeServerConnection = true;
+                                    return;
                                 }
 
-                                break;
-                            }
+                                // construct the web request that we are going to issue on behalf of the client.
+                                await handleHttpSessionRequestInternal(connection, args);
+
+                            }, contextData);
+
 
                             //user requested
                             if (args.WebSession.CloseServerConnection)
@@ -275,8 +262,8 @@ namespace Titanium.Web.Proxy
                             //between sessions without using it.
                             if (EnableConnectionPool)
                             {
-                                await tcpConnectionFactory.Release(serverConnection);
-                                serverConnection = null;   
+                                await tcpConnectionFactory.Release(connection);
+                                connection = null;
                             }
 
                         }
@@ -300,10 +287,10 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                await tcpConnectionFactory.Release(serverConnection,
+                await tcpConnectionFactory.Release(connection,
                     closeServerConnection);
 
-                if (prefetchTask!=null)
+                if (prefetchTask != null)
                 {
                     await tcpConnectionFactory.Release(await prefetchTask,
                             closeServerConnection);
@@ -515,7 +502,7 @@ namespace Titanium.Web.Proxy
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
         private Task<TcpServerConnection> getServerConnection(SessionEventArgsBase args, bool isConnect,
-            SslApplicationProtocol applicationProtocol, CancellationToken cancellationToken)
+            SslApplicationProtocol applicationProtocol, bool noCache, CancellationToken cancellationToken)
         {
             List<SslApplicationProtocol> applicationProtocols = null;
             if (applicationProtocol != default)
@@ -523,7 +510,7 @@ namespace Titanium.Web.Proxy
                 applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
             }
 
-            return getServerConnection(args, isConnect, applicationProtocols, cancellationToken);
+            return getServerConnection(args, isConnect, applicationProtocols, noCache, cancellationToken);
         }
 
         /// <summary>
@@ -535,7 +522,7 @@ namespace Titanium.Web.Proxy
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
         private async Task<TcpServerConnection> getServerConnection(SessionEventArgsBase args, bool isConnect,
-            List<SslApplicationProtocol> applicationProtocols, CancellationToken cancellationToken)
+            List<SslApplicationProtocol> applicationProtocols, bool noCache, CancellationToken cancellationToken)
         {
             ExternalProxy customUpStreamProxy = null;
 
@@ -554,7 +541,7 @@ namespace Titanium.Web.Proxy
                 isHttps, applicationProtocols, isConnect,
                 this, args.WebSession.UpStreamEndPoint ?? UpStreamEndPoint,
                 customUpStreamProxy ?? (isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy),
-                cancellationToken);
+                noCache, cancellationToken);
         }
 
         /// <summary>
