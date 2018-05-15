@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Security;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -14,7 +15,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 {
     public class ProxyTestController
     {
-        private readonly object lockObj = new object();
+        private readonly SemaphoreSlim @lock = new SemaphoreSlim(1);
 
         private readonly ProxyServer proxyServer;
 
@@ -30,27 +31,34 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.CertificateManager.TrustRootCertificate();
             //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
 
-            proxyServer.ExceptionFunc = exception =>
+            proxyServer.ExceptionFunc = async exception =>
             {
-                lock (lockObj)
-                {
-                    var color = Console.ForegroundColor;
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    if (exception is ProxyHttpException phex)
-                    {
-                        Console.WriteLine(exception.Message + ": " + phex.InnerException?.Message);
-                    }
-                    else
-                    {
-                        Console.WriteLine(exception.Message);
-                    }
+                await @lock.WaitAsync();
 
-                    Console.ForegroundColor = color;
+                try
+                {
+                        var color = Console.ForegroundColor;
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        if (exception is ProxyHttpException phex)
+                        {
+                            Console.WriteLine(exception.Message + ": " + phex.InnerException?.Message);
+                        }
+                        else
+                        {
+                            Console.WriteLine(exception.Message);
+                        }
+
+                        Console.ForegroundColor = color;
+                    
+                }
+                finally
+                {
+                    @lock.Release();
                 }
             };
             proxyServer.ForwardToUpstreamGateway = true;
             proxyServer.CertificateManager.SaveFakeCertificates = true;
-            
+
             // optionally set the Certificate Engine
             // Under Mono or Non-Windows runtimes only BouncyCastle will be supported
             //proxyServer.CertificateManager.CertificateEngine = Network.CertificateEngine.BouncyCastle;
@@ -122,7 +130,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;
 
             proxyServer.Stop();
-            
+
             // remove the generated certificates
             //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
         }
@@ -130,7 +138,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
             string hostname = e.WebSession.Request.RequestUri.Host;
-            WriteToConsole("Tunnel to: " + hostname);
+            await WriteToConsole("Tunnel to: " + hostname);
 
             if (hostname.Contains("dropbox.com"))
             {
@@ -148,8 +156,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
         // intecept & cancel redirect or update requests
         private async Task OnRequest(object sender, SessionEventArgs e)
         {
-            WriteToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
-            WriteToConsole(e.WebSession.Request.Url);
+            await WriteToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
+            await WriteToConsole(e.WebSession.Request.Url);
 
             // store it in the UserData property
             // It can be a simple integer, Guid, or any type
@@ -187,19 +195,19 @@ namespace Titanium.Web.Proxy.Examples.Basic
         }
 
         // Modify response
-        private void MultipartRequestPartSent(object sender, MultipartRequestPartSentEventArgs e)
+        private async Task MultipartRequestPartSent(object sender, MultipartRequestPartSentEventArgs e)
         {
             var session = (SessionEventArgs)sender;
-            WriteToConsole("Multipart form data headers:");
+            await WriteToConsole("Multipart form data headers:");
             foreach (var header in e.Headers)
             {
-                WriteToConsole(header.ToString());
+                await WriteToConsole(header.ToString());
             }
         }
 
         private async Task OnResponse(object sender, SessionEventArgs e)
         {
-            WriteToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
+            await WriteToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
             string ext = System.IO.Path.GetExtension(e.WebSession.Request.RequestUri.AbsolutePath);
 
@@ -271,11 +279,17 @@ namespace Titanium.Web.Proxy.Examples.Basic
             return Task.FromResult(0);
         }
 
-        private void WriteToConsole(string message)
+        private async Task WriteToConsole(string message)
         {
-            lock (lockObj)
+            await @lock.WaitAsync();
+
+            try
             {
                 Console.WriteLine(message);
+            }
+            finally
+            {
+                @lock.Release();
             }
         }
 
