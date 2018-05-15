@@ -150,8 +150,12 @@ namespace Titanium.Web.Proxy
                         }
 
                         SslStream sslStream = null;
+
+                        //don't pass cancellation token here
+                        //it could cause floating server connections when client exits
                         prefetchConnectionTask = getServerConnection(connectArgs, true,
-                                null, false, cancellationToken);
+                                null, false, CancellationToken.None);
+
                         try
                         {
                             sslStream = new SslStream(clientStream);
@@ -250,7 +254,7 @@ namespace Titanium.Web.Proxy
                         {
                             await tcpConnectionFactory.Release(connection, true);
                         }
-                        calledRequestHandler = true;
+
                         return;
                     }
                 }
@@ -331,18 +335,26 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
+                if (!calledRequestHandler
+                        && prefetchConnectionTask != null)
+                {
+                    TcpServerConnection prefetchedConnection = null;
+                    try
+                    {
+                        prefetchedConnection = await prefetchConnectionTask;
+
+                    }
+                    finally
+                    {
+                        await tcpConnectionFactory.Release(prefetchedConnection, closeServerConnection);
+                    }
+                }
+
                 clientStream.Dispose();
 
                 if (!cancellationTokenSource.IsCancellationRequested)
                 {
                     cancellationTokenSource.Cancel();
-                }
-
-                if (!calledRequestHandler
-                        && prefetchConnectionTask != null)
-                {
-                    var connection = await prefetchConnectionTask;
-                    await tcpConnectionFactory.Release(connection, closeServerConnection);
                 }
             }
         }
