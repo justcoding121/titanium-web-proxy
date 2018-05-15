@@ -155,7 +155,7 @@ namespace Titanium.Web.Proxy
                         //it could cause floating server connections when client exits
                         prefetchConnectionTask = getServerConnection(connectArgs, true,
                                 null, false, CancellationToken.None);
-                       
+
                         try
                         {
                             sslStream = new SslStream(clientStream);
@@ -254,7 +254,7 @@ namespace Titanium.Web.Proxy
                         {
                             await tcpConnectionFactory.Release(connection, true);
                         }
-                        calledRequestHandler = true;
+
                         return;
                     }
                 }
