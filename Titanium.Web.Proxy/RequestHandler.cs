@@ -288,7 +288,6 @@ namespace Titanium.Web.Proxy
                     try
                     {
                         prefetchedConnection = await prefetchTask;
-
                     }
                     finally
                     {
