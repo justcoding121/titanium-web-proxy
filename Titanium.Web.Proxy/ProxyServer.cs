@@ -7,7 +7,6 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
-using Polly;
 using StreamExtended;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
@@ -125,7 +124,7 @@ namespace Titanium.Web.Proxy
         private SystemProxyManager systemProxySettingsManager { get; }
 
         //Number of exception retries when connection pool is enabled.
-        private int retries => EnableConnectionPool ? MaxCachedConnections + 1 : 0;
+        private int retries => EnableConnectionPool ? MaxCachedConnections : 0;
 
         /// <summary>
         ///     Is the proxy currently running?
@@ -809,22 +808,9 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Connection retry policy when using connection pool.
         /// </summary>
-        private Policy retryPolicy<T>() where T : Exception
+        private RetryPolicy<T> retryPolicy<T>() where T : Exception
         {
-            return Policy.Handle<T>()
-                .RetryAsync(retries,
-                    onRetryAsync: async (ex, i, context) =>
-                    {
-                        if (context["connection"] != null)
-                        {
-                            //close connection on error
-                            var connection = (TcpServerConnection)context["connection"];
-                            await tcpConnectionFactory.Release(connection, true);
-                            context["connection"] = null;
-                        }
-
-                    });
-
+            return new RetryPolicy<T>(retries, tcpConnectionFactory);
         }
     }
 }

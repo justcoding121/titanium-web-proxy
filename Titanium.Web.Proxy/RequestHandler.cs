@@ -204,30 +204,28 @@ namespace Titanium.Web.Proxy
                                 connection = null;
                             }
 
-                            //for connection pool retry fails until cache is exhausted   
-                            await retryPolicy<ServerConnectionException>().ExecuteAsync(async (context) =>
-                            {
-                                connection = context["connection"] as TcpServerConnection ??
-                                            await getServerConnection(args, false,
+                            //a connection generator task with captured parameters via closure.
+                            Func<Task<TcpServerConnection>> generator = () => getServerConnection(args, false,
                                                 clientConnection.NegotiatedApplicationProtocol,
                                                 false, cancellationToken);
-
-                                context["connection"] = connection;
-
+                            
+                            //for connection pool, retry fails until cache is exhausted.   
+                            await retryPolicy<ServerConnectionException>().ExecuteAsync(async (serverConnection) =>
+                            {
                                 // if upgrading to websocket then relay the request without reading the contents
                                 if (request.UpgradeToWebSocket)
                                 {
                                     await handleWebSocketUpgrade(httpCmd, args, request,
                                         response, clientStream, clientStreamWriter,
-                                        connection, cancellationTokenSource, cancellationToken);
+                                        serverConnection, cancellationTokenSource, cancellationToken);
                                     closeServerConnection = true;
                                     return;
                                 }
 
                                 // construct the web request that we are going to issue on behalf of the client.
-                                await handleHttpSessionRequestInternal(connection, args);
+                                await handleHttpSessionRequestInternal(serverConnection, args);
 
-                            }, new Dictionary<string, object> { { "connection", connection } });
+                            }, generator, ref connection);
 
                             //user requested
                             if (args.WebSession.CloseServerConnection)
