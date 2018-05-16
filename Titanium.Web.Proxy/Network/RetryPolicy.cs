@@ -64,11 +64,10 @@ namespace Titanium.Web.Proxy.Network
                 }, outerContext);
             }
             //all retries failed
-            catch
+            finally
             {
                 //update the original connection to last used connection
                 initialConnection = outerContext["connection"] as TcpServerConnection;
-                throw;
             }
 
             return result;
