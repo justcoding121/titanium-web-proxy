@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended.Network;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -69,6 +70,91 @@ namespace Titanium.Web.Proxy.Network.Tcp
             return cacheKeyBuilder.ToString();
 
         }
+
+        /// <summary>
+        ///     Gets the connection cache key.
+        /// </summary>
+        /// <param name="args">The session event arguments.</param>
+        /// <param name="applicationProtocol"></param>
+        /// <returns></returns>
+        internal async Task<string> GetConnectionCacheKey(ProxyServer server, SessionEventArgsBase args,
+            SslApplicationProtocol applicationProtocol)
+        {
+            List<SslApplicationProtocol> applicationProtocols = null;
+            if (applicationProtocol != default)
+            {
+                applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
+            }
+
+            ExternalProxy customUpStreamProxy = null;
+
+            bool isHttps = args.IsHttps;
+            if (server.GetCustomUpStreamProxyFunc != null)
+            {
+                customUpStreamProxy = await server.GetCustomUpStreamProxyFunc(args);
+            }
+
+            args.CustomUpStreamProxyUsed = customUpStreamProxy;
+
+            return GetConnectionCacheKey(
+                args.WebSession.Request.RequestUri.Host,
+                args.WebSession.Request.RequestUri.Port,
+                isHttps, applicationProtocols,
+                server, args.WebSession.UpStreamEndPoint ?? server.UpStreamEndPoint,
+                customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy));
+        }
+
+
+        /// <summary>
+        ///     Create a server connection.
+        /// </summary>
+        /// <param name="args">The session event arguments.</param>
+        /// <param name="isConnect">Is this a CONNECT request.</param>
+        /// <param name="applicationProtocol"></param>
+        /// <param name="cancellationToken">The cancellation token for this async task.</param>
+        /// <returns></returns>
+        internal Task<TcpServerConnection> GetServerConnection(ProxyServer server, SessionEventArgsBase args, bool isConnect,
+            SslApplicationProtocol applicationProtocol, bool noCache, CancellationToken cancellationToken)
+        {
+            List<SslApplicationProtocol> applicationProtocols = null;
+            if (applicationProtocol != default)
+            {
+                applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
+            }
+
+            return GetServerConnection(server, args, isConnect, applicationProtocols, noCache, cancellationToken);
+        }
+
+        /// <summary>
+        ///     Create a server connection.
+        /// </summary>
+        /// <param name="args">The session event arguments.</param>
+        /// <param name="isConnect">Is this a CONNECT request.</param>
+        /// <param name="applicationProtocols"></param>
+        /// <param name="cancellationToken">The cancellation token for this async task.</param>
+        /// <returns></returns>
+        internal async Task<TcpServerConnection> GetServerConnection(ProxyServer server, SessionEventArgsBase args, bool isConnect,
+            List<SslApplicationProtocol> applicationProtocols, bool noCache, CancellationToken cancellationToken)
+        {
+            ExternalProxy customUpStreamProxy = null;
+
+            bool isHttps = args.IsHttps;
+            if (server.GetCustomUpStreamProxyFunc != null)
+            {
+                customUpStreamProxy = await server.GetCustomUpStreamProxyFunc(args);
+            }
+
+            args.CustomUpStreamProxyUsed = customUpStreamProxy;
+
+            return await GetServerConnection(
+                args.WebSession.Request.RequestUri.Host,
+                args.WebSession.Request.RequestUri.Port,
+                args.WebSession.Request.HttpVersion,
+                isHttps, applicationProtocols, isConnect,
+                server, args.WebSession.UpStreamEndPoint ?? server.UpStreamEndPoint,
+                customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy),
+                noCache, cancellationToken);
+        }
         /// <summary>
         ///     Gets a TCP connection to server from connection pool.
         /// </summary>
@@ -84,7 +170,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="noCache">Not from cache/create new connection.</param>
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
-        internal async Task<TcpServerConnection> GetClient(string remoteHostName, int remotePort,
+        internal async Task<TcpServerConnection> GetServerConnection(string remoteHostName, int remotePort,
             Version httpVersion, bool isHttps, List<SslApplicationProtocol> applicationProtocols, bool isConnect,
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
             bool noCache, CancellationToken cancellationToken)
@@ -116,121 +202,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
             }
 
-            var connection = await createClient(remoteHostName, remotePort, httpVersion, isHttps,
+            var connection = await createServerConnection(remoteHostName, remotePort, httpVersion, isHttps,
                 applicationProtocols, isConnect, proxyServer, upStreamEndPoint, externalProxy, cancellationToken);
 
             connection.CacheKey = cacheKey;
 
             return connection;
-        }
-
-        /// <summary>
-        ///     Release connection back to cache.
-        /// </summary>
-        /// <param name="connection">The Tcp server connection to return.</param>
-        /// <param name="close">Should we just close the connection instead of reusing?</param>
-        internal async Task Release(TcpServerConnection connection, bool close = false)
-        {
-            if (connection == null)
-            {
-                return;
-            }
-
-            if (close || connection.IsWinAuthenticated || !server.EnableConnectionPool)
-            {
-                disposalBag.Add(connection);
-                return;
-            }
-
-            connection.LastAccess = DateTime.Now;
-
-            try
-            {
-                await @lock.WaitAsync();
-
-                while (true)
-                {
-                    if (cache.TryGetValue(connection.CacheKey, out var existingConnections))
-                    {
-                        while (existingConnections.Count >= server.MaxCachedConnections)
-                        {
-                            if (existingConnections.TryDequeue(out var staleConnection))
-                            {
-                                disposalBag.Add(staleConnection);
-                            }
-                        }
-
-                        existingConnections.Enqueue(connection);
-                        break;
-                    }
-
-                    if (cache.TryAdd(connection.CacheKey,
-                        new ConcurrentQueue<TcpServerConnection>(new[] { connection })))
-                    {
-                        break;
-                    }
-                }
-
-            }
-            finally
-            {
-                @lock.Release();
-            }
-        }
-
-        private async Task clearOutdatedConnections()
-        {
-            while (runCleanUpTask)
-            {
-                foreach (var item in cache)
-                {
-                    var queue = item.Value;
-
-                    while (queue.Count > 0)
-                    {
-                        if (queue.TryDequeue(out var connection))
-                        {
-                            var cutOff = DateTime.Now.AddSeconds(-1 * server.ConnectionTimeOutSeconds);
-                            if (!server.EnableConnectionPool
-                                || connection.LastAccess < cutOff)
-                            {
-                                disposalBag.Add(connection);
-                                continue;
-                            }
-
-                            queue.Enqueue(connection);
-                            break;
-                        }
-                    }
-                }
-
-                try
-                {
-                    await @lock.WaitAsync();
-
-                    //clear empty queues
-                    var emptyKeys = cache.Where(x => x.Value.Count == 0).Select(x => x.Key).ToList();
-                    foreach (string key in emptyKeys)
-                    {
-                        cache.TryRemove(key, out var _);
-                    }
-                }
-                finally
-                {
-                    @lock.Release();
-                }
-
-                while (!disposalBag.IsEmpty)
-                {
-                    if (disposalBag.TryTake(out var connection))
-                    {
-                        connection?.Dispose();
-                    }
-                }
-
-                //cleanup every 3 seconds by default
-                await Task.Delay(1000 * 3);
-            }
         }
 
         /// <summary>
@@ -247,7 +224,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="externalProxy">The external proxy to make request via.</param>
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
-        private async Task<TcpServerConnection> createClient(string remoteHostName, int remotePort,
+        private async Task<TcpServerConnection> createServerConnection(string remoteHostName, int remotePort,
             Version httpVersion, bool isHttps, List<SslApplicationProtocol> applicationProtocols, bool isConnect,
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
             CancellationToken cancellationToken)
@@ -370,6 +347,117 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 Version = httpVersion
             };
         }
+
+
+        /// <summary>
+        ///     Release connection back to cache.
+        /// </summary>
+        /// <param name="connection">The Tcp server connection to return.</param>
+        /// <param name="close">Should we just close the connection instead of reusing?</param>
+        internal async Task Release(TcpServerConnection connection, bool close = false)
+        {
+            if (connection == null)
+            {
+                return;
+            }
+
+            if (close || connection.IsWinAuthenticated || !server.EnableConnectionPool)
+            {
+                disposalBag.Add(connection);
+                return;
+            }
+
+            connection.LastAccess = DateTime.Now;
+
+            try
+            {
+                await @lock.WaitAsync();
+
+                while (true)
+                {
+                    if (cache.TryGetValue(connection.CacheKey, out var existingConnections))
+                    {
+                        while (existingConnections.Count >= server.MaxCachedConnections)
+                        {
+                            if (existingConnections.TryDequeue(out var staleConnection))
+                            {
+                                disposalBag.Add(staleConnection);
+                            }
+                        }
+
+                        existingConnections.Enqueue(connection);
+                        break;
+                    }
+
+                    if (cache.TryAdd(connection.CacheKey,
+                        new ConcurrentQueue<TcpServerConnection>(new[] { connection })))
+                    {
+                        break;
+                    }
+                }
+
+            }
+            finally
+            {
+                @lock.Release();
+            }
+        }
+
+        private async Task clearOutdatedConnections()
+        {
+            while (runCleanUpTask)
+            {
+                foreach (var item in cache)
+                {
+                    var queue = item.Value;
+
+                    while (queue.Count > 0)
+                    {
+                        if (queue.TryDequeue(out var connection))
+                        {
+                            var cutOff = DateTime.Now.AddSeconds(-1 * server.ConnectionTimeOutSeconds);
+                            if (!server.EnableConnectionPool
+                                || connection.LastAccess < cutOff)
+                            {
+                                disposalBag.Add(connection);
+                                continue;
+                            }
+
+                            queue.Enqueue(connection);
+                            break;
+                        }
+                    }
+                }
+
+                try
+                {
+                    await @lock.WaitAsync();
+
+                    //clear empty queues
+                    var emptyKeys = cache.Where(x => x.Value.Count == 0).Select(x => x.Key).ToList();
+                    foreach (string key in emptyKeys)
+                    {
+                        cache.TryRemove(key, out var _);
+                    }
+                }
+                finally
+                {
+                    @lock.Release();
+                }
+
+                while (!disposalBag.IsEmpty)
+                {
+                    if (disposalBag.TryTake(out var connection))
+                    {
+                        connection?.Dispose();
+                    }
+                }
+
+                //cleanup every 3 seconds by default
+                await Task.Delay(1000 * 3);
+            }
+        }
+
         /// <summary>
         ///     Check if a TcpClient is good to be used.
         ///     This only checks if send is working so local socket is still connected.
