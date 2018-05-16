@@ -196,7 +196,7 @@ namespace Titanium.Web.Proxy
                             // only gets hit when connection pool is disabled.
                             // or when prefetch task has a unexpectedly different connection.
                             if (connection != null
-                                && (await getConnectionCacheKey(args,
+                                && (await tcpConnectionFactory.GetConnectionCacheKey(this, args,
                                     clientConnection.NegotiatedApplicationProtocol)
                                                 != connection.CacheKey))
                             {
@@ -205,9 +205,10 @@ namespace Titanium.Web.Proxy
                             }
 
                             //a connection generator task with captured parameters via closure.
-                            Func<Task<TcpServerConnection>> generator = () => getServerConnection(args, false,
-                                                clientConnection.NegotiatedApplicationProtocol,
-                                                false, cancellationToken);
+                            Func<Task<TcpServerConnection>> generator = () => 
+                                                tcpConnectionFactory.GetServerConnection(this, args, false,
+                                                        clientConnection.NegotiatedApplicationProtocol,
+                                                        false, cancellationToken);
                             
                             //for connection pool, retry fails until cache is exhausted.   
                             await retryPolicy<ServerConnectionException>().ExecuteAsync(async (serverConnection) =>
@@ -374,62 +375,6 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///     Handle upgrade to websocket
-        /// </summary>
-        private async Task handleWebSocketUpgrade(string httpCmd,
-            SessionEventArgs args, Request request, Response response,
-            CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
-            TcpServerConnection serverConnection,
-            CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
-        {
-            // prepare the prefix content
-            await serverConnection.StreamWriter.WriteLineAsync(httpCmd, cancellationToken);
-            await serverConnection.StreamWriter.WriteHeadersAsync(request.Headers,
-                cancellationToken: cancellationToken);
-
-            string httpStatus;
-            try
-            {
-                httpStatus = await serverConnection.Stream.ReadLineAsync(cancellationToken);
-                if (httpStatus == null)
-                {
-                    throw new ServerConnectionException("Server connection was closed.");
-                }
-            }
-            catch (Exception e) when (!(e is ServerConnectionException))
-            {
-                throw new ServerConnectionException("Server connection was closed.", e);
-            }
-
-            Response.ParseResponseLine(httpStatus, out var responseVersion,
-                out int responseStatusCode,
-                out string responseStatusDescription);
-            response.HttpVersion = responseVersion;
-            response.StatusCode = responseStatusCode;
-            response.StatusDescription = responseStatusDescription;
-
-            await HeaderParser.ReadHeaders(serverConnection.Stream, response.Headers,
-                cancellationToken);
-
-            if (!args.IsTransparent)
-            {
-                await clientStreamWriter.WriteResponseAsync(response,
-                    cancellationToken: cancellationToken);
-            }
-
-            // If user requested call back then do it
-            if (!args.WebSession.Response.Locked)
-            {
-                await invokeBeforeResponse(args);
-            }
-
-            await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool, BufferSize,
-                (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); },
-                (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); },
-                cancellationTokenSource, ExceptionFunc);
-        }
-
-        /// <summary>
         ///     Prepare the request headers so that we can avoid encodings not parsable by this proxy
         /// </summary>
         private void prepareRequestHeaders(HeaderCollection requestHeaders)
@@ -453,92 +398,6 @@ namespace Titanium.Web.Proxy
             }
 
             requestHeaders.FixProxyHeaders();
-        }
-
-
-        /// <summary>
-        ///     Gets the connection cache key.
-        /// </summary>
-        /// <param name="args">The session event arguments.</param>
-        /// <param name="applicationProtocol"></param>
-        /// <returns></returns>
-        private async Task<string> getConnectionCacheKey(SessionEventArgsBase args,
-            SslApplicationProtocol applicationProtocol)
-        {
-            List<SslApplicationProtocol> applicationProtocols = null;
-            if (applicationProtocol != default)
-            {
-                applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
-            }
-
-            ExternalProxy customUpStreamProxy = null;
-
-            bool isHttps = args.IsHttps;
-            if (GetCustomUpStreamProxyFunc != null)
-            {
-                customUpStreamProxy = await GetCustomUpStreamProxyFunc(args);
-            }
-
-            args.CustomUpStreamProxyUsed = customUpStreamProxy;
-
-            return tcpConnectionFactory.GetConnectionCacheKey(
-                args.WebSession.Request.RequestUri.Host,
-                args.WebSession.Request.RequestUri.Port,
-                isHttps, applicationProtocols,
-                this, args.WebSession.UpStreamEndPoint ?? UpStreamEndPoint,
-                customUpStreamProxy ?? (isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy));
-        }
-
-
-        /// <summary>
-        ///     Create a server connection.
-        /// </summary>
-        /// <param name="args">The session event arguments.</param>
-        /// <param name="isConnect">Is this a CONNECT request.</param>
-        /// <param name="applicationProtocol"></param>
-        /// <param name="cancellationToken">The cancellation token for this async task.</param>
-        /// <returns></returns>
-        private Task<TcpServerConnection> getServerConnection(SessionEventArgsBase args, bool isConnect,
-            SslApplicationProtocol applicationProtocol, bool noCache, CancellationToken cancellationToken)
-        {
-            List<SslApplicationProtocol> applicationProtocols = null;
-            if (applicationProtocol != default)
-            {
-                applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
-            }
-
-            return getServerConnection(args, isConnect, applicationProtocols, noCache, cancellationToken);
-        }
-
-        /// <summary>
-        ///     Create a server connection.
-        /// </summary>
-        /// <param name="args">The session event arguments.</param>
-        /// <param name="isConnect">Is this a CONNECT request.</param>
-        /// <param name="applicationProtocols"></param>
-        /// <param name="cancellationToken">The cancellation token for this async task.</param>
-        /// <returns></returns>
-        private async Task<TcpServerConnection> getServerConnection(SessionEventArgsBase args, bool isConnect,
-            List<SslApplicationProtocol> applicationProtocols, bool noCache, CancellationToken cancellationToken)
-        {
-            ExternalProxy customUpStreamProxy = null;
-
-            bool isHttps = args.IsHttps;
-            if (GetCustomUpStreamProxyFunc != null)
-            {
-                customUpStreamProxy = await GetCustomUpStreamProxyFunc(args);
-            }
-
-            args.CustomUpStreamProxyUsed = customUpStreamProxy;
-
-            return await tcpConnectionFactory.GetClient(
-                args.WebSession.Request.RequestUri.Host,
-                args.WebSession.Request.RequestUri.Port,
-                args.WebSession.Request.HttpVersion,
-                isHttps, applicationProtocols, isConnect,
-                this, args.WebSession.UpStreamEndPoint ?? UpStreamEndPoint,
-                customUpStreamProxy ?? (isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy),
-                noCache, cancellationToken);
         }
 
         /// <summary>

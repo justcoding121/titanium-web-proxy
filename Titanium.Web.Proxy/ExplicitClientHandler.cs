@@ -140,7 +140,7 @@ namespace Titanium.Web.Proxy
                         {
                             // test server HTTP/2 support
                             // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
-                            var connection = await getServerConnection(connectArgs, true,
+                            var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs, true,
                                 SslExtensions.Http2ProtocolAsList, true, cancellationToken);
 
                             http2Supported = connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
@@ -153,7 +153,7 @@ namespace Titanium.Web.Proxy
 
                         //don't pass cancellation token here
                         //it could cause floating server connections when client exits
-                        prefetchConnectionTask = getServerConnection(connectArgs, true,
+                        prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(this, connectArgs, true,
                                 null, false, CancellationToken.None);
 
                         try
@@ -214,7 +214,7 @@ namespace Titanium.Web.Proxy
                         // create new connection to server.
                         // If we detected that client tunnel CONNECTs without SSL by checking for empty client hello then 
                         // this connection should not be HTTPS.
-                        var connection = await getServerConnection(connectArgs,
+                        var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs,
                             true, SslExtensions.Http2ProtocolAsList, true, cancellationToken);
 
                         try
@@ -284,7 +284,7 @@ namespace Titanium.Web.Proxy
                             throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
                         }
 
-                        var connection = await getServerConnection(connectArgs, true,
+                        var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs, true,
                                                         SslExtensions.Http2ProtocolAsList, true,
                                                         cancellationToken);
                         try
