@@ -2622,6 +2622,19 @@ references:
   commentId: E:Titanium.Web.Proxy.ProxyServer.AfterResponse
   fullName: Titanium.Web.Proxy.ProxyServer.AfterResponse
   nameWithType: ProxyServer.AfterResponse
+- uid: Titanium.Web.Proxy.ProxyServer.AuthenticateSchemeFunc
+  name: AuthenticateSchemeFunc
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_AuthenticateSchemeFunc
+  commentId: P:Titanium.Web.Proxy.ProxyServer.AuthenticateSchemeFunc
+  fullName: Titanium.Web.Proxy.ProxyServer.AuthenticateSchemeFunc
+  nameWithType: ProxyServer.AuthenticateSchemeFunc
+- uid: Titanium.Web.Proxy.ProxyServer.AuthenticateSchemeFunc*
+  name: AuthenticateSchemeFunc
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_AuthenticateSchemeFunc_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.AuthenticateSchemeFunc
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.AuthenticateSchemeFunc
+  nameWithType: ProxyServer.AuthenticateSchemeFunc
 - uid: Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc
   name: AuthenticateUserFunc
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_AuthenticateUserFunc
@@ -3047,6 +3060,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.Stop
   nameWithType: ProxyServer.Stop
+- uid: Titanium.Web.Proxy.ProxyServer.SupportedAuthenticationSchemes
+  name: SupportedAuthenticationSchemes
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SupportedAuthenticationSchemes
+  commentId: P:Titanium.Web.Proxy.ProxyServer.SupportedAuthenticationSchemes
+  fullName: Titanium.Web.Proxy.ProxyServer.SupportedAuthenticationSchemes
+  nameWithType: ProxyServer.SupportedAuthenticationSchemes
+- uid: Titanium.Web.Proxy.ProxyServer.SupportedAuthenticationSchemes*
+  name: SupportedAuthenticationSchemes
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SupportedAuthenticationSchemes_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.SupportedAuthenticationSchemes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.SupportedAuthenticationSchemes
+  nameWithType: ProxyServer.SupportedAuthenticationSchemes
 - uid: Titanium.Web.Proxy.ProxyServer.SupportedSslProtocols
   name: SupportedSslProtocols
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SupportedSslProtocols
