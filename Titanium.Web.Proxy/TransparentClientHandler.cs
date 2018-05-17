@@ -164,8 +164,7 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                if (!calledRequestHandler
-                   && prefetchConnectionTask != null)
+                if (!calledRequestHandler)
                 {
                     await tcpConnectionFactory.Release(prefetchConnectionTask, closeServerConnection);
                 }
