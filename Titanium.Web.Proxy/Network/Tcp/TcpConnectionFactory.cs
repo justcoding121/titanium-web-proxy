@@ -403,6 +403,23 @@ namespace Titanium.Web.Proxy.Network.Tcp
             }
         }
 
+        internal async Task Release(Task<TcpServerConnection> connectionCreateTask, bool closeServerConnection)
+        {
+            if (connectionCreateTask != null)
+            {
+                TcpServerConnection connection = null;
+                try
+                {
+                    connection = await connectionCreateTask;
+                }
+                catch { }
+                finally
+                {
+                    await Release(connection, closeServerConnection);
+                }
+            }
+        }
+
         private async Task clearOutdatedConnections()
         {
             while (runCleanUpTask)
