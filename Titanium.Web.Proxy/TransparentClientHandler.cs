@@ -66,8 +66,9 @@ namespace Titanium.Web.Proxy
                         //don't pass cancellation token here
                         //it could cause floating server connections when client exits
                         prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(httpsHostName, endPoint.Port,
-                                null, true, null, false, this,
-                                UpStreamEndPoint, UpStreamHttpsProxy, false, CancellationToken.None);
+                                httpVersion: null, isHttps: true, applicationProtocols: null, isConnect: false,
+                                proxyServer: this, upStreamEndPoint: UpStreamEndPoint, externalProxy: UpStreamHttpsProxy,
+                                noCache: false, cancellationToken: CancellationToken.None);
 
                         SslStream sslStream = null;
 
@@ -97,8 +98,9 @@ namespace Titanium.Web.Proxy
                     else
                     {
                         var connection = await tcpConnectionFactory.GetServerConnection(httpsHostName, endPoint.Port,
-                                    null, false, null,
-                                    true, this, UpStreamEndPoint, UpStreamHttpsProxy, true, cancellationToken);
+                                    httpVersion: null, isHttps: false, applicationProtocols: null,
+                                    isConnect: true, proxyServer: this, upStreamEndPoint: UpStreamEndPoint,
+                                    externalProxy: UpStreamHttpsProxy, noCache: true, cancellationToken: cancellationToken);
 
                         try
                         {

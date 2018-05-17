@@ -206,9 +206,9 @@ namespace Titanium.Web.Proxy
 
                             //a connection generator task with captured parameters via closure.
                             Func<Task<TcpServerConnection>> generator = () => 
-                                                tcpConnectionFactory.GetServerConnection(this, args, false,
-                                                        clientConnection.NegotiatedApplicationProtocol,
-                                                        false, cancellationToken);
+                                                tcpConnectionFactory.GetServerConnection(this, args, isConnect: false,
+                                                        applicationProtocol:clientConnection.NegotiatedApplicationProtocol,
+                                                        noCache: false, cancellationToken: cancellationToken);
                             
                             //for connection pool, retry fails until cache is exhausted.   
                             await retryPolicy<ServerConnectionException>().ExecuteAsync(async (serverConnection) =>
