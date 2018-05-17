@@ -209,9 +209,9 @@ namespace Titanium.Web.Proxy
                                                 tcpConnectionFactory.GetServerConnection(this, args, isConnect: false,
                                                         applicationProtocol:clientConnection.NegotiatedApplicationProtocol,
                                                         noCache: false, cancellationToken: cancellationToken);
-                            
+
                             //for connection pool, retry fails until cache is exhausted.   
-                            await retryPolicy<ServerConnectionException>().ExecuteAsync(async (serverConnection) =>
+                            var result = await retryPolicy<ServerConnectionException>().ExecuteAsync(async (serverConnection) =>
                             {
                                 // if upgrading to websocket then relay the request without reading the contents
                                 if (request.UpgradeToWebSocket)
@@ -226,7 +226,16 @@ namespace Titanium.Web.Proxy
                                 // construct the web request that we are going to issue on behalf of the client.
                                 await handleHttpSessionRequestInternal(serverConnection, args);
 
-                            }, generator, ref connection);
+                            }, generator, connection);
+
+                            //update connection to latest used
+                            connection = result.LatestConnection;
+
+                            //throw if exception happened
+                            if(!result.IsSuccess)
+                            {
+                                throw result.Exception;
+                            }
 
                             //user requested
                             if (args.WebSession.CloseServerConnection)
