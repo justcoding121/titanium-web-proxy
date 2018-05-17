@@ -271,6 +271,18 @@ namespace Titanium.Web.Proxy
         public Func<string, string, Task<bool>> AuthenticateUserFunc { get; set; }
 
         /// <summary>
+        /// A pluggable callback to authenticate clients by scheme instead of requiring basic auth.
+        /// Parameters are current working session, schemeType, and token as provided by a calling client.
+        /// Should return success for successful authentication, continuation if the package requests, or failure.
+        /// </summary>
+        public Func<SessionEventArgsBase, string, string, Task<ProxyAuthenticationContext>> AuthenticateSchemeFunc { get; set; }
+
+        /// <summary>
+        /// A collection of scheme types, e.g. basic, NTLM, Kerberos, Negotiate, to return if authentication is required.
+        /// </summary>
+        public IEnumerable<string> SupportedAuthenticationSchemes { get; set; } = new string[0];
+
+        /// <summary>
         ///     Dispose the Proxy instance.
         /// </summary>
         public void Dispose()
