@@ -424,54 +424,60 @@ namespace Titanium.Web.Proxy.Network.Tcp
         {
             while (runCleanUpTask)
             {
-                foreach (var item in cache)
-                {
-                    var queue = item.Value;
-
-                    while (queue.Count > 0)
-                    {
-                        if (queue.TryDequeue(out var connection))
-                        {
-                            var cutOff = DateTime.Now.AddSeconds(-1 * server.ConnectionTimeOutSeconds);
-                            if (!server.EnableConnectionPool
-                                || connection.LastAccess < cutOff)
-                            {
-                                disposalBag.Add(connection);
-                                continue;
-                            }
-
-                            queue.Enqueue(connection);
-                            break;
-                        }
-                    }
-                }
-
                 try
                 {
-                    await @lock.WaitAsync();
-
-                    //clear empty queues
-                    var emptyKeys = cache.Where(x => x.Value.Count == 0).Select(x => x.Key).ToList();
-                    foreach (string key in emptyKeys)
+                    foreach (var item in cache)
                     {
-                        cache.TryRemove(key, out var _);
+                        var queue = item.Value;
+
+                        while (queue.Count > 0)
+                        {
+                            if (queue.TryDequeue(out var connection))
+                            {
+                                var cutOff = DateTime.Now.AddSeconds(-1 * server.ConnectionTimeOutSeconds);
+                                if (!server.EnableConnectionPool
+                                    || connection.LastAccess < cutOff)
+                                {
+                                    disposalBag.Add(connection);
+                                    continue;
+                                }
+
+                                queue.Enqueue(connection);
+                                break;
+                            }
+                        }
+                    }
+
+                    try
+                    {
+                        await @lock.WaitAsync();
+
+                        //clear empty queues
+                        var emptyKeys = cache.Where(x => x.Value.Count == 0).Select(x => x.Key).ToList();
+                        foreach (string key in emptyKeys)
+                        {
+                            cache.TryRemove(key, out var _);
+                        }
+                    }
+                    finally
+                    {
+                        @lock.Release();
+                    }
+
+                    while (!disposalBag.IsEmpty)
+                    {
+                        if (disposalBag.TryTake(out var connection))
+                        {
+                            connection?.Dispose();
+                        }
                     }
                 }
                 finally
                 {
-                    @lock.Release();
+                    //cleanup every 3 seconds by default
+                    await Task.Delay(1000 * 3);
                 }
-
-                while (!disposalBag.IsEmpty)
-                {
-                    if (disposalBag.TryTake(out var connection))
-                    {
-                        connection?.Dispose();
-                    }
-                }
-
-                //cleanup every 3 seconds by default
-                await Task.Delay(1000 * 3);
+              
             }
         }
 
