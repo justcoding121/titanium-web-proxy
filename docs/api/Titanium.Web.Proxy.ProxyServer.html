@@ -10,7 +10,7 @@
     <meta name="viewport" content="width=device-width">
     <meta name="title" content="Class ProxyServer
    | Titanium Web Proxy ">
-    <meta name="generator" content="docfx 2.35.4.0">
+    <meta name="generator" content="docfx 2.36.0.0">
     
     <link rel="shortcut icon" href="../favicon.ico">
     <link rel="stylesheet" href="../styles/docfx.vendor.css">
@@ -228,62 +228,6 @@ prompting for UAC if required?</p>
   </table>
   <h3 id="properties">Properties
   </h3>
-  
-  
-  <a id="Titanium_Web_Proxy_ProxyServer_AuthenticateSchemeFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.AuthenticateSchemeFunc*"></a>
-  <h4 id="Titanium_Web_Proxy_ProxyServer_AuthenticateSchemeFunc" data-uid="Titanium.Web.Proxy.ProxyServer.AuthenticateSchemeFunc">AuthenticateSchemeFunc</h4>
-  <div class="markdown level1 summary"><p>A pluggable callback to authenticate clients by scheme instead of requiring basic auth.
-Parameters are current working session, schemeType, and token as provided by a calling client.
-Should return success for successful authentication, continuation if the package requests, or failure.</p>
-</div>
-  <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
-  <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public Func&lt;SessionEventArgsBase, string, string, Task&lt;ProxyAuthenticationContext&gt;&gt; AuthenticateSchemeFunc { get; set; }</code></pre>
-  </div>
-  <h5 class="propertyValue">Property Value</h5>
-  <table class="table table-bordered table-striped table-condensed">
-    <thead>
-      <tr>
-        <th>Type</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-4">Func</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<span class="xref">ProxyAuthenticationContext</span>&gt;&gt;</td>
-        <td></td>
-      </tr>
-    </tbody>
-  </table>
-  
-  
-  <a id="Titanium_Web_Proxy_ProxyServer_AuthenticateUserFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc*"></a>
-  <h4 id="Titanium_Web_Proxy_ProxyServer_AuthenticateUserFunc" data-uid="Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc">AuthenticateUserFunc</h4>
-  <div class="markdown level1 summary"><p>A callback to authenticate clients.
-Parameters are username and password as provided by client.
-Should return true for successful authentication.</p>
-</div>
-  <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
-  <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public Func&lt;string, string, Task&lt;bool&gt;&gt; AuthenticateUserFunc { get; set; }</code></pre>
-  </div>
-  <h5 class="propertyValue">Property Value</h5>
-  <table class="table table-bordered table-striped table-condensed">
-    <thead>
-      <tr>
-        <th>Type</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-3">Func</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a>&gt;&gt;</td>
-        <td></td>
-      </tr>
-    </tbody>
-  </table>
   
   
   <a id="Titanium_Web_Proxy_ProxyServer_BufferPool_" data-uid="Titanium.Web.Proxy.ProxyServer.BufferPool*"></a>
@@ -641,6 +585,87 @@ Default value is 2.</p>
   </table>
   
   
+  <a id="Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationRealm_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationRealm*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationRealm" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationRealm">ProxyAuthenticationRealm</h4>
+  <div class="markdown level1 summary"><p>Realm used during Proxy Basic Authentication.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public string ProxyAuthenticationRealm { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationSchemes_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationSchemes" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes">ProxyAuthenticationSchemes</h4>
+  <div class="markdown level1 summary"><p>A collection of scheme types, e.g. basic, NTLM, Kerberos, Negotiate, to return if scheme authentication is required.
+Works in relation with ProxySchemeAuthenticateFunc.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public IEnumerable&lt;string&gt; ProxyAuthenticationSchemes { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.ienumerable-1">IEnumerable</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ProxyBasicAuthenticateFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyBasicAuthenticateFunc" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc">ProxyBasicAuthenticateFunc</h4>
+  <div class="markdown level1 summary"><p>A callback to authenticate proxy clients via basic authentication.
+Parameters are username and password as provided by client.
+Should return true for successful authentication.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Func&lt;string, string, Task&lt;bool&gt;&gt; ProxyBasicAuthenticateFunc { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-3">Func</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a>&gt;&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
   <a id="Titanium_Web_Proxy_ProxyServer_ProxyEndPoints_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyEndPoints*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyEndPoints" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyEndPoints">ProxyEndPoints</h4>
   <div class="markdown level1 summary"><p>A list of IpAddress and port this proxy is listening to.</p>
@@ -661,32 +686,6 @@ Default value is 2.</p>
     <tbody>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.list-1">List</a>&lt;<a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html">ProxyEndPoint</a>&gt;</td>
-        <td></td>
-      </tr>
-    </tbody>
-  </table>
-  
-  
-  <a id="Titanium_Web_Proxy_ProxyServer_ProxyRealm_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRealm*"></a>
-  <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyRealm" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRealm">ProxyRealm</h4>
-  <div class="markdown level1 summary"><p>Realm used during Proxy Basic Authentication.</p>
-</div>
-  <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
-  <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public string ProxyRealm { get; set; }</code></pre>
-  </div>
-  <h5 class="propertyValue">Property Value</h5>
-  <table class="table table-bordered table-striped table-condensed">
-    <thead>
-      <tr>
-        <th>Type</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
         <td></td>
       </tr>
     </tbody>
@@ -719,6 +718,34 @@ Default value is 2.</p>
   </table>
   
   
+  <a id="Titanium_Web_Proxy_ProxyServer_ProxySchemeAuthenticateFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ProxySchemeAuthenticateFunc" data-uid="Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc">ProxySchemeAuthenticateFunc</h4>
+  <div class="markdown level1 summary"><p>A pluggable callback to authenticate clients by scheme instead of requiring basic authentication through ProxyBasicAuthenticateFunc.
+Parameters are current working session, schemeType, and token as provided by a calling client.
+Should return success for successful authentication, continuation if the package requests, or failure.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Func&lt;SessionEventArgsBase, string, string, Task&lt;ProxyAuthenticationContext&gt;&gt; ProxySchemeAuthenticateFunc { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-4">Func</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<span class="xref">ProxyAuthenticationContext</span>&gt;&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
   <a id="Titanium_Web_Proxy_ProxyServer_ServerConnectionCount_" data-uid="Titanium.Web.Proxy.ProxyServer.ServerConnectionCount*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ServerConnectionCount" data-uid="Titanium.Web.Proxy.ProxyServer.ServerConnectionCount">ServerConnectionCount</h4>
   <div class="markdown level1 summary"><p>Total number of active server connections.</p>
@@ -739,32 +766,6 @@ Default value is 2.</p>
     <tbody>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a></td>
-        <td></td>
-      </tr>
-    </tbody>
-  </table>
-  
-  
-  <a id="Titanium_Web_Proxy_ProxyServer_SupportedAuthenticationSchemes_" data-uid="Titanium.Web.Proxy.ProxyServer.SupportedAuthenticationSchemes*"></a>
-  <h4 id="Titanium_Web_Proxy_ProxyServer_SupportedAuthenticationSchemes" data-uid="Titanium.Web.Proxy.ProxyServer.SupportedAuthenticationSchemes">SupportedAuthenticationSchemes</h4>
-  <div class="markdown level1 summary"><p>A collection of scheme types, e.g. basic, NTLM, Kerberos, Negotiate, to return if authentication is required.</p>
-</div>
-  <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
-  <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public IEnumerable&lt;string&gt; SupportedAuthenticationSchemes { get; set; }</code></pre>
-  </div>
-  <h5 class="propertyValue">Property Value</h5>
-  <table class="table table-bordered table-striped table-condensed">
-    <thead>
-      <tr>
-        <th>Type</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.ienumerable-1">IEnumerable</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>&gt;</td>
         <td></td>
       </tr>
     </tbody>
