@@ -259,7 +259,9 @@ namespace Titanium.Web.Proxy
                             //Get/release server connection for each HTTP session instead of per client connection.
                             //This will be more efficient especially when client is idly holding server connection 
                             //between sessions without using it.
-                            if (EnableConnectionPool)
+                            //Do not release authenticated connections for performance reasons.
+                            //Otherwise it will keep authenticating per session.
+                            if (EnableConnectionPool && !connection.IsWinAuthenticated)
                             {
                                 await tcpConnectionFactory.Release(connection);
                                 connection = null;
