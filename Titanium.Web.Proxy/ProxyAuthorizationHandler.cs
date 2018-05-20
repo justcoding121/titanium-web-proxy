@@ -21,7 +21,7 @@ namespace Titanium.Web.Proxy
         private async Task<bool> checkAuthorization(SessionEventArgsBase session)
         {
             // If we are not authorizing clients return true
-            if (AuthenticateUserFunc == null && AuthenticateSchemeFunc == null)
+            if (ProxyBasicAuthenticateFunc == null && ProxySchemeAuthenticateFunc == null)
             {
                 return true;
             }
@@ -46,14 +46,14 @@ namespace Titanium.Web.Proxy
                     return false;
                 }
 
-                if (AuthenticateUserFunc != null)
+                if (ProxyBasicAuthenticateFunc != null)
                 {
                     return await authenticateUserBasic(session, headerValueParts);
                 }
 
-                if (AuthenticateSchemeFunc != null)
+                if (ProxySchemeAuthenticateFunc != null)
                 {
-                    var result = await AuthenticateSchemeFunc(session, headerValueParts[0], headerValueParts[1]);
+                    var result = await ProxySchemeAuthenticateFunc(session, headerValueParts[0], headerValueParts[1]);
 
                     if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
                     {
@@ -98,7 +98,7 @@ namespace Titanium.Web.Proxy
 
             string username = decoded.Substring(0, colonIndex);
             string password = decoded.Substring(colonIndex + 1);
-            bool authenticated = await AuthenticateUserFunc(username, password);
+            bool authenticated = await ProxyBasicAuthenticateFunc(username, password);
             if (!authenticated)
             {
                 session.WebSession.Response = createAuthentication407Response("Proxy Authentication Invalid");
@@ -126,14 +126,14 @@ namespace Titanium.Web.Proxy
                 return createContinuationResponse(response, continuation);
             }
 
-            if (AuthenticateUserFunc != null)
+            if (ProxyBasicAuthenticateFunc != null)
             {
-                response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, $"Basic realm=\"{ProxyRealm}\"");
+                response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, $"Basic realm=\"{ProxyAuthenticationRealm}\"");
             }
 
-            if (AuthenticateSchemeFunc != null)
+            if (ProxySchemeAuthenticateFunc != null)
             {
-                foreach (var scheme in SupportedAuthenticationSchemes)
+                foreach (var scheme in ProxyAuthenticationSchemes)
                 {
                     response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, scheme);
                 }

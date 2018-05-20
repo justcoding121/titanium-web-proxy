@@ -199,7 +199,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Realm used during Proxy Basic Authentication.
         /// </summary>
-        public string ProxyRealm { get; set; } = "TitaniumProxy";
+        public string ProxyAuthenticationRealm { get; set; } = "TitaniumProxy";
 
         /// <summary>
         ///     List of supported Ssl versions.
@@ -263,23 +263,24 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///     A callback to authenticate clients.
+        ///     A callback to authenticate proxy clients via basic authentication.
         ///     Parameters are username and password as provided by client.
         ///     Should return true for successful authentication.
         /// </summary>
-        public Func<string, string, Task<bool>> AuthenticateUserFunc { get; set; }
+        public Func<string, string, Task<bool>> ProxyBasicAuthenticateFunc { get; set; }
 
         /// <summary>
-        /// A pluggable callback to authenticate clients by scheme instead of requiring basic auth.
-        /// Parameters are current working session, schemeType, and token as provided by a calling client.
-        /// Should return success for successful authentication, continuation if the package requests, or failure.
+        ///     A pluggable callback to authenticate clients by scheme instead of requiring basic authentication through ProxyBasicAuthenticateFunc.
+        ///     Parameters are current working session, schemeType, and token as provided by a calling client.
+        ///     Should return success for successful authentication, continuation if the package requests, or failure.
         /// </summary>
-        public Func<SessionEventArgsBase, string, string, Task<ProxyAuthenticationContext>> AuthenticateSchemeFunc { get; set; }
+        public Func<SessionEventArgsBase, string, string, Task<ProxyAuthenticationContext>> ProxySchemeAuthenticateFunc { get; set; }
 
         /// <summary>
-        /// A collection of scheme types, e.g. basic, NTLM, Kerberos, Negotiate, to return if authentication is required.
+        ///     A collection of scheme types, e.g. basic, NTLM, Kerberos, Negotiate, to return if scheme authentication is required.
+        ///     Works in relation with ProxySchemeAuthenticateFunc.
         /// </summary>
-        public IEnumerable<string> SupportedAuthenticationSchemes { get; set; } = new string[0];
+        public IEnumerable<string> ProxyAuthenticationSchemes { get; set; } = new string[0];
 
         /// <summary>
         ///     Dispose the Proxy instance.
