@@ -1,6 +1,5 @@
 ﻿using Polly;
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Network.Tcp;
 
@@ -14,10 +13,14 @@ namespace Titanium.Web.Proxy.Network
         private TcpServerConnection currentConnection;
         private Exception exception;
 
+        private Policy policy;
+
         internal RetryPolicy(int retries, TcpConnectionFactory tcpConnectionFactory)
         {
             this.retries = retries;
             this.tcpConnectionFactory = tcpConnectionFactory;
+
+            policy = getRetryPolicy();
         }
 
         /// <summary>
@@ -31,11 +34,13 @@ namespace Titanium.Web.Proxy.Network
             Func<Task<TcpServerConnection>> generator, TcpServerConnection initialConnection)
         {
             currentConnection = initialConnection;
+            exception = null;
+
             try
             {
                 //retry on error with polly policy
                 //do not use polly context to store connection; it does not save states b/w attempts
-                await getRetryPolicy().ExecuteAsync(async () =>
+                await policy.ExecuteAsync(async () =>
                 {
                     //setup connection
                     currentConnection = currentConnection as TcpServerConnection ??
@@ -54,17 +59,17 @@ namespace Titanium.Web.Proxy.Network
         private Policy getRetryPolicy()
         {
             return Policy.Handle<T>()
-                .RetryAsync(retries,
-                    onRetryAsync: async (ex, i, context) =>
-                    {
-                        if (currentConnection != null)
+                    .RetryAsync(retries,
+                        onRetryAsync: async (ex, i, context) =>
                         {
-                            //close connection on error
-                            await tcpConnectionFactory.Release(currentConnection, true);
-                            currentConnection = null;
-                        }
+                            if (currentConnection != null)
+                            {
+                                //close connection on error
+                                await tcpConnectionFactory.Release(currentConnection, true);
+                                currentConnection = null;
+                            }
 
-                    });
+                        });
         }
     }
 
