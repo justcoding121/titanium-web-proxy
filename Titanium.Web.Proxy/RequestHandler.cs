@@ -220,11 +220,12 @@ namespace Titanium.Web.Proxy
                                         response, clientStream, clientStreamWriter,
                                         serverConnection, cancellationTokenSource, cancellationToken);
                                     closeServerConnection = true;
-                                    return;
+                                    return false;
                                 }
 
                                 // construct the web request that we are going to issue on behalf of the client.
                                 await handleHttpSessionRequestInternal(serverConnection, args);
+                                return true;
 
                             }, generator, connection);
 
@@ -235,6 +236,11 @@ namespace Titanium.Web.Proxy
                             if(!result.IsSuccess)
                             {
                                 throw result.Exception;
+                            }
+
+                            if(!result.Continue)
+                            {
+                                return;
                             }
 
                             //user requested
