@@ -203,6 +203,12 @@ namespace Titanium.Web.Proxy
                         {
                             decryptSsl = false;
                         }
+
+                        if(!decryptSsl)
+                        {
+                            await tcpConnectionFactory.Release(prefetchConnectionTask, true);
+                            prefetchConnectionTask = null; 
+                        }
                     }
 
                     if (cancellationTokenSource.IsCancellationRequested)
@@ -250,8 +256,6 @@ namespace Titanium.Web.Proxy
                                 (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
                                 (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
                                 connectArgs.CancellationTokenSource, ExceptionFunc);
-
-
                         }
                         finally
                         {
