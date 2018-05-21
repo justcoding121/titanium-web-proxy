@@ -149,8 +149,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
             }
         }
 
-        private async Task OnBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
+        private Task OnBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
         {
+            return Task.FromResult(false);
         }
 
         // intecept & cancel redirect or update requests

@@ -7,7 +7,6 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
-using Polly;
 using StreamExtended;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
@@ -125,7 +124,7 @@ namespace Titanium.Web.Proxy
         private SystemProxyManager systemProxySettingsManager { get; }
 
         //Number of exception retries when connection pool is enabled.
-        private int retries => EnableConnectionPool ? MaxCachedConnections + 1 : 0;
+        private int retries => EnableConnectionPool ? MaxCachedConnections : 0;
 
         /// <summary>
         ///     Is the proxy currently running?
@@ -200,7 +199,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Realm used during Proxy Basic Authentication.
         /// </summary>
-        public string ProxyRealm { get; set; } = "TitaniumProxy";
+        public string ProxyAuthenticationRealm { get; set; } = "TitaniumProxy";
 
         /// <summary>
         ///     List of supported Ssl versions.
@@ -264,11 +263,24 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///     A callback to authenticate clients.
+        ///     A callback to authenticate proxy clients via basic authentication.
         ///     Parameters are username and password as provided by client.
         ///     Should return true for successful authentication.
         /// </summary>
-        public Func<string, string, Task<bool>> AuthenticateUserFunc { get; set; }
+        public Func<string, string, Task<bool>> ProxyBasicAuthenticateFunc { get; set; }
+
+        /// <summary>
+        ///     A pluggable callback to authenticate clients by scheme instead of requiring basic authentication through ProxyBasicAuthenticateFunc.
+        ///     Parameters are current working session, schemeType, and token as provided by a calling client.
+        ///     Should return success for successful authentication, continuation if the package requests, or failure.
+        /// </summary>
+        public Func<SessionEventArgsBase, string, string, Task<ProxyAuthenticationContext>> ProxySchemeAuthenticateFunc { get; set; }
+
+        /// <summary>
+        ///     A collection of scheme types, e.g. basic, NTLM, Kerberos, Negotiate, to return if scheme authentication is required.
+        ///     Works in relation with ProxySchemeAuthenticateFunc.
+        /// </summary>
+        public IEnumerable<string> ProxyAuthenticationSchemes { get; set; } = new string[0];
 
         /// <summary>
         ///     Dispose the Proxy instance.
@@ -809,22 +821,9 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Connection retry policy when using connection pool.
         /// </summary>
-        private Policy retryPolicy<T>() where T : Exception
+        private RetryPolicy<T> retryPolicy<T>() where T : Exception
         {
-            return Policy.Handle<T>()
-                .RetryAsync(retries,
-                    onRetryAsync: async (ex, i, context) =>
-                    {
-                        if (context["connection"] != null)
-                        {
-                            //close connection on error
-                            var connection = (TcpServerConnection)context["connection"];
-                            await tcpConnectionFactory.Release(connection, true);
-                            context["connection"] = null;
-                        }
-
-                    });
-
+            return new RetryPolicy<T>(retries, tcpConnectionFactory);
         }
     }
 }

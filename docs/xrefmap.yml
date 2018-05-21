@@ -2622,19 +2622,6 @@ references:
   commentId: E:Titanium.Web.Proxy.ProxyServer.AfterResponse
   fullName: Titanium.Web.Proxy.ProxyServer.AfterResponse
   nameWithType: ProxyServer.AfterResponse
-- uid: Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc
-  name: AuthenticateUserFunc
-  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_AuthenticateUserFunc
-  commentId: P:Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc
-  fullName: Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc
-  nameWithType: ProxyServer.AuthenticateUserFunc
-- uid: Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc*
-  name: AuthenticateUserFunc
-  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_AuthenticateUserFunc_
-  commentId: Overload:Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc
-  nameWithType: ProxyServer.AuthenticateUserFunc
 - uid: Titanium.Web.Proxy.ProxyServer.BeforeRequest
   name: BeforeRequest
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BeforeRequest
@@ -2905,6 +2892,45 @@ references:
   commentId: E:Titanium.Web.Proxy.ProxyServer.OnServerConnectionCreate
   fullName: Titanium.Web.Proxy.ProxyServer.OnServerConnectionCreate
   nameWithType: ProxyServer.OnServerConnectionCreate
+- uid: Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationRealm
+  name: ProxyAuthenticationRealm
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationRealm
+  commentId: P:Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationRealm
+  fullName: Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationRealm
+  nameWithType: ProxyServer.ProxyAuthenticationRealm
+- uid: Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationRealm*
+  name: ProxyAuthenticationRealm
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationRealm_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationRealm
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationRealm
+  nameWithType: ProxyServer.ProxyAuthenticationRealm
+- uid: Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes
+  name: ProxyAuthenticationSchemes
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationSchemes
+  commentId: P:Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes
+  fullName: Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes
+  nameWithType: ProxyServer.ProxyAuthenticationSchemes
+- uid: Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes*
+  name: ProxyAuthenticationSchemes
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationSchemes_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes
+  nameWithType: ProxyServer.ProxyAuthenticationSchemes
+- uid: Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc
+  name: ProxyBasicAuthenticateFunc
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxyBasicAuthenticateFunc
+  commentId: P:Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc
+  fullName: Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc
+  nameWithType: ProxyServer.ProxyBasicAuthenticateFunc
+- uid: Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc*
+  name: ProxyBasicAuthenticateFunc
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxyBasicAuthenticateFunc_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc
+  nameWithType: ProxyServer.ProxyBasicAuthenticateFunc
 - uid: Titanium.Web.Proxy.ProxyServer.ProxyEndPoints
   name: ProxyEndPoints
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxyEndPoints
@@ -2918,19 +2944,6 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.ProxyEndPoints
   nameWithType: ProxyServer.ProxyEndPoints
-- uid: Titanium.Web.Proxy.ProxyServer.ProxyRealm
-  name: ProxyRealm
-  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxyRealm
-  commentId: P:Titanium.Web.Proxy.ProxyServer.ProxyRealm
-  fullName: Titanium.Web.Proxy.ProxyServer.ProxyRealm
-  nameWithType: ProxyServer.ProxyRealm
-- uid: Titanium.Web.Proxy.ProxyServer.ProxyRealm*
-  name: ProxyRealm
-  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxyRealm_
-  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ProxyRealm
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.ProxyServer.ProxyRealm
-  nameWithType: ProxyServer.ProxyRealm
 - uid: Titanium.Web.Proxy.ProxyServer.ProxyRunning
   name: ProxyRunning
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxyRunning
@@ -2944,6 +2957,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.ProxyRunning
   nameWithType: ProxyServer.ProxyRunning
+- uid: Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc
+  name: ProxySchemeAuthenticateFunc
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxySchemeAuthenticateFunc
+  commentId: P:Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc
+  fullName: Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc
+  nameWithType: ProxyServer.ProxySchemeAuthenticateFunc
+- uid: Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc*
+  name: ProxySchemeAuthenticateFunc
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ProxySchemeAuthenticateFunc_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc
+  nameWithType: ProxyServer.ProxySchemeAuthenticateFunc
 - uid: Titanium.Web.Proxy.ProxyServer.RemoveEndPoint(Titanium.Web.Proxy.Models.ProxyEndPoint)
   name: RemoveEndPoint(ProxyEndPoint)
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_RemoveEndPoint_Titanium_Web_Proxy_Models_ProxyEndPoint_
