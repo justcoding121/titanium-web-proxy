@@ -472,12 +472,15 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         }
                     }
                 }
+                catch (Exception e) {
+                    server.ExceptionFunc(new Exception("An error occurred when disposing server connections.", e));
+                }
                 finally
                 {
                     //cleanup every 3 seconds by default
                     await Task.Delay(1000 * 3);
                 }
-              
+
             }
         }
 
