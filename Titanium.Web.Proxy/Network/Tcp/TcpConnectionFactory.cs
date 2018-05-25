@@ -229,16 +229,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
             CancellationToken cancellationToken)
         {
-            if (remoteHostName == "localhost"
-                || remoteHostName == "127.0.0.1"
-                || remoteHostName == Dns.GetHostName())
+            //deny connection to proxy end points to avoid infinite connection loop.
+            if (server.ProxyEndPoints.Any(x => x.Port == remotePort)
+                && NetworkHelper.IsLocalIpAddress(remoteHostName))
             {
-                if (server.ProxyEndPoints.Any(x => x.Port == remotePort))
-                {
-                    throw new Exception($"A client is making HTTP request to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
-                }
+                throw new Exception($"A client is making HTTP request to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
             }
-
 
             bool useUpstreamProxy = false;
 
