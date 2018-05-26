@@ -231,9 +231,18 @@ namespace Titanium.Web.Proxy.Network.Tcp
         {
             //deny connection to proxy end points to avoid infinite connection loop.
             if (server.ProxyEndPoints.Any(x => x.Port == remotePort)
-                && NetworkHelper.IsLocalIpAddress(remoteHostName))
+                    && NetworkHelper.IsLocalIpAddress(remoteHostName))
             {
                 throw new Exception($"A client is making HTTP request to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
+            }
+
+            if (externalProxy != null)
+            {
+                if (server.ProxyEndPoints.Any(x => x.Port == externalProxy.Port)
+                    && NetworkHelper.IsLocalIpAddress(externalProxy.HostName))
+                {
+                    throw new Exception($"A client is making HTTP request via external proxy to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
+                }
             }
 
             bool useUpstreamProxy = false;
