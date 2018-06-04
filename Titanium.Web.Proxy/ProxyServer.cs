@@ -442,7 +442,7 @@ namespace Titanium.Web.Proxy
             systemProxySettingsManager.SetProxy(
                 Equals(endPoint.IpAddress, IPAddress.Any) |
                 Equals(endPoint.IpAddress, IPAddress.Loopback)
-                    ? "127.0.0.1"
+                    ? "localhost"
                     : endPoint.IpAddress.ToString(),
                 endPoint.Port,
                 protocolType);
@@ -545,8 +545,7 @@ namespace Titanium.Web.Proxy
                     var protocolToRemove = ProxyProtocolType.None;
                     foreach (var proxy in proxyInfo.Proxies.Values)
                     {
-                        if ((proxy.HostName == "127.0.0.1"
-                             || proxy.HostName.EqualsIgnoreCase("localhost"))
+                        if (NetworkHelper.IsLocalIpAddress(proxy.HostName)
                             && ProxyEndPoints.Any(x => x.Port == proxy.Port))
                         {
                             protocolToRemove |= proxy.ProtocolType;

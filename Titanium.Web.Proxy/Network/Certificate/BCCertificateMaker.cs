@@ -146,7 +146,6 @@ namespace Titanium.Web.Proxy.Network.Certificate
             x509Certificate.PrivateKey = DotNetUtilities.ToRSA(rsaparams);
 #else
             var x509Certificate = withPrivateKey(certificate, rsaparams);
-            x509Certificate.FriendlyName = subjectName;
 #endif
 
             if (!doNotSetFriendlyName)

@@ -229,6 +229,22 @@ namespace Titanium.Web.Proxy.Network.Tcp
             ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
             CancellationToken cancellationToken)
         {
+            //deny connection to proxy end points to avoid infinite connection loop.
+            if (server.ProxyEndPoints.Any(x => x.Port == remotePort)
+                    && NetworkHelper.IsLocalIpAddress(remoteHostName))
+            {
+                throw new Exception($"A client is making HTTP request to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
+            }
+
+            if (externalProxy != null)
+            {
+                if (server.ProxyEndPoints.Any(x => x.Port == externalProxy.Port)
+                    && NetworkHelper.IsLocalIpAddress(externalProxy.HostName))
+                {
+                    throw new Exception($"A client is making HTTP request via external proxy to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
+                }
+            }
+
             bool useUpstreamProxy = false;
 
             // check if external proxy is set for HTTP/HTTPS
@@ -472,12 +488,16 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         }
                     }
                 }
+                catch (Exception e)
+                {
+                    server.ExceptionFunc(new Exception("An error occurred when disposing server connections.", e));
+                }
                 finally
                 {
                     //cleanup every 3 seconds by default
                     await Task.Delay(1000 * 3);
                 }
-              
+
             }
         }
 

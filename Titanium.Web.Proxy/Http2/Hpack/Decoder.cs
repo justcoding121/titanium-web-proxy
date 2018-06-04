@@ -173,7 +173,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                         break;
 
                     case State.ReadMaxDynamicTableSize:
-                        int maxSize = DecodeULE128(input);
+                        int maxSize = decodeULE128(input);
                         if (maxSize == -1)
                         {
                             return;
@@ -190,7 +190,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                         break;
 
                     case State.ReadIndexedHeader:
-                        int headerIndex = DecodeULE128(input);
+                        int headerIndex = decodeULE128(input);
                         if (headerIndex == -1)
                         {
                             return;
@@ -208,7 +208,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
 
                     case State.ReadIndexedHeaderName:
                         // Header Name matches an entry in the Header Table
-                        int nameIndex = DecodeULE128(input);
+                        int nameIndex = decodeULE128(input);
                         if (nameIndex == -1)
                         {
                             return;
@@ -272,7 +272,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
 
                     case State.ReadLiteralHeaderNameLength:
                         // Header Name is a Literal String
-                        nameLength = DecodeULE128(input);
+                        nameLength = decodeULE128(input);
                         if (nameLength == -1)
                         {
                             return;
@@ -388,7 +388,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
 
                     case State.ReadLiteralHeaderValueLength:
                         // Header Value is a Literal String
-                        valueLength = DecodeULE128(input);
+                        valueLength = decodeULE128(input);
                         if (valueLength == -1)
                         {
                             return;
@@ -612,7 +612,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         }
 
         // Unsigned Little Endian Base 128 Variable-Length Integer Encoding
-        private static int DecodeULE128(BinaryReader input)
+        private static int decodeULE128(BinaryReader input)
         {
             long markedPosition = input.BaseStream.Position;
             int result = 0;
