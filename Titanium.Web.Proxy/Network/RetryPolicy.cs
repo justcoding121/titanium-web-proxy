@@ -1,5 +1,4 @@
-﻿using Polly;
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Network.Tcp;
 
@@ -11,14 +10,11 @@ namespace Titanium.Web.Proxy.Network
         private readonly TcpConnectionFactory tcpConnectionFactory;
 
         private TcpServerConnection currentConnection;
-        private Policy policy;
 
         internal RetryPolicy(int retries, TcpConnectionFactory tcpConnectionFactory)
         {
             this.retries = retries;
             this.tcpConnectionFactory = tcpConnectionFactory;
-
-            policy = getRetryPolicy();
         }
 
         /// <summary>
@@ -32,14 +28,14 @@ namespace Titanium.Web.Proxy.Network
             Func<Task<TcpServerConnection>> generator, TcpServerConnection initialConnection)
         {
             currentConnection = initialConnection;
-            Exception exception = null;
             bool @continue = true;
+            Exception exception = null;
 
-            try
+            var attempts = retries;
+            while (attempts >= 0)
             {
-                //retry on error with polly policy
-                //do not use polly context to store connection; it does not save states b/w attempts
-                await policy.ExecuteAsync(async () =>
+                
+                try
                 {
                     //setup connection
                     currentConnection = currentConnection as TcpServerConnection ??
@@ -47,23 +43,27 @@ namespace Titanium.Web.Proxy.Network
                     //try
                     @continue = await action(currentConnection);
 
-                });
+                }
+                catch (T ex)
+                {
+                    exception = ex;
+                    await onRetry(ex);
+                }
+
+                if(exception == null)
+                {
+                    break;
+                }
+
+                exception = null;
+                attempts--;
             }
-            catch (Exception e) { exception = e; }
 
             return new RetryResult(currentConnection, exception, @continue);
         }
 
-        //get the policy
-        private Policy getRetryPolicy()
-        {
-            return Policy.Handle<T>()
-                    .RetryAsync(retries,
-                        onRetryAsync: onRetry);
-        }
-
         //before retry clear connection
-        private async Task onRetry(Exception ex, int attempt)
+        private async Task onRetry(Exception ex)
         {
             if (currentConnection != null)
             {
