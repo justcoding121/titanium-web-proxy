@@ -16,7 +16,6 @@
     <dependencies>
       <dependency id="StreamExtended" version="1.0.179" />
       <dependency id="Portable.BouncyCastle" version="1.8.2" />
-      <dependency id="Polly" version="6.0.1"/>
     </dependencies>
   </metadata>
   <files>
