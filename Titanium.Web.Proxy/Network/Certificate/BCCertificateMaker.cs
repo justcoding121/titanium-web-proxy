@@ -16,6 +16,7 @@ using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Utilities;
 using Org.BouncyCastle.X509;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Shared;
 using X509Certificate = Org.BouncyCastle.X509.X509Certificate;
 
@@ -28,10 +29,6 @@ namespace Titanium.Web.Proxy.Network.Certificate
     {
         private const int certificateValidDays = 1825;
         private const int certificateGraceDays = 366;
-
-        // The FriendlyName value cannot be set on Unix.
-        // Set this flag to true when exception detected to avoid further exceptions
-        private static bool doNotSetFriendlyName;
 
         private readonly ExceptionHandler exceptionFunc;
 
@@ -148,16 +145,9 @@ namespace Titanium.Web.Proxy.Network.Certificate
             var x509Certificate = withPrivateKey(certificate, rsaparams);
 #endif
 
-            if (!doNotSetFriendlyName)
+            if (RunTime.IsWindows)
             {
-                try
-                {
-                    x509Certificate.FriendlyName = ProxyConstants.CNRemoverRegex.Replace(subjectName, string.Empty);
-                }
-                catch (PlatformNotSupportedException)
-                {
-                    doNotSetFriendlyName = true;
-                }
+                x509Certificate.FriendlyName = ProxyConstants.CNRemoverRegex.Replace(subjectName, string.Empty);
             }
 
             return x509Certificate;
