@@ -32,9 +32,9 @@ namespace Titanium.Web.Proxy.Network
             Exception exception = null;
 
             var attempts = retries;
-            while (attempts >= 0)
+
+            while (true)
             {
-                
                 try
                 {
                     //setup connection
@@ -44,26 +44,29 @@ namespace Titanium.Web.Proxy.Network
                     @continue = await action(currentConnection);
 
                 }
-                catch (T ex)
-                {
+                catch (Exception ex)
+                {     
                     exception = ex;
-                    await onRetry(ex);
                 }
 
-                if(exception == null)
+                attempts--;
+
+                if (attempts < 0
+                    || exception == null
+                    || !(exception is T))
                 {
                     break;
                 }
 
                 exception = null;
-                attempts--;
+                await disposeConnection();         
             }
 
             return new RetryResult(currentConnection, exception, @continue);
         }
 
         //before retry clear connection
-        private async Task onRetry(Exception ex)
+        private async Task disposeConnection()
         {
             if (currentConnection != null)
             {
