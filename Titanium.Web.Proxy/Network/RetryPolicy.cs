@@ -46,8 +46,13 @@ namespace Titanium.Web.Proxy.Network
                 }
                 catch (T ex)
                 {
+                    await disposeConnection();
                     exception = ex;
-                    await onRetry(ex);
+                }
+                catch
+                {
+                    await disposeConnection();
+                    throw;
                 }
 
                 if(exception == null)
@@ -63,7 +68,7 @@ namespace Titanium.Web.Proxy.Network
         }
 
         //before retry clear connection
-        private async Task onRetry(Exception ex)
+        private async Task disposeConnection()
         {
             if (currentConnection != null)
             {
