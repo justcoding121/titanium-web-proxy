@@ -44,23 +44,19 @@ namespace Titanium.Web.Proxy.Network
                     @continue = await action(currentConnection);
 
                 }
-                catch (T ex)
-                {
-                    await disposeConnection();
+                catch (Exception ex)
+                {     
                     exception = ex;
                 }
-                catch
-                {
-                    await disposeConnection();
-                    throw;
-                }
 
-                if(exception == null)
+                if(exception == null
+                    || !(exception is T))
                 {
                     break;
                 }
 
                 exception = null;
+                await disposeConnection();
                 attempts--;
             }
 
