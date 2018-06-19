@@ -267,7 +267,8 @@ namespace Titanium.Web.Proxy
                             //between sessions without using it.
                             //Do not release authenticated connections for performance reasons.
                             //Otherwise it will keep authenticating per session.
-                            if (EnableConnectionPool && !connection.IsWinAuthenticated)
+                            if (EnableConnectionPool && connection!=null
+                                && !connection.IsWinAuthenticated)
                             {
                                 await tcpConnectionFactory.Release(connection);
                                 connection = null;
