@@ -19,12 +19,9 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 
 ### Features
 
-* Multithreaded & fully asynchronous proxy
-* Supports HTTP(S) and most features of HTTP 1.1 
-* Supports redirect/block/update requests and modifying responses
-* Safely relays Web Socket requests over HTTP
-* Supports mutual SSL authentication
-* Supports proxy authentication & automatic proxy detection
+* Multithreaded & fully asynchronous proxy employing server connection pooling, certificate cache & buffer pooling
+* View/modify/redirect/block requests & responses
+* Supports mutual SSL authentication, proxy authentication & automatic upstream proxy detection
 * Kerberos/NTLM authentication over HTTP protocols for windows domain
 
 ### Usage
