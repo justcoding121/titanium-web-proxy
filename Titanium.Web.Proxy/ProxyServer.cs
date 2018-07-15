@@ -267,7 +267,7 @@ namespace Titanium.Web.Proxy
         ///     Parameters are username and password as provided by client.
         ///     Should return true for successful authentication.
         /// </summary>
-        public Func<string, string, Task<bool>> ProxyBasicAuthenticateFunc { get; set; }
+        public Func<SessionEventArgsBase, string, string, Task<bool>> ProxyBasicAuthenticateFunc { get; set; }
 
         /// <summary>
         ///     A pluggable callback to authenticate clients by scheme instead of requiring basic authentication through ProxyBasicAuthenticateFunc.
