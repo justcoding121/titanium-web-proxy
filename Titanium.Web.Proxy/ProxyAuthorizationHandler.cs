@@ -98,7 +98,7 @@ namespace Titanium.Web.Proxy
 
             string username = decoded.Substring(0, colonIndex);
             string password = decoded.Substring(colonIndex + 1);
-            bool authenticated = await ProxyBasicAuthenticateFunc(username, password);
+            bool authenticated = await ProxyBasicAuthenticateFunc(session, username, password);
             if (!authenticated)
             {
                 session.WebSession.Response = createAuthentication407Response("Proxy Authentication Invalid");
