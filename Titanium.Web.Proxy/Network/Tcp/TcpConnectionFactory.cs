@@ -273,9 +273,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
                     SendBufferSize = proxyServer.BufferSize,
                     ReceiveBufferSize = proxyServer.BufferSize
-                };
-
-                await proxyServer.InvokeConnectionCreateEvent(tcpClient, false);
+                }; 
 
                 // If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections
                 if (useUpstreamProxy)
@@ -286,6 +284,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     await tcpClient.ConnectAsync(remoteHostName, remotePort);
                 }
+
+                await proxyServer.InvokeConnectionCreateEvent(tcpClient, false);
 
                 stream = new CustomBufferedStream(tcpClient.GetStream(), proxyServer.BufferPool, proxyServer.BufferSize);
 
