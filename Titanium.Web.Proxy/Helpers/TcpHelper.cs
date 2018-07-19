@@ -1,11 +1,9 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended.Helpers;
+using StreamExtended;
 using Titanium.Web.Proxy.Extensions;
 
 namespace Titanium.Web.Proxy.Helpers
@@ -39,7 +37,7 @@ namespace Titanium.Web.Proxy.Helpers
                             0) == 0)
                     {
                         int rowCount = *(int*)tcpTable;
-                        uint portInNetworkByteOrder = ToNetworkByteOrder((uint)localPort);
+                        uint portInNetworkByteOrder = toNetworkByteOrder((uint)localPort);
 
                         if (ipVersion == IpVersion.Ipv4)
                         {
@@ -90,7 +88,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="port"></param>
         /// <returns></returns>
-        private static uint ToNetworkByteOrder(uint port)
+        private static uint toNetworkByteOrder(uint port)
         {
             return ((port >> 8) & 0x00FF00FFu) | ((port << 8) & 0xFF00FF00u);
         }
@@ -109,7 +107,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="cancellationTokenSource"></param>
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
-        internal static async Task SendRawApm(Stream clientStream, Stream serverStream, int bufferSize,
+        internal static async Task SendRawApm(Stream clientStream, Stream serverStream, 
+            IBufferPool bufferPool, int bufferSize,
             Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive,
             CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)
@@ -118,23 +117,23 @@ namespace Titanium.Web.Proxy.Helpers
             cancellationTokenSource.Token.Register(() => taskCompletionSource.TrySetResult(true));
 
             // Now async relay all server=>client & client=>server data
-            var clientBuffer = BufferPool.GetBuffer(bufferSize);
-            var serverBuffer = BufferPool.GetBuffer(bufferSize);
+            var clientBuffer = bufferPool.GetBuffer(bufferSize);
+            var serverBuffer = bufferPool.GetBuffer(bufferSize);
             try
             {
-                BeginRead(clientStream, serverStream, clientBuffer, onDataSend, cancellationTokenSource, exceptionFunc);
-                BeginRead(serverStream, clientStream, serverBuffer, onDataReceive, cancellationTokenSource,
+                beginRead(clientStream, serverStream, clientBuffer, onDataSend, cancellationTokenSource, exceptionFunc);
+                beginRead(serverStream, clientStream, serverBuffer, onDataReceive, cancellationTokenSource,
                     exceptionFunc);
                 await taskCompletionSource.Task;
             }
             finally
             {
-                BufferPool.ReturnBuffer(clientBuffer);
-                BufferPool.ReturnBuffer(serverBuffer);
+                bufferPool.ReturnBuffer(clientBuffer);
+                bufferPool.ReturnBuffer(serverBuffer);
             }
         }
 
-        private static void BeginRead(Stream inputStream, Stream outputStream, byte[] buffer,
+        private static void beginRead(Stream inputStream, Stream outputStream, byte[] buffer,
             Action<byte[], int, int> onCopy, CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)
         {
@@ -174,7 +173,7 @@ namespace Titanium.Web.Proxy.Helpers
                         try
                         {
                             outputStream.EndWrite(ar2);
-                            BeginRead(inputStream, outputStream, buffer, onCopy, cancellationTokenSource,
+                            beginRead(inputStream, outputStream, buffer, onCopy, cancellationTokenSource,
                                 exceptionFunc);
                         }
                         catch (IOException ex)
@@ -214,16 +213,17 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="cancellationTokenSource"></param>
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
-        private static async Task SendRawTap(Stream clientStream, Stream serverStream, int bufferSize,
+        private static async Task sendRawTap(Stream clientStream, Stream serverStream,
+            IBufferPool bufferPool, int bufferSize,
             Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive,
             CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)
         {
             // Now async relay all server=>client & client=>server data
             var sendRelay =
-                clientStream.CopyToAsync(serverStream, onDataSend, bufferSize, cancellationTokenSource.Token);
+                clientStream.CopyToAsync(serverStream, onDataSend, bufferPool, bufferSize, cancellationTokenSource.Token);
             var receiveRelay =
-                serverStream.CopyToAsync(clientStream, onDataReceive, bufferSize, cancellationTokenSource.Token);
+                serverStream.CopyToAsync(clientStream, onDataReceive, bufferPool, bufferSize, cancellationTokenSource.Token);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             cancellationTokenSource.Cancel();
@@ -244,13 +244,14 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="cancellationTokenSource"></param>
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
-        internal static Task SendRaw(Stream clientStream, Stream serverStream, int bufferSize,
+        internal static Task SendRaw(Stream clientStream, Stream serverStream, 
+            IBufferPool bufferPool, int bufferSize,
             Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive,
             CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)
         {
             // todo: fix APM mode
-            return SendRawTap(clientStream, serverStream, bufferSize, onDataSend, onDataReceive,
+            return sendRawTap(clientStream, serverStream, bufferPool, bufferSize, onDataSend, onDataReceive,
                 cancellationTokenSource,
                 exceptionFunc);
         }

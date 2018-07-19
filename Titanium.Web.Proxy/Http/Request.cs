@@ -99,7 +99,8 @@ namespace Titanium.Web.Proxy.Http
         public string Url => RequestUri.OriginalString;
 
         /// <summary>
-        ///     Terminates the underlying Tcp Connection to client after current request.
+        ///     Cancels the client HTTP request without sending to server.
+        ///     This should be set when API user responds with custom response.
         /// </summary>
         internal bool CancelRequest { get; set; }
 
@@ -199,7 +200,7 @@ namespace Titanium.Web.Proxy.Http
 
             // Find the request Verb
             httpMethod = httpCmdSplit[0];
-            if (!IsAllUpper(httpMethod))
+            if (!isAllUpper(httpMethod))
             {
                 httpMethod = httpMethod.ToUpper();
             }
@@ -219,7 +220,7 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        private static bool IsAllUpper(string input)
+        private static bool isAllUpper(string input)
         {
             for (int i = 0; i < input.Length; i++)
             {
@@ -232,5 +233,6 @@ namespace Titanium.Web.Proxy.Http
 
             return true;
         }
+
     }
 }

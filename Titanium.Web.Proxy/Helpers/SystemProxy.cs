@@ -84,8 +84,8 @@ namespace Titanium.Web.Proxy.Helpers
 
             if (reg != null)
             {
-                SaveOriginalProxyConfiguration(reg);
-                PrepareRegistry(reg);
+                saveOriginalProxyConfiguration(reg);
+                prepareRegistry(reg);
 
                 string exisitingContent = reg.GetValue(regProxyServer) as string;
                 var existingSystemProxyValues = ProxyInfo.GetSystemProxyValues(exisitingContent);
@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy.Helpers
                 reg.SetValue(regProxyServer,
                     string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
 
-                Refresh();
+                refresh();
             }
         }
 
@@ -129,7 +129,7 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 if (saveOriginalConfig)
                 {
-                    SaveOriginalProxyConfiguration(reg);
+                    saveOriginalProxyConfiguration(reg);
                 }
 
                 if (reg.GetValue(regProxyServer) != null)
@@ -152,7 +152,7 @@ namespace Titanium.Web.Proxy.Helpers
                     }
                 }
 
-                Refresh();
+                refresh();
             }
         }
 
@@ -165,12 +165,12 @@ namespace Titanium.Web.Proxy.Helpers
 
             if (reg != null)
             {
-                SaveOriginalProxyConfiguration(reg);
+                saveOriginalProxyConfiguration(reg);
 
                 reg.SetValue(regProxyEnable, 0);
                 reg.SetValue(regProxyServer, string.Empty);
 
-                Refresh();
+                refresh();
             }
         }
 
@@ -180,9 +180,9 @@ namespace Titanium.Web.Proxy.Helpers
 
             if (reg != null)
             {
-                SaveOriginalProxyConfiguration(reg);
+                saveOriginalProxyConfiguration(reg);
                 reg.SetValue(regAutoConfigUrl, url);
-                Refresh();
+                refresh();
             }
         }
 
@@ -192,9 +192,9 @@ namespace Titanium.Web.Proxy.Helpers
 
             if (reg != null)
             {
-                SaveOriginalProxyConfiguration(reg);
+                saveOriginalProxyConfiguration(reg);
                 reg.SetValue(regProxyOverride, proxyOverride);
-                Refresh();
+                refresh();
             }
         }
 
@@ -247,7 +247,7 @@ namespace Titanium.Web.Proxy.Helpers
                 }
 
                 originalValues = null;
-                Refresh();
+                refresh();
             }
         }
 
@@ -257,13 +257,13 @@ namespace Titanium.Web.Proxy.Helpers
 
             if (reg != null)
             {
-                return GetProxyInfoFromRegistry(reg);
+                return getProxyInfoFromRegistry(reg);
             }
 
             return null;
         }
 
-        private ProxyInfo GetProxyInfoFromRegistry(RegistryKey reg)
+        private ProxyInfo getProxyInfoFromRegistry(RegistryKey reg)
         {
             var pi = new ProxyInfo(null, reg.GetValue(regAutoConfigUrl) as string, reg.GetValue(regProxyEnable) as int?,
                 reg.GetValue(regProxyServer) as string,
@@ -272,21 +272,21 @@ namespace Titanium.Web.Proxy.Helpers
             return pi;
         }
 
-        private void SaveOriginalProxyConfiguration(RegistryKey reg)
+        private void saveOriginalProxyConfiguration(RegistryKey reg)
         {
             if (originalValues != null)
             {
                 return;
             }
 
-            originalValues = GetProxyInfoFromRegistry(reg);
+            originalValues = getProxyInfoFromRegistry(reg);
         }
 
         /// <summary>
         ///     Prepares the proxy server registry (create empty values if they don't exist)
         /// </summary>
         /// <param name="reg"></param>
-        private static void PrepareRegistry(RegistryKey reg)
+        private static void prepareRegistry(RegistryKey reg)
         {
             if (reg.GetValue(regProxyEnable) == null)
             {
@@ -302,7 +302,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         ///     Refresh the settings so that the system know about a change in proxy setting
         /// </summary>
-        private void Refresh()
+        private static void refresh()
         {
             NativeMethods.InternetSetOption(IntPtr.Zero, InternetOptionSettingsChanged, IntPtr.Zero, 0);
             NativeMethods.InternetSetOption(IntPtr.Zero, InternetOptionRefresh, IntPtr.Zero, 0);

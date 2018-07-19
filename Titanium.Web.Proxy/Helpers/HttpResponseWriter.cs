@@ -2,13 +2,15 @@
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using StreamExtended;
 using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Helpers
 {
     internal sealed class HttpResponseWriter : HttpWriter
     {
-        internal HttpResponseWriter(Stream stream, int bufferSize) : base(stream, bufferSize)
+        internal HttpResponseWriter(Stream stream, IBufferPool bufferPool, int bufferSize) 
+            : base(stream, bufferPool, bufferSize)
         {
         }
 

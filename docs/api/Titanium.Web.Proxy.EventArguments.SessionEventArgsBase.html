@@ -10,7 +10,7 @@
     <meta name="viewport" content="width=device-width">
     <meta name="title" content="Class SessionEventArgsBase
    | Titanium Web Proxy ">
-    <meta name="generator" content="docfx 2.35.4.0">
+    <meta name="generator" content="docfx 2.37.0.0">
     
     <link rel="shortcut icon" href="../favicon.ico">
     <link rel="stylesheet" href="../styles/docfx.vendor.css">
@@ -139,12 +139,12 @@ or when server terminates connection from proxy.</p>
   
   
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase__ctor_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.#ctor*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase__ctor_System_Int32_Titanium_Web_Proxy_Models_ProxyEndPoint_System_Threading_CancellationTokenSource_Titanium_Web_Proxy_Http_Request_Titanium_Web_Proxy_ExceptionHandler_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.#ctor(System.Int32,Titanium.Web.Proxy.Models.ProxyEndPoint,System.Threading.CancellationTokenSource,Titanium.Web.Proxy.Http.Request,Titanium.Web.Proxy.ExceptionHandler)">SessionEventArgsBase(Int32, ProxyEndPoint, CancellationTokenSource, Request, ExceptionHandler)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase__ctor_Titanium_Web_Proxy_ProxyServer_Titanium_Web_Proxy_Models_ProxyEndPoint_System_Threading_CancellationTokenSource_Titanium_Web_Proxy_Http_Request_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.#ctor(Titanium.Web.Proxy.ProxyServer,Titanium.Web.Proxy.Models.ProxyEndPoint,System.Threading.CancellationTokenSource,Titanium.Web.Proxy.Http.Request)">SessionEventArgsBase(ProxyServer, ProxyEndPoint, CancellationTokenSource, Request)</h4>
   <div class="markdown level1 summary"></div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">protected SessionEventArgsBase(int bufferSize, ProxyEndPoint endPoint, CancellationTokenSource cancellationTokenSource, Request request, ExceptionHandler exceptionFunc)</code></pre>
+    <pre><code class="lang-csharp hljs">protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint, CancellationTokenSource cancellationTokenSource, Request request)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -157,8 +157,8 @@ or when server terminates connection from proxy.</p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a></td>
-        <td><span class="parametername">bufferSize</span></td>
+        <td><a class="xref" href="Titanium.Web.Proxy.ProxyServer.html">ProxyServer</a></td>
+        <td><span class="parametername">server</span></td>
         <td></td>
       </tr>
       <tr>
@@ -176,24 +176,42 @@ or when server terminates connection from proxy.</p>
         <td><span class="parametername">request</span></td>
         <td></td>
       </tr>
-      <tr>
-        <td><a class="xref" href="Titanium.Web.Proxy.ExceptionHandler.html">ExceptionHandler</a></td>
-        <td><span class="parametername">exceptionFunc</span></td>
-        <td></td>
-      </tr>
     </tbody>
   </table>
   <h3 id="fields">Fields
   </h3>
   
   
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_BufferSize" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.BufferSize">BufferSize</h4>
-  <div class="markdown level1 summary"><p>Size of Buffers used by this object</p>
-</div>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_bufferPool" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.bufferPool">bufferPool</h4>
+  <div class="markdown level1 summary"></div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">protected readonly int BufferSize</code></pre>
+    <pre><code class="lang-csharp hljs">protected readonly IBufferPool bufferPool</code></pre>
+  </div>
+  <h5 class="fieldValue">Field Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">StreamExtended.IBufferPool</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_bufferSize" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.bufferSize">bufferSize</h4>
+  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">protected readonly int bufferSize</code></pre>
   </div>
   <h5 class="fieldValue">Field Value</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -212,12 +230,12 @@ or when server terminates connection from proxy.</p>
   </table>
   
   
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ExceptionFunc" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ExceptionFunc">ExceptionFunc</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_exceptionFunc" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.exceptionFunc">exceptionFunc</h4>
   <div class="markdown level1 summary"></div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">protected readonly ExceptionHandler ExceptionFunc</code></pre>
+    <pre><code class="lang-csharp hljs">protected readonly ExceptionHandler exceptionFunc</code></pre>
   </div>
   <h5 class="fieldValue">Field Value</h5>
   <table class="table table-bordered table-striped table-condensed">

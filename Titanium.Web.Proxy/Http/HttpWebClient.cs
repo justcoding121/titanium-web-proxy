@@ -1,9 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -15,12 +16,9 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class HttpWebClient
     {
-        private readonly int bufferSize;
 
-        internal HttpWebClient(int bufferSize, Request request = null, Response response = null)
+        internal HttpWebClient(Request request = null, Response response = null)
         {
-            this.bufferSize = bufferSize;
-
             Request = request ?? new Request();
             Response = response ?? new Response();
         }
@@ -29,6 +27,11 @@ namespace Titanium.Web.Proxy.Http
         ///     Connection to server
         /// </summary>
         internal TcpServerConnection ServerConnection { get; set; }
+
+        /// <summary>
+        ///     Should we close the server connection at the end of this HTTP request/response session.
+        /// </summary>
+        internal bool CloseServerConnection { get; set; }
 
         /// <summary>
         ///     Stores internal data for the session.
@@ -98,16 +101,16 @@ namespace Titanium.Web.Proxy.Http
             await writer.WriteLineAsync(Request.CreateRequestLine(Request.Method,
                 useUpstreamProxy || isTransparent ? Request.OriginalUrl : Request.RequestUri.PathAndQuery,
                 Request.HttpVersion), cancellationToken);
-            
+
+            var headerBuilder = new StringBuilder();
             // Send Authentication to Upstream proxy if needed
             if (!isTransparent && upstreamProxy != null
                                && ServerConnection.IsHttps == false
                                && !string.IsNullOrEmpty(upstreamProxy.UserName)
                                && upstreamProxy.Password != null)
             {
-                await HttpHeader.ProxyConnectionKeepAlive.WriteToStreamAsync(writer, cancellationToken);
-                await HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password)
-                    .WriteToStreamAsync(writer, cancellationToken);
+                headerBuilder.AppendLine(HttpHeader.ProxyConnectionKeepAlive.ToString());
+                headerBuilder.AppendLine(HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password).ToString());
             }
 
             // write request headers
@@ -115,17 +118,30 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (isTransparent || header.Name != KnownHeaders.ProxyAuthorization)
                 {
-                    await header.WriteToStreamAsync(writer, cancellationToken);
+                    headerBuilder.AppendLine(header.ToString());
                 }
             }
 
-            await writer.WriteLineAsync(cancellationToken);
+            headerBuilder.AppendLine();
+            await writer.WriteAsync(headerBuilder.ToString(), cancellationToken);
 
             if (enable100ContinueBehaviour)
             {
                 if (Request.ExpectContinue)
                 {
-                    string httpStatus = await ServerConnection.Stream.ReadLineAsync(cancellationToken);
+                    string httpStatus;
+                    try
+                    {
+                        httpStatus = await ServerConnection.Stream.ReadLineAsync(cancellationToken);
+                        if (httpStatus == null)
+                        {
+                            throw new ServerConnectionException("Server connection was closed.");
+                        }
+                    }
+                    catch (Exception e) when (!(e is ServerConnectionException))
+                    {
+                        throw new ServerConnectionException("Server connection was closed.");
+                    }
 
                     Response.ParseResponseLine(httpStatus, out _, out int responseStatusCode,
                         out string responseStatusDescription);
@@ -159,10 +175,18 @@ namespace Titanium.Web.Proxy.Http
                 return;
             }
 
-            string httpStatus = await ServerConnection.Stream.ReadLineAsync(cancellationToken);
-            if (httpStatus == null)
+            string httpStatus;
+            try
             {
-                throw new IOException();
+                httpStatus = await ServerConnection.Stream.ReadLineAsync(cancellationToken);
+                if (httpStatus == null)
+                {
+                    throw new ServerConnectionException("Server connection was closed.");
+                }
+            }
+            catch (Exception e) when (!(e is ServerConnectionException))
+            {
+                throw new ServerConnectionException("Server connection was closed.");
             }
 
             if (httpStatus == string.Empty)
@@ -217,6 +241,9 @@ namespace Titanium.Web.Proxy.Http
             ConnectRequest?.FinishSession();
             Request?.FinishSession();
             Response?.FinishSession();
+
+            Data.Clear();
+            UserData = null;
         }
     }
 }

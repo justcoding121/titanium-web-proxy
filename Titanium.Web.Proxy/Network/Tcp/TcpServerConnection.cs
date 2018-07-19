@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Net;
+#if NETCOREAPP2_1
 using System.Net.Security;
+#endif
 using System.Net.Sockets;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
@@ -49,6 +51,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         private readonly TcpClient tcpClient;
 
         /// <summary>
+        /// The TcpClient.
+        /// </summary>
+        internal TcpClient TcpClient => tcpClient;
+
+        /// <summary>
         ///     Used to write lines to server
         /// </summary>
         internal HttpRequestWriter StreamWriter { get; set; }
@@ -64,15 +71,23 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal DateTime LastAccess { get; set; }
 
         /// <summary>
+        /// The cache key used to uniquely identify this connection properties
+        /// </summary>
+        internal string CacheKey { get; set; }
+
+        /// <summary>
+        /// Is this connection authenticated via WinAuth
+        /// </summary>
+        internal bool IsWinAuthenticated { get; set; }
+
+        /// <summary>
         ///     Dispose.
         /// </summary>
         public void Dispose()
         {
-            Stream?.Dispose();
-
-            tcpClient.CloseSocket();
-
             proxyServer.UpdateServerConnectionCount(false);
+            Stream?.Dispose();
+            tcpClient.CloseSocket();
         }
     }
 }

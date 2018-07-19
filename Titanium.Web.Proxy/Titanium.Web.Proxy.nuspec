@@ -14,7 +14,7 @@
     <copyright>Copyright &#x00A9; Titanium.  All rights reserved.</copyright>
     <tags></tags>
     <dependencies>
-      <dependency id="StreamExtended" version="1.0.164" />
+      <dependency id="StreamExtended" version="1.0.179" />
       <dependency id="Portable.BouncyCastle" version="1.8.2" />
     </dependencies>
   </metadata>

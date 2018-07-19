@@ -2,7 +2,7 @@
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended.Helpers;
+using StreamExtended;
 
 namespace Titanium.Web.Proxy.Extensions
 {
@@ -19,9 +19,9 @@ namespace Titanium.Web.Proxy.Extensions
         /// <param name="onCopy"></param>
         /// <param name="bufferSize"></param>
         internal static Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy,
-            int bufferSize)
+            IBufferPool bufferPool, int bufferSize)
         {
-            return CopyToAsync(input, output, onCopy, bufferSize, CancellationToken.None);
+            return CopyToAsync(input, output, onCopy, bufferPool, bufferSize, CancellationToken.None);
         }
 
         /// <summary>
@@ -33,9 +33,9 @@ namespace Titanium.Web.Proxy.Extensions
         /// <param name="bufferSize"></param>
         /// <param name="cancellationToken"></param>
         internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy,
-            int bufferSize, CancellationToken cancellationToken)
+            IBufferPool bufferPool, int bufferSize, CancellationToken cancellationToken)
         {
-            var buffer = BufferPool.GetBuffer(bufferSize);
+            var buffer = bufferPool.GetBuffer(bufferSize);
             try
             {
                 while (!cancellationToken.IsCancellationRequested)
@@ -43,7 +43,7 @@ namespace Titanium.Web.Proxy.Extensions
                     // cancellation is not working on Socket ReadAsync
                     // https://github.com/dotnet/corefx/issues/15033
                     int num = await input.ReadAsync(buffer, 0, buffer.Length, CancellationToken.None)
-                        .WithCancellation(cancellationToken);
+                        .withCancellation(cancellationToken);
                     int bytesRead;
                     if ((bytesRead = num) != 0 && !cancellationToken.IsCancellationRequested)
                     {
@@ -58,11 +58,11 @@ namespace Titanium.Web.Proxy.Extensions
             }
             finally
             {
-                BufferPool.ReturnBuffer(buffer);
+                bufferPool.ReturnBuffer(buffer);
             }
         }
 
-        private static async Task<T> WithCancellation<T>(this Task<T> task, CancellationToken cancellationToken)
+        private static async Task<T> withCancellation<T>(this Task<T> task, CancellationToken cancellationToken)
         {
             var tcs = new TaskCompletionSource<bool>();
             using (cancellationToken.Register(s => ((TaskCompletionSource<bool>)s).TrySetResult(true), tcs))

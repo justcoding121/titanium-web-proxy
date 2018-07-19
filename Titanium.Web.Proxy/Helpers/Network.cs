@@ -21,43 +21,51 @@ namespace Titanium.Web.Proxy.Helpers
 
             // get local IP addresses
             var localIPs = Dns.GetHostAddresses(Dns.GetHostName());
-            
+
             // test if any host IP equals to any local IP or to localhost
             return localIPs.Contains(address);
         }
 
         internal static bool IsLocalIpAddress(string hostName)
         {
-            bool isLocalhost = false;
+            hostName = hostName.ToLower();
 
-            var localhost = Dns.GetHostEntry("127.0.0.1");
-            if (hostName == localhost.HostName)
+            if (hostName == "127.0.0.1"
+                || hostName == "localhost")
             {
-                var hostEntry = Dns.GetHostEntry(hostName);
-                isLocalhost = hostEntry.AddressList.Any(IPAddress.IsLoopback);
+                return true;
+            }
+
+            var localhostDnsName = Dns.GetHostName().ToLower();
+
+            //if hostname matches current machine DNS name
+            if (hostName == localhostDnsName)
+            {
+                return true;
+            }
+
+            var isLocalhost = false;
+            IPHostEntry hostEntry = null;
+
+            //check if parsable to an IP Address
+            if (IPAddress.TryParse(hostName, out var ipAddress))
+            {
+                hostEntry = Dns.GetHostEntry(localhostDnsName);
+                isLocalhost = hostEntry.AddressList.Any(x => x.Equals(ipAddress));
             }
 
             if (!isLocalhost)
             {
-                localhost = Dns.GetHostEntry(Dns.GetHostName());
-
-                if (IPAddress.TryParse(hostName, out var ipAddress))
+                try
                 {
-                    isLocalhost = localhost.AddressList.Any(x => x.Equals(ipAddress));
+                    hostEntry = Dns.GetHostEntry(hostName);
+                    isLocalhost = hostEntry.AddressList.Any(x => hostEntry.AddressList.Any(x.Equals));
                 }
-
-                if (!isLocalhost)
+                catch (SocketException)
                 {
-                    try
-                    {
-                        var hostEntry = Dns.GetHostEntry(hostName);
-                        isLocalhost = localhost.AddressList.Any(x => hostEntry.AddressList.Any(x.Equals));
-                    }
-                    catch (SocketException)
-                    {
-                    }
                 }
             }
+
 
             return isLocalhost;
         }

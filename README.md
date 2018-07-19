@@ -19,12 +19,9 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 
 ### Features
 
-* Multithreaded & fully asynchronous proxy
-* Supports HTTP(S) and most features of HTTP 1.1 
-* Supports redirect/block/update requests and modifying responses
-* Safely relays Web Socket requests over HTTP
-* Supports mutual SSL authentication
-* Supports proxy authentication & automatic proxy detection
+* Multithreaded & fully asynchronous proxy employing server connection pooling, certificate cache & buffer pooling
+* View/modify/redirect/block requests & responses
+* Supports mutual SSL authentication, proxy authentication & automatic upstream proxy detection
 * Kerberos/NTLM authentication over HTTP protocols for windows domain
 
 ### Usage
@@ -36,7 +33,7 @@ Install by [nuget](https://www.nuget.org/packages/Titanium.Web.Proxy)
 
 For beta releases on [beta branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/beta)
 
-    Install-Package Titanium.Web.Proxy -Pre
+    Install-Package Titanium.Web.Proxy
 
 For stable releases on [stable branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/stable)
 

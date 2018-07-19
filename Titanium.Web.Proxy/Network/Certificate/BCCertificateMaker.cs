@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <returns>X509Certificate2 instance.</returns>
         public X509Certificate2 MakeCertificate(string sSubjectCn, bool isRoot, X509Certificate2 signingCert = null)
         {
-            return MakeCertificateInternal(sSubjectCn, isRoot, true, signingCert);
+            return makeCertificateInternal(sSubjectCn, isRoot, true, signingCert);
         }
 
         /// <summary>
@@ -65,7 +65,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="hostName">The host name</param>
         /// <returns>X509Certificate2 instance.</returns>
         /// <exception cref="PemException">Malformed sequence in RSA private key</exception>
-        private static X509Certificate2 GenerateCertificate(string hostName,
+        private static X509Certificate2 generateCertificate(string hostName,
             string subjectName,
             string issuerName, DateTime validFrom,
             DateTime validTo, int keyStrength = 2048,
@@ -145,8 +145,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             var x509Certificate = new X509Certificate2(certificate.GetEncoded());
             x509Certificate.PrivateKey = DotNetUtilities.ToRSA(rsaparams);
 #else
-            var x509Certificate = WithPrivateKey(certificate, rsaparams);
-            x509Certificate.FriendlyName = subjectName;
+            var x509Certificate = withPrivateKey(certificate, rsaparams);
 #endif
 
             if (!doNotSetFriendlyName)
@@ -164,7 +163,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             return x509Certificate;
         }
 
-        private static X509Certificate2 WithPrivateKey(X509Certificate certificate, AsymmetricKeyParameter privateKey)
+        private static X509Certificate2 withPrivateKey(X509Certificate certificate, AsymmetricKeyParameter privateKey)
         {
             const string password = "password";
             var store = new Pkcs12Store();
@@ -194,7 +193,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         ///     You must specify a Signing Certificate if and only if you are not creating a
         ///     root.
         /// </exception>
-        private X509Certificate2 MakeCertificateInternal(bool isRoot,
+        private X509Certificate2 makeCertificateInternal(bool isRoot,
             string hostName, string subjectName,
             DateTime validFrom, DateTime validTo, X509Certificate2 signingCertificate)
         {
@@ -207,11 +206,11 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             if (isRoot)
             {
-                return GenerateCertificate(null, subjectName, subjectName, validFrom, validTo);
+                return generateCertificate(null, subjectName, subjectName, validFrom, validTo);
             }
 
             var kp = DotNetUtilities.GetKeyPair(signingCertificate.PrivateKey);
-            return GenerateCertificate(hostName, subjectName, signingCertificate.Subject, validFrom, validTo,
+            return generateCertificate(hostName, subjectName, signingCertificate.Subject, validFrom, validTo,
                 issuerPrivateKey: kp.Private);
         }
 
@@ -224,7 +223,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="signingCert">The signing cert.</param>
         /// <param name="cancellationToken">Task cancellation token</param>
         /// <returns>X509Certificate2.</returns>
-        private X509Certificate2 MakeCertificateInternal(string subject, bool isRoot,
+        private X509Certificate2 makeCertificateInternal(string subject, bool isRoot,
             bool switchToMtaIfNeeded, X509Certificate2 signingCert = null,
             CancellationToken cancellationToken = default)
         {
@@ -238,7 +237,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
                     {
                         try
                         {
-                            certificate = MakeCertificateInternal(subject, isRoot, false, signingCert);
+                            certificate = makeCertificateInternal(subject, isRoot, false, signingCert);
                         }
                         catch (Exception ex)
                         {
@@ -258,7 +257,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             }
 #endif
 
-            return MakeCertificateInternal(isRoot, subject, $"CN={subject}",
+            return makeCertificateInternal(isRoot, subject, $"CN={subject}",
                 DateTime.UtcNow.AddDays(-certificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays),
                 isRoot ? null : signingCert);
         }

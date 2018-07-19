@@ -10,7 +10,7 @@
     <meta name="viewport" content="width=device-width">
     <meta name="title" content="Class ProxyServer
    | Titanium Web Proxy ">
-    <meta name="generator" content="docfx 2.35.4.0">
+    <meta name="generator" content="docfx 2.37.0.0">
     
     <link rel="shortcut icon" href="../favicon.ico">
     <link rel="stylesheet" href="../styles/docfx.vendor.css">
@@ -230,16 +230,16 @@ prompting for UAC if required?</p>
   </h3>
   
   
-  <a id="Titanium_Web_Proxy_ProxyServer_AuthenticateUserFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc*"></a>
-  <h4 id="Titanium_Web_Proxy_ProxyServer_AuthenticateUserFunc" data-uid="Titanium.Web.Proxy.ProxyServer.AuthenticateUserFunc">AuthenticateUserFunc</h4>
-  <div class="markdown level1 summary"><p>A callback to authenticate clients.
-Parameters are username and password as provided by client.
-Should return true for successful authentication.</p>
+  <a id="Titanium_Web_Proxy_ProxyServer_BufferPool_" data-uid="Titanium.Web.Proxy.ProxyServer.BufferPool*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_BufferPool" data-uid="Titanium.Web.Proxy.ProxyServer.BufferPool">BufferPool</h4>
+  <div class="markdown level1 summary"><p>The buffer pool used throughout this proxy instance.
+Set custom implementations by implementing this interface.
+By default this uses DefaultBufferPool implementation available in StreamExtended library package.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public Func&lt;string, string, Task&lt;bool&gt;&gt; AuthenticateUserFunc { get; set; }</code></pre>
+    <pre><code class="lang-csharp hljs">public IBufferPool BufferPool { get; set; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -251,7 +251,7 @@ Should return true for successful authentication.</p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-3">Func</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a>&gt;&gt;</td>
+        <td><span class="xref">StreamExtended.IBufferPool</span></td>
         <td></td>
       </tr>
     </tbody>
@@ -260,7 +260,8 @@ Should return true for successful authentication.</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_BufferSize_" data-uid="Titanium.Web.Proxy.ProxyServer.BufferSize*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_BufferSize" data-uid="Titanium.Web.Proxy.ProxyServer.BufferSize">BufferSize</h4>
-  <div class="markdown level1 summary"><p>Buffer size used throughout this proxy.</p>
+  <div class="markdown level1 summary"><p>Buffer size in bytes used throughout this proxy.
+Default value is 8192 bytes.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -365,7 +366,9 @@ Note: If enabled can reduce performance. Defaults to false.</p>
   
   <a id="Titanium_Web_Proxy_ProxyServer_ConnectionTimeOutSeconds_" data-uid="Titanium.Web.Proxy.ProxyServer.ConnectionTimeOutSeconds*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ConnectionTimeOutSeconds" data-uid="Titanium.Web.Proxy.ProxyServer.ConnectionTimeOutSeconds">ConnectionTimeOutSeconds</h4>
-  <div class="markdown level1 summary"><p>Seconds client/server connection are to be kept alive when waiting for read/write to complete.</p>
+  <div class="markdown level1 summary"><p>Seconds client/server connection are to be kept alive when waiting for read/write to complete.
+This will also determine the pool eviction time when connection pool is enabled.
+Default value is 60 seconds.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -417,12 +420,40 @@ Defaults to false.</p>
   </table>
   
   
+  <a id="Titanium_Web_Proxy_ProxyServer_EnableConnectionPool_" data-uid="Titanium.Web.Proxy.ProxyServer.EnableConnectionPool*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_EnableConnectionPool" data-uid="Titanium.Web.Proxy.ProxyServer.EnableConnectionPool">EnableConnectionPool</h4>
+  <div class="markdown level1 summary"><p>Should we enable experimental server connection pool?
+Defaults to disable.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool EnableConnectionPool { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
   <a id="Titanium_Web_Proxy_ProxyServer_EnableWinAuth_" data-uid="Titanium.Web.Proxy.ProxyServer.EnableWinAuth*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_EnableWinAuth" data-uid="Titanium.Web.Proxy.ProxyServer.EnableWinAuth">EnableWinAuth</h4>
   <div class="markdown level1 summary"><p>Enable disable Windows Authentication (NTLM/Kerberos).
 Note: NTLM/Kerberos will always send local credentials of current user
 running the proxy process. This is because a man
-in middle attack with Windows domain authentication is not currently supported.</p>
+in middle attack with Windows domain authentication is not currently supported.
+Defaults to false.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -474,7 +505,8 @@ in middle attack with Windows domain authentication is not currently supported.<
   
   <a id="Titanium_Web_Proxy_ProxyServer_ForwardToUpstreamGateway_" data-uid="Titanium.Web.Proxy.ProxyServer.ForwardToUpstreamGateway*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ForwardToUpstreamGateway" data-uid="Titanium.Web.Proxy.ProxyServer.ForwardToUpstreamGateway">ForwardToUpstreamGateway</h4>
-  <div class="markdown level1 summary"><p>Gets or sets a value indicating whether requests will be chained to upstream gateway.</p>
+  <div class="markdown level1 summary"><p>Gets or sets a value indicating whether requests will be chained to upstream gateway.
+Defaults to false.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -525,6 +557,115 @@ User should return the ExternalProxy object with valid credentials.</p>
   </table>
   
   
+  <a id="Titanium_Web_Proxy_ProxyServer_MaxCachedConnections_" data-uid="Titanium.Web.Proxy.ProxyServer.MaxCachedConnections*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_MaxCachedConnections" data-uid="Titanium.Web.Proxy.ProxyServer.MaxCachedConnections">MaxCachedConnections</h4>
+  <div class="markdown level1 summary"><p>Maximum number of concurrent connections per remote host in cache.
+Only valid when connection pooling is enabled.
+Default value is 2.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int MaxCachedConnections { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationRealm_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationRealm*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationRealm" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationRealm">ProxyAuthenticationRealm</h4>
+  <div class="markdown level1 summary"><p>Realm used during Proxy Basic Authentication.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public string ProxyAuthenticationRealm { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationSchemes_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyAuthenticationSchemes" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes">ProxyAuthenticationSchemes</h4>
+  <div class="markdown level1 summary"><p>A collection of scheme types, e.g. basic, NTLM, Kerberos, Negotiate, to return if scheme authentication is required.
+Works in relation with ProxySchemeAuthenticateFunc.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public IEnumerable&lt;string&gt; ProxyAuthenticationSchemes { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.collections.generic.ienumerable-1">IEnumerable</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ProxyBasicAuthenticateFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyBasicAuthenticateFunc" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc">ProxyBasicAuthenticateFunc</h4>
+  <div class="markdown level1 summary"><p>A callback to authenticate proxy clients via basic authentication.
+Parameters are username and password as provided by client.
+Should return true for successful authentication.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Func&lt;SessionEventArgsBase, string, string, Task&lt;bool&gt;&gt; ProxyBasicAuthenticateFunc { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-4">Func</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a>&gt;&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
   <a id="Titanium_Web_Proxy_ProxyServer_ProxyEndPoints_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyEndPoints*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyEndPoints" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyEndPoints">ProxyEndPoints</h4>
   <div class="markdown level1 summary"><p>A list of IpAddress and port this proxy is listening to.</p>
@@ -551,32 +692,6 @@ User should return the ExternalProxy object with valid credentials.</p>
   </table>
   
   
-  <a id="Titanium_Web_Proxy_ProxyServer_ProxyRealm_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRealm*"></a>
-  <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyRealm" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRealm">ProxyRealm</h4>
-  <div class="markdown level1 summary"><p>Realm used during Proxy Basic Authentication.</p>
-</div>
-  <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
-  <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public string ProxyRealm { get; set; }</code></pre>
-  </div>
-  <h5 class="propertyValue">Property Value</h5>
-  <table class="table table-bordered table-striped table-condensed">
-    <thead>
-      <tr>
-        <th>Type</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a></td>
-        <td></td>
-      </tr>
-    </tbody>
-  </table>
-  
-  
   <a id="Titanium_Web_Proxy_ProxyServer_ProxyRunning_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRunning*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ProxyRunning" data-uid="Titanium.Web.Proxy.ProxyServer.ProxyRunning">ProxyRunning</h4>
   <div class="markdown level1 summary"><p>Is the proxy currently running?</p>
@@ -597,6 +712,34 @@ User should return the ExternalProxy object with valid credentials.</p>
     <tbody>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_ProxySchemeAuthenticateFunc_" data-uid="Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ProxySchemeAuthenticateFunc" data-uid="Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc">ProxySchemeAuthenticateFunc</h4>
+  <div class="markdown level1 summary"><p>A pluggable callback to authenticate clients by scheme instead of requiring basic authentication through ProxyBasicAuthenticateFunc.
+Parameters are current working session, schemeType, and token as provided by a calling client.
+Should return success for successful authentication, continuation if the package requests, or failure.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Func&lt;SessionEventArgsBase, string, string, Task&lt;ProxyAuthenticationContext&gt;&gt; ProxySchemeAuthenticateFunc { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-4">Func</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<span class="xref">ProxyAuthenticationContext</span>&gt;&gt;</td>
         <td></td>
       </tr>
     </tbody>
@@ -1103,6 +1246,56 @@ Will throw error if the end point does&apos;nt exist.</p>
     <tbody>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.eventhandler">EventHandler</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <h4 id="Titanium_Web_Proxy_ProxyServer_OnClientConnectionCreate" data-uid="Titanium.Web.Proxy.ProxyServer.OnClientConnectionCreate">OnClientConnectionCreate</h4>
+  <div class="markdown level1 summary"><p>Customize TcpClient used for client connection upon create.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event AsyncEventHandler&lt;TcpClient&gt; OnClientConnectionCreate</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html">AsyncEventHandler</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.net.sockets.tcpclient">TcpClient</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <h4 id="Titanium_Web_Proxy_ProxyServer_OnServerConnectionCreate" data-uid="Titanium.Web.Proxy.ProxyServer.OnServerConnectionCreate">OnServerConnectionCreate</h4>
+  <div class="markdown level1 summary"><p>Customize TcpClient used for server connection upon create.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event AsyncEventHandler&lt;TcpClient&gt; OnServerConnectionCreate</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html">AsyncEventHandler</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.net.sockets.tcpclient">TcpClient</a>&gt;</td>
         <td></td>
       </tr>
     </tbody>
