@@ -187,6 +187,18 @@ namespace Titanium.Web.Proxy
         public int MaxCachedConnections { get; set; } = 2;
 
         /// <summary>
+        /// Number of seconds to linger when Tcp connection is in TIME_WAIT state.
+        /// Default value is 3.
+        /// </summary>
+        public int TcpTimeWaitSeconds { get; set; } = 3;
+
+        /// <summary>
+        /// Should we resues client/server tcp sockets.
+        /// Default is true.
+        /// </summary>
+        public bool ReuseSocket { get; set; } = true;
+
+        /// <summary>
         ///     Total number of active client connections.
         /// </summary>
         public int ClientConnectionCount => clientConnectionCount;
@@ -619,6 +631,12 @@ namespace Titanium.Web.Proxy
         private void listen(ProxyEndPoint endPoint)
         {
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
+
+            if (ReuseSocket)
+            {
+                endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            }
+
             try
             {
                 endPoint.Listener.Start();
@@ -718,6 +736,7 @@ namespace Titanium.Web.Proxy
             tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
             tcpClient.SendBufferSize = BufferSize;
             tcpClient.ReceiveBufferSize = BufferSize;
+            tcpClient.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
 
             await InvokeConnectionCreateEvent(tcpClient, true);
 

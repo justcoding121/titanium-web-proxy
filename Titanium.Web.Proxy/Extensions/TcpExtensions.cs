@@ -6,22 +6,6 @@ namespace Titanium.Web.Proxy.Extensions
 {
     internal static class TcpExtensions
     {
-        private static readonly Func<Socket, bool> socketCleanedUpGetter;
-
-        static TcpExtensions()
-        {
-            var property = typeof(Socket).GetProperty("CleanedUp", BindingFlags.NonPublic | BindingFlags.Instance);
-            if (property != null)
-            {
-                var method = property.GetMethod;
-                if (method != null && method.ReturnType == typeof(bool))
-                {
-                    socketCleanedUpGetter =
-                        (Func<Socket, bool>)Delegate.CreateDelegate(typeof(Func<Socket, bool>), method);
-                }
-            }
-        }
-
         internal static void CloseSocket(this TcpClient tcpClient)
         {
             if (tcpClient == null)
@@ -31,21 +15,54 @@ namespace Titanium.Web.Proxy.Extensions
 
             try
             {
-                // This line is important!
-                // contributors please don't remove it without discussion
-                // It helps to avoid eventual deterioration of performance due to TCP port exhaustion
-                // due to default TCP CLOSE_WAIT timeout for 4 minutes
-                if (socketCleanedUpGetter == null || !socketCleanedUpGetter(tcpClient.Client))
-                {
-                    tcpClient.LingerState = new LingerOption(true, 0);
-                }
-
                 tcpClient.Close();
             }
             catch
             {
                 // ignored
             }
+        }
+
+
+        /// <summary>
+        ///     Check if a TcpClient is good to be used.
+        ///     This only checks if send is working so local socket is still connected.
+        ///     Receive can only be verified by doing a valid read from server without exceptions.
+        ///     So in our case we should retry with new connection from pool if first read after getting the connection fails.
+        ///     https://msdn.microsoft.com/en-us/library/system.net.sockets.socket.connected(v=vs.110).aspx
+        /// </summary>
+        /// <param name="client"></param>
+        /// <returns></returns>
+        internal static bool IsGoodConnection(this TcpClient client)
+        {
+            var socket = client.Client;
+
+            if (!client.Connected || !socket.Connected)
+            {
+                return false;
+            }
+
+            // This is how you can determine whether a socket is still connected.
+            bool blockingState = socket.Blocking;
+            try
+            {
+                var tmp = new byte[1];
+
+                socket.Blocking = false;
+                socket.Send(tmp, 0, 0);
+                //Connected.
+            }
+            catch
+            {
+                //Should we let 10035 == WSAEWOULDBLOCK as valid connection?
+                return false;
+            }
+            finally
+            {
+                socket.Blocking = blockingState;
+            }
+
+            return true;
         }
     }
 }
