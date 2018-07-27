@@ -165,6 +165,8 @@ namespace Titanium.Web.Proxy
                             //we need this to syphon out data from connection if API user changes them.
                             request.SetOriginalHeaders();
 
+                            args.TimeLine.Add("Request Received", DateTime.Now);
+
                             // If user requested interception do it
                             await invokeBeforeRequest(args);
 
@@ -213,6 +215,8 @@ namespace Titanium.Web.Proxy
                             //for connection pool, retry fails until cache is exhausted.   
                             var result = await retryPolicy<ServerConnectionException>().ExecuteAsync(async (serverConnection) =>
                             {
+                                args.TimeLine.Add("Server Connection Created", DateTime.Now);
+
                                 // if upgrading to websocket then relay the request without reading the contents
                                 if (request.UpgradeToWebSocket)
                                 {
@@ -378,6 +382,8 @@ namespace Titanium.Web.Proxy
             {
                 await handleHttpSessionResponse(args);
             }
+
+            args.TimeLine.Add("Response Sent", DateTime.Now);
         }
 
         /// <summary>
