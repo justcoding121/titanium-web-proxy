@@ -272,15 +272,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
                     SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
                     SendBufferSize = proxyServer.BufferSize,
-                    ReceiveBufferSize = proxyServer.BufferSize
+                    ReceiveBufferSize = proxyServer.BufferSize,
+                    LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds)
                 };
 
                 if(proxyServer.ReuseSocket)
                 {
                     tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                 }
-            
-                tcpClient.LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds);
 
                 // If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections
                 if (useUpstreamProxy)
