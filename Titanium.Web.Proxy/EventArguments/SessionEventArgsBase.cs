@@ -40,7 +40,7 @@ namespace Titanium.Web.Proxy.EventArguments
             bufferSize = server.BufferSize;
             bufferPool = server.BufferPool;
             exceptionFunc = server.ExceptionFunc;
-            TimeLine.Add("Session Created", DateTime.Now);
+            TimeLine["Session Created"] = DateTime.Now;
         }
 
         protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
