@@ -191,7 +191,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                             var cutOff = DateTime.Now.AddSeconds(-1 * proxyServer.ConnectionTimeOutSeconds + 3);
 
                             if (recentConnection.LastAccess > cutOff
-                                && isGoodConnection(recentConnection.TcpClient))
+                                && recentConnection.TcpClient.IsGoodConnection())
                             {
                                 return recentConnection;
                             }
@@ -273,7 +273,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
                     SendBufferSize = proxyServer.BufferSize,
                     ReceiveBufferSize = proxyServer.BufferSize
-                }; 
+                };
+
+                if(proxyServer.ReuseSocket)
+                {
+                    tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                }
+            
+                tcpClient.LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds);
 
                 // If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections
                 if (useUpstreamProxy)
@@ -499,47 +506,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
 
             }
-        }
-
-        /// <summary>
-        ///     Check if a TcpClient is good to be used.
-        ///     This only checks if send is working so local socket is still connected.
-        ///     Receive can only be verified by doing a valid read from server without exceptions.
-        ///     So in our case we should retry with new connection from pool if first read after getting the connection fails.
-        ///     https://msdn.microsoft.com/en-us/library/system.net.sockets.socket.connected(v=vs.110).aspx
-        /// </summary>
-        /// <param name="client"></param>
-        /// <returns></returns>
-        private static bool isGoodConnection(TcpClient client)
-        {
-            var socket = client.Client;
-
-            if (!client.Connected || !socket.Connected)
-            {
-                return false;
-            }
-
-            // This is how you can determine whether a socket is still connected.
-            bool blockingState = socket.Blocking;
-            try
-            {
-                var tmp = new byte[1];
-
-                socket.Blocking = false;
-                socket.Send(tmp, 0, 0);
-                //Connected.
-            }
-            catch
-            {
-                //Should we let 10035 == WSAEWOULDBLOCK as valid connection?
-                return false;
-            }
-            finally
-            {
-                socket.Blocking = blockingState;
-            }
-
-            return true;
         }
 
         public void Dispose()

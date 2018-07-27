@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Security;
 #endif
 using System.Net.Sockets;
+using System.Threading.Tasks;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -85,9 +86,17 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         public void Dispose()
         {
-            proxyServer.UpdateServerConnectionCount(false);
-            Stream?.Dispose();
-            tcpClient.CloseSocket();
+            Task.Run(async () =>
+            {
+                //delay calling tcp connection close()
+                //so that server have enough time to call close first.
+                //This way we can push tcp Time_Wait to server side when possible.
+                await Task.Delay(1000);
+                proxyServer.UpdateServerConnectionCount(false);
+                Stream?.Dispose();
+                tcpClient.CloseSocket();
+            });
+
         }
     }
 }
