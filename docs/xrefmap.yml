@@ -644,6 +644,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TerminateSession
   nameWithType: SessionEventArgsBase.TerminateSession
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TimeLine
+  name: TimeLine
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_TimeLine
+  commentId: P:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TimeLine
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TimeLine
+  nameWithType: SessionEventArgsBase.TimeLine
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TimeLine*
+  name: TimeLine
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_TimeLine_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TimeLine
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TimeLine
+  nameWithType: SessionEventArgsBase.TimeLine
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UserData
   name: UserData
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UserData
