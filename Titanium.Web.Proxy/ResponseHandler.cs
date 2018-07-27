@@ -24,7 +24,7 @@ namespace Titanium.Web.Proxy
             // read response & headers from server
             await args.WebSession.ReceiveResponse(cancellationToken);
 
-            args.TimeLine.Add("Response Received", DateTime.Now);
+            args.TimeLine["Response Received"] = DateTime.Now;
 
             var response = args.WebSession.Response;
             args.ReRequest = false;
