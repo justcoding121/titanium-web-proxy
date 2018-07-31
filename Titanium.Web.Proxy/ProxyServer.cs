@@ -109,12 +109,6 @@ namespace Titanium.Web.Proxy
                 systemProxySettingsManager = new SystemProxyManager();
             }
 
-            //linux have bug with socket reuse
-            if (!RunTime.IsLinux)
-            {
-                ReuseSocket = true;
-            }
-
             CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName,
                 userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, ExceptionFunc);
         }
@@ -184,7 +178,6 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public int ConnectionTimeOutSeconds { get; set; }
 
-
         /// <summary>
         ///     Maximum number of concurrent connections per remote host in cache.
         ///     Only valid when connection pooling is enabled.
@@ -194,15 +187,15 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         /// Number of seconds to linger when Tcp connection is in TIME_WAIT state.
-        /// Default value is 3.
+        /// Default value is 30.
         /// </summary>
-        public int TcpTimeWaitSeconds { get; set; } = 3;
+        public int TcpTimeWaitSeconds { get; set; } = 30;
 
         /// <summary>
-        /// Should we resues client/server tcp sockets.
+        /// Should we reuse client/server tcp sockets.
         /// Default is true (false for linux due to bug in .Net core).
         /// </summary>
-        public bool ReuseSocket { get; set; }
+        public bool ReuseSocket { get; set; } = true;
 
         /// <summary>
         ///     Total number of active client connections.
@@ -299,20 +292,6 @@ namespace Titanium.Web.Proxy
         ///     Works in relation with ProxySchemeAuthenticateFunc.
         /// </summary>
         public IEnumerable<string> ProxyAuthenticationSchemes { get; set; } = new string[0];
-
-        /// <summary>
-        ///     Dispose the Proxy instance.
-        /// </summary>
-        public void Dispose()
-        {
-            if (ProxyRunning)
-            {
-                Stop();
-            }
-
-            CertificateManager?.Dispose();
-            BufferPool?.Dispose();
-        }
 
         /// <summary>
         ///     Event occurs when client connection count changed.
@@ -638,7 +617,8 @@ namespace Titanium.Web.Proxy
         {
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
 
-            if (ReuseSocket)
+            //linux has a bug with socket reuse in .net core.
+            if (ReuseSocket && !RunTime.IsLinux)
             {
                 endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             }
@@ -848,6 +828,20 @@ namespace Titanium.Web.Proxy
         private RetryPolicy<T> retryPolicy<T>() where T : Exception
         {
             return new RetryPolicy<T>(retries, tcpConnectionFactory);
+        }
+
+        /// <summary>
+        ///     Dispose the Proxy instance.
+        /// </summary>
+        public void Dispose()
+        {
+            if (ProxyRunning)
+            {
+                Stop();
+            }
+
+            CertificateManager?.Dispose();
+            BufferPool?.Dispose();
         }
     }
 }
