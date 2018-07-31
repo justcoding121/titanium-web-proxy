@@ -109,6 +109,12 @@ namespace Titanium.Web.Proxy
                 systemProxySettingsManager = new SystemProxyManager();
             }
 
+            //linux have bug with socket reuse
+            if (!RunTime.IsLinux)
+            {
+                ReuseSocket = true;
+            }
+
             CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName,
                 userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, ExceptionFunc);
         }
@@ -194,9 +200,9 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         /// Should we resues client/server tcp sockets.
-        /// Default is true.
+        /// Default is true (false for linux due to bug in .Net core).
         /// </summary>
-        public bool ReuseSocket { get; set; } = true;
+        public bool ReuseSocket { get; set; }
 
         /// <summary>
         ///     Total number of active client connections.

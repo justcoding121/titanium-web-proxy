@@ -23,12 +23,21 @@ namespace Titanium.Web.Proxy.Helpers
 /// <returns></returns>
 private static readonly Lazy<bool> isRunningOnWindows
     = new Lazy<bool>(() => RuntimeInformation.IsOSPlatform(OSPlatform.Windows));
+
+private static readonly Lazy<bool> isRunningOnLinux
+    = new Lazy<bool>(() => RuntimeInformation.IsOSPlatform(OSPlatform.Linux));
 #endif
 
         /// <summary>
         ///     Is running on Mono?
         /// </summary>
         internal static bool IsRunningOnMono => isRunningOnMono.Value;
+
+#if NETSTANDARD2_0
+        internal static bool IsLinux => isRunningOnLinux.Value;
+#else
+        internal static bool IsLinux => !IsWindows;
+#endif
 
 #if NETSTANDARD2_0
         internal static bool IsWindows => isRunningOnWindows.Value;
