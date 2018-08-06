@@ -19,14 +19,17 @@ namespace Titanium.Web.Proxy.Network
     public enum CertificateEngine
     {
         /// <summary>
-        ///     Uses Windows Certification Generation API.
+        ///     Uses BouncyCastle 3rd party library.
+        ///     Default.
         /// </summary>
-        DefaultWindows = 0,
+        BouncyCastle = 0,
 
         /// <summary>
-        ///     Uses BouncyCastle 3rd party library.
+        ///     Uses Windows Certification Generation API.
+        ///     Bug #468 Reported.
         /// </summary>
-        BouncyCastle = 1
+        DefaultWindows = 1
+
     }
 
     /// <summary>
@@ -93,7 +96,7 @@ namespace Titanium.Web.Proxy.Network
                 RootCertificateIssuerName = rootCertificateIssuerName;
             }
 
-            CertificateEngine = RunTime.IsWindows ? CertificateEngine.DefaultWindows : CertificateEngine.BouncyCastle;
+            CertificateEngine = CertificateEngine.BouncyCastle;
 
             certificateCache = new ConcurrentDictionary<string, CachedCertificate>();
             pendingCertificateCreationTasks = new ConcurrentDictionary<string, Task<X509Certificate2>>();
