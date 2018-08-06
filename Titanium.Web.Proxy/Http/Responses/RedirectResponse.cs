@@ -3,7 +3,7 @@
 namespace Titanium.Web.Proxy.Http.Responses
 {
     /// <summary>
-    ///     Redirect response
+    ///     The http redirect response.
     /// </summary>
     public sealed class RedirectResponse : Response
     {

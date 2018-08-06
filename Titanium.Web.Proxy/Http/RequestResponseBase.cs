@@ -10,6 +10,9 @@ using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http
 {
+    /// <summary>
+    /// Abstract base class for similar objects shared by both request and response objects.
+    /// </summary>
     public abstract class RequestResponseBase
     {
         /// <summary>

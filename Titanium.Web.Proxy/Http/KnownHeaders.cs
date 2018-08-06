@@ -1,5 +1,8 @@
 ﻿namespace Titanium.Web.Proxy.Http
 {
+    /// <summary>
+    /// Well known http headers.
+    /// </summary>
     public static class KnownHeaders
     {
         // Both
