@@ -10,7 +10,7 @@
     <meta name="viewport" content="width=device-width">
     <meta name="title" content="Class ProxyServer
    | Titanium Web Proxy ">
-    <meta name="generator" content="docfx 2.37.0.0">
+    <meta name="generator" content="docfx 2.37.2.0">
     
     <link rel="shortcut icon" href="../favicon.ico">
     <link rel="stylesheet" href="../styles/docfx.vendor.css">
@@ -746,6 +746,33 @@ Should return success for successful authentication, continuation if the package
   </table>
   
   
+  <a id="Titanium_Web_Proxy_ProxyServer_ReuseSocket_" data-uid="Titanium.Web.Proxy.ProxyServer.ReuseSocket*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ReuseSocket" data-uid="Titanium.Web.Proxy.ProxyServer.ReuseSocket">ReuseSocket</h4>
+  <div class="markdown level1 summary"><p>Should we reuse client/server tcp sockets.
+Default is true (false for linux due to bug in .Net core).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool ReuseSocket { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
   <a id="Titanium_Web_Proxy_ProxyServer_ServerConnectionCount_" data-uid="Titanium.Web.Proxy.ProxyServer.ServerConnectionCount*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ServerConnectionCount" data-uid="Titanium.Web.Proxy.ProxyServer.ServerConnectionCount">ServerConnectionCount</h4>
   <div class="markdown level1 summary"><p>Total number of active server connections.</p>
@@ -792,6 +819,33 @@ Should return success for successful authentication, continuation if the package
     <tbody>
       <tr>
         <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.security.authentication.sslprotocols">SslProtocols</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_TcpTimeWaitSeconds_" data-uid="Titanium.Web.Proxy.ProxyServer.TcpTimeWaitSeconds*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_TcpTimeWaitSeconds" data-uid="Titanium.Web.Proxy.ProxyServer.TcpTimeWaitSeconds">TcpTimeWaitSeconds</h4>
+  <div class="markdown level1 summary"><p>Number of seconds to linger when Tcp connection is in TIME_WAIT state.
+Default value is 30.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int TcpTimeWaitSeconds { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a></td>
         <td></td>
       </tr>
     </tbody>

@@ -644,6 +644,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TerminateSession
   nameWithType: SessionEventArgsBase.TerminateSession
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TimeLine
+  name: TimeLine
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_TimeLine
+  commentId: P:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TimeLine
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TimeLine
+  nameWithType: SessionEventArgsBase.TimeLine
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TimeLine*
+  name: TimeLine
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_TimeLine_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TimeLine
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TimeLine
+  nameWithType: SessionEventArgsBase.TimeLine
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UserData
   name: UserData
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UserData
@@ -2983,6 +2996,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.RemoveEndPoint
   nameWithType: ProxyServer.RemoveEndPoint
+- uid: Titanium.Web.Proxy.ProxyServer.ReuseSocket
+  name: ReuseSocket
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ReuseSocket
+  commentId: P:Titanium.Web.Proxy.ProxyServer.ReuseSocket
+  fullName: Titanium.Web.Proxy.ProxyServer.ReuseSocket
+  nameWithType: ProxyServer.ReuseSocket
+- uid: Titanium.Web.Proxy.ProxyServer.ReuseSocket*
+  name: ReuseSocket
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ReuseSocket_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ReuseSocket
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ReuseSocket
+  nameWithType: ProxyServer.ReuseSocket
 - uid: Titanium.Web.Proxy.ProxyServer.ServerCertificateValidationCallback
   name: ServerCertificateValidationCallback
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ServerCertificateValidationCallback
@@ -3086,6 +3112,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.SupportedSslProtocols
   nameWithType: ProxyServer.SupportedSslProtocols
+- uid: Titanium.Web.Proxy.ProxyServer.TcpTimeWaitSeconds
+  name: TcpTimeWaitSeconds
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TcpTimeWaitSeconds
+  commentId: P:Titanium.Web.Proxy.ProxyServer.TcpTimeWaitSeconds
+  fullName: Titanium.Web.Proxy.ProxyServer.TcpTimeWaitSeconds
+  nameWithType: ProxyServer.TcpTimeWaitSeconds
+- uid: Titanium.Web.Proxy.ProxyServer.TcpTimeWaitSeconds*
+  name: TcpTimeWaitSeconds
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TcpTimeWaitSeconds_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.TcpTimeWaitSeconds
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.TcpTimeWaitSeconds
+  nameWithType: ProxyServer.TcpTimeWaitSeconds
 - uid: Titanium.Web.Proxy.ProxyServer.UpStreamEndPoint
   name: UpStreamEndPoint
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_UpStreamEndPoint

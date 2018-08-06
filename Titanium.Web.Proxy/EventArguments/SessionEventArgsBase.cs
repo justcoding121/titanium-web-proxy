@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using StreamExtended;
@@ -26,6 +27,11 @@ namespace Titanium.Web.Proxy.EventArguments
         protected readonly ExceptionHandler exceptionFunc;
 
         /// <summary>
+        /// Relative milliseconds for various events.
+        /// </summary>
+        public Dictionary<string, DateTime> TimeLine { get; set; } = new Dictionary<string, DateTime>();
+
+        /// <summary>
         ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
         /// </summary>
         private SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
@@ -34,6 +40,7 @@ namespace Titanium.Web.Proxy.EventArguments
             bufferSize = server.BufferSize;
             bufferPool = server.BufferPool;
             exceptionFunc = server.ExceptionFunc;
+            TimeLine["Session Created"] = DateTime.Now;
         }
 
         protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
