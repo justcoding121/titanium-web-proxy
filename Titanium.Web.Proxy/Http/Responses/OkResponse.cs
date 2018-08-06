@@ -3,7 +3,7 @@
 namespace Titanium.Web.Proxy.Http.Responses
 {
     /// <summary>
-    ///     200 Ok response
+    ///     The http 200 Ok response.
     /// </summary>
     public sealed class OkResponse : Response
     {
