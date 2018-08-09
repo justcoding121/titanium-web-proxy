@@ -4,6 +4,9 @@ using StreamExtended;
 
 namespace Titanium.Web.Proxy.Http
 {
+    /// <summary>
+    /// The tcp tunnel connect response object.
+    /// </summary>
     public class ConnectResponse : Response
     {
         public ServerHelloInfo ServerHelloInfo { get; set; }

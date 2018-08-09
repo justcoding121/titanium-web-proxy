@@ -8,6 +8,9 @@ using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http
 {
+    /// <summary>
+    /// The http header collection.
+    /// </summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class HeaderCollection : IEnumerable<HttpHeader>
     {
