@@ -193,7 +193,7 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         /// Should we reuse client/server tcp sockets.
-        /// Default is true (false for linux due to bug in .Net core).
+        /// Default is true (disabled for linux/macOS due to bug in .Net core).
         /// </summary>
         public bool ReuseSocket { get; set; } = true;
 
@@ -617,8 +617,8 @@ namespace Titanium.Web.Proxy
         {
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
 
-            //linux has a bug with socket reuse in .net core.
-            if (ReuseSocket && !RunTime.IsLinux)
+            //linux/macOS has a bug with socket reuse in .net core.
+            if (ReuseSocket && (RunTime.IsWindows || RunTime.IsRunningOnMono))
             {
                 endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             }
