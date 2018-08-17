@@ -52,6 +52,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         internal WinCertificateMaker(ExceptionHandler exceptionFunc)
         {
             this.exceptionFunc = exceptionFunc;
+
             typeX500DN = Type.GetTypeFromProgID("X509Enrollment.CX500DistinguishedName", true);
             typeX509PrivateKey = Type.GetTypeFromProgID("X509Enrollment.CX509PrivateKey", true);
             typeOID = Type.GetTypeFromProgID("X509Enrollment.CObjectId", true);
