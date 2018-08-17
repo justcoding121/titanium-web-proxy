@@ -80,7 +80,7 @@ namespace Titanium.Web.Proxy
             {
                 // clear current response
                 await args.ClearResponse(cancellationToken);
-                await handleHttpSessionRequestInternal(args.WebSession.ServerConnection, args);
+                await handleHttpSessionRequest(args.WebSession.ServerConnection, args);
                 return;
             }
 
