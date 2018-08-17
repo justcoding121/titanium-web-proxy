@@ -177,7 +177,7 @@
   "api/Titanium.Web.Proxy.Network.CertificateEngine.html": {
     "href": "api/Titanium.Web.Proxy.Network.CertificateEngine.html",
     "title": "Enum CertificateEngine | Titanium Web Proxy",
-    "keywords": "Enum CertificateEngine Certificate Engine option. Namespace : Titanium.Web.Proxy.Network Assembly : Titanium.Web.Proxy.dll Syntax public enum CertificateEngine Fields Name Description BouncyCastle Uses BouncyCastle 3rd party library. Default. DefaultWindows Uses Windows Certification Generation API. Bug #468 Reported."
+    "keywords": "Enum CertificateEngine Certificate Engine option. Namespace : Titanium.Web.Proxy.Network Assembly : Titanium.Web.Proxy.dll Syntax public enum CertificateEngine Fields Name Description BouncyCastle Uses BouncyCastle 3rd party library. Default. DefaultWindows Uses Windows Certification Generation API and only valid in Windows OS. Observed to be faster than BouncyCastle. Bug #468 Reported."
   },
   "api/Titanium.Web.Proxy.Network.CertificateManager.html": {
     "href": "api/Titanium.Web.Proxy.Network.CertificateManager.html",
