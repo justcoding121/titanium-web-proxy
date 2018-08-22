@@ -113,7 +113,7 @@ namespace Titanium.Web.Proxy.Http
             {
                 headerBuilder.AppendFormat("{0}{1}", HttpHeader.ProxyConnectionKeepAlive, CRLF);
                 headerBuilder.AppendFormat("{0}{1}",
-                    HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password));
+                    HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password), CRLF);
             }
 
             // write request headers
