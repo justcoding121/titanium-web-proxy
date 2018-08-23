@@ -145,7 +145,7 @@ namespace Titanium.Web.Proxy.Http
             out string statusDescription)
         {
             var httpResult = httpStatus.Split(ProxyConstants.SpaceSplit, 3);
-            if (httpResult.Length != 3)
+            if (httpResult.Length <= 1)
             {
                 throw new Exception("Invalid HTTP status line: " + httpStatus);
             }
@@ -159,7 +159,7 @@ namespace Titanium.Web.Proxy.Http
             }
 
             statusCode = int.Parse(httpResult[1]);
-            statusDescription = httpResult[2];
+            statusDescription = httpResult.Length > 2 ? httpResult[2] : string.Empty;
         }
     }
 }
