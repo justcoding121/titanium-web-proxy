@@ -52,6 +52,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         internal WinCertificateMaker(ExceptionHandler exceptionFunc)
         {
             this.exceptionFunc = exceptionFunc;
+
             typeX500DN = Type.GetTypeFromProgID("X509Enrollment.CX500DistinguishedName", true);
             typeX509PrivateKey = Type.GetTypeFromProgID("X509Enrollment.CX509PrivateKey", true);
             typeOID = Type.GetTypeFromProgID("X509Enrollment.CObjectId", true);
@@ -74,13 +75,41 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <summary>
         ///     Make certificate.
         /// </summary>
-        /// <param name="sSubjectCN"></param>
-        /// <param name="isRoot"></param>
-        /// <param name="signingCert"></param>
-        /// <returns></returns>
         public X509Certificate2 MakeCertificate(string sSubjectCN, bool isRoot, X509Certificate2 signingCert = null)
         {
-            return makeCertificateInternal(sSubjectCN, isRoot, true, signingCert);
+            return makeCertificate(sSubjectCN, isRoot, true, signingCert);
+        }
+
+        private X509Certificate2 makeCertificate(string sSubjectCN, bool isRoot,
+            bool switchToMTAIfNeeded, X509Certificate2 signingCert = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (switchToMTAIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
+            {
+                return Task.Run(() => makeCertificate(sSubjectCN, isRoot, false, signingCert),
+                    cancellationToken).Result;
+            }
+
+            // Subject
+            string fullSubject = $"CN={sSubjectCN}";
+
+            // Sig Algo
+            const string hashAlgo = "SHA256";
+
+            // Grace Days
+            const int graceDays = -366;
+
+            // ValiDays
+            const int validDays = 1825;
+
+            // KeyLength
+            const int keyLength = 2048;
+
+            var graceTime = DateTime.Now.AddDays(graceDays);
+            var now = DateTime.Now;
+            var certificate = makeCertificate(isRoot, sSubjectCN, fullSubject, keyLength, hashAlgo, graceTime,
+                now.AddDays(validDays), isRoot ? null : signingCert);
+            return certificate;
         }
 
         private X509Certificate2 makeCertificate(bool isRoot, string subject, string fullSubject,
@@ -271,39 +300,9 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             string empty = (string)typeX509Enrollment.InvokeMember("CreatePFX", BindingFlags.InvokeMethod, null,
                 x509Enrollment, typeValue);
+
             return new X509Certificate2(Convert.FromBase64String(empty), string.Empty, X509KeyStorageFlags.Exportable);
         }
 
-        private X509Certificate2 makeCertificateInternal(string sSubjectCN, bool isRoot,
-            bool switchToMTAIfNeeded, X509Certificate2 signingCert = null,
-            CancellationToken cancellationToken = default)
-        {
-            if (switchToMTAIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
-            {
-                return Task.Run(() => makeCertificateInternal(sSubjectCN, isRoot, false, signingCert),
-                    cancellationToken).Result;
-            }
-
-            // Subject
-            string fullSubject = $"CN={sSubjectCN}";
-
-            // Sig Algo
-            const string hashAlgo = "SHA256";
-            
-            // Grace Days
-            const int graceDays = -366;
-            
-            // ValiDays
-            const int validDays = 1825;
-            
-            // KeyLength
-            const int keyLength = 2048;
-
-            var graceTime = DateTime.Now.AddDays(graceDays);
-            var now = DateTime.Now;
-            var certificate = makeCertificate(isRoot, sSubjectCN, fullSubject, keyLength, hashAlgo, graceTime,
-                now.AddDays(validDays), isRoot ? null : signingCert);
-            return certificate;
-        }
     }
 }

@@ -110,13 +110,13 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 var sb = new StringBuilder();
-                sb.AppendLine(CreateResponseLine(HttpVersion, StatusCode, StatusDescription));
+                sb.Append($"{CreateResponseLine(HttpVersion, StatusCode, StatusDescription)}{ProxyConstants.NewLine}");
                 foreach (var header in Headers)
                 {
-                    sb.AppendLine(header.ToString());
+                    sb.Append($"{header.ToString()}{ProxyConstants.NewLine}");
                 }
 
-                sb.AppendLine();
+                sb.Append(ProxyConstants.NewLine);
                 return sb.ToString();
             }
         }
@@ -145,7 +145,7 @@ namespace Titanium.Web.Proxy.Http
             out string statusDescription)
         {
             var httpResult = httpStatus.Split(ProxyConstants.SpaceSplit, 3);
-            if (httpResult.Length != 3)
+            if (httpResult.Length <= 1)
             {
                 throw new Exception("Invalid HTTP status line: " + httpStatus);
             }
@@ -159,7 +159,7 @@ namespace Titanium.Web.Proxy.Http
             }
 
             statusCode = int.Parse(httpResult[1]);
-            statusDescription = httpResult[2];
+            statusDescription = httpResult.Length > 2 ? httpResult[2] : string.Empty;
         }
     }
 }

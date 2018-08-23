@@ -140,13 +140,13 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 var sb = new StringBuilder();
-                sb.AppendLine(CreateRequestLine(Method, OriginalUrl, HttpVersion));
+                sb.Append($"{CreateRequestLine(Method, OriginalUrl, HttpVersion)}{ProxyConstants.NewLine}");
                 foreach (var header in Headers)
                 {
-                    sb.AppendLine(header.ToString());
+                    sb.Append($"{header.ToString()}{ProxyConstants.NewLine}");
                 }
 
-                sb.AppendLine();
+                sb.Append(ProxyConstants.NewLine);
                 return sb.ToString();
             }
         }
