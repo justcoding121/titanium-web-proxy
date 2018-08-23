@@ -8,6 +8,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -16,8 +17,6 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class HttpWebClient
     {
-        private const string CRLF = "\r\n";
-
         internal HttpWebClient(Request request = null, Response response = null)
         {
             Request = request ?? new Request();
@@ -111,9 +110,8 @@ namespace Titanium.Web.Proxy.Http
                                && !string.IsNullOrEmpty(upstreamProxy.UserName)
                                && upstreamProxy.Password != null)
             {
-                headerBuilder.AppendFormat("{0}{1}", HttpHeader.ProxyConnectionKeepAlive, CRLF);
-                headerBuilder.AppendFormat("{0}{1}",
-                    HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password), CRLF);
+                headerBuilder.Append($"{HttpHeader.ProxyConnectionKeepAlive}{ProxyConstants.NewLine}");
+                headerBuilder.Append($"{HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password)}{ProxyConstants.NewLine}");
             }
 
             // write request headers
@@ -121,11 +119,11 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (isTransparent || header.Name != KnownHeaders.ProxyAuthorization)
                 {
-                    headerBuilder.AppendFormat("{0}{1}", header, CRLF);
+                    headerBuilder.Append($"{header}{ProxyConstants.NewLine}");
                 }
             }
 
-            headerBuilder.Append(CRLF);
+            headerBuilder.Append(ProxyConstants.NewLine);
             
             await writer.WriteAsync(headerBuilder.ToString(), cancellationToken);
 

@@ -1,4 +1,6 @@
-﻿using System.Text.RegularExpressions;
+﻿using System;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace Titanium.Web.Proxy.Shared
 {
@@ -14,9 +16,20 @@ namespace Titanium.Web.Proxy.Shared
         internal static readonly char[] SemiColonSplit = { ';' };
         internal static readonly char[] EqualSplit = { '=' };
 
-        internal static readonly byte[] NewLine = { (byte)'\r', (byte)'\n' };
+        internal static readonly string NewLine = "\r\n";
+        internal static readonly byte[] NewLineBytes = { (byte)'\r', (byte)'\n' };
 
-        public static readonly Regex CNRemoverRegex =
+        internal static readonly Regex UriSchemeRegex =
+            new Regex("^[a-z]*://", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        internal static readonly HashSet<string> ProxySupportedCompressions =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "gzip",
+                "deflate"
+            };
+
+        internal static readonly Regex CNRemoverRegex =
             new Regex(@"^CN\s*=\s*", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     }
 }

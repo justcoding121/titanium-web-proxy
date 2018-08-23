@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.Helpers
         private readonly Stream stream;
         private readonly IBufferPool bufferPool;
 
-        private static readonly byte[] newLine = ProxyConstants.NewLine;
+        private static readonly byte[] newLine = ProxyConstants.NewLineBytes;
 
         private static readonly Encoder encoder = Encoding.ASCII.GetEncoder();
 
@@ -109,9 +109,9 @@ namespace Titanium.Web.Proxy.Helpers
             var headerBuilder = new StringBuilder();
             foreach (var header in headers)
             {
-                headerBuilder.AppendLine(header.ToString());
+                headerBuilder.Append($"{header.ToString()}{ProxyConstants.NewLine}");
             }
-            headerBuilder.AppendLine();
+            headerBuilder.Append(ProxyConstants.NewLine);
 
             await WriteAsync(headerBuilder.ToString(), cancellationToken);
 

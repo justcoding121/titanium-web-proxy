@@ -16,6 +16,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy
 {
@@ -24,15 +25,6 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer
     {
-        private static readonly Regex uriSchemeRegex =
-            new Regex("^[a-z]*://", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-        private static readonly HashSet<string> proxySupportedCompressions =
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "gzip",
-                "deflate"
-            };
 
         private bool isWindowsAuthenticationEnabledAndSupported =>
             EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
@@ -96,7 +88,7 @@ namespace Titanium.Web.Proxy
                                 cancellationToken);
 
                             Uri httpRemoteUri;
-                            if (uriSchemeRegex.IsMatch(httpUrl))
+                            if (ProxyConstants.UriSchemeRegex.IsMatch(httpUrl))
                             {
                                 try
                                 {
@@ -400,7 +392,7 @@ namespace Titanium.Web.Proxy
                 //only allow proxy supported compressions
                 supportedAcceptEncoding.AddRange(acceptEncoding.Split(',')
                     .Select(x => x.Trim())
-                    .Where(x => proxySupportedCompressions.Contains(x)));
+                    .Where(x => ProxyConstants.ProxySupportedCompressions.Contains(x)));
 
                 //uncompressed is always supported by proxy
                 supportedAcceptEncoding.Add("identity");
