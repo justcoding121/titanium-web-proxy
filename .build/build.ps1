@@ -2,7 +2,7 @@ $PSake.use_exit_on_error = $true
 
 $Here = "$(Split-Path -parent $MyInvocation.MyCommand.Definition)"
 
-$SolutionRoot = (Split-Path -parent $Here)
+$SolutionRoot = "$(Split-Path -parent $Here)\src"
 
 $ProjectName = "Titanium.Web.Proxy"
 $GitHubProjectName = "Titanium-Web-Proxy"
