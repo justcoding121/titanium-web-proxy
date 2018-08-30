@@ -11,11 +11,11 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 
 **Console example application screenshot**
 
-![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/Examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
+![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
 
 **GUI example application screenshot**
 
-![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/Examples/Titanium.Web.Proxy.Examples.Wpf/Capture.PNG)
+![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/examples/Titanium.Web.Proxy.Examples.Wpf/Capture.PNG)
 
 ### Features
 

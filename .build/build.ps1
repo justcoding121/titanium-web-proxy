@@ -27,7 +27,7 @@ if(!$Branch) { $Branch = "local" }
 
 if($Branch -eq "beta" ) { $Version = "$Version-beta" }
 
-$NuGet = Join-Path $SolutionRoot ".nuget\nuget.exe"
+$NuGet = Join-Path $RepoRoot ".nuget\nuget.exe"
 
 $MSBuild = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin\msbuild.exe"
 $MSBuild -replace ' ', '` '
@@ -121,5 +121,5 @@ Task Document -depends Build {
 
 #package nuget files
 Task Package -depends Document {
-    exec { . $NuGet pack "$SolutionRoot\$ProjectName\$ProjectName.nuspec" -Properties Configuration=$Configuration -OutputDirectory "$SolutionRoot" -Version "$Version" }
+    exec { . $NuGet pack "$SolutionRoot\$ProjectName\$ProjectName.nuspec" -Properties Configuration=$Configuration -OutputDirectory "$RepoRoot" -Version "$Version" }
 }
