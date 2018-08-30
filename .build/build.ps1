@@ -2,7 +2,8 @@ $PSake.use_exit_on_error = $true
 
 $Here = "$(Split-Path -parent $MyInvocation.MyCommand.Definition)"
 
-$SolutionRoot = "$(Split-Path -parent $Here)\src"
+$RepoRoot = $(Split-Path -parent $Here)
+$SolutionRoot = "$RepoRoot\src"
 
 $ProjectName = "Titanium.Web.Proxy"
 $GitHubProjectName = "Titanium-Web-Proxy"
@@ -65,12 +66,13 @@ Task Document -depends Build {
 
 	if($Branch -eq "master")
 	{
+		
 		#use docfx to generate API documentation from source metadata
 		docfx docfx.json
 
 		#patch index.json so that it is always sorted
 		#otherwise git will think file was changed 
-		$IndexJsonFile = "$SolutionRoot\docs\index.json"
+		$IndexJsonFile = "$RepoRoot\docs\index.json"
 		$unsorted = Get-Content $IndexJsonFile | Out-String
 		[Reflection.Assembly]::LoadFile("$Here\lib\Newtonsoft.Json.dll")
 		[System.Reflection.Assembly]::LoadWithPartialName("System")
@@ -79,7 +81,7 @@ Task Document -depends Build {
 		Set-Content -Path $IndexJsonFile -Value $obj
 
 		#setup clone directory
-		$TEMP_REPO_DIR =(Split-Path -parent $SolutionRoot) + "\temp-repo-clone"
+		$TEMP_REPO_DIR =(Split-Path -parent $RepoRoot) + "\temp-repo-clone"
 
 		If(test-path $TEMP_REPO_DIR)
 		{
@@ -101,7 +103,7 @@ Task Document -depends Build {
 		cd "$TEMP_REPO_DIR\docs"
 
 		#copy docs to clone directory\docs 
-		Copy-Item -Path "$SolutionRoot\docs\*" -Destination "$TEMP_REPO_DIR\docs" -Recurse -Force
+		Copy-Item -Path "$RepoRoot\docs\*" -Destination "$TEMP_REPO_DIR\docs" -Recurse -Force
 
 		#push changes to master
 		git config --global credential.helper store
