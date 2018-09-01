@@ -36,19 +36,16 @@ Supports
 Development enviroment used to work and build this project is described below for each platforms.
 
 #### Windows
-
-* Visual Studio 2017 as IDE for .NET framework/.Net core
-* Visual Studio Code as IDE for .NET core
+* Visual Studio 2017 as IDE for .NET framework/.NET core
+* Visual Studio Code as IDE for .NET framework/.NET core
 
 #### Mac OS
-
-* Visual Studio 2017 as IDE for Mono/.Net core
+* Visual Studio 2017 as IDE for Mono/.NET core
 * Visual Studio Code as IDE for .NET core
 
 #### Linux
-
 * Visual Studio Code as IDE for .NET core
-* Mono develop for Mono
+* Mono develop as IDE for Mono
 
 ### Usage
 
