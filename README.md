@@ -37,15 +37,18 @@ Development enviroment used to work and build this project is described below fo
 
 #### Windows
 
-* Visual Studio 2017/Visual Studio Code as IDE
+* Visual Studio 2017 as IDE for .NET framework/.Net core
+* Visual Studio Code as IDE for .NET core
 
 #### Mac OS
 
-* Visual Studio Code as IDE for .NET Standard
+* Visual Studio 2017 as IDE for Mono/.Net core
+* Visual Studio Code as IDE for .NET core
 
 #### Linux
 
-* Visual Studio Code as IDE for .NET Standard
+* Visual Studio Code as IDE for .NET core
+* Mono develop for Mono
 
 ### Usage
 
