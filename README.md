@@ -9,13 +9,22 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 * [API Documentation](https://justcoding121.github.io/Titanium-Web-Proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html)
 * [Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki)
 
-**Console example application screenshot**
+## Dev Environment
+Development enviroment used to work and build this project is described below for each platforms.
 
-![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
+### Windows
 
-**GUI example application screenshot**
+* Visual Studio 2017 as IDE for .NET/.NET standard builds
+* Visual Studio Code as IDE for .NET Standard only builds
 
-![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/examples/Titanium.Web.Proxy.Examples.Wpf/Capture.PNG)
+
+### Mac OS
+
+* Visual Studio Code as IDE for .NET Standard only builds
+
+### Linux
+
+* Visual Studio Code as IDE for .NET Standard only builds
 
 ### Features
 
@@ -229,3 +238,12 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
 #### Collaborators
 
 * [honfika](https://github.com/honfika)
+
+
+**Console example application screenshot**
+
+![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
+
+**GUI example application screenshot**
+
+![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/examples/Titanium.Web.Proxy.Examples.Wpf/Capture.PNG)
