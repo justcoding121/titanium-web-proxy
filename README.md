@@ -9,23 +9,6 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 * [API Documentation](https://justcoding121.github.io/Titanium-Web-Proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html)
 * [Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki)
 
-## Dev Environment
-Development enviroment used to work and build this project is described below for each platforms.
-
-### Windows
-
-* Visual Studio 2017 as IDE for .NET/.NET standard builds
-* Visual Studio Code as IDE for .NET Standard only builds
-
-
-### Mac OS
-
-* Visual Studio Code as IDE for .NET Standard only builds
-
-### Linux
-
-* Visual Studio Code as IDE for .NET Standard only builds
-
 ### Features
 
 * Multithreaded & fully asynchronous proxy employing server connection pooling, certificate cache & buffer pooling
@@ -33,11 +16,7 @@ Development enviroment used to work and build this project is described below fo
 * Supports mutual SSL authentication, proxy authentication & automatic upstream proxy detection
 * Kerberos/NTLM authentication over HTTP protocols for windows domain
 
-### Usage
-
-
-Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. 
-
+### Installation
 Install by [nuget](https://www.nuget.org/packages/Titanium.Web.Proxy)
 
 For beta releases on [beta branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/beta)
@@ -52,6 +31,27 @@ Supports
 
  * .Net Standard 2.0 or above
  * .Net Framework 4.5 or above
+ 
+### Development Environment
+Development enviroment used to work and build this project is described below for each platforms.
+
+#### Windows
+
+* Visual Studio 2017 as IDE for .NET/.NET standard builds
+* Visual Studio Code as IDE for .NET Standard only builds
+
+
+#### Mac OS
+
+* Visual Studio Code as IDE for .NET Standard only builds
+
+#### Linux
+
+* Visual Studio Code as IDE for .NET Standard only builds
+
+### Usage
+
+Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. 
  
 Setup HTTP proxy:
 
