@@ -41,7 +41,11 @@ skip_tags: true
 
 skip_commits:
   author: buildbot121
-  
+  files:
+    - docs/*
+    - README.md
+    - LICENSE
+
 #---------------------------------#
 #       artifacts configuration   #
 #---------------------------------#
