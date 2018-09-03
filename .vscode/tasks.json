@@ -1,0 +1,26 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "type": "process",
+            "windows": {
+                "command": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\MSBuild\\15.0\\Bin\\MSBuild.exe",
+                "args": ["${workspaceFolder}/src/Titanium.Web.Proxy.sln", "/p:Platform=x64"]
+            },
+            "osx": {
+                "command": "dotnet",
+                "args": ["${workspaceFolder}/src/Titanium.Web.Proxy.DotNet.sln"]
+            },
+            "linux": {
+                "command": "dotnet",
+                "args": ["${workspaceFolder}/src/Titanium.Web.Proxy.DotNet.sln"]
+            },
+            "problemMatcher": "$msCompile",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}

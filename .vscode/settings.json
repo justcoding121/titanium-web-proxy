@@ -1,0 +1,13 @@
+{
+    // The following will hide the js and map files in the editor
+    "files.exclude": {
+        "**/.build": true,
+        "**/.nuget": true,
+        "**/.vs": true,
+        "**/docs": true,
+        "**/packages": true,
+        "**/bin": true,
+        "**/obj": true,
+        "**/*.DotSettings": true,
+    }
+}

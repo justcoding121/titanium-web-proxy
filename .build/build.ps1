@@ -58,7 +58,7 @@ Task Restore-Packages -depends Install-BuildTools  {
 
 #build
 Task Build -depends Restore-Packages{
-    exec { . $MSBuild $SolutionFile /t:Build /v:normal /p:Configuration=$Configuration /t:restore }
+    exec { . $MSBuild $SolutionFile /t:Build /v:normal /p:Configuration=$Configuration /p:Platform="Any CPU" /t:restore }
 }
 
 #publish API documentation changes for GitHub pages under master\docs directory
