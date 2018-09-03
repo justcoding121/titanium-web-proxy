@@ -9,5 +9,6 @@
         "**/bin": true,
         "**/obj": true,
         "**/*.DotSettings": true,
+        "**/*.sln": true,
     }
 }

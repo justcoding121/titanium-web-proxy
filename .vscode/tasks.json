@@ -2,11 +2,11 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build",
+            "label": "build-basic-example",
             "type": "process",
             "windows": {
                 "command": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\MSBuild\\15.0\\Bin\\MSBuild.exe",
-                "args": ["${workspaceFolder}/src/Titanium.Web.Proxy.sln", "/p:Platform=Any CPU"]
+                "args": ["${workspaceFolder}/examples/Titanium.Web.Proxy.Examples.Basic/Titanium.Web.Proxy.Examples.Basic.csproj", "/p:Platform=Any CPU"]
             },
             "osx": {
                 "command": "dotnet",
@@ -23,7 +23,7 @@
             }
         },
         {
-            "label": "build-x64",
+            "label": "build-wpf-example",
             "type": "process",
             "command": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\MSBuild\\15.0\\Bin\\MSBuild.exe",
             "args": ["${workspaceFolder}/examples/Titanium.Web.Proxy.Examples.Wpf/Titanium.Web.Proxy.Examples.Wpf.csproj", "/p:Platform=x64"],

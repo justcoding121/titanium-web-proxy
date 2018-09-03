@@ -10,7 +10,7 @@
             "cwd": "${workspaceRoot}",
             "stopAtEntry": false,
             "console": "integratedTerminal",
-            "preLaunchTask": "build"
+            "preLaunchTask": "build-basic-example"
         },
         {
             "name": "Win|Net45|Debug|Wpf Example",
@@ -21,7 +21,7 @@
             "cwd": "${workspaceRoot}",
             "stopAtEntry": false,
             "console": "internalConsole",
-            "preLaunchTask": "build-x64"
+            "preLaunchTask": "build-wpf-example"
         }
     ]
 }
