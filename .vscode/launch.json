@@ -2,7 +2,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Win|Net45|Debug|Basic Example",
+            "name": "NetCore|Debug|Basic Example",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceRoot}/examples/Titanium.Web.Proxy.Examples.Basic/bin/Debug/netcoreapp2.0/Titanium.Web.Proxy.Examples.Basic.dll",
+            "args": [],
+            "cwd": "${workspaceRoot}",
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "preLaunchTask": "build-basic-example-netcore"
+        },
+        {
+            "name": "Windows|Net45|Debug|Basic Example",
             "type": "clr",
             "request": "launch",
             "program": "${workspaceRoot}/examples/Titanium.Web.Proxy.Examples.Basic/bin/Debug/net45/Titanium.Web.Proxy.Examples.Basic.exe",
@@ -10,10 +21,10 @@
             "cwd": "${workspaceRoot}",
             "stopAtEntry": false,
             "console": "integratedTerminal",
-            "preLaunchTask": "build-basic-example"
+            "preLaunchTask": "build-basic-example-net45"
         },
         {
-            "name": "Win|Net45|Debug|Wpf Example",
+            "name": "Windows|Net45|Debug|Wpf Example",
             "type": "clr",
             "request": "launch",
             "program": "${workspaceRoot}/examples/Titanium.Web.Proxy.Examples.Wpf/bin/x64/Debug/Titanium.Web.Proxy.Examples.Wpf.exe",
