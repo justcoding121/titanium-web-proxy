@@ -4,7 +4,7 @@
       "src": [
         {
 	 "files": [ "Titanium.Web.Proxy.Docs.sln"],
-         "src": "../"
+         "src": "../src/"
         }
       ],
       "dest": "obj/api"

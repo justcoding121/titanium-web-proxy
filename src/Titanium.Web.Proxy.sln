@@ -5,13 +5,6 @@ VisualStudioVersion = 15.0.26906.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Examples", "Examples", "{B6DBABDC-C985-4872-9C38-B4E5079CBC4B}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{6FD3B84B-9283-4E9C-8C43-A234E9AA3EAA}"
-	ProjectSection(SolutionItems) = preProject
-		..\.nuget\NuGet.Config = ..\.nuget\NuGet.Config
-		..\.nuget\NuGet.exe = ..\.nuget\NuGet.exe
-		..\.nuget\NuGet.targets = ..\.nuget\NuGet.targets
-	EndProjectSection
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentation", "{38EA62D0-D2CB-465D-AF4F-407C5B4D4A1E}"
 	ProjectSection(SolutionItems) = preProject
 		..\LICENSE = ..\LICENSE
@@ -97,7 +90,7 @@ Global
 		{4406CE17-9A39-4F28-8363-6169A4F799C1} = {B6DBABDC-C985-4872-9C38-B4E5079CBC4B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {625C1EB5-44CF-47DE-A85A-B4C8C40ED90A}
 		EnterpriseLibraryConfigurationToolBinariesPath = .1.505.2\lib\NET35
+		SolutionGuid = {625C1EB5-44CF-47DE-A85A-B4C8C40ED90A}
 	EndGlobalSection
 EndGlobal
