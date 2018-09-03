@@ -6,7 +6,7 @@
             "type": "process",
             "windows": {
                 "command": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\MSBuild\\15.0\\Bin\\MSBuild.exe",
-                "args": ["${workspaceFolder}/src/Titanium.Web.Proxy.sln", "/p:Platform=x64"]
+                "args": ["${workspaceFolder}/src/Titanium.Web.Proxy.sln", "/p:Platform=Any CPU"]
             },
             "osx": {
                 "command": "dotnet",
@@ -16,6 +16,17 @@
                 "command": "dotnet",
                 "args": ["${workspaceFolder}/src/Titanium.Web.Proxy.DotNet.sln"]
             },
+            "problemMatcher": "$msCompile",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "build-x64",
+            "type": "process",
+            "command": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\MSBuild\\15.0\\Bin\\MSBuild.exe",
+            "args": ["${workspaceFolder}/src/Titanium.Web.Proxy.sln", "/p:Platform=x64"],
             "problemMatcher": "$msCompile",
             "group": {
                 "kind": "build",

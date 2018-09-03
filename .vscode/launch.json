@@ -13,7 +13,7 @@
             "preLaunchTask": "build"
         },
         {
-            "name": "Net45|Debug|Wpf Example",
+            "name": "Net45|Debug|Win|Wpf Example",
             "type": "clr",
             "request": "launch",
             "program": "${workspaceRoot}/examples/Titanium.Web.Proxy.Examples.Wpf/bin/x64/Debug/Titanium.Web.Proxy.Examples.Wpf.exe",
@@ -21,7 +21,7 @@
             "cwd": "${workspaceRoot}",
             "stopAtEntry": false,
             "console": "internalConsole",
-            "preLaunchTask": "build"
+            "preLaunchTask": "build-x64"
         }
     ]
 }
