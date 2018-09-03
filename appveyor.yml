@@ -43,6 +43,7 @@ skip_commits:
   author: buildbot121
   files:
     - docs/*
+    - .vscode/*
     - README.md
     - LICENSE
 
