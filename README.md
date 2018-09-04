@@ -33,7 +33,6 @@ Supports
  * .Net Framework 4.5 or above
  
 ### Development Environment
-Development enviroment used to work and build this project is described below for each platforms.
 
 #### Windows
 * Visual Studio Code as IDE for .NET core
