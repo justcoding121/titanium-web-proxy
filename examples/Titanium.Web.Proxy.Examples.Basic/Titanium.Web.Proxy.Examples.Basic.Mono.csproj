@@ -9,7 +9,7 @@
   </PropertyGroup>
 
    <ItemGroup>
-    <ProjectReference Include="..\..&#x9;\src\Titanium.Web.Proxy\Titanium.Web.Proxy.Mono.csproj" />
+    <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.Mono.csproj" />
   </ItemGroup>
 
 </Project>
