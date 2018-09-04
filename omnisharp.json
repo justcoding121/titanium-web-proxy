@@ -5,7 +5,8 @@
         "**/tests/",
         "**/Titanium.Web.Proxy.Examples.Wpf/",
         "**/*.Basic.csproj",
-        "**/*.Proxy.csproj"
+        "**/*.Proxy.csproj",
+        "**/*.Mono.csproj"
       ]
     }
   }

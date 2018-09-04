@@ -10,7 +10,18 @@
             "cwd": "${workspaceRoot}",
             "stopAtEntry": false,
             "console": "integratedTerminal",
-            "preLaunchTask": "build-basic-example-netcore"
+            "preLaunchTask": "build-basic-example-netcore-debug"
+        },
+        {
+            "name": "NetCore|Release|Basic Example",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceRoot}/examples/Titanium.Web.Proxy.Examples.Basic/bin/Release/netcoreapp2.0/Titanium.Web.Proxy.Examples.Basic.NetCore.dll",
+            "args": [],
+            "cwd": "${workspaceRoot}",
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "preLaunchTask": "build-basic-example-netcore-release"
         }
     ]
 }
