@@ -10,6 +10,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using System.Runtime.InteropServices;
 
 namespace Titanium.Web.Proxy.Examples.Basic
 {
@@ -108,9 +109,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
                     endPoint.IpAddress, endPoint.Port);
             }
 
-#if NETSTANDARD2_0
+
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-#endif
             {
                 // Only explicit proxies can be set as system proxy!
                 //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
