@@ -12,7 +12,9 @@
         "**/*.sln": true,
         "**/tests/" : true,
         "**/Titanium.Web.Proxy.Examples.Wpf/" : true,
-        "**/*.Basic.csproj/": true
+        "**/*.Basic.csproj/": true,
+        "**/*.Docs.csproj/": true,
+        "**/*.Proxy.csproj/": true
     },
     "search.exclude": {
         "**/.build": true,
@@ -26,6 +28,8 @@
         "**/*.sln": true,
         "**/tests/" : true,
         "**/Titanium.Web.Proxy.Examples.Wpf/" : true,
-        "**/*.Basic.csproj/": true
+        "**/*.Basic.csproj/": true,
+        "**/*.Docs.csproj/": true,
+        "**/*.Proxy.csproj/": true
     }
 }
