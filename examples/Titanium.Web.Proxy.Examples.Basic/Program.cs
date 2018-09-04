@@ -1,6 +1,6 @@
 ﻿using System;
-using System.Runtime.InteropServices;
 using Titanium.Web.Proxy.Examples.Basic.Helpers;
+using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Examples.Basic
 {
@@ -10,9 +10,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public static void Main(string[] args)
         {
-            if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+
+            if (RunTime.IsWindows)
             {
-                 // fix console hang due to QuickEdit mode
+                // fix console hang due to QuickEdit mode
                 ConsoleHelper.DisableQuickEditMode();
             }
 
