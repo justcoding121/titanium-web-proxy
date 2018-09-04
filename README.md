@@ -40,7 +40,7 @@ Supports
 
 #### Mac OS
 * Visual Studio Code as IDE for .NET core
-* Visual Studio 2017 as IDE for Mono/.NET core
+* Visual Studio 2017 as IDE for Mono
 
 #### Linux
 * Visual Studio Code as IDE for .NET core
