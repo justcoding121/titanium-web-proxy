@@ -74,6 +74,16 @@
     "title": "Class ProxyHttpException | Titanium Web Proxy",
     "keywords": "Class ProxyHttpException Proxy HTTP exception. Inheritance Object Exception ProxyException ProxyHttpException Implements ISerializable _Exception Inherited Members Exception.GetBaseException() Exception.ToString() Exception.GetObjectData(SerializationInfo, StreamingContext) Exception.GetType() Exception.Message Exception.Data Exception.InnerException Exception.TargetSite Exception.StackTrace Exception.HelpLink Exception.Source Exception.HResult Exception.SerializeObjectState Object.Equals(Object) Object.Equals(Object, Object) Object.ReferenceEquals(Object, Object) Object.GetHashCode() Object.MemberwiseClone() Namespace : Titanium.Web.Proxy.Exceptions Assembly : Titanium.Web.Proxy.dll Syntax public class ProxyHttpException : ProxyException, ISerializable, _Exception Properties SessionEventArgs Gets session info associated to the exception. Declaration public SessionEventArgs SessionEventArgs { get; } Property Value Type Description SessionEventArgs Remarks This object properties should not be edited. Implements System.Runtime.Serialization.ISerializable System.Runtime.InteropServices._Exception"
   },
+  "api/Titanium.Web.Proxy.Helpers.html": {
+    "href": "api/Titanium.Web.Proxy.Helpers.html",
+    "title": "Namespace Titanium.Web.Proxy.Helpers | Titanium Web Proxy",
+    "keywords": "Namespace Titanium.Web.Proxy.Helpers Classes RunTime Run time helpers"
+  },
+  "api/Titanium.Web.Proxy.Helpers.RunTime.html": {
+    "href": "api/Titanium.Web.Proxy.Helpers.RunTime.html",
+    "title": "Class RunTime | Titanium Web Proxy",
+    "keywords": "Class RunTime Run time helpers Inheritance Object RunTime Inherited Members Object.ToString() Object.Equals(Object) Object.Equals(Object, Object) Object.ReferenceEquals(Object, Object) Object.GetHashCode() Object.GetType() Object.MemberwiseClone() Namespace : Titanium.Web.Proxy.Helpers Assembly : Titanium.Web.Proxy.dll Syntax public static class RunTime Properties IsLinux Declaration public static bool IsLinux { get; } Property Value Type Description Boolean IsMac Declaration public static bool IsMac { get; } Property Value Type Description Boolean IsWindows Declaration public static bool IsWindows { get; } Property Value Type Description Boolean"
+  },
   "api/Titanium.Web.Proxy.html": {
     "href": "api/Titanium.Web.Proxy.html",
     "title": "Namespace Titanium.Web.Proxy | Titanium Web Proxy",
