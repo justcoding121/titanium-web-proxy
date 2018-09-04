@@ -1,8 +1,6 @@
 ﻿using System;
-
-#if NETSTANDARD2_0
 using System.Runtime.InteropServices;
-#endif
+
 namespace Titanium.Web.Proxy.Helpers
 {
     /// <summary>
@@ -16,33 +14,24 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         private static readonly Lazy<bool> isRunningOnMono = new Lazy<bool>(() => Type.GetType("Mono.Runtime") != null);
 
-#if NETSTANDARD2_0
-/// <summary>
-/// cache for Windows platform check
-/// </summary>
-/// <returns></returns>
-private static readonly Lazy<bool> isRunningOnWindows
-    = new Lazy<bool>(() => RuntimeInformation.IsOSPlatform(OSPlatform.Windows));
-
-private static readonly Lazy<bool> isRunningOnLinux
-    = new Lazy<bool>(() => RuntimeInformation.IsOSPlatform(OSPlatform.Linux));
-#endif
+        /// <summary>
+        /// cache for Windows platform check
+        /// </summary>
+        /// <returns></returns>
+        private static bool isRunningOnWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        private static bool isRunningOnLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+        private static bool isRunningOnMac => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
 
         /// <summary>
         ///     Is running on Mono?
         /// </summary>
         internal static bool IsRunningOnMono => isRunningOnMono.Value;
 
-#if NETSTANDARD2_0
-        internal static bool IsLinux => isRunningOnLinux.Value;
-#else
-        internal static bool IsLinux => !IsWindows;
-#endif
+        internal static bool IsLinux => isRunningOnLinux;
 
-#if NETSTANDARD2_0
-        internal static bool IsWindows => isRunningOnWindows.Value;
-#else
-        internal static bool IsWindows => true;
-#endif
+        internal static bool IsWindows => isRunningOnWindows;
+
+        internal static bool IsMac => isRunningOnMac;
+
     }
 }

@@ -5,36 +5,12 @@
             "label": "build-basic-example-netcore",
             "type": "process",
             "command": "dotnet",
-            "args": ["build","${workspaceFolder}/examples/Titanium.Web.Proxy.Examples.Basic/Titanium.Web.Proxy.Examples.Basic.csproj"],
+            "args": ["build","${workspaceFolder}/examples/Titanium.Web.Proxy.Examples.Basic/Titanium.Web.Proxy.Examples.Basic.NetCore.csproj"],
             "problemMatcher": "$msCompile",
             "group": {
                 "kind": "build",
                 "isDefault": true
             }
-        },
-        {
-            "label": "build-basic-example-net45",
-            "type": "process",
-            "windows": {
-                "command": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\MSBuild\\15.0\\Bin\\MSBuild.exe",
-                "args": ["${workspaceFolder}/examples/Titanium.Web.Proxy.Examples.Basic/Titanium.Web.Proxy.Examples.Basic.csproj", "/p:Platform=Any CPU"]
-            },
-            "osx": {
-                "command": "dotnet",
-                "args": ["${workspaceFolder}/src/Titanium.Web.Proxy.DotNet.sln"]
-            },
-            "linux": {
-                "command": "dotnet",
-                "args": ["${workspaceFolder}/src/Titanium.Web.Proxy.DotNet.sln"]
-            },
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "build-wpf-example",
-            "type": "process",
-            "command": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\MSBuild\\15.0\\Bin\\MSBuild.exe",
-            "args": ["${workspaceFolder}/examples/Titanium.Web.Proxy.Examples.Wpf/Titanium.Web.Proxy.Examples.Wpf.csproj", "/p:Platform=x64"],
-            "problemMatcher": "$msCompile"
         }
     ]
 }
