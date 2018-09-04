@@ -12,7 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
+    <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.NetCore.csproj" />
   </ItemGroup>
 
 </Project>
