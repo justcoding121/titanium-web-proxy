@@ -4,7 +4,7 @@
         "**/*.Docs.csproj",
         "**/tests/",
         "**/Titanium.Web.Proxy.Examples.Wpf/",
-        "**/*.Basic.csproj/"
+        "**/*.Basic.csproj"
       ]
     }
   }
