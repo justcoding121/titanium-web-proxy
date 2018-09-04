@@ -1,0 +1,7 @@
+{
+    "fileOptions": {
+      "excludeSearchPatterns": [
+        "**/*.Docs.csproj"
+      ]
+    }
+  }

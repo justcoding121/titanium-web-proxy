@@ -9,7 +9,7 @@
             "args": [],
             "cwd": "${workspaceRoot}",
             "stopAtEntry": false,
-            "console": "internalConsole",
+            "console": "integratedTerminal",
             "preLaunchTask": "build-basic-example-netcore"
         },
         {
