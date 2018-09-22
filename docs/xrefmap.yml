@@ -2879,6 +2879,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
   nameWithType: ProxyServer.EnableConnectionPool
+- uid: Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
+  name: EnableTcpServerConnectionPrefetch
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableTcpServerConnectionPrefetch
+  commentId: P:Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
+  nameWithType: ProxyServer.EnableTcpServerConnectionPrefetch
+- uid: Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch*
+  name: EnableTcpServerConnectionPrefetch
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableTcpServerConnectionPrefetch_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
+  nameWithType: ProxyServer.EnableTcpServerConnectionPrefetch
 - uid: Titanium.Web.Proxy.ProxyServer.EnableWinAuth
   name: EnableWinAuth
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableWinAuth

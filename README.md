@@ -21,7 +21,7 @@ Install by [nuget](https://www.nuget.org/packages/Titanium.Web.Proxy)
 
 For beta releases on [beta branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/beta)
 
-    Install-Package Titanium.Web.Proxy
+    Install-Package Titanium.Web.Proxy -Pre
 
 For stable releases on [stable branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/stable)
 

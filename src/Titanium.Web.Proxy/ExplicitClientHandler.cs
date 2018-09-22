@@ -152,11 +152,14 @@ namespace Titanium.Web.Proxy
 
                         SslStream sslStream = null;
 
-                        //don't pass cancellation token here
-                        //it could cause floating server connections when client exits
-                        prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(this, connectArgs,
-                                                isConnect: true, applicationProtocols: null, noCache: false,
-                                                cancellationToken: CancellationToken.None);
+                        if (EnableTcpServerConnectionPrefetch)
+                        {
+                            //don't pass cancellation token here
+                            //it could cause floating server connections when client exits
+                            prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(this, connectArgs,
+                                                    isConnect: true, applicationProtocols: null, noCache: false,
+                                                    cancellationToken: CancellationToken.None);
+                        }
 
                         try
                         {
@@ -204,10 +207,10 @@ namespace Titanium.Web.Proxy
                             decryptSsl = false;
                         }
 
-                        if(!decryptSsl)
+                        if (!decryptSsl)
                         {
                             await tcpConnectionFactory.Release(prefetchConnectionTask, true);
-                            prefetchConnectionTask = null; 
+                            prefetchConnectionTask = null;
                         }
                     }
 
