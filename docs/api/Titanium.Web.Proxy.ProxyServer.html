@@ -10,7 +10,7 @@
     <meta name="viewport" content="width=device-width">
     <meta name="title" content="Class ProxyServer
    | Titanium Web Proxy ">
-    <meta name="generator" content="docfx 2.39.1.0">
+    <meta name="generator" content="docfx 2.39.2.0">
     
     <link rel="shortcut icon" href="../favicon.ico">
     <link rel="stylesheet" href="../styles/docfx.vendor.css">
@@ -423,12 +423,43 @@ Defaults to false.</p>
   <a id="Titanium_Web_Proxy_ProxyServer_EnableConnectionPool_" data-uid="Titanium.Web.Proxy.ProxyServer.EnableConnectionPool*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_EnableConnectionPool" data-uid="Titanium.Web.Proxy.ProxyServer.EnableConnectionPool">EnableConnectionPool</h4>
   <div class="markdown level1 summary"><p>Should we enable experimental server connection pool?
-Defaults to disable.</p>
+Defaults to true.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public bool EnableConnectionPool { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  
+  <a id="Titanium_Web_Proxy_ProxyServer_EnableTcpServerConnectionPrefetch_" data-uid="Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_EnableTcpServerConnectionPrefetch" data-uid="Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch">EnableTcpServerConnectionPrefetch</h4>
+  <div class="markdown level1 summary"><p>Should we enable tcp server connection prefetching?
+When enabled, as soon as we receive a client connection we concurrently initiate 
+corresponding server connection process using CONNECT hostname or SNI hostname on a separate task so that after parsing client request
+we will have the server connection immediately ready or in the process of getting ready.
+If a server connection is available in cache then this prefetch task will immediatly return with the available connection from cache.
+Defaults to true.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool EnableTcpServerConnectionPrefetch { get; set; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
   <table class="table table-bordered table-striped table-condensed">
