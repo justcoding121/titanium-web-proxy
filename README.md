@@ -9,14 +9,6 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 * [API Documentation](https://justcoding121.github.io/Titanium-Web-Proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html)
 * [Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki)
 
-**Console example application screenshot**
-
-![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/Examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
-
-**GUI example application screenshot**
-
-![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/Examples/Titanium.Web.Proxy.Examples.Wpf/Capture.PNG)
-
 ### Features
 
 * Multithreaded & fully asynchronous proxy employing server connection pooling, certificate cache & buffer pooling
@@ -24,16 +16,12 @@ Kindly report only issues/bugs here . For programming help or questions use [Sta
 * Supports mutual SSL authentication, proxy authentication & automatic upstream proxy detection
 * Kerberos/NTLM authentication over HTTP protocols for windows domain
 
-### Usage
-
-
-Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. 
-
+### Installation
 Install by [nuget](https://www.nuget.org/packages/Titanium.Web.Proxy)
 
 For beta releases on [beta branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/beta)
 
-    Install-Package Titanium.Web.Proxy
+    Install-Package Titanium.Web.Proxy -Pre
 
 For stable releases on [stable branch](https://github.com/justcoding121/Titanium-Web-Proxy/tree/stable)
 
@@ -43,6 +31,24 @@ Supports
 
  * .Net Standard 2.0 or above
  * .Net Framework 4.5 or above
+ 
+### Development environment
+
+#### Windows
+* Visual Studio Code as IDE for .NET core
+* Visual Studio 2017 as IDE for .NET framework/.NET core
+
+#### Mac OS
+* Visual Studio Code as IDE for .NET core
+* Visual Studio 2017 as IDE for Mono
+
+#### Linux
+* Visual Studio Code as IDE for .NET core
+* Mono develop as IDE for Mono
+
+### Usage
+
+Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. 
  
 Setup HTTP proxy:
 
@@ -229,3 +235,12 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
 #### Collaborators
 
 * [honfika](https://github.com/honfika)
+
+
+**Console example application screenshot**
+
+![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/examples/Titanium.Web.Proxy.Examples.Basic/Capture.PNG)
+
+**GUI example application screenshot**
+
+![alt tag](https://raw.githubusercontent.com/justcoding121/Titanium-Web-Proxy/master/examples/Titanium.Web.Proxy.Examples.Wpf/Capture.PNG)
