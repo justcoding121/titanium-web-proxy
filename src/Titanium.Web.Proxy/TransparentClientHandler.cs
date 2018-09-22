@@ -63,13 +63,16 @@ namespace Titanium.Web.Proxy
 
                     if (endPoint.DecryptSsl && args.DecryptSsl)
                     {
-                        //don't pass cancellation token here
-                        //it could cause floating server connections when client exits
-                        prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(httpsHostName, endPoint.Port,
-                                httpVersion: null, isHttps: true, applicationProtocols: null, isConnect: false,
-                                proxyServer: this, upStreamEndPoint: UpStreamEndPoint, externalProxy: UpStreamHttpsProxy,
-                                noCache: false, cancellationToken: CancellationToken.None);
-
+                        if(EnableTcpServerConnectionPrefetch)
+                        {
+                            //don't pass cancellation token here
+                            //it could cause floating server connections when client exits
+                            prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(httpsHostName, endPoint.Port,
+                                    httpVersion: null, isHttps: true, applicationProtocols: null, isConnect: false,
+                                    proxyServer: this, upStreamEndPoint: UpStreamEndPoint, externalProxy: UpStreamHttpsProxy,
+                                    noCache: false, cancellationToken: CancellationToken.None);
+                        }
+                        
                         SslStream sslStream = null;
 
                         //do client authentication using fake certificate

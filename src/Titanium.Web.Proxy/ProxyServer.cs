@@ -161,9 +161,19 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         ///     Should we enable experimental server connection pool?
-        ///     Defaults to disable.
+        ///     Defaults to true.
         /// </summary>
-        public bool EnableConnectionPool { get; set; }
+        public bool EnableConnectionPool { get; set; } = true;
+
+        /// <summary>
+        ///     Should we enable tcp server connection prefetching?
+        ///     When enabled, as soon as we receive a client connection we concurrently initiate 
+        ///     corresponding server connection process using CONNECT hostname or SNI hostname on a separate task so that after parsing client request
+        ///     we will have the server connection immediately ready or in the process of getting ready.
+        ///     If a server connection is available in cache then this prefetch task will immediatly return with the available connection from cache.
+        ///     Defaults to true.
+        /// </summary>
+        public bool EnableTcpServerConnectionPrefetch { get; set; } = true;
 
         /// <summary>
         ///     Buffer size in bytes used throughout this proxy.
@@ -186,14 +196,14 @@ namespace Titanium.Web.Proxy
         public int MaxCachedConnections { get; set; } = 2;
 
         /// <summary>
-        /// Number of seconds to linger when Tcp connection is in TIME_WAIT state.
-        /// Default value is 30.
+        ///     Number of seconds to linger when Tcp connection is in TIME_WAIT state.
+        ///     Default value is 30.
         /// </summary>
         public int TcpTimeWaitSeconds { get; set; } = 30;
 
         /// <summary>
-        /// Should we reuse client/server tcp sockets.
-        /// Default is true (disabled for linux/macOS due to bug in .Net core).
+        ///     Should we reuse client/server tcp sockets.
+        ///     Default is true (disabled for linux/macOS due to bug in .Net core).
         /// </summary>
         public bool ReuseSocket { get; set; } = true;
 
