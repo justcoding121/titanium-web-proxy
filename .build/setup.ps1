@@ -6,7 +6,7 @@ param (
 
 function Install-Chocolatey()
 {
-	if(-not $env:ChocolateyInstall -or -not (Test-Path "$env:ChocolateyInstall"))
+	if(-not $env:ChocolateyInstall -or -not (Test-Path "$env:ChocolateyInstall\*"))
 	{
 		Write-Output "Chocolatey Not Found, Installing..."
 		iex ((new-object net.webclient).DownloadString('http://chocolatey.org/install.ps1')) 
