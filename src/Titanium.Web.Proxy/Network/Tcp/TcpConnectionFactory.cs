@@ -22,6 +22,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpConnectionFactory : IDisposable
     {
+        private static readonly Random rnd = new Random();
+
         //Tcp server connection pool cache
         private readonly ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>> cache
             = new ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>>();
@@ -282,14 +284,33 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                 }
 
-                // If this proxy uses another external proxy then create a tunnel request for HTTP/HTTPS connections
-                if (useUpstreamProxy)
+                var hostname = useUpstreamProxy ? externalProxy.HostName : remoteHostName;
+                var port = useUpstreamProxy ? externalProxy.Port : remotePort;
+
+                var ipHostEntry = await Dns.GetHostEntryAsync(hostname);
+
+                if (ipHostEntry == null || ipHostEntry.AddressList.Length == 0)
                 {
-                    await tcpClient.ConnectAsync(externalProxy.HostName, externalProxy.Port);
+                    throw new Exception($"Could not resolve the hostname {hostname}");
                 }
-                else
+
+                var ipAddresses = ipHostEntry.AddressList.OrderBy(x => rnd.Next()).ToArray();
+                
+
+                for (int i = 0; i < ipAddresses.Length; i++)
                 {
-                    await tcpClient.ConnectAsync(remoteHostName, remotePort);
+                    try
+                    {
+                        await tcpClient.ConnectAsync(ipAddresses[i], port);
+                        break;
+                    }
+                    catch (Exception e)
+                    {
+                        if (i == ipAddresses.Length - 1)
+                        {
+                            throw new Exception($"Could not resolve the hostname {hostname}", e);
+                        }
+                    }
                 }
 
                 await proxyServer.InvokeConnectionCreateEvent(tcpClient, false);
