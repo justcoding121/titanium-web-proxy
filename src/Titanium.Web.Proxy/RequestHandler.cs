@@ -207,7 +207,7 @@ namespace Titanium.Web.Proxy
                             //for connection pool, retry fails until cache is exhausted.   
                             var result = await retryPolicy<ServerConnectionException>().ExecuteAsync(async (serverConnection) =>
                             {
-                                args.TimeLine["Server Connection Created"] = DateTime.Now;
+                                args.TimeLine["Connection Ready"] = DateTime.Now;
 
                                 // if upgrading to websocket then relay the request without reading the contents
                                 if (request.UpgradeToWebSocket)
@@ -368,6 +368,8 @@ namespace Titanium.Web.Proxy
                     }
                 }
             }
+
+            args.TimeLine["Request Sent"] = DateTime.Now;
 
             // If not expectation failed response was returned by server then parse response
             if (!request.ExpectationFailed)

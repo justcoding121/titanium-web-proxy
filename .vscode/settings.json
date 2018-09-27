@@ -15,7 +15,7 @@
         "**/*.Basic.csproj/": true,
         "**/*.Docs.csproj/": true,
         "**/*.Proxy.csproj/": true,
-        "**/*.Proxy.csproj" : true
+        "**/*.Mono.csproj" : true
     },
     "search.exclude": {
         "**/.build": true,
@@ -32,6 +32,6 @@
         "**/*.Basic.csproj/": true,
         "**/*.Docs.csproj/": true,
         "**/*.Proxy.csproj/": true,
-        "**/*.Proxy.csproj" : true
+        "**/*.Mono.csproj" : true
     }
 }
