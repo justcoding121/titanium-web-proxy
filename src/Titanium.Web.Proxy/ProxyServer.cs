@@ -94,8 +94,6 @@ namespace Titanium.Web.Proxy
             bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
             bool trustRootCertificateAsAdmin = false)
         {
-            // default values
-            ConnectionTimeOutSeconds = 60;
 
             if (BufferPool == null)
             {
@@ -186,7 +184,7 @@ namespace Titanium.Web.Proxy
         ///     This will also determine the pool eviction time when connection pool is enabled.
         ///     Default value is 60 seconds.
         /// </summary>
-        public int ConnectionTimeOutSeconds { get; set; }
+        public int ConnectionTimeOutSeconds { get; set; } = 60;
 
         /// <summary>
         ///     Maximum number of concurrent connections per remote host in cache.
