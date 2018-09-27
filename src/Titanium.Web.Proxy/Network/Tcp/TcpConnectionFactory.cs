@@ -22,7 +22,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpConnectionFactory : IDisposable
     {
-        private static readonly Random rnd = new Random();
 
         //Tcp server connection pool cache
         private readonly ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>> cache
@@ -296,7 +295,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                 session.TimeLine["Dns Resolved"] = DateTime.Now;
 
-                var ipAddresses = ipHostEntry.AddressList.OrderBy(x => rnd.Next()).ToArray();
+                var ipAddresses = ipHostEntry.AddressList;
 
                 for (int i = 0; i < ipAddresses.Length; i++)
                 {
