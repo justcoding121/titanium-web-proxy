@@ -293,7 +293,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     throw new Exception($"Could not resolve the hostname {hostname}");
                 }
 
-                session.TimeLine["Dns Resolved"] = DateTime.Now;
+                if (session != null)
+                {
+                    session.TimeLine["Dns Resolved"] = DateTime.Now;
+                }
 
                 var ipAddresses = ipHostEntry.AddressList;
 
@@ -313,7 +316,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     }
                 }
 
-                session.TimeLine["Connection Established"] = DateTime.Now;
+                if (session != null)
+                {
+                    session.TimeLine["Connection Established"] = DateTime.Now;
+                }
 
                 await proxyServer.InvokeConnectionCreateEvent(tcpClient, false);
 
@@ -370,7 +376,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
 #if NETCOREAPP2_1
                     negotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
 #endif
-                    session.TimeLine["HTTPS Established"] = DateTime.Now;
+
+                    if (session != null)
+                    {
+                        session.TimeLine["HTTPS Established"] = DateTime.Now;
+                    }
+
                 }
             }
             catch (Exception)
