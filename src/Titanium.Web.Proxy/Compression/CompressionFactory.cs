@@ -20,11 +20,6 @@ namespace Titanium.Web.Proxy.Compression
                 case KnownHeaders.ContentEncodingDeflate:
                     return new DeflateStream(stream, CompressionMode.Compress, leaveOpen);
                 case KnownHeaders.ContentEncodingBrotli:
-                    if (!RunTime.IsWindows)
-                    {
-                        throw new PlatformNotSupportedException("BrotliSharpLib currently supports only Windows.");
-                    }
-
                     return new BrotliSharpLib.BrotliStream(stream, CompressionMode.Compress, leaveOpen);
                 default:
                     throw new Exception($"Unsupported compression mode: {type}");
