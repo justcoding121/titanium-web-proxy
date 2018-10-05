@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.IO.Compression;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Compression
@@ -18,6 +19,8 @@ namespace Titanium.Web.Proxy.Compression
                     return new GZipStream(stream, CompressionMode.Decompress, leaveOpen);
                 case KnownHeaders.ContentEncodingDeflate:
                     return new DeflateStream(stream, CompressionMode.Decompress, leaveOpen);
+                case KnownHeaders.ContentEncodingBrotli:
+                    return new BrotliSharpLib.BrotliStream(stream, CompressionMode.Decompress, leaveOpen);
                 default:
                     throw new Exception($"Unsupported decompression mode: {type}");
             }

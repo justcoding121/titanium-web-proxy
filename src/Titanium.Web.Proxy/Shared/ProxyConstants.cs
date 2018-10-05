@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Shared
 {
@@ -25,8 +26,9 @@ namespace Titanium.Web.Proxy.Shared
         internal static readonly HashSet<string> ProxySupportedCompressions =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                "gzip",
-                "deflate"
+                KnownHeaders.ContentEncodingGzip,
+                KnownHeaders.ContentEncodingDeflate,
+                KnownHeaders.ContentEncodingBrotli
             };
 
         internal static readonly Regex CNRemoverRegex =
