@@ -1281,6 +1281,12 @@ references:
   commentId: F:Titanium.Web.Proxy.Http.KnownHeaders.ContentEncoding
   fullName: Titanium.Web.Proxy.Http.KnownHeaders.ContentEncoding
   nameWithType: KnownHeaders.ContentEncoding
+- uid: Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingBrotli
+  name: ContentEncodingBrotli
+  href: api/Titanium.Web.Proxy.Http.KnownHeaders.html#Titanium_Web_Proxy_Http_KnownHeaders_ContentEncodingBrotli
+  commentId: F:Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingBrotli
+  fullName: Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingBrotli
+  nameWithType: KnownHeaders.ContentEncodingBrotli
 - uid: Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingDeflate
   name: ContentEncodingDeflate
   href: api/Titanium.Web.Proxy.Http.KnownHeaders.html#Titanium_Web_Proxy_Http_KnownHeaders_ContentEncodingDeflate
