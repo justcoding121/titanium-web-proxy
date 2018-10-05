@@ -16,7 +16,7 @@
     <dependencies>
       <dependency id="StreamExtended" version="1.0.179" />
       <dependency id="Portable.BouncyCastle" version="1.8.2" />
-      <dependency id="CloudVeil.BrotliSharpLib" version="0.3.1" />
+      <dependency id="BrotliSharpLib" version="0.3.1" />
     </dependencies>
   </metadata>
   <files>
