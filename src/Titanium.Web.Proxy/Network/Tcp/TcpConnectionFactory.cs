@@ -287,7 +287,16 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 var hostname = useUpstreamProxy ? externalProxy.HostName : remoteHostName;
                 var port = useUpstreamProxy ? externalProxy.Port : remotePort;
 
-                var ipHostEntry = await Dns.GetHostEntryAsync(hostname);
+                IPHostEntry ipHostEntry;
+                if (IPAddress.TryParse(hostname, out var ipAddress))
+                {
+                    ipHostEntry = await Dns.GetHostEntryAsync(ipAddress);
+                }
+                else
+                {
+                    ipHostEntry = await Dns.GetHostEntryAsync(hostname);
+                }
+
                 if (ipHostEntry == null || ipHostEntry.AddressList.Length == 0)
                 {
                     throw new Exception($"Could not resolve the hostname {hostname}");
