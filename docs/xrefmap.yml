@@ -822,6 +822,57 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Exceptions.ProxyHttpException.SessionEventArgs
   nameWithType: ProxyHttpException.SessionEventArgs
+- uid: Titanium.Web.Proxy.Helpers
+  name: Titanium.Web.Proxy.Helpers
+  href: api/Titanium.Web.Proxy.Helpers.html
+  commentId: N:Titanium.Web.Proxy.Helpers
+  fullName: Titanium.Web.Proxy.Helpers
+  nameWithType: Titanium.Web.Proxy.Helpers
+- uid: Titanium.Web.Proxy.Helpers.RunTime
+  name: RunTime
+  href: api/Titanium.Web.Proxy.Helpers.RunTime.html
+  commentId: T:Titanium.Web.Proxy.Helpers.RunTime
+  fullName: Titanium.Web.Proxy.Helpers.RunTime
+  nameWithType: RunTime
+- uid: Titanium.Web.Proxy.Helpers.RunTime.IsLinux
+  name: IsLinux
+  href: api/Titanium.Web.Proxy.Helpers.RunTime.html#Titanium_Web_Proxy_Helpers_RunTime_IsLinux
+  commentId: P:Titanium.Web.Proxy.Helpers.RunTime.IsLinux
+  fullName: Titanium.Web.Proxy.Helpers.RunTime.IsLinux
+  nameWithType: RunTime.IsLinux
+- uid: Titanium.Web.Proxy.Helpers.RunTime.IsLinux*
+  name: IsLinux
+  href: api/Titanium.Web.Proxy.Helpers.RunTime.html#Titanium_Web_Proxy_Helpers_RunTime_IsLinux_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.RunTime.IsLinux
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.RunTime.IsLinux
+  nameWithType: RunTime.IsLinux
+- uid: Titanium.Web.Proxy.Helpers.RunTime.IsMac
+  name: IsMac
+  href: api/Titanium.Web.Proxy.Helpers.RunTime.html#Titanium_Web_Proxy_Helpers_RunTime_IsMac
+  commentId: P:Titanium.Web.Proxy.Helpers.RunTime.IsMac
+  fullName: Titanium.Web.Proxy.Helpers.RunTime.IsMac
+  nameWithType: RunTime.IsMac
+- uid: Titanium.Web.Proxy.Helpers.RunTime.IsMac*
+  name: IsMac
+  href: api/Titanium.Web.Proxy.Helpers.RunTime.html#Titanium_Web_Proxy_Helpers_RunTime_IsMac_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.RunTime.IsMac
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.RunTime.IsMac
+  nameWithType: RunTime.IsMac
+- uid: Titanium.Web.Proxy.Helpers.RunTime.IsWindows
+  name: IsWindows
+  href: api/Titanium.Web.Proxy.Helpers.RunTime.html#Titanium_Web_Proxy_Helpers_RunTime_IsWindows
+  commentId: P:Titanium.Web.Proxy.Helpers.RunTime.IsWindows
+  fullName: Titanium.Web.Proxy.Helpers.RunTime.IsWindows
+  nameWithType: RunTime.IsWindows
+- uid: Titanium.Web.Proxy.Helpers.RunTime.IsWindows*
+  name: IsWindows
+  href: api/Titanium.Web.Proxy.Helpers.RunTime.html#Titanium_Web_Proxy_Helpers_RunTime_IsWindows_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.RunTime.IsWindows
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.RunTime.IsWindows
+  nameWithType: RunTime.IsWindows
 - uid: Titanium.Web.Proxy.Http
   name: Titanium.Web.Proxy.Http
   href: api/Titanium.Web.Proxy.Http.html
@@ -1230,6 +1281,12 @@ references:
   commentId: F:Titanium.Web.Proxy.Http.KnownHeaders.ContentEncoding
   fullName: Titanium.Web.Proxy.Http.KnownHeaders.ContentEncoding
   nameWithType: KnownHeaders.ContentEncoding
+- uid: Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingBrotli
+  name: ContentEncodingBrotli
+  href: api/Titanium.Web.Proxy.Http.KnownHeaders.html#Titanium_Web_Proxy_Http_KnownHeaders_ContentEncodingBrotli
+  commentId: F:Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingBrotli
+  fullName: Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingBrotli
+  nameWithType: KnownHeaders.ContentEncodingBrotli
 - uid: Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingDeflate
   name: ContentEncodingDeflate
   href: api/Titanium.Web.Proxy.Http.KnownHeaders.html#Titanium_Web_Proxy_Http_KnownHeaders_ContentEncodingDeflate
@@ -2828,6 +2885,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
   nameWithType: ProxyServer.EnableConnectionPool
+- uid: Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
+  name: EnableTcpServerConnectionPrefetch
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableTcpServerConnectionPrefetch
+  commentId: P:Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
+  nameWithType: ProxyServer.EnableTcpServerConnectionPrefetch
+- uid: Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch*
+  name: EnableTcpServerConnectionPrefetch
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableTcpServerConnectionPrefetch_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
+  nameWithType: ProxyServer.EnableTcpServerConnectionPrefetch
 - uid: Titanium.Web.Proxy.ProxyServer.EnableWinAuth
   name: EnableWinAuth
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableWinAuth

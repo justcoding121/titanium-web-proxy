@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27428.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Proxy.Docs", "Titanium.Web.Proxy\Titanium.Web.Proxy.Docs.csproj", "{EBF2EA46-EA00-4350-BE1D-D86AFD699DB3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EBF2EA46-EA00-4350-BE1D-D86AFD699DB3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EBF2EA46-EA00-4350-BE1D-D86AFD699DB3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EBF2EA46-EA00-4350-BE1D-D86AFD699DB3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EBF2EA46-EA00-4350-BE1D-D86AFD699DB3}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A250E1E5-3ABA-4FED-9A0E-6C63EB0261E0}
+	EndGlobalSection
+EndGlobal
