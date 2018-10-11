@@ -283,12 +283,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             await @lock.WaitAsync();
 
+            ConsoleColor existing = Console.ForegroundColor;
+
             try
             {
+                Console.ForegroundColor = color;
                 Console.WriteLine(message);
             }
             finally
             {
+                Console.ForegroundColor = existing;
                 @lock.Release();
             }
 
