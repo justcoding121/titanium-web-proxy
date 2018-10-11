@@ -32,11 +32,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
             {
                 if (exception is ProxyHttpException phex)
                 {
-                    await WriteToConsole(exception.Message + ": " + phex.InnerException?.Message, ConsoleColor.Red);
+                    await WriteToConsole(exception.Message + ": " + phex.InnerException?.Message, true);
                 }
                 else
                 {
-                    await WriteToConsole(exception.Message, ConsoleColor.Red);
+                    await WriteToConsole(exception.Message, true);
                 }
             };
             proxyServer.ForwardToUpstreamGateway = true;
@@ -261,40 +261,23 @@ namespace Titanium.Web.Proxy.Examples.Basic
             return Task.FromResult(0);
         }
 
-        private async Task WriteToConsole(string message)
+        private async Task WriteToConsole(string message, bool useRedColor = false)
         {
             await @lock.WaitAsync();
 
-            ConsoleColor color;
-
-            try
+            if (useRedColor)
             {
-                color = Console.ForegroundColor;
+                ConsoleColor existing = Console.ForegroundColor;
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine(message);
+                Console.ForegroundColor = existing;
             }
-            finally
+            else
             {
-                @lock.Release();
-            }
-
-            await WriteToConsole(message, color);
-        }
-
-        private async Task WriteToConsole(string message, ConsoleColor color)
-        {
-            await @lock.WaitAsync();
-
-            ConsoleColor existing = Console.ForegroundColor;
-
-            try
-            {
-                Console.ForegroundColor = color;
                 Console.WriteLine(message);
             }
-            finally
-            {
-                Console.ForegroundColor = existing;
-                @lock.Release();
-            }
+
+            @lock.Release();
 
         }
 
