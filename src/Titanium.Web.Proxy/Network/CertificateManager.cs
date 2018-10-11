@@ -60,7 +60,7 @@ namespace Titanium.Web.Proxy.Network
         private X509Certificate2 rootCertificate;
 
         private string rootCertificateName;
-        
+
         /// <summary>
         ///     Initializes a new instance of the <see cref="CertificateManager"/> class.
         /// </summary>
@@ -242,7 +242,7 @@ namespace Titanium.Web.Proxy.Network
         public void Dispose()
         {
         }
-        
+
         private string getRootCertificateDirectory()
         {
             string assemblyLocation = Assembly.GetExecutingAssembly().Location;
@@ -427,17 +427,16 @@ namespace Titanium.Web.Proxy.Network
                         certificate = makeCertificate(certificateName, false);
 
                         // store as cache
-                        Task.Run(() =>
+                        try
                         {
-                            try
-                            {
-                                File.WriteAllBytes(certificatePath, certificate.Export(X509ContentType.Pkcs12));
-                            }
-                            catch (Exception e)
-                            {
-                                ExceptionFunc(new Exception("Failed to save fake certificate.", e));
-                            }
-                        });
+                            var exported = certificate.Export(X509ContentType.Pkcs12);
+                            File.WriteAllBytes(certificatePath, exported);
+                        }
+                        catch (Exception e)
+                        {
+                            ExceptionFunc(new Exception("Failed to save fake certificate.", e));
+                        }
+
                     }
                     else
                     {
@@ -530,7 +529,7 @@ namespace Titanium.Web.Proxy.Network
                 await Task.Delay(1000 * 60);
             }
         }
-        
+
         /// <summary>
         ///     Stops the certificate cache clear process
         /// </summary>
@@ -776,7 +775,7 @@ namespace Titanium.Web.Proxy.Network
 
             EnsureRootCertificate();
         }
-        
+
         /// <summary>
         ///     Determines whether the root certificate is trusted.
         /// </summary>

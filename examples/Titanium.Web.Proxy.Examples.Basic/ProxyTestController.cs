@@ -16,9 +16,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
     public class ProxyTestController
     {
         private readonly SemaphoreSlim @lock = new SemaphoreSlim(1);
-
         private readonly ProxyServer proxyServer;
-
         private ExplicitProxyEndPoint explicitEndPoint;
 
         public ProxyTestController()
@@ -32,27 +30,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             proxyServer.ExceptionFunc = async exception =>
             {
-                await @lock.WaitAsync();
-
-                try
+                if (exception is ProxyHttpException phex)
                 {
-                        var color = Console.ForegroundColor;
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        if (exception is ProxyHttpException phex)
-                        {
-                            Console.WriteLine(exception.Message + ": " + phex.InnerException?.Message);
-                        }
-                        else
-                        {
-                            Console.WriteLine(exception.Message);
-                        }
-
-                        Console.ForegroundColor = color;
-                    
+                    await WriteToConsole(exception.Message + ": " + phex.InnerException?.Message, ConsoleColor.Red);
                 }
-                finally
+                else
                 {
-                    @lock.Release();
+                    await WriteToConsole(exception.Message, ConsoleColor.Red);
                 }
             };
             proxyServer.ForwardToUpstreamGateway = true;
@@ -110,7 +94,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // Only explicit proxies can be set as system proxy!
             //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
             //proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
-            if(RunTime.IsWindows)
+            if (RunTime.IsWindows)
             {
                 proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
             }
@@ -281,6 +265,24 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             await @lock.WaitAsync();
 
+            ConsoleColor color;
+
+            try
+            {
+                color = Console.ForegroundColor;
+            }
+            finally
+            {
+                @lock.Release();
+            }
+
+            await WriteToConsole(message, color);
+        }
+
+        private async Task WriteToConsole(string message, ConsoleColor color)
+        {
+            await @lock.WaitAsync();
+
             try
             {
                 Console.WriteLine(message);
@@ -289,6 +291,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             {
                 @lock.Release();
             }
+
         }
 
         ///// <summary>
