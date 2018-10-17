@@ -18,6 +18,12 @@ namespace Titanium.Web.Proxy.Helpers
         [DllImport("kernel32.dll", SetLastError = true)]
         internal static extern bool SetConsoleCtrlHandler(ConsoleEventDelegate callback, bool add);
 
+        /// <summary>
+        ///     <see href="https://docs.microsoft.com/en-us/windows/desktop/api/winuser/nf-winuser-getsystemmetrics" />
+        /// </summary>
+        [DllImport("user32.dll")]
+        internal static extern int GetSystemMetrics(int nIndex);
+
         // Pinvoke
         internal delegate bool ConsoleEventDelegate(int eventType);
     }
