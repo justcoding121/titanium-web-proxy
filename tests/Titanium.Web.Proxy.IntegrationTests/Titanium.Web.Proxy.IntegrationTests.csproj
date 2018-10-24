@@ -70,6 +70,8 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
+    <Compile Include="InterceptionTests.cs" />
+    <Compile Include="ProxyTestController.cs" />
     <Compile Include="SslTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
