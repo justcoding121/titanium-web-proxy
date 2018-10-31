@@ -1,27 +1,31 @@
 ﻿using System;
 using System.Net;
 using System.Net.Http;
+using System.Net.Mime;
+using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Titanium.Web.Proxy.IntegrationTests
 {
     [TestClass]
-    public class SslTests
+    public class InterceptionTests
     {
-        //[TestMethod]
-        //disable this test until CI is prepared to handle
-        public void TestSsl()
+        [TestMethod]
+        public void CanInterceptPostRequests()
         {
-            // expand this to stress test to find
-            // why in long run proxy becomes unresponsive as per issue #184
-            string testUrl = "https://google.com";
+            string testUrl = "http://interceptthis.com";
             int proxyPort = 8086;
             var proxy = new ProxyTestController();
             proxy.StartProxy(proxyPort);
 
             using (var client = CreateHttpClient(testUrl, proxyPort))
             {
-                var response = client.GetAsync(new Uri(testUrl)).Result;
+                var response = client.PostAsync(new Uri(testUrl), new StringContent("hello!")).Result;
+
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+
+                var body = response.Content.ReadAsStringAsync().Result;
+                Assert.IsTrue(body.Contains("TitaniumWebProxy-Stopped!!"));
             }
         }
 
@@ -37,5 +41,6 @@ namespace Titanium.Web.Proxy.IntegrationTests
 
             return client;
         }
+
     }
 }
