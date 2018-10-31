@@ -2,7 +2,7 @@
 
 namespace Titanium.Web.Proxy.Network
 {
-    public interface ICertificateStorage
+    public interface ICertificateCache
     {
         /// <summary>
         ///     Loads the root certificate from the storage.

@@ -5,7 +5,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Titanium.Web.Proxy.Network
 {
-    internal sealed class DefaultCertificateStorage : ICertificateStorage
+    internal sealed class DefaultCertificateDiskCache : ICertificateCache
     {
         private const string defaultCertificateDirectoryName = "crts";
         private const string defaultCertificateFileExtension = ".pfx";
