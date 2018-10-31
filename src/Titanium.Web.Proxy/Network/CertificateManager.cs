@@ -48,6 +48,8 @@ namespace Titanium.Web.Proxy.Network
 
         private readonly CancellationTokenSource clearCertificatesTokenSource;
 
+        private readonly object rootCertCreationLock;
+
         private ICertificateMaker certEngine;
 
         private CertificateEngine engine;
@@ -103,6 +105,8 @@ namespace Titanium.Web.Proxy.Network
             clearCertificatesTokenSource = new CancellationTokenSource();
 
             certificateCache = new DefaultCertificateDiskCache();
+
+            rootCertCreationLock = new object();
         }
 
         /// <summary>
@@ -515,63 +519,68 @@ namespace Titanium.Web.Proxy.Network
         /// </returns>
         public bool CreateRootCertificate(bool persistToFile = true)
         {
-            if (persistToFile && RootCertificate == null)
+            lock (rootCertCreationLock)
             {
-                RootCertificate = LoadRootCertificate();
-            }
-
-            if (RootCertificate != null)
-            {
-                return true;
-            }
-
-            if (!OverwritePfxFile)
-            {
-                try
+                if (persistToFile && RootCertificate == null)
                 {
-                    var rootCert = certificateCache.LoadRootCertificate(PfxFilePath, PfxPassword, X509KeyStorageFlags.Exportable);
-                    if (rootCert != null)
-                    {
-                        return false;
-                    }
+                    RootCertificate = LoadRootCertificate();
                 }
-                catch
+
+                if (RootCertificate != null)
                 {
-                    // root cert cannot be loaded
+                    return true;
                 }
-            }
 
-            try
-            {
-                RootCertificate = CreateCertificate(RootCertificateName, true);
-            }
-            catch (Exception e)
-            {
-                ExceptionFunc(e);
-            }
-
-            if (persistToFile && RootCertificate != null)
-            {
-                try
+                if (!OverwritePfxFile)
                 {
                     try
                     {
-                        certificateCache.Clear();
+                        var rootCert = certificateCache.LoadRootCertificate(PfxFilePath, PfxPassword,
+                            X509KeyStorageFlags.Exportable);
+
+                        if (rootCert != null)
+                        {
+                            return false;
+                        }
                     }
                     catch
                     {
-                        // ignore
+                        // root cert cannot be loaded
                     }
+                }
 
-                    certificateCache.SaveRootCertificate(PfxFilePath, PfxPassword, RootCertificate);
+                try
+                {
+                    RootCertificate = CreateCertificate(RootCertificateName, true);
                 }
                 catch (Exception e)
                 {
                     ExceptionFunc(e);
                 }
-            }
 
-            return RootCertificate != null;
+                if (persistToFile && RootCertificate != null)
+                {
+                    try
+                    {
+                        try
+                        {
+                            certificateCache.Clear();
+                        }
+                        catch
+                        {
+                            // ignore
+                        }
+
+                        certificateCache.SaveRootCertificate(PfxFilePath, PfxPassword, RootCertificate);
+                    }
+                    catch (Exception e)
+                    {
+                        ExceptionFunc(e);
+                    }
+                }
+
+                return RootCertificate != null;
+            }
         }
 
         /// <summary>
@@ -600,7 +609,7 @@ namespace Titanium.Web.Proxy.Network
         /// </param>
         /// <param name="password">Set a password for the .pfx file.</param>
         /// <param name="overwritePfXFile">
-        ///     true : replace an existing .pfx file if password is incorect or if
+        ///     true : replace an existing .pfx file if password is incorrect or if
         ///     RootCertificate==null.
         /// </param>
         /// <param name="storageFlag"></param>

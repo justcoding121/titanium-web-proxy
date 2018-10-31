@@ -43,9 +43,13 @@ namespace Titanium.Web.Proxy.Network
 
         public void Clear()
         {
-            if (Directory.Exists(getCertificatePath()))
+            try
             {
                 Directory.Delete(getCertificatePath(), true);
+            }
+            catch (DirectoryNotFoundException)
+            {
+                // do nothing
             }
 
             certificatePath = null;
