@@ -38,7 +38,6 @@ namespace Titanium.Web.Proxy.IntegrationTests
             public ProxyTestController()
             {
                 proxyServer = new ProxyServer();
-                proxyServer.CertificateManager.RootCertificateName = "root-certificate-for-integration-test.pfx";
                 var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 0, true);
                 proxyServer.AddEndPoint(explicitEndPoint);
                 proxyServer.BeforeRequest += OnRequest;

@@ -82,8 +82,8 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\.build\lib\root-certificate-for-integration-test.pfx">
-      <Link>root-certificate-for-integration-test.pfx</Link>
+    <None Include="..\..\.build\lib\rootCert.pfx">
+      <Link>rootCert.pfx</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
