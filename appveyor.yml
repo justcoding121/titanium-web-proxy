@@ -10,7 +10,7 @@
 version: 3.0.{build}
 image: Visual Studio 2017
 
-shallow_clone: true
+shallow_clone: false
 
 #---------------------------------#
 #       build configuration       #
@@ -38,9 +38,6 @@ test: on
 
 # skip building commits that add tags (such as release tag)
 skip_tags: true
-
-init:
-- ps: IF ($env:APPVEYOR_REPO_BRANCH -eq "master") {$env:APPVEYOR_CACHE_SKIP_RESTORE = "true"}
 
 skip_commits:
   author: buildbot121
