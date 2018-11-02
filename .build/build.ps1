@@ -126,12 +126,11 @@ Task Package -depends Document {
 
 #install root cetificate needed for integration tests
 Task PrepareIntegrationTest {
-    $pfx = new-object System.Security.Cryptography.X509Certificates.X509Certificate2 
-    $certPath = "$Here\lib\root-certificate-for-integration-test.pfx"
-    $pfxPass =  ""
-    $pfx.import($certPath,$pfxPass,"Exportable,PersistKeySet") 
-    $store = new-object System.Security.Cryptography.X509Certificates.X509Store([System.Security.Cryptography.X509Certificates.StoreName]::Root, "localmachine")
-    $store.open("MaxAllowed") 
-    $store.add($pfx) 
-    $store.close()
+
+$startInfo = new-object System.Diagnostics.ProcessStartInfo "PowerShell";
+$startInfo.Arguments = "$Here\install-certificate.ps1";
+$startInfo.Verb = "runas";
+$process = [System.Diagnostics.Process]::Start($startInfo);
+$process.WaitForExit()
+
 }
