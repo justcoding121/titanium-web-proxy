@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Net;
-using System.Net.Http;
-using System.Net.Security;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.IntegrationTests
@@ -16,41 +13,35 @@ namespace Titanium.Web.Proxy.IntegrationTests
         public async Task TestSsl()
         {
             string testUrl = "https://google.com";
-            int proxyPort = 8086;
-            var proxy = new ProxyTestController();
-            proxy.StartProxy(proxyPort);
-
-            using (var client = TestHelper.CreateHttpClient(testUrl, proxyPort))
+            using (var proxy = new ProxyTestController())
             {
-                var response = await client.GetAsync(new Uri(testUrl));
-                Assert.IsNotNull(response);
+                using (var client = TestHelper.CreateHttpClient(testUrl, proxy.ListeningPort))
+                {
+                    var response = await client.GetAsync(new Uri(testUrl));
+                    Assert.IsNotNull(response);
+                }
             }
         }
-      
 
-        private class ProxyTestController
+        private class ProxyTestController : IDisposable
         {
             private readonly ProxyServer proxyServer;
+            public int ListeningPort => proxyServer.ProxyEndPoints[0].Port;
 
             public ProxyTestController()
             {
                 proxyServer = new ProxyServer();
                 proxyServer.CertificateManager.RootCertificateName = "root-certificate-for-integration-test.pfx";
-            }
-
-            public void StartProxy(int proxyPort)
-            {
-                var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, proxyPort, true);
+                var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 0, true);
                 proxyServer.AddEndPoint(explicitEndPoint);
                 proxyServer.Start();
             }
 
-            public void Stop()
+            public void Dispose()
             {
                 proxyServer.Stop();
                 proxyServer.Dispose();
             }
-
         }
     }
 }
