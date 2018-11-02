@@ -25,10 +25,6 @@ configuration: Release
 # to run your custom scripts instead of automatic MSBuild
 build_script:
   - cmd: build.bat Package
-
-init:
-  - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
-  
   
 assembly_info:
   patch: true
@@ -42,6 +38,9 @@ test: on
 
 # skip building commits that add tags (such as release tag)
 skip_tags: true
+
+cache:
+
 
 skip_commits:
   author: buildbot121
