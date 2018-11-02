@@ -27,7 +27,7 @@ build_script:
   - cmd: build.bat Package
 
 cache:
-
+  - packages
   
 assembly_info:
   patch: true
