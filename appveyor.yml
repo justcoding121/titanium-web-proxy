@@ -22,6 +22,9 @@ platform: Any CPU
 # build Configuration, i.e. Debug, Release, etc.
 configuration: Release
 
+#set file change to watch so that cache can be invalidated on demand.
+cache: .build\cleanup-cache.txt
+
 # to run your custom scripts instead of automatic MSBuild
 build_script:
   - cmd: build.bat Package
