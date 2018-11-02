@@ -35,7 +35,7 @@ $MSBuild -replace ' ', '` '
 FormatTaskName (("-"*25) + "[{0}]" + ("-"*25))
 
 #default task
-Task default -depends Clean, Build, Document, Package
+Task default -depends Clean, Build, Document, Package, PrepareIntegrationTest
 
 #cleans obj, b
 Task Clean {
@@ -122,4 +122,16 @@ Task Document -depends Build {
 #package nuget files
 Task Package -depends Document {
     exec { . $NuGet pack "$SolutionRoot\$ProjectName\$ProjectName.nuspec" -Properties Configuration=$Configuration -OutputDirectory "$RepoRoot" -Version "$Version" }
+}
+
+#install root cetificate needed for integration tests
+Task PrepareIntegrationTest {
+    $pfx = new-object System.Security.Cryptography.X509Certificates.X509Certificate2 
+    $certPath = "$Here\lib\root-certificate-for-integration-test.pfx"
+    $pfxPass =  ""
+    $pfx.import($certPath,$pfxPass,"Exportable,PersistKeySet") 
+    $store = new-object System.Security.Cryptography.X509Certificates.X509Store([System.Security.Cryptography.X509Certificates.StoreName]::Root, "localmachine")
+    $store.open("MaxAllowed") 
+    $store.add($pfx) 
+    $store.close()
 }

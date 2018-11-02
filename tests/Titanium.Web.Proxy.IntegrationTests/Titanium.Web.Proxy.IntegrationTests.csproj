@@ -71,15 +71,21 @@
   </Choose>
   <ItemGroup>
     <Compile Include="InterceptionTests.cs" />
-    <Compile Include="ProxyTestController.cs" />
     <Compile Include="SslTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Utilities\TestHelper.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj">
       <Project>{91018b6d-a7a9-45be-9cb3-79cbb8b169a6}</Project>
       <Name>Titanium.Web.Proxy</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\.build\lib\root-certificate-for-integration-test.pfx">
+      <Link>root-certificate-for-integration-test.pfx</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <Choose>
     <When Condition="'$(VisualStudioVersion)' == '10.0' And '$(IsCodedUITest)' == 'True'">

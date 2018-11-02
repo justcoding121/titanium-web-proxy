@@ -1,41 +1,55 @@
 ﻿using System;
 using System.Net;
 using System.Net.Http;
+using System.Net.Security;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.IntegrationTests
 {
     [TestClass]
     public class SslTests
     {
-        //[TestMethod]
-        //disable this test until CI is prepared to handle
-        public void TestSsl()
+        [TestMethod]
+        public async Task TestSsl()
         {
-            // expand this to stress test to find
-            // why in long run proxy becomes unresponsive as per issue #184
             string testUrl = "https://google.com";
             int proxyPort = 8086;
             var proxy = new ProxyTestController();
             proxy.StartProxy(proxyPort);
 
-            using (var client = CreateHttpClient(testUrl, proxyPort))
+            using (var client = TestHelper.CreateHttpClient(testUrl, proxyPort))
             {
-                var response = client.GetAsync(new Uri(testUrl)).Result;
+                var response = await client.GetAsync(new Uri(testUrl));
             }
         }
+      
 
-        private HttpClient CreateHttpClient(string url, int localProxyPort)
+        private class ProxyTestController
         {
-            var handler = new HttpClientHandler
+            private readonly ProxyServer proxyServer;
+
+            public ProxyTestController()
             {
-                Proxy = new WebProxy($"http://localhost:{localProxyPort}", false),
-                UseProxy = true
-            };
+                proxyServer = new ProxyServer();
+                proxyServer.CertificateManager.RootCertificateName = "root-certificate-for-integration-test.pfx";
+            }
 
-            var client = new HttpClient(handler);
+            public void StartProxy(int proxyPort)
+            {
+                var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, proxyPort, true);
+                proxyServer.AddEndPoint(explicitEndPoint);
+                proxyServer.Start();
+            }
 
-            return client;
+            public void Stop()
+            {
+                proxyServer.Stop();
+                proxyServer.Dispose();
+            }
+
         }
     }
 }
