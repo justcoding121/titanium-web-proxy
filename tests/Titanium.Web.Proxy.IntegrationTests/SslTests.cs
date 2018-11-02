@@ -23,6 +23,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             using (var client = TestHelper.CreateHttpClient(testUrl, proxyPort))
             {
                 var response = await client.GetAsync(new Uri(testUrl));
+                Assert.IsNotNull(response);
             }
         }
       
