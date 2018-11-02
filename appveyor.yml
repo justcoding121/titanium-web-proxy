@@ -26,6 +26,9 @@ configuration: Release
 build_script:
   - cmd: build.bat Package
 
+cache:
+
+  
 assembly_info:
   patch: true
   file: AssemblyInfo.*
