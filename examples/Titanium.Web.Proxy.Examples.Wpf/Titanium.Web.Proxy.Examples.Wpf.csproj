@@ -72,8 +72,8 @@
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="StreamExtended, Version=1.0.188.0, Culture=neutral, PublicKeyToken=bbfa0f1d54f50043, processorArchitecture=MSIL">
-      <HintPath>..\..\src\packages\StreamExtended.1.0.188-beta\lib\net45\StreamExtended.dll</HintPath>
+    <Reference Include="StreamExtended, Version=1.0.190.0, Culture=neutral, PublicKeyToken=bbfa0f1d54f50043, processorArchitecture=MSIL">
+      <HintPath>..\..\src\packages\StreamExtended.1.0.190\lib\net45\StreamExtended.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />

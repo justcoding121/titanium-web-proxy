@@ -34,12 +34,6 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="BouncyCastle.Crypto, Version=1.8.2.0, Culture=neutral, PublicKeyToken=0e99375e54769942, processorArchitecture=MSIL">
-      <HintPath>..\packages\Portable.BouncyCastle.1.8.2\lib\net40\BouncyCastle.Crypto.dll</HintPath>
-    </Reference>
-    <Reference Include="StreamExtended, Version=1.0.160.0, Culture=neutral, PublicKeyToken=bbfa0f1d54f50043, processorArchitecture=MSIL">
-      <HintPath>..\packages\StreamExtended.1.0.160-beta\lib\net45\StreamExtended.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -51,18 +45,11 @@
   <ItemGroup>
     <Compile Include="CertificateHandler.cs" />
     <Compile Include="Compression\CompressionFactory.cs" />
-    <Compile Include="Compression\DeflateCompression.cs" />
-    <Compile Include="Compression\GZipCompression.cs" />
-    <Compile Include="Compression\ICompression.cs" />
-    <Compile Include="Decompression\DecompressionFactory.cs" />
-    <Compile Include="Decompression\DeflateDecompression.cs" />
-    <Compile Include="Decompression\GZipDecompression.cs" />
-    <Compile Include="Decompression\IDecompression.cs" />
+    <Compile Include="Compression\DecompressionFactory.cs" />
     <Compile Include="EventArguments\AsyncEventHandler.cs" />
     <Compile Include="EventArguments\BeforeSslAuthenticateEventArgs.cs" />
     <Compile Include="EventArguments\CertificateSelectionEventArgs.cs" />
     <Compile Include="EventArguments\CertificateValidationEventArgs.cs" />
-    <Compile Include="EventArguments\DataEventArgs.cs" />
     <Compile Include="EventArguments\LimitedStream.cs" />
     <Compile Include="EventArguments\MultipartRequestPartSentEventArgs.cs" />
     <Compile Include="EventArguments\SessionEventArgs.cs" />
@@ -72,8 +59,10 @@
     <Compile Include="ExceptionHandler.cs" />
     <Compile Include="Exceptions\BodyNotFoundException.cs" />
     <Compile Include="Exceptions\ProxyAuthorizationException.cs" />
+    <Compile Include="Exceptions\ProxyConnectException.cs" />
     <Compile Include="Exceptions\ProxyException.cs" />
     <Compile Include="Exceptions\ProxyHttpException.cs" />
+    <Compile Include="Exceptions\ServerConnectionException.cs" />
     <Compile Include="ExplicitClientHandler.cs" />
     <Compile Include="Extensions\FuncExtensions.cs" />
     <Compile Include="Extensions\SslExtensions.cs" />
@@ -91,15 +80,25 @@
     <Compile Include="Helpers\Ref.cs" />
     <Compile Include="Helpers\RunTime.cs" />
     <Compile Include="Helpers\SystemProxy.cs" />
-    <Compile Include="Helpers\Tcp.cs" />
+    <Compile Include="Helpers\TcpHelper.cs" />
     <Compile Include="Helpers\WinHttp\NativeMethods.WinHttp.cs" />
     <Compile Include="Helpers\WinHttp\WinHttpHandle.cs" />
     <Compile Include="Helpers\WinHttp\WinHttpWebProxyFinder.cs" />
+    <Compile Include="Http2\Hpack\Decoder.cs" />
+    <Compile Include="Http2\Hpack\DynamicTable.cs" />
+    <Compile Include="Http2\Hpack\Encoder.cs" />
+    <Compile Include="Http2\Hpack\HpackUtil.cs" />
+    <Compile Include="Http2\Hpack\HuffmanDecoder.cs" />
+    <Compile Include="Http2\Hpack\HuffmanEncoder.cs" />
+    <Compile Include="Http2\Hpack\IHeaderListener.cs" />
+    <Compile Include="Http2\Hpack\StaticTable.cs" />
+    <Compile Include="Http2\Http2Helper.cs" />
     <Compile Include="Http\ConnectRequest.cs" />
     <Compile Include="Http\ConnectResponse.cs" />
     <Compile Include="Http\HeaderCollection.cs" />
     <Compile Include="Http\HeaderParser.cs" />
     <Compile Include="Http\HttpWebClient.cs" />
+    <Compile Include="Http\InternalDataStore.cs" />
     <Compile Include="Http\KnownHeaders.cs" />
     <Compile Include="Http\Request.cs" />
     <Compile Include="Http\RequestResponseBase.cs" />
@@ -110,7 +109,9 @@
     <Compile Include="Models\ExplicitProxyEndPoint.cs" />
     <Compile Include="Models\ExternalProxy.cs" />
     <Compile Include="Models\HttpHeader.cs" />
+    <Compile Include="Models\ProxyAuthenticationContext.cs" />
     <Compile Include="Models\ProxyEndPoint.cs" />
+    <Compile Include="Models\ProxyProtocolType.cs" />
     <Compile Include="Models\TransparentProxyEndPoint.cs" />
     <Compile Include="Network\CachedCertificate.cs" />
     <Compile Include="Network\CertificateManager.cs" />
@@ -119,8 +120,11 @@
     <Compile Include="Network\Certificate\WinCertificateMaker.cs" />
     <Compile Include="Network\DebugCustomBufferedStream.cs" />
     <Compile Include="Network\ProxyClient.cs" />
+    <Compile Include="Network\RetryPolicy.cs" />
+    <Compile Include="Network\Tcp\TcpClientConnection.cs" />
     <Compile Include="Network\Tcp\TcpConnection.cs" />
     <Compile Include="Network\Tcp\TcpConnectionFactory.cs" />
+    <Compile Include="Network\Tcp\TcpServerConnection.cs" />
     <Compile Include="Network\WinAuth\Security\Common.cs" />
     <Compile Include="Network\WinAuth\Security\LittleEndian.cs" />
     <Compile Include="Network\WinAuth\Security\Message.cs" />
@@ -134,6 +138,7 @@
     <Compile Include="ResponseHandler.cs" />
     <Compile Include="Shared\ProxyConstants.cs" />
     <Compile Include="TransparentClientHandler.cs" />
+    <Compile Include="WebSocketHandler.cs" />
     <Compile Include="WinAuthHandler.cs" />
   </ItemGroup>
   <ItemGroup>
