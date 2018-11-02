@@ -122,7 +122,6 @@
     <Compile Include="Network\ProxyClient.cs" />
     <Compile Include="Network\RetryPolicy.cs" />
     <Compile Include="Network\Tcp\TcpClientConnection.cs" />
-    <Compile Include="Network\Tcp\TcpConnection.cs" />
     <Compile Include="Network\Tcp\TcpConnectionFactory.cs" />
     <Compile Include="Network\Tcp\TcpServerConnection.cs" />
     <Compile Include="Network\WinAuth\Security\Common.cs" />
