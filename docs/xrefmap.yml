@@ -1789,19 +1789,6 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http.RequestResponseBase.KeepBody
   nameWithType: RequestResponseBase.KeepBody
-- uid: Titanium.Web.Proxy.Http.RequestResponseBase.OriginalIsBodyRead
-  name: OriginalIsBodyRead
-  href: api/Titanium.Web.Proxy.Http.RequestResponseBase.html#Titanium_Web_Proxy_Http_RequestResponseBase_OriginalIsBodyRead
-  commentId: P:Titanium.Web.Proxy.Http.RequestResponseBase.OriginalIsBodyRead
-  fullName: Titanium.Web.Proxy.Http.RequestResponseBase.OriginalIsBodyRead
-  nameWithType: RequestResponseBase.OriginalIsBodyRead
-- uid: Titanium.Web.Proxy.Http.RequestResponseBase.OriginalIsBodyRead*
-  name: OriginalIsBodyRead
-  href: api/Titanium.Web.Proxy.Http.RequestResponseBase.html#Titanium_Web_Proxy_Http_RequestResponseBase_OriginalIsBodyRead_
-  commentId: Overload:Titanium.Web.Proxy.Http.RequestResponseBase.OriginalIsBodyRead
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.Http.RequestResponseBase.OriginalIsBodyRead
-  nameWithType: RequestResponseBase.OriginalIsBodyRead
 - uid: Titanium.Web.Proxy.Http.RequestResponseBase.ToString
   name: ToString()
   href: api/Titanium.Web.Proxy.Http.RequestResponseBase.html#Titanium_Web_Proxy_Http_RequestResponseBase_ToString
