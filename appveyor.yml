@@ -40,7 +40,7 @@ test: on
 skip_tags: true
 
 init:
-- ps: IF ($env:APPVEYOR_REPO_BRANCH -eq "develop") {$env:APPVEYOR_CACHE_SKIP_RESTORE = "true"}
+- ps: {$env:APPVEYOR_CACHE_SKIP_RESTORE = "true"}
 
 skip_commits:
   author: buildbot121
