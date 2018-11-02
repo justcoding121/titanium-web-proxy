@@ -778,6 +778,25 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Exceptions.ProxyAuthorizationException.Session
   nameWithType: ProxyAuthorizationException.Session
+- uid: Titanium.Web.Proxy.Exceptions.ProxyConnectException
+  name: ProxyConnectException
+  href: api/Titanium.Web.Proxy.Exceptions.ProxyConnectException.html
+  commentId: T:Titanium.Web.Proxy.Exceptions.ProxyConnectException
+  fullName: Titanium.Web.Proxy.Exceptions.ProxyConnectException
+  nameWithType: ProxyConnectException
+- uid: Titanium.Web.Proxy.Exceptions.ProxyConnectException.ConnectEventArgs
+  name: ConnectEventArgs
+  href: api/Titanium.Web.Proxy.Exceptions.ProxyConnectException.html#Titanium_Web_Proxy_Exceptions_ProxyConnectException_ConnectEventArgs
+  commentId: P:Titanium.Web.Proxy.Exceptions.ProxyConnectException.ConnectEventArgs
+  fullName: Titanium.Web.Proxy.Exceptions.ProxyConnectException.ConnectEventArgs
+  nameWithType: ProxyConnectException.ConnectEventArgs
+- uid: Titanium.Web.Proxy.Exceptions.ProxyConnectException.ConnectEventArgs*
+  name: ConnectEventArgs
+  href: api/Titanium.Web.Proxy.Exceptions.ProxyConnectException.html#Titanium_Web_Proxy_Exceptions_ProxyConnectException_ConnectEventArgs_
+  commentId: Overload:Titanium.Web.Proxy.Exceptions.ProxyConnectException.ConnectEventArgs
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Exceptions.ProxyConnectException.ConnectEventArgs
+  nameWithType: ProxyConnectException.ConnectEventArgs
 - uid: Titanium.Web.Proxy.Exceptions.ProxyException
   name: ProxyException
   href: api/Titanium.Web.Proxy.Exceptions.ProxyException.html
@@ -822,6 +841,12 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Exceptions.ProxyHttpException.SessionEventArgs
   nameWithType: ProxyHttpException.SessionEventArgs
+- uid: Titanium.Web.Proxy.Exceptions.ServerConnectionException
+  name: ServerConnectionException
+  href: api/Titanium.Web.Proxy.Exceptions.ServerConnectionException.html
+  commentId: T:Titanium.Web.Proxy.Exceptions.ServerConnectionException
+  fullName: Titanium.Web.Proxy.Exceptions.ServerConnectionException
+  nameWithType: ServerConnectionException
 - uid: Titanium.Web.Proxy.Helpers
   name: Titanium.Web.Proxy.Helpers
   href: api/Titanium.Web.Proxy.Helpers.html
@@ -1987,6 +2012,463 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http.Responses.RedirectResponse.RedirectResponse
   nameWithType: RedirectResponse.RedirectResponse
+- uid: Titanium.Web.Proxy.Http2.Hpack
+  name: Titanium.Web.Proxy.Http2.Hpack
+  href: api/Titanium.Web.Proxy.Http2.Hpack.html
+  commentId: N:Titanium.Web.Proxy.Http2.Hpack
+  fullName: Titanium.Web.Proxy.Http2.Hpack
+  nameWithType: Titanium.Web.Proxy.Http2.Hpack
+- uid: Titanium.Web.Proxy.Http2.Hpack.Decoder
+  name: Decoder
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Decoder.html
+  commentId: T:Titanium.Web.Proxy.Http2.Hpack.Decoder
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Decoder
+  nameWithType: Decoder
+- uid: Titanium.Web.Proxy.Http2.Hpack.Decoder.#ctor(System.Int32,System.Int32)
+  name: Decoder(Int32, Int32)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Decoder.html#Titanium_Web_Proxy_Http2_Hpack_Decoder__ctor_System_Int32_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.Decoder.#ctor(System.Int32,System.Int32)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Decoder.Decoder(System.Int32, System.Int32)
+  nameWithType: Decoder.Decoder(Int32, Int32)
+- uid: Titanium.Web.Proxy.Http2.Hpack.Decoder.#ctor*
+  name: Decoder
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Decoder.html#Titanium_Web_Proxy_Http2_Hpack_Decoder__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.Decoder.#ctor
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Decoder.Decoder
+  nameWithType: Decoder.Decoder
+- uid: Titanium.Web.Proxy.Http2.Hpack.Decoder.Decode(System.IO.BinaryReader,Titanium.Web.Proxy.Http2.Hpack.IHeaderListener)
+  name: Decode(BinaryReader, IHeaderListener)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Decoder.html#Titanium_Web_Proxy_Http2_Hpack_Decoder_Decode_System_IO_BinaryReader_Titanium_Web_Proxy_Http2_Hpack_IHeaderListener_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.Decoder.Decode(System.IO.BinaryReader,Titanium.Web.Proxy.Http2.Hpack.IHeaderListener)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Decoder.Decode(System.IO.BinaryReader, Titanium.Web.Proxy.Http2.Hpack.IHeaderListener)
+  nameWithType: Decoder.Decode(BinaryReader, IHeaderListener)
+- uid: Titanium.Web.Proxy.Http2.Hpack.Decoder.Decode*
+  name: Decode
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Decoder.html#Titanium_Web_Proxy_Http2_Hpack_Decoder_Decode_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.Decoder.Decode
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Decoder.Decode
+  nameWithType: Decoder.Decode
+- uid: Titanium.Web.Proxy.Http2.Hpack.Decoder.EndHeaderBlock
+  name: EndHeaderBlock()
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Decoder.html#Titanium_Web_Proxy_Http2_Hpack_Decoder_EndHeaderBlock
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.Decoder.EndHeaderBlock
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Decoder.EndHeaderBlock()
+  nameWithType: Decoder.EndHeaderBlock()
+- uid: Titanium.Web.Proxy.Http2.Hpack.Decoder.EndHeaderBlock*
+  name: EndHeaderBlock
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Decoder.html#Titanium_Web_Proxy_Http2_Hpack_Decoder_EndHeaderBlock_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.Decoder.EndHeaderBlock
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Decoder.EndHeaderBlock
+  nameWithType: Decoder.EndHeaderBlock
+- uid: Titanium.Web.Proxy.Http2.Hpack.Decoder.GetMaxHeaderTableSize
+  name: GetMaxHeaderTableSize()
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Decoder.html#Titanium_Web_Proxy_Http2_Hpack_Decoder_GetMaxHeaderTableSize
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.Decoder.GetMaxHeaderTableSize
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Decoder.GetMaxHeaderTableSize()
+  nameWithType: Decoder.GetMaxHeaderTableSize()
+- uid: Titanium.Web.Proxy.Http2.Hpack.Decoder.GetMaxHeaderTableSize*
+  name: GetMaxHeaderTableSize
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Decoder.html#Titanium_Web_Proxy_Http2_Hpack_Decoder_GetMaxHeaderTableSize_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.Decoder.GetMaxHeaderTableSize
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Decoder.GetMaxHeaderTableSize
+  nameWithType: Decoder.GetMaxHeaderTableSize
+- uid: Titanium.Web.Proxy.Http2.Hpack.Decoder.SetMaxHeaderTableSize(System.Int32)
+  name: SetMaxHeaderTableSize(Int32)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Decoder.html#Titanium_Web_Proxy_Http2_Hpack_Decoder_SetMaxHeaderTableSize_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.Decoder.SetMaxHeaderTableSize(System.Int32)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Decoder.SetMaxHeaderTableSize(System.Int32)
+  nameWithType: Decoder.SetMaxHeaderTableSize(Int32)
+- uid: Titanium.Web.Proxy.Http2.Hpack.Decoder.SetMaxHeaderTableSize*
+  name: SetMaxHeaderTableSize
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Decoder.html#Titanium_Web_Proxy_Http2_Hpack_Decoder_SetMaxHeaderTableSize_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.Decoder.SetMaxHeaderTableSize
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Decoder.SetMaxHeaderTableSize
+  nameWithType: Decoder.SetMaxHeaderTableSize
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable
+  name: DynamicTable
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html
+  commentId: T:Titanium.Web.Proxy.Http2.Hpack.DynamicTable
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable
+  nameWithType: DynamicTable
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.#ctor(System.Int32)
+  name: DynamicTable(Int32)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable__ctor_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.#ctor(System.Int32)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.DynamicTable(System.Int32)
+  nameWithType: DynamicTable.DynamicTable(Int32)
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.#ctor*
+  name: DynamicTable
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.#ctor
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.DynamicTable
+  nameWithType: DynamicTable.DynamicTable
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Add(Titanium.Web.Proxy.Models.HttpHeader)
+  name: Add(HttpHeader)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_Add_Titanium_Web_Proxy_Models_HttpHeader_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Add(Titanium.Web.Proxy.Models.HttpHeader)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Add(Titanium.Web.Proxy.Models.HttpHeader)
+  nameWithType: DynamicTable.Add(HttpHeader)
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Add*
+  name: Add
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_Add_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Add
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Add
+  nameWithType: DynamicTable.Add
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Capacity
+  name: Capacity
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_Capacity
+  commentId: P:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Capacity
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Capacity
+  nameWithType: DynamicTable.Capacity
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Capacity*
+  name: Capacity
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_Capacity_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Capacity
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Capacity
+  nameWithType: DynamicTable.Capacity
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Clear
+  name: Clear()
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_Clear
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Clear
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Clear()
+  nameWithType: DynamicTable.Clear()
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Clear*
+  name: Clear
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_Clear_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Clear
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Clear
+  nameWithType: DynamicTable.Clear
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.GetEntry(System.Int32)
+  name: GetEntry(Int32)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_GetEntry_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.GetEntry(System.Int32)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.GetEntry(System.Int32)
+  nameWithType: DynamicTable.GetEntry(Int32)
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.GetEntry*
+  name: GetEntry
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_GetEntry_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.GetEntry
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.GetEntry
+  nameWithType: DynamicTable.GetEntry
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Length
+  name: Length()
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_Length
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Length
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Length()
+  nameWithType: DynamicTable.Length()
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Length*
+  name: Length
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_Length_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Length
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Length
+  nameWithType: DynamicTable.Length
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Remove
+  name: Remove()
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_Remove
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Remove
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Remove()
+  nameWithType: DynamicTable.Remove()
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Remove*
+  name: Remove
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_Remove_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Remove
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Remove
+  nameWithType: DynamicTable.Remove
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.SetCapacity(System.Int32)
+  name: SetCapacity(Int32)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_SetCapacity_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.SetCapacity(System.Int32)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.SetCapacity(System.Int32)
+  nameWithType: DynamicTable.SetCapacity(Int32)
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.SetCapacity*
+  name: SetCapacity
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_SetCapacity_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.SetCapacity
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.SetCapacity
+  nameWithType: DynamicTable.SetCapacity
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Size
+  name: Size
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_Size
+  commentId: P:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Size
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Size
+  nameWithType: DynamicTable.Size
+- uid: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Size*
+  name: Size
+  href: api/Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html#Titanium_Web_Proxy_Http2_Hpack_DynamicTable_Size_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Size
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Size
+  nameWithType: DynamicTable.Size
+- uid: Titanium.Web.Proxy.Http2.Hpack.Encoder
+  name: Encoder
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Encoder.html
+  commentId: T:Titanium.Web.Proxy.Http2.Hpack.Encoder
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Encoder
+  nameWithType: Encoder
+- uid: Titanium.Web.Proxy.Http2.Hpack.Encoder.#ctor(System.Int32)
+  name: Encoder(Int32)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Encoder.html#Titanium_Web_Proxy_Http2_Hpack_Encoder__ctor_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.Encoder.#ctor(System.Int32)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Encoder.Encoder(System.Int32)
+  nameWithType: Encoder.Encoder(Int32)
+- uid: Titanium.Web.Proxy.Http2.Hpack.Encoder.#ctor*
+  name: Encoder
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Encoder.html#Titanium_Web_Proxy_Http2_Hpack_Encoder__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.Encoder.#ctor
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Encoder.Encoder
+  nameWithType: Encoder.Encoder
+- uid: Titanium.Web.Proxy.Http2.Hpack.Encoder.EncodeHeader(System.IO.BinaryWriter,System.String,System.String,System.Boolean)
+  name: EncodeHeader(BinaryWriter, String, String, Boolean)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Encoder.html#Titanium_Web_Proxy_Http2_Hpack_Encoder_EncodeHeader_System_IO_BinaryWriter_System_String_System_String_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.Encoder.EncodeHeader(System.IO.BinaryWriter,System.String,System.String,System.Boolean)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Encoder.EncodeHeader(System.IO.BinaryWriter, System.String, System.String, System.Boolean)
+  nameWithType: Encoder.EncodeHeader(BinaryWriter, String, String, Boolean)
+- uid: Titanium.Web.Proxy.Http2.Hpack.Encoder.EncodeHeader*
+  name: EncodeHeader
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Encoder.html#Titanium_Web_Proxy_Http2_Hpack_Encoder_EncodeHeader_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.Encoder.EncodeHeader
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Encoder.EncodeHeader
+  nameWithType: Encoder.EncodeHeader
+- uid: Titanium.Web.Proxy.Http2.Hpack.Encoder.MaxHeaderTableSize
+  name: MaxHeaderTableSize
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Encoder.html#Titanium_Web_Proxy_Http2_Hpack_Encoder_MaxHeaderTableSize
+  commentId: P:Titanium.Web.Proxy.Http2.Hpack.Encoder.MaxHeaderTableSize
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Encoder.MaxHeaderTableSize
+  nameWithType: Encoder.MaxHeaderTableSize
+- uid: Titanium.Web.Proxy.Http2.Hpack.Encoder.MaxHeaderTableSize*
+  name: MaxHeaderTableSize
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Encoder.html#Titanium_Web_Proxy_Http2_Hpack_Encoder_MaxHeaderTableSize_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.Encoder.MaxHeaderTableSize
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Encoder.MaxHeaderTableSize
+  nameWithType: Encoder.MaxHeaderTableSize
+- uid: Titanium.Web.Proxy.Http2.Hpack.Encoder.SetMaxHeaderTableSize(System.IO.BinaryWriter,System.Int32)
+  name: SetMaxHeaderTableSize(BinaryWriter, Int32)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Encoder.html#Titanium_Web_Proxy_Http2_Hpack_Encoder_SetMaxHeaderTableSize_System_IO_BinaryWriter_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.Encoder.SetMaxHeaderTableSize(System.IO.BinaryWriter,System.Int32)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Encoder.SetMaxHeaderTableSize(System.IO.BinaryWriter, System.Int32)
+  nameWithType: Encoder.SetMaxHeaderTableSize(BinaryWriter, Int32)
+- uid: Titanium.Web.Proxy.Http2.Hpack.Encoder.SetMaxHeaderTableSize*
+  name: SetMaxHeaderTableSize
+  href: api/Titanium.Web.Proxy.Http2.Hpack.Encoder.html#Titanium_Web_Proxy_Http2_Hpack_Encoder_SetMaxHeaderTableSize_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.Encoder.SetMaxHeaderTableSize
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.Encoder.SetMaxHeaderTableSize
+  nameWithType: Encoder.SetMaxHeaderTableSize
+- uid: Titanium.Web.Proxy.Http2.Hpack.HpackUtil
+  name: HpackUtil
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HpackUtil.html
+  commentId: T:Titanium.Web.Proxy.Http2.Hpack.HpackUtil
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HpackUtil
+  nameWithType: HpackUtil
+- uid: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanCodeLengths
+  name: HuffmanCodeLengths
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HpackUtil.html#Titanium_Web_Proxy_Http2_Hpack_HpackUtil_HuffmanCodeLengths
+  commentId: F:Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanCodeLengths
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanCodeLengths
+  nameWithType: HpackUtil.HuffmanCodeLengths
+- uid: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanCodes
+  name: HuffmanCodes
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HpackUtil.html#Titanium_Web_Proxy_Http2_Hpack_HpackUtil_HuffmanCodes
+  commentId: F:Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanCodes
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanCodes
+  nameWithType: HpackUtil.HuffmanCodes
+- uid: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanEos
+  name: HuffmanEos
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HpackUtil.html#Titanium_Web_Proxy_Http2_Hpack_HpackUtil_HuffmanEos
+  commentId: F:Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanEos
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanEos
+  nameWithType: HpackUtil.HuffmanEos
+- uid: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType
+  name: HpackUtil.IndexType
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.html
+  commentId: T:Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType
+  nameWithType: HpackUtil.IndexType
+- uid: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.Incremental
+  name: Incremental
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.html#Titanium_Web_Proxy_Http2_Hpack_HpackUtil_IndexType_Incremental
+  commentId: F:Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.Incremental
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.Incremental
+  nameWithType: HpackUtil.IndexType.Incremental
+- uid: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.Never
+  name: Never
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.html#Titanium_Web_Proxy_Http2_Hpack_HpackUtil_IndexType_Never
+  commentId: F:Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.Never
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.Never
+  nameWithType: HpackUtil.IndexType.Never
+- uid: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.None
+  name: None
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.html#Titanium_Web_Proxy_Http2_Hpack_HpackUtil_IndexType_None
+  commentId: F:Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.None
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.None
+  nameWithType: HpackUtil.IndexType.None
+- uid: Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder
+  name: HuffmanDecoder
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.html
+  commentId: T:Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder
+  nameWithType: HuffmanDecoder
+- uid: Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Decode(System.Byte[])
+  name: Decode(Byte[])
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.html#Titanium_Web_Proxy_Http2_Hpack_HuffmanDecoder_Decode_System_Byte___
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Decode(System.Byte[])
+  name.vb: Decode(Byte())
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Decode(System.Byte[])
+  fullName.vb: Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Decode(System.Byte())
+  nameWithType: HuffmanDecoder.Decode(Byte[])
+  nameWithType.vb: HuffmanDecoder.Decode(Byte())
+- uid: Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Decode*
+  name: Decode
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.html#Titanium_Web_Proxy_Http2_Hpack_HuffmanDecoder_Decode_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Decode
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Decode
+  nameWithType: HuffmanDecoder.Decode
+- uid: Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Instance
+  name: Instance
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.html#Titanium_Web_Proxy_Http2_Hpack_HuffmanDecoder_Instance
+  commentId: F:Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Instance
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Instance
+  nameWithType: HuffmanDecoder.Instance
+- uid: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder
+  name: HuffmanEncoder
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.html
+  commentId: T:Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder
+  nameWithType: HuffmanEncoder
+- uid: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Encode(System.IO.BinaryWriter,System.Byte[])
+  name: Encode(BinaryWriter, Byte[])
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.html#Titanium_Web_Proxy_Http2_Hpack_HuffmanEncoder_Encode_System_IO_BinaryWriter_System_Byte___
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Encode(System.IO.BinaryWriter,System.Byte[])
+  name.vb: Encode(BinaryWriter, Byte())
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Encode(System.IO.BinaryWriter, System.Byte[])
+  fullName.vb: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Encode(System.IO.BinaryWriter, System.Byte())
+  nameWithType: HuffmanEncoder.Encode(BinaryWriter, Byte[])
+  nameWithType.vb: HuffmanEncoder.Encode(BinaryWriter, Byte())
+- uid: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Encode(System.IO.BinaryWriter,System.Byte[],System.Int32,System.Int32)
+  name: Encode(BinaryWriter, Byte[], Int32, Int32)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.html#Titanium_Web_Proxy_Http2_Hpack_HuffmanEncoder_Encode_System_IO_BinaryWriter_System_Byte___System_Int32_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Encode(System.IO.BinaryWriter,System.Byte[],System.Int32,System.Int32)
+  name.vb: Encode(BinaryWriter, Byte(), Int32, Int32)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Encode(System.IO.BinaryWriter, System.Byte[], System.Int32, System.Int32)
+  fullName.vb: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Encode(System.IO.BinaryWriter, System.Byte(), System.Int32, System.Int32)
+  nameWithType: HuffmanEncoder.Encode(BinaryWriter, Byte[], Int32, Int32)
+  nameWithType.vb: HuffmanEncoder.Encode(BinaryWriter, Byte(), Int32, Int32)
+- uid: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Encode*
+  name: Encode
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.html#Titanium_Web_Proxy_Http2_Hpack_HuffmanEncoder_Encode_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Encode
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Encode
+  nameWithType: HuffmanEncoder.Encode
+- uid: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.GetEncodedLength(System.Byte[])
+  name: GetEncodedLength(Byte[])
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.html#Titanium_Web_Proxy_Http2_Hpack_HuffmanEncoder_GetEncodedLength_System_Byte___
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.GetEncodedLength(System.Byte[])
+  name.vb: GetEncodedLength(Byte())
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.GetEncodedLength(System.Byte[])
+  fullName.vb: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.GetEncodedLength(System.Byte())
+  nameWithType: HuffmanEncoder.GetEncodedLength(Byte[])
+  nameWithType.vb: HuffmanEncoder.GetEncodedLength(Byte())
+- uid: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.GetEncodedLength*
+  name: GetEncodedLength
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.html#Titanium_Web_Proxy_Http2_Hpack_HuffmanEncoder_GetEncodedLength_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.GetEncodedLength
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.GetEncodedLength
+  nameWithType: HuffmanEncoder.GetEncodedLength
+- uid: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Instance
+  name: Instance
+  href: api/Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.html#Titanium_Web_Proxy_Http2_Hpack_HuffmanEncoder_Instance
+  commentId: F:Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Instance
+  fullName: Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Instance
+  nameWithType: HuffmanEncoder.Instance
+- uid: Titanium.Web.Proxy.Http2.Hpack.IHeaderListener
+  name: IHeaderListener
+  href: api/Titanium.Web.Proxy.Http2.Hpack.IHeaderListener.html
+  commentId: T:Titanium.Web.Proxy.Http2.Hpack.IHeaderListener
+  fullName: Titanium.Web.Proxy.Http2.Hpack.IHeaderListener
+  nameWithType: IHeaderListener
+- uid: Titanium.Web.Proxy.Http2.Hpack.IHeaderListener.AddHeader(System.String,System.String,System.Boolean)
+  name: AddHeader(String, String, Boolean)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.IHeaderListener.html#Titanium_Web_Proxy_Http2_Hpack_IHeaderListener_AddHeader_System_String_System_String_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.IHeaderListener.AddHeader(System.String,System.String,System.Boolean)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.IHeaderListener.AddHeader(System.String, System.String, System.Boolean)
+  nameWithType: IHeaderListener.AddHeader(String, String, Boolean)
+- uid: Titanium.Web.Proxy.Http2.Hpack.IHeaderListener.AddHeader*
+  name: AddHeader
+  href: api/Titanium.Web.Proxy.Http2.Hpack.IHeaderListener.html#Titanium_Web_Proxy_Http2_Hpack_IHeaderListener_AddHeader_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.IHeaderListener.AddHeader
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.IHeaderListener.AddHeader
+  nameWithType: IHeaderListener.AddHeader
+- uid: Titanium.Web.Proxy.Http2.Hpack.StaticTable
+  name: StaticTable
+  href: api/Titanium.Web.Proxy.Http2.Hpack.StaticTable.html
+  commentId: T:Titanium.Web.Proxy.Http2.Hpack.StaticTable
+  fullName: Titanium.Web.Proxy.Http2.Hpack.StaticTable
+  nameWithType: StaticTable
+- uid: Titanium.Web.Proxy.Http2.Hpack.StaticTable.Get(System.Int32)
+  name: Get(Int32)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.StaticTable.html#Titanium_Web_Proxy_Http2_Hpack_StaticTable_Get_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.StaticTable.Get(System.Int32)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.StaticTable.Get(System.Int32)
+  nameWithType: StaticTable.Get(Int32)
+- uid: Titanium.Web.Proxy.Http2.Hpack.StaticTable.Get*
+  name: Get
+  href: api/Titanium.Web.Proxy.Http2.Hpack.StaticTable.html#Titanium_Web_Proxy_Http2_Hpack_StaticTable_Get_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.StaticTable.Get
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.StaticTable.Get
+  nameWithType: StaticTable.Get
+- uid: Titanium.Web.Proxy.Http2.Hpack.StaticTable.GetIndex(System.String)
+  name: GetIndex(String)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.StaticTable.html#Titanium_Web_Proxy_Http2_Hpack_StaticTable_GetIndex_System_String_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.StaticTable.GetIndex(System.String)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.StaticTable.GetIndex(System.String)
+  nameWithType: StaticTable.GetIndex(String)
+- uid: Titanium.Web.Proxy.Http2.Hpack.StaticTable.GetIndex(System.String,System.String)
+  name: GetIndex(String, String)
+  href: api/Titanium.Web.Proxy.Http2.Hpack.StaticTable.html#Titanium_Web_Proxy_Http2_Hpack_StaticTable_GetIndex_System_String_System_String_
+  commentId: M:Titanium.Web.Proxy.Http2.Hpack.StaticTable.GetIndex(System.String,System.String)
+  fullName: Titanium.Web.Proxy.Http2.Hpack.StaticTable.GetIndex(System.String, System.String)
+  nameWithType: StaticTable.GetIndex(String, String)
+- uid: Titanium.Web.Proxy.Http2.Hpack.StaticTable.GetIndex*
+  name: GetIndex
+  href: api/Titanium.Web.Proxy.Http2.Hpack.StaticTable.html#Titanium_Web_Proxy_Http2_Hpack_StaticTable_GetIndex_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.StaticTable.GetIndex
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.StaticTable.GetIndex
+  nameWithType: StaticTable.GetIndex
+- uid: Titanium.Web.Proxy.Http2.Hpack.StaticTable.Length
+  name: Length
+  href: api/Titanium.Web.Proxy.Http2.Hpack.StaticTable.html#Titanium_Web_Proxy_Http2_Hpack_StaticTable_Length
+  commentId: P:Titanium.Web.Proxy.Http2.Hpack.StaticTable.Length
+  fullName: Titanium.Web.Proxy.Http2.Hpack.StaticTable.Length
+  nameWithType: StaticTable.Length
+- uid: Titanium.Web.Proxy.Http2.Hpack.StaticTable.Length*
+  name: Length
+  href: api/Titanium.Web.Proxy.Http2.Hpack.StaticTable.html#Titanium_Web_Proxy_Http2_Hpack_StaticTable_Length_
+  commentId: Overload:Titanium.Web.Proxy.Http2.Hpack.StaticTable.Length
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http2.Hpack.StaticTable.Length
+  nameWithType: StaticTable.Length
 - uid: Titanium.Web.Proxy.Models
   name: Titanium.Web.Proxy.Models
   href: api/Titanium.Web.Proxy.Models.html
@@ -2224,6 +2706,88 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.HttpHeader.Value
   nameWithType: HttpHeader.Value
+- uid: Titanium.Web.Proxy.Models.ProxyAuthenticationContext
+  name: ProxyAuthenticationContext
+  href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html
+  commentId: T:Titanium.Web.Proxy.Models.ProxyAuthenticationContext
+  fullName: Titanium.Web.Proxy.Models.ProxyAuthenticationContext
+  nameWithType: ProxyAuthenticationContext
+- uid: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Continuation
+  name: Continuation
+  href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html#Titanium_Web_Proxy_Models_ProxyAuthenticationContext_Continuation
+  commentId: P:Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Continuation
+  fullName: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Continuation
+  nameWithType: ProxyAuthenticationContext.Continuation
+- uid: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Continuation*
+  name: Continuation
+  href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html#Titanium_Web_Proxy_Models_ProxyAuthenticationContext_Continuation_
+  commentId: Overload:Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Continuation
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Continuation
+  nameWithType: ProxyAuthenticationContext.Continuation
+- uid: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Failed
+  name: Failed()
+  href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html#Titanium_Web_Proxy_Models_ProxyAuthenticationContext_Failed
+  commentId: M:Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Failed
+  fullName: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Failed()
+  nameWithType: ProxyAuthenticationContext.Failed()
+- uid: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Failed*
+  name: Failed
+  href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html#Titanium_Web_Proxy_Models_ProxyAuthenticationContext_Failed_
+  commentId: Overload:Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Failed
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Failed
+  nameWithType: ProxyAuthenticationContext.Failed
+- uid: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Result
+  name: Result
+  href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html#Titanium_Web_Proxy_Models_ProxyAuthenticationContext_Result
+  commentId: P:Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Result
+  fullName: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Result
+  nameWithType: ProxyAuthenticationContext.Result
+- uid: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Result*
+  name: Result
+  href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html#Titanium_Web_Proxy_Models_ProxyAuthenticationContext_Result_
+  commentId: Overload:Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Result
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Result
+  nameWithType: ProxyAuthenticationContext.Result
+- uid: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Succeeded
+  name: Succeeded()
+  href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html#Titanium_Web_Proxy_Models_ProxyAuthenticationContext_Succeeded
+  commentId: M:Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Succeeded
+  fullName: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Succeeded()
+  nameWithType: ProxyAuthenticationContext.Succeeded()
+- uid: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Succeeded*
+  name: Succeeded
+  href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html#Titanium_Web_Proxy_Models_ProxyAuthenticationContext_Succeeded_
+  commentId: Overload:Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Succeeded
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Succeeded
+  nameWithType: ProxyAuthenticationContext.Succeeded
+- uid: Titanium.Web.Proxy.Models.ProxyAuthenticationResult
+  name: ProxyAuthenticationResult
+  href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationResult.html
+  commentId: T:Titanium.Web.Proxy.Models.ProxyAuthenticationResult
+  fullName: Titanium.Web.Proxy.Models.ProxyAuthenticationResult
+  nameWithType: ProxyAuthenticationResult
+- uid: Titanium.Web.Proxy.Models.ProxyAuthenticationResult.ContinuationNeeded
+  name: ContinuationNeeded
+  href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationResult.html#Titanium_Web_Proxy_Models_ProxyAuthenticationResult_ContinuationNeeded
+  commentId: F:Titanium.Web.Proxy.Models.ProxyAuthenticationResult.ContinuationNeeded
+  fullName: Titanium.Web.Proxy.Models.ProxyAuthenticationResult.ContinuationNeeded
+  nameWithType: ProxyAuthenticationResult.ContinuationNeeded
+- uid: Titanium.Web.Proxy.Models.ProxyAuthenticationResult.Failure
+  name: Failure
+  href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationResult.html#Titanium_Web_Proxy_Models_ProxyAuthenticationResult_Failure
+  commentId: F:Titanium.Web.Proxy.Models.ProxyAuthenticationResult.Failure
+  fullName: Titanium.Web.Proxy.Models.ProxyAuthenticationResult.Failure
+  nameWithType: ProxyAuthenticationResult.Failure
+- uid: Titanium.Web.Proxy.Models.ProxyAuthenticationResult.Success
+  name: Success
+  href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationResult.html#Titanium_Web_Proxy_Models_ProxyAuthenticationResult_Success
+  commentId: F:Titanium.Web.Proxy.Models.ProxyAuthenticationResult.Success
+  fullName: Titanium.Web.Proxy.Models.ProxyAuthenticationResult.Success
+  nameWithType: ProxyAuthenticationResult.Success
 - uid: Titanium.Web.Proxy.Models.ProxyEndPoint
   name: ProxyEndPoint
   href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html
@@ -2295,6 +2859,36 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.Port
   nameWithType: ProxyEndPoint.Port
+- uid: Titanium.Web.Proxy.Models.ProxyProtocolType
+  name: ProxyProtocolType
+  href: api/Titanium.Web.Proxy.Models.ProxyProtocolType.html
+  commentId: T:Titanium.Web.Proxy.Models.ProxyProtocolType
+  fullName: Titanium.Web.Proxy.Models.ProxyProtocolType
+  nameWithType: ProxyProtocolType
+- uid: Titanium.Web.Proxy.Models.ProxyProtocolType.AllHttp
+  name: AllHttp
+  href: api/Titanium.Web.Proxy.Models.ProxyProtocolType.html#Titanium_Web_Proxy_Models_ProxyProtocolType_AllHttp
+  commentId: F:Titanium.Web.Proxy.Models.ProxyProtocolType.AllHttp
+  fullName: Titanium.Web.Proxy.Models.ProxyProtocolType.AllHttp
+  nameWithType: ProxyProtocolType.AllHttp
+- uid: Titanium.Web.Proxy.Models.ProxyProtocolType.Http
+  name: Http
+  href: api/Titanium.Web.Proxy.Models.ProxyProtocolType.html#Titanium_Web_Proxy_Models_ProxyProtocolType_Http
+  commentId: F:Titanium.Web.Proxy.Models.ProxyProtocolType.Http
+  fullName: Titanium.Web.Proxy.Models.ProxyProtocolType.Http
+  nameWithType: ProxyProtocolType.Http
+- uid: Titanium.Web.Proxy.Models.ProxyProtocolType.Https
+  name: Https
+  href: api/Titanium.Web.Proxy.Models.ProxyProtocolType.html#Titanium_Web_Proxy_Models_ProxyProtocolType_Https
+  commentId: F:Titanium.Web.Proxy.Models.ProxyProtocolType.Https
+  fullName: Titanium.Web.Proxy.Models.ProxyProtocolType.Https
+  nameWithType: ProxyProtocolType.Https
+- uid: Titanium.Web.Proxy.Models.ProxyProtocolType.None
+  name: None
+  href: api/Titanium.Web.Proxy.Models.ProxyProtocolType.html#Titanium_Web_Proxy_Models_ProxyProtocolType_None
+  commentId: F:Titanium.Web.Proxy.Models.ProxyProtocolType.None
+  fullName: Titanium.Web.Proxy.Models.ProxyProtocolType.None
+  nameWithType: ProxyProtocolType.None
 - uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint
   name: TransparentProxyEndPoint
   href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html
@@ -2833,11 +3427,11 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.DisableSystemHttpsProxy
   nameWithType: ProxyServer.DisableSystemHttpsProxy
-- uid: Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(ProxyProtocolType)
+- uid: Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(Titanium.Web.Proxy.Models.ProxyProtocolType)
   name: DisableSystemProxy(ProxyProtocolType)
-  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DisableSystemProxy_ProxyProtocolType_
-  commentId: M:Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(ProxyProtocolType)
-  fullName: Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(ProxyProtocolType)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_DisableSystemProxy_Titanium_Web_Proxy_Models_ProxyProtocolType_
+  commentId: M:Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(Titanium.Web.Proxy.Models.ProxyProtocolType)
+  fullName: Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(Titanium.Web.Proxy.Models.ProxyProtocolType)
   nameWithType: ProxyServer.DisableSystemProxy(ProxyProtocolType)
 - uid: Titanium.Web.Proxy.ProxyServer.DisableSystemProxy*
   name: DisableSystemProxy
@@ -3130,11 +3724,11 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpsProxy
   nameWithType: ProxyServer.SetAsSystemHttpsProxy
-- uid: Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,ProxyProtocolType)
+- uid: Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,Titanium.Web.Proxy.Models.ProxyProtocolType)
   name: SetAsSystemProxy(ExplicitProxyEndPoint, ProxyProtocolType)
-  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SetAsSystemProxy_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_ProxyProtocolType_
-  commentId: M:Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,ProxyProtocolType)
-  fullName: Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint, ProxyProtocolType)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SetAsSystemProxy_Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_Titanium_Web_Proxy_Models_ProxyProtocolType_
+  commentId: M:Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint,Titanium.Web.Proxy.Models.ProxyProtocolType)
+  fullName: Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint, Titanium.Web.Proxy.Models.ProxyProtocolType)
   nameWithType: ProxyServer.SetAsSystemProxy(ExplicitProxyEndPoint, ProxyProtocolType)
 - uid: Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy*
   name: SetAsSystemProxy
