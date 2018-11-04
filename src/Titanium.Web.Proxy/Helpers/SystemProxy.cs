@@ -80,10 +80,13 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="protocolType"></param>
         internal void SetProxy(string hostname, int port, ProxyProtocolType protocolType)
         {
-            var reg = Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
-
-            if (reg != null)
+            using (var reg = OpenInternetSettingsKey())
             {
+                if (reg == null)
+                {
+                    return;
+                }
+
                 saveOriginalProxyConfiguration(reg);
                 prepareRegistry(reg);
 
@@ -124,9 +127,13 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         internal void RemoveProxy(ProxyProtocolType protocolType, bool saveOriginalConfig = true)
         {
-            var reg = Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
-            if (reg != null)
+            using (var reg = OpenInternetSettingsKey())
             {
+                if (reg == null)
+                {
+                    return;
+                }
+
                 if (saveOriginalConfig)
                 {
                     saveOriginalProxyConfiguration(reg);
@@ -161,10 +168,13 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         internal void DisableAllProxy()
         {
-            var reg = Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
-
-            if (reg != null)
+            using (var reg = OpenInternetSettingsKey())
             {
+                if (reg == null)
+                {
+                    return;
+                }
+
                 saveOriginalProxyConfiguration(reg);
 
                 reg.SetValue(regProxyEnable, 0);
@@ -176,10 +186,13 @@ namespace Titanium.Web.Proxy.Helpers
 
         internal void SetAutoProxyUrl(string url)
         {
-            var reg = Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
-
-            if (reg != null)
+            using (var reg = OpenInternetSettingsKey())
             {
+                if (reg == null)
+                {
+                    return;
+                }
+
                 saveOriginalProxyConfiguration(reg);
                 reg.SetValue(regAutoConfigUrl, url);
                 refresh();
@@ -188,10 +201,13 @@ namespace Titanium.Web.Proxy.Helpers
 
         internal void SetProxyOverride(string proxyOverride)
         {
-            var reg = Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
-
-            if (reg != null)
+            using (var reg = OpenInternetSettingsKey())
             {
+                if (reg == null)
+                {
+                    return;
+                }
+
                 saveOriginalProxyConfiguration(reg);
                 reg.SetValue(regProxyOverride, proxyOverride);
                 refresh();
@@ -205,10 +221,13 @@ namespace Titanium.Web.Proxy.Helpers
                 return;
             }
 
-            var reg = Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
-
-            if (reg != null)
+            using (var reg = Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true))
             {
+                if (reg == null)
+                {
+                    return;
+                }
+
                 var ov = originalValues;
                 if (ov.AutoConfigUrl != null)
                 {
@@ -246,26 +265,43 @@ namespace Titanium.Web.Proxy.Helpers
                     reg.DeleteValue(regProxyOverride, false);
                 }
 
+                // This should not be needed, but sometimes the values are not stored into the registry
+                // at system shutdown without flushing.
+                reg.Flush();
+
                 originalValues = null;
-                refresh();
+
+                const int SM_SHUTTINGDOWN = 0x2000;
+                Version windows7Version = new Version(6, 1);
+                if (Environment.OSVersion.Version > windows7Version ||
+                    NativeMethods.GetSystemMetrics(SM_SHUTTINGDOWN) == 0)
+                {
+                    // Do not call refresh() in Windows 7 or earlier at system shutdown.
+                    // SetInternetOption in the refresh method re-enables ProxyEnable registry value
+                    // in Windows 7 or earlier at system shutdown.
+                    refresh();
+                }
             }
         }
 
         internal ProxyInfo GetProxyInfoFromRegistry()
         {
-            var reg = Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
-
-            if (reg != null)
+            using (var reg = OpenInternetSettingsKey())
             {
+                if (reg == null)
+                {
+                    return null;
+                }
+
                 return getProxyInfoFromRegistry(reg);
             }
-
-            return null;
         }
 
         private ProxyInfo getProxyInfoFromRegistry(RegistryKey reg)
         {
-            var pi = new ProxyInfo(null, reg.GetValue(regAutoConfigUrl) as string, reg.GetValue(regProxyEnable) as int?,
+            var pi = new ProxyInfo(null,
+                reg.GetValue(regAutoConfigUrl) as string,
+                reg.GetValue(regProxyEnable) as int?,
                 reg.GetValue(regProxyServer) as string,
                 reg.GetValue(regProxyOverride) as string);
 
@@ -306,6 +342,14 @@ namespace Titanium.Web.Proxy.Helpers
         {
             NativeMethods.InternetSetOption(IntPtr.Zero, InternetOptionSettingsChanged, IntPtr.Zero, 0);
             NativeMethods.InternetSetOption(IntPtr.Zero, InternetOptionRefresh, IntPtr.Zero, 0);
+        }
+
+        /// <summary>
+        ///     Opens the registry key with the internet settings
+        /// </summary>
+        private static RegistryKey OpenInternetSettingsKey()
+        {
+            return Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
         }
     }
 }

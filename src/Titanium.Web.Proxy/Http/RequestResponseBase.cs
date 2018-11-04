@@ -50,12 +50,6 @@ namespace Titanium.Web.Proxy.Http
         internal string OriginalContentEncoding { get; set; }
 
         /// <summary>
-        ///     Store whether the original request/response body was read by user.
-        ///     We need this detail to syphon out attached tcp connection for reuse.
-        /// </summary>
-        public bool OriginalIsBodyRead { get; internal set; }
-
-        /// <summary>
         ///     Keeps the body data after the session is finished.
         /// </summary>
         public bool KeepBody { get; set; }
@@ -269,7 +263,6 @@ namespace Titanium.Web.Proxy.Http
             OriginalContentLength = ContentLength;
             OriginalIsChunked = IsChunked;
             OriginalContentEncoding = ContentEncoding;
-            OriginalIsBodyRead = IsBodyRead;
         }
 
         /// <summary>
@@ -282,7 +275,6 @@ namespace Titanium.Web.Proxy.Http
             OriginalContentLength = requestResponseBase.OriginalContentLength;
             OriginalIsChunked = requestResponseBase.OriginalIsChunked;
             OriginalContentEncoding = requestResponseBase.OriginalContentEncoding;
-            OriginalIsBodyRead = requestResponseBase.OriginalIsBodyRead;
         }
 
         /// <summary>

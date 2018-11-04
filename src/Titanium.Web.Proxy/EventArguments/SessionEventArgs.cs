@@ -179,7 +179,7 @@ namespace Titanium.Web.Proxy.EventArguments
         internal async Task SyphonOutBodyAsync(bool isRequest, CancellationToken cancellationToken)
         {
             var requestResponse = isRequest ? (RequestResponseBase)WebSession.Request : WebSession.Response;
-            if (requestResponse.OriginalIsBodyRead || !requestResponse.OriginalHasBody)
+            if (requestResponse.IsBodyRead || !requestResponse.OriginalHasBody)
             {
                 return;
             }

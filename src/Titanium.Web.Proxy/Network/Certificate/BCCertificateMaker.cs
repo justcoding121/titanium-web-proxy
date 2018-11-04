@@ -16,6 +16,7 @@ using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Utilities;
 using Org.BouncyCastle.X509;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Shared;
 using X509Certificate = Org.BouncyCastle.X509.X509Certificate;
 
@@ -166,7 +167,19 @@ namespace Titanium.Web.Proxy.Network.Certificate
         private static X509Certificate2 withPrivateKey(X509Certificate certificate, AsymmetricKeyParameter privateKey)
         {
             const string password = "password";
-            var store = new Pkcs12Store();
+            Pkcs12Store store = null;
+
+            if(RunTime.IsRunningOnMono)
+            {
+                Pkcs12StoreBuilder builder = new Pkcs12StoreBuilder();
+                builder.SetUseDerEncoding(true);
+                store = builder.Build();
+            }
+            else
+            {
+                store = new Pkcs12Store();
+            }
+            
             var entry = new X509CertificateEntry(certificate);
             store.SetCertificateEntry(certificate.SubjectDN.ToString(), entry);
 
