@@ -2970,6 +2970,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.CertificateEngine
   nameWithType: CertificateManager.CertificateEngine
+- uid: Titanium.Web.Proxy.Network.CertificateManager.CertificateStorage
+  name: CertificateStorage
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_CertificateStorage
+  commentId: P:Titanium.Web.Proxy.Network.CertificateManager.CertificateStorage
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.CertificateStorage
+  nameWithType: CertificateManager.CertificateStorage
+- uid: Titanium.Web.Proxy.Network.CertificateManager.CertificateStorage*
+  name: CertificateStorage
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_CertificateStorage_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.CertificateStorage
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.CertificateStorage
+  nameWithType: CertificateManager.CertificateStorage
 - uid: Titanium.Web.Proxy.Network.CertificateManager.ClearRootCertificate
   name: ClearRootCertificate()
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ClearRootCertificate
