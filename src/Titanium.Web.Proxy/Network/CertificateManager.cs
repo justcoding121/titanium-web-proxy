@@ -44,11 +44,21 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         ///     Cache dictionary
         /// </summary>
-        private readonly ConcurrentDictionary<string, CachedCertificate> cachedCertificates;
+        private readonly ConcurrentDictionary<string, CachedCertificate> cachedCertificates
+                            = new ConcurrentDictionary<string, CachedCertificate>();
 
-        private readonly CancellationTokenSource clearCertificatesTokenSource;
+        /// <summary>
+        /// A list of pending certificate creation tasks.
+        /// Usefull to prevent multiple threads working on same certificate generation 
+        /// when burst certificate generation requests happen for same certificate.
+        /// </summary>
+        private readonly ConcurrentDictionary<string, Task<X509Certificate2>> pendingCertificateCreationTasks
+                            = new ConcurrentDictionary<string, Task<X509Certificate2>>();
 
-        private readonly object rootCertCreationLock;
+        private readonly CancellationTokenSource clearCertificatesTokenSource
+                            = new CancellationTokenSource();
+
+        private readonly object rootCertCreationLock = new object();
 
         private ICertificateMaker certEngine;
 
@@ -60,7 +70,7 @@ namespace Titanium.Web.Proxy.Network
 
         private string rootCertificateName;
 
-        private ICertificateCache certificateCache;
+        private ICertificateCache certificateCache = new DefaultCertificateDiskCache();
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="CertificateManager"/> class.
@@ -99,14 +109,6 @@ namespace Titanium.Web.Proxy.Network
             }
 
             CertificateEngine = CertificateEngine.BouncyCastle;
-
-            cachedCertificates = new ConcurrentDictionary<string, CachedCertificate>();
-
-            clearCertificatesTokenSource = new CancellationTokenSource();
-
-            certificateCache = new DefaultCertificateDiskCache();
-
-            rootCertCreationLock = new object();
         }
 
         /// <summary>
@@ -225,8 +227,9 @@ namespace Titanium.Web.Proxy.Network
         public bool SaveFakeCertificates { get; set; } = false;
 
         /// <summary>
-        ///     The service to save fake certificates.
-        ///     The default storage saves certificates in folder "crts" (will be created in proxy dll directory).
+        ///     The fake certificate cache storage.
+        ///     The default cache storage implementation saves certificates in folder "crts" (will be created in proxy dll directory).
+        ///     Implement ICertificateCache interface and assign concrete class here to customize.
         /// </summary>
         public ICertificateCache CertificateStorage
         {
@@ -436,41 +439,40 @@ namespace Titanium.Web.Proxy.Network
         internal async Task<X509Certificate2> CreateCertificateAsync(string certificateName)
         {
             // check in cache first
-            var item = cachedCertificates.GetOrAdd(certificateName, _ =>
+            if (cachedCertificates.TryGetValue(certificateName, out var cached))
             {
-                var cached = new CachedCertificate();
-                cached.CreationTask = Task.Run(() =>
-                {
-                    var certificate = CreateCertificate(certificateName, false);
-
-                    // see http://www.albahari.com/threading/part4.aspx for the explanation
-                    // why Thread.MemoryBarrier is used here and below
-                    cached.Certificate = certificate;
-                    Thread.MemoryBarrier();
-                    cached.CreationTask = null;
-                    Thread.MemoryBarrier();
-                    return certificate;
-                });
-
-                return cached;
-            });
-
-            item.LastAccess = DateTime.Now;
-
-            if (item.Certificate != null)
-            {
-                return item.Certificate;
+                cached.LastAccess = DateTime.Now;
+                return cached.Certificate;
             }
 
             // handle burst requests with same certificate name
-            // by checking for existing task
-            Thread.MemoryBarrier();
-            var task = item.CreationTask;
+            // by checking for existing task for same certificate name
+            if (pendingCertificateCreationTasks.TryGetValue(certificateName, out var task))
+            {
+                return await task;
+            }
 
-            Thread.MemoryBarrier();
+            // run certificate creation task & add it to pending tasks
+            task = Task.Run(() =>
+            {
+                var result = CreateCertificate(certificateName, false);
+                if (result != null)
+                {
+                    cachedCertificates.TryAdd(certificateName, new CachedCertificate
+                    {
+                        Certificate = result
+                    });
+                }
 
-            // return result
-            return item.Certificate ?? await task;
+                return result;
+            });
+            pendingCertificateCreationTasks.TryAdd(certificateName, task);
+
+            // cleanup pending tasks & return result
+            var certificate = await task;
+            pendingCertificateCreationTasks.TryRemove(certificateName, out task);
+
+            return certificate;
         }
 
         /// <summary>

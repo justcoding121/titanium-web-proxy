@@ -12,11 +12,6 @@ namespace Titanium.Web.Proxy.Network
         internal X509Certificate2 Certificate { get; set; }
 
         /// <summary>
-        ///     Certificate creation task.
-        /// </summary>
-        internal Task<X509Certificate2> CreationTask { get; set; }
-
-        /// <summary>
         ///     Last time this certificate was used.
         ///     Useful in determining its cache lifetime.
         /// </summary>
