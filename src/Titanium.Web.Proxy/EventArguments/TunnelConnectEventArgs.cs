@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.EventArguments
             CancellationTokenSource cancellationTokenSource)
             : base(server, endPoint, cancellationTokenSource, connectRequest)
         {
-            WebSession.ConnectRequest = connectRequest;
+            HttpClient.ConnectRequest = connectRequest;
         }
 
         /// <summary>

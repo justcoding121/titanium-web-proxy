@@ -46,9 +46,9 @@ namespace Titanium.Web.Proxy.IntegrationTests
 
             public async Task OnRequest(object sender, SessionEventArgs e)
             {
-                if (e.WebSession.Request.Url.Contains("interceptthis.com"))
+                if (e.HttpClient.Request.Url.Contains("interceptthis.com"))
                 {
-                    if (e.WebSession.Request.HasBody)
+                    if (e.HttpClient.Request.HasBody)
                     {
                         var body = await e.GetRequestBodyAsString();
                     }

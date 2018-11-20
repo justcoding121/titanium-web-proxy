@@ -122,7 +122,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private async Task ProxyServer_BeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
-            string hostname = e.WebSession.Request.RequestUri.Host;
+            string hostname = e.HttpClient.Request.RequestUri.Host;
             if (hostname.EndsWith("webex.com"))
             {
                 e.DecryptSsl = false;
@@ -135,7 +135,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             await Dispatcher.InvokeAsync(() =>
             {
-                if (sessionDictionary.TryGetValue(e.WebSession, out var item))
+                if (sessionDictionary.TryGetValue(e.HttpClient, out var item))
                 {
                     item.Update();
                 }
@@ -147,9 +147,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() => { item = AddSession(e); });
 
-            if (e.WebSession.Request.HasBody)
+            if (e.HttpClient.Request.HasBody)
             {
-                e.WebSession.Request.KeepBody = true;
+                e.HttpClient.Request.KeepBody = true;
                 await e.GetRequestBody();
             }
         }
@@ -159,7 +159,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() =>
             {
-                if (sessionDictionary.TryGetValue(e.WebSession, out item))
+                if (sessionDictionary.TryGetValue(e.HttpClient, out item))
                 {
                     item.Update();
                 }
@@ -167,9 +167,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             if (item != null)
             {
-                if (e.WebSession.Response.HasBody)
+                if (e.HttpClient.Response.HasBody)
                 {
-                    e.WebSession.Response.KeepBody = true;
+                    e.HttpClient.Response.KeepBody = true;
                     await e.GetResponseBody();
 
                     await Dispatcher.InvokeAsync(() => { item.Update(); });
@@ -181,7 +181,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             await Dispatcher.InvokeAsync(() =>
             {
-                if (sessionDictionary.TryGetValue(e.WebSession, out var item))
+                if (sessionDictionary.TryGetValue(e.HttpClient, out var item))
                 {
                     item.Exception = e.Exception;
                 }
@@ -192,7 +192,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             var item = CreateSessionListItem(e);
             Sessions.Add(item);
-            sessionDictionary.Add(e.WebSession, item);
+            sessionDictionary.Add(e.HttpClient, item);
             return item;
         }
 
@@ -203,16 +203,16 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var item = new SessionListItem
             {
                 Number = lastSessionNumber,
-                WebSession = e.WebSession,
+                WebSession = e.HttpClient,
                 IsTunnelConnect = isTunnelConnect
             };
 
-            if (isTunnelConnect || e.WebSession.Request.UpgradeToWebSocket)
+            if (isTunnelConnect || e.HttpClient.Request.UpgradeToWebSocket)
             {
                 e.DataReceived += (sender, args) =>
                 {
                     var session = (SessionEventArgs)sender;
-                    if (sessionDictionary.TryGetValue(session.WebSession, out var li))
+                    if (sessionDictionary.TryGetValue(session.HttpClient, out var li))
                     {
                         li.ReceivedDataCount += args.Count;
                     }
@@ -221,7 +221,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 e.DataSent += (sender, args) =>
                 {
                     var session = (SessionEventArgs)sender;
-                    if (sessionDictionary.TryGetValue(session.WebSession, out var li))
+                    if (sessionDictionary.TryGetValue(session.HttpClient, out var li))
                     {
                         li.SentDataCount += args.Count;
                     }

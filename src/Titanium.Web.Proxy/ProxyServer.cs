@@ -679,7 +679,7 @@ namespace Titanium.Web.Proxy
         /// <returns>The external proxy as task result.</returns>
         private Task<ExternalProxy> getSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
         {
-            var proxy = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
+            var proxy = systemProxyResolver.GetProxy(sessionEventArgs.HttpClient.Request.RequestUri);
             return Task.FromResult(proxy);
         }
 

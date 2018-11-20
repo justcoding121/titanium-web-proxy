@@ -8,6 +8,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
+using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -19,8 +20,9 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public abstract class SessionEventArgsBase : EventArgs, IDisposable
     {
-
         internal readonly CancellationTokenSource CancellationTokenSource;
+        internal TcpServerConnection ServerConnection => HttpClient.Connection;
+        internal TcpClientConnection ClientConnection => ProxyClient.Connection;
 
         protected readonly int bufferSize;
         protected readonly IBufferPool bufferPool;
@@ -50,10 +52,10 @@ namespace Titanium.Web.Proxy.EventArguments
             CancellationTokenSource = cancellationTokenSource;
 
             ProxyClient = new ProxyClient();
-            WebSession = new HttpWebClient(request);
+            HttpClient = new HttpWebClient(request);
             LocalEndPoint = endPoint;
 
-            WebSession.ProcessId = new Lazy<int>(() =>
+            HttpClient.ProcessId = new Lazy<int>(() =>
             {
                 if (RunTime.IsWindows)
                 {
@@ -85,25 +87,27 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public object UserData
         {
-            get => WebSession.UserData;
-            set => WebSession.UserData = value;
+            get => HttpClient.UserData;
+            set => HttpClient.UserData = value;
         }
 
         /// <summary>
         ///     Does this session uses SSL?
         /// </summary>
-        public bool IsHttps => WebSession.Request.IsHttps;
+        public bool IsHttps => HttpClient.Request.IsHttps;
 
         /// <summary>
         ///     Client End Point.
         /// </summary>
-        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.ClientConnection.RemoteEndPoint;
+        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.Connection.RemoteEndPoint;
 
         /// <summary>
-        ///     A web session corresponding to a single request/response sequence
-        ///     within a proxy connection.
+        ///    The web client used to communicate with server for this session.
         /// </summary>
-        public HttpWebClient WebSession { get; }
+        public HttpWebClient HttpClient { get; }
+
+        [Obsolete("Use HttpClient instead.")]
+        public HttpWebClient WebSession => HttpClient;
 
         /// <summary>
         ///     Are we using a custom upstream HTTP(S) proxy?
@@ -136,7 +140,7 @@ namespace Titanium.Web.Proxy.EventArguments
             DataReceived = null;
             Exception = null;
 
-            WebSession.FinishSession();
+            HttpClient.FinishSession();
         }
 
         /// <summary>

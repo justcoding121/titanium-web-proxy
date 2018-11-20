@@ -118,7 +118,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
-            string hostname = e.WebSession.Request.RequestUri.Host;
+            string hostname = e.HttpClient.Request.RequestUri.Host;
             await WriteToConsole("Tunnel to: " + hostname);
 
             if (hostname.Contains("dropbox.com"))
@@ -139,7 +139,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private async Task OnRequest(object sender, SessionEventArgs e)
         {
             await WriteToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
-            await WriteToConsole(e.WebSession.Request.Url);
+            await WriteToConsole(e.HttpClient.Request.Url);
 
             // store it in the UserData property
             // It can be a simple integer, Guid, or any type
@@ -191,7 +191,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             await WriteToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
-            string ext = System.IO.Path.GetExtension(e.WebSession.Request.RequestUri.AbsolutePath);
+            string ext = System.IO.Path.GetExtension(e.HttpClient.Request.RequestUri.AbsolutePath);
 
             //access user data set in request to do something with it
             //var userData = e.WebSession.UserData as CustomUserData;

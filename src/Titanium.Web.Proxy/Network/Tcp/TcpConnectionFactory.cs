@@ -98,10 +98,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
             session.CustomUpStreamProxyUsed = customUpStreamProxy;
 
             return GetConnectionCacheKey(
-                session.WebSession.Request.RequestUri.Host,
-                session.WebSession.Request.RequestUri.Port,
+                session.HttpClient.Request.RequestUri.Host,
+                session.HttpClient.Request.RequestUri.Port,
                 isHttps, applicationProtocols,
-                server, session.WebSession.UpStreamEndPoint ?? server.UpStreamEndPoint,
+                server, session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
                 customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy));
         }
 
@@ -148,11 +148,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
             session.CustomUpStreamProxyUsed = customUpStreamProxy;
 
             return await GetServerConnection(
-                session.WebSession.Request.RequestUri.Host,
-                session.WebSession.Request.RequestUri.Port,
-                session.WebSession.Request.HttpVersion,
+                session.HttpClient.Request.RequestUri.Host,
+                session.HttpClient.Request.RequestUri.Port,
+                session.HttpClient.Request.HttpVersion,
                 isHttps, applicationProtocols, isConnect,
-                server, session, session.WebSession.UpStreamEndPoint ?? server.UpStreamEndPoint,
+                server, session, session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
                 customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy),
                 noCache, cancellationToken);
         }
