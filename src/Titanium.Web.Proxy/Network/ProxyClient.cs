@@ -12,7 +12,7 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         ///     TcpClient connection used to communicate with client
         /// </summary>
-        internal TcpClientConnection ClientConnection { get; set; }
+        internal TcpClientConnection Connection { get; set; }
 
         /// <summary>
         ///     Holds the stream to client

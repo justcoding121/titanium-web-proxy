@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy
             string headerName = null;
             HttpHeader authHeader = null;
 
-            var response = args.WebSession.Response;
+            var response = args.HttpClient.Response;
 
             // check in non-unique headers first
             var header = response.Headers.NonUniqueHeaders.FirstOrDefault(x => authHeaderNames.Contains(x.Key));
@@ -96,14 +96,14 @@ namespace Titanium.Web.Proxy
                 var expectedAuthState =
                     scheme == null ? State.WinAuthState.INITIAL_TOKEN : State.WinAuthState.UNAUTHORIZED;
 
-                if (!WinAuthEndPoint.ValidateWinAuthState(args.WebSession.Data, expectedAuthState))
+                if (!WinAuthEndPoint.ValidateWinAuthState(args.HttpClient.Data, expectedAuthState))
                 {
                     // Invalid state, create proper error message to client
                     await rewriteUnauthorizedResponse(args);
                     return;
                 }
 
-                var request = args.WebSession.Request;
+                var request = args.HttpClient.Request;
 
                 // clear any existing headers to avoid confusing bad servers
                 request.Headers.RemoveHeader(KnownHeaders.Authorization);
@@ -111,7 +111,7 @@ namespace Titanium.Web.Proxy
                 // initial value will match exactly any of the schemes
                 if (scheme != null)
                 {
-                    string clientToken = WinAuthHandler.GetInitialAuthToken(request.Host, scheme, args.WebSession.Data);
+                    string clientToken = WinAuthHandler.GetInitialAuthToken(request.Host, scheme, args.HttpClient.Data);
 
                     string auth = string.Concat(scheme, clientToken);
 
@@ -133,7 +133,7 @@ namespace Titanium.Web.Proxy
                         authHeader.Value.Length > x.Length + 1);
 
                     string serverToken = authHeader.Value.Substring(scheme.Length + 1);
-                    string clientToken = WinAuthHandler.GetFinalAuthToken(request.Host, serverToken, args.WebSession.Data);
+                    string clientToken = WinAuthHandler.GetFinalAuthToken(request.Host, serverToken, args.HttpClient.Data);
 
                     string auth = string.Concat(scheme, clientToken);
 
@@ -146,7 +146,7 @@ namespace Titanium.Web.Proxy
                         request.ContentLength = request.Body.Length;
                     }
 
-                    args.WebSession.ServerConnection.IsWinAuthenticated = true;
+                    args.HttpClient.Connection.IsWinAuthenticated = true;
                 }
 
                 // Need to revisit this.
@@ -165,7 +165,7 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         private async Task rewriteUnauthorizedResponse(SessionEventArgs args)
         {
-            var response = args.WebSession.Response;
+            var response = args.HttpClient.Response;
 
             // Strip authentication headers to avoid credentials prompt in client web browser
             foreach (string authHeaderName in authHeaderNames)
@@ -176,7 +176,7 @@ namespace Titanium.Web.Proxy
             // Add custom div to body to clarify that the proxy (not the client browser) failed authentication
             string authErrorMessage =
                 "<div class=\"inserted-by-proxy\"><h2>NTLM authentication through Titanium.Web.Proxy (" +
-                args.ProxyClient.ClientConnection.LocalEndPoint +
+                args.ProxyClient.Connection.LocalEndPoint +
                 ") failed. Please check credentials.</h2></div>";
             string originalErrorMessage =
                 "<div class=\"inserted-by-proxy\"><h3>Response from remote web server below.</h3></div><br/>";

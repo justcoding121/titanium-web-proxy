@@ -58,7 +58,7 @@ namespace Titanium.Web.Proxy
             }
 
             // If user requested call back then do it
-            if (!args.WebSession.Response.Locked)
+            if (!args.HttpClient.Response.Locked)
             {
                 await invokeBeforeResponse(args);
             }

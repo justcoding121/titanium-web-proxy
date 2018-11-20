@@ -22,11 +22,11 @@ namespace Titanium.Web.Proxy
             var cancellationToken = args.CancellationTokenSource.Token;
 
             // read response & headers from server
-            await args.WebSession.ReceiveResponse(cancellationToken);
+            await args.HttpClient.ReceiveResponse(cancellationToken);
 
             args.TimeLine["Response Received"] = DateTime.Now;
 
-            var response = args.WebSession.Response;
+            var response = args.HttpClient.Response;
             args.ReRequest = false;
 
             // check for windows authentication
@@ -38,7 +38,7 @@ namespace Titanium.Web.Proxy
                 }
                 else
                 {
-                    WinAuthEndPoint.AuthenticatedResponse(args.WebSession.Data);
+                    WinAuthEndPoint.AuthenticatedResponse(args.HttpClient.Data);
                 }
             }
 
@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy
             }
 
             // it may changed in the user event
-            response = args.WebSession.Response;
+            response = args.HttpClient.Response;
 
             var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
 
@@ -63,8 +63,8 @@ namespace Titanium.Web.Proxy
                 //write custom user response with body and return.
                 await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
 
-                if(args.WebSession.ServerConnection != null
-                    && !args.WebSession.CloseServerConnection)
+                if(args.HttpClient.Connection != null
+                    && !args.HttpClient.CloseServerConnection)
                 {
                     // syphon out the original response body from server connection
                     // so that connection will be good to be reused.
@@ -80,7 +80,8 @@ namespace Titanium.Web.Proxy
             {
                 // clear current response
                 await args.ClearResponse(cancellationToken);
-                await handleHttpSessionRequest(args.WebSession.ServerConnection, args);
+                await handleHttpSessionRequest(args, args.HttpClient.Connection, 
+                    args.ClientConnection.NegotiatedApplicationProtocol, cancellationToken);
                 return;
             }
 
