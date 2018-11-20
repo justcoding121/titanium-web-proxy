@@ -145,20 +145,20 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // It can be a simple integer, Guid, or any type
             //e.UserData = new CustomUserData()
             //{
-            //    RequestHeaders = e.WebSession.Request.Headers,
-            //    RequestBody = e.WebSession.Request.HasBody ? e.WebSession.Request.Body:null,
-            //    RequestBodyString = e.WebSession.Request.HasBody? e.WebSession.Request.BodyString:null
+            //    RequestHeaders = e.HttpClient.Request.Headers,
+            //    RequestBody = e.HttpClient.Request.HasBody ? e.HttpClient.Request.Body:null,
+            //    RequestBodyString = e.HttpClient.Request.HasBody? e.HttpClient.Request.BodyString:null
             //};
 
             ////This sample shows how to get the multipart form data headers
-            //if (e.WebSession.Request.Host == "mail.yahoo.com" && e.WebSession.Request.IsMultipartFormData)
+            //if (e.HttpClient.Request.Host == "mail.yahoo.com" && e.HttpClient.Request.IsMultipartFormData)
             //{
             //    e.MultipartRequestPartSent += MultipartRequestPartSent;
             //}
 
             // To cancel a request with a custom HTML content
             // Filter URL
-            //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("yahoo.com"))
+            //if (e.HttpClient.Request.RequestUri.AbsoluteUri.Contains("yahoo.com"))
             //{ 
             //    e.Ok("<!DOCTYPE html>" +
             //          "<html><body><h1>" +
@@ -170,7 +170,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //} 
 
             ////Redirect example
-            //if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
+            //if (e.HttpClient.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
             //{ 
             //   e.Redirect("https://www.paypal.com");
             //} 
@@ -194,7 +194,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             string ext = System.IO.Path.GetExtension(e.HttpClient.Request.RequestUri.AbsolutePath);
 
             //access user data set in request to do something with it
-            //var userData = e.WebSession.UserData as CustomUserData;
+            //var userData = e.HttpClient.UserData as CustomUserData;
 
             //if (ext == ".gif" || ext == ".png" || ext == ".jpg")
             //{ 
@@ -207,21 +207,21 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //                                           "</html>");
 
             //    var response = new OkResponse(btBody);
-            //    response.HttpVersion = e.WebSession.Request.HttpVersion;
+            //    response.HttpVersion = e.HttpClient.Request.HttpVersion;
 
             //    e.Respond(response);
             //    e.TerminateServerConnection();
             //} 
 
             //// print out process id of current session
-            ////WriteToConsole($"PID: {e.WebSession.ProcessId.Value}");
+            ////WriteToConsole($"PID: {e.HttpClient.ProcessId.Value}");
 
             ////if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
-            //if (e.WebSession.Request.Method == "GET" || e.WebSession.Request.Method == "POST")
+            //if (e.HttpClient.Request.Method == "GET" || e.HttpClient.Request.Method == "POST")
             //{ 
-            //    if (e.WebSession.Response.StatusCode == (int)HttpStatusCode.OK)
+            //    if (e.HttpClient.Response.StatusCode == (int)HttpStatusCode.OK)
             //    {
-            //        if (e.WebSession.Response.ContentType != null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
+            //        if (e.HttpClient.Response.ContentType != null && e.HttpClient.Response.ContentType.Trim().ToLower().Contains("text/html"))
             //        {
             //            var bodyBytes = await e.GetResponseBody();
             //            await e.SetResponseBody(bodyBytes);
@@ -283,7 +283,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         ///// <summary>
         ///// User data object as defined by user.
-        ///// User data can be set to each SessionEventArgs.WebSession.UserData property
+        ///// User data can be set to each SessionEventArgs.HttpClient.UserData property
         ///// </summary>
         //public class CustomUserData
         //{

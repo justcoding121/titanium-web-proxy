@@ -203,7 +203,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var item = new SessionListItem
             {
                 Number = lastSessionNumber,
-                WebSession = e.HttpClient,
+                HttpClient = e.HttpClient,
                 IsTunnelConnect = isTunnelConnect
             };
 
@@ -240,7 +240,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 foreach (var item in selectedItems.Cast<SessionListItem>().ToArray())
                 {
                     Sessions.Remove(item);
-                    sessionDictionary.Remove(item.WebSession);
+                    sessionDictionary.Remove(item.HttpClient);
                 }
             }
         }
@@ -254,7 +254,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             const int truncateLimit = 1024;
 
-            var session = SelectedSession.WebSession;
+            var session = SelectedSession.HttpClient;
             var request = session.Request;
             var data = (request.IsBodyRead ? request.Body : null) ?? new byte[0];
             bool truncated = data.Length > truncateLimit;

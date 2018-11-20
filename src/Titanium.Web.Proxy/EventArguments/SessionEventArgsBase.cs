@@ -83,7 +83,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         /// <summary>
         ///     Returns a user data for this request/response session which is
-        ///     same as the user data of WebSession.
+        ///     same as the user data of HttpClient.
         /// </summary>
         public object UserData
         {
