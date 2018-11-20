@@ -25,7 +25,6 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer
     {
-
         private bool isWindowsAuthenticationEnabledAndSupported =>
             EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
 
