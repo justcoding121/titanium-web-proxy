@@ -592,6 +592,19 @@ references:
   commentId: F:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.exceptionFunc
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.exceptionFunc
   nameWithType: SessionEventArgsBase.exceptionFunc
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.HttpClient
+  name: HttpClient
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_HttpClient
+  commentId: P:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.HttpClient
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.HttpClient
+  nameWithType: SessionEventArgsBase.HttpClient
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.HttpClient*
+  name: HttpClient
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_HttpClient_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.HttpClient
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.HttpClient
+  nameWithType: SessionEventArgsBase.HttpClient
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsHttps
   name: IsHttps
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsHttps
@@ -885,6 +898,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Helpers.RunTime.IsMac
   nameWithType: RunTime.IsMac
+- uid: Titanium.Web.Proxy.Helpers.RunTime.IsUwpOnWindows
+  name: IsUwpOnWindows
+  href: api/Titanium.Web.Proxy.Helpers.RunTime.html#Titanium_Web_Proxy_Helpers_RunTime_IsUwpOnWindows
+  commentId: P:Titanium.Web.Proxy.Helpers.RunTime.IsUwpOnWindows
+  fullName: Titanium.Web.Proxy.Helpers.RunTime.IsUwpOnWindows
+  nameWithType: RunTime.IsUwpOnWindows
+- uid: Titanium.Web.Proxy.Helpers.RunTime.IsUwpOnWindows*
+  name: IsUwpOnWindows
+  href: api/Titanium.Web.Proxy.Helpers.RunTime.html#Titanium_Web_Proxy_Helpers_RunTime_IsUwpOnWindows_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.RunTime.IsUwpOnWindows
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.RunTime.IsUwpOnWindows
+  nameWithType: RunTime.IsUwpOnWindows
 - uid: Titanium.Web.Proxy.Helpers.RunTime.IsWindows
   name: IsWindows
   href: api/Titanium.Web.Proxy.Helpers.RunTime.html#Titanium_Web_Proxy_Helpers_RunTime_IsWindows
