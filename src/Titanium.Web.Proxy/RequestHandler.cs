@@ -300,8 +300,6 @@ namespace Titanium.Web.Proxy
                     return false;
                 }
 
-                args.TimeLine["Connection Ready"] = DateTime.Now;
-
                 // construct the web request that we are going to issue on behalf of the client.
                 await handleHttpSessionRequest(connection, args);
                 return true;
