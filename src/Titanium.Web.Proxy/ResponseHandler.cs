@@ -3,6 +3,7 @@ using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy
@@ -63,7 +64,7 @@ namespace Titanium.Web.Proxy
                 //write custom user response with body and return.
                 await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
 
-                if(args.HttpClient.Connection != null
+                if (args.HttpClient.Connection != null
                     && !args.HttpClient.CloseServerConnection)
                 {
                     // syphon out the original response body from server connection
@@ -78,10 +79,14 @@ namespace Titanium.Web.Proxy
             // likely after making modifications from User Response Handler
             if (args.ReRequest)
             {
+                await tcpConnectionFactory.Release(args.HttpClient.Connection);
+
                 // clear current response
                 await args.ClearResponse(cancellationToken);
-                await handleHttpSessionRequest(args, args.HttpClient.Connection, 
-                    args.ClientConnection.NegotiatedApplicationProtocol, cancellationToken);
+                var httpCmd = Request.CreateRequestLine(args.HttpClient.Request.Method, 
+                    args.HttpClient.Request.OriginalUrl, args.HttpClient.Request.HttpVersion);
+                await handleHttpSessionRequest(httpCmd, args, null, args.ClientConnection.NegotiatedApplicationProtocol,
+                            cancellationToken, args.CancellationTokenSource);
                 return;
             }
 
