@@ -380,7 +380,6 @@ namespace Titanium.Web.Proxy
                 await handleHttpSessionResponse(args);
             }
 
-            args.TimeLine["Response Sent"] = DateTime.Now;
         }
 
         /// <summary>
