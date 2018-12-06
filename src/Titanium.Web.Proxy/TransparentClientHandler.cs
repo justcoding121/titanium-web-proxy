@@ -81,7 +81,7 @@ namespace Titanium.Web.Proxy
                             sslStream = new SslStream(clientStream);
 
                             string certName = HttpHelper.GetWildCardDomainName(httpsHostName);
-                            var certificate = await CertificateManager.CreateCertificateAsync(certName);
+                            var certificate = CertificateManager.RootCertificate ?? await CertificateManager.CreateCertificateAsync(certName);
 
                             // Successfully managed to authenticate the client using the fake certificate
                             await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
