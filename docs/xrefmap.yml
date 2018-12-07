@@ -2519,19 +2519,6 @@ references:
   commentId: E:Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.BeforeTunnelConnectResponse
   fullName: Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.BeforeTunnelConnectResponse
   nameWithType: ExplicitProxyEndPoint.BeforeTunnelConnectResponse
-- uid: Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.GenericCertificate
-  name: GenericCertificate
-  href: api/Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html#Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_GenericCertificate
-  commentId: P:Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.GenericCertificate
-  fullName: Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.GenericCertificate
-  nameWithType: ExplicitProxyEndPoint.GenericCertificate
-- uid: Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.GenericCertificate*
-  name: GenericCertificate
-  href: api/Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html#Titanium_Web_Proxy_Models_ExplicitProxyEndPoint_GenericCertificate_
-  commentId: Overload:Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.GenericCertificate
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.GenericCertificate
-  nameWithType: ExplicitProxyEndPoint.GenericCertificate
 - uid: Titanium.Web.Proxy.Models.ExternalProxy
   name: ExternalProxy
   href: api/Titanium.Web.Proxy.Models.ExternalProxy.html
@@ -2833,6 +2820,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.DecryptSsl
   nameWithType: ProxyEndPoint.DecryptSsl
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.GenericCertificate
+  name: GenericCertificate
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_GenericCertificate
+  commentId: P:Titanium.Web.Proxy.Models.ProxyEndPoint.GenericCertificate
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.GenericCertificate
+  nameWithType: ProxyEndPoint.GenericCertificate
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.GenericCertificate*
+  name: GenericCertificate
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_GenericCertificate_
+  commentId: Overload:Titanium.Web.Proxy.Models.ProxyEndPoint.GenericCertificate
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.GenericCertificate
+  nameWithType: ProxyEndPoint.GenericCertificate
 - uid: Titanium.Web.Proxy.Models.ProxyEndPoint.IpAddress
   name: IpAddress
   href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_IpAddress
