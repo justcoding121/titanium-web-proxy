@@ -1,18 +1,18 @@
 ## Titanium Web Proxy
 
-A light weight HTTP(S) proxy server written in C#
+A lightweight HTTP(S) proxy server written in C#.
 
 <a href="https://ci.appveyor.com/project/justcoding121/titanium-web-proxy">![Build Status](https://ci.appveyor.com/api/projects/status/p5vvtbpx9yp250ol?svg=true)</a> [![Join the chat at https://gitter.im/Titanium-Web-Proxy/Lobby](https://badges.gitter.im/Titanium-Web-Proxy/Lobby.svg)](https://gitter.im/Titanium-Web-Proxy/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-Kindly report only issues/bugs here . For programming help or questions use [StackOverflow](http://stackoverflow.com/questions/tagged/titanium-web-proxy) with the tag Titanium-Web-Proxy.
+Kindly report only issues/bugs here. For programming help or questions use [StackOverflow](http://stackoverflow.com/questions/tagged/titanium-web-proxy) with the tag Titanium-Web-Proxy.
 
 * [API Documentation](https://justcoding121.github.io/Titanium-Web-Proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html)
 * [Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki)
 
 ### Features
 
-* Multithreaded & fully asynchronous proxy employing server connection pooling, certificate cache & buffer pooling
-* View/modify/redirect/block requests & responses
+* Multi-threaded fully asynchronous proxy employing server connection pooling, certificate cache, and buffer pooling
+* View/modify/redirect/block requests and responses
 * Supports mutual SSL authentication, proxy authentication & automatic upstream proxy detection
 * Kerberos/NTLM authentication over HTTP protocols for windows domain
 
@@ -48,7 +48,7 @@ Supports
 
 ### Usage
 
-Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. 
+Refer the HTTP Proxy Server library in your project and look up the test project to learn usage. 
  
 Setup HTTP proxy:
 
@@ -228,7 +228,7 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
 ```
 ###  Note to contributors
 
-#### Roadmap
+#### Road map
 
 * Support HTTP 2.0 
 
