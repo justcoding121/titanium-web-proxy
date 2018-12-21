@@ -1,11 +1,16 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
 namespace Titanium.Web.Proxy.Helpers
 {
     internal class NetworkHelper
     {
+        private static readonly string localhostName = Dns.GetHostName();
+        private static readonly IPHostEntry localhostEntry = Dns.GetHostEntry(string.Empty);
+
         /// <summary>
         ///     Adapated from below link
         ///     http://stackoverflow.com/questions/11834091/how-to-check-if-localhost
@@ -19,55 +24,52 @@ namespace Titanium.Web.Proxy.Helpers
                 return true;
             }
 
-            // get local IP addresses
-            var localIPs = Dns.GetHostAddresses(Dns.GetHostName());
-
-            // test if any host IP equals to any local IP or to localhost
-            return localIPs.Contains(address);
+            // test if host IP equals any local IP
+            return localhostEntry.AddressList.Contains(address);
         }
 
         internal static bool IsLocalIpAddress(string hostName)
         {
-            hostName = hostName.ToLower();
-
-            if (hostName == "127.0.0.1"
-                || hostName == "localhost")
+            if (IPAddress.TryParse(hostName, out var ipAddress)
+                && IsLocalIpAddress(ipAddress))
             {
                 return true;
             }
 
-            var localhostDnsName = Dns.GetHostName().ToLower();
-
-            //if hostname matches current machine DNS name
-            if (hostName == localhostDnsName)
+            if (hostName.Equals("localhost", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
 
-            var isLocalhost = false;
-            IPHostEntry hostEntry = null;
-
-            //check if parsable to an IP Address
-            if (IPAddress.TryParse(hostName, out var ipAddress))
+            //if hostname matches local host name
+            if (hostName.Equals(localhostName, StringComparison.OrdinalIgnoreCase))
             {
-                hostEntry = Dns.GetHostEntry(localhostDnsName);
-                isLocalhost = hostEntry.AddressList.Any(x => x.Equals(ipAddress));
+                return true;
             }
 
-            if (!isLocalhost)
+            // if hostname matches fully qualified local DNS name
+            if (hostName.Equals(localhostEntry.HostName, StringComparison.OrdinalIgnoreCase))
             {
-                try
-                {
-                    hostEntry = Dns.GetHostEntry(hostName);
-                    isLocalhost = hostEntry.AddressList.Any(x => hostEntry.AddressList.Any(x.Equals));
-                }
-                catch (SocketException)
-                {
-                }
+                return true;
             }
 
+            try
+            {              
+                // do reverse DNS lookup even if hostName is an IP address
+                var hostEntry = Dns.GetHostEntry(hostName);
+                // if DNS resolved hostname matches local DNS name,
+                // or if host IP address list contains any local IP address
+                if (hostEntry.HostName.Equals(localhostEntry.HostName, StringComparison.OrdinalIgnoreCase)
+                    || hostEntry.AddressList.Any(hostIP => localhostEntry.AddressList.Contains(hostIP)))
+                {
+                    return true;
+                }
+            }
+            catch (SocketException)
+            {
+            }
 
-            return isLocalhost;
+            return false;
         }
     }
 }
