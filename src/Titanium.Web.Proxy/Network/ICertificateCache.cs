@@ -7,12 +7,12 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         ///     Loads the root certificate from the storage.
         /// </summary>
-        X509Certificate2 LoadRootCertificate(string name, string password, X509KeyStorageFlags storageFlags);
+        X509Certificate2 LoadRootCertificate(string pathOrName, string password, X509KeyStorageFlags storageFlags);
 
         /// <summary>
         ///     Saves the root certificate to the storage.
         /// </summary>
-        void SaveRootCertificate(string name, string password, X509Certificate2 certificate);
+        void SaveRootCertificate(string pathOrName, string password, X509Certificate2 certificate);
 
         /// <summary>
         ///     Loads certificate from the storage. Returns true if certificate does not exist.

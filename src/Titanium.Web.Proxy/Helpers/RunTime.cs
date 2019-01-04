@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Runtime.InteropServices;
 using System.Text;
-#if NETSTANDARD2_0
 using System.Runtime.InteropServices;
-#endif
 
 namespace Titanium.Web.Proxy.Helpers
 {
