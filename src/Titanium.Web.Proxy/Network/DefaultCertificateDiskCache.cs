@@ -2,6 +2,7 @@
 using System.IO;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
+using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Network
 {
@@ -13,24 +14,24 @@ namespace Titanium.Web.Proxy.Network
         private string rootCertificatePath;
         private string certificatePath;
 
-        public X509Certificate2 LoadRootCertificate(string name, string password, X509KeyStorageFlags storageFlags)
+        public X509Certificate2 LoadRootCertificate(string pathOrName, string password, X509KeyStorageFlags storageFlags)
         {
-            string filePath = getRootCertificatePath(name);
-            return loadCertificate(filePath, password, storageFlags);
+            string path = getRootCertificatePath(pathOrName);
+            return loadCertificate(path, password, storageFlags);
         }
 
-        public void SaveRootCertificate(string name, string password, X509Certificate2 certificate)
+        public void SaveRootCertificate(string pathOrName, string password, X509Certificate2 certificate)
         {
-            string filePath = getRootCertificatePath(name);
+            string path = getRootCertificatePath(pathOrName);
             byte[] exported = certificate.Export(X509ContentType.Pkcs12, password);
-            File.WriteAllBytes(filePath, exported);
+            File.WriteAllBytes(path, exported);
         }
 
         /// <inheritdoc />
         public X509Certificate2 LoadCertificate(string subjectName, X509KeyStorageFlags storageFlags)
         {
-            string filePath = Path.Combine(getCertificatePath(), subjectName + defaultCertificateFileExtension);
-            return loadCertificate(filePath, string.Empty, storageFlags);
+            string path = Path.Combine(getCertificatePath(), subjectName + defaultCertificateFileExtension);
+            return loadCertificate(path, string.Empty, storageFlags);
         }
 
         /// <inheritdoc />
@@ -55,12 +56,12 @@ namespace Titanium.Web.Proxy.Network
             certificatePath = null;
         }
 
-        private X509Certificate2 loadCertificate(string filePath, string password, X509KeyStorageFlags storageFlags)
+        private X509Certificate2 loadCertificate(string path, string password, X509KeyStorageFlags storageFlags)
         {
             byte[] exported;
             try
             {
-                exported = File.ReadAllBytes(filePath);
+                exported = File.ReadAllBytes(path);
             }
             catch (IOException)
             {
@@ -71,15 +72,15 @@ namespace Titanium.Web.Proxy.Network
             return new X509Certificate2(exported, password, storageFlags);
         }
 
-        private string getRootCertificatePath(string filePath)
+        private string getRootCertificatePath(string pathOrName)
         {
-            if (Path.IsPathRooted(filePath))
+            if (Path.IsPathRooted(pathOrName))
             {
-                return filePath;
+                return pathOrName;
             }
 
             return Path.Combine(getRootCertificateDirectory(),
-                string.IsNullOrEmpty(filePath) ? defaultRootCertificateFileName : filePath);
+                string.IsNullOrEmpty(pathOrName) ? defaultRootCertificateFileName : pathOrName);
         }
 
         private string getCertificatePath()
@@ -104,17 +105,32 @@ namespace Titanium.Web.Proxy.Network
         {
             if (rootCertificatePath == null)
             {
-                string assemblyLocation = GetType().Assembly.Location;
-
-                // dynamically loaded assemblies returns string.Empty location
-                if (assemblyLocation == string.Empty)
+                if (RunTime.IsUwpOnWindows)
                 {
-                    assemblyLocation = Assembly.GetEntryAssembly().Location;
+                    rootCertificatePath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
                 }
+                else if (RunTime.IsLinux)
+                {
+                    rootCertificatePath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                }
+                else if (RunTime.IsMac)
+                {
+                    rootCertificatePath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                }
+                else
+                {
+                    string assemblyLocation = GetType().Assembly.Location;
 
-                string path = Path.GetDirectoryName(assemblyLocation);
+                    // dynamically loaded assemblies returns string.Empty location
+                    if (assemblyLocation == string.Empty)
+                    {
+                        assemblyLocation = Assembly.GetEntryAssembly().Location;
+                    }
 
-                rootCertificatePath = path ?? throw new NullReferenceException();
+                    string path = Path.GetDirectoryName(assemblyLocation);
+
+                    rootCertificatePath = path ?? throw new NullReferenceException();
+                }
             }
 
             return rootCertificatePath;
