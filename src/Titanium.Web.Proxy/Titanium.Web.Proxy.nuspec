@@ -14,11 +14,9 @@
     <copyright>Copyright &#x00A9; Titanium.  All rights reserved.</copyright>
     <tags></tags>
     <dependencies>
-	  <group>
-		  <dependency id="StreamExtended" version="1.0.179" />
-		  <dependency id="Portable.BouncyCastle" version="1.8.2" />
-		  <dependency id="BrotliSharpLib" version="0.3.1" />
-	  </group>
+	  <dependency id="StreamExtended" version="1.0.179" />
+	  <dependency id="Portable.BouncyCastle" version="1.8.2" />
+	  <dependency id="BrotliSharpLib" version="0.3.1" />
 	  <group targetFramework="netstandard2.0">
 		  <dependency id="Microsoft.Win32.Registry" version="4.4.0" />
 		  <dependency id="System.Security.Principal.Windows" version="4.4.1" />
