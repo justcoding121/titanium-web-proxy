@@ -73,7 +73,7 @@ namespace Titanium.Web.Proxy
 
                     connectArgs = new TunnelConnectSessionEventArgs(this, endPoint, connectRequest,
                         cancellationTokenSource);
-                    connectArgs.ProxyClient.ClientConnection = clientConnection;
+                    connectArgs.ProxyClient.Connection = clientConnection;
                     connectArgs.ProxyClient.ClientStream = clientStream;
 
                     await endPoint.InvokeBeforeTunnelConnectRequest(this, connectArgs, ExceptionFunc);
@@ -83,9 +83,9 @@ namespace Titanium.Web.Proxy
 
                     if (connectArgs.DenyConnect)
                     {
-                        if (connectArgs.WebSession.Response.StatusCode == 0)
+                        if (connectArgs.HttpClient.Response.StatusCode == 0)
                         {
-                            connectArgs.WebSession.Response = new Response
+                            connectArgs.HttpClient.Response = new Response
                             {
                                 HttpVersion = HttpHeader.Version11,
                                 StatusCode = (int)HttpStatusCode.Forbidden,
@@ -94,7 +94,7 @@ namespace Titanium.Web.Proxy
                         }
 
                         // send the response
-                        await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response,
+                        await clientStreamWriter.WriteResponseAsync(connectArgs.HttpClient.Response,
                             cancellationToken: cancellationToken);
                         return;
                     }
@@ -104,7 +104,7 @@ namespace Titanium.Web.Proxy
                         await endPoint.InvokeBeforeTunnectConnectResponse(this, connectArgs, ExceptionFunc);
 
                         // send the response
-                        await clientStreamWriter.WriteResponseAsync(connectArgs.WebSession.Response,
+                        await clientStreamWriter.WriteResponseAsync(connectArgs.HttpClient.Response,
                             cancellationToken: cancellationToken);
                         return;
                     }
@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy
                     // Set ContentLength explicitly to properly handle HTTP 1.0
                     response.ContentLength = 0;
                     response.Headers.FixProxyHeaders();
-                    connectArgs.WebSession.Response = response;
+                    connectArgs.HttpClient.Response = response;
 
                     await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
 
@@ -252,7 +252,7 @@ namespace Titanium.Web.Proxy
                                 }
 
                                 var serverHelloInfo = await SslTools.PeekServerHello(connection.Stream, BufferPool, cancellationToken);
-                                ((ConnectResponse)connectArgs.WebSession.Response).ServerHelloInfo = serverHelloInfo;
+                                ((ConnectResponse)connectArgs.HttpClient.Response).ServerHelloInfo = serverHelloInfo;
                             }
 
                             await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool, BufferSize,
@@ -321,7 +321,7 @@ namespace Titanium.Web.Proxy
                 calledRequestHandler = true;
                 // Now create the request
                 await handleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
-                    cancellationTokenSource, connectHostname, connectArgs?.WebSession.ConnectRequest, prefetchConnectionTask);
+                    cancellationTokenSource, connectHostname, connectArgs?.HttpClient.ConnectRequest, prefetchConnectionTask);
             }
             catch (ProxyException e)
             {

@@ -35,7 +35,7 @@ $MSBuild -replace ' ', '` '
 FormatTaskName (("-"*25) + "[{0}]" + ("-"*25))
 
 #default task
-Task default -depends Clean, Build, Document, Package
+Task default -depends Package
 
 #cleans obj, b
 Task Clean {
@@ -43,8 +43,19 @@ Task Clean {
     exec { . $MSBuild $SolutionFile /t:Clean /v:quiet }
 }
 
+#install root cetificate needed for integration tests
+Task Setup-Integration-Test-Tools -depends Clean {
+
+$startInfo = new-object System.Diagnostics.ProcessStartInfo "PowerShell";
+$startInfo.Arguments = "$Here\install-certificate.ps1";
+$startInfo.Verb = "runas";
+$process = [System.Diagnostics.Process]::Start($startInfo);
+$process.WaitForExit()
+
+}
+
 #install build tools
-Task Install-BuildTools -depends Clean  {
+Task Install-BuildTools  -depends Setup-Integration-Test-Tools {
     if(!(Test-Path $MSBuild)) 
     { 
         cinst microsoft-build-tools -y

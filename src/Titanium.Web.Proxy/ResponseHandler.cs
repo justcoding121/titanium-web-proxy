@@ -3,6 +3,7 @@ using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy
@@ -22,11 +23,11 @@ namespace Titanium.Web.Proxy
             var cancellationToken = args.CancellationTokenSource.Token;
 
             // read response & headers from server
-            await args.WebSession.ReceiveResponse(cancellationToken);
+            await args.HttpClient.ReceiveResponse(cancellationToken);
 
             args.TimeLine["Response Received"] = DateTime.Now;
 
-            var response = args.WebSession.Response;
+            var response = args.HttpClient.Response;
             args.ReRequest = false;
 
             // check for windows authentication
@@ -38,7 +39,7 @@ namespace Titanium.Web.Proxy
                 }
                 else
                 {
-                    WinAuthEndPoint.AuthenticatedResponse(args.WebSession.Data);
+                    WinAuthEndPoint.AuthenticatedResponse(args.HttpClient.Data);
                 }
             }
 
@@ -53,7 +54,7 @@ namespace Titanium.Web.Proxy
             }
 
             // it may changed in the user event
-            response = args.WebSession.Response;
+            response = args.HttpClient.Response;
 
             var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
 
@@ -63,8 +64,8 @@ namespace Titanium.Web.Proxy
                 //write custom user response with body and return.
                 await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
 
-                if(args.WebSession.ServerConnection != null
-                    && !args.WebSession.CloseServerConnection)
+                if (args.HttpClient.Connection != null
+                    && !args.HttpClient.CloseServerConnection)
                 {
                     // syphon out the original response body from server connection
                     // so that connection will be good to be reused.
@@ -78,9 +79,14 @@ namespace Titanium.Web.Proxy
             // likely after making modifications from User Response Handler
             if (args.ReRequest)
             {
+                await tcpConnectionFactory.Release(args.HttpClient.Connection);
+
                 // clear current response
                 await args.ClearResponse(cancellationToken);
-                await handleHttpSessionRequest(args.WebSession.ServerConnection, args);
+                var httpCmd = Request.CreateRequestLine(args.HttpClient.Request.Method, 
+                    args.HttpClient.Request.OriginalUrl, args.HttpClient.Request.HttpVersion);
+                await handleHttpSessionRequest(httpCmd, args, null, args.ClientConnection.NegotiatedApplicationProtocol,
+                            cancellationToken, args.CancellationTokenSource);
                 return;
             }
 
@@ -123,6 +129,8 @@ namespace Titanium.Web.Proxy
                         cancellationToken);
                 }
             }
+
+            args.TimeLine["Response Sent"] = DateTime.Now;
 
         }
 

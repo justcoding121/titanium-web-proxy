@@ -94,8 +94,6 @@ namespace Titanium.Web.Proxy
             bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
             bool trustRootCertificateAsAdmin = false)
         {
-            // default values
-            ConnectionTimeOutSeconds = 60;
 
             if (BufferPool == null)
             {
@@ -104,7 +102,7 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory(this);
-            if (!RunTime.IsRunningOnMono && RunTime.IsWindows)
+            if (!RunTime.IsRunningOnMono && RunTime.IsWindows && !RunTime.IsUwpOnWindows)
             {
                 systemProxySettingsManager = new SystemProxyManager();
             }
@@ -186,7 +184,7 @@ namespace Titanium.Web.Proxy
         ///     This will also determine the pool eviction time when connection pool is enabled.
         ///     Default value is 60 seconds.
         /// </summary>
-        public int ConnectionTimeOutSeconds { get; set; }
+        public int ConnectionTimeOutSeconds { get; set; } = 60;
 
         /// <summary>
         ///     Maximum number of concurrent connections per remote host in cache.
@@ -544,7 +542,7 @@ namespace Titanium.Web.Proxy
 
             // clear any system proxy settings which is pointing to our own endpoint (causing a cycle)
             // due to ungracious proxy shutdown before or something else
-            if (systemProxySettingsManager != null && RunTime.IsWindows)
+            if (systemProxySettingsManager != null && RunTime.IsWindows && !RunTime.IsUwpOnWindows)
             {
                 var proxyInfo = systemProxySettingsManager.GetProxyInfoFromRegistry();
                 if (proxyInfo.Proxies != null)
@@ -595,7 +593,7 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is not running.");
             }
 
-            if (!RunTime.IsRunningOnMono && RunTime.IsWindows)
+            if (!RunTime.IsRunningOnMono && RunTime.IsWindows && !RunTime.IsUwpOnWindows)
             {
                 bool setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
                     .Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
@@ -681,7 +679,7 @@ namespace Titanium.Web.Proxy
         /// <returns>The external proxy as task result.</returns>
         private Task<ExternalProxy> getSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
         {
-            var proxy = systemProxyResolver.GetProxy(sessionEventArgs.WebSession.Request.RequestUri);
+            var proxy = systemProxyResolver.GetProxy(sessionEventArgs.HttpClient.Request.RequestUri);
             return Task.FromResult(proxy);
         }
 

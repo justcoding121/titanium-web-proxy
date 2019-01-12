@@ -69,7 +69,7 @@ namespace Titanium.Web.Proxy
                             //it could cause floating server connections when client exits
                             prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(httpsHostName, endPoint.Port,
                                     httpVersion: null, isHttps: true, applicationProtocols: null, isConnect: false,
-                                    proxyServer: this, upStreamEndPoint: UpStreamEndPoint, externalProxy: UpStreamHttpsProxy,
+                                    proxyServer: this, session: null, upStreamEndPoint: UpStreamEndPoint, externalProxy: UpStreamHttpsProxy,
                                     noCache: false, cancellationToken: CancellationToken.None);
                         }
                         
@@ -81,7 +81,8 @@ namespace Titanium.Web.Proxy
                             sslStream = new SslStream(clientStream);
 
                             string certName = HttpHelper.GetWildCardDomainName(httpsHostName);
-                            var certificate = await CertificateManager.CreateCertificateAsync(certName);
+                            var certificate = endPoint.GenericCertificate ??
+                                                    await CertificateManager.CreateCertificateAsync(certName);
 
                             // Successfully managed to authenticate the client using the fake certificate
                             await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
@@ -102,7 +103,7 @@ namespace Titanium.Web.Proxy
                     {
                         var connection = await tcpConnectionFactory.GetServerConnection(httpsHostName, endPoint.Port,
                                     httpVersion: null, isHttps: false, applicationProtocols: null,
-                                    isConnect: true, proxyServer: this, upStreamEndPoint: UpStreamEndPoint,
+                                    isConnect: true, proxyServer: this, session:null, upStreamEndPoint: UpStreamEndPoint,
                                     externalProxy: UpStreamHttpsProxy, noCache: true, cancellationToken: cancellationToken);
 
                         try

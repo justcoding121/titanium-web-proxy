@@ -26,14 +26,14 @@ namespace Titanium.Web.Proxy
                 return true;
             }
 
-            var httpHeaders = session.WebSession.Request.Headers;
+            var httpHeaders = session.HttpClient.Request.Headers;
 
             try
             {
                 var header = httpHeaders.GetFirstHeader(KnownHeaders.ProxyAuthorization);
                 if (header == null)
                 {
-                    session.WebSession.Response = createAuthentication407Response("Proxy Authentication Required");
+                    session.HttpClient.Response = createAuthentication407Response("Proxy Authentication Required");
                     return false;
                 }
 
@@ -42,7 +42,7 @@ namespace Titanium.Web.Proxy
                 if (headerValueParts.Length != 2)
                 {
                     // Return not authorized
-                    session.WebSession.Response = createAuthentication407Response("Proxy Authentication Invalid");
+                    session.HttpClient.Response = createAuthentication407Response("Proxy Authentication Invalid");
                     return false;
                 }
 
@@ -57,7 +57,7 @@ namespace Titanium.Web.Proxy
 
                     if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
                     {
-                        session.WebSession.Response = createAuthentication407Response("Proxy Authentication Invalid", result.Continuation);
+                        session.HttpClient.Response = createAuthentication407Response("Proxy Authentication Invalid", result.Continuation);
 
                         return false;
                     }
@@ -73,7 +73,7 @@ namespace Titanium.Web.Proxy
                     httpHeaders));
 
                 // Return not authorized
-                session.WebSession.Response = createAuthentication407Response("Proxy Authentication Invalid");
+                session.HttpClient.Response = createAuthentication407Response("Proxy Authentication Invalid");
                 return false;
             }
         }
@@ -83,7 +83,7 @@ namespace Titanium.Web.Proxy
             if (!headerValueParts[0].EqualsIgnoreCase(KnownHeaders.ProxyAuthorizationBasic))
             {
                 // Return not authorized
-                session.WebSession.Response = createAuthentication407Response("Proxy Authentication Invalid");
+                session.HttpClient.Response = createAuthentication407Response("Proxy Authentication Invalid");
                 return false;
             }
 
@@ -92,7 +92,7 @@ namespace Titanium.Web.Proxy
             if (colonIndex == -1)
             {
                 // Return not authorized
-                session.WebSession.Response = createAuthentication407Response("Proxy Authentication Invalid");
+                session.HttpClient.Response = createAuthentication407Response("Proxy Authentication Invalid");
                 return false;
             }
 
@@ -101,7 +101,7 @@ namespace Titanium.Web.Proxy
             bool authenticated = await ProxyBasicAuthenticateFunc(session, username, password);
             if (!authenticated)
             {
-                session.WebSession.Response = createAuthentication407Response("Proxy Authentication Invalid");
+                session.HttpClient.Response = createAuthentication407Response("Proxy Authentication Invalid");
             }
 
             return authenticated;

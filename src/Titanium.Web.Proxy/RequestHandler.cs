@@ -15,6 +15,7 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Shared;
 
@@ -25,7 +26,6 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer
     {
-
         private bool isWindowsAuthenticationEnabledAndSupported =>
             EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
 
@@ -72,8 +72,8 @@ namespace Titanium.Web.Proxy
 
                     var args = new SessionEventArgs(this, endPoint, cancellationTokenSource)
                     {
-                        ProxyClient = { ClientConnection = clientConnection },
-                        WebSession = { ConnectRequest = connectRequest }
+                        ProxyClient = { Connection = clientConnection },
+                        HttpClient = { ConnectRequest = connectRequest }
                     };
 
                     try
@@ -84,7 +84,7 @@ namespace Titanium.Web.Proxy
                                 out var version);
 
                             // Read the request headers in to unique and non-unique header collections
-                            await HeaderParser.ReadHeaders(clientStream, args.WebSession.Request.Headers,
+                            await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,
                                 cancellationToken);
 
                             Uri httpRemoteUri;
@@ -101,7 +101,7 @@ namespace Titanium.Web.Proxy
                             }
                             else
                             {
-                                string host = args.WebSession.Request.Host ?? httpsConnectHostname;
+                                string host = args.HttpClient.Request.Host ?? httpsConnectHostname;
                                 string hostAndPath = host;
                                 if (httpUrl.StartsWith("/"))
                                 {
@@ -120,7 +120,7 @@ namespace Titanium.Web.Proxy
                                 }
                             }
 
-                            var request = args.WebSession.Request;
+                            var request = args.HttpClient.Request;
                             request.RequestUri = httpRemoteUri;
                             request.OriginalUrl = httpUrl;
 
@@ -137,7 +137,7 @@ namespace Titanium.Web.Proxy
                                     await invokeBeforeResponse(args);
 
                                     // send the response
-                                    await clientStreamWriter.WriteResponseAsync(args.WebSession.Response,
+                                    await clientStreamWriter.WriteResponseAsync(args.HttpClient.Response,
                                         cancellationToken: cancellationToken);
                                     return;
                                 }
@@ -162,7 +162,7 @@ namespace Titanium.Web.Proxy
                             // If user requested interception do it
                             await invokeBeforeRequest(args);
 
-                            var response = args.WebSession.Response;
+                            var response = args.HttpClient.Response;
 
                             if (request.CancelRequest)
                             {
@@ -198,49 +198,27 @@ namespace Titanium.Web.Proxy
                                 connection = null;
                             }
 
-                            //a connection generator task with captured parameters via closure.
-                            Func<Task<TcpServerConnection>> generator = () => 
-                                                tcpConnectionFactory.GetServerConnection(this, args, isConnect: false,
-                                                        applicationProtocol:clientConnection.NegotiatedApplicationProtocol,
-                                                        noCache: false, cancellationToken: cancellationToken);
-
-                            //for connection pool, retry fails until cache is exhausted.   
-                            var result = await retryPolicy<ServerConnectionException>().ExecuteAsync(async (serverConnection) =>
-                            {
-                                args.TimeLine["Server Connection Created"] = DateTime.Now;
-
-                                // if upgrading to websocket then relay the request without reading the contents
-                                if (request.UpgradeToWebSocket)
-                                {
-                                    await handleWebSocketUpgrade(httpCmd, args, request,
-                                        response, clientStream, clientStreamWriter,
-                                        serverConnection, cancellationTokenSource, cancellationToken);
-                                    closeServerConnection = true;
-                                    return false;
-                                }
-
-                                // construct the web request that we are going to issue on behalf of the client.
-                                await handleHttpSessionRequest(serverConnection, args);
-                                return true;
-
-                            }, generator, connection);
+                            var result = await handleHttpSessionRequest(httpCmd, args, connection,
+                                  clientConnection.NegotiatedApplicationProtocol,
+                                  cancellationToken, cancellationTokenSource);
 
                             //update connection to latest used
                             connection = result.LatestConnection;
+                            closeServerConnection = !result.Continue;           
 
                             //throw if exception happened
-                            if(!result.IsSuccess)
+                            if (!result.IsSuccess)
                             {
                                 throw result.Exception;
                             }
 
-                            if(!result.Continue)
+                            if (!result.Continue)
                             {
                                 return;
                             }
 
                             //user requested
-                            if (args.WebSession.CloseServerConnection)
+                            if (args.HttpClient.CloseServerConnection)
                             {
                                 closeServerConnection = true;
                                 return;
@@ -258,13 +236,13 @@ namespace Titanium.Web.Proxy
                                 throw new Exception("Session was terminated by user.");
                             }
 
-                            //Get/release server connection for each HTTP session instead of per client connection.
+                            //Release server connection for each HTTP session instead of per client connection.
                             //This will be more efficient especially when client is idly holding server connection 
                             //between sessions without using it.
                             //Do not release authenticated connections for performance reasons.
                             //Otherwise it will keep authenticating per session.
-                            if (EnableConnectionPool && connection!=null
-                                && !connection.IsWinAuthenticated)
+                            if (EnableConnectionPool && connection != null
+                                    && !connection.IsWinAuthenticated)
                             {
                                 await tcpConnectionFactory.Release(connection);
                                 connection = null;
@@ -298,16 +276,41 @@ namespace Titanium.Web.Proxy
             }
         }
 
-        /// <summary>
-        ///     Handle a specific session (request/response sequence)
-        /// </summary>
-        /// <param name="serverConnection">The tcp connection.</param>
-        /// <param name="args">The session event arguments.</param>
-        /// <returns></returns>
-        private async Task handleHttpSessionRequest(TcpServerConnection serverConnection, SessionEventArgs args)
+        private async Task<RetryResult> handleHttpSessionRequest(string httpCmd, SessionEventArgs args,
+          TcpServerConnection serverConnection, SslApplicationProtocol sslApplicationProtocol,
+          CancellationToken cancellationToken, CancellationTokenSource cancellationTokenSource)
+        {
+            //a connection generator task with captured parameters via closure.
+            Func<Task<TcpServerConnection>> generator = () =>
+                            tcpConnectionFactory.GetServerConnection(this, args, isConnect: false,
+                                    applicationProtocol: sslApplicationProtocol,
+                                    noCache: false, cancellationToken: cancellationToken);
+
+            //for connection pool, retry fails until cache is exhausted.   
+            return await retryPolicy<ServerConnectionException>().ExecuteAsync(async (connection) =>
+            {
+                args.TimeLine["Connection Ready"] = DateTime.Now;
+
+                if (args.HttpClient.Request.UpgradeToWebSocket)
+                {
+                    // if upgrading to websocket then relay the request without reading the contents
+                    await handleWebSocketUpgrade(httpCmd, args, args.HttpClient.Request,
+                        args.HttpClient.Response, args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamWriter,
+                        connection, cancellationTokenSource, cancellationToken);
+                    return false;
+                }
+
+                // construct the web request that we are going to issue on behalf of the client.
+                await handleHttpSessionRequest(connection, args);
+                return true;
+
+            }, generator, serverConnection);
+        }
+
+        private async Task handleHttpSessionRequest(TcpServerConnection connection, SessionEventArgs args)
         {
             var cancellationToken = args.CancellationTokenSource.Token;
-            var request = args.WebSession.Request;
+            var request = args.HttpClient.Request;
             request.Locked = true;
 
             var body = request.CompressBodyAndUpdateContentLength();
@@ -316,8 +319,8 @@ namespace Titanium.Web.Proxy
             // and see if server would return 100 conitinue
             if (request.ExpectContinue)
             {
-                args.WebSession.SetConnection(serverConnection);
-                await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
+                args.HttpClient.SetConnection(connection);
+                await args.HttpClient.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
                     cancellationToken);
             }
 
@@ -328,13 +331,13 @@ namespace Titanium.Web.Proxy
 
                 if (request.Is100Continue)
                 {
-                    await clientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion,
+                    await clientStreamWriter.WriteResponseStatusAsync(args.HttpClient.Response.HttpVersion,
                         (int)HttpStatusCode.Continue, "Continue", cancellationToken);
                     await clientStreamWriter.WriteLineAsync(cancellationToken);
                 }
                 else if (request.ExpectationFailed)
                 {
-                    await clientStreamWriter.WriteResponseStatusAsync(args.WebSession.Response.HttpVersion,
+                    await clientStreamWriter.WriteResponseStatusAsync(args.HttpClient.Response.HttpVersion,
                         (int)HttpStatusCode.ExpectationFailed, "Expectation Failed", cancellationToken);
                     await clientStreamWriter.WriteLineAsync(cancellationToken);
                 }
@@ -343,8 +346,8 @@ namespace Titanium.Web.Proxy
             // If expect continue is not enabled then set the connectio and send request headers
             if (!request.ExpectContinue)
             {
-                args.WebSession.SetConnection(serverConnection);
-                await args.WebSession.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
+                args.HttpClient.SetConnection(connection);
+                await args.HttpClient.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
                     cancellationToken);
             }
 
@@ -353,7 +356,7 @@ namespace Titanium.Web.Proxy
             {
                 if (request.IsBodyRead)
                 {
-                    var writer = args.WebSession.ServerConnection.StreamWriter;
+                    var writer = args.HttpClient.Connection.StreamWriter;
                     await writer.WriteBodyAsync(body, request.IsChunked, cancellationToken);
                 }
                 else
@@ -362,12 +365,14 @@ namespace Titanium.Web.Proxy
                     {
                         if (request.HasBody)
                         {
-                            HttpWriter writer = args.WebSession.ServerConnection.StreamWriter;
+                            HttpWriter writer = args.HttpClient.Connection.StreamWriter;
                             await args.CopyRequestBodyAsync(writer, TransformationMode.None, cancellationToken);
                         }
                     }
                 }
             }
+
+            args.TimeLine["Request Sent"] = DateTime.Now;
 
             // If not expectation failed response was returned by server then parse response
             if (!request.ExpectationFailed)
@@ -375,7 +380,6 @@ namespace Titanium.Web.Proxy
                 await handleHttpSessionResponse(args);
             }
 
-            args.TimeLine["Response Sent"] = DateTime.Now;
         }
 
         /// <summary>

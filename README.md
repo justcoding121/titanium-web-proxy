@@ -1,18 +1,18 @@
 ## Titanium Web Proxy
 
-A light weight HTTP(S) proxy server written in C#
+A lightweight HTTP(S) proxy server written in C#.
 
-<a href="https://ci.appveyor.com/project/justcoding121/titanium-web-proxy">![Build Status](https://ci.appveyor.com/api/projects/status/rvlxv8xgj0m7lkr4?svg=true)</a> [![Join the chat at https://gitter.im/Titanium-Web-Proxy/Lobby](https://badges.gitter.im/Titanium-Web-Proxy/Lobby.svg)](https://gitter.im/Titanium-Web-Proxy/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+<a href="https://ci.appveyor.com/project/justcoding121/titanium-web-proxy">![Build Status](https://ci.appveyor.com/api/projects/status/p5vvtbpx9yp250ol?svg=true)</a> [![Join the chat at https://gitter.im/Titanium-Web-Proxy/Lobby](https://badges.gitter.im/Titanium-Web-Proxy/Lobby.svg)](https://gitter.im/Titanium-Web-Proxy/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-Kindly report only issues/bugs here . For programming help or questions use [StackOverflow](http://stackoverflow.com/questions/tagged/titanium-web-proxy) with the tag Titanium-Web-Proxy.
+Kindly report only issues/bugs here. For programming help or questions use [StackOverflow](http://stackoverflow.com/questions/tagged/titanium-web-proxy) with the tag Titanium-Web-Proxy.
 
 * [API Documentation](https://justcoding121.github.io/Titanium-Web-Proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html)
 * [Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki)
 
 ### Features
 
-* Multithreaded & fully asynchronous proxy employing server connection pooling, certificate cache & buffer pooling
-* View/modify/redirect/block requests & responses
+* Multi-threaded fully asynchronous proxy employing server connection pooling, certificate cache, and buffer pooling
+* View/modify/redirect/block requests and responses
 * Supports mutual SSL authentication, proxy authentication & automatic upstream proxy detection
 * Kerberos/NTLM authentication over HTTP protocols for windows domain
 
@@ -48,7 +48,7 @@ Supports
 
 ### Usage
 
-Refer the HTTP Proxy Server library in your project, look up Test project to learn usage. 
+Refer the HTTP Proxy Server library in your project and look up the test project to learn usage. 
  
 Setup HTTP proxy:
 
@@ -126,7 +126,7 @@ Sample request and response event handlers
 
 private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
 {
-    string hostname = e.WebSession.Request.RequestUri.Host;
+    string hostname = e.HttpClient.Request.RequestUri.Host;
 
     if (hostname.Contains("dropbox.com"))
     {
@@ -139,12 +139,12 @@ private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSess
 
 public async Task OnRequest(object sender, SessionEventArgs e)
 {
-    Console.WriteLine(e.WebSession.Request.Url);
+    Console.WriteLine(e.HttpClient.Request.Url);
 
     ////read request headers
-    var requestHeaders = e.WebSession.Request.RequestHeaders;
+    var requestHeaders = e.HttpClient.Request.RequestHeaders;
 
-    var method = e.WebSession.Request.Method.ToUpper();
+    var method = e.HttpClient.Request.Method.ToUpper();
     if ((method == "POST" || method == "PUT" || method == "PATCH"))
     {
 	//Get/Set request body bytes
@@ -157,12 +157,12 @@ public async Task OnRequest(object sender, SessionEventArgs e)
 	
 	//store request 
 	//so that you can find it from response handler 
-  	e.UserData = e.WebSession.Request;
+  	e.UserData = e.HttpClient.Request;
     }
 
     //To cancel a request with a custom HTML content
     //Filter URL
-    if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("google.com"))
+    if (e.HttpClient.Request.RequestUri.AbsoluteUri.Contains("google.com"))
     {
 	e.Ok("<!DOCTYPE html>" +
 	      "<html><body><h1>" +
@@ -173,7 +173,7 @@ public async Task OnRequest(object sender, SessionEventArgs e)
 	      "</html>");
     }
     //Redirect example
-    if (e.WebSession.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
+    if (e.HttpClient.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
     {
 	e.Redirect("https://www.paypal.com");
     }
@@ -183,14 +183,14 @@ public async Task OnRequest(object sender, SessionEventArgs e)
 public async Task OnResponse(object sender, SessionEventArgs e)
 {
     //read response headers
-    var responseHeaders = e.WebSession.Response.ResponseHeaders;
+    var responseHeaders = e.HttpClient.Response.ResponseHeaders;
 
     //if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
-    if (e.WebSession.Request.Method == "GET" || e.WebSession.Request.Method == "POST")
+    if (e.HttpClient.Request.Method == "GET" || e.HttpClient.Request.Method == "POST")
     {
-	if (e.WebSession.Response.ResponseStatusCode == "200")
+	if (e.HttpClient.Response.ResponseStatusCode == "200")
 	{
-	    if (e.WebSession.Response.ContentType!=null && e.WebSession.Response.ContentType.Trim().ToLower().Contains("text/html"))
+	    if (e.HttpClient.Response.ContentType!=null && e.HttpClient.Response.ContentType.Trim().ToLower().Contains("text/html"))
 	    {
 		byte[] bodyBytes = await e.GetResponseBody();
 		await e.SetResponseBody(bodyBytes);
@@ -228,7 +228,7 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
 ```
 ###  Note to contributors
 
-#### Roadmap
+#### Road map
 
 * Support HTTP 2.0 
 

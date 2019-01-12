@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         public int Number { get; set; }
 
-        public HttpWebClient WebSession { get; set; }
+        public HttpWebClient HttpClient { get; set; }
 
         public bool IsTunnelConnect { get; set; }
 
@@ -97,8 +97,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         public void Update()
         {
-            var request = WebSession.Request;
-            var response = WebSession.Response;
+            var request = HttpClient.Request;
+            var response = HttpClient.Response;
             int statusCode = response?.StatusCode ?? 0;
             StatusCode = statusCode == 0 ? "-" : statusCode.ToString();
             Protocol = request.RequestUri.Scheme;
@@ -132,7 +132,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 BodySize = responseSize;
             }
 
-            Process = GetProcessDescription(WebSession.ProcessId.Value);
+            Process = GetProcessDescription(HttpClient.ProcessId.Value);
         }
 
         private string GetProcessDescription(int processId)
