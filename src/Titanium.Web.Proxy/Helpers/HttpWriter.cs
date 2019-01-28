@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy.Helpers
             return writeAsyncInternal(value, false, cancellationToken);
         }
 
-        private Task writeAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken)
+        private async Task writeAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken)
         {
             int newLineChars = addNewLine ? newLine.Length : 0;
             int charCount = value.Length;
@@ -67,7 +67,7 @@ namespace Titanium.Web.Proxy.Helpers
                         idx += newLineChars;
                     }
 
-                    return stream.WriteAsync(buffer, 0, idx, cancellationToken);
+                    await stream.WriteAsync(buffer, 0, idx, cancellationToken);
                 }
                 finally
                 {
@@ -87,7 +87,7 @@ namespace Titanium.Web.Proxy.Helpers
                     idx += newLineChars;
                 }
 
-                return stream.WriteAsync(buffer, 0, idx, cancellationToken);
+                await stream.WriteAsync(buffer, 0, idx, cancellationToken);
             }
         }
 
