@@ -67,11 +67,15 @@ namespace Titanium.Web.Proxy.Helpers
                         idx += newLineChars;
                     }
 
-                    return stream.WriteAsync(buffer, 0, idx, cancellationToken);
+                    return stream.WriteAsync(buffer, 0, idx, cancellationToken).ContinueWith((antecedent) =>
+                    {
+                        bufferPool.ReturnBuffer(buffer);
+                    });
                 }
-                finally
+                catch(Exception ex)
                 {
                     bufferPool.ReturnBuffer(buffer);
+                    throw ex;
                 }
             }
             else
