@@ -39,6 +39,9 @@ assembly_info:
 # to disable automatic tests 
 test: on
 
+test_script: 
+ - cmd: dotnet test "[%APPVEYOR_BUILD_FOLDER%\tests\Titanium.Web.Proxy.IntegrationTests\Titanium.Web.Proxy.IntegrationTests.csproj]" -c %CONFIGURATION%
+ 
 # skip building commits that add tags (such as release tag)
 skip_tags: true
 
