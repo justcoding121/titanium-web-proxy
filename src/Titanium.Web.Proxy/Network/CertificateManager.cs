@@ -432,11 +432,11 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <summary>
-        ///     Create an SSL certificate async
+        ///     Creates a server certificate signed by the root certificate.
         /// </summary>
         /// <param name="certificateName"></param>
         /// <returns></returns>
-        internal async Task<X509Certificate2> CreateCertificateAsync(string certificateName)
+        public async Task<X509Certificate2> CreateServerCertificate(string certificateName)
         {
             // check in cache first
             if (cachedCertificates.TryGetValue(certificateName, out var cached))
