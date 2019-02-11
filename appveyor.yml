@@ -27,7 +27,7 @@ cache: .build\cleanup-cache.txt
 
 # to run your custom scripts instead of automatic MSBuild
 build_script:
-  - cmd: build.bat Package
+  - cmd: build.bat
   
 assembly_info:
   patch: true
@@ -40,7 +40,7 @@ assembly_info:
 test: on
 
 test_script: 
- - cmd: dotnet test "%APPVEYOR_BUILD_FOLDER%\tests\Titanium.Web.Proxy.IntegrationTests\Titanium.Web.Proxy.IntegrationTests.csproj" -c %CONFIGURATION%
+ - cmd: test.bat
 # skip building commits that add tags (such as release tag)
 skip_tags: true
 
