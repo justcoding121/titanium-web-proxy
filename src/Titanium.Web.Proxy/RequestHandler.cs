@@ -47,9 +47,11 @@ namespace Titanium.Web.Proxy
         /// <param name="prefetchConnectionTask">Prefetched server connection for current client using Connect/SNI headers.</param>
         private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, TcpClientConnection clientConnection,
             CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
-            CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, ConnectRequest connectRequest,
+            CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, TunnelConnectSessionEventArgs connectArgs,
             Task<TcpServerConnection> prefetchConnectionTask = null)
         {
+            var connectRequest = connectArgs?.HttpClient.ConnectRequest;
+
             var prefetchTask = prefetchConnectionTask;
             TcpServerConnection connection = null;
             bool closeServerConnection = false;
@@ -73,7 +75,8 @@ namespace Titanium.Web.Proxy
                     var args = new SessionEventArgs(this, endPoint, cancellationTokenSource)
                     {
                         ProxyClient = { Connection = clientConnection },
-                        HttpClient = { ConnectRequest = connectRequest }
+                        HttpClient = { ConnectRequest = connectRequest },
+                        UserData = connectArgs?.UserData
                     };
 
                     try
@@ -204,7 +207,7 @@ namespace Titanium.Web.Proxy
 
                             //update connection to latest used
                             connection = result.LatestConnection;
-                            closeServerConnection = !result.Continue;           
+                            closeServerConnection = !result.Continue;
 
                             //throw if exception happened
                             if (!result.IsSuccess)
