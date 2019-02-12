@@ -45,10 +45,9 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         // uncomment this to compare WinCert maker performance with BC (BC takes more time for same test above)
-        [TestMethod]
+        //[TestMethod]
         public async Task Simple_Create_Win_Certificate_Test()
         {
-
             var tasks = new List<Task>();
 
             var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => (e =>

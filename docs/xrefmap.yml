@@ -3035,6 +3035,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.CreateRootCertificate
   nameWithType: CertificateManager.CreateRootCertificate
+- uid: Titanium.Web.Proxy.Network.CertificateManager.CreateServerCertificate(System.String)
+  name: CreateServerCertificate(String)
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_CreateServerCertificate_System_String_
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.CreateServerCertificate(System.String)
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.CreateServerCertificate(System.String)
+  nameWithType: CertificateManager.CreateServerCertificate(String)
+- uid: Titanium.Web.Proxy.Network.CertificateManager.CreateServerCertificate*
+  name: CreateServerCertificate
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_CreateServerCertificate_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.CreateServerCertificate
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.CreateServerCertificate
+  nameWithType: CertificateManager.CreateServerCertificate
 - uid: Titanium.Web.Proxy.Network.CertificateManager.Dispose
   name: Dispose()
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_Dispose
