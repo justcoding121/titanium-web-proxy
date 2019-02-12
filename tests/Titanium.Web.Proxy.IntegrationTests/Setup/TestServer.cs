@@ -1,0 +1,98 @@
+﻿using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http;
+using System;
+using Microsoft.Extensions.DependencyInjection;
+using System.Linq;
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Titanium.Web.Proxy.IntegrationTests.Setup
+{
+    //set up a kestrel test server
+    public class TestServer : IDisposable
+    {
+        public string ListeningHttpUrl => $"http://localhost:{HttpListeningPort}";
+        public string ListeningHttpsUrl => $"https://localhost:{HttpsListeningPort}";
+
+        public int HttpListeningPort { get; private set; }
+        public int HttpsListeningPort { get; private set; }
+
+        private IWebHost host;
+        public TestServer(X509Certificate2 serverCertificate)
+        {
+            var startUp = new Startup(() => requestHandler);
+
+            host = WebHost.CreateDefaultBuilder()
+                         .ConfigureServices(s =>
+                         {
+                             s.AddSingleton<IStartup>(startUp);
+                         })
+                          .UseKestrel(options =>
+                          {
+                              options.Listen(IPAddress.Loopback, 0);
+                              options.Listen(IPAddress.Loopback, 0, listenOptions =>
+                              {
+                                  listenOptions.UseHttps(serverCertificate);
+                              });
+                          })
+                        .Build();
+
+            host.Start();
+
+            var addresses = host.ServerFeatures
+                        .Get<IServerAddressesFeature>()
+                        .Addresses.ToArray();
+
+            string httpAddress = addresses[0];
+            HttpListeningPort = int.Parse(httpAddress.Split(':')[2]);
+
+            string httpsAddress = addresses[1];
+            HttpsListeningPort = int.Parse(httpsAddress.Split(':')[2]);
+        }
+
+        Func<HttpContext, Task> requestHandler = null;
+        public void HandleRequest(Func<HttpContext, Task> requestHandler)
+        {
+            this.requestHandler = requestHandler;
+        }
+
+        public void Dispose()
+        {
+            host.StopAsync().Wait();
+            host.Dispose();
+        }
+
+        private class Startup : IStartup
+        {
+            Func<Func<HttpContext, Task>> requestHandler;
+            public Startup(Func<Func<HttpContext, Task>> requestHandler)
+            {
+                this.requestHandler = requestHandler;
+            }
+
+            public void Configure(IApplicationBuilder app)
+            {
+                app.Run(context =>
+                {
+                    if (requestHandler == null)
+                    {
+                        throw new Exception("Test server not configured to handle request.");
+                    }
+
+                    return requestHandler()(context);
+                });
+
+            }
+
+            public IServiceProvider ConfigureServices(IServiceCollection services)
+            {
+                return services.BuildServiceProvider();
+            }
+        }
+    }
+}

@@ -27,7 +27,7 @@ cache: .build\cleanup-cache.txt
 
 # to run your custom scripts instead of automatic MSBuild
 build_script:
-  - cmd: build.bat Package
+  - cmd: build.bat
   
 assembly_info:
   patch: true
@@ -39,6 +39,8 @@ assembly_info:
 # to disable automatic tests 
 test: on
 
+test_script: 
+ - cmd: test.bat
 # skip building commits that add tags (such as release tag)
 skip_tags: true
 
