@@ -43,9 +43,9 @@ namespace Titanium.Web.Proxy.IntegrationTests
             return new TestProxyServer(true).ProxyServer;
         }
 
-        public HttpClient GetClient(ProxyServer proxyServer)
+        public HttpClient GetClient(ProxyServer proxyServer, bool enableBasicProxyAuthorization = false)
         {
-            return TestHelper.GetHttpClient(proxyServer.ProxyEndPoints[0].Port);
+            return TestHelper.GetHttpClient(proxyServer.ProxyEndPoints[0].Port, enableBasicProxyAuthorization);
         }
 
         public HttpClient GetReverseProxyClient()
