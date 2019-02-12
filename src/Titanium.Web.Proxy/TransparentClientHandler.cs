@@ -34,10 +34,6 @@ namespace Titanium.Web.Proxy
             var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferPool, BufferSize);
             var clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool, BufferSize);
 
-            Task<TcpServerConnection> prefetchConnectionTask = null;
-            bool closeServerConnection = false;
-            bool calledRequestHandler = false;
-
             try
             {
                 var clientHelloInfo = await SslTools.PeekClientHello(clientStream, BufferPool, cancellationToken);
@@ -63,16 +59,7 @@ namespace Titanium.Web.Proxy
 
                     if (endPoint.DecryptSsl && args.DecryptSsl)
                     {
-                        if(EnableTcpServerConnectionPrefetch)
-                        {
-                            //don't pass cancellation token here
-                            //it could cause floating server connections when client exits
-                            prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(httpsHostName, endPoint.Port,
-                                    httpVersion: null, isHttps: true, applicationProtocols: null, isConnect: false,
-                                    proxyServer: this, session: null, upStreamEndPoint: UpStreamEndPoint, externalProxy: UpStreamHttpsProxy,
-                                    noCache: false, cancellationToken: CancellationToken.None);
-                        }
-                        
+
                         SslStream sslStream = null;
 
                         //do client authentication using fake certificate
@@ -140,39 +127,29 @@ namespace Titanium.Web.Proxy
                         return;
                     }
                 }
-                calledRequestHandler = true;
                 // HTTPS server created - we can now decrypt the client's traffic
                 // Now create the request
                 await handleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
-                    cancellationTokenSource, isHttps ? httpsHostName : null, null, prefetchConnectionTask);
+                    cancellationTokenSource, isHttps ? httpsHostName : null, null, null);
             }
             catch (ProxyException e)
             {
-                closeServerConnection = true;
                 onException(clientStream, e);
             }
             catch (IOException e)
             {
-                closeServerConnection = true;
                 onException(clientStream, new Exception("Connection was aborted", e));
             }
             catch (SocketException e)
             {
-                closeServerConnection = true;
                 onException(clientStream, new Exception("Could not connect", e));
             }
             catch (Exception e)
             {
-                closeServerConnection = true;
                 onException(clientStream, new Exception("Error occured in whilst handling the client", e));
             }
             finally
             {
-                if (!calledRequestHandler)
-                {
-                    await tcpConnectionFactory.Release(prefetchConnectionTask, closeServerConnection);
-                }
-
                 clientStream.Dispose();
 
                 if (!cancellationTokenSource.IsCancellationRequested)

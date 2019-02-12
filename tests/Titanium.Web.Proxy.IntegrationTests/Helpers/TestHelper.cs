@@ -2,11 +2,11 @@
 using System.Net;
 using System.Net.Http;
 
-namespace Titanium.Web.Proxy.IntegrationTests
+namespace Titanium.Web.Proxy.IntegrationTests.Helpers
 {
     public static class TestHelper
     {
-        public static HttpClient CreateHttpClient(int localProxyPort)
+        public static HttpClient GetHttpClient(int localProxyPort)
         {
             var proxy = new TestProxy($"http://localhost:{localProxyPort}");
 
@@ -17,6 +17,11 @@ namespace Titanium.Web.Proxy.IntegrationTests
             };
 
             return new HttpClient(handler);
+        }
+
+        public static HttpClient GetHttpClient()
+        {
+            return new HttpClient(new HttpClientHandler());
         }
 
         public class TestProxy : IWebProxy
