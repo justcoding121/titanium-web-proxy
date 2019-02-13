@@ -161,13 +161,13 @@ namespace Titanium.Web.Proxy
                                                     cancellationToken: CancellationToken.None);
                         }
 
+                        X509Certificate2 certificate = null;
                         try
                         {
-                            sslStream = new SslStream(clientStream);
+                            sslStream = new SslStream(clientStream, true);
 
                             string certName = HttpHelper.GetWildCardDomainName(connectHostname);
-
-                            var certificate = endPoint.GenericCertificate ??
+                            certificate = endPoint.GenericCertificate ??
                                               await CertificateManager.CreateServerCertificate(certName);
 
                             // Successfully managed to authenticate the client using the fake certificate
@@ -197,9 +197,13 @@ namespace Titanium.Web.Proxy
                         }
                         catch (Exception e)
                         {
-                            sslStream?.Dispose();
+                            var certname = certificate?.GetNameInfo(X509NameType.SimpleName, false);
                             throw new ProxyConnectException(
-                                $"Could'nt authenticate client '{connectHostname}' with fake certificate.", e, connectArgs);
+                                $"Couldn't authenticate host '{connectHostname}' with certificate '{certname}'.", e, connectArgs);
+                        }
+                        finally
+                        {
+                            sslStream?.Dispose();
                         }
 
                         if (await HttpHelper.IsConnectMethod(clientStream) == -1)
