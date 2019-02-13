@@ -6,14 +6,15 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
 {
     public static class TestHelper
     {
-        public static HttpClient GetHttpClient(int localProxyPort)
+        public static HttpClient GetHttpClient(int localProxyPort,
+            bool enableBasicProxyAuthorization = false)
         {
-            var proxy = new TestProxy($"http://localhost:{localProxyPort}");
+            var proxy = new TestProxy($"http://localhost:{localProxyPort}", enableBasicProxyAuthorization);
 
             var handler = new HttpClientHandler
             {
                 Proxy = proxy,
-                UseProxy = true
+                UseProxy = true  
             };
 
             return new HttpClient(handler);
@@ -29,12 +30,16 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             public Uri ProxyUri { get; set; }
             public ICredentials Credentials { get; set; }
 
-            public TestProxy(string proxyUri)
+            public TestProxy(string proxyUri, bool enableAuthorization)
                 : this(new Uri(proxyUri))
             {
+                if (enableAuthorization)
+                {
+                    Credentials = new NetworkCredential("test", "Test56");
+                }
             }
 
-            public TestProxy(Uri proxyUri)
+            private TestProxy(Uri proxyUri)
             {
                 this.ProxyUri = proxyUri;
             }

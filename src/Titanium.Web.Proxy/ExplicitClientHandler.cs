@@ -321,7 +321,7 @@ namespace Titanium.Web.Proxy
                 calledRequestHandler = true;
                 // Now create the request
                 await handleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
-                    cancellationTokenSource, connectHostname, connectArgs?.HttpClient.ConnectRequest, prefetchConnectionTask);
+                    cancellationTokenSource, connectHostname, connectArgs, prefetchConnectionTask);
             }
             catch (ProxyException e)
             {
