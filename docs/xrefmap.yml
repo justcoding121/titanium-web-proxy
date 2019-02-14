@@ -797,19 +797,19 @@ references:
   commentId: T:Titanium.Web.Proxy.Exceptions.ProxyConnectException
   fullName: Titanium.Web.Proxy.Exceptions.ProxyConnectException
   nameWithType: ProxyConnectException
-- uid: Titanium.Web.Proxy.Exceptions.ProxyConnectException.ConnectEventArgs
-  name: ConnectEventArgs
-  href: api/Titanium.Web.Proxy.Exceptions.ProxyConnectException.html#Titanium_Web_Proxy_Exceptions_ProxyConnectException_ConnectEventArgs
-  commentId: P:Titanium.Web.Proxy.Exceptions.ProxyConnectException.ConnectEventArgs
-  fullName: Titanium.Web.Proxy.Exceptions.ProxyConnectException.ConnectEventArgs
-  nameWithType: ProxyConnectException.ConnectEventArgs
-- uid: Titanium.Web.Proxy.Exceptions.ProxyConnectException.ConnectEventArgs*
-  name: ConnectEventArgs
-  href: api/Titanium.Web.Proxy.Exceptions.ProxyConnectException.html#Titanium_Web_Proxy_Exceptions_ProxyConnectException_ConnectEventArgs_
-  commentId: Overload:Titanium.Web.Proxy.Exceptions.ProxyConnectException.ConnectEventArgs
+- uid: Titanium.Web.Proxy.Exceptions.ProxyConnectException.Session
+  name: Session
+  href: api/Titanium.Web.Proxy.Exceptions.ProxyConnectException.html#Titanium_Web_Proxy_Exceptions_ProxyConnectException_Session
+  commentId: P:Titanium.Web.Proxy.Exceptions.ProxyConnectException.Session
+  fullName: Titanium.Web.Proxy.Exceptions.ProxyConnectException.Session
+  nameWithType: ProxyConnectException.Session
+- uid: Titanium.Web.Proxy.Exceptions.ProxyConnectException.Session*
+  name: Session
+  href: api/Titanium.Web.Proxy.Exceptions.ProxyConnectException.html#Titanium_Web_Proxy_Exceptions_ProxyConnectException_Session_
+  commentId: Overload:Titanium.Web.Proxy.Exceptions.ProxyConnectException.Session
   isSpec: "True"
-  fullName: Titanium.Web.Proxy.Exceptions.ProxyConnectException.ConnectEventArgs
-  nameWithType: ProxyConnectException.ConnectEventArgs
+  fullName: Titanium.Web.Proxy.Exceptions.ProxyConnectException.Session
+  nameWithType: ProxyConnectException.Session
 - uid: Titanium.Web.Proxy.Exceptions.ProxyException
   name: ProxyException
   href: api/Titanium.Web.Proxy.Exceptions.ProxyException.html
@@ -841,19 +841,19 @@ references:
   commentId: T:Titanium.Web.Proxy.Exceptions.ProxyHttpException
   fullName: Titanium.Web.Proxy.Exceptions.ProxyHttpException
   nameWithType: ProxyHttpException
-- uid: Titanium.Web.Proxy.Exceptions.ProxyHttpException.SessionEventArgs
-  name: SessionEventArgs
-  href: api/Titanium.Web.Proxy.Exceptions.ProxyHttpException.html#Titanium_Web_Proxy_Exceptions_ProxyHttpException_SessionEventArgs
-  commentId: P:Titanium.Web.Proxy.Exceptions.ProxyHttpException.SessionEventArgs
-  fullName: Titanium.Web.Proxy.Exceptions.ProxyHttpException.SessionEventArgs
-  nameWithType: ProxyHttpException.SessionEventArgs
-- uid: Titanium.Web.Proxy.Exceptions.ProxyHttpException.SessionEventArgs*
-  name: SessionEventArgs
-  href: api/Titanium.Web.Proxy.Exceptions.ProxyHttpException.html#Titanium_Web_Proxy_Exceptions_ProxyHttpException_SessionEventArgs_
-  commentId: Overload:Titanium.Web.Proxy.Exceptions.ProxyHttpException.SessionEventArgs
+- uid: Titanium.Web.Proxy.Exceptions.ProxyHttpException.Session
+  name: Session
+  href: api/Titanium.Web.Proxy.Exceptions.ProxyHttpException.html#Titanium_Web_Proxy_Exceptions_ProxyHttpException_Session
+  commentId: P:Titanium.Web.Proxy.Exceptions.ProxyHttpException.Session
+  fullName: Titanium.Web.Proxy.Exceptions.ProxyHttpException.Session
+  nameWithType: ProxyHttpException.Session
+- uid: Titanium.Web.Proxy.Exceptions.ProxyHttpException.Session*
+  name: Session
+  href: api/Titanium.Web.Proxy.Exceptions.ProxyHttpException.html#Titanium_Web_Proxy_Exceptions_ProxyHttpException_Session_
+  commentId: Overload:Titanium.Web.Proxy.Exceptions.ProxyHttpException.Session
   isSpec: "True"
-  fullName: Titanium.Web.Proxy.Exceptions.ProxyHttpException.SessionEventArgs
-  nameWithType: ProxyHttpException.SessionEventArgs
+  fullName: Titanium.Web.Proxy.Exceptions.ProxyHttpException.Session
+  nameWithType: ProxyHttpException.Session
 - uid: Titanium.Web.Proxy.Exceptions.ServerConnectionException
   name: ServerConnectionException
   href: api/Titanium.Web.Proxy.Exceptions.ServerConnectionException.html

@@ -4,6 +4,7 @@ using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended;
@@ -34,6 +35,8 @@ namespace Titanium.Web.Proxy
             var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferPool, BufferSize);
             var clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool, BufferSize);
 
+            SslStream sslStream = null;
+
             try
             {
                 var clientHelloInfo = await SslTools.PeekClientHello(clientStream, BufferPool, cancellationToken);
@@ -60,18 +63,17 @@ namespace Titanium.Web.Proxy
                     if (endPoint.DecryptSsl && args.DecryptSsl)
                     {
 
-                        SslStream sslStream = null;
-
-                        //do client authentication using fake certificate
+                        //do client authentication using certificate
+                        X509Certificate2 certificate = null;
                         try
                         {
-                            sslStream = new SslStream(clientStream);
+                            sslStream = new SslStream(clientStream, true);
 
                             string certName = HttpHelper.GetWildCardDomainName(httpsHostName);
-                            var certificate = endPoint.GenericCertificate ??
+                            certificate = endPoint.GenericCertificate ??
                                                     await CertificateManager.CreateServerCertificate(certName);
 
-                            // Successfully managed to authenticate the client using the fake certificate
+                            // Successfully managed to authenticate the client using the certificate
                             await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
 
                             // HTTPS server created - we can now decrypt the client's traffic
@@ -81,10 +83,16 @@ namespace Titanium.Web.Proxy
                         }
                         catch (Exception e)
                         {
-                            sslStream?.Dispose();
+                            var certname = certificate?.GetNameInfo(X509NameType.SimpleName, false);
+                            var session = new SessionEventArgs(this, endPoint, cancellationTokenSource)
+                            {
+                                ProxyClient = { Connection = clientConnection },
+                                HttpClient = { ConnectRequest = null }
+                            };
                             throw new ProxyConnectException(
-                                $"Could'nt authenticate client '{httpsHostName}' with fake certificate.", e, null);
+                                $"Couldn't authenticate host '{httpsHostName}' with certificate '{certname}'.", e, session);
                         }
+                      
                     }
                     else
                     {
@@ -150,8 +158,9 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
+                sslStream?.Dispose();
                 clientStream.Dispose();
-
+               
                 if (!cancellationTokenSource.IsCancellationRequested)
                 {
                     cancellationTokenSource.Cancel();

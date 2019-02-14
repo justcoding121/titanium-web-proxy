@@ -13,11 +13,11 @@ namespace Titanium.Web.Proxy.Exceptions
         /// </summary>
         /// <param name="message">Message for this exception</param>
         /// <param name="innerException">Associated inner exception</param>
-        /// <param name="connectEventArgs">Instance of <see cref="EventArguments.TunnelConnectSessionEventArgs" /> associated to the exception</param>
-        internal ProxyConnectException(string message, Exception innerException, TunnelConnectSessionEventArgs connectEventArgs) : base(
+        /// <param name="session">Instance of <see cref="EventArguments.TunnelConnectSessionEventArgs" /> associated to the exception</param>
+        internal ProxyConnectException(string message, Exception innerException, SessionEventArgsBase session) : base(
             message, innerException)
         {
-            ConnectEventArgs = connectEventArgs;
+            Session = session;
         }
 
         /// <summary>
@@ -26,6 +26,6 @@ namespace Titanium.Web.Proxy.Exceptions
         /// <remarks>
         ///     This object properties should not be edited.
         /// </remarks>
-        public TunnelConnectSessionEventArgs ConnectEventArgs { get; }
+        public SessionEventArgsBase Session { get; }
     }
 }
