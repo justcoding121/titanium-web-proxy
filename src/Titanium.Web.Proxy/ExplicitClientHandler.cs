@@ -41,11 +41,13 @@ namespace Titanium.Web.Proxy
             bool closeServerConnection = false;
             bool calledRequestHandler = false;
 
+            SslStream sslStream = null;
+
             try
             {
                 string connectHostname = null;
                 TunnelConnectSessionEventArgs connectArgs = null;
-
+                
 
                 // Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
                 if (await HttpHelper.IsConnectMethod(clientStream) == 1)
@@ -150,8 +152,6 @@ namespace Titanium.Web.Proxy
                             await tcpConnectionFactory.Release(connection, true);
                         }
 
-                        SslStream sslStream = null;
-
                         if (EnableTcpServerConnectionPrefetch)
                         {
                             //don't pass cancellation token here
@@ -200,10 +200,6 @@ namespace Titanium.Web.Proxy
                             var certname = certificate?.GetNameInfo(X509NameType.SimpleName, false);
                             throw new ProxyConnectException(
                                 $"Couldn't authenticate host '{connectHostname}' with certificate '{certname}'.", e, connectArgs);
-                        }
-                        finally
-                        {
-                            sslStream?.Dispose();
                         }
 
                         if (await HttpHelper.IsConnectMethod(clientStream) == -1)
@@ -354,6 +350,7 @@ namespace Titanium.Web.Proxy
                     await tcpConnectionFactory.Release(prefetchConnectionTask, closeServerConnection);
                 }
 
+                sslStream?.Dispose();
                 clientStream.Dispose();
 
                 if (!cancellationTokenSource.IsCancellationRequested)
