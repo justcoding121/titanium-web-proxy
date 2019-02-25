@@ -1471,6 +1471,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http.Request.ExpectationFailed
   nameWithType: Request.ExpectationFailed
+- uid: Titanium.Web.Proxy.Http.Request.ExpectationSucceeded
+  name: ExpectationSucceeded
+  href: api/Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_ExpectationSucceeded
+  commentId: P:Titanium.Web.Proxy.Http.Request.ExpectationSucceeded
+  fullName: Titanium.Web.Proxy.Http.Request.ExpectationSucceeded
+  nameWithType: Request.ExpectationSucceeded
+- uid: Titanium.Web.Proxy.Http.Request.ExpectationSucceeded*
+  name: ExpectationSucceeded
+  href: api/Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_ExpectationSucceeded_
+  commentId: Overload:Titanium.Web.Proxy.Http.Request.ExpectationSucceeded
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.Request.ExpectationSucceeded
+  nameWithType: Request.ExpectationSucceeded
 - uid: Titanium.Web.Proxy.Http.Request.ExpectContinue
   name: ExpectContinue
   href: api/Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_ExpectContinue
@@ -1523,19 +1536,6 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http.Request.Host
   nameWithType: Request.Host
-- uid: Titanium.Web.Proxy.Http.Request.Is100Continue
-  name: Is100Continue
-  href: api/Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_Is100Continue
-  commentId: P:Titanium.Web.Proxy.Http.Request.Is100Continue
-  fullName: Titanium.Web.Proxy.Http.Request.Is100Continue
-  nameWithType: Request.Is100Continue
-- uid: Titanium.Web.Proxy.Http.Request.Is100Continue*
-  name: Is100Continue
-  href: api/Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_Is100Continue_
-  commentId: Overload:Titanium.Web.Proxy.Http.Request.Is100Continue
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.Http.Request.Is100Continue
-  nameWithType: Request.Is100Continue
 - uid: Titanium.Web.Proxy.Http.Request.IsHttps
   name: IsHttps
   href: api/Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_IsHttps
@@ -1856,19 +1856,6 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http.Response.Response
   nameWithType: Response.Response
-- uid: Titanium.Web.Proxy.Http.Response.ExpectationFailed
-  name: ExpectationFailed
-  href: api/Titanium.Web.Proxy.Http.Response.html#Titanium_Web_Proxy_Http_Response_ExpectationFailed
-  commentId: P:Titanium.Web.Proxy.Http.Response.ExpectationFailed
-  fullName: Titanium.Web.Proxy.Http.Response.ExpectationFailed
-  nameWithType: Response.ExpectationFailed
-- uid: Titanium.Web.Proxy.Http.Response.ExpectationFailed*
-  name: ExpectationFailed
-  href: api/Titanium.Web.Proxy.Http.Response.html#Titanium_Web_Proxy_Http_Response_ExpectationFailed_
-  commentId: Overload:Titanium.Web.Proxy.Http.Response.ExpectationFailed
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.Http.Response.ExpectationFailed
-  nameWithType: Response.ExpectationFailed
 - uid: Titanium.Web.Proxy.Http.Response.HasBody
   name: HasBody
   href: api/Titanium.Web.Proxy.Http.Response.html#Titanium_Web_Proxy_Http_Response_HasBody
@@ -1895,19 +1882,6 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http.Response.HeaderText
   nameWithType: Response.HeaderText
-- uid: Titanium.Web.Proxy.Http.Response.Is100Continue
-  name: Is100Continue
-  href: api/Titanium.Web.Proxy.Http.Response.html#Titanium_Web_Proxy_Http_Response_Is100Continue
-  commentId: P:Titanium.Web.Proxy.Http.Response.Is100Continue
-  fullName: Titanium.Web.Proxy.Http.Response.Is100Continue
-  nameWithType: Response.Is100Continue
-- uid: Titanium.Web.Proxy.Http.Response.Is100Continue*
-  name: Is100Continue
-  href: api/Titanium.Web.Proxy.Http.Response.html#Titanium_Web_Proxy_Http_Response_Is100Continue_
-  commentId: Overload:Titanium.Web.Proxy.Http.Response.Is100Continue
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.Http.Response.Is100Continue
-  nameWithType: Response.Is100Continue
 - uid: Titanium.Web.Proxy.Http.Response.KeepAlive
   name: KeepAlive
   href: api/Titanium.Web.Proxy.Http.Response.html#Titanium_Web_Proxy_Http_Response_KeepAlive
