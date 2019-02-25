@@ -169,8 +169,11 @@ namespace Titanium.Web.Proxy
 
                             if (request.CancelRequest)
                             {
-                                // syphon out the request body from client before setting the new body
-                                await args.SyphonOutBodyAsync(true, cancellationToken);
+                                if (!(Enable100ContinueBehaviour && request.ExpectContinue))
+                                {
+                                    // syphon out the request body from client before setting the new body
+                                    await args.SyphonOutBodyAsync(true, cancellationToken);
+                                }
 
                                 await handleHttpSessionResponse(args);
 
@@ -318,71 +321,42 @@ namespace Titanium.Web.Proxy
 
             var body = request.CompressBodyAndUpdateContentLength();
 
-            // if expect continue is enabled then send the headers first 
-            // and see if server would return 100 conitinue
-            if (request.ExpectContinue)
-            {
-                args.HttpClient.SetConnection(connection);
-                await args.HttpClient.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
-                    cancellationToken);
-            }
+            // set the connection and send request headers
+            args.HttpClient.SetConnection(connection);
+            await args.HttpClient.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
+                cancellationToken);
 
-            // If 100 continue was the response inform that to the client
-            if (Enable100ContinueBehaviour)
+            // If a successful 100 continue request was made, inform that to the client and reset response
+            if (request.ExpectationSucceeded)
             {
                 var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
-
-                if (request.Is100Continue)
-                {
-                    await clientStreamWriter.WriteResponseStatusAsync(args.HttpClient.Response.HttpVersion,
-                        (int)HttpStatusCode.Continue, "Continue", cancellationToken);
-                    await clientStreamWriter.WriteLineAsync(cancellationToken);
-                }
-                else if (request.ExpectationFailed)
-                {
-                    await clientStreamWriter.WriteResponseStatusAsync(args.HttpClient.Response.HttpVersion,
-                        (int)HttpStatusCode.ExpectationFailed, "Expectation Failed", cancellationToken);
-                    await clientStreamWriter.WriteLineAsync(cancellationToken);
-                }
+                var response = args.HttpClient.Response;
+                await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.StatusCode,
+                    response.StatusDescription, cancellationToken);
+                await clientStreamWriter.WriteHeadersAsync(response.Headers, cancellationToken: cancellationToken);
+                await args.ClearResponse(cancellationToken);
             }
 
-            // If expect continue is not enabled then set the connectio and send request headers
-            if (!request.ExpectContinue)
-            {
-                args.HttpClient.SetConnection(connection);
-                await args.HttpClient.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
-                    cancellationToken);
-            }
-
-            // check if content-length is > 0
-            if (request.ContentLength > 0)
+            // send body to server if available
+            if (request.HasBody)
             {
                 if (request.IsBodyRead)
                 {
                     var writer = args.HttpClient.Connection.StreamWriter;
                     await writer.WriteBodyAsync(body, request.IsChunked, cancellationToken);
                 }
-                else
+                else if (!request.ExpectationFailed)
                 {
-                    if (!request.ExpectationFailed)
-                    {
-                        if (request.HasBody)
-                        {
-                            HttpWriter writer = args.HttpClient.Connection.StreamWriter;
-                            await args.CopyRequestBodyAsync(writer, TransformationMode.None, cancellationToken);
-                        }
-                    }
+                    // get the request body unless an unsuccessful 100 continue request was made
+                    HttpWriter writer = args.HttpClient.Connection.StreamWriter;
+                    await args.CopyRequestBodyAsync(writer, TransformationMode.None, cancellationToken);
                 }
             }
 
             args.TimeLine["Request Sent"] = DateTime.Now;
 
-            // If not expectation failed response was returned by server then parse response
-            if (!request.ExpectationFailed)
-            {
-                await handleHttpSessionResponse(args);
-            }
-
+            // parse and send response
+            await handleHttpSessionResponse(args);
         }
 
         /// <summary>

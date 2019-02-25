@@ -93,16 +93,6 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        ///     Is response 100-continue
-        /// </summary>
-        public bool Is100Continue { get; internal set; }
-
-        /// <summary>
-        ///     expectation failed returned by server?
-        /// </summary>
-        public bool ExpectationFailed { get; internal set; }
-
-        /// <summary>
         ///     Gets the header text.
         /// </summary>
         public override string HeaderText
