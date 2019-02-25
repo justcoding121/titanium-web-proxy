@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -152,7 +152,7 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         ///     Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
-        ///     Broken 100 contunue implementations on server/client may cause problems if enabled.
+        ///     Broken 100 continue implementations on server/client may cause problems if enabled.
         ///     Defaults to false.
         /// </summary>
         public bool Enable100ContinueBehaviour { get; set; }

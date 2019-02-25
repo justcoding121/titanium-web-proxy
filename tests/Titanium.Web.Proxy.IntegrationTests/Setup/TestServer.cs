@@ -1,14 +1,14 @@
 ﻿using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
-using System;
 using Microsoft.Extensions.DependencyInjection;
+using System;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.IntegrationTests.Setup
@@ -18,9 +18,11 @@ namespace Titanium.Web.Proxy.IntegrationTests.Setup
     {
         public string ListeningHttpUrl => $"http://localhost:{HttpListeningPort}";
         public string ListeningHttpsUrl => $"https://localhost:{HttpsListeningPort}";
+        public string ListeningTcpUrl => $"http://localhost:{TcpListeningPort}";
 
         public int HttpListeningPort { get; private set; }
         public int HttpsListeningPort { get; private set; }
+        public int TcpListeningPort { get; private set; }
 
         private IWebHost host;
         public TestServer(X509Certificate2 serverCertificate)
@@ -39,6 +41,18 @@ namespace Titanium.Web.Proxy.IntegrationTests.Setup
                               {
                                   listenOptions.UseHttps(serverCertificate);
                               });
+                              options.Listen(IPAddress.Loopback, 0, listenOptions =>
+                              {
+                                  listenOptions.Run(context =>
+                                  {
+                                      if (tcpRequestHandler == null)
+                                      {
+                                          throw new Exception("Test server not configured to handle tcp request.");
+                                      }
+
+                                      return tcpRequestHandler(context);
+                                  });
+                              });
                           })
                         .Build();
 
@@ -53,12 +67,22 @@ namespace Titanium.Web.Proxy.IntegrationTests.Setup
 
             string httpsAddress = addresses[1];
             HttpsListeningPort = int.Parse(httpsAddress.Split(':')[2]);
+
+            string tcpAddress = addresses[2];
+            TcpListeningPort = int.Parse(tcpAddress.Split(':')[2]);
         }
 
         Func<HttpContext, Task> requestHandler = null;
+        Func<ConnectionContext, Task> tcpRequestHandler = null;
+
         public void HandleRequest(Func<HttpContext, Task> requestHandler)
         {
             this.requestHandler = requestHandler;
+        }
+
+        public void HandleTcpRequest(Func<ConnectionContext, Task> tcpRequestHandler)
+        {
+            this.tcpRequestHandler = tcpRequestHandler;
         }
 
         public void Dispose()
