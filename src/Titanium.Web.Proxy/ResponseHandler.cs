@@ -25,6 +25,14 @@ namespace Titanium.Web.Proxy
             // read response & headers from server
             await args.HttpClient.ReceiveResponse(cancellationToken);
 
+            // Server may send expect-continue even if not asked for it in request.
+            // According to spec "the client can simply discard this interim response."
+            if (args.HttpClient.Response.StatusCode == (int)HttpStatusCode.Continue)
+            {
+                await args.ClearResponse(cancellationToken);
+                await args.HttpClient.ReceiveResponse(cancellationToken);
+            }
+
             args.TimeLine["Response Received"] = DateTime.Now;
 
             var response = args.HttpClient.Response;
@@ -91,20 +99,6 @@ namespace Titanium.Web.Proxy
             }
 
             response.Locked = true;
-
-            // Write back to client 100-conitinue response if that's what server returned
-            if (response.Is100Continue)
-            {
-                await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion,
-                    (int)HttpStatusCode.Continue, "Continue", cancellationToken);
-                await clientStreamWriter.WriteLineAsync(cancellationToken);
-            }
-            else if (response.ExpectationFailed)
-            {
-                await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion,
-                    (int)HttpStatusCode.ExpectationFailed, "Expectation Failed", cancellationToken);
-                await clientStreamWriter.WriteLineAsync(cancellationToken);
-            }
 
             if (!args.IsTransparent)
             {

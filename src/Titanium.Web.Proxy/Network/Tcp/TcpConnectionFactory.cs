@@ -279,7 +279,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 };
 
                 //linux has a bug with socket reuse in .net core.
-                if (proxyServer.ReuseSocket && RunTime.IsWindows || RunTime.IsRunningOnMono)
+                if (proxyServer.ReuseSocket && (RunTime.IsWindows || RunTime.IsRunningOnMono))
                 {
                     tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                 }
