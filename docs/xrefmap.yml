@@ -3570,6 +3570,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.MaxCachedConnections
   nameWithType: ProxyServer.MaxCachedConnections
+- uid: Titanium.Web.Proxy.ProxyServer.NoDelay
+  name: NoDelay
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_NoDelay
+  commentId: P:Titanium.Web.Proxy.ProxyServer.NoDelay
+  fullName: Titanium.Web.Proxy.ProxyServer.NoDelay
+  nameWithType: ProxyServer.NoDelay
+- uid: Titanium.Web.Proxy.ProxyServer.NoDelay*
+  name: NoDelay
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_NoDelay_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.NoDelay
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.NoDelay
+  nameWithType: ProxyServer.NoDelay
 - uid: Titanium.Web.Proxy.ProxyServer.OnClientConnectionCreate
   name: OnClientConnectionCreate
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_OnClientConnectionCreate
