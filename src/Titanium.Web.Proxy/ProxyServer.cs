@@ -174,6 +174,12 @@ namespace Titanium.Web.Proxy
         public bool EnableTcpServerConnectionPrefetch { get; set; } = true;
 
         /// <summary>
+        /// Gets or sets a Boolean value that specifies whether server and client stream Sockets are using the Nagle algorithm.
+        /// Defaults to true, no nagle algorithm is used.
+        /// </summary>
+        public bool NoDelay { get; set; } = true;
+
+        /// <summary>
         ///     Buffer size in bytes used throughout this proxy.
         ///     Default value is 8192 bytes.
         /// </summary>
@@ -696,6 +702,7 @@ namespace Titanium.Web.Proxy
             {
                 // based on end point type call appropriate request handlers
                 tcpClient = endPoint.Listener.EndAcceptTcpClient(asyn);
+                tcpClient.NoDelay = NoDelay;
             }
             catch (ObjectDisposedException)
             {

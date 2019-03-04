@@ -271,7 +271,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 tcpClient = new TcpClient(upStreamEndPoint)
                 {
-					NoDelay = true,
+					NoDelay = proxyServer.NoDelay,
                     ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
                     SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
                     SendBufferSize = proxyServer.BufferSize,
