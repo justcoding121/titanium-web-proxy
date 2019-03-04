@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -152,7 +152,7 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         ///     Does this proxy uses the HTTP protocol 100 continue behaviour strictly?
-        ///     Broken 100 contunue implementations on server/client may cause problems if enabled.
+        ///     Broken 100 continue implementations on server/client may cause problems if enabled.
         ///     Defaults to false.
         /// </summary>
         public bool Enable100ContinueBehaviour { get; set; }
@@ -172,6 +172,12 @@ namespace Titanium.Web.Proxy
         ///     Defaults to true.
         /// </summary>
         public bool EnableTcpServerConnectionPrefetch { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a Boolean value that specifies whether server and client stream Sockets are using the Nagle algorithm.
+        /// Defaults to true, no nagle algorithm is used.
+        /// </summary>
+        public bool NoDelay { get; set; } = true;
 
         /// <summary>
         ///     Buffer size in bytes used throughout this proxy.
@@ -696,6 +702,7 @@ namespace Titanium.Web.Proxy
             {
                 // based on end point type call appropriate request handlers
                 tcpClient = endPoint.Listener.EndAcceptTcpClient(asyn);
+                tcpClient.NoDelay = NoDelay;
             }
             catch (ObjectDisposedException)
             {

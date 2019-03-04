@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -127,40 +127,18 @@ namespace Titanium.Web.Proxy.Http
             
             await writer.WriteAsync(headerBuilder.ToString(), cancellationToken);
 
-            if (enable100ContinueBehaviour)
+            if (enable100ContinueBehaviour && Request.ExpectContinue)
             {
-                if (Request.ExpectContinue)
+                // wait for expectation response from server
+                await ReceiveResponse(cancellationToken);
+
+                if (Response.StatusCode == (int)HttpStatusCode.Continue)
                 {
-                    string httpStatus;
-                    try
-                    {
-                        httpStatus = await Connection.Stream.ReadLineAsync(cancellationToken);
-                        if (httpStatus == null)
-                        {
-                            throw new ServerConnectionException("Server connection was closed.");
-                        }
-                    }
-                    catch (Exception e) when (!(e is ServerConnectionException))
-                    {
-                        throw new ServerConnectionException("Server connection was closed.");
-                    }
-
-                    Response.ParseResponseLine(httpStatus, out _, out int responseStatusCode,
-                        out string responseStatusDescription);
-
-                    // find if server is willing for expect continue
-                    if (responseStatusCode == (int)HttpStatusCode.Continue
-                        && responseStatusDescription.EqualsIgnoreCase("continue"))
-                    {
-                        Request.Is100Continue = true;
-                        await Connection.Stream.ReadLineAsync(cancellationToken);
-                    }
-                    else if (responseStatusCode == (int)HttpStatusCode.ExpectationFailed
-                             && responseStatusDescription.EqualsIgnoreCase("expectation failed"))
-                    {
-                        Request.ExpectationFailed = true;
-                        await Connection.Stream.ReadLineAsync(cancellationToken);
-                    }
+                    Request.ExpectationSucceeded = true;
+                }
+                else
+                {
+                    Request.ExpectationFailed = true;
                 }
             }
         }
@@ -201,33 +179,6 @@ namespace Titanium.Web.Proxy.Http
             Response.HttpVersion = version;
             Response.StatusCode = statusCode;
             Response.StatusDescription = statusDescription;
-
-            // For HTTP 1.1 comptibility server may send expect-continue even if not asked for it in request
-            if (Response.StatusCode == (int)HttpStatusCode.Continue
-                && Response.StatusDescription.EqualsIgnoreCase("continue"))
-            {
-                // Read the next line after 100-continue 
-                Response.Is100Continue = true;
-                Response.StatusCode = 0;
-                await Connection.Stream.ReadLineAsync(cancellationToken);
-
-                // now receive response
-                await ReceiveResponse(cancellationToken);
-                return;
-            }
-
-            if (Response.StatusCode == (int)HttpStatusCode.ExpectationFailed
-                && Response.StatusDescription.EqualsIgnoreCase("expectation failed"))
-            {
-                // read next line after expectation failed response
-                Response.ExpectationFailed = true;
-                Response.StatusCode = 0;
-                await Connection.Stream.ReadLineAsync(cancellationToken);
-
-                // now receive response 
-                await ReceiveResponse(cancellationToken);
-                return;
-            }
 
             // Read the response headers in to unique and non-unique header collections
             await HeaderParser.ReadHeaders(Connection.Stream, Response.Headers, cancellationToken);

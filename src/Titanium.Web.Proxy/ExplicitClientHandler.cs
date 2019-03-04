@@ -41,11 +41,13 @@ namespace Titanium.Web.Proxy
             bool closeServerConnection = false;
             bool calledRequestHandler = false;
 
+            SslStream sslStream = null;
+
             try
             {
                 string connectHostname = null;
                 TunnelConnectSessionEventArgs connectArgs = null;
-
+                
 
                 // Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
                 if (await HttpHelper.IsConnectMethod(clientStream) == 1)
@@ -150,8 +152,6 @@ namespace Titanium.Web.Proxy
                             await tcpConnectionFactory.Release(connection, true);
                         }
 
-                        SslStream sslStream = null;
-
                         if (EnableTcpServerConnectionPrefetch)
                         {
                             //don't pass cancellation token here
@@ -161,13 +161,13 @@ namespace Titanium.Web.Proxy
                                                     cancellationToken: CancellationToken.None);
                         }
 
+                        X509Certificate2 certificate = null;
                         try
                         {
-                            sslStream = new SslStream(clientStream);
+                            sslStream = new SslStream(clientStream, true);
 
                             string certName = HttpHelper.GetWildCardDomainName(connectHostname);
-
-                            var certificate = endPoint.GenericCertificate ??
+                            certificate = endPoint.GenericCertificate ??
                                               await CertificateManager.CreateServerCertificate(certName);
 
                             // Successfully managed to authenticate the client using the fake certificate
@@ -197,9 +197,9 @@ namespace Titanium.Web.Proxy
                         }
                         catch (Exception e)
                         {
-                            sslStream?.Dispose();
+                            var certname = certificate?.GetNameInfo(X509NameType.SimpleName, false);
                             throw new ProxyConnectException(
-                                $"Could'nt authenticate client '{connectHostname}' with fake certificate.", e, connectArgs);
+                                $"Couldn't authenticate host '{connectHostname}' with certificate '{certname}'.", e, connectArgs);
                         }
 
                         if (await HttpHelper.IsConnectMethod(clientStream) == -1)
@@ -350,6 +350,7 @@ namespace Titanium.Web.Proxy
                     await tcpConnectionFactory.Release(prefetchConnectionTask, closeServerConnection);
                 }
 
+                sslStream?.Dispose();
                 clientStream.Dispose();
 
                 if (!cancellationTokenSource.IsCancellationRequested)

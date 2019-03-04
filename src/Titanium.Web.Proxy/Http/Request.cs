@@ -123,12 +123,12 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
-        ///     Did server responsed positively for 100 continue request?
+        ///     Did server respond positively for 100 continue request?
         /// </summary>
-        public bool Is100Continue { get; internal set; }
+        public bool ExpectationSucceeded { get; internal set; }
 
         /// <summary>
-        ///     Did server responsed negatively for the request for 100 continue?
+        ///     Did server respond negatively for 100 continue request?
         /// </summary>
         public bool ExpectationFailed { get; internal set; }
 
