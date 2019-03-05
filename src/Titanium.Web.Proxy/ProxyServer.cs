@@ -417,9 +417,10 @@ namespace Titanium.Web.Proxy
         /// <param name="protocolType">The proxy protocol type.</param>
         public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType)
         {
-            if (RunTime.IsRunningOnMono)
+            if (!RunTime.IsWindows)
             {
-                throw new Exception("Mono Runtime do not support system proxy settings.");
+                throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
+                            Please manually confugure you operating system to use this proxy's port and address.");
             }
 
             validateEndPointAsSystemProxy(endPoint);
