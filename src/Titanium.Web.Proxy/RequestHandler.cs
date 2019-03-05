@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy
     public partial class ProxyServer
     {
         private bool isWindowsAuthenticationEnabledAndSupported =>
-            EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
+            EnableWinAuth && RunTime.IsWindows;
 
         /// <summary>
         ///     This is the core request handler method for a particular connection from client.
