@@ -47,7 +47,7 @@ namespace Titanium.Web.Proxy
             {
                 string connectHostname = null;
                 TunnelConnectSessionEventArgs connectArgs = null;
-                
+
 
                 // Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
                 if (await HttpHelper.IsConnectMethod(clientStream) == 1)
@@ -154,11 +154,17 @@ namespace Titanium.Web.Proxy
 
                         if (EnableTcpServerConnectionPrefetch)
                         {
-                            //don't pass cancellation token here
-                            //it could cause floating server connections when client exits
-                            prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(this, connectArgs,
-                                                    isConnect: true, applicationProtocols: null, noCache: false,
-                                                    cancellationToken: CancellationToken.None);
+                            //make sure the host can be resolved before creating the prefetch task
+                            var ipAddresses = await Dns.GetHostAddressesAsync(connectArgs.HttpClient.Request.RequestUri.Host);
+
+                            if (ipAddresses != null && ipAddresses.Length > 0)
+                            {
+                                //don't pass cancellation token here
+                                //it could cause floating server connections when client exits
+                                prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(this, connectArgs,
+                                                        isConnect: true, applicationProtocols: null, noCache: false,
+                                                        cancellationToken: CancellationToken.None);
+                            }
                         }
 
                         X509Certificate2 certificate = null;
