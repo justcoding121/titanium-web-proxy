@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Sockets;
 #if NETCOREAPP2_1
 using System.Net.Security;
 #endif
@@ -188,8 +189,20 @@ namespace Titanium.Web.Proxy
                             //If prefetch task is available.
                             if (connection == null && prefetchTask != null)
                             {
-                                connection = await prefetchTask;
+                                try
+                                {
+                                    connection = await prefetchTask;
+                                }
+                                catch (SocketException e)
+                                {
+                                    if(e.SocketErrorCode != SocketError.HostNotFound)
+                                    {
+                                        throw;
+                                    }
+                                }
+
                                 prefetchTask = null;
+
                             }
 
                             // create a new connection if cache key changes.
