@@ -102,7 +102,7 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory(this);
-            if (!RunTime.IsRunningOnMono && RunTime.IsWindows && !RunTime.IsUwpOnWindows)
+            if (RunTime.IsWindows && !RunTime.IsUwpOnWindows)
             {
                 systemProxySettingsManager = new SystemProxyManager();
             }
@@ -417,9 +417,10 @@ namespace Titanium.Web.Proxy
         /// <param name="protocolType">The proxy protocol type.</param>
         public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType)
         {
-            if (RunTime.IsRunningOnMono)
+            if (!RunTime.IsWindows)
             {
-                throw new Exception("Mono Runtime do not support system proxy settings.");
+                throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
+                            Please manually confugure you operating system to use this proxy's port and address.");
             }
 
             validateEndPointAsSystemProxy(endPoint);
@@ -510,9 +511,10 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemProxy(ProxyProtocolType protocolType)
         {
-            if (RunTime.IsRunningOnMono)
+            if (!RunTime.IsWindows)
             {
-                throw new Exception("Mono Runtime do not support system proxy settings.");
+                throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
+                            Please manually confugure you operating system to use this proxy's port and address.");
             }
 
             systemProxySettingsManager.RemoveProxy(protocolType);
@@ -523,9 +525,10 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableAllSystemProxies()
         {
-            if (RunTime.IsRunningOnMono)
+            if (!RunTime.IsWindows)
             {
-                throw new Exception("Mono Runtime do not support system proxy settings.");
+                throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
+                            Please manually confugure you operating system to use this proxy's port and address.");
             }
 
             systemProxySettingsManager.DisableAllProxy();
@@ -599,7 +602,7 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is not running.");
             }
 
-            if (!RunTime.IsRunningOnMono && RunTime.IsWindows && !RunTime.IsUwpOnWindows)
+            if (RunTime.IsWindows && !RunTime.IsUwpOnWindows)
             {
                 bool setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
                     .Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
@@ -632,7 +635,7 @@ namespace Titanium.Web.Proxy
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
 
             //linux/macOS has a bug with socket reuse in .net core.
-            if (ReuseSocket && (RunTime.IsWindows || RunTime.IsRunningOnMono))
+            if (ReuseSocket && RunTime.IsWindows)
             {
                 endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             }
