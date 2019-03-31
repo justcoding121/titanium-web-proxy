@@ -59,6 +59,12 @@ namespace Titanium.Web.Proxy.Network
         private X509Certificate2 loadCertificate(string path, string password, X509KeyStorageFlags storageFlags)
         {
             byte[] exported;
+
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
             try
             {
                 exported = File.ReadAllBytes(path);
