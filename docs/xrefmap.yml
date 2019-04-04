@@ -3505,6 +3505,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
   nameWithType: ProxyServer.EnableTcpServerConnectionPrefetch
+- uid: Titanium.Web.Proxy.ProxyServer.EnableThreadPoolOptimizing
+  name: EnableThreadPoolOptimizing
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableThreadPoolOptimizing
+  commentId: P:Titanium.Web.Proxy.ProxyServer.EnableThreadPoolOptimizing
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableThreadPoolOptimizing
+  nameWithType: ProxyServer.EnableThreadPoolOptimizing
+- uid: Titanium.Web.Proxy.ProxyServer.EnableThreadPoolOptimizing*
+  name: EnableThreadPoolOptimizing
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableThreadPoolOptimizing_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.EnableThreadPoolOptimizing
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableThreadPoolOptimizing
+  nameWithType: ProxyServer.EnableThreadPoolOptimizing
 - uid: Titanium.Web.Proxy.ProxyServer.EnableWinAuth
   name: EnableWinAuth
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableWinAuth
