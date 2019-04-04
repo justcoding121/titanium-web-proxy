@@ -57,11 +57,10 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private WinHttpWebProxyFinder systemProxyResolver;
 
-
         /// <summary>
-        ///     
+        ///     lock for Thread Pool tuning
         /// </summary>
-        private object lockThreadPoolSettings = new object();
+        private object lockThreadPoolTuning = new object();
 
         /// <inheritdoc />
         /// <summary>
@@ -755,7 +754,7 @@ namespace Titanium.Web.Proxy
         {
             if (EnableThreadPoolOptimizing)
             {
-                lock (lockThreadPoolSettings)
+                lock (lockThreadPoolTuning)
                 {
                     int iWorkerThreads, iCompletionPortThreads;
                     ThreadPool.GetMinThreads(out iWorkerThreads, out iCompletionPortThreads);
