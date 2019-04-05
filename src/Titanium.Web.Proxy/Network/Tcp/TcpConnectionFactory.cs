@@ -274,8 +274,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
 					NoDelay = proxyServer.NoDelay,
                     ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
                     SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
-                    SendBufferSize = proxyServer.BufferSize,
-                    ReceiveBufferSize = proxyServer.BufferSize,
                     LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds)
                 };
 
