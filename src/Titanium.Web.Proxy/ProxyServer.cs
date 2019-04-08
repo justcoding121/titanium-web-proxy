@@ -752,20 +752,32 @@ namespace Titanium.Web.Proxy
             endPoint.Listener.BeginAcceptTcpClient(onAcceptConnection, endPoint);
         }
 
+        private Lazy<int> maxWorkerThreads = new Lazy<int>(() =>
+        {
+            int maxWorkerThreads;
+            ThreadPool.GetMaxThreads(out maxWorkerThreads, out var _);
+            return maxWorkerThreads;
+        });
+
         /// <summary>
         /// Change the ThreadPool.WorkerThread minThread 
         /// </summary>
-        /// <param name="piNbWorkerThreadsToAdd">Number of threads to add</param>
-        private void setThreadPoolMinThread(int piNbWorkerThreadsToAdd)
+        /// <param name="workerThreadsToAdd">Number of threads to add</param>
+        private void setThreadPoolMinThread(int workerThreadsToAdd)
         {
             if (EnableThreadPoolOptimizing)
             {
                 lock (lockThreadPoolTuning)
                 {
-                    int iWorkerThreads, iCompletionPortThreads;
-                    ThreadPool.GetMinThreads(out iWorkerThreads, out iCompletionPortThreads);
-                    iWorkerThreads = Math.Max(iWorkerThreads + piNbWorkerThreadsToAdd, Environment.ProcessorCount);
-                    ThreadPool.SetMinThreads(iWorkerThreads, iCompletionPortThreads);
+                    int minWorkerThreads, minCompletionPortThreads;
+
+                    ThreadPool.GetMinThreads(out minWorkerThreads, out minCompletionPortThreads);
+                    minWorkerThreads = Math.Max(minWorkerThreads + workerThreadsToAdd, Environment.ProcessorCount);
+
+                    if (minWorkerThreads <= maxWorkerThreads.Value)
+                    {
+                        ThreadPool.SetMinThreads(minWorkerThreads, minCompletionPortThreads);
+                    }
                 }
             }
         }
