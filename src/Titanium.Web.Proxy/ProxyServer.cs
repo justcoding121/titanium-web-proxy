@@ -732,13 +732,19 @@ namespace Titanium.Web.Proxy
 
             if (tcpClient != null)
             {
-                SetThreadPoolMinThread(1); // increase the ThreadPool 
+                setThreadPoolMinThread(1); // increase the ThreadPool 
 
                 Task.Run(async () =>
                 {
-                    await handleClient(tcpClient, endPoint);
+                    try
+                    {
+                        await handleClient(tcpClient, endPoint);
+                    }
+                    finally
+                    {
+                        setThreadPoolMinThread(-1); //decrease the Threadpool
+                    }
 
-                    SetThreadPoolMinThread(-1); //decrease the Threadpool
                 });
             }
 
@@ -750,7 +756,7 @@ namespace Titanium.Web.Proxy
         /// Change the ThreadPool.WorkerThread minThread 
         /// </summary>
         /// <param name="piNbWorkerThreadsToAdd">Number of threads to add</param>
-        void SetThreadPoolMinThread(int piNbWorkerThreadsToAdd)
+        private void setThreadPoolMinThread(int piNbWorkerThreadsToAdd)
         {
             if (EnableThreadPoolOptimizing)
             {
@@ -774,8 +780,7 @@ namespace Titanium.Web.Proxy
         {
             tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
             tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
-            tcpClient.SendBufferSize = BufferSize;
-            tcpClient.ReceiveBufferSize = BufferSize;
+
             tcpClient.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
 
             await InvokeConnectionCreateEvent(tcpClient, true);
