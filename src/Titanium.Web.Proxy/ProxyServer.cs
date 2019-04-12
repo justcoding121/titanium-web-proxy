@@ -57,11 +57,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private WinHttpWebProxyFinder systemProxyResolver;
 
-        /// <summary>
-        ///     lock for Thread Pool tuning
-        /// </summary>
-        private object lockThreadPoolTuning = new object();
-
+        
         /// <inheritdoc />
         /// <summary>
         ///     Initializes a new instance of ProxyServer class with provided parameters.
@@ -177,12 +173,6 @@ namespace Titanium.Web.Proxy
         ///     Defaults to true.
         /// </summary>
         public bool EnableTcpServerConnectionPrefetch { get; set; } = true;
-
-        /// <summary>
-        /// Gets or sets a Boolean value that specifies whether ThreadPool grows new connections and decrease when connections close
-        /// Defaults to true.
-        /// </summary>
-        public bool EnableThreadPoolOptimizing { get; set; } = true;
 
         /// <summary>
         /// Gets or sets a Boolean value that specifies whether server and client stream Sockets are using the Nagle algorithm.
@@ -362,6 +352,11 @@ namespace Titanium.Web.Proxy
         ///     Customize TcpClient used for server connection upon create.
         /// </summary>
         public event AsyncEventHandler<TcpClient> OnServerConnectionCreate;
+
+        /// <summary>
+        /// Customize the minimum ThreadPool size (increase it on a server)
+        /// </summary>
+        public int ThreadPoolWorkerThread { get; set; } = Environment.ProcessorCount;
 
         /// <summary>
         ///     Add a proxy end point.
@@ -555,6 +550,8 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
+            setThreadPoolMinThread(ThreadPoolWorkerThread);
+
             if (ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.GenericCertificate == null))
             {
                 CertificateManager.EnsureRootCertificate();
@@ -732,19 +729,9 @@ namespace Titanium.Web.Proxy
 
             if (tcpClient != null)
             {
-                setThreadPoolMinThread(1); // increase the ThreadPool 
-
                 Task.Run(async () =>
                 {
-                    try
-                    {
-                        await handleClient(tcpClient, endPoint);
-                    }
-                    finally
-                    {
-                        setThreadPoolMinThread(-1); //decrease the Threadpool
-                    }
-
+                    await handleClient(tcpClient, endPoint);
                 });
             }
 
@@ -752,35 +739,23 @@ namespace Titanium.Web.Proxy
             endPoint.Listener.BeginAcceptTcpClient(onAcceptConnection, endPoint);
         }
 
-        private Lazy<int> maxWorkerThreads = new Lazy<int>(() =>
-        {
-            int maxWorkerThreads;
-            ThreadPool.GetMaxThreads(out maxWorkerThreads, out var _);
-            return maxWorkerThreads;
-        });
 
         /// <summary>
         /// Change the ThreadPool.WorkerThread minThread 
         /// </summary>
-        /// <param name="workerThreadsToAdd">Number of threads to add</param>
-        private void setThreadPoolMinThread(int workerThreadsToAdd)
+        /// <param name="workerThreadsToAdd">minimum Threads allocated in the ThreadPool</param>
+        private void setThreadPoolMinThread(int workerThreads)
         {
-            if (EnableThreadPoolOptimizing)
-            {
-                lock (lockThreadPoolTuning)
-                {
-                    int minWorkerThreads, minCompletionPortThreads;
+            int minWorkerThreads, minCompletionPortThreads, maxWorkerThreads;
 
-                    ThreadPool.GetMinThreads(out minWorkerThreads, out minCompletionPortThreads);
-                    minWorkerThreads = Math.Max(minWorkerThreads + workerThreadsToAdd, Environment.ProcessorCount);
+            ThreadPool.GetMinThreads(out minWorkerThreads, out minCompletionPortThreads);
+            ThreadPool.GetMaxThreads(out maxWorkerThreads, out _);
 
-                    if (minWorkerThreads <= maxWorkerThreads.Value)
-                    {
-                        ThreadPool.SetMinThreads(minWorkerThreads, minCompletionPortThreads);
-                    }
-                }
-            }
+            minWorkerThreads = Math.Min(maxWorkerThreads, Math.Max(workerThreads, Environment.ProcessorCount));
+
+            ThreadPool.SetMinThreads(minWorkerThreads, minCompletionPortThreads);
         }
+
 
         /// <summary>
         ///     Handle the client.
