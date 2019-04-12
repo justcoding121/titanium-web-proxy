@@ -15,14 +15,14 @@
     <tags></tags>
     <dependencies>
 	  <group targetFramework="net45">
-		  <dependency id="StreamExtended" version="1.0.190" />
-		  <dependency id="Portable.BouncyCastle" version="1.8.3.37" />
-		  <dependency id="BrotliSharpLib" version="0.3.1" />
+		  <dependency id="StreamExtended" version="1.0.201" />
+		  <dependency id="Portable.BouncyCastle" version="1.8.5" />
+		  <dependency id="BrotliSharpLib" version="0.3.3" />
 	  </group>
 	  <group targetFramework="netstandard2.0">
-		  <dependency id="StreamExtended" version="1.0.190" />
-		  <dependency id="Portable.BouncyCastle" version="1.8.3.37" />
-		  <dependency id="BrotliSharpLib" version="0.3.1" />
+		  <dependency id="StreamExtended" version="1.0.201" />
+		  <dependency id="Portable.BouncyCastle" version="1.8.5" />
+		  <dependency id="BrotliSharpLib" version="0.3.3" />
 		  <dependency id="Microsoft.Win32.Registry" version="4.4.0" />
 		  <dependency id="System.Security.Principal.Windows" version="4.4.1" />
 	  </group>
