@@ -15,7 +15,7 @@
   <ItemGroup>
     <PackageReference Include="BrotliSharpLib" Version="0.3.1" />
     <PackageReference Include="Portable.BouncyCastle" Version="1.8.3.37" />
-    <PackageReference Include="StreamExtended" Version="1.0.190" />
+    <PackageReference Include="StreamExtended" Version="1.0.201" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
