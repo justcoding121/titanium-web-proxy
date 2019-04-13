@@ -154,8 +154,13 @@ namespace Titanium.Web.Proxy
 
                         if (EnableTcpServerConnectionPrefetch)
                         {
-                            //make sure the host can be resolved before creating the prefetch task
-                            var ipAddresses = await Dns.GetHostAddressesAsync(connectArgs.HttpClient.Request.RequestUri.Host);
+                            IPAddress[] ipAddresses = null;
+                            try
+                            {
+                                //make sure the host can be resolved before creating the prefetch task
+                                ipAddresses = await Dns.GetHostAddressesAsync(connectArgs.HttpClient.Request.RequestUri.Host);
+                            }
+                            catch (SocketException) { }
 
                             if (ipAddresses != null && ipAddresses.Length > 0)
                             {

@@ -3505,19 +3505,6 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
   nameWithType: ProxyServer.EnableTcpServerConnectionPrefetch
-- uid: Titanium.Web.Proxy.ProxyServer.EnableThreadPoolOptimizing
-  name: EnableThreadPoolOptimizing
-  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableThreadPoolOptimizing
-  commentId: P:Titanium.Web.Proxy.ProxyServer.EnableThreadPoolOptimizing
-  fullName: Titanium.Web.Proxy.ProxyServer.EnableThreadPoolOptimizing
-  nameWithType: ProxyServer.EnableThreadPoolOptimizing
-- uid: Titanium.Web.Proxy.ProxyServer.EnableThreadPoolOptimizing*
-  name: EnableThreadPoolOptimizing
-  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableThreadPoolOptimizing_
-  commentId: Overload:Titanium.Web.Proxy.ProxyServer.EnableThreadPoolOptimizing
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.ProxyServer.EnableThreadPoolOptimizing
-  nameWithType: ProxyServer.EnableThreadPoolOptimizing
 - uid: Titanium.Web.Proxy.ProxyServer.EnableWinAuth
   name: EnableWinAuth
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableWinAuth
@@ -3828,6 +3815,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.TcpTimeWaitSeconds
   nameWithType: ProxyServer.TcpTimeWaitSeconds
+- uid: Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread
+  name: ThreadPoolWorkerThread
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ThreadPoolWorkerThread
+  commentId: P:Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread
+  fullName: Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread
+  nameWithType: ProxyServer.ThreadPoolWorkerThread
+- uid: Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread*
+  name: ThreadPoolWorkerThread
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ThreadPoolWorkerThread_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread
+  nameWithType: ProxyServer.ThreadPoolWorkerThread
 - uid: Titanium.Web.Proxy.ProxyServer.UpStreamEndPoint
   name: UpStreamEndPoint
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_UpStreamEndPoint
