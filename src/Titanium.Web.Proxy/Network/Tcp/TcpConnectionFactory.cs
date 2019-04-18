@@ -494,11 +494,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
                                     || connection.LastAccess < cutOff)
                                 {
                                     disposalBag.Add(connection);
-                                    continue;
                                 }
-
-                                queue.Enqueue(connection);
-                                break;
+                                else
+                                {
+                                    queue.Enqueue(connection);
+                                    break;
+                                }
                             }
                         }
                     }
