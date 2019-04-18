@@ -53,6 +53,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             proxyServer.ForwardToUpstreamGateway = true;
 
+            //increase the ThreadPool (for server prod)
+            //proxyServer.ThreadPoolWorkerThread = Environment.ProcessorCount * 6;
+
             ////if you need Load or Create Certificate now. ////// "true" if you need Enable===> Trust the RootCertificate used by this proxy server
             //proxyServer.CertificateManager.EnsureRootCertificate(true);
 
