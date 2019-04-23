@@ -416,7 +416,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 return;
             }
 
-            if (close || connection.IsWinAuthenticated || !server.EnableConnectionPool)
+            if (close || connection.IsWinAuthenticated || !server.EnableConnectionPool || connection.Stream.IsClosed)
             {
                 disposalBag.Add(connection);
                 return;
