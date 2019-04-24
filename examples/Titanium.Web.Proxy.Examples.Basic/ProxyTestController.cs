@@ -64,7 +64,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             // Fired when a CONNECT request is received
             explicitEndPoint.BeforeTunnelConnectRequest += onBeforeTunnelConnectRequest;
-            explicitEndPoint.BeforeTunnelConnectResponse += OnBeforeTunnelConnectResponse;
+            explicitEndPoint.BeforeTunnelConnectResponse += onBeforeTunnelConnectResponse;
 
             // An explicit endpoint is where the client knows about the existence of a proxy
             // So client sends request in a proxy friendly manner
@@ -103,7 +103,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         public void Stop()
         {
             explicitEndPoint.BeforeTunnelConnectRequest -= onBeforeTunnelConnectRequest;
-            explicitEndPoint.BeforeTunnelConnectResponse -= OnBeforeTunnelConnectResponse;
+            explicitEndPoint.BeforeTunnelConnectResponse -= onBeforeTunnelConnectResponse;
 
             proxyServer.BeforeRequest -= onRequest;
             proxyServer.BeforeResponse -= onResponse;
@@ -130,7 +130,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             }
         }
 
-        private Task OnBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
+        private Task onBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
         {
             return Task.FromResult(false);
         }
