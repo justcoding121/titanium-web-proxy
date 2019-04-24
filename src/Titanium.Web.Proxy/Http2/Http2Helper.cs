@@ -1,4 +1,4 @@
-#if NETCOREAPP2_1
+﻿#if NETCOREAPP2_1
 using System;
 using System.IO;
 using System.Threading;
@@ -22,7 +22,7 @@ namespace Titanium.Web.Proxy.Http2
         /// <summary>
         ///     relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers
         ///     as prefix
-        ///     Usefull for websocket requests
+        ///     Useful for websocket requests
         ///     Task-based Asynchronous Pattern
         /// </summary>
         /// <param name="clientStream"></param>

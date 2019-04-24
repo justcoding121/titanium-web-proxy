@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy.Exceptions
         ///     Initializes a new instance of the <see cref="ProxyException" /> class.
         ///     - must be invoked by derived classes' constructors
         /// </summary>
-        /// <param name="message">Excception message</param>
+        /// <param name="message">Exception message</param>
         /// <param name="innerException">Inner exception associated</param>
         protected ProxyException(string message, Exception innerException) : base(message, innerException)
         {

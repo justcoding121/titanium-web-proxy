@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         {
             //http version is ignored since its an application level decision b/w HTTP 1.0/1.1
             //also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
-            //That can create cache miss for same server connection unneccessarily expecially when prefetcing with Connect.
+            //That can create cache miss for same server connection unnecessarily especially when prefetching with Connect.
             //http version 2 is separated using applicationProtocols below.
             var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}-" +
                                                   //when creating Tcp client isConnect won't matter

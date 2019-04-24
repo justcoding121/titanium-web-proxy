@@ -214,7 +214,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 e.DataReceived += (sender, args) =>
                 {
-                    var session = (SessionEventArgs)sender;
+                    var session = (SessionEventArgsBase)sender;
                     if (sessionDictionary.TryGetValue(session.HttpClient, out var li))
                     {
                         li.ReceivedDataCount += args.Count;
@@ -223,7 +223,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
                 e.DataSent += (sender, args) =>
                 {
-                    var session = (SessionEventArgs)sender;
+                    var session = (SessionEventArgsBase)sender;
                     if (sessionDictionary.TryGetValue(session.HttpClient, out var li))
                     {
                         li.SentDataCount += args.Count;

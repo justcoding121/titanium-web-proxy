@@ -31,7 +31,7 @@ namespace Titanium.Web.Proxy.Models
         ///     Intercept tunnel connect request.
         ///     Valid only for explicit endpoints.
         ///     Set the <see cref="TunnelConnectSessionEventArgs.DecryptSsl" /> property to false if this HTTP connect request
-        ///     should'nt be decrypted and instead be relayed.
+        ///     shouldn't be decrypted and instead be relayed.
         /// </summary>
         public event AsyncEventHandler<TunnelConnectSessionEventArgs> BeforeTunnelConnectRequest;
 

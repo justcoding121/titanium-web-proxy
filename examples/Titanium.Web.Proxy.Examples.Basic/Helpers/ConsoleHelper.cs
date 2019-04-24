@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace Titanium.Web.Proxy.Examples.Basic.Helpers
 {
     /// <summary>
-    ///     Adapated from
+    ///     Adapted from
     ///     http://stackoverflow.com/questions/13656846/how-to-programmatic-disable-c-sharp-console-applications-quick-edit-mode
     /// </summary>
     internal static class ConsoleHelper
