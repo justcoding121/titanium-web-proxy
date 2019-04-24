@@ -26,6 +26,13 @@
 		  <dependency id="Microsoft.Win32.Registry" version="4.4.0" />
 		  <dependency id="System.Security.Principal.Windows" version="4.4.1" />
 	  </group>
+	  <group targetFramework="netcoreapp2.1">
+		  <dependency id="StreamExtended" version="1.0.209-beta" />
+		  <dependency id="Portable.BouncyCastle" version="1.8.5" />
+		  <dependency id="BrotliSharpLib" version="0.3.3" />
+		  <dependency id="Microsoft.Win32.Registry" version="4.4.0" />
+		  <dependency id="System.Security.Principal.Windows" version="4.4.1" />
+	  </group>
     </dependencies>
   </metadata>
   <files>

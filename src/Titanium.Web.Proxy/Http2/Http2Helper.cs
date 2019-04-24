@@ -63,6 +63,7 @@ namespace Titanium.Web.Proxy.Http2
             while (true)
             {
                 int read = await ForceRead(input, headerBuffer, 0, 9, cancellationToken);
+                onCopy(headerBuffer, 0, read);
                 if (read != 9)
                 {
                     return;
@@ -75,6 +76,7 @@ namespace Titanium.Web.Proxy.Http2
                                headerBuffer[8];
 
                 read = await ForceRead(input, buffer, 0, length, cancellationToken);
+                onCopy(buffer, 0, read);
                 if (read != length)
                 {
                     return;
@@ -138,7 +140,7 @@ namespace Titanium.Web.Proxy.Http2
             while (bytesToRead > 0)
             {
                 int read = await input.ReadAsync(buffer, offset, bytesToRead, cancellationToken);
-                if (read == -1)
+                if (read == 0)
                 {
                     break;
                 }
