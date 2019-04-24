@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy.Models
             }
         }
 
-        internal async Task InvokeBeforeTunnectConnectResponse(ProxyServer proxyServer,
+        internal async Task InvokeBeforeTunnelConnectResponse(ProxyServer proxyServer,
             TunnelConnectSessionEventArgs connectArgs, ExceptionHandler exceptionFunc, bool isClientHello = false)
         {
             if (BeforeTunnelConnectResponse != null)

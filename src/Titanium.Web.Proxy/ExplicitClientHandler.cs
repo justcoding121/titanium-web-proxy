@@ -103,7 +103,7 @@ namespace Titanium.Web.Proxy
 
                     if (await checkAuthorization(connectArgs) == false)
                     {
-                        await endPoint.InvokeBeforeTunnectConnectResponse(this, connectArgs, ExceptionFunc);
+                        await endPoint.InvokeBeforeTunnelConnectResponse(this, connectArgs, ExceptionFunc);
 
                         // send the response
                         await clientStreamWriter.WriteResponseAsync(connectArgs.HttpClient.Response,
@@ -129,7 +129,7 @@ namespace Titanium.Web.Proxy
                         connectRequest.ClientHelloInfo = clientHelloInfo;
                     }
 
-                    await endPoint.InvokeBeforeTunnectConnectResponse(this, connectArgs, ExceptionFunc, isClientHello);
+                    await endPoint.InvokeBeforeTunnelConnectResponse(this, connectArgs, ExceptionFunc, isClientHello);
 
                     if (decryptSsl && isClientHello)
                     {
@@ -183,7 +183,7 @@ namespace Titanium.Web.Proxy
 
                             // Successfully managed to authenticate the client using the fake certificate
                             var options = new SslServerAuthenticationOptions();
-                            if (http2Supported)
+                            if (EnableHttp2 && http2Supported)
                             {
                                 options.ApplicationProtocols = clientHelloInfo.GetAlpn();
                                 if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)

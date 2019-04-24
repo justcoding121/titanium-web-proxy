@@ -144,6 +144,12 @@ namespace Titanium.Web.Proxy
         ///     Defaults to false.
         /// </summary>
         public bool EnableWinAuth { get; set; }
+        
+        /// <summary>
+        ///     Enable disable HTTP/2 support. This setting is internal,
+        ///     because the implementation is not finished
+        /// </summary>
+        internal bool EnableHttp2 { get; set; } = false;
 
         /// <summary>
         ///     Should we check for certificate revocation during SSL authentication to servers
