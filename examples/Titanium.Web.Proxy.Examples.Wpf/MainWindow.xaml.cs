@@ -106,7 +106,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 if (value != selectedSession)
                 {
                     selectedSession = value;
-                    SelectedSessionChanged();
+                    selectedSessionChanged();
                 }
             }
         }
@@ -131,7 +131,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 e.DecryptSsl = false;
             }
 
-            await Dispatcher.InvokeAsync(() => { AddSession(e); });
+            await Dispatcher.InvokeAsync(() => { addSession(e); });
         }
 
         private async Task ProxyServer_BeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
@@ -148,7 +148,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private async Task ProxyServer_BeforeRequest(object sender, SessionEventArgs e)
         {
             SessionListItem item = null;
-            await Dispatcher.InvokeAsync(() => { item = AddSession(e); });
+            await Dispatcher.InvokeAsync(() => { item = addSession(e); });
 
             if (e.HttpClient.Request.HasBody)
             {
@@ -191,15 +191,15 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             });
         }
 
-        private SessionListItem AddSession(SessionEventArgsBase e)
+        private SessionListItem addSession(SessionEventArgsBase e)
         {
-            var item = CreateSessionListItem(e);
+            var item = createSessionListItem(e);
             Sessions.Add(item);
             sessionDictionary.Add(e.HttpClient, item);
             return item;
         }
 
-        private SessionListItem CreateSessionListItem(SessionEventArgsBase e)
+        private SessionListItem createSessionListItem(SessionEventArgsBase e)
         {
             lastSessionNumber++;
             bool isTunnelConnect = e is TunnelConnectSessionEventArgs;
@@ -248,7 +248,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             }
         }
 
-        private void SelectedSessionChanged()
+        private void selectedSessionChanged()
         {
             if (SelectedSession == null)
             {

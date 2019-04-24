@@ -80,7 +80,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="protocolType"></param>
         internal void SetProxy(string hostname, int port, ProxyProtocolType protocolType)
         {
-            using (var reg = OpenInternetSettingsKey())
+            using (var reg = openInternetSettingsKey())
             {
                 if (reg == null)
                 {
@@ -127,7 +127,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         internal void RemoveProxy(ProxyProtocolType protocolType, bool saveOriginalConfig = true)
         {
-            using (var reg = OpenInternetSettingsKey())
+            using (var reg = openInternetSettingsKey())
             {
                 if (reg == null)
                 {
@@ -168,7 +168,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         internal void DisableAllProxy()
         {
-            using (var reg = OpenInternetSettingsKey())
+            using (var reg = openInternetSettingsKey())
             {
                 if (reg == null)
                 {
@@ -186,7 +186,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         internal void SetAutoProxyUrl(string url)
         {
-            using (var reg = OpenInternetSettingsKey())
+            using (var reg = openInternetSettingsKey())
             {
                 if (reg == null)
                 {
@@ -201,7 +201,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         internal void SetProxyOverride(string proxyOverride)
         {
-            using (var reg = OpenInternetSettingsKey())
+            using (var reg = openInternetSettingsKey())
             {
                 if (reg == null)
                 {
@@ -286,7 +286,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         internal ProxyInfo GetProxyInfoFromRegistry()
         {
-            using (var reg = OpenInternetSettingsKey())
+            using (var reg = openInternetSettingsKey())
             {
                 if (reg == null)
                 {
@@ -347,7 +347,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         ///     Opens the registry key with the internet settings
         /// </summary>
-        private static RegistryKey OpenInternetSettingsKey()
+        private static RegistryKey openInternetSettingsKey()
         {
             return Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
         }

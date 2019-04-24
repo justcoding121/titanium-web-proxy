@@ -117,7 +117,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                exceptionFunc(new Exception("Exception thrown in user event", ex));
+                ExceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -154,7 +154,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             using (var bodyStream = new MemoryStream())
             {
-                var writer = new HttpWriter(bodyStream, bufferPool, bufferSize);
+                var writer = new HttpWriter(bodyStream, BufferPool, BufferSize);
 
                 if (isRequest)
                 {
@@ -186,7 +186,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             using (var bodyStream = new MemoryStream())
             {
-                var writer = new HttpWriter(bodyStream, bufferPool, bufferSize);
+                var writer = new HttpWriter(bodyStream, BufferPool, BufferSize);
                 await copyBodyAsync(isRequest, true, writer, TransformationMode.None, null, cancellationToken);
             }
         }
@@ -207,7 +207,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 var reader = getStreamReader(true);
                 string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
 
-                using (var copyStream = new CopyStream(reader, writer, bufferPool, bufferSize))
+                using (var copyStream = new CopyStream(reader, writer, BufferPool, BufferSize))
                 {
                     while (contentLength > copyStream.ReadBytes)
                     {
@@ -259,7 +259,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             string contentEncoding = useOriginalHeaderValues ? requestResponse.OriginalContentEncoding : requestResponse.ContentEncoding;
 
-            Stream s = limitedStream = new LimitedStream(stream, bufferPool, isChunked, contentLength);
+            Stream s = limitedStream = new LimitedStream(stream, BufferPool, isChunked, contentLength);
 
             if (transformation == TransformationMode.Uncompress && contentEncoding != null)
             {
@@ -268,7 +268,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             try
             {
-                using (var bufStream = new CustomBufferedStream(s, bufferPool, bufferSize, true))
+                using (var bufStream = new CustomBufferedStream(s, BufferPool, BufferSize, true))
                 {
                     await writer.CopyBodyAsync(bufStream, false, -1, onCopy, cancellationToken);
                 }
@@ -290,7 +290,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             int bufferDataLength = 0;
 
-            var buffer = bufferPool.GetBuffer(bufferSize);
+            var buffer = BufferPool.GetBuffer(BufferSize);
             try
             {
                 int boundaryLength = boundary.Length + 4;
@@ -340,7 +340,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             finally
             {
-                bufferPool.ReturnBuffer(buffer);
+                BufferPool.ReturnBuffer(buffer);
             }
         }
 
