@@ -189,7 +189,7 @@ namespace Titanium.Web.Proxy.Http
         public bool IsBodyRead { get; internal set; }
 
         /// <summary>
-        ///     Is the request/response no more modifyable by user (user callbacks complete?)
+        ///     Is the request/response no more modifiable by user (user callbacks complete?)
         ///     Also if user set this as a custom response then this should be true.
         /// </summary>
         internal bool Locked { get; set; }

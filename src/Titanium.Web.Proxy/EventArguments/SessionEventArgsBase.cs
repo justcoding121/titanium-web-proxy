@@ -24,9 +24,9 @@ namespace Titanium.Web.Proxy.EventArguments
         internal TcpServerConnection ServerConnection => HttpClient.Connection;
         internal TcpClientConnection ClientConnection => ProxyClient.Connection;
 
-        protected readonly int bufferSize;
-        protected readonly IBufferPool bufferPool;
-        protected readonly ExceptionHandler exceptionFunc;
+        protected readonly int BufferSize;
+        protected readonly IBufferPool BufferPool;
+        protected readonly ExceptionHandler ExceptionFunc;
 
         /// <summary>
         /// Relative milliseconds for various events.
@@ -39,9 +39,9 @@ namespace Titanium.Web.Proxy.EventArguments
         private SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
             CancellationTokenSource cancellationTokenSource)
         {
-            bufferSize = server.BufferSize;
-            bufferPool = server.BufferPool;
-            exceptionFunc = server.ExceptionFunc;
+            BufferSize = server.BufferSize;
+            BufferPool = server.BufferPool;
+            ExceptionFunc = server.ExceptionFunc;
             TimeLine["Session Created"] = DateTime.Now;
         }
 
@@ -161,7 +161,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                exceptionFunc(new Exception("Exception thrown in user event", ex));
+                ExceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -173,7 +173,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                exceptionFunc(new Exception("Exception thrown in user event", ex));
+                ExceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 

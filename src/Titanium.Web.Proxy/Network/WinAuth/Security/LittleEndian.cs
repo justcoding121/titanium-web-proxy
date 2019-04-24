@@ -1,4 +1,4 @@
-//
+﻿//
 // Mono.Security.BitConverterLE.cs
 //  Like System.BitConverter but always little endian
 //

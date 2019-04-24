@@ -146,7 +146,7 @@ namespace Titanium.Web.Proxy
         public bool EnableWinAuth { get; set; }
 
         /// <summary>
-        ///     Should we check for certificare revocation during SSL authentication to servers
+        ///     Should we check for certificate revocation during SSL authentication to servers
         ///     Note: If enabled can reduce performance. Defaults to false.
         /// </summary>
         public X509RevocationMode CheckCertificateRevocation { get; set; }
@@ -169,7 +169,7 @@ namespace Titanium.Web.Proxy
         ///     When enabled, as soon as we receive a client connection we concurrently initiate 
         ///     corresponding server connection process using CONNECT hostname or SNI hostname on a separate task so that after parsing client request
         ///     we will have the server connection immediately ready or in the process of getting ready.
-        ///     If a server connection is available in cache then this prefetch task will immediatly return with the available connection from cache.
+        ///     If a server connection is available in cache then this prefetch task will immediately return with the available connection from cache.
         ///     Defaults to true.
         /// </summary>
         public bool EnableTcpServerConnectionPrefetch { get; set; } = true;
@@ -380,7 +380,7 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         ///     Remove a proxy end point.
-        ///     Will throw error if the end point does'nt exist.
+        ///     Will throw error if the end point doesn't exist.
         /// </summary>
         /// <param name="endPoint">The existing endpoint to remove.</param>
         public void RemoveEndPoint(ProxyEndPoint endPoint)
@@ -743,13 +743,11 @@ namespace Titanium.Web.Proxy
         /// <summary>
         /// Change the ThreadPool.WorkerThread minThread 
         /// </summary>
-        /// <param name="workerThreadsToAdd">minimum Threads allocated in the ThreadPool</param>
+        /// <param name="workerThreads">minimum Threads allocated in the ThreadPool</param>
         private void setThreadPoolMinThread(int workerThreads)
         {
-            int minWorkerThreads, minCompletionPortThreads, maxWorkerThreads;
-
-            ThreadPool.GetMinThreads(out minWorkerThreads, out minCompletionPortThreads);
-            ThreadPool.GetMaxThreads(out maxWorkerThreads, out _);
+            ThreadPool.GetMinThreads(out int minWorkerThreads, out int minCompletionPortThreads);
+            ThreadPool.GetMaxThreads(out int maxWorkerThreads, out _);
 
             minWorkerThreads = Math.Min(maxWorkerThreads, Math.Max(workerThreads, Environment.ProcessorCount));
 

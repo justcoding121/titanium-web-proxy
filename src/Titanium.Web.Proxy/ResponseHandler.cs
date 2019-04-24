@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy
     public partial class ProxyServer
     {
         /// <summary>
-        ///     Called asynchronously when a request was successfull and we received the response.
+        ///     Called asynchronously when a request was successful and we received the response.
         /// </summary>
         /// <param name="args">The session event arguments.</param>
         /// <returns> The task.</returns>

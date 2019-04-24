@@ -111,8 +111,8 @@ namespace Titanium.Web.Proxy
                         return;
                     }
 
-                    // write back successfull CONNECT response
-                    var response = ConnectResponse.CreateSuccessfullConnectResponse(version);
+                    // write back successful CONNECT response
+                    var response = ConnectResponse.CreateSuccessfulConnectResponse(version);
 
                     // Set ContentLength explicitly to properly handle HTTP 1.0
                     response.ContentLength = 0;
@@ -148,7 +148,7 @@ namespace Titanium.Web.Proxy
 
                             http2Supported = connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
 
-                            //release connection back to pool intead of closing when connection pool is enabled.
+                            //release connection back to pool instead of closing when connection pool is enabled.
                             await tcpConnectionFactory.Release(connection, true);
                         }
 
@@ -253,7 +253,7 @@ namespace Titanium.Web.Proxy
                                     try
                                     {
                                         await clientStream.ReadAsync(data, 0, available, cancellationToken);
-                                        // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
+                                        // clientStream.Available should be at most BufferSize because it is using the same buffer size
                                         await connection.StreamWriter.WriteAsync(data, 0, available, true, cancellationToken);
                                     }
                                     finally

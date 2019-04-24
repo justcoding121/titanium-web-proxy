@@ -31,12 +31,12 @@ namespace Titanium.Web.Proxy.EventArguments
         public bool DenyConnect { get; set; }
 
         /// <summary>
-        ///     Is this a connect request to secure HTTP server? Or is it to someother protocol.
+        ///     Is this a connect request to secure HTTP server? Or is it to some other protocol.
         /// </summary>
         public bool IsHttpsConnect
         {
             get => isHttpsConnect ??
-                   throw new Exception("The value of this property is known in the BeforeTunnectConnectResponse event");
+                   throw new Exception("The value of this property is known in the BeforeTunnelConnectResponse event");
 
             internal set => isHttpsConnect = value;
         }
