@@ -12,9 +12,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BrotliSharpLib" Version="0.3.1" />
-    <PackageReference Include="Portable.BouncyCastle" Version="1.8.3" />
-    <PackageReference Include="StreamExtended" Version="1.0.188-beta" />
+    <PackageReference Include="BrotliSharpLib" Version="0.3.3" />
+    <PackageReference Include="Portable.BouncyCastle" Version="1.8.5" />
+    <PackageReference Include="StreamExtended" Version="1.0.209-beta" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
