@@ -59,99 +59,99 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             /* 14 */
             new HttpHeader(":status", "500"),
             /* 15 */
-            new HttpHeader("accept-charset", string.Empty),
+            new HttpHeader("Accept-Charset", string.Empty),
             /* 16 */
-            new HttpHeader("accept-encoding", "gzip, deflate"),
+            new HttpHeader("Accept-Encoding", "gzip, deflate"),
             /* 17 */
-            new HttpHeader("accept-language", string.Empty),
+            new HttpHeader("Accept-Language", string.Empty),
             /* 18 */
-            new HttpHeader("accept-ranges", string.Empty),
+            new HttpHeader("Accept-Ranges", string.Empty),
             /* 19 */
-            new HttpHeader("accept", string.Empty),
+            new HttpHeader("Accept", string.Empty),
             /* 20 */
-            new HttpHeader("access-control-allow-origin", string.Empty),
+            new HttpHeader("Access-Control-Allow-Origin", string.Empty),
             /* 21 */
-            new HttpHeader("age", string.Empty),
+            new HttpHeader("Age", string.Empty),
             /* 22 */
-            new HttpHeader("allow", string.Empty),
+            new HttpHeader("Allow", string.Empty),
             /* 23 */
-            new HttpHeader("authorization", string.Empty),
+            new HttpHeader("Authorization", string.Empty),
             /* 24 */
-            new HttpHeader("cache-control", string.Empty),
+            new HttpHeader("Cache-Control", string.Empty),
             /* 25 */
-            new HttpHeader("content-disposition", string.Empty),
+            new HttpHeader("Content-Disposition", string.Empty),
             /* 26 */
-            new HttpHeader("content-encoding", string.Empty),
+            new HttpHeader("Content-Encoding", string.Empty),
             /* 27 */
-            new HttpHeader("content-language", string.Empty),
+            new HttpHeader("Content-Language", string.Empty),
             /* 28 */
-            new HttpHeader("content-length", string.Empty),
+            new HttpHeader("Content-Length", string.Empty),
             /* 29 */
-            new HttpHeader("content-location", string.Empty),
+            new HttpHeader("Content-Location", string.Empty),
             /* 30 */
-            new HttpHeader("content-range", string.Empty),
+            new HttpHeader("Content-Range", string.Empty),
             /* 31 */
-            new HttpHeader("content-type", string.Empty),
+            new HttpHeader("Content-Type", string.Empty),
             /* 32 */
-            new HttpHeader("cookie", string.Empty),
+            new HttpHeader("Cookie", string.Empty),
             /* 33 */
-            new HttpHeader("date", string.Empty),
+            new HttpHeader("Date", string.Empty),
             /* 34 */
-            new HttpHeader("etag", string.Empty),
+            new HttpHeader("ETag", string.Empty),
             /* 35 */
-            new HttpHeader("expect", string.Empty),
+            new HttpHeader("Expect", string.Empty),
             /* 36 */
-            new HttpHeader("expires", string.Empty),
+            new HttpHeader("Expires", string.Empty),
             /* 37 */
-            new HttpHeader("from", string.Empty),
+            new HttpHeader("From", string.Empty),
             /* 38 */
-            new HttpHeader("host", string.Empty),
+            new HttpHeader("Host", string.Empty),
             /* 39 */
-            new HttpHeader("if-match", string.Empty),
+            new HttpHeader("If-Match", string.Empty),
             /* 40 */
-            new HttpHeader("if-modified-since", string.Empty),
+            new HttpHeader("If-Modified-Since", string.Empty),
             /* 41 */
-            new HttpHeader("if-none-match", string.Empty),
+            new HttpHeader("If-None-Match", string.Empty),
             /* 42 */
-            new HttpHeader("if-range", string.Empty),
+            new HttpHeader("If-Range", string.Empty),
             /* 43 */
-            new HttpHeader("if-unmodified-since", string.Empty),
+            new HttpHeader("If-Unmodified-Since", string.Empty),
             /* 44 */
-            new HttpHeader("last-modified", string.Empty),
+            new HttpHeader("Last-Modified", string.Empty),
             /* 45 */
-            new HttpHeader("link", string.Empty),
+            new HttpHeader("Link", string.Empty),
             /* 46 */
-            new HttpHeader("location", string.Empty),
+            new HttpHeader("Location", string.Empty),
             /* 47 */
-            new HttpHeader("max-forwards", string.Empty),
+            new HttpHeader("Max-Forwards", string.Empty),
             /* 48 */
-            new HttpHeader("proxy-authenticate", string.Empty),
+            new HttpHeader("Proxy-Authenticate", string.Empty),
             /* 49 */
-            new HttpHeader("proxy-authorization", string.Empty),
+            new HttpHeader("Proxy-Authorization", string.Empty),
             /* 50 */
-            new HttpHeader("range", string.Empty),
+            new HttpHeader("Range", string.Empty),
             /* 51 */
-            new HttpHeader("referer", string.Empty),
+            new HttpHeader("Referer", string.Empty),
             /* 52 */
-            new HttpHeader("refresh", string.Empty),
+            new HttpHeader("Refresh", string.Empty),
             /* 53 */
-            new HttpHeader("retry-after", string.Empty),
+            new HttpHeader("Retry-After", string.Empty),
             /* 54 */
-            new HttpHeader("server", string.Empty),
+            new HttpHeader("Server", string.Empty),
             /* 55 */
-            new HttpHeader("set-cookie", string.Empty),
+            new HttpHeader("Set-Cookie", string.Empty),
             /* 56 */
-            new HttpHeader("strict-transport-security", string.Empty),
+            new HttpHeader("Strict-Transport-Security", string.Empty),
             /* 57 */
-            new HttpHeader("transfer-encoding", string.Empty),
+            new HttpHeader("Transfer-Encoding", string.Empty),
             /* 58 */
-            new HttpHeader("user-agent", string.Empty),
+            new HttpHeader("User-Agent", string.Empty),
             /* 59 */
-            new HttpHeader("vary", string.Empty),
+            new HttpHeader("Vary", string.Empty),
             /* 60 */
-            new HttpHeader("via", string.Empty),
+            new HttpHeader("Via", string.Empty),
             /* 61 */
-            new HttpHeader("www-authenticate", string.Empty)
+            new HttpHeader("WWW-Authenticate", string.Empty)
         };
 
         private static readonly Dictionary<string, int> staticIndexByName = CreateMap();
