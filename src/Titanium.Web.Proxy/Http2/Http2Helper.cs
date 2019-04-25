@@ -62,6 +62,8 @@ namespace Titanium.Web.Proxy.Http2
             int bufferSize, Guid connectionId, bool isClient, CancellationToken cancellationToken,
             ExceptionHandler exceptionFunc)
         {
+            decoder = new Decoder(8192, 4096 * 16);
+
             var headerBuffer = new byte[9];
             var buffer = new byte[32768];
             while (true)
@@ -96,6 +98,27 @@ namespace Titanium.Web.Proxy.Http2
                     {
                         endStream = true;
                     }
+
+                    if (!sessions.TryGetValue(streamId, out var args))
+                    {
+                        throw new ProxyHttpException("HTTP Body data received before any header frame.", null, args);
+                    }
+
+                    var rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
+                    if (rr.ReadHttp2BodyTaskCompletionSource != null)
+                    {
+                        // Get body method was called in the "before" event handler
+
+                        var data = rr.Http2BodyData;
+                        data.Write(buffer, 0, length);
+
+                        if (endStream)
+                        {
+                            rr.Body = data.ToArray();
+                            rr.IsBodyRead = true;
+                            rr.ReadHttp2BodyTaskCompletionSource.SetResult(true);
+                        }
+                    }
                 }
                 else if (type == 1 /*headers*/)
                 {
@@ -127,7 +150,6 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (!sessions.TryGetValue(streamId, out var args))
                     {
-                        // todo: remove sessions when finished, otherwise it will be a "memory leak"
                         args = sessionFactory();
                         sessions.TryAdd(streamId, args);
                     }
@@ -149,16 +171,18 @@ namespace Titanium.Web.Proxy.Http2
 
                         if (isClient)
                         {
-                            args.HttpClient.Request.HttpVersion = HttpVersion.Version20;
-                            args.HttpClient.Request.Method = headerListener.Method;
-                            args.HttpClient.Request.OriginalUrl = headerListener.Status;
-                            args.HttpClient.Request.RequestUri = headerListener.GetUri();
+                            var request = args.HttpClient.Request;
+                            request.HttpVersion = HttpVersion.Version20;
+                            request.Method = headerListener.Method;
+                            request.OriginalUrl = headerListener.Status;
+                            request.RequestUri = headerListener.GetUri();
                         }
                         else
                         {
-                            args.HttpClient.Response.HttpVersion = HttpVersion.Version20;
+                            var response = args.HttpClient.Response;
+                            response.HttpVersion = HttpVersion.Version20;
                             int.TryParse(headerListener.Status, out int statusCode);
-                            args.HttpClient.Response.StatusCode = statusCode;
+                            response.StatusCode = statusCode;
                         }
                     }
                     catch (Exception ex)
@@ -168,7 +192,18 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (endHeaders)
                     {
-                        await onBeforeRequestResponse(args);
+                        var handler = onBeforeRequestResponse(args);
+
+                        var tcs = new TaskCompletionSource<bool>();
+                        args.ReadHttp2BodyTaskCompletionSource = tcs;
+
+                        if (handler == await Task.WhenAny(handler, tcs.Task))
+                        {
+                            tcs.SetResult(true);
+                        }
+
+                        var rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
+                        rr.Locked = true;
                     }
                 }
 
@@ -186,7 +221,7 @@ namespace Titanium.Web.Proxy.Http2
                     return;
                 }
 
-                /*using (var fs = new System.IO.FileStream($@"c:\11\{connectionId}.{streamId}.dat", FileMode.Append))
+                /*using (var fs = new System.IO.FileStream($@"c:\temp\{connectionId}.{streamId}.dat", FileMode.Append))
                 {
                     fs.Write(headerBuffer, 0, headerBuffer.Length);
                     fs.Write(buffer, 0, length);

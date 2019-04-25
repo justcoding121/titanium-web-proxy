@@ -36,6 +36,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         public MainWindow()
         {
             proxyServer = new ProxyServer();
+
+            proxyServer.EnableHttp2 = true;
+
             //proxyServer.CertificateManager.CertificateEngine = CertificateEngine.DefaultWindows;
 
             ////Set a password for the .pfx file
@@ -150,11 +153,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() => { item = addSession(e); });
 
-            if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Http2)
-            {
-                // GetRequestBody for HTTP/2 currently not supported
-                return;
-            }
+            //if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Http2)
+            //{
+            //}
 
             if (e.HttpClient.Request.HasBody)
             {
@@ -174,11 +175,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 }
             });
 
-            if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Http2)
-            {
-                // GetRequestBody for HTTP/2 currently not supported
-                return;
-            }
+            //if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Http2)
+            //{
+            //}
 
             if (item != null)
             {
