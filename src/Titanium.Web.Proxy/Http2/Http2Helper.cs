@@ -39,15 +39,14 @@ namespace Titanium.Web.Proxy.Http2
             CancellationTokenSource cancellationTokenSource, Guid connectionId,
             ExceptionHandler exceptionFunc)
         {
-            var decoder = new Decoder(8192, 4096 * 16);
             var sessions = new ConcurrentDictionary<int, SessionEventArgs>();
 
             // Now async relay all server=>client & client=>server data
             var sendRelay =
-                copyHttp2FrameAsync(clientStream, serverStream, onDataSend, sessionFactory, decoder, sessions, onBeforeRequest, 
+                copyHttp2FrameAsync(clientStream, serverStream, onDataSend, sessionFactory, sessions, onBeforeRequest, 
                     bufferSize, connectionId, true, cancellationTokenSource.Token, exceptionFunc);
             var receiveRelay =
-                copyHttp2FrameAsync(serverStream, clientStream, onDataReceive, sessionFactory, decoder, sessions, onBeforeResponse, 
+                copyHttp2FrameAsync(serverStream, clientStream, onDataReceive, sessionFactory, sessions, onBeforeResponse, 
                     bufferSize, connectionId, false, cancellationTokenSource.Token, exceptionFunc);
 
             await Task.WhenAny(sendRelay, receiveRelay);
@@ -57,12 +56,12 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         private static async Task copyHttp2FrameAsync(Stream input, Stream output, Action<byte[], int, int> onCopy,
-            Func<SessionEventArgs> sessionFactory, Decoder decoder, ConcurrentDictionary<int, SessionEventArgs>  sessions, 
+            Func<SessionEventArgs> sessionFactory, ConcurrentDictionary<int, SessionEventArgs>  sessions, 
             Func<SessionEventArgs, Task> onBeforeRequestResponse,
             int bufferSize, Guid connectionId, bool isClient, CancellationToken cancellationToken,
             ExceptionHandler exceptionFunc)
         {
-            decoder = new Decoder(8192, 4096 * 16);
+            var decoder = new Decoder(8192, 4096 * 16);
 
             var headerBuffer = new byte[9];
             var buffer = new byte[32768];
