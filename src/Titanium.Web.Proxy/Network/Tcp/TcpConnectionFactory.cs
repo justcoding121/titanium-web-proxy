@@ -42,7 +42,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             Task.Run(async () => await clearOutdatedConnections());
         }
 
-        internal ProxyServer Server { get; set; }
+        internal ProxyServer Server { get; }
 
         internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
             bool isHttps, List<SslApplicationProtocol> applicationProtocols,

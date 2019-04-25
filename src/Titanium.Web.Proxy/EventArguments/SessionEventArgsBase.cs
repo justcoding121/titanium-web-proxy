@@ -31,7 +31,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Relative milliseconds for various events.
         /// </summary>
-        public Dictionary<string, DateTime> TimeLine { get; set; } = new Dictionary<string, DateTime>();
+        public Dictionary<string, DateTime> TimeLine { get; } = new Dictionary<string, DateTime>();
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
