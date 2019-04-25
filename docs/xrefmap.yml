@@ -962,6 +962,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http.ConnectRequest.ClientHelloInfo
   nameWithType: ConnectRequest.ClientHelloInfo
+- uid: Titanium.Web.Proxy.Http.ConnectRequest.TunnelType
+  name: TunnelType
+  href: api/Titanium.Web.Proxy.Http.ConnectRequest.html#Titanium_Web_Proxy_Http_ConnectRequest_TunnelType
+  commentId: P:Titanium.Web.Proxy.Http.ConnectRequest.TunnelType
+  fullName: Titanium.Web.Proxy.Http.ConnectRequest.TunnelType
+  nameWithType: ConnectRequest.TunnelType
+- uid: Titanium.Web.Proxy.Http.ConnectRequest.TunnelType*
+  name: TunnelType
+  href: api/Titanium.Web.Proxy.Http.ConnectRequest.html#Titanium_Web_Proxy_Http_ConnectRequest_TunnelType_
+  commentId: Overload:Titanium.Web.Proxy.Http.ConnectRequest.TunnelType
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.ConnectRequest.TunnelType
+  nameWithType: ConnectRequest.TunnelType
 - uid: Titanium.Web.Proxy.Http.ConnectResponse
   name: ConnectResponse
   href: api/Titanium.Web.Proxy.Http.ConnectResponse.html
@@ -3492,6 +3505,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
   nameWithType: ProxyServer.EnableConnectionPool
+- uid: Titanium.Web.Proxy.ProxyServer.EnableHttp2
+  name: EnableHttp2
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableHttp2
+  commentId: P:Titanium.Web.Proxy.ProxyServer.EnableHttp2
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableHttp2
+  nameWithType: ProxyServer.EnableHttp2
+- uid: Titanium.Web.Proxy.ProxyServer.EnableHttp2*
+  name: EnableHttp2
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableHttp2_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.EnableHttp2
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableHttp2
+  nameWithType: ProxyServer.EnableHttp2
 - uid: Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
   name: EnableTcpServerConnectionPrefetch
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableTcpServerConnectionPrefetch
