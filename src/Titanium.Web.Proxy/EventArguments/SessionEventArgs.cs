@@ -91,7 +91,7 @@ namespace Titanium.Web.Proxy.EventArguments
             // If not already read (not cached yet)
             if (!request.IsBodyRead)
             {
-                if (request.HttpVersion == HttpVersion.Version20)
+                if (request.HttpVersion == HttpHeader.Version20)
                 {
                     request.Http2BodyData = new MemoryStream();
                     request.ReadHttp2BodyTaskCompletionSource = new TaskCompletionSource<bool>();
@@ -155,7 +155,7 @@ namespace Titanium.Web.Proxy.EventArguments
             // If not already read (not cached yet)
             if (!response.IsBodyRead)
             {
-                if (response.HttpVersion == HttpVersion.Version20)
+                if (response.HttpVersion == HttpHeader.Version20)
                 {
                     response.Http2BodyData = new MemoryStream();
                     response.ReadHttp2BodyTaskCompletionSource = new TaskCompletionSource<bool>();
