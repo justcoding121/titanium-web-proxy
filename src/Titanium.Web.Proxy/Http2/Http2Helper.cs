@@ -117,6 +117,9 @@ namespace Titanium.Web.Proxy.Http2
                             rr.Body = data.ToArray();
                             rr.IsBodyRead = true;
                             rr.ReadHttp2BodyTaskCompletionSource.SetResult(true);
+
+                            rr.ReadHttp2BodyTaskCompletionSource = null;
+                            rr.Http2BodyData = null;
                         }
                     }
                 }
