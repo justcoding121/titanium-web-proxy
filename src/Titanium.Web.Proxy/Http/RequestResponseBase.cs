@@ -50,6 +50,8 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         internal string OriginalContentEncoding { get; set; }
 
+        internal TaskCompletionSource<bool> ReadHttp2BeforeHandlerTaskCompletionSource;
+
         internal TaskCompletionSource<bool> ReadHttp2BodyTaskCompletionSource;
 
         internal MemoryStream Http2BodyData;

@@ -7,6 +7,8 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Network.Tcp
 {
@@ -34,9 +36,40 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         private readonly TcpClient tcpClient;
 
+        private int? processId;
+
         public Stream GetStream()
         {
             return tcpClient.GetStream();
+        }
+
+        public int GetProcessId(ProxyEndPoint endPoint)
+        {
+            if (processId.HasValue)
+            {
+                return processId.Value;
+            }
+
+            if (RunTime.IsWindows)
+            {
+                var remoteEndPoint = (IPEndPoint)RemoteEndPoint;
+
+                // If client is localhost get the process id
+                if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
+                {
+                    var ipVersion = endPoint.IpV6Enabled ? IpVersion.Ipv6 : IpVersion.Ipv4;
+                    processId = TcpHelper.GetProcessIdByLocalPort(ipVersion, remoteEndPoint.Port);
+                }
+                else
+                {
+                    // can't access process Id of remote request from remote machine
+                    processId = -1;
+                }
+
+                return processId.Value;
+            }
+
+            throw new PlatformNotSupportedException();
         }
 
         /// <summary>

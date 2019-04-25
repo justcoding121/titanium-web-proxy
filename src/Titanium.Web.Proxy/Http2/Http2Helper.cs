@@ -89,7 +89,30 @@ namespace Titanium.Web.Proxy.Http2
 
                 bool endStream = false;
 
-                //System.Diagnostics.Debug.WriteLine("CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
+                SessionEventArgs args = null;
+                RequestResponseBase rr = null;
+                if (type == 0 || type == 1)
+                {
+                    if (!sessions.TryGetValue(streamId, out args))
+                    {
+                        if (type == 0)
+                        {
+                            throw new ProxyHttpException("HTTP Body data received before any header frame.", null, args);
+                        }
+
+                        if (!isClient)
+                        {
+                            throw new ProxyHttpException("HTTP Response received before any Request header frame.", null, args);
+                        }
+
+                        args = sessionFactory();
+                        sessions.TryAdd(streamId, args);
+                    }
+
+                    rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
+                }
+
+                //System.Diagnostics.Debug.WriteLine("CONN: " + connectionId + ", CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
                 if (type == 0 /* data */)
                 {
                     bool endStreamFlag = (flags & (int)Http2FrameFlag.EndStream) != 0;
@@ -98,12 +121,6 @@ namespace Titanium.Web.Proxy.Http2
                         endStream = true;
                     }
 
-                    if (!sessions.TryGetValue(streamId, out var args))
-                    {
-                        throw new ProxyHttpException("HTTP Body data received before any header frame.", null, args);
-                    }
-
-                    var rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
                     if (rr.ReadHttp2BodyTaskCompletionSource != null)
                     {
                         // Get body method was called in the "before" event handler
@@ -115,12 +132,18 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             rr.Body = data.ToArray();
                             rr.IsBodyRead = true;
-                            rr.ReadHttp2BodyTaskCompletionSource.SetResult(true);
 
+                            var tcs = rr.ReadHttp2BodyTaskCompletionSource;
                             rr.ReadHttp2BodyTaskCompletionSource = null;
+
+                            if (!tcs.Task.IsCompleted)
+                            {
+                                tcs.SetResult(true);
+                            }
+
                             rr.Http2BodyData = null;
                         }
-                    }
+                    }   
                 }
                 else if (type == 1 /*headers*/)
                 {
@@ -148,12 +171,6 @@ namespace Titanium.Web.Proxy.Http2
                     if (padded)
                     {
                         dataLength -= buffer[0];
-                    }
-
-                    if (!sessions.TryGetValue(streamId, out var args))
-                    {
-                        args = sessionFactory();
-                        sessions.TryAdd(streamId, args);
                     }
 
                     var headerListener = new MyHeaderListener(
@@ -194,17 +211,17 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (endHeaders)
                     {
+                        var tcs = new TaskCompletionSource<bool>();
+                        rr.ReadHttp2BeforeHandlerTaskCompletionSource = tcs;
+
                         var handler = onBeforeRequestResponse(args);
 
-                        var tcs = new TaskCompletionSource<bool>();
-                        args.ReadHttp2BodyTaskCompletionSource = tcs;
-
-                        if (handler == await Task.WhenAny(handler, tcs.Task))
+                        if (handler == await Task.WhenAny(tcs.Task, handler))
                         {
+                            rr.ReadHttp2BeforeHandlerTaskCompletionSource = null;
                             tcs.SetResult(true);
                         }
 
-                        var rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
                         rr.Locked = true;
                     }
                 }
@@ -212,6 +229,7 @@ namespace Titanium.Web.Proxy.Http2
                 if (!isClient && endStream)
                 {
                     sessions.TryRemove(streamId, out _);
+                    //System.Diagnostics.Debug.WriteLine("REMOVED CONN: " + connectionId + ", CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
                 }
 
                 // do not cancel the write operation

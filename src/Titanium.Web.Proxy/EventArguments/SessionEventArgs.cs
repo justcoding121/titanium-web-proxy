@@ -28,8 +28,6 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private bool reRequest;
 
-        internal TaskCompletionSource<bool> ReadHttp2BodyTaskCompletionSource;
-
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
@@ -99,7 +97,7 @@ namespace Titanium.Web.Proxy.EventArguments
                     request.ReadHttp2BodyTaskCompletionSource = tcs;
 
                     // signal to HTTP/2 copy frame method to continue
-                    ReadHttp2BodyTaskCompletionSource.SetResult(true);
+                    request.ReadHttp2BeforeHandlerTaskCompletionSource.SetResult(true);
 
                     await tcs.Task;
                 }
@@ -163,9 +161,9 @@ namespace Titanium.Web.Proxy.EventArguments
 
                     var tcs = new TaskCompletionSource<bool>();
                     response.ReadHttp2BodyTaskCompletionSource = tcs;
-                    
+
                     // signal to HTTP/2 copy frame method to continue
-                    ReadHttp2BodyTaskCompletionSource.SetResult(true);
+                    response.ReadHttp2BeforeHandlerTaskCompletionSource.SetResult(true);
 
                     await tcs.Task;
                 }
