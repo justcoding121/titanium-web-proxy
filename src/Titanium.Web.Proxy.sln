@@ -23,13 +23,15 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{BC1E0789
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Titanium.Web.Proxy", "Titanium.Web.Proxy\Titanium.Web.Proxy.csproj", "{91018B6D-A7A9-45BE-9CB3-79CBB8B169A6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Proxy.UnitTests", "..\tests\Titanium.Web.Proxy.UnitTests\Titanium.Web.Proxy.UnitTests.csproj", "{B517E3D0-D03B-436F-AB03-34BA0D5321AF}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Titanium.Web.Proxy.UnitTests", "..\tests\Titanium.Web.Proxy.UnitTests\Titanium.Web.Proxy.UnitTests.csproj", "{B517E3D0-D03B-436F-AB03-34BA0D5321AF}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Titanium.Web.Proxy.Examples.Basic", "..\examples\Titanium.Web.Proxy.Examples.Basic\Titanium.Web.Proxy.Examples.Basic.csproj", "{1FAC4205-4445-4F2B-BB8F-618E8A0C15FD}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Proxy.Examples.Wpf", "..\examples\Titanium.Web.Proxy.Examples.Wpf\Titanium.Web.Proxy.Examples.Wpf.csproj", "{4406CE17-9A39-4F28-8363-6169A4F799C1}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Titanium.Web.Proxy.IntegrationTests", "..\tests\Titanium.Web.Proxy.IntegrationTests\Titanium.Web.Proxy.IntegrationTests.csproj", "{1D053D72-DCB4-4517-ACDD-D35ADC186950}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "StreamExtended", "StreamExtended\StreamExtended.csproj", "{61539DC1-CE80-41E6-A696-8F455ACE8D15}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -79,6 +81,14 @@ Global
 		{1D053D72-DCB4-4517-ACDD-D35ADC186950}.Release|Any CPU.Build.0 = Release|Any CPU
 		{1D053D72-DCB4-4517-ACDD-D35ADC186950}.Release|x64.ActiveCfg = Release|Any CPU
 		{1D053D72-DCB4-4517-ACDD-D35ADC186950}.Release|x64.Build.0 = Release|Any CPU
+		{61539DC1-CE80-41E6-A696-8F455ACE8D15}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{61539DC1-CE80-41E6-A696-8F455ACE8D15}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{61539DC1-CE80-41E6-A696-8F455ACE8D15}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{61539DC1-CE80-41E6-A696-8F455ACE8D15}.Debug|x64.Build.0 = Debug|Any CPU
+		{61539DC1-CE80-41E6-A696-8F455ACE8D15}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{61539DC1-CE80-41E6-A696-8F455ACE8D15}.Release|Any CPU.Build.0 = Release|Any CPU
+		{61539DC1-CE80-41E6-A696-8F455ACE8D15}.Release|x64.ActiveCfg = Release|Any CPU
+		{61539DC1-CE80-41E6-A696-8F455ACE8D15}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -90,7 +100,7 @@ Global
 		{1D053D72-DCB4-4517-ACDD-D35ADC186950} = {BC1E0789-D348-49CF-8B67-5E99D50EDF64}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {625C1EB5-44CF-47DE-A85A-B4C8C40ED90A}
 		EnterpriseLibraryConfigurationToolBinariesPath = .1.505.2\lib\NET35
+		SolutionGuid = {625C1EB5-44CF-47DE-A85A-B4C8C40ED90A}
 	EndGlobalSection
 EndGlobal
