@@ -150,6 +150,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() => { item = addSession(e); });
 
+            if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Http2)
+            {
+                // GetRequestBody for HTTP/2 currently not supported
+                return;
+            }
+
             if (e.HttpClient.Request.HasBody)
             {
                 e.HttpClient.Request.KeepBody = true;
@@ -167,6 +173,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                     item.Update();
                 }
             });
+
+            if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Http2)
+            {
+                // GetRequestBody for HTTP/2 currently not supported
+                return;
+            }
 
             if (item != null)
             {
@@ -217,6 +229,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                     var session = (SessionEventArgsBase)sender;
                     if (sessionDictionary.TryGetValue(session.HttpClient, out var li))
                     {
+                        var tunnelType = session.HttpClient.ConnectRequest?.TunnelType ?? TunnelType.Unknown;
+                        if (tunnelType != TunnelType.Unknown)
+                        {
+                            li.Protocol = TunnelTypeToString(tunnelType);
+                        }
+
                         li.ReceivedDataCount += args.Count;
                     }
                 };
@@ -226,6 +244,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                     var session = (SessionEventArgsBase)sender;
                     if (sessionDictionary.TryGetValue(session.HttpClient, out var li))
                     {
+                        var tunnelType = session.HttpClient.ConnectRequest?.TunnelType ?? TunnelType.Unknown;
+                        if (tunnelType != TunnelType.Unknown)
+                        {
+                            li.Protocol = TunnelTypeToString(tunnelType);
+                        }
+
                         li.SentDataCount += args.Count;
                     }
                 };
@@ -233,6 +257,21 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             item.Update();
             return item;
+        }
+
+        private string TunnelTypeToString(TunnelType tunnelType)
+        {
+            switch (tunnelType)
+            {
+                case TunnelType.Https:
+                    return "https";
+                case TunnelType.Websocket:
+                    return "websocket";
+                case TunnelType.Http2:
+                    return "http2";
+            }
+
+            return null;
         }
 
         private void ListViewSessions_OnKeyDown(object sender, KeyEventArgs e)

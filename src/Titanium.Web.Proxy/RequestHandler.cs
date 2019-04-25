@@ -312,6 +312,8 @@ namespace Titanium.Web.Proxy
 
                 if (args.HttpClient.Request.UpgradeToWebSocket)
                 {
+                    args.HttpClient.ConnectRequest.TunnelType = TunnelType.Websocket;
+
                     // if upgrading to websocket then relay the request without reading the contents
                     await handleWebSocketUpgrade(httpCmd, args, args.HttpClient.Request,
                         args.HttpClient.Response, args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamWriter,

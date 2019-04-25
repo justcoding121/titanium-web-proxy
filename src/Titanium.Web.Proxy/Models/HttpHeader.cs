@@ -45,7 +45,7 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         ///     Header Name.
         /// </summary>
-        public string Name { get; set; }
+        public string Name { get; }
 
         /// <summary>
         ///     Header Value.

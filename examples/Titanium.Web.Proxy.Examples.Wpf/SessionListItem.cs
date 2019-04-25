@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private long? bodySize;
         private Exception exception;
         private string host;
-        private string process;
+        private int processId;
         private string protocol;
         private long receivedDataCount;
         private long sentDataCount;
@@ -54,10 +54,32 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             set => SetField(ref bodySize, value);
         }
 
+        public int ProcessId
+        {
+            get => processId;
+            set
+            {
+                if (SetField(ref processId, value))
+                {
+                    OnPropertyChanged(nameof(Process));
+                }
+            }
+        }
+
         public string Process
         {
-            get => process;
-            set => SetField(ref process, value);
+            get
+            {
+                try
+                {
+                    var process = System.Diagnostics.Process.GetProcessById(processId);
+                    return process.ProcessName + ":" + processId;
+                }
+                catch (Exception)
+                {
+                    return string.Empty;
+                }
+            }
         }
 
         public long ReceivedDataCount
@@ -80,13 +102,16 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         public event PropertyChangedEventHandler PropertyChanged;
 
-        protected void SetField<T>(ref T field, T value, [CallerMemberName] string propertyName = null)
+        protected bool SetField<T>(ref T field, T value, [CallerMemberName] string propertyName = null)
         {
             if (!Equals(field, value))
             {
                 field = value;
                 OnPropertyChanged(propertyName);
+                return true;
             }
+
+            return false;
         }
 
         [NotifyPropertyChangedInvocator]
@@ -132,20 +157,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 BodySize = responseSize;
             }
 
-            Process = GetProcessDescription(HttpClient.ProcessId.Value);
-        }
-
-        private string GetProcessDescription(int processId)
-        {
-            try
-            {
-                var process = System.Diagnostics.Process.GetProcessById(processId);
-                return process.ProcessName + ":" + processId;
-            }
-            catch (Exception)
-            {
-                return string.Empty;
-            }
+            ProcessId = HttpClient.ProcessId.Value;
         }
     }
 }

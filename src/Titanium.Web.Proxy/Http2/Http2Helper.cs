@@ -1,8 +1,14 @@
 ﻿#if NETCOREAPP2_1
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
 
 namespace Titanium.Web.Proxy.Http2
@@ -25,27 +31,24 @@ namespace Titanium.Web.Proxy.Http2
         ///     Useful for websocket requests
         ///     Task-based Asynchronous Pattern
         /// </summary>
-        /// <param name="clientStream"></param>
-        /// <param name="serverStream"></param>
-        /// <param name="bufferSize"></param>
-        /// <param name="onDataSend"></param>
-        /// <param name="onDataReceive"></param>
-        /// <param name="cancellationTokenSource"></param>
-        /// <param name="connectionId"></param>
-        /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         internal static async Task SendHttp2(Stream clientStream, Stream serverStream, int bufferSize,
             Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive,
+            Func<SessionEventArgs> sessionFactory,
+            Func<SessionEventArgs, Task> onBeforeRequest, Func<SessionEventArgs, Task> onBeforeResponse,
             CancellationTokenSource cancellationTokenSource, Guid connectionId,
             ExceptionHandler exceptionFunc)
         {
+            var decoder = new Decoder(8192, 4096 * 16);
+            var sessions = new ConcurrentDictionary<int, SessionEventArgs>();
+
             // Now async relay all server=>client & client=>server data
             var sendRelay =
-                CopyHttp2FrameAsync(clientStream, serverStream, onDataSend, bufferSize, connectionId,
-                    true, cancellationTokenSource.Token);
+                copyHttp2FrameAsync(clientStream, serverStream, onDataSend, sessionFactory, decoder, sessions, onBeforeRequest, 
+                    bufferSize, connectionId, true, cancellationTokenSource.Token, exceptionFunc);
             var receiveRelay =
-                CopyHttp2FrameAsync(serverStream, clientStream, onDataReceive, bufferSize, connectionId,
-                    false, cancellationTokenSource.Token);
+                copyHttp2FrameAsync(serverStream, clientStream, onDataReceive, sessionFactory, decoder, sessions, onBeforeResponse, 
+                    bufferSize, connectionId, false, cancellationTokenSource.Token, exceptionFunc);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             cancellationTokenSource.Cancel();
@@ -53,16 +56,17 @@ namespace Titanium.Web.Proxy.Http2
             await Task.WhenAll(sendRelay, receiveRelay);
         }
 
-        private static async Task CopyHttp2FrameAsync(Stream input, Stream output, Action<byte[], int, int> onCopy,
-            int bufferSize, Guid connectionId, bool isClient, CancellationToken cancellationToken)
+        private static async Task copyHttp2FrameAsync(Stream input, Stream output, Action<byte[], int, int> onCopy,
+            Func<SessionEventArgs> sessionFactory, Decoder decoder, ConcurrentDictionary<int, SessionEventArgs>  sessions, 
+            Func<SessionEventArgs, Task> onBeforeRequestResponse,
+            int bufferSize, Guid connectionId, bool isClient, CancellationToken cancellationToken,
+            ExceptionHandler exceptionFunc)
         {
-            var decoder = new Decoder(8192, 4096);
-
             var headerBuffer = new byte[9];
             var buffer = new byte[32768];
             while (true)
             {
-                int read = await ForceRead(input, headerBuffer, 0, 9, cancellationToken);
+                int read = await forceRead(input, headerBuffer, 0, 9, cancellationToken);
                 onCopy(headerBuffer, 0, read);
                 if (read != 9)
                 {
@@ -75,55 +79,112 @@ namespace Titanium.Web.Proxy.Http2
                 int streamId = ((headerBuffer[5] & 0x7f) << 24) + (headerBuffer[6] << 16) + (headerBuffer[7] << 8) +
                                headerBuffer[8];
 
-                read = await ForceRead(input, buffer, 0, length, cancellationToken);
+                read = await forceRead(input, buffer, 0, length, cancellationToken);
                 onCopy(buffer, 0, read);
                 if (read != length)
                 {
                     return;
                 }
 
-                if (isClient)
+                bool endStream = false;
+
+                //System.Diagnostics.Debug.WriteLine("CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
+                if (type == 0 /* data */)
                 {
-                    if (type == 1 /*headers*/)
+                    bool endStreamFlag = (flags & (int)Http2FrameFlag.EndStream) != 0;
+                    if (endStreamFlag)
                     {
-                        bool endHeaders = (flags & (int)Http2FrameFlag.EndHeaders) != 0;
-                        bool padded = (flags & (int)Http2FrameFlag.Padded) != 0;
-                        bool priority = (flags & (int)Http2FrameFlag.Priority) != 0;
+                        endStream = true;
+                    }
+                }
+                else if (type == 1 /*headers*/)
+                {
+                    bool endHeaders = (flags & (int)Http2FrameFlag.EndHeaders) != 0;
+                    bool padded = (flags & (int)Http2FrameFlag.Padded) != 0;
+                    bool priority = (flags & (int)Http2FrameFlag.Priority) != 0;
+                    bool endStreamFlag = (flags & (int)Http2FrameFlag.EndStream) != 0;
+                    if (endStreamFlag)
+                    {
+                        endStream = true;
+                    }
 
-                        System.Diagnostics.Debug.WriteLine("HEADER: " + streamId + " end: " + endHeaders);
+                    int offset = 0;
+                    if (padded)
+                    {
+                        offset = 1;
+                    }
+                    
+                    if (priority)
+                    {
+                        offset += 5;
+                    }
 
-                        int offset = 0;
-                        if (padded)
+                    int dataLength = length - offset;
+                    if (padded)
+                    {
+                        dataLength -= buffer[0];
+                    }
+
+                    if (!sessions.TryGetValue(streamId, out var args))
+                    {
+                        // todo: remove sessions when finished, otherwise it will be a "memory leak"
+                        args = sessionFactory();
+                        sessions.TryAdd(streamId, args);
+                    }
+
+                    var headerListener = new MyHeaderListener(
+                        (name, value) =>
                         {
-                            offset = 1;
-                        }
-
-                        if (priority)
-                        {
-                            offset += 5;
-                        }
-
-                        int dataLength = length - offset;
-                        if (padded)
-                        {
-                            dataLength -= buffer[0];
-                        }
-
-                        var headerListener = new MyHeaderListener();
-                        try
+                            var headers = isClient ? args.HttpClient.Request.Headers : args.HttpClient.Response.Headers;
+                            headers.AddHeader(name, value);
+                        });
+                    try
+                    {
+                        lock (decoder)
                         {
                             decoder.Decode(new BinaryReader(new MemoryStream(buffer, offset, dataLength)),
                                 headerListener);
                             decoder.EndHeaderBlock();
                         }
-                        catch (Exception)
+
+                        if (isClient)
                         {
+                            args.HttpClient.Request.HttpVersion = HttpVersion.Version20;
+                            args.HttpClient.Request.Method = headerListener.Method;
+                            args.HttpClient.Request.OriginalUrl = headerListener.Status;
+                            args.HttpClient.Request.RequestUri = headerListener.GetUri();
                         }
+                        else
+                        {
+                            args.HttpClient.Response.HttpVersion = HttpVersion.Version20;
+                            int.TryParse(headerListener.Status, out int statusCode);
+                            args.HttpClient.Response.StatusCode = statusCode;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        exceptionFunc(new ProxyHttpException("Failed to decode HTTP/2 headers", ex, args));
+                    }
+
+                    if (endHeaders)
+                    {
+                        await onBeforeRequestResponse(args);
                     }
                 }
 
-                await output.WriteAsync(headerBuffer, 0, headerBuffer.Length, cancellationToken);
-                await output.WriteAsync(buffer, 0, length, cancellationToken);
+                if (!isClient && endStream)
+                {
+                    sessions.TryRemove(streamId, out _);
+                }
+
+                // do not cancel the write operation
+                await output.WriteAsync(headerBuffer, 0, headerBuffer.Length/*, cancellationToken*/);
+                await output.WriteAsync(buffer, 0, length/*, cancellationToken*/);
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
 
                 /*using (var fs = new System.IO.FileStream($@"c:\11\{connectionId}.{streamId}.dat", FileMode.Append))
                 {
@@ -133,7 +194,7 @@ namespace Titanium.Web.Proxy.Http2
             }
         }
 
-        private static async Task<int> ForceRead(Stream input, byte[] buffer, int offset, int bytesToRead,
+        private static async Task<int> forceRead(Stream input, byte[] buffer, int offset, int bytesToRead,
             CancellationToken cancellationToken)
         {
             int totalRead = 0;
@@ -155,9 +216,59 @@ namespace Titanium.Web.Proxy.Http2
 
         class MyHeaderListener : IHeaderListener
         {
+            private readonly Action<string, string> addHeaderFunc;
+
+            public string Method { get; private set; }
+
+            public string Status { get; private set; }
+
+            private string authority;
+
+            private string scheme;
+
+            public string Path { get; private set; }
+
+            public MyHeaderListener(Action<string, string> addHeaderFunc)
+            {
+                this.addHeaderFunc = addHeaderFunc;
+            }
+
             public void AddHeader(string name, string value, bool sensitive)
             {
-                Console.WriteLine(name + ": " + value + " " + sensitive);
+                if (name[0] == ':')
+                {
+                    switch (name)
+                    {
+                        case ":method":
+                            Method = value;
+                            return;
+                        case ":authority":
+                            authority = value;
+                            return;
+                        case ":scheme":
+                            scheme = value;
+                            return;
+                        case ":path":
+                            Path = value;
+                            return;
+                        case ":status":
+                            Status = value;
+                            return;
+                    }
+                }
+
+                addHeaderFunc(name, value);
+            }
+
+            public Uri GetUri()
+            {
+                if (authority == null)
+                {
+                    // todo
+                    authority = "abc.abc";
+                }
+
+                return new Uri(scheme + "://" + authority + Path);
             }
         }
     }

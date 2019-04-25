@@ -146,10 +146,13 @@ namespace Titanium.Web.Proxy
         public bool EnableWinAuth { get; set; }
         
         /// <summary>
-        ///     Enable disable HTTP/2 support. This setting is internal,
-        ///     because the implementation is not finished
+        ///     Enable disable HTTP/2 support.
+        ///     Warning: HTTP/2 support is very limited
+        ///      - only enabled when both client and server supports it (no protocol changing in proxy)
+        ///      - GetRequest/ResponseBody(AsString) methods are not supported
+        ///      - cannot modify the request/response (e.g header modifications in BeforeRequest/Response events are ignored)
         /// </summary>
-        internal bool EnableHttp2 { get; set; } = false;
+        public bool EnableHttp2 { get; set; } = false;
 
         /// <summary>
         ///     Should we check for certificate revocation during SSL authentication to servers
