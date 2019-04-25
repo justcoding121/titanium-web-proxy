@@ -271,7 +271,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 tcpClient = new TcpClient(upStreamEndPoint)
                 {
-					NoDelay = proxyServer.NoDelay,
+                    NoDelay = proxyServer.NoDelay,
                     ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
                     SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
                     LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds)
@@ -416,7 +416,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 return;
             }
 
-            if (close || connection.IsWinAuthenticated || !Server.EnableConnectionPool || connection.Stream.IsClosed)
+            if (close || connection.IsWinAuthenticated || !Server.EnableConnectionPool || connection.IsClosed)
             {
                 disposalBag.Add(connection);
                 return;
