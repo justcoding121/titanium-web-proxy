@@ -94,12 +94,14 @@ namespace Titanium.Web.Proxy.EventArguments
                 if (request.HttpVersion == HttpHeader.Version20)
                 {
                     request.Http2BodyData = new MemoryStream();
-                    request.ReadHttp2BodyTaskCompletionSource = new TaskCompletionSource<bool>();
+
+                    var tcs = new TaskCompletionSource<bool>();
+                    request.ReadHttp2BodyTaskCompletionSource = tcs;
 
                     // signal to HTTP/2 copy frame method to continue
                     ReadHttp2BodyTaskCompletionSource.SetResult(true);
 
-                    await request.ReadHttp2BodyTaskCompletionSource.Task;
+                    await tcs.Task;
                 }
                 else
                 {
@@ -158,12 +160,14 @@ namespace Titanium.Web.Proxy.EventArguments
                 if (response.HttpVersion == HttpHeader.Version20)
                 {
                     response.Http2BodyData = new MemoryStream();
-                    response.ReadHttp2BodyTaskCompletionSource = new TaskCompletionSource<bool>();
+
+                    var tcs = new TaskCompletionSource<bool>();
+                    response.ReadHttp2BodyTaskCompletionSource = tcs;
                     
                     // signal to HTTP/2 copy frame method to continue
                     ReadHttp2BodyTaskCompletionSource.SetResult(true);
 
-                    await response.ReadHttp2BodyTaskCompletionSource.Task;
+                    await tcs.Task;
                 }
                 else
                 {
