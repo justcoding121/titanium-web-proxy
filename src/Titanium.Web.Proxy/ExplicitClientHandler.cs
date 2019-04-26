@@ -47,8 +47,7 @@ namespace Titanium.Web.Proxy
             {
                 string connectHostname = null;
                 TunnelConnectSessionEventArgs connectArgs = null;
-
-
+                
                 // Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
                 if (await HttpHelper.IsConnectMethod(clientStream) == 1)
                 {
@@ -142,15 +141,22 @@ namespace Titanium.Web.Proxy
                         if (alpn != null && alpn.Contains(SslApplicationProtocol.Http2))
                         {
                             // test server HTTP/2 support
-                            // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
-                            var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs,
-                                                    isConnect: true, applicationProtocols: SslExtensions.Http2ProtocolAsList,
-                                                    noCache: true, cancellationToken: cancellationToken);
+                            try
+                            {
+                                // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
+                                var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs,
+                                    isConnect: true, applicationProtocols: SslExtensions.Http2ProtocolAsList,
+                                    noCache: true, cancellationToken: cancellationToken);
 
-                            http2Supported = connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
-
-                            //release connection back to pool instead of closing when connection pool is enabled.
-                            await tcpConnectionFactory.Release(connection, true);
+                                http2Supported = connection.NegotiatedApplicationProtocol ==
+                                                 SslApplicationProtocol.Http2;
+                                //release connection back to pool instead of closing when connection pool is enabled.
+                                await tcpConnectionFactory.Release(connection, true);
+                            }
+                            catch (Exception ex)
+                            {
+                                // ignore
+                            }
                         }
 
                         if (EnableTcpServerConnectionPrefetch)

@@ -36,13 +36,20 @@
         </ListView>
         <TabControl Grid.Column="2" Grid.Row="0">
             <TabItem Header="Session">
-                <Grid Background="Red" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                     <Grid.RowDefinitions>
                         <RowDefinition />
                         <RowDefinition />
                     </Grid.RowDefinitions>
                     <TextBox x:Name="TextBoxRequest" Grid.Row="0" />
-                    <TextBox x:Name="TextBoxResponse" Grid.Row="1" />
+                    <TabControl Grid.Row="1">
+                        <TabItem Header="Text">
+                            <TextBox x:Name="TextBoxResponse" />
+                        </TabItem>
+                        <TabItem Header="Image">
+                            <Image x:Name="ImageResponse" HorizontalAlignment="Center"  VerticalAlignment="Center" Stretch="None" />
+                        </TabItem>
+                    </TabControl>
                 </Grid>
             </TabItem>
         </TabControl>

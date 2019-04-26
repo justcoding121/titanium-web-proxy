@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -8,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -297,7 +299,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             var session = SelectedSession.HttpClient;
             var request = session.Request;
-            var data = (request.IsBodyRead ? request.Body : null) ?? new byte[0];
+            var fullData = (request.IsBodyRead ? request.Body : null) ?? new byte[0];
+            var data = fullData;
             bool truncated = data.Length > truncateLimit;
             if (truncated)
             {
@@ -313,7 +316,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             TextBoxRequest.Text = sb.ToString();
 
             var response = session.Response;
-            data = (response.IsBodyRead ? response.Body : null) ?? new byte[0];
+            fullData = (response.IsBodyRead ? response.Body : null) ?? new byte[0];
+            data = fullData;
             truncated = data.Length > truncateLimit;
             if (truncated)
             {
@@ -333,6 +337,19 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             }
 
             TextBoxResponse.Text = sb.ToString();
+
+            try
+            {
+                using (MemoryStream stream = new MemoryStream(fullData))
+                {
+                    ImageResponse.Source =
+                        BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+                }
+            }
+            catch
+            {
+                ImageResponse.Source = null;
+            }
         }
     }
 }
