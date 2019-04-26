@@ -649,6 +649,7 @@ namespace StreamExtended.Network
         {
             return baseStream.BeginWrite(buffer, offset, count, callback, state);
         }
+
         public override void EndWrite(IAsyncResult asyncResult)
         {
             baseStream.EndWrite(asyncResult);
