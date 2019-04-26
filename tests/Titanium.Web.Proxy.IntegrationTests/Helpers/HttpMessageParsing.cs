@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 RequestResponseBase request = new Request()
                 {
                     Method = method,
-                    OriginalUrl = url,
+                    RequestUriString = url,
                     HttpVersion = version
                 };
                 while (!string.IsNullOrEmpty(line = reader.ReadLine()))

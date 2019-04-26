@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.Helpers
         internal async Task WriteRequestAsync(Request request, bool flush = true,
             CancellationToken cancellationToken = default)
         {
-            await WriteLineAsync(Request.CreateRequestLine(request.Method, request.OriginalUrl, request.HttpVersion),
+            await WriteLineAsync(Request.CreateRequestLine(request.Method, request.RequestUriString, request.HttpVersion),
                 cancellationToken);
             await WriteAsync(request, flush, cancellationToken);
         }

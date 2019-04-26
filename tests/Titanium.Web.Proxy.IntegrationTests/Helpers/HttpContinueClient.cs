@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             var request = new Request
             {
                 Method = "POST",
-                OriginalUrl = "/",
+                RequestUriString = "/",
                 HttpVersion = new Version(1, 1)
             };
             request.Headers.AddHeader(KnownHeaders.Host, server);
