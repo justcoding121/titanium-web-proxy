@@ -39,14 +39,19 @@ namespace Titanium.Web.Proxy.Http2
             CancellationTokenSource cancellationTokenSource, Guid connectionId,
             ExceptionHandler exceptionFunc)
         {
+            var clientSettings = new Http2Settings();
+            var serverSettings = new Http2Settings();
+            ;
             var sessions = new ConcurrentDictionary<int, SessionEventArgs>();
 
             // Now async relay all server=>client & client=>server data
             var sendRelay =
-                copyHttp2FrameAsync(clientStream, serverStream, onDataSend, sessionFactory, sessions, onBeforeRequest, 
+                copyHttp2FrameAsync(clientStream, serverStream, onDataSend, clientSettings, serverSettings, 
+                    sessionFactory, sessions, onBeforeRequest, 
                     bufferSize, connectionId, true, cancellationTokenSource.Token, exceptionFunc);
             var receiveRelay =
-                copyHttp2FrameAsync(serverStream, clientStream, onDataReceive, sessionFactory, sessions, onBeforeResponse, 
+                copyHttp2FrameAsync(serverStream, clientStream, onDataReceive, serverSettings, clientSettings, 
+                    sessionFactory, sessions, onBeforeResponse, 
                     bufferSize, connectionId, false, cancellationTokenSource.Token, exceptionFunc);
 
             await Task.WhenAny(sendRelay, receiveRelay);
@@ -56,15 +61,17 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         private static async Task copyHttp2FrameAsync(Stream input, Stream output, Action<byte[], int, int> onCopy,
+            Http2Settings localSettings, Http2Settings remoteSettings,
             Func<SessionEventArgs> sessionFactory, ConcurrentDictionary<int, SessionEventArgs>  sessions, 
             Func<SessionEventArgs, Task> onBeforeRequestResponse,
             int bufferSize, Guid connectionId, bool isClient, CancellationToken cancellationToken,
             ExceptionHandler exceptionFunc)
         {
-            var decoder = new Decoder(8192, 4096 * 16);
+            int headerTableSize = 0;
+            Decoder decoder = null;
 
             var headerBuffer = new byte[9];
-            var buffer = new byte[32768];
+            byte[] buffer = null;
             while (true)
             {
                 int read = await forceRead(input, headerBuffer, 0, 9, cancellationToken);
@@ -79,6 +86,11 @@ namespace Titanium.Web.Proxy.Http2
                 byte flags = headerBuffer[4];
                 int streamId = ((headerBuffer[5] & 0x7f) << 24) + (headerBuffer[6] << 16) + (headerBuffer[7] << 8) +
                                headerBuffer[8];
+
+                if (buffer == null || buffer.Length < localSettings.MaxFrameSize)
+                {
+                    buffer = new byte[localSettings.MaxFrameSize];
+                }
 
                 read = await forceRead(input, buffer, 0, length, cancellationToken);
                 onCopy(buffer, 0, read);
@@ -145,7 +157,7 @@ namespace Titanium.Web.Proxy.Http2
                         }
                     }   
                 }
-                else if (type == 1 /*headers*/)
+                else if (type == 1 /* headers */)
                 {
                     bool endHeaders = (flags & (int)Http2FrameFlag.EndHeaders) != 0;
                     bool padded = (flags & (int)Http2FrameFlag.Padded) != 0;
@@ -181,12 +193,17 @@ namespace Titanium.Web.Proxy.Http2
                         });
                     try
                     {
-                        lock (decoder)
+                        // recreate the decoder when new value is bigger
+                        // should we recreate when smaller, too?
+                        if (decoder == null || headerTableSize < localSettings.HeaderTableSize)
                         {
-                            decoder.Decode(new BinaryReader(new MemoryStream(buffer, offset, dataLength)),
-                                headerListener);
-                            decoder.EndHeaderBlock();
+                            headerTableSize = localSettings.HeaderTableSize;
+                            decoder = new Decoder(8192, headerTableSize);
                         }
+
+                        decoder.Decode(new BinaryReader(new MemoryStream(buffer, offset, dataLength)),
+                            headerListener);
+                        decoder.EndHeaderBlock();
 
                         if (isClient)
                         {
@@ -223,6 +240,53 @@ namespace Titanium.Web.Proxy.Http2
                         }
 
                         rr.Locked = true;
+                    }
+                }
+                else if (type == 4 /* settings */)
+                {
+                    if (length % 6 != 0)
+                    {
+                        // https://httpwg.org/specs/rfc7540.html#SETTINGS
+                        // 6.5. SETTINGS
+                        // A SETTINGS frame with a length other than a multiple of 6 octets MUST be treated as a connection error (Section 5.4.1) of type FRAME_SIZE_ERROR
+                        throw new ProxyHttpException("Invalid settings length", null, null);
+                    }
+
+                    int pos = 0;
+                    while (pos < length)
+                    {
+                        int identifier = (buffer[pos++] << 8) + buffer[pos++];
+                        int value = (buffer[pos++] << 24) + (buffer[pos++] << 16) + (buffer[pos++] << 8) + buffer[pos++];
+                        if (identifier == 1 /*SETTINGS_HEADER_TABLE_SIZE*/)
+                        {
+                            //System.Diagnostics.Debug.WriteLine("HEADER SIZE CONN: " + connectionId + ", CLIENT: " + isClient + ", value: " + value);
+                            remoteSettings.HeaderTableSize = value;
+                        }
+                        else if (identifier == 5 /*SETTINGS_MAX_FRAME_SIZE*/)
+                        {
+                            remoteSettings.MaxFrameSize = value;
+                        }
+                    }
+                }
+
+                if (type == 3 /* rst_stream */)
+                {
+                    int errorCode = (buffer[0] << 24) + (buffer[1] << 16) + (buffer[2] << 8) + buffer[3];
+                    if (streamId == 0)
+                    {
+                        // connection error
+                        exceptionFunc(new ProxyHttpException("HTTP/2 connection error. Error code: " + errorCode, null, args));
+                        return;
+                    }
+                    else
+                    {
+                        // stream error
+                        sessions.TryRemove(streamId, out _);
+
+                        if (errorCode != 8 /*cancel*/)
+                        {
+                            exceptionFunc(new ProxyHttpException("HTTP/2 stream error. Error code: " + errorCode, null, args));
+                        }
                     }
                 }
 
@@ -267,6 +331,14 @@ namespace Titanium.Web.Proxy.Http2
             }
 
             return totalRead;
+        }
+
+
+        class Http2Settings
+        {
+            public int HeaderTableSize { get; set; } = 4096;
+
+            public int MaxFrameSize { get; set; } = 16384;
         }
 
         class MyHeaderListener : IHeaderListener
