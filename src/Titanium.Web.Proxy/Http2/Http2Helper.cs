@@ -41,7 +41,7 @@ namespace Titanium.Web.Proxy.Http2
         {
             var clientSettings = new Http2Settings();
             var serverSettings = new Http2Settings();
-            ;
+
             var sessions = new ConcurrentDictionary<int, SessionEventArgs>();
 
             // Now async relay all server=>client & client=>server data
