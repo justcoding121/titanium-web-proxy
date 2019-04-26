@@ -153,7 +153,7 @@ namespace Titanium.Web.Proxy
                                 //release connection back to pool instead of closing when connection pool is enabled.
                                 await tcpConnectionFactory.Release(connection, true);
                             }
-                            catch (Exception ex)
+                            catch (Exception)
                             {
                                 // ignore
                             }
