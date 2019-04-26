@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -48,6 +49,12 @@ namespace Titanium.Web.Proxy.Http
         ///     We need this detail to syphon out attached tcp connection for reuse.
         /// </summary>
         internal string OriginalContentEncoding { get; set; }
+
+        internal TaskCompletionSource<bool> ReadHttp2BeforeHandlerTaskCompletionSource;
+
+        internal TaskCompletionSource<bool> ReadHttp2BodyTaskCompletionSource;
+
+        internal MemoryStream Http2BodyData;
 
         /// <summary>
         ///     Keeps the body data after the session is finished.

@@ -89,13 +89,28 @@ namespace Titanium.Web.Proxy.EventArguments
             // If not already read (not cached yet)
             if (!request.IsBodyRead)
             {
-                var body = await readBodyAsync(true, cancellationToken);
-                request.Body = body;
+                if (request.HttpVersion == HttpHeader.Version20)
+                {
+                    request.Http2BodyData = new MemoryStream();
 
-                // Now set the flag to true
-                // So that next time we can deliver body from cache
-                request.IsBodyRead = true;
-                OnDataSent(body, 0, body.Length);
+                    var tcs = new TaskCompletionSource<bool>();
+                    request.ReadHttp2BodyTaskCompletionSource = tcs;
+
+                    // signal to HTTP/2 copy frame method to continue
+                    request.ReadHttp2BeforeHandlerTaskCompletionSource.SetResult(true);
+
+                    await tcs.Task;
+                }
+                else
+                {
+                    var body = await readBodyAsync(true, cancellationToken);
+                    request.Body = body;
+
+                    // Now set the flag to true
+                    // So that next time we can deliver body from cache
+                    request.IsBodyRead = true;
+                    OnDataSent(body, 0, body.Length);
+                }
             }
         }
 
@@ -140,13 +155,28 @@ namespace Titanium.Web.Proxy.EventArguments
             // If not already read (not cached yet)
             if (!response.IsBodyRead)
             {
-                var body = await readBodyAsync(false, cancellationToken);
-                response.Body = body;
+                if (response.HttpVersion == HttpHeader.Version20)
+                {
+                    response.Http2BodyData = new MemoryStream();
 
-                // Now set the flag to true
-                // So that next time we can deliver body from cache
-                response.IsBodyRead = true;
-                OnDataReceived(body, 0, body.Length);
+                    var tcs = new TaskCompletionSource<bool>();
+                    response.ReadHttp2BodyTaskCompletionSource = tcs;
+
+                    // signal to HTTP/2 copy frame method to continue
+                    response.ReadHttp2BeforeHandlerTaskCompletionSource.SetResult(true);
+
+                    await tcs.Task;
+                }
+                else
+                {
+                    var body = await readBodyAsync(false, cancellationToken);
+                    response.Body = body;
+
+                    // Now set the flag to true
+                    // So that next time we can deliver body from cache
+                    response.IsBodyRead = true;
+                    OnDataReceived(body, 0, body.Length);
+                }
             }
         }
 
