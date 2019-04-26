@@ -63,7 +63,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             if (!int.TryParse(chunkHead, NumberStyles.HexNumber, null, out int chunkSize))
             {
-                throw new ProxyHttpException($"Invalid chunk length: '{chunkSize}'", null, null);
+                throw new ProxyHttpException($"Invalid chunk length: '{chunkHead}'", null, null);
             }
 
             bytesRemaining = chunkSize;
