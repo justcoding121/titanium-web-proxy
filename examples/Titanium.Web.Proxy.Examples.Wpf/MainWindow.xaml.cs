@@ -101,7 +101,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             InitializeComponent();
         }
 
-        public ObservableCollection<SessionListItem> Sessions { get; } = new ObservableCollection<SessionListItem>();
+        public ObservableCollectionEx<SessionListItem> Sessions { get; } = new ObservableCollectionEx<SessionListItem>();
 
         public SessionListItem SelectedSession
         {
@@ -280,11 +280,14 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             if (e.Key == Key.Delete)
             {
                 var selectedItems = ((ListView)sender).SelectedItems;
+                Sessions.SuppressNotification = true;
                 foreach (var item in selectedItems.Cast<SessionListItem>().ToArray())
                 {
                     Sessions.Remove(item);
                     sessionDictionary.Remove(item.HttpClient);
                 }
+
+                Sessions.SuppressNotification = false;
             }
         }
 
