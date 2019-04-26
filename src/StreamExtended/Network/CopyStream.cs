@@ -36,6 +36,7 @@ namespace StreamExtended.Network
             this.writer = writer;
             BufferSize = bufferSize;
             buffer = bufferPool.GetBuffer(bufferSize);
+            this.bufferPool = bufferPool;
         }
 
         public async Task<bool> FillBufferAsync(CancellationToken cancellationToken = default(CancellationToken))
