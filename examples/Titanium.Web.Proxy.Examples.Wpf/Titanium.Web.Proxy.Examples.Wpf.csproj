@@ -92,6 +92,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="ObservableCollectionEx.cs" />
     <Compile Include="Properties\Annotations.cs" />
     <Compile Include="SessionListItem.cs" />
     <Page Include="MainWindow.xaml">
