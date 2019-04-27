@@ -56,6 +56,15 @@ namespace Titanium.Web.Proxy.Http
 
         internal MemoryStream Http2BodyData;
 
+        internal bool Http2IgnoreBodyFrames;
+
+        internal Task Http2BeforeHandlerTask;
+
+        /// <summary>
+        ///     Priority used only in HTTP/2
+        /// </summary>
+        internal long? Priority;
+
         /// <summary>
         ///     Keeps the body data after the session is finished.
         /// </summary>
@@ -200,6 +209,8 @@ namespace Titanium.Web.Proxy.Http
         ///     Also if user set this as a custom response then this should be true.
         /// </summary>
         internal bool Locked { get; set; }
+
+        internal bool BodyAvailable => BodyInternal != null;
 
         internal abstract void EnsureBodyAvailable(bool throwWhenNotReadYet = true);
 

@@ -2,10 +2,12 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Http;
@@ -128,10 +130,16 @@ namespace Titanium.Web.Proxy.Http2
                 //System.Diagnostics.Debug.WriteLine("CONN: " + connectionId + ", CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
                 if (type == 0 /* data */)
                 {
+                    bool padded = (flags & (int)Http2FrameFlag.Padded) != 0;
                     bool endStreamFlag = (flags & (int)Http2FrameFlag.EndStream) != 0;
                     if (endStreamFlag)
                     {
                         endStream = true;
+                    }
+
+                    if (rr.Http2IgnoreBodyFrames)
+                    {
+                        sendPacket = false;
                     }
 
                     if (rr.ReadHttp2BodyTaskCompletionSource != null)
@@ -139,11 +147,39 @@ namespace Titanium.Web.Proxy.Http2
                         // Get body method was called in the "before" event handler
 
                         var data = rr.Http2BodyData;
-                        data.Write(buffer, 0, length);
+                        int offset = 0;
+                        if (padded)
+                        {
+                            offset++;
+                            length--;
+                            length -= buffer[0];
+                        }
+
+                        data.Write(buffer, offset, length);
 
                         if (endStream)
                         {
-                            rr.Body = data.ToArray();
+                            var body = data.ToArray();
+
+                            if (rr.ContentEncoding != null)
+                            {
+                                using (var ms = new MemoryStream())
+                                {
+                                    using (var zip =
+                                        DecompressionFactory.Create(rr.ContentEncoding, new MemoryStream(body)))
+                                    {
+                                        zip.CopyTo(ms);
+                                    }
+
+                                    body = ms.ToArray();
+                                }
+                            }
+
+                            if (!rr.BodyAvailable)
+                            {
+                                rr.Body = body;
+                            }
+
                             rr.IsBodyRead = true;
 
                             var tcs = rr.ReadHttp2BodyTaskCompletionSource;
@@ -155,8 +191,15 @@ namespace Titanium.Web.Proxy.Http2
                             }
 
                             rr.Http2BodyData = null;
+
+                            if (rr.Http2BeforeHandlerTask != null)
+                            {
+                                await rr.Http2BeforeHandlerTask;
+                            }
+
+                            await sendBody(remoteSettings, rr, headerBuffer, buffer, output);
                         }
-                    }   
+                    }
                 }
                 else if (type == 1 /* headers */)
                 {
@@ -173,11 +216,14 @@ namespace Titanium.Web.Proxy.Http2
                     if (padded)
                     {
                         offset = 1;
+                        breakpoint();
                     }
                     
                     if (priority)
                     {
-                        offset += 5;
+                        var priorityData = ((long)buffer[offset++] << 32) + ((long)buffer[offset++] << 24) + 
+                                       (buffer[offset++] << 16) + (buffer[offset++] << 8) + buffer[offset++];
+                        rr.Priority = priorityData;
                     }
 
                     int dataLength = length - offset;
@@ -212,6 +258,7 @@ namespace Titanium.Web.Proxy.Http2
                             request.HttpVersion = HttpVersion.Version20;
                             request.Method = headerListener.Method;
                             request.OriginalUrl = headerListener.Path;
+
                             request.RequestUri = headerListener.GetUri();
                         }
                         else
@@ -227,91 +274,43 @@ namespace Titanium.Web.Proxy.Http2
                         exceptionFunc(new ProxyHttpException("Failed to decode HTTP/2 headers", ex, args));
                     }
 
+                    if (!endHeaders)
+                    {
+                        breakpoint();
+                    }
+
                     if (endHeaders)
                     {
                         var tcs = new TaskCompletionSource<bool>();
                         rr.ReadHttp2BeforeHandlerTaskCompletionSource = tcs;
 
                         var handler = onBeforeRequestResponse(args);
+                        rr.Http2BeforeHandlerTask = handler;
 
                         if (handler == await Task.WhenAny(tcs.Task, handler))
                         {
                             rr.ReadHttp2BeforeHandlerTaskCompletionSource = null;
                             tcs.SetResult(true);
-                        }
-
-                        rr.Locked = true;
-
-                        var encoder = new Encoder(remoteSettings.HeaderTableSize);
-                        var ms = new MemoryStream();
-                        var writer = new BinaryWriter(ms);
-                        if (priority)
-                        {
-                            writer.Write(buffer, padded ? 1 : 0, 5);
-                        }
-
-                        if (isClient)
-                        {
-                            var request = (Request)rr;
-                            encoder.EncodeHeader(writer, ":method", request.Method);
-                            encoder.EncodeHeader(writer, ":authority", request.RequestUri.Host);
-                            encoder.EncodeHeader(writer, ":scheme", request.RequestUri.Scheme);
-                            encoder.EncodeHeader(writer, ":path", request.RequestUriString, false,
-                                HpackUtil.IndexType.None, false);
+                            await sendHeader(remoteSettings, headerBuffer, rr, endStream, output);
                         }
                         else
                         {
-                            var response = (Response)rr;
-                            encoder.EncodeHeader(writer, ":status", response.StatusCode.ToString());
+                            rr.Http2IgnoreBodyFrames = true;
                         }
 
-                        foreach (var header in rr.Headers)
-                        {
-                            encoder.EncodeHeader(writer, header.Name.ToLower(), header.Value);
-                        }
-
-                        var data = ms.ToArray();
-                        int newLength = data.Length;
-                        //if (newLength == length)
-                        //{
-                        //    var x = data;
-                        //    for (int i = 0; i < x.Length; i++)
-                        //    {
-                        //        if (i >= buffer.Length || buffer[i] != x[i])
-                        //        {
-                        //            ;
-                        //        }
-                        //    }
-                        //}
-
-                        headerBuffer[0] = (byte)((newLength >> 16) & 0xff);
-                        headerBuffer[1] = (byte)((newLength >> 8) & 0xff);
-                        headerBuffer[2] = (byte)(newLength & 0xff);
-
-                        if (padded)
-                        {
-                            // clear the padding flag
-                            headerBuffer[4] = (byte)(flags & ~((int)Http2FrameFlag.Padded));
-                        }
-
-                        //var headerListener2 = new MyHeaderListener2(
-                        //    (name, value) =>
-                        //    {
-                        //        System.Diagnostics.Debug.WriteLine("LL: " + name + ": " + value);
-                        //    });
-
-                        //var decoder2 = new Decoder(8192, headerTableSize);
-
-                        //decoder2.Decode(new BinaryReader(new MemoryStream(buffer, offset, dataLength)),
-                        //    headerListener2);
-                        //decoder2.EndHeaderBlock();
-
-
-                        await output.WriteAsync(headerBuffer, 0, headerBuffer.Length /*, cancellationToken*/);
-                        await output.WriteAsync(data, 0, data.Length /*, cancellationToken*/);
+                        rr.Locked = true;
                     }
 
                     sendPacket = false;
+                }
+                else if (type == 5 /* push_promise */)
+                {
+                    breakpoint();
+                }
+                else if (type == 9 /* continuation */)
+                {
+                    // todo: implementing this type is mandatory for multi-part headers
+                    breakpoint();
                 }
                 else if (type == 4 /* settings */)
                 {
@@ -384,6 +383,105 @@ namespace Titanium.Web.Proxy.Http2
                     fs.Write(headerBuffer, 0, headerBuffer.Length);
                     fs.Write(buffer, 0, length);
                 }*/
+            }
+        }
+
+        [Conditional("DEBUG")]
+        private static void breakpoint()
+        {
+            // when this method is called something received which is not yet implemented
+            ;
+        }
+
+        private static async Task sendHeader(Http2Settings settings, byte[] headerBuffer, RequestResponseBase rr, bool endStream, Stream output)
+        {
+            var encoder = new Encoder(settings.HeaderTableSize);
+            var ms = new MemoryStream();
+            var writer = new BinaryWriter(ms);
+            if (rr.Priority.HasValue)
+            {
+                long p = rr.Priority.Value;
+                writer.Write((byte)((p >> 32) & 0xff));
+                writer.Write((byte)((p >> 24) & 0xff));
+                writer.Write((byte)((p >> 16) & 0xff));
+                writer.Write((byte)((p >> 8) & 0xff));
+                writer.Write((byte)(p & 0xff));
+            }
+
+            if (rr is Request request)
+            {
+                encoder.EncodeHeader(writer, ":method", request.Method);
+                encoder.EncodeHeader(writer, ":authority", request.RequestUri.Host);
+                encoder.EncodeHeader(writer, ":scheme", request.RequestUri.Scheme);
+                encoder.EncodeHeader(writer, ":path", request.RequestUriString, false,
+                    HpackUtil.IndexType.None, false);
+            }
+            else
+            {
+                var response = (Response)rr;
+                encoder.EncodeHeader(writer, ":status", response.StatusCode.ToString());
+            }
+
+            foreach (var header in rr.Headers)
+            {
+                encoder.EncodeHeader(writer, header.Name.ToLower(), header.Value);
+            }
+
+            var data = ms.ToArray();
+            int newLength = data.Length;
+
+            headerBuffer[0] = (byte)((newLength >> 16) & 0xff);
+            headerBuffer[1] = (byte)((newLength >> 8) & 0xff);
+            headerBuffer[2] = (byte)(newLength & 0xff);
+            headerBuffer[3] = 1; // type: header
+
+            int flags = (int)Http2FrameFlag.EndHeaders;
+            if (endStream)
+            {
+                flags |= (int)Http2FrameFlag.EndStream;
+            }
+
+            if (rr.Priority.HasValue)
+            {
+                flags |= (int)Http2FrameFlag.Priority;
+            }
+
+            headerBuffer[4] = (byte)flags;
+
+            // clear the padding flag
+            //headerBuffer[4] = (byte)(flags & ~((int)Http2FrameFlag.Padded));
+
+            // send the header
+            await output.WriteAsync(headerBuffer, 0, headerBuffer.Length /*, cancellationToken*/);
+            await output.WriteAsync(data, 0, data.Length /*, cancellationToken*/);
+        }
+
+        private static async Task sendBody(Http2Settings settings, RequestResponseBase rr, byte[] headerBuffer, byte[] buffer, Stream output)
+        {
+            var body = rr.CompressBodyAndUpdateContentLength();
+            await sendHeader(settings, headerBuffer, rr, !(rr.HasBody && rr.IsBodyRead), output);
+
+            if (rr.HasBody && rr.IsBodyRead)
+            {
+                int pos = 0;
+                while (pos < body.Length)
+                {
+                    int bodyFrameLength = Math.Min(buffer.Length, body.Length - pos);
+                    Buffer.BlockCopy(body, pos, buffer, 0, bodyFrameLength);
+                    pos += bodyFrameLength;
+
+                    headerBuffer[0] = (byte)((bodyFrameLength >> 16) & 0xff);
+                    headerBuffer[1] = (byte)((bodyFrameLength >> 8) & 0xff);
+                    headerBuffer[2] = (byte)(bodyFrameLength & 0xff);
+                    headerBuffer[3] = 0; // type: data
+                    headerBuffer[4] = pos < body.Length ? (byte)0 : (byte)(int)Http2FrameFlag.EndStream;
+                    await output.WriteAsync(headerBuffer, 0, headerBuffer.Length /*, cancellationToken*/);
+                    await output.WriteAsync(buffer, 0, bodyFrameLength /*, cancellationToken*/);
+                }
+            }
+            else
+            {
+                ;
             }
         }
 

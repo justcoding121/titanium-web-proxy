@@ -159,6 +159,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             //{
             //}
 
+            //if (!e.HttpClient.Request.RequestUri.ToString().Contains("/mail/u/"))
+            //    return;
+
             if (e.HttpClient.Request.HasBody)
             {
                 e.HttpClient.Request.KeepBody = true;
@@ -177,7 +180,10 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 }
             });
 
-            e.HttpClient.Response.Headers.AddHeader("X-Titanium-Header", "HTTP/2 works");
+            //e.SetResponseBody(Encoding.ASCII.GetBytes("TITANIUMMMM!!!!"));
+            //if (!e.HttpClient.Request.RequestUri.ToString().Contains("/mail/u/"))
+            //    return;
+            //e.HttpClient.Response.Headers.AddHeader("X-Titanium-Header", "HTTP/2 works");
 
             //if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Http2)
             //{
