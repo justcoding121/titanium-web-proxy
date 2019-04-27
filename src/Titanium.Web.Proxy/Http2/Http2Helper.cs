@@ -99,6 +99,7 @@ namespace Titanium.Web.Proxy.Http2
                     return;
                 }
 
+                bool sendPacket = true;
                 bool endStream = false;
 
                 SessionEventArgs args = null;
@@ -210,7 +211,7 @@ namespace Titanium.Web.Proxy.Http2
                             var request = args.HttpClient.Request;
                             request.HttpVersion = HttpVersion.Version20;
                             request.Method = headerListener.Method;
-                            request.OriginalUrl = headerListener.Status;
+                            request.OriginalUrl = headerListener.Path;
                             request.RequestUri = headerListener.GetUri();
                         }
                         else
@@ -240,7 +241,77 @@ namespace Titanium.Web.Proxy.Http2
                         }
 
                         rr.Locked = true;
+
+                        var encoder = new Encoder(remoteSettings.HeaderTableSize);
+                        var ms = new MemoryStream();
+                        var writer = new BinaryWriter(ms);
+                        if (priority)
+                        {
+                            writer.Write(buffer, padded ? 1 : 0, 5);
+                        }
+
+                        if (isClient)
+                        {
+                            var request = (Request)rr;
+                            encoder.EncodeHeader(writer, ":method", request.Method);
+                            encoder.EncodeHeader(writer, ":authority", request.RequestUri.Host);
+                            encoder.EncodeHeader(writer, ":scheme", request.RequestUri.Scheme);
+                            encoder.EncodeHeader(writer, ":path", request.RequestUriString, false,
+                                HpackUtil.IndexType.None, false);
+                        }
+                        else
+                        {
+                            var response = (Response)rr;
+                            encoder.EncodeHeader(writer, ":status", response.StatusCode.ToString());
+                        }
+
+                        foreach (var header in rr.Headers)
+                        {
+                            encoder.EncodeHeader(writer, header.Name.ToLower(), header.Value);
+                        }
+
+                        var data = ms.ToArray();
+                        int newLength = data.Length;
+                        //if (newLength == length)
+                        //{
+                        //    var x = data;
+                        //    for (int i = 0; i < x.Length; i++)
+                        //    {
+                        //        if (i >= buffer.Length || buffer[i] != x[i])
+                        //        {
+                        //            ;
+                        //        }
+                        //    }
+                        //}
+
+                        headerBuffer[0] = (byte)((newLength >> 16) & 0xff);
+                        headerBuffer[1] = (byte)((newLength >> 8) & 0xff);
+                        headerBuffer[2] = (byte)(newLength & 0xff);
+
+                        if (padded)
+                        {
+                            // clear the padding flag
+                            headerBuffer[4] = (byte)(flags & ~((int)Http2FrameFlag.Padded));
+                        }
+
+                        //var headerListener2 = new MyHeaderListener2(
+                        //    (name, value) =>
+                        //    {
+                        //        System.Diagnostics.Debug.WriteLine("LL: " + name + ": " + value);
+                        //    });
+
+                        //var decoder2 = new Decoder(8192, headerTableSize);
+
+                        //decoder2.Decode(new BinaryReader(new MemoryStream(buffer, offset, dataLength)),
+                        //    headerListener2);
+                        //decoder2.EndHeaderBlock();
+
+
+                        await output.WriteAsync(headerBuffer, 0, headerBuffer.Length /*, cancellationToken*/);
+                        await output.WriteAsync(data, 0, data.Length /*, cancellationToken*/);
                     }
+
+                    sendPacket = false;
                 }
                 else if (type == 4 /* settings */)
                 {
@@ -296,9 +367,12 @@ namespace Titanium.Web.Proxy.Http2
                     //System.Diagnostics.Debug.WriteLine("REMOVED CONN: " + connectionId + ", CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
                 }
 
-                // do not cancel the write operation
-                await output.WriteAsync(headerBuffer, 0, headerBuffer.Length/*, cancellationToken*/);
-                await output.WriteAsync(buffer, 0, length/*, cancellationToken*/);
+                if (sendPacket)
+                {
+                    // do not cancel the write operation
+                    await output.WriteAsync(headerBuffer, 0, headerBuffer.Length /*, cancellationToken*/);
+                    await output.WriteAsync(buffer, 0, length /*, cancellationToken*/);
+                }
 
                 if (cancellationToken.IsCancellationRequested)
                 {

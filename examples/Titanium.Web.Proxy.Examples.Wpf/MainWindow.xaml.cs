@@ -177,6 +177,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 }
             });
 
+            e.HttpClient.Response.Headers.AddHeader("X-Titanium-Header", "HTTP/2 works");
+
             //if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Http2)
             //{
             //}

@@ -154,7 +154,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             new HttpHeader("WWW-Authenticate", string.Empty)
         };
 
-        private static readonly Dictionary<string, int> staticIndexByName = CreateMap();
+        private static readonly Dictionary<string, int> staticIndexByName = createMap();
 
         /// <summary>
         /// The number of header fields in the static table.
@@ -180,12 +180,12 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <param name="name">Name.</param>
         public static int GetIndex(string name)
         {
-            if (!staticIndexByName.ContainsKey(name))
+            if (!staticIndexByName.TryGetValue(name, out int index))
             {
                 return -1;
             }
 
-            return staticIndexByName[name];
+            return index;
         }
 
         /// <summary>
@@ -207,7 +207,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             while (index <= Length)
             {
                 var entry = Get(index);
-                if (!HpackUtil.Equals(name, entry.Name))
+                if (!name.Equals(entry.Name, StringComparison.OrdinalIgnoreCase))
                 {
                     break;
                 }
@@ -227,7 +227,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// create a map of header name to index value to allow quick lookup
         /// </summary>
         /// <returns>The map.</returns>
-        private static Dictionary<string, int> CreateMap()
+        private static Dictionary<string, int> createMap()
         {
             int length = staticTable.Count;
             var ret = new Dictionary<string, int>(length);
@@ -237,7 +237,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             for (int index = length; index > 0; index--)
             {
                 var entry = Get(index);
-                string name = entry.Name;
+                string name = entry.Name.ToLower();
                 ret[name] = index;
             }
 
