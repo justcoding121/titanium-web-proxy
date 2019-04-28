@@ -29,6 +29,11 @@ namespace Titanium.Web.Proxy.EventArguments
         private bool reRequest;
 
         /// <summary>
+        ///     Is this session a HTTP/2 promise?
+        /// </summary>
+        public bool IsPromise { get; internal set; }
+
+        /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
         internal SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint,
