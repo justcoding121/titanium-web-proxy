@@ -62,7 +62,7 @@ namespace Titanium.Web.Proxy.Http2
             int headerTableSize = 0;
             Decoder decoder = null;
 
-            Http2FrameHeader frameHeader = new Http2FrameHeader();
+            var frameHeader = new Http2FrameHeader();
             frameHeader.Buffer = new byte[9];
             byte[] buffer = null;
             while (true)
@@ -102,20 +102,20 @@ namespace Titanium.Web.Proxy.Http2
                 bool endStream = false;
 
                 SessionEventArgs args = null;
-                RequestResponseBase rr;
-                if (type == Http2FrameType.Data || type == Http2FrameType.Headers || type == Http2FrameType.PushPromise)
+                RequestResponseBase rr = null;
+                if (type == Http2FrameType.Data || type == Http2FrameType.Headers/* || type == Http2FrameType.PushPromise*/)
                 {
                     if (!sessions.TryGetValue(streamId, out args))
                     {
-                        if (type == Http2FrameType.Data)
-                        {
-                            throw new ProxyHttpException("HTTP Body data received before any header frame.", null, args);
-                        }
+                        //if (type == Http2FrameType.Data)
+                        //{
+                        //    throw new ProxyHttpException("HTTP Body data received before any header frame.", null, args);
+                        //}
 
-                        if (type == Http2FrameType.Headers && !isClient)
-                        {
-                            throw new ProxyHttpException("HTTP Response received before any Request header frame.", null, args);
-                        }
+                        //if (type == Http2FrameType.Headers && !isClient)
+                        //{
+                        //    throw new ProxyHttpException("HTTP Response received before any Request header frame.", null, args);
+                        //}
 
                         if (type == Http2FrameType.PushPromise && isClient)
                         {
@@ -125,7 +125,7 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 //System.Diagnostics.Debug.WriteLine("CONN: " + connectionId + ", CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
-                if (type == Http2FrameType.Data)
+                if (type == Http2FrameType.Data && args != null)
                 {
                     rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
 
@@ -155,54 +155,6 @@ namespace Titanium.Web.Proxy.Http2
                         }
 
                         data.Write(buffer, offset, length);
-
-                        if (endStream)
-                        {
-                            var body = data.ToArray();
-
-                            if (rr.ContentEncoding != null)
-                            {
-                                using (var ms = new MemoryStream())
-                                {
-                                    using (var zip =
-                                        DecompressionFactory.Create(rr.ContentEncoding, new MemoryStream(body)))
-                                    {
-                                        zip.CopyTo(ms);
-                                    }
-
-                                    body = ms.ToArray();
-                                }
-                            }
-
-                            if (!rr.BodyAvailable)
-                            {
-                                rr.Body = body;
-                            }
-
-                            rr.IsBodyRead = true;
-
-                            var tcs = rr.ReadHttp2BodyTaskCompletionSource;
-                            rr.ReadHttp2BodyTaskCompletionSource = null;
-
-                            if (!tcs.Task.IsCompleted)
-                            {
-                                tcs.SetResult(true);
-                            }
-
-                            rr.Http2BodyData = null;
-
-                            if (rr.Http2BeforeHandlerTask != null)
-                            {
-                                await rr.Http2BeforeHandlerTask;
-                            }
-
-                            if (args.IsPromise)
-                            {
-                                breakpoint();
-                            }
-
-                            await sendBody(remoteSettings, rr, frameHeader, buffer, output);
-                        }
                     }
                 }
                 else if (type == Http2FrameType.Headers/* || type == Http2FrameType.PushPromise*/)
@@ -389,6 +341,55 @@ namespace Titanium.Web.Proxy.Http2
                             exceptionFunc(new ProxyHttpException("HTTP/2 stream error. Error code: " + errorCode, null, args));
                         }
                     }
+                }
+
+                if (endStream && rr.ReadHttp2BodyTaskCompletionSource != null)
+                {
+                    if (!rr.BodyAvailable)
+                    {
+                        var data = rr.Http2BodyData;
+                        var body = data.ToArray();
+
+                        if (rr.ContentEncoding != null)
+                        {
+                            using (var ms = new MemoryStream())
+                            {
+                                using (var zip =
+                                    DecompressionFactory.Create(rr.ContentEncoding, new MemoryStream(body)))
+                                {
+                                    zip.CopyTo(ms);
+                                }
+
+                                body = ms.ToArray();
+                            }
+                        }
+
+                        rr.Body = body;
+                    }
+
+                    rr.IsBodyRead = true;
+
+                    var tcs = rr.ReadHttp2BodyTaskCompletionSource;
+                    rr.ReadHttp2BodyTaskCompletionSource = null;
+
+                    if (!tcs.Task.IsCompleted)
+                    {
+                        tcs.SetResult(true);
+                    }
+
+                    rr.Http2BodyData = null;
+
+                    if (rr.Http2BeforeHandlerTask != null)
+                    {
+                        await rr.Http2BeforeHandlerTask;
+                    }
+
+                    if (args.IsPromise)
+                    {
+                        breakpoint();
+                    }
+
+                    await sendBody(remoteSettings, rr, frameHeader, buffer, output);
                 }
 
                 if (!isClient && endStream)
