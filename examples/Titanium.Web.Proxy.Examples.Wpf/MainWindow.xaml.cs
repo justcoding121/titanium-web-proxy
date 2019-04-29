@@ -152,12 +152,20 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private async Task ProxyServer_BeforeRequest(object sender, SessionEventArgs e)
         {
+            if (e.HttpClient.ConnectRequest?.TunnelType != TunnelType.Http2)
+            {
+                return;
+            }
+
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() => { item = addSession(e); });
 
             //if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Http2)
             //{
             //}
+
+            //if (!e.HttpClient.Request.RequestUri.ToString().Contains("/mail/u/"))
+            //    return;
 
             if (e.HttpClient.Request.HasBody)
             {
@@ -168,6 +176,11 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private async Task ProxyServer_BeforeResponse(object sender, SessionEventArgs e)
         {
+            if (e.HttpClient.ConnectRequest?.TunnelType != TunnelType.Http2)
+            {
+                return;
+            }
+
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() =>
             {
@@ -177,9 +190,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 }
             });
 
-            //if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Http2)
-            //{
-            //}
+            //e.HttpClient.Response.Headers.AddHeader("X-Titanium-Header", "HTTP/2 works");
+
+            //e.SetResponseBody(Encoding.ASCII.GetBytes("TITANIUMMMM!!!!"));
 
             if (item != null)
             {

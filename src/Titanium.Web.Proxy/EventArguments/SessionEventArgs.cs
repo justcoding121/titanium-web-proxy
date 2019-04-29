@@ -29,6 +29,11 @@ namespace Titanium.Web.Proxy.EventArguments
         private bool reRequest;
 
         /// <summary>
+        ///     Is this session a HTTP/2 promise?
+        /// </summary>
+        public bool IsPromise { get; internal set; }
+
+        /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
         internal SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint,
@@ -91,6 +96,9 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 if (request.HttpVersion == HttpHeader.Version20)
                 {
+                    // do not send to the remote endpoint
+                    request.Http2IgnoreBodyFrames = true;
+
                     request.Http2BodyData = new MemoryStream();
 
                     var tcs = new TaskCompletionSource<bool>();
@@ -100,6 +108,10 @@ namespace Titanium.Web.Proxy.EventArguments
                     request.ReadHttp2BeforeHandlerTaskCompletionSource.SetResult(true);
 
                     await tcs.Task;
+
+                    // Now set the flag to true
+                    // So that next time we can deliver body from cache
+                    request.IsBodyRead = true;
                 }
                 else
                 {
@@ -157,6 +169,9 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 if (response.HttpVersion == HttpHeader.Version20)
                 {
+                    // do not send to the remote endpoint
+                    response.Http2IgnoreBodyFrames = true;
+
                     response.Http2BodyData = new MemoryStream();
 
                     var tcs = new TaskCompletionSource<bool>();
@@ -166,6 +181,10 @@ namespace Titanium.Web.Proxy.EventArguments
                     response.ReadHttp2BeforeHandlerTaskCompletionSource.SetResult(true);
 
                     await tcs.Task;
+
+                    // Now set the flag to true
+                    // So that next time we can deliver body from cache
+                    response.IsBodyRead = true;
                 }
                 else
                 {
