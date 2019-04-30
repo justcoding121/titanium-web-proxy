@@ -605,7 +605,7 @@ namespace StreamExtended.Network
             buffer = newBuffer;
         }
 
-#if NET45
+#if NET45 || NETSTANDARD2_0
 
         /// <summary>        
         /// Base Stream.BeginRead will call this.Read and block thread (we don't want this, Network stream handles async)
