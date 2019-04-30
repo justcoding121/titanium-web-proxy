@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy
                 TunnelConnectSessionEventArgs connectArgs = null;
                 
                 // Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
-                if (await HttpHelper.IsConnectMethod(clientStream) == 1)
+                if (await HttpHelper.IsConnectMethod(clientStream, cancellationToken) == 1)
                 {
                     // read the first line HTTP command
                     string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
