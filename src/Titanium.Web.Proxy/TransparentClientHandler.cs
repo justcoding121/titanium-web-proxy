@@ -112,7 +112,7 @@ namespace Titanium.Web.Proxy
                                 var data = BufferPool.GetBuffer(BufferSize);
                                 try
                                 {
-                                    // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
+                                    // clientStream.Available should be at most BufferSize because it is using the same buffer size
                                     await clientStream.ReadAsync(data, 0, available, cancellationToken);
                                     serverStream = connection.Stream;
                                     await serverStream.WriteAsync(data, 0, available, cancellationToken);

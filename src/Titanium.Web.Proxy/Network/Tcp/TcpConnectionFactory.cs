@@ -38,11 +38,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         internal TcpConnectionFactory(ProxyServer server)
         {
-            this.server = server;
+            this.Server = server;
             Task.Run(async () => await clearOutdatedConnections());
         }
 
-        internal ProxyServer server { get; set; }
+        internal ProxyServer Server { get; }
 
         internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
             bool isHttps, List<SslApplicationProtocol> applicationProtocols,
@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         {
             //http version is ignored since its an application level decision b/w HTTP 1.0/1.1
             //also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
-            //That can create cache miss for same server connection unneccessarily expecially when prefetcing with Connect.
+            //That can create cache miss for same server connection unnecessarily especially when prefetching with Connect.
             //http version 2 is separated using applicationProtocols below.
             var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}-" +
                                                   //when creating Tcp client isConnect won't matter
@@ -232,7 +232,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             CancellationToken cancellationToken)
         {
             //deny connection to proxy end points to avoid infinite connection loop.
-            if (server.ProxyEndPoints.Any(x => x.Port == remotePort)
+            if (Server.ProxyEndPoints.Any(x => x.Port == remotePort)
                     && NetworkHelper.IsLocalIpAddress(remoteHostName))
             {
                 throw new Exception($"A client is making HTTP request to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
@@ -240,7 +240,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             if (externalProxy != null)
             {
-                if (server.ProxyEndPoints.Any(x => x.Port == externalProxy.Port)
+                if (Server.ProxyEndPoints.Any(x => x.Port == externalProxy.Port)
                     && NetworkHelper.IsLocalIpAddress(externalProxy.HostName))
                 {
                     throw new Exception($"A client is making HTTP request via external proxy to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
@@ -271,7 +271,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 tcpClient = new TcpClient(upStreamEndPoint)
                 {
-					NoDelay = proxyServer.NoDelay,
+                    NoDelay = proxyServer.NoDelay,
                     ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
                     SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
                     LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds)
@@ -416,7 +416,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 return;
             }
 
-            if (close || connection.IsWinAuthenticated || !server.EnableConnectionPool)
+            if (close || connection.IsWinAuthenticated || !Server.EnableConnectionPool || connection.IsClosed)
             {
                 disposalBag.Add(connection);
                 return;
@@ -432,7 +432,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     if (cache.TryGetValue(connection.CacheKey, out var existingConnections))
                     {
-                        while (existingConnections.Count >= server.MaxCachedConnections)
+                        while (existingConnections.Count >= Server.MaxCachedConnections)
                         {
                             if (existingConnections.TryDequeue(out var staleConnection))
                             {
@@ -489,8 +489,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         {
                             if (queue.TryDequeue(out var connection))
                             {
-                                var cutOff = DateTime.Now.AddSeconds(-1 * server.ConnectionTimeOutSeconds);
-                                if (!server.EnableConnectionPool
+                                var cutOff = DateTime.Now.AddSeconds(-1 * Server.ConnectionTimeOutSeconds);
+                                if (!Server.EnableConnectionPool
                                     || connection.LastAccess < cutOff)
                                 {
                                     disposalBag.Add(connection);
@@ -530,7 +530,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
                 catch (Exception e)
                 {
-                    server.ExceptionFunc(new Exception("An error occurred when disposing server connections.", e));
+                    Server.ExceptionFunc(new Exception("An error occurred when disposing server connections.", e));
                 }
                 finally
                 {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -96,11 +96,12 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         ///     relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers
         ///     as prefix
-        ///     Usefull for websocket requests
+        ///     Useful for websocket requests
         ///     Task-based Asynchronous Pattern
         /// </summary>
         /// <param name="clientStream"></param>
         /// <param name="serverStream"></param>
+        /// <param name="bufferPool"></param>
         /// <param name="bufferSize"></param>
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
@@ -128,10 +129,11 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         ///     relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers
         ///     as prefix
-        ///     Usefull for websocket requests
+        ///     Useful for websocket requests
         /// </summary>
         /// <param name="clientStream"></param>
         /// <param name="serverStream"></param>
+        /// <param name="bufferPool"></param>
         /// <param name="bufferSize"></param>
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>

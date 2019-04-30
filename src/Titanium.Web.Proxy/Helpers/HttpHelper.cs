@@ -146,8 +146,8 @@ namespace Titanium.Web.Proxy.Helpers
         private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, string expectedStart)
         {
             bool isExpected = true;
-            int legthToCheck = 10;
-            for (int i = 0; i < legthToCheck; i++)
+            int lengthToCheck = 10;
+            for (int i = 0; i < lengthToCheck; i++)
             {
                 int b = await clientStreamReader.PeekByteAsync(i);
                 if (b == -1)

@@ -12,6 +12,8 @@ namespace Titanium.Web.Proxy.Http
             Method = "CONNECT";
         }
 
+        public TunnelType TunnelType { get; internal set; }
+
         public ClientHelloInfo ClientHelloInfo { get; set; }
     }
 }

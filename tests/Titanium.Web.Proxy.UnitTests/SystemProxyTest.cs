@@ -11,22 +11,22 @@ namespace Titanium.Web.Proxy.UnitTests
     public class SystemProxyTest
     {
         [TestMethod]
-        public void CompareProxyAdddressReturendByWebProxyAndWinHttpProxyResolver()
+        public void CompareProxyAddressReturnedByWebProxyAndWinHttpProxyResolver()
         {
             var proxyManager = new SystemProxyManager();
 
             try
             {
-                CompareUrls();
+                compareUrls();
 
                 proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.Http);
-                CompareUrls();
+                compareUrls();
 
                 proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.Https);
-                CompareUrls();
+                compareUrls();
 
                 proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.AllHttp);
-                CompareUrls();
+                compareUrls();
 
                 // for this test you need to add a proxy.pac file to a local webserver
                 //function FindProxyForURL(url, host)
@@ -43,25 +43,25 @@ namespace Titanium.Web.Proxy.UnitTests
                 //CompareUrls();
 
                 proxyManager.SetProxyOverride("<-loopback>");
-                CompareUrls();
+                compareUrls();
 
                 proxyManager.SetProxyOverride("<local>");
-                CompareUrls();
+                compareUrls();
 
                 proxyManager.SetProxyOverride("yahoo.com");
-                CompareUrls();
+                compareUrls();
 
                 proxyManager.SetProxyOverride("*.local");
-                CompareUrls();
+                compareUrls();
 
                 proxyManager.SetProxyOverride("http://*.local");
-                CompareUrls();
+                compareUrls();
 
                 proxyManager.SetProxyOverride("<-loopback>;*.local");
-                CompareUrls();
+                compareUrls();
 
                 proxyManager.SetProxyOverride("<-loopback>;*.local;<local>");
-                CompareUrls();
+                compareUrls();
             }
             finally
             {
@@ -69,7 +69,7 @@ namespace Titanium.Web.Proxy.UnitTests
             }
         }
 
-        private void CompareUrls()
+        private void compareUrls()
         {
             var webProxy = WebRequest.GetSystemWebProxy();
 

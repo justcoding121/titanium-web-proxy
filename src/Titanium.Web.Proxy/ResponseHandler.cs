@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy
     public partial class ProxyServer
     {
         /// <summary>
-        ///     Called asynchronously when a request was successfull and we received the response.
+        ///     Called asynchronously when a request was successful and we received the response.
         /// </summary>
         /// <param name="args">The session event arguments.</param>
         /// <returns> The task.</returns>
@@ -92,7 +92,7 @@ namespace Titanium.Web.Proxy
                 // clear current response
                 await args.ClearResponse(cancellationToken);
                 var httpCmd = Request.CreateRequestLine(args.HttpClient.Request.Method, 
-                    args.HttpClient.Request.OriginalUrl, args.HttpClient.Request.HttpVersion);
+                    args.HttpClient.Request.RequestUriString, args.HttpClient.Request.HttpVersion);
                 await handleHttpSessionRequest(httpCmd, args, null, args.ClientConnection.NegotiatedApplicationProtocol,
                             cancellationToken, args.CancellationTokenSource);
                 return;
@@ -125,7 +125,6 @@ namespace Titanium.Web.Proxy
             }
 
             args.TimeLine["Response Sent"] = DateTime.Now;
-
         }
 
         /// <summary>

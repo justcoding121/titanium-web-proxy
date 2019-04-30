@@ -35,9 +35,16 @@ namespace Titanium.Web.Proxy.Models
         {
             if (string.IsNullOrEmpty(name))
             {
-                throw new Exception("Name cannot be null");
+                throw new Exception("Name cannot be null or empty");
             }
 
+            Name = name.Trim();
+            Value = value.Trim();
+        }
+
+        protected HttpHeader(string name, string value, bool headerEntry)
+        {
+            // special header entry created in inherited class with empty name
             Name = name.Trim();
             Value = value.Trim();
         }
@@ -45,7 +52,7 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         ///     Header Name.
         /// </summary>
-        public string Name { get; set; }
+        public string Name { get; }
 
         /// <summary>
         ///     Header Value.

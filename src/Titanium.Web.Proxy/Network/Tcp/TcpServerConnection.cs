@@ -27,6 +27,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         private ProxyServer proxyServer { get; }
 
+        internal bool IsClosed => Stream.IsClosed;
+
         internal ExternalProxy UpStreamProxy { get; set; }
 
         internal string HostName { get; set; }

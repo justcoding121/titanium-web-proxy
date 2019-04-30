@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy.Network
 
         /// <summary>
         /// A list of pending certificate creation tasks.
-        /// Usefull to prevent multiple threads working on same certificate generation 
+        /// Useful to prevent multiple threads working on same certificate generation 
         /// when burst certificate generation requests happen for same certificate.
         /// </summary>
         private readonly ConcurrentDictionary<string, Task<X509Certificate2>> pendingCertificateCreationTasks

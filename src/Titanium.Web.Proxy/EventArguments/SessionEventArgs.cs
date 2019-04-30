@@ -29,6 +29,11 @@ namespace Titanium.Web.Proxy.EventArguments
         private bool reRequest;
 
         /// <summary>
+        ///     Is this session a HTTP/2 promise?
+        /// </summary>
+        public bool IsPromise { get; internal set; }
+
+        /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
         internal SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint,
@@ -89,13 +94,35 @@ namespace Titanium.Web.Proxy.EventArguments
             // If not already read (not cached yet)
             if (!request.IsBodyRead)
             {
-                var body = await readBodyAsync(true, cancellationToken);
-                request.Body = body;
+                if (request.HttpVersion == HttpHeader.Version20)
+                {
+                    // do not send to the remote endpoint
+                    request.Http2IgnoreBodyFrames = true;
 
-                // Now set the flag to true
-                // So that next time we can deliver body from cache
-                request.IsBodyRead = true;
-                OnDataSent(body, 0, body.Length);
+                    request.Http2BodyData = new MemoryStream();
+
+                    var tcs = new TaskCompletionSource<bool>();
+                    request.ReadHttp2BodyTaskCompletionSource = tcs;
+
+                    // signal to HTTP/2 copy frame method to continue
+                    request.ReadHttp2BeforeHandlerTaskCompletionSource.SetResult(true);
+
+                    await tcs.Task;
+
+                    // Now set the flag to true
+                    // So that next time we can deliver body from cache
+                    request.IsBodyRead = true;
+                }
+                else
+                {
+                    var body = await readBodyAsync(true, cancellationToken);
+                    request.Body = body;
+
+                    // Now set the flag to true
+                    // So that next time we can deliver body from cache
+                    request.IsBodyRead = true;
+                    OnDataSent(body, 0, body.Length);
+                }
             }
         }
 
@@ -117,7 +144,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                exceptionFunc(new Exception("Exception thrown in user event", ex));
+                ExceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -140,13 +167,35 @@ namespace Titanium.Web.Proxy.EventArguments
             // If not already read (not cached yet)
             if (!response.IsBodyRead)
             {
-                var body = await readBodyAsync(false, cancellationToken);
-                response.Body = body;
+                if (response.HttpVersion == HttpHeader.Version20)
+                {
+                    // do not send to the remote endpoint
+                    response.Http2IgnoreBodyFrames = true;
 
-                // Now set the flag to true
-                // So that next time we can deliver body from cache
-                response.IsBodyRead = true;
-                OnDataReceived(body, 0, body.Length);
+                    response.Http2BodyData = new MemoryStream();
+
+                    var tcs = new TaskCompletionSource<bool>();
+                    response.ReadHttp2BodyTaskCompletionSource = tcs;
+
+                    // signal to HTTP/2 copy frame method to continue
+                    response.ReadHttp2BeforeHandlerTaskCompletionSource.SetResult(true);
+
+                    await tcs.Task;
+
+                    // Now set the flag to true
+                    // So that next time we can deliver body from cache
+                    response.IsBodyRead = true;
+                }
+                else
+                {
+                    var body = await readBodyAsync(false, cancellationToken);
+                    response.Body = body;
+
+                    // Now set the flag to true
+                    // So that next time we can deliver body from cache
+                    response.IsBodyRead = true;
+                    OnDataReceived(body, 0, body.Length);
+                }
             }
         }
 
@@ -154,7 +203,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             using (var bodyStream = new MemoryStream())
             {
-                var writer = new HttpWriter(bodyStream, bufferPool, bufferSize);
+                var writer = new HttpWriter(bodyStream, BufferPool, BufferSize);
 
                 if (isRequest)
                 {
@@ -186,7 +235,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             using (var bodyStream = new MemoryStream())
             {
-                var writer = new HttpWriter(bodyStream, bufferPool, bufferSize);
+                var writer = new HttpWriter(bodyStream, BufferPool, BufferSize);
                 await copyBodyAsync(isRequest, true, writer, TransformationMode.None, null, cancellationToken);
             }
         }
@@ -207,7 +256,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 var reader = getStreamReader(true);
                 string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
 
-                using (var copyStream = new CopyStream(reader, writer, bufferPool, bufferSize))
+                using (var copyStream = new CopyStream(reader, writer, BufferPool, BufferSize))
                 {
                     while (contentLength > copyStream.ReadBytes)
                     {
@@ -259,7 +308,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             string contentEncoding = useOriginalHeaderValues ? requestResponse.OriginalContentEncoding : requestResponse.ContentEncoding;
 
-            Stream s = limitedStream = new LimitedStream(stream, bufferPool, isChunked, contentLength);
+            Stream s = limitedStream = new LimitedStream(stream, BufferPool, isChunked, contentLength);
 
             if (transformation == TransformationMode.Uncompress && contentEncoding != null)
             {
@@ -268,7 +317,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             try
             {
-                using (var bufStream = new CustomBufferedStream(s, bufferPool, bufferSize, true))
+                using (var bufStream = new CustomBufferedStream(s, BufferPool, BufferSize, true))
                 {
                     await writer.CopyBodyAsync(bufStream, false, -1, onCopy, cancellationToken);
                 }
@@ -290,7 +339,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             int bufferDataLength = 0;
 
-            var buffer = bufferPool.GetBuffer(bufferSize);
+            var buffer = BufferPool.GetBuffer(BufferSize);
             try
             {
                 int boundaryLength = boundary.Length + 4;
@@ -340,7 +389,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             finally
             {
-                bufferPool.ReturnBuffer(buffer);
+                BufferPool.ReturnBuffer(buffer);
             }
         }
 

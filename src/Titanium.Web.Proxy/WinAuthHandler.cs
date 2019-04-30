@@ -150,7 +150,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 // Need to revisit this.
-                // Should we cache all Set-Cokiee headers from server during auth process
+                // Should we cache all Set-Cookie headers from server during auth process
                 // and send it to client after auth?
 
                 // Let ResponseHandler send the updated request

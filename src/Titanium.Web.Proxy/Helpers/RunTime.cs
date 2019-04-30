@@ -70,7 +70,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             internal static bool IsRunningAsUwp()
             {
-                if (IsWindows7OrLower)
+                if (isWindows7OrLower)
                 {
                     return false;
                 }
@@ -87,7 +87,7 @@ namespace Titanium.Web.Proxy.Helpers
                 }
             }
 
-            private static bool IsWindows7OrLower
+            private static bool isWindows7OrLower
             {
                 get
                 {
