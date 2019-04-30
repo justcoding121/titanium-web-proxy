@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
@@ -120,9 +122,9 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsConnectMethod(ICustomStreamReader clientStreamReader)
+        internal static Task<int> IsConnectMethod(ICustomStreamReader clientStreamReader, CancellationToken cancellationToken = default(CancellationToken))
         {
-            return startsWith(clientStreamReader, "CONNECT");
+            return startsWith(clientStreamReader, "CONNECT", cancellationToken);
         }
 
         /// <summary>
@@ -130,9 +132,9 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when PRI, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsPriMethod(ICustomStreamReader clientStreamReader)
+        internal static Task<int> IsPriMethod(ICustomStreamReader clientStreamReader, CancellationToken cancellationToken = default(CancellationToken))
         {
-            return startsWith(clientStreamReader, "PRI");
+            return startsWith(clientStreamReader, "PRI", cancellationToken);
         }
 
         /// <summary>
@@ -143,37 +145,23 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns>
         ///     1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
         /// </returns>
-        private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, string expectedStart)
+        private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, string expectedStart, CancellationToken cancellationToken = default(CancellationToken))
         {
-            bool isExpected = true;
+            int iRet = -1;
             int lengthToCheck = 10;
-            for (int i = 0; i < lengthToCheck; i++)
+
+            var vBuffer = await clientStreamReader.PeekBytesAsync(0, lengthToCheck, cancellationToken);
+            if (vBuffer != null)
             {
-                int b = await clientStreamReader.PeekByteAsync(i);
-                if (b == -1)
-                {
-                    return -1;
-                }
+                var httpMethod = defaultEncoding.GetString(vBuffer);
 
-                if (b == ' ' && i > 2)
-                {
-                    return isExpected ? 1 : 0;
-                }
-
-                char ch = (char)b;
-                if (!char.IsLetter(ch))
-                {
-                    return -1;
-                }
-
-                if (i >= expectedStart.Length || ch != expectedStart[i])
-                {
-                    isExpected = false;
-                }
+                if (httpMethod.StartsWith(expectedStart))
+                    iRet = 1;
+                else if (Regex.Match(httpMethod, @"^[a-z]{3,} ", RegexOptions.IgnoreCase).Success) //valid HTTP requests start by at least 3 letters + space
+                    iRet = 0;
             }
 
-            // only letters
-            return isExpected ? 1 : 0;
+            return iRet;
         }
     }
 }
