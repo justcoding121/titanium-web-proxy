@@ -252,10 +252,12 @@ namespace StreamExtended.Network
         /// <summary>
         /// Peeks bytes asynchronous.
         /// </summary>
+        /// <param name="buffer">The buffer to copy.</param>
+        /// <param name="offset">The offset where copying.</param>
         /// <param name="index">The index.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        public async Task<byte[]> PeekBytesAsync(int index, int size, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int size, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (Available <= index)
             {
@@ -270,12 +272,12 @@ namespace StreamExtended.Network
 
             if (Available <= (index + size))
             {
-                return null;
+                return -1;
             }
 
-            var vRet = new byte[size];
-            Array.Copy(streamBuffer, index, vRet, 0, size);
-            return vRet;
+            Buffer.BlockCopy(streamBuffer, index, buffer, offset, size);
+
+            return size;
         }
 
         /// <summary>

@@ -55,9 +55,9 @@ namespace StreamExtended.Network
             return reader.PeekByteAsync(index, cancellationToken);
         }
 
-        public Task<byte[]> PeekBytesAsync(int index, int size, CancellationToken cancellationToken = default(CancellationToken))
+        public Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int size, CancellationToken cancellationToken = default(CancellationToken))
         {
-            return reader.PeekBytesAsync(index, size, cancellationToken);
+            return reader.PeekBytesAsync(buffer, offset, index, size, cancellationToken);
         }
 
         public void Flush()

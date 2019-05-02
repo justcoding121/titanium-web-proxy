@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using StreamExtended;
 using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
@@ -122,9 +123,9 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsConnectMethod(ICustomStreamReader clientStreamReader, CancellationToken cancellationToken = default(CancellationToken))
+        internal static Task<int> IsConnectMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, CancellationToken cancellationToken = default(CancellationToken))
         {
-            return startsWith(clientStreamReader, "CONNECT", cancellationToken);
+            return startsWith(clientStreamReader, bufferPool, bufferSize, "CONNECT", cancellationToken);
         }
 
         /// <summary>
@@ -132,9 +133,9 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when PRI, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsPriMethod(ICustomStreamReader clientStreamReader, CancellationToken cancellationToken = default(CancellationToken))
+        internal static Task<int> IsPriMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, CancellationToken cancellationToken = default(CancellationToken))
         {
-            return startsWith(clientStreamReader, "PRI", cancellationToken);
+            return startsWith(clientStreamReader, bufferPool, bufferSize, "PRI", cancellationToken);
         }
 
         /// <summary>
@@ -145,22 +146,46 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns>
         ///     1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
         /// </returns>
-        private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, string expectedStart, CancellationToken cancellationToken = default(CancellationToken))
+        private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, string expectedStart, CancellationToken cancellationToken = default(CancellationToken))
         {
             int iRet = -1;
-            int lengthToCheck = 10;
-
-            var vBuffer = await clientStreamReader.PeekBytesAsync(0, lengthToCheck, cancellationToken);
-            if (vBuffer != null)
+            const int lengthToCheck = 10;
+            byte[] buffer = null;
+            try
             {
-                var httpMethod = defaultEncoding.GetString(vBuffer);
+                buffer = bufferPool.GetBuffer(Math.Max(bufferSize, lengthToCheck));
 
-                if (httpMethod.StartsWith(expectedStart))
-                    iRet = 1;
-                else if (Regex.Match(httpMethod, @"^[a-z]{3,} ", RegexOptions.IgnoreCase).Success) //valid HTTP requests start by at least 3 letters + space
-                    iRet = 0;
+                int peeked = await clientStreamReader.PeekBytesAsync(buffer, 0, 0, lengthToCheck, cancellationToken);
+
+                if (peeked > 0)
+                {
+                    bool isExpected = true;
+
+                    for (int i = 0; i < lengthToCheck; i++)
+                    {
+                        int b = buffer[i];
+
+                        if (b == ' ' && i > 2)
+                            return isExpected ? 1 : 0;
+                        else
+                        {
+                            char ch = (char)b;
+                            if (!char.IsLetter(ch))
+                                return -1;
+                            else if (i >= expectedStart.Length || ch != expectedStart[i])
+                                isExpected = false;                            
+                        }
+                    }
+
+                    // only letters
+                    iRet = isExpected ? 1 : 0;
+                }
             }
-
+            finally
+            {
+                bufferPool.ReturnBuffer(buffer);
+                buffer = null;
+            }
             return iRet;
         }
     }

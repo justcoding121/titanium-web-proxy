@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy
                 TunnelConnectSessionEventArgs connectArgs = null;
                 
                 // Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
-                if (await HttpHelper.IsConnectMethod(clientStream, cancellationToken) == 1)
+                if (await HttpHelper.IsConnectMethod(clientStream, BufferPool, BufferSize, cancellationToken) == 1)
                 {
                     // read the first line HTTP command
                     string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
@@ -220,7 +220,7 @@ namespace Titanium.Web.Proxy
                                 $"Couldn't authenticate host '{connectHostname}' with certificate '{certName}'.", e, connectArgs);
                         }
 
-                        if (await HttpHelper.IsConnectMethod(clientStream) == -1)
+                        if (await HttpHelper.IsConnectMethod(clientStream, BufferPool, BufferSize, cancellationToken) == -1)
                         {
                             decryptSsl = false;
                         }
@@ -292,7 +292,7 @@ namespace Titanium.Web.Proxy
                     }
                 }
 
-                if (connectArgs != null && await HttpHelper.IsPriMethod(clientStream) == 1)
+                if (connectArgs != null && await HttpHelper.IsPriMethod(clientStream, BufferPool, BufferSize, cancellationToken) == 1)
                 {
                     // todo
                     string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
