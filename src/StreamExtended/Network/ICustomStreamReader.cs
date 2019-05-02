@@ -40,10 +40,12 @@ namespace StreamExtended.Network
         /// <summary>
         /// Peeks bytes asynchronous.
         /// </summary>
+        /// <param name="buffer">The buffer to copy.</param>
+        /// <param name="offset">The offset where copying.</param>
         /// <param name="index">The index.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        Task<byte[]> PeekBytesAsync(int index, int size, CancellationToken cancellationToken = default(CancellationToken));
+        Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int size, CancellationToken cancellationToken = default(CancellationToken));
 
         byte ReadByteFromBuffer();
 
