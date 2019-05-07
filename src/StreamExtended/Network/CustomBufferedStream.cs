@@ -471,6 +471,7 @@ namespace StreamExtended.Network
             else
             {
                 closed = true;
+                throw new EndOfStreamException();
             }
 
             return result;
@@ -514,6 +515,7 @@ namespace StreamExtended.Network
             else
             {
                 closed = true;
+                throw new EndOfStreamException();
             }
 
             return result;
@@ -625,7 +627,7 @@ namespace StreamExtended.Network
             {
                 //use TaskExtended to pass State as AsyncObject
                 //callback will call EndRead (otherwise, it will block)
-                callback(new TaskResult<int>(pAsyncResult, state));
+                callback?.Invoke(new TaskResult<int>(pAsyncResult, state));
             });
 
             return vAsyncResult;
@@ -640,6 +642,7 @@ namespace StreamExtended.Network
             return ((TaskResult<int>)asyncResult).Result;
         }
 
+
         /// <summary>
         /// Fix the .net bug with SslStream slow WriteAsync
         /// https://github.com/justcoding121/Titanium-Web-Proxy/issues/495
@@ -649,13 +652,20 @@ namespace StreamExtended.Network
         /// <returns></returns>
         public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
         {
-            return baseStream.BeginWrite(buffer, offset, count, callback, state);
-        }
+            var vAsyncResult = this.WriteAsync(buffer, offset, count);
 
+            vAsyncResult.ContinueWith(pAsyncResult =>
+            {
+                callback?.Invoke(new TaskResult(pAsyncResult, state));
+            });
+
+            return vAsyncResult;
+        }
         public override void EndWrite(IAsyncResult asyncResult)
         {
-            baseStream.EndWrite(asyncResult);
+            ((TaskResult)asyncResult).GetResult();
         }
+
 #endif
     }
 }
