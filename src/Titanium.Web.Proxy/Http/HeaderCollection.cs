@@ -67,7 +67,7 @@ namespace Titanium.Web.Proxy.Http
 
         /// <summary>
         ///     Returns all headers with given name if exists
-        ///     Returns null if does'nt exist
+        ///     Returns null if doesn't exist
         /// </summary>
         /// <param name="name"></param>
         /// <returns></returns>

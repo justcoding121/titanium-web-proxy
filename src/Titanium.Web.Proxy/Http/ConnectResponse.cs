@@ -12,11 +12,11 @@ namespace Titanium.Web.Proxy.Http
         public ServerHelloInfo ServerHelloInfo { get; set; }
 
         /// <summary>
-        ///     Creates a successfull CONNECT response
+        ///     Creates a successful CONNECT response
         /// </summary>
         /// <param name="httpVersion"></param>
         /// <returns></returns>
-        internal static ConnectResponse CreateSuccessfullConnectResponse(Version httpVersion)
+        internal static ConnectResponse CreateSuccessfulConnectResponse(Version httpVersion)
         {
             var response = new ConnectResponse
             {

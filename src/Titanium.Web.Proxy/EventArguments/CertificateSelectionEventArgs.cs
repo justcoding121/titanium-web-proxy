@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy.EventArguments
         public X509Certificate RemoteCertificate { get; internal set; }
 
         /// <summary>
-        ///     Acceptable issuers as listed by remoted server.
+        ///     Acceptable issuers as listed by remote server.
         /// </summary>
         public string[] AcceptableIssuers { get; internal set; }
 

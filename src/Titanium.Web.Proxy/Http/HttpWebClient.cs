@@ -99,7 +99,7 @@ namespace Titanium.Web.Proxy.Http
 
             // prepare the request & headers
             await writer.WriteLineAsync(Request.CreateRequestLine(Request.Method,
-                useUpstreamProxy || isTransparent ? Request.OriginalUrl : Request.RequestUri.PathAndQuery,
+                useUpstreamProxy || isTransparent ? Request.RequestUriString : Request.RequestUri.PathAndQuery,
                 Request.HttpVersion), cancellationToken);
 
             var headerBuilder = new StringBuilder();

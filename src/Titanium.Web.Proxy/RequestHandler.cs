@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy
         ///     The https hostname as appeared in CONNECT request if this is a HTTPS request from
         ///     explicit endpoint.
         /// </param>
-        /// <param name="connectRequest">The Connect request if this is a HTTPS request from explicit endpoint.</param>
+        /// <param name="connectArgs">The Connect request if this is a HTTPS request from explicit endpoint.</param>
         /// <param name="prefetchConnectionTask">Prefetched server connection for current client using Connect/SNI headers.</param>
         private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, TcpClientConnection clientConnection,
             CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy
             {
                 var cancellationToken = cancellationTokenSource.Token;
 
-                // Loop through each subsequest request on this particular client connection
+                // Loop through each subsequent request on this particular client connection
                 // (assuming HTTP connection is kept alive by client)
                 while (true)
                 {
@@ -312,6 +312,8 @@ namespace Titanium.Web.Proxy
 
                 if (args.HttpClient.Request.UpgradeToWebSocket)
                 {
+                    args.HttpClient.ConnectRequest.TunnelType = TunnelType.Websocket;
+
                     // if upgrading to websocket then relay the request without reading the contents
                     await handleWebSocketUpgrade(httpCmd, args, args.HttpClient.Request,
                         args.HttpClient.Response, args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamWriter,
@@ -373,7 +375,7 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///     Prepare the request headers so that we can avoid encodings not parsable by this proxy
+        ///     Prepare the request headers so that we can avoid encodings not parseable by this proxy
         /// </summary>
         private void prepareRequestHeaders(HeaderCollection requestHeaders)
         {

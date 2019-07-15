@@ -61,7 +61,9 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <param name="name">Name.</param>
         /// <param name="value">Value.</param>
         /// <param name="sensitive">If set to <c>true</c> sensitive.</param>
-        public void EncodeHeader(BinaryWriter output, string name, string value, bool sensitive = false)
+        /// <param name="indexType">Index type.</param>
+        /// <param name="useStaticName">Use static name.</param>
+        public void EncodeHeader(BinaryWriter output, string name, string value, bool sensitive = false, HpackUtil.IndexType indexType = HpackUtil.IndexType.Incremental, bool useStaticName = true)
         {
             // If the header value is sensitive then it must never be indexed
             if (sensitive)
@@ -116,10 +118,9 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 }
                 else
                 {
-                    int nameIndex = getNameIndex(name);
+                    int nameIndex = useStaticName ? getNameIndex(name) : -1;
                     ensureCapacity(headerSize);
 
-                    var indexType = HpackUtil.IndexType.Incremental;
                     encodeLiteral(output, name, value, indexType, nameIndex);
                     add(name, value);
                 }
@@ -309,7 +310,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             int i = index(h);
             for (var e = headerFields[i]; e != null; e = e.Next)
             {
-                if (e.Hash == h && Equals(name, e.Name) && Equals(value, e.Value))
+                if (e.Hash == h && name.Equals(e.Name, StringComparison.OrdinalIgnoreCase) && Equals(value, e.Value))
                 {
                     return e;
                 }
@@ -336,7 +337,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             int index = -1;
             for (var e = headerFields[i]; e != null; e = e.Next)
             {
-                if (e.Hash == h && HpackUtil.Equals(name, e.Name))
+                if (e.Hash == h && name.Equals(e.Name, StringComparison.OrdinalIgnoreCase))
                 {
                     index = e.Index;
                     break;
@@ -513,7 +514,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             /// <param name="value">Value.</param>
             /// <param name="index">Index.</param>
             /// <param name="next">Next.</param>
-            public HeaderEntry(int hash, string name, string value, int index, HeaderEntry next) : base(name, value)
+            public HeaderEntry(int hash, string name, string value, int index, HeaderEntry next) : base(name, value, true)
             {
                 Index = index;
                 Hash = hash;

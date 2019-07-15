@@ -24,14 +24,14 @@ namespace Titanium.Web.Proxy.EventArguments
         internal TcpServerConnection ServerConnection => HttpClient.Connection;
         internal TcpClientConnection ClientConnection => ProxyClient.Connection;
 
-        protected readonly int bufferSize;
-        protected readonly IBufferPool bufferPool;
-        protected readonly ExceptionHandler exceptionFunc;
+        protected readonly int BufferSize;
+        protected readonly IBufferPool BufferPool;
+        protected readonly ExceptionHandler ExceptionFunc;
 
         /// <summary>
         /// Relative milliseconds for various events.
         /// </summary>
-        public Dictionary<string, DateTime> TimeLine { get; set; } = new Dictionary<string, DateTime>();
+        public Dictionary<string, DateTime> TimeLine { get; } = new Dictionary<string, DateTime>();
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
@@ -39,9 +39,9 @@ namespace Titanium.Web.Proxy.EventArguments
         private SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
             CancellationTokenSource cancellationTokenSource)
         {
-            bufferSize = server.BufferSize;
-            bufferPool = server.BufferPool;
-            exceptionFunc = server.ExceptionFunc;
+            BufferSize = server.BufferSize;
+            BufferPool = server.BufferPool;
+            ExceptionFunc = server.ExceptionFunc;
             TimeLine["Session Created"] = DateTime.Now;
         }
 
@@ -55,25 +55,7 @@ namespace Titanium.Web.Proxy.EventArguments
             HttpClient = new HttpWebClient(request);
             LocalEndPoint = endPoint;
 
-            HttpClient.ProcessId = new Lazy<int>(() =>
-            {
-                if (RunTime.IsWindows)
-                {
-                    var remoteEndPoint = ClientEndPoint;
-
-                    // If client is localhost get the process id
-                    if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
-                    {
-                        var ipVersion = endPoint.IpV6Enabled ? IpVersion.Ipv6 : IpVersion.Ipv4;
-                        return TcpHelper.GetProcessIdByLocalPort(ipVersion, remoteEndPoint.Port);
-                    }
-
-                    // can't access process Id of remote request from remote machine
-                    return -1;
-                }
-
-                throw new PlatformNotSupportedException();
-            });
+            HttpClient.ProcessId = new Lazy<int>(() => ProxyClient.Connection.GetProcessId(endPoint));
         }
 
         /// <summary>
@@ -161,7 +143,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                exceptionFunc(new Exception("Exception thrown in user event", ex));
+                ExceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -173,7 +155,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                exceptionFunc(new Exception("Exception thrown in user event", ex));
+                ExceptionFunc(new Exception("Exception thrown in user event", ex));
             }
         }
 

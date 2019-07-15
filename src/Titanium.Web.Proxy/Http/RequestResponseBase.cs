@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -48,6 +49,21 @@ namespace Titanium.Web.Proxy.Http
         ///     We need this detail to syphon out attached tcp connection for reuse.
         /// </summary>
         internal string OriginalContentEncoding { get; set; }
+
+        internal TaskCompletionSource<bool> ReadHttp2BeforeHandlerTaskCompletionSource;
+
+        internal TaskCompletionSource<bool> ReadHttp2BodyTaskCompletionSource;
+
+        internal MemoryStream Http2BodyData;
+
+        internal bool Http2IgnoreBodyFrames;
+
+        internal Task Http2BeforeHandlerTask;
+
+        /// <summary>
+        ///     Priority used only in HTTP/2
+        /// </summary>
+        internal long? Priority;
 
         /// <summary>
         ///     Keeps the body data after the session is finished.
@@ -189,10 +205,12 @@ namespace Titanium.Web.Proxy.Http
         public bool IsBodyRead { get; internal set; }
 
         /// <summary>
-        ///     Is the request/response no more modifyable by user (user callbacks complete?)
+        ///     Is the request/response no more modifiable by user (user callbacks complete?)
         ///     Also if user set this as a custom response then this should be true.
         /// </summary>
         internal bool Locked { get; set; }
+
+        internal bool BodyAvailable => BodyInternal != null;
 
         internal abstract void EnsureBodyAvailable(bool throwWhenNotReadYet = true);
 

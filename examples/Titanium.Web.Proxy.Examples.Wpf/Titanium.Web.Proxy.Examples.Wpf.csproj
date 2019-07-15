@@ -72,9 +72,6 @@
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="StreamExtended, Version=1.0.201.0, Culture=neutral, PublicKeyToken=bbfa0f1d54f50043, processorArchitecture=MSIL">
-      <HintPath>..\..\src\packages\StreamExtended.1.0.201\lib\net45\StreamExtended.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
@@ -95,6 +92,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="ObservableCollectionEx.cs" />
     <Compile Include="Properties\Annotations.cs" />
     <Compile Include="SessionListItem.cs" />
     <Page Include="MainWindow.xaml">
@@ -128,7 +126,6 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
-    <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
@@ -145,6 +142,10 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\StreamExtended\StreamExtended.csproj">
+      <Project>{61539dc1-ce80-41e6-a696-8f455ace8d15}</Project>
+      <Name>StreamExtended</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj">
       <Project>{91018b6d-a7a9-45be-9cb3-79cbb8b169a6}</Project>
       <Name>Titanium.Web.Proxy</Name>

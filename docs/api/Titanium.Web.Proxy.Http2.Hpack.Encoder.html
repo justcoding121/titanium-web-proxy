@@ -194,19 +194,19 @@
   </h3>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/master/apiSpec/new?filename=Titanium_Web_Proxy_Http2_Hpack_Encoder_EncodeHeader_System_IO_BinaryWriter_System_String_System_String_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http2.Hpack.Encoder.EncodeHeader(System.IO.BinaryWriter%2CSystem.String%2CSystem.String%2CSystem.Boolean)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/master/apiSpec/new?filename=Titanium_Web_Proxy_Http2_Hpack_Encoder_EncodeHeader_System_IO_BinaryWriter_System_String_System_String_System_Boolean_Titanium_Web_Proxy_Http2_Hpack_HpackUtil_IndexType_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http2.Hpack.Encoder.EncodeHeader(System.IO.BinaryWriter%2CSystem.String%2CSystem.String%2CSystem.Boolean%2CTitanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType%2CSystem.Boolean)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/Http2/Hpack/Encoder.cs/#L64">View Source</a>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/Http2/Hpack/Encoder.cs/#L66">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http2_Hpack_Encoder_EncodeHeader_" data-uid="Titanium.Web.Proxy.Http2.Hpack.Encoder.EncodeHeader*"></a>
-  <h4 id="Titanium_Web_Proxy_Http2_Hpack_Encoder_EncodeHeader_System_IO_BinaryWriter_System_String_System_String_System_Boolean_" data-uid="Titanium.Web.Proxy.Http2.Hpack.Encoder.EncodeHeader(System.IO.BinaryWriter,System.String,System.String,System.Boolean)">EncodeHeader(BinaryWriter, String, String, Boolean)</h4>
+  <h4 id="Titanium_Web_Proxy_Http2_Hpack_Encoder_EncodeHeader_System_IO_BinaryWriter_System_String_System_String_System_Boolean_Titanium_Web_Proxy_Http2_Hpack_HpackUtil_IndexType_System_Boolean_" data-uid="Titanium.Web.Proxy.Http2.Hpack.Encoder.EncodeHeader(System.IO.BinaryWriter,System.String,System.String,System.Boolean,Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType,System.Boolean)">EncodeHeader(BinaryWriter, String, String, Boolean, HpackUtil.IndexType, Boolean)</h4>
   <div class="markdown level1 summary"><p>Encode the header field into the header block.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void EncodeHeader(BinaryWriter output, string name, string value, bool sensitive = false)</code></pre>
+    <pre><code class="lang-csharp hljs">public void EncodeHeader(BinaryWriter output, string name, string value, bool sensitive = false, HpackUtil.IndexType indexType = HpackUtil.IndexType.Incremental, bool useStaticName = true)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -242,6 +242,18 @@
         <td><p>If set to <code>true</code> sensitive.</p>
 </td>
       </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.html">HpackUtil.IndexType</a></td>
+        <td><span class="parametername">indexType</span></td>
+        <td><p>Index type.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">useStaticName</span></td>
+        <td><p>Use static name.</p>
+</td>
+      </tr>
     </tbody>
   </table>
   <span class="small pull-right mobile-hide">
@@ -249,7 +261,7 @@
     <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/master/apiSpec/new?filename=Titanium_Web_Proxy_Http2_Hpack_Encoder_SetMaxHeaderTableSize_System_IO_BinaryWriter_System_Int32_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http2.Hpack.Encoder.SetMaxHeaderTableSize(System.IO.BinaryWriter%2CSystem.Int32)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/Http2/Hpack/Encoder.cs/#L134">View Source</a>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/Http2/Hpack/Encoder.cs/#L135">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http2_Hpack_Encoder_SetMaxHeaderTableSize_" data-uid="Titanium.Web.Proxy.Http2.Hpack.Encoder.SetMaxHeaderTableSize*"></a>
   <h4 id="Titanium_Web_Proxy_Http2_Hpack_Encoder_SetMaxHeaderTableSize_System_IO_BinaryWriter_System_Int32_" data-uid="Titanium.Web.Proxy.Http2.Hpack.Encoder.SetMaxHeaderTableSize(System.IO.BinaryWriter,System.Int32)">SetMaxHeaderTableSize(BinaryWriter, Int32)</h4>
