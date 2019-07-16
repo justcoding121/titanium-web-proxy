@@ -1,6 +1,6 @@
-﻿using StreamExtended.Network;
-using Titanium.Web.Proxy.Helpers;
+﻿using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Network
 {

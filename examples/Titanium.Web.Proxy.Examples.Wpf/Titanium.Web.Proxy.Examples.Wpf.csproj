@@ -142,10 +142,6 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\StreamExtended\StreamExtended.csproj">
-      <Project>{61539dc1-ce80-41e6-a696-8f455ace8d15}</Project>
-      <Name>StreamExtended</Name>
-    </ProjectReference>
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj">
       <Project>{91018b6d-a7a9-45be-9cb3-79cbb8b169a6}</Project>
       <Name>Titanium.Web.Proxy</Name>

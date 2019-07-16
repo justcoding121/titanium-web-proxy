@@ -5,10 +5,10 @@ using System.Net.Security;
 #endif
 using System.Net.Sockets;
 using System.Threading.Tasks;
-using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Network.Tcp
 {

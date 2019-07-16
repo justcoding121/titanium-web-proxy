@@ -4,8 +4,9 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
-namespace StreamExtended.Network
+namespace Titanium.Web.Proxy.StreamExtended.Network
 {
     /// <summary>
     ///     A custom network stream inherited from stream

@@ -1,9 +1,9 @@
-﻿using StreamExtended.Models;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Titanium.Web.Proxy.StreamExtended.Models;
 
-namespace StreamExtended
+namespace Titanium.Web.Proxy.StreamExtended
 {
     internal class SslExtensions
     {

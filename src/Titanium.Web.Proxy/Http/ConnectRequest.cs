@@ -1,4 +1,4 @@
-﻿using StreamExtended;
+﻿using Titanium.Web.Proxy.StreamExtended;
 
 namespace Titanium.Web.Proxy.Http
 {

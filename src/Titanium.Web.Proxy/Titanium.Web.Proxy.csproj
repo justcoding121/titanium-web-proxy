@@ -40,10 +40,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\StreamExtended\StreamExtended.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Compile Update="Network\WinAuth\Security\Common.cs">
       <ExcludeFromSourceAnalysis>True</ExcludeFromSourceAnalysis>
       <ExcludeFromStyleCop>True</ExcludeFromStyleCop>

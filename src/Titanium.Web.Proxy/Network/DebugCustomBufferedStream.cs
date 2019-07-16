@@ -1,10 +1,11 @@
-﻿#if DEBUG
+﻿
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
+using Titanium.Web.Proxy.StreamExtended.Network;
+#if DEBUG
 using System;
 using System.IO;
 using System.Text;
 using System.Threading;
-using StreamExtended;
-using StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Network
 {

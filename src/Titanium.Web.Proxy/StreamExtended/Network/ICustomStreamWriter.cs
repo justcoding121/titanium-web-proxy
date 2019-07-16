@@ -1,7 +1,7 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
 
-namespace StreamExtended.Network
+namespace Titanium.Web.Proxy.StreamExtended.Network
 {
     /// <summary>
     ///     A concrete implementation of this interface is required when calling CopyStream.

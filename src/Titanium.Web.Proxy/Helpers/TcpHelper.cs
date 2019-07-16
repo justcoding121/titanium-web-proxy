@@ -3,8 +3,8 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.Helpers
 {

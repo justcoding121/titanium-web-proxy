@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace StreamExtended.Network
+namespace Titanium.Web.Proxy.StreamExtended.Network
 {
     /// <summary>
     ///     This concrete implemetation of interface acts as the source stream for CopyStream class.

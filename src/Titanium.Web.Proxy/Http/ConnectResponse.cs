@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Net;
-using StreamExtended;
+using Titanium.Web.Proxy.StreamExtended;
 
 namespace Titanium.Web.Proxy.Http
 {

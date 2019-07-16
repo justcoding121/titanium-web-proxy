@@ -1,11 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace StreamExtended
+namespace Titanium.Web.Proxy.StreamExtended
 {
     /// <summary>
     /// Mimic a Task but you can set AsyncState

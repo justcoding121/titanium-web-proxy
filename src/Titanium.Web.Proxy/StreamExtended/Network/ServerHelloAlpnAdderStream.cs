@@ -1,8 +1,9 @@
 ﻿using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
-namespace StreamExtended.Network
+namespace Titanium.Web.Proxy.StreamExtended.Network
 {
     public class ServerHelloAlpnAdderStream : Stream
     {
