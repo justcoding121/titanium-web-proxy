@@ -10,7 +10,7 @@ using System.Windows;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("Demo WPF")]
-[assembly: AssemblyCopyright("Copyright ©2017 Titanium")]
+[assembly: AssemblyCopyright("Copyright © Titanium 2015-2019")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

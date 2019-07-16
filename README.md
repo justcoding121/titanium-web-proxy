@@ -38,7 +38,7 @@ Supports
 
 #### Windows
 * Visual Studio Code as IDE for .NET core
-* Visual Studio 2017 as IDE for .NET framework/.NET core
+* Visual Studio 2017/2019 as IDE for .NET framework/.NET core
 
 #### Mac OS
 * Visual Studio Code as IDE for .NET core
