@@ -3,11 +3,11 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended;
-using StreamExtended.Network;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Shared;
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Helpers
 {

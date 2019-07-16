@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace StreamExtended.Models
+namespace Titanium.Web.Proxy.StreamExtended.Models
 {
     internal static class SslCiphers
     {

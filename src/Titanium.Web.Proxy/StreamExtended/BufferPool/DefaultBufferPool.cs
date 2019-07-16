@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 
-namespace StreamExtended
+namespace Titanium.Web.Proxy.StreamExtended.BufferPool
 {
 
     /// <summary>

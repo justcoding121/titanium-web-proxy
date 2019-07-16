@@ -1,4 +1,4 @@
-namespace StreamExtended.Models
+namespace Titanium.Web.Proxy.StreamExtended.Models
 {
     /// <summary>
     ///     The SSL extension information.

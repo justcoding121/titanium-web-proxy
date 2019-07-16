@@ -4,12 +4,12 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended.Network;
 using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {

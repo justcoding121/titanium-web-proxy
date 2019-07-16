@@ -9,7 +9,6 @@ using System.Net.Security;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
@@ -19,6 +18,7 @@ using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Shared;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy
 {

@@ -1,8 +1,8 @@
 ﻿using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.Helpers
 {

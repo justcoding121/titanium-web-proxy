@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace StreamExtended
+namespace Titanium.Web.Proxy.StreamExtended.BufferPool
 {
     /// <summary>
     ///     Use this interface to implement custom buffer pool.

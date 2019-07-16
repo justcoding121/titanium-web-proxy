@@ -34,10 +34,6 @@
     </PackageReference>
   </ItemGroup>
 
-   <ItemGroup>
-    <ProjectReference Include="..\StreamExtended\StreamExtended.csproj" />
-  </ItemGroup>
-  
   <ItemGroup Condition="'$(TargetFramework)' == 'net45'">
     <Reference Include="System.Web" />
   </ItemGroup>

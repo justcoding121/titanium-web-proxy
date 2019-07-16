@@ -2,9 +2,9 @@
 using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
-using StreamExtended;
-using StreamExtended.Network;
 using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
