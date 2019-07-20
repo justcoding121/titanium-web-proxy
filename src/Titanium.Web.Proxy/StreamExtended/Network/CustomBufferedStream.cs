@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -450,7 +451,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         {
             if (closed)
             {
-                return false;
+                throw new Exception("Stream is already closed");
             }
 
             if (bufferLength > 0)
@@ -462,17 +463,23 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             bufferPos = 0;
 
-            int readBytes = baseStream.Read(streamBuffer, bufferLength, streamBuffer.Length - bufferLength);
-            bool result = readBytes > 0;
-            if (result)
+            bool result = false;
+            try
             {
-                OnDataRead(streamBuffer, bufferLength, readBytes);
-                bufferLength += readBytes;
+                int readBytes = baseStream.Read(streamBuffer, bufferLength, streamBuffer.Length - bufferLength);
+                result = readBytes > 0;
+                if (result)
+                {
+                    OnDataRead(streamBuffer, bufferLength, readBytes);
+                    bufferLength += readBytes;
+                }
             }
-            else
+            finally
             {
-                closed = true;
-                throw new EndOfStreamException();
+                if (!result)
+                {
+                    closed = true;
+                }
             }
 
             return result;
@@ -488,7 +495,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         {
             if (closed)
             {
-                return false;
+                throw new Exception("Stream is already closed");
             }
 
             if (bufferLength > 0)
@@ -506,18 +513,23 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             bufferPos = 0;
 
-            int readBytes = await baseStream.ReadAsync(streamBuffer, bufferLength, bytesToRead, cancellationToken);
-            bool result = readBytes > 0;
-            if (result)
+            bool result = false;
+            try
             {
-                OnDataRead(streamBuffer, bufferLength, readBytes);
-                bufferLength += readBytes;
+                int readBytes = await baseStream.ReadAsync(streamBuffer, bufferLength, bytesToRead, cancellationToken);
+                result = readBytes > 0;
+                if (result)
+                {
+                    OnDataRead(streamBuffer, bufferLength, readBytes);
+                    bufferLength += readBytes;
+                }
             }
-            else
+            finally
             {
-                closed = true;
-
-                // do not throw exception here
+                if (!result)
+                {
+                    closed = true;
+                }
             }
 
             return result;
