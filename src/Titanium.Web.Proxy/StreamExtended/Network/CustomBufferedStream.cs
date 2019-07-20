@@ -456,7 +456,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             if (bufferLength > 0)
             {
                 //normally we fill the buffer only when it is empty, but sometimes we need more data
-                //move the remanining data to the beginning of the buffer 
+                //move the remaining data to the beginning of the buffer 
                 Buffer.BlockCopy(streamBuffer, bufferPos, streamBuffer, 0, bufferLength);
             }
 
@@ -516,7 +516,8 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             else
             {
                 closed = true;
-                throw new EndOfStreamException();
+
+                // do not throw exception here
             }
 
             return result;

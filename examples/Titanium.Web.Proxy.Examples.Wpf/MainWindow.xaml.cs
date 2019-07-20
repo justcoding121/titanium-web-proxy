@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             proxyServer = new ProxyServer();
 
-            proxyServer.EnableHttp2 = true;
+            //proxyServer.EnableHttp2 = true;
 
             //proxyServer.CertificateManager.CertificateEngine = CertificateEngine.DefaultWindows;
 
@@ -152,20 +152,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private async Task ProxyServer_BeforeRequest(object sender, SessionEventArgs e)
         {
-            if (e.HttpClient.ConnectRequest?.TunnelType != TunnelType.Http2)
-            {
-                return;
-            }
-
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() => { item = addSession(e); });
-
-            //if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Http2)
-            //{
-            //}
-
-            //if (!e.HttpClient.Request.RequestUri.ToString().Contains("/mail/u/"))
-            //    return;
 
             if (e.HttpClient.Request.HasBody)
             {
@@ -176,11 +164,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private async Task ProxyServer_BeforeResponse(object sender, SessionEventArgs e)
         {
-            if (e.HttpClient.ConnectRequest?.TunnelType != TunnelType.Http2)
-            {
-                return;
-            }
-
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() =>
             {
