@@ -238,11 +238,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     List of supported Ssl versions.
         /// </summary>
-        public SslProtocols SupportedSslProtocols { get; set; } =
-#if NET45
-            SslProtocols.Ssl3 |
-#endif
-            SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12;
+        public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Ssl3 | SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12;
 
         /// <summary>
         ///     The buffer pool used throughout this proxy instance.
