@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Fills the buffer asynchronous.
         /// </summary>
         /// <returns></returns>
-        Task<bool> FillBufferAsync(CancellationToken cancellationToken = default(CancellationToken));
+        Task<bool> FillBufferAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Peeks a byte from buffer.
@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="index">The index.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        Task<int> PeekByteAsync(int index, CancellationToken cancellationToken = default(CancellationToken));
+        Task<int> PeekByteAsync(int index, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Peeks bytes asynchronous.
@@ -45,7 +45,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="index">The index.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int size, CancellationToken cancellationToken = default(CancellationToken));
+        Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int size, CancellationToken cancellationToken = default);
 
         byte ReadByteFromBuffer();
 
@@ -69,12 +69,12 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="cancellationToken"></param>
         /// <returns>The number of bytes read</returns>
         Task<int> ReadAsync(byte[] buffer, int offset, int bytesToRead,
-            CancellationToken cancellationToken = default(CancellationToken));
+            CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        Task<string> ReadLineAsync(CancellationToken cancellationToken = default(CancellationToken));
+        Task<string> ReadLineAsync(CancellationToken cancellationToken = default);
     }
 }

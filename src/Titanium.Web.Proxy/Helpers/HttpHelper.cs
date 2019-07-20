@@ -123,7 +123,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsConnectMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, CancellationToken cancellationToken = default(CancellationToken))
+        internal static Task<int> IsConnectMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, CancellationToken cancellationToken = default)
         {
             return startsWith(clientStreamReader, bufferPool, bufferSize, "CONNECT", cancellationToken);
         }
@@ -133,7 +133,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when PRI, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsPriMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, CancellationToken cancellationToken = default(CancellationToken))
+        internal static Task<int> IsPriMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, CancellationToken cancellationToken = default)
         {
             return startsWith(clientStreamReader, bufferPool, bufferSize, "PRI", cancellationToken);
         }
@@ -146,7 +146,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns>
         ///     1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
         /// </returns>
-        private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, string expectedStart, CancellationToken cancellationToken = default(CancellationToken))
+        private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, string expectedStart, CancellationToken cancellationToken = default)
         {
             int iRet = -1;
             const int lengthToCheck = 10;

@@ -97,10 +97,19 @@ namespace Titanium.Web.Proxy.Http
 
             var writer = Connection.StreamWriter;
 
+            string url;
+            if (useUpstreamProxy || isTransparent)
+            {
+                url = Request.RequestUriString;
+            }
+            else
+            {
+                var uri = Request.RequestUri;
+                url = uri.IsWellFormedOriginalString() ? uri.PathAndQuery : uri.GetComponents(UriComponents.PathAndQuery, UriFormat.Unescaped);
+            }
+
             // prepare the request & headers
-            await writer.WriteLineAsync(Request.CreateRequestLine(Request.Method,
-                useUpstreamProxy || isTransparent ? Request.RequestUriString : Request.RequestUri.PathAndQuery,
-                Request.HttpVersion), cancellationToken);
+            await writer.WriteLineAsync(Request.CreateRequestLine(Request.Method, url, Request.HttpVersion), cancellationToken);
 
             var headerBuilder = new StringBuilder();
             
