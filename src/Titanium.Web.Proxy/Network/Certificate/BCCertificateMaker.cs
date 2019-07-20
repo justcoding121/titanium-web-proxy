@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -141,21 +141,8 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 rsa.Prime1, rsa.Prime2, rsa.Exponent1,
                 rsa.Exponent2, rsa.Coefficient);
 
-#if NET45
             // Set private key onto certificate instance
-            X509Certificate2 x509Certificate;
-            if (RunTime.IsRunningOnMono)
-            {
-                x509Certificate = withPrivateKey(certificate, rsaparams);
-            }
-            else
-            {
-                x509Certificate = new X509Certificate2(certificate.GetEncoded());
-                x509Certificate.PrivateKey = DotNetUtilities.ToRSA(rsaparams);
-            }
-#else
             var x509Certificate = withPrivateKey(certificate, rsaparams);
-#endif
 
             if (!doNotSetFriendlyName)
             {
@@ -248,36 +235,6 @@ namespace Titanium.Web.Proxy.Network.Certificate
             bool switchToMtaIfNeeded, X509Certificate2 signingCert = null,
             CancellationToken cancellationToken = default)
         {
-#if NET45
-            if (switchToMtaIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
-            {
-                X509Certificate2 certificate = null;
-                using (var manualResetEvent = new ManualResetEventSlim(false))
-                {
-                    ThreadPool.QueueUserWorkItem(o =>
-                    {
-                        try
-                        {
-                            certificate = makeCertificateInternal(subject, isRoot, false, signingCert);
-                        }
-                        catch (Exception ex)
-                        {
-                            exceptionFunc(new Exception("Failed to create BC certificate", ex));
-                        }
-
-                        if (!cancellationToken.IsCancellationRequested)
-                        {
-                            manualResetEvent.Set();
-                        }
-                    });
-
-                    manualResetEvent.Wait(TimeSpan.FromMinutes(1), cancellationToken);
-                }
-
-                return certificate;
-            }
-#endif
-
             return makeCertificateInternal(isRoot, subject, $"CN={subject}",
                 DateTime.UtcNow.AddDays(-certificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays),
                 isRoot ? null : signingCert);
