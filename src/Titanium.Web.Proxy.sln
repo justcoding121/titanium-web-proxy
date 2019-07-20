@@ -68,7 +68,6 @@ Global
 		{4406CE17-9A39-4F28-8363-6169A4F799C1}.Debug|x64.ActiveCfg = Debug|Any CPU
 		{4406CE17-9A39-4F28-8363-6169A4F799C1}.Debug|x64.Build.0 = Debug|Any CPU
 		{4406CE17-9A39-4F28-8363-6169A4F799C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{4406CE17-9A39-4F28-8363-6169A4F799C1}.Release|Any CPU.Build.0 = Release|Any CPU
 		{4406CE17-9A39-4F28-8363-6169A4F799C1}.Release|x64.ActiveCfg = Release|Any CPU
 		{4406CE17-9A39-4F28-8363-6169A4F799C1}.Release|x64.Build.0 = Release|Any CPU
 		{1D053D72-DCB4-4517-ACDD-D35ADC186950}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -90,7 +89,7 @@ Global
 		{1D053D72-DCB4-4517-ACDD-D35ADC186950} = {BC1E0789-D348-49CF-8B67-5E99D50EDF64}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		EnterpriseLibraryConfigurationToolBinariesPath = .1.505.2\lib\NET35
 		SolutionGuid = {625C1EB5-44CF-47DE-A85A-B4C8C40ED90A}
+		EnterpriseLibraryConfigurationToolBinariesPath = .1.505.2\lib\NET35
 	EndGlobalSection
 EndGlobal
