@@ -1,5 +1,7 @@
 ## Titanium Web Proxy
 
+### Note: This Project is no longer maintained. Any pull requests for fixes are welcome.
+
 A lightweight HTTP(S) proxy server written in C#.
 
 <a href="https://ci.appveyor.com/project/justcoding121/titanium-web-proxy">![Build Status](https://ci.appveyor.com/api/projects/status/p5vvtbpx9yp250ol?svg=true)</a> [![Join the chat at https://gitter.im/Titanium-Web-Proxy/Lobby](https://badges.gitter.im/Titanium-Web-Proxy/Lobby.svg)](https://gitter.im/Titanium-Web-Proxy/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
@@ -36,7 +38,7 @@ Supports
 
 #### Windows
 * Visual Studio Code as IDE for .NET core
-* Visual Studio 2017 as IDE for .NET framework/.NET core
+* Visual Studio 2017/2019 as IDE for .NET framework/.NET core
 
 #### Mac OS
 * Visual Studio Code as IDE for .NET core

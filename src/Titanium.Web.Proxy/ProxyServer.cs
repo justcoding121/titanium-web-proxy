@@ -7,8 +7,6 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended;
-using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -16,6 +14,8 @@ using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy
 {
@@ -57,6 +57,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private WinHttpWebProxyFinder systemProxyResolver;
 
+        
         /// <inheritdoc />
         /// <summary>
         ///     Initializes a new instance of ProxyServer class with provided parameters.
@@ -102,7 +103,7 @@ namespace Titanium.Web.Proxy
 
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory(this);
-            if (!RunTime.IsRunningOnMono && RunTime.IsWindows && !RunTime.IsUwpOnWindows)
+            if (RunTime.IsWindows && !RunTime.IsUwpOnWindows)
             {
                 systemProxySettingsManager = new SystemProxyManager();
             }
@@ -143,9 +144,17 @@ namespace Titanium.Web.Proxy
         ///     Defaults to false.
         /// </summary>
         public bool EnableWinAuth { get; set; }
+        
+        /// <summary>
+        ///     Enable disable HTTP/2 support.
+        ///     Warning: HTTP/2 support is very limited
+        ///      - only enabled when both client and server supports it (no protocol changing in proxy)
+        ///      - cannot modify the request/response (e.g header modifications in BeforeRequest/Response events are ignored)
+        /// </summary>
+        public bool EnableHttp2 { get; set; } = false;
 
         /// <summary>
-        ///     Should we check for certificare revocation during SSL authentication to servers
+        ///     Should we check for certificate revocation during SSL authentication to servers
         ///     Note: If enabled can reduce performance. Defaults to false.
         /// </summary>
         public X509RevocationMode CheckCertificateRevocation { get; set; }
@@ -168,7 +177,7 @@ namespace Titanium.Web.Proxy
         ///     When enabled, as soon as we receive a client connection we concurrently initiate 
         ///     corresponding server connection process using CONNECT hostname or SNI hostname on a separate task so that after parsing client request
         ///     we will have the server connection immediately ready or in the process of getting ready.
-        ///     If a server connection is available in cache then this prefetch task will immediatly return with the available connection from cache.
+        ///     If a server connection is available in cache then this prefetch task will immediately return with the available connection from cache.
         ///     Defaults to true.
         /// </summary>
         public bool EnableTcpServerConnectionPrefetch { get; set; } = true;
@@ -353,6 +362,11 @@ namespace Titanium.Web.Proxy
         public event AsyncEventHandler<TcpClient> OnServerConnectionCreate;
 
         /// <summary>
+        /// Customize the minimum ThreadPool size (increase it on a server)
+        /// </summary>
+        public int ThreadPoolWorkerThread { get; set; } = Environment.ProcessorCount;
+
+        /// <summary>
         ///     Add a proxy end point.
         /// </summary>
         /// <param name="endPoint">The proxy endpoint.</param>
@@ -374,7 +388,7 @@ namespace Titanium.Web.Proxy
 
         /// <summary>
         ///     Remove a proxy end point.
-        ///     Will throw error if the end point does'nt exist.
+        ///     Will throw error if the end point doesn't exist.
         /// </summary>
         /// <param name="endPoint">The existing endpoint to remove.</param>
         public void RemoveEndPoint(ProxyEndPoint endPoint)
@@ -417,9 +431,10 @@ namespace Titanium.Web.Proxy
         /// <param name="protocolType">The proxy protocol type.</param>
         public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType)
         {
-            if (RunTime.IsRunningOnMono)
+            if (!RunTime.IsWindows)
             {
-                throw new Exception("Mono Runtime do not support system proxy settings.");
+                throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
+                            Please manually confugure you operating system to use this proxy's port and address.");
             }
 
             validateEndPointAsSystemProxy(endPoint);
@@ -510,9 +525,10 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemProxy(ProxyProtocolType protocolType)
         {
-            if (RunTime.IsRunningOnMono)
+            if (!RunTime.IsWindows)
             {
-                throw new Exception("Mono Runtime do not support system proxy settings.");
+                throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
+                            Please manually confugure you operating system to use this proxy's port and address.");
             }
 
             systemProxySettingsManager.RemoveProxy(protocolType);
@@ -523,9 +539,10 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableAllSystemProxies()
         {
-            if (RunTime.IsRunningOnMono)
+            if (!RunTime.IsWindows)
             {
-                throw new Exception("Mono Runtime do not support system proxy settings.");
+                throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
+                            Please manually confugure you operating system to use this proxy's port and address.");
             }
 
             systemProxySettingsManager.DisableAllProxy();
@@ -540,6 +557,8 @@ namespace Titanium.Web.Proxy
             {
                 throw new Exception("Proxy is already running.");
             }
+
+            setThreadPoolMinThread(ThreadPoolWorkerThread);
 
             if (ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.GenericCertificate == null))
             {
@@ -599,7 +618,7 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is not running.");
             }
 
-            if (!RunTime.IsRunningOnMono && RunTime.IsWindows && !RunTime.IsUwpOnWindows)
+            if (RunTime.IsWindows && !RunTime.IsUwpOnWindows)
             {
                 bool setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
                     .Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
@@ -632,7 +651,7 @@ namespace Titanium.Web.Proxy
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
 
             //linux/macOS has a bug with socket reuse in .net core.
-            if (ReuseSocket && (RunTime.IsWindows || RunTime.IsRunningOnMono))
+            if (ReuseSocket && RunTime.IsWindows)
             {
                 endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             }
@@ -718,12 +737,31 @@ namespace Titanium.Web.Proxy
 
             if (tcpClient != null)
             {
-                Task.Run(async () => { await handleClient(tcpClient, endPoint); });
+                Task.Run(async () =>
+                {
+                    await handleClient(tcpClient, endPoint);
+                });
             }
 
             // Get the listener that handles the client request.
             endPoint.Listener.BeginAcceptTcpClient(onAcceptConnection, endPoint);
         }
+
+
+        /// <summary>
+        /// Change the ThreadPool.WorkerThread minThread 
+        /// </summary>
+        /// <param name="workerThreads">minimum Threads allocated in the ThreadPool</param>
+        private void setThreadPoolMinThread(int workerThreads)
+        {
+            ThreadPool.GetMinThreads(out int minWorkerThreads, out int minCompletionPortThreads);
+            ThreadPool.GetMaxThreads(out int maxWorkerThreads, out _);
+
+            minWorkerThreads = Math.Min(maxWorkerThreads, Math.Max(workerThreads, Environment.ProcessorCount));
+
+            ThreadPool.SetMinThreads(minWorkerThreads, minCompletionPortThreads);
+        }
+
 
         /// <summary>
         ///     Handle the client.
@@ -735,8 +773,7 @@ namespace Titanium.Web.Proxy
         {
             tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
             tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
-            tcpClient.SendBufferSize = BufferSize;
-            tcpClient.ReceiveBufferSize = BufferSize;
+
             tcpClient.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
 
             await InvokeConnectionCreateEvent(tcpClient, true);

@@ -143,8 +143,16 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
 #if NET45
             // Set private key onto certificate instance
-            var x509Certificate = new X509Certificate2(certificate.GetEncoded());
-            x509Certificate.PrivateKey = DotNetUtilities.ToRSA(rsaparams);
+            X509Certificate2 x509Certificate;
+            if (RunTime.IsRunningOnMono)
+            {
+                x509Certificate = withPrivateKey(certificate, rsaparams);
+            }
+            else
+            {
+                x509Certificate = new X509Certificate2(certificate.GetEncoded());
+                x509Certificate.PrivateKey = DotNetUtilities.ToRSA(rsaparams);
+            }
 #else
             var x509Certificate = withPrivateKey(certificate, rsaparams);
 #endif

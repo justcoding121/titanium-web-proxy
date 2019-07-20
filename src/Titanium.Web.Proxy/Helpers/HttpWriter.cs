@@ -4,10 +4,10 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended;
-using StreamExtended.Network;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Shared;
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -18,18 +18,13 @@ namespace Titanium.Web.Proxy.Helpers
 
         private static readonly byte[] newLine = ProxyConstants.NewLineBytes;
 
-        private static readonly Encoder encoder = Encoding.ASCII.GetEncoder();
-
-        private readonly char[] charBuffer;
+        private static readonly Encoding encoder = Encoding.ASCII;
 
         internal HttpWriter(Stream stream, IBufferPool bufferPool, int bufferSize)
         {
             BufferSize = bufferSize;
             this.stream = stream;
             this.bufferPool = bufferPool;
-
-            // ASCII encoder max byte count is char count + 1
-            charBuffer = new char[BufferSize - 1];
         }
 
         internal int BufferSize { get; }
@@ -55,12 +50,10 @@ namespace Titanium.Web.Proxy.Helpers
             int charCount = value.Length;
             if (charCount < BufferSize - newLineChars)
             {
-                value.CopyTo(0, charBuffer, 0, charCount);
-
                 var buffer = bufferPool.GetBuffer(BufferSize);
                 try
                 {
-                    int idx = encoder.GetBytes(charBuffer, 0, charCount, buffer, 0, true);
+                    int idx = encoder.GetBytes(value, 0, charCount, buffer, 0);
                     if (newLineChars > 0)
                     {
                         Buffer.BlockCopy(newLine, 0, buffer, idx, newLineChars);
@@ -76,11 +69,8 @@ namespace Titanium.Web.Proxy.Helpers
             }
             else
             {
-                var charBuffer = new char[charCount];
-                value.CopyTo(0, charBuffer, 0, charCount);
-
                 var buffer = new byte[charCount + newLineChars + 1];
-                int idx = encoder.GetBytes(charBuffer, 0, charCount, buffer, 0, true);
+                int idx = encoder.GetBytes(value, 0, charCount, buffer, 0);
                 if (newLineChars > 0)
                 {
                     Buffer.BlockCopy(newLine, 0, buffer, idx, newLineChars);

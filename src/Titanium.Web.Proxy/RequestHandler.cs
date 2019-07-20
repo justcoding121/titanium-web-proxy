@@ -2,13 +2,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Sockets;
 #if NETCOREAPP2_1
 using System.Net.Security;
 #endif
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
@@ -18,6 +18,7 @@ using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Shared;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy
 {
@@ -27,7 +28,7 @@ namespace Titanium.Web.Proxy
     public partial class ProxyServer
     {
         private bool isWindowsAuthenticationEnabledAndSupported =>
-            EnableWinAuth && RunTime.IsWindows && !RunTime.IsRunningOnMono;
+            EnableWinAuth && RunTime.IsWindows;
 
         /// <summary>
         ///     This is the core request handler method for a particular connection from client.
@@ -43,7 +44,7 @@ namespace Titanium.Web.Proxy
         ///     The https hostname as appeared in CONNECT request if this is a HTTPS request from
         ///     explicit endpoint.
         /// </param>
-        /// <param name="connectRequest">The Connect request if this is a HTTPS request from explicit endpoint.</param>
+        /// <param name="connectArgs">The Connect request if this is a HTTPS request from explicit endpoint.</param>
         /// <param name="prefetchConnectionTask">Prefetched server connection for current client using Connect/SNI headers.</param>
         private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, TcpClientConnection clientConnection,
             CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
@@ -60,7 +61,7 @@ namespace Titanium.Web.Proxy
             {
                 var cancellationToken = cancellationTokenSource.Token;
 
-                // Loop through each subsequest request on this particular client connection
+                // Loop through each subsequent request on this particular client connection
                 // (assuming HTTP connection is kept alive by client)
                 while (true)
                 {
@@ -188,8 +189,20 @@ namespace Titanium.Web.Proxy
                             //If prefetch task is available.
                             if (connection == null && prefetchTask != null)
                             {
-                                connection = await prefetchTask;
+                                try
+                                {
+                                    connection = await prefetchTask;
+                                }
+                                catch (SocketException e)
+                                {
+                                    if(e.SocketErrorCode != SocketError.HostNotFound)
+                                    {
+                                        throw;
+                                    }
+                                }
+
                                 prefetchTask = null;
+
                             }
 
                             // create a new connection if cache key changes.
@@ -299,6 +312,8 @@ namespace Titanium.Web.Proxy
 
                 if (args.HttpClient.Request.UpgradeToWebSocket)
                 {
+                    args.HttpClient.ConnectRequest.TunnelType = TunnelType.Websocket;
+
                     // if upgrading to websocket then relay the request without reading the contents
                     await handleWebSocketUpgrade(httpCmd, args, args.HttpClient.Request,
                         args.HttpClient.Response, args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamWriter,
@@ -360,7 +375,7 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///     Prepare the request headers so that we can avoid encodings not parsable by this proxy
+        ///     Prepare the request headers so that we can avoid encodings not parseable by this proxy
         /// </summary>
         private void prepareRequestHeaders(HeaderCollection requestHeaders)
         {

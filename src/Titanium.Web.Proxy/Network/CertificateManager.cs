@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy.Network
 
         /// <summary>
         /// A list of pending certificate creation tasks.
-        /// Usefull to prevent multiple threads working on same certificate generation 
+        /// Useful to prevent multiple threads working on same certificate generation 
         /// when burst certificate generation requests happen for same certificate.
         /// </summary>
         private readonly ConcurrentDictionary<string, Task<X509Certificate2>> pendingCertificateCreationTasks
@@ -149,7 +149,7 @@ namespace Titanium.Web.Proxy.Network
             set
             {
                 // For Mono (or Non-Windows) only Bouncy Castle is supported
-                if (!RunTime.IsWindows || RunTime.IsRunningOnMono)
+                if (!RunTime.IsWindows)
                 {
                     value = CertificateEngine.BouncyCastle;
                 }
@@ -662,7 +662,7 @@ namespace Titanium.Web.Proxy.Network
         /// <returns>True if success.</returns>
         public bool TrustRootCertificateAsAdmin(bool machineTrusted = false)
         {
-            if (!RunTime.IsWindows || RunTime.IsRunningOnMono)
+            if (!RunTime.IsWindows)
             {
                 return false;
             }
@@ -805,7 +805,7 @@ namespace Titanium.Web.Proxy.Network
         /// <returns>Should also remove from machine store?</returns>
         public bool RemoveTrustedRootCertificateAsAdmin(bool machineTrusted = false)
         {
-            if (!RunTime.IsWindows || RunTime.IsRunningOnMono)
+            if (!RunTime.IsWindows)
             {
                 return false;
             }

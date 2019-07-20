@@ -2,8 +2,9 @@
 using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
-using StreamExtended;
-using StreamExtended.Network;
+using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -60,7 +61,11 @@ namespace Titanium.Web.Proxy.EventArguments
                 chunkHead = chunkHead.Substring(0, idx);
             }
 
-            int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
+            if (!int.TryParse(chunkHead, NumberStyles.HexNumber, null, out int chunkSize))
+            {
+                throw new ProxyHttpException($"Invalid chunk length: '{chunkHead}'", null, null);
+            }
+
             bytesRemaining = chunkSize;
 
             if (chunkSize == 0)

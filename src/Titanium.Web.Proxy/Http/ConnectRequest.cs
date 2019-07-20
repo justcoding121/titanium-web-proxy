@@ -1,4 +1,4 @@
-﻿using StreamExtended;
+﻿using Titanium.Web.Proxy.StreamExtended;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -11,6 +11,8 @@ namespace Titanium.Web.Proxy.Http
         {
             Method = "CONNECT";
         }
+
+        public TunnelType TunnelType { get; internal set; }
 
         public ClientHelloInfo ClientHelloInfo { get; set; }
     }

@@ -2,7 +2,7 @@
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended;
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.Extensions
 {
@@ -17,6 +17,7 @@ namespace Titanium.Web.Proxy.Extensions
         /// <param name="input"></param>
         /// <param name="output"></param>
         /// <param name="onCopy"></param>
+        /// <param name="bufferPool"></param>
         /// <param name="bufferSize"></param>
         internal static Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy,
             IBufferPool bufferPool, int bufferSize)
@@ -30,6 +31,7 @@ namespace Titanium.Web.Proxy.Extensions
         /// <param name="input"></param>
         /// <param name="output"></param>
         /// <param name="onCopy"></param>
+        /// <param name="bufferPool"></param>
         /// <param name="bufferSize"></param>
         /// <param name="cancellationToken"></param>
         internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy,

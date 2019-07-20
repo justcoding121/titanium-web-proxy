@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.26906.1
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29102.190
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Examples", "Examples", "{B6DBABDC-C985-4872-9C38-B4E5079CBC4B}"
 EndProject
@@ -23,7 +23,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{BC1E0789
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Titanium.Web.Proxy", "Titanium.Web.Proxy\Titanium.Web.Proxy.csproj", "{91018B6D-A7A9-45BE-9CB3-79CBB8B169A6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Proxy.UnitTests", "..\tests\Titanium.Web.Proxy.UnitTests\Titanium.Web.Proxy.UnitTests.csproj", "{B517E3D0-D03B-436F-AB03-34BA0D5321AF}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Titanium.Web.Proxy.UnitTests", "..\tests\Titanium.Web.Proxy.UnitTests\Titanium.Web.Proxy.UnitTests.csproj", "{B517E3D0-D03B-436F-AB03-34BA0D5321AF}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Titanium.Web.Proxy.Examples.Basic", "..\examples\Titanium.Web.Proxy.Examples.Basic\Titanium.Web.Proxy.Examples.Basic.csproj", "{1FAC4205-4445-4F2B-BB8F-618E8A0C15FD}"
 EndProject

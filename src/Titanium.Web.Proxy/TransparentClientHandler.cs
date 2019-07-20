@@ -7,14 +7,14 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
-using StreamExtended;
-using StreamExtended.Network;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.StreamExtended;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy
 {
@@ -67,7 +67,7 @@ namespace Titanium.Web.Proxy
                         X509Certificate2 certificate = null;
                         try
                         {
-                            sslStream = new SslStream(clientStream, true);
+                            sslStream = new SslStream(clientStream, false);
 
                             string certName = HttpHelper.GetWildCardDomainName(httpsHostName);
                             certificate = endPoint.GenericCertificate ??
@@ -112,7 +112,7 @@ namespace Titanium.Web.Proxy
                                 var data = BufferPool.GetBuffer(BufferSize);
                                 try
                                 {
-                                    // clientStream.Available sbould be at most BufferSize because it is using the same buffer size
+                                    // clientStream.Available should be at most BufferSize because it is using the same buffer size
                                     await clientStream.ReadAsync(data, 0, available, cancellationToken);
                                     serverStream = connection.Stream;
                                     await serverStream.WriteAsync(data, 0, available, cancellationToken);
