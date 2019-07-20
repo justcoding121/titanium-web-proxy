@@ -159,6 +159,11 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 e.HttpClient.Request.KeepBody = true;
                 await e.GetRequestBody();
+
+                if (item == SelectedSession)
+                {
+                    await Dispatcher.InvokeAsync(selectedSessionChanged);
+                }
             }
         }
 
@@ -185,6 +190,10 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                     await e.GetResponseBody();
 
                     await Dispatcher.InvokeAsync(() => { item.Update(); });
+                    if (item == SelectedSession)
+                    {
+                        await Dispatcher.InvokeAsync(selectedSessionChanged);
+                    }
                 }
             }
         }
