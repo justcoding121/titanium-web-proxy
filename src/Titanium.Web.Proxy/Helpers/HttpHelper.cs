@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -99,7 +100,13 @@ namespace Titanium.Web.Proxy.Helpers
         {
             // only for subdomains we need wild card
             // example www.google.com or gstatic.google.com
-            // but NOT for google.com
+            // but NOT for google.com or IP address
+
+            if (IPAddress.TryParse(hostname, out _))
+            {
+                return hostname;
+            }
+
             if (hostname.Split(ProxyConstants.DotSplit).Length > 2)
             {
                 int idx = hostname.IndexOf(ProxyConstants.DotSplit);

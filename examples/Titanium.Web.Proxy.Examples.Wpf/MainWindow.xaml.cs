@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using Titanium.Web.Proxy.EventArguments;
@@ -95,7 +96,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 Dispatcher.Invoke(() => { ServerConnectionCount = proxyServer.ServerConnectionCount; });
             };
             proxyServer.Start();
-
+            
             proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
 
             InitializeComponent();
@@ -284,15 +285,26 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             if (e.Key == Key.Delete)
             {
+                bool isSelected = false;
                 var selectedItems = ((ListView)sender).SelectedItems;
                 Sessions.SuppressNotification = true;
                 foreach (var item in selectedItems.Cast<SessionListItem>().ToArray())
                 {
+                    if (item == SelectedSession)
+                    {
+                        isSelected = true;
+                    }
+
                     Sessions.Remove(item);
                     sessionDictionary.Remove(item.HttpClient);
                 }
 
                 Sessions.SuppressNotification = false;
+
+                if (isSelected)
+                {
+                    SelectedSession = null;
+                }
             }
         }
 
@@ -300,6 +312,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             if (SelectedSession == null)
             {
+                TextBoxRequest.Text = null;
+                TextBoxResponse.Text = string.Empty;
+                ImageResponse.Source = null;
                 return;
             }
 
@@ -307,7 +322,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             var session = SelectedSession.HttpClient;
             var request = session.Request;
-            var fullData = (request.IsBodyRead ? request.Body : null) ?? new byte[0];
+            var fullData = (request.IsBodyRead ? request.Body : null) ?? Array.Empty<byte>();
             var data = fullData;
             bool truncated = data.Length > truncateLimit;
             if (truncated)
@@ -324,7 +339,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             TextBoxRequest.Text = sb.ToString();
 
             var response = session.Response;
-            fullData = (response.IsBodyRead ? response.Body : null) ?? new byte[0];
+            fullData = (response.IsBodyRead ? response.Body : null) ?? Array.Empty<byte>();
             data = fullData;
             truncated = data.Length > truncateLimit;
             if (truncated)
@@ -348,15 +363,32 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             try
             {
-                using (MemoryStream stream = new MemoryStream(fullData))
+                if (fullData.Length > 0)
                 {
-                    ImageResponse.Source =
-                        BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+                    using (var stream = new MemoryStream(fullData))
+                    {
+                        ImageResponse.Source =
+                            BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+                    }
                 }
             }
             catch
             {
                 ImageResponse.Source = null;
+            }
+        }
+
+        private void ButtonProxyOnOff_OnClick(object sender, RoutedEventArgs e)
+        {
+            var button = (ToggleButton)sender;
+            if (button.IsChecked == true)
+            {
+                proxyServer.SetAsSystemProxy((ExplicitProxyEndPoint)proxyServer.ProxyEndPoints[0],
+                    ProxyProtocolType.AllHttp);
+            }
+            else
+            {
+                proxyServer.RestoreOriginalProxySettings();
             }
         }
     }
