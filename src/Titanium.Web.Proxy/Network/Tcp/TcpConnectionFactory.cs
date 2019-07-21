@@ -480,7 +480,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 try
                 {
-                    var cutOff = DateTime.Now.AddSeconds(-1 * Server.ConnectionTimeOutSeconds);
+                    var cutOff = DateTime.Now.AddSeconds(-Server.ConnectionTimeOutSeconds);
                     foreach (var item in cache)
                     {
                         var queue = item.Value;
