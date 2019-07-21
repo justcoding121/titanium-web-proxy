@@ -119,7 +119,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private async Task onBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
             string hostname = e.HttpClient.Request.RequestUri.Host;
-            //await writeToConsole("Tunnel to: " + hostname);
+            await writeToConsole("Tunnel to: " + hostname);
 
             if (hostname.Contains("dropbox.com"))
             {
@@ -138,8 +138,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
         // intecept & cancel redirect or update requests
         private async Task onRequest(object sender, SessionEventArgs e)
         {
-            //await writeToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
-            //await writeToConsole(e.HttpClient.Request.Url);
+            await writeToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
+            await writeToConsole(e.HttpClient.Request.Url);
 
             // store it in the UserData property
             // It can be a simple integer, Guid, or any type
@@ -189,7 +189,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task onResponse(object sender, SessionEventArgs e)
         {
-            //await writeToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
+            await writeToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
             string ext = System.IO.Path.GetExtension(e.HttpClient.Request.RequestUri.AbsolutePath);
 

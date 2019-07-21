@@ -184,13 +184,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 if (cache.TryGetValue(cacheKey, out var existingConnections))
                 {
+                    // +3 seconds for potential delay after getting connection
+                    var cutOff = DateTime.Now.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
                     while (existingConnections.Count > 0)
                     {
                         if (existingConnections.TryDequeue(out var recentConnection))
                         {
-                            //+3 seconds for potential delay after getting connection
-                            var cutOff = DateTime.Now.AddSeconds(-1 * proxyServer.ConnectionTimeOutSeconds + 3);
-
                             if (recentConnection.LastAccess > cutOff
                                 && recentConnection.TcpClient.IsGoodConnection())
                             {
@@ -481,7 +480,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 try
                 {
-                    var cutOff = DateTime.Now.AddSeconds(-1 * Server.ConnectionTimeOutSeconds);
+                    var cutOff = DateTime.Now.AddSeconds(-Server.ConnectionTimeOutSeconds);
                     foreach (var item in cache)
                     {
                         var queue = item.Value;
@@ -490,8 +489,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         {
                             if (queue.TryDequeue(out var connection))
                             {
-                                if (!Server.EnableConnectionPool
-                                    || connection.LastAccess < cutOff)
+                                if (!Server.EnableConnectionPool || connection.LastAccess < cutOff)
                                 {
                                     disposalBag.Add(connection);
                                 }
@@ -508,8 +506,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     {
                         await @lock.WaitAsync();
 
-                        //clear empty queues
-                        var emptyKeys = cache.Where(x => x.Value.Count == 0).Select(x => x.Key).ToList();
+                        // clear empty queues
+                        var emptyKeys = cache.ToArray().Where(x => x.Value.Count == 0).Select(x => x.Key);
                         foreach (string key in emptyKeys)
                         {
                             cache.TryRemove(key, out _);
