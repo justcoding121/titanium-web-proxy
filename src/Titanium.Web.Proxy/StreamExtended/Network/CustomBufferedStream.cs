@@ -51,7 +51,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             try
             {
                 var method = typeof(NetworkStream).GetMethod(nameof(Stream.ReadAsync),
-                    new Type[] { typeof(byte[]), typeof(int), typeof(int), typeof(CancellationToken) });
+                    new[] { typeof(byte[]), typeof(int), typeof(int), typeof(CancellationToken) });
                 if (method != null && method.DeclaringType != typeof(Stream))
                 {
                     networkStreamHack = false;
@@ -684,8 +684,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             return ((TaskResult<int>)asyncResult).Result;
         }
-
-
+        
         /// <summary>
         /// Fix the .net bug with SslStream slow WriteAsync
         /// https://github.com/justcoding121/Titanium-Web-Proxy/issues/495
@@ -709,6 +708,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             return vAsyncResult;
         }
+
         public override void EndWrite(IAsyncResult asyncResult)
         {
             if (!networkStreamHack)
