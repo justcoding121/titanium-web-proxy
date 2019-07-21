@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System.Buffers;
+using System.Collections.Concurrent;
 
 namespace Titanium.Web.Proxy.StreamExtended.BufferPool
 {
@@ -10,8 +11,6 @@ namespace Titanium.Web.Proxy.StreamExtended.BufferPool
     /// </summary>
     public class DefaultBufferPool : IBufferPool
     {
-        private readonly ConcurrentStack<byte[]> buffers = new ConcurrentStack<byte[]>();
-
         /// <summary>
         /// Gets a buffer.
         /// </summary>
@@ -19,12 +18,7 @@ namespace Titanium.Web.Proxy.StreamExtended.BufferPool
         /// <returns></returns>
         public byte[] GetBuffer(int bufferSize)
         {
-            if (!buffers.TryPop(out var buffer) || buffer.Length != bufferSize)
-            {
-                buffer = new byte[bufferSize];
-            }
-
-            return buffer;
+            return ArrayPool<byte>.Shared.Rent(bufferSize);
         }
 
         /// <summary>
@@ -33,15 +27,11 @@ namespace Titanium.Web.Proxy.StreamExtended.BufferPool
         /// <param name="buffer">The buffer.</param>
         public void ReturnBuffer(byte[] buffer)
         {
-            if (buffer != null)
-            {
-                buffers.Push(buffer);
-            }
+            ArrayPool<byte>.Shared.Return(buffer);
         }
 
         public void Dispose()
         {
-            buffers.Clear();
         }
     }
 }

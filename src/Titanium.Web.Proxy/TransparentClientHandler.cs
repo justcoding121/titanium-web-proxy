@@ -103,7 +103,6 @@ namespace Titanium.Web.Proxy
 
                         try
                         {
-                            CustomBufferedStream serverStream = null;
                             int available = clientStream.Available;
 
                             if (available > 0)
@@ -114,9 +113,7 @@ namespace Titanium.Web.Proxy
                                 {
                                     // clientStream.Available should be at most BufferSize because it is using the same buffer size
                                     await clientStream.ReadAsync(data, 0, available, cancellationToken);
-                                    serverStream = connection.Stream;
-                                    await serverStream.WriteAsync(data, 0, available, cancellationToken);
-                                    await serverStream.FlushAsync(cancellationToken);
+                                    await connection.StreamWriter.WriteAsync(data, 0, available, true, cancellationToken);
                                 }
                                 finally
                                 {
@@ -124,8 +121,11 @@ namespace Titanium.Web.Proxy
                                 }
                             }
 
-                            await TcpHelper.SendRaw(clientStream, serverStream, BufferPool, BufferSize,
-                                null, null, cancellationTokenSource, ExceptionFunc);
+                            if (!clientStream.IsClosed && !connection.Stream.IsClosed)
+                            {
+                                await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool, BufferSize,
+                                    null, null, cancellationTokenSource, ExceptionFunc);
+                            }
                         }
                         finally
                         {

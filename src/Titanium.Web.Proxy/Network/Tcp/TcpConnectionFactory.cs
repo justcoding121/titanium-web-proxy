@@ -481,6 +481,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 try
                 {
+                    var cutOff = DateTime.Now.AddSeconds(-1 * Server.ConnectionTimeOutSeconds);
                     foreach (var item in cache)
                     {
                         var queue = item.Value;
@@ -489,7 +490,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         {
                             if (queue.TryDequeue(out var connection))
                             {
-                                var cutOff = DateTime.Now.AddSeconds(-1 * Server.ConnectionTimeOutSeconds);
                                 if (!Server.EnableConnectionPool
                                     || connection.LastAccess < cutOff)
                                 {
@@ -512,7 +512,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         var emptyKeys = cache.Where(x => x.Value.Count == 0).Select(x => x.Key).ToList();
                         foreach (string key in emptyKeys)
                         {
-                            cache.TryRemove(key, out var _);
+                            cache.TryRemove(key, out _);
                         }
                     }
                     finally

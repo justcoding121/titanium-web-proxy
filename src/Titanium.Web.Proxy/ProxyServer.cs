@@ -517,6 +517,20 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
+        ///     Restores the original proxy settings.
+        /// </summary>
+        public void RestoreOriginalProxySettings()
+        {
+            if (!RunTime.IsWindows)
+            {
+                throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
+                            Please manually configure your operating system to use this proxy's port and address.");
+            }
+
+            systemProxySettingsManager.RestoreOriginalSettings();
+        }
+
+        /// <summary>
         ///     Clear the specified proxy setting for current machine.
         /// </summary>
         public void DisableSystemProxy(ProxyProtocolType protocolType)
@@ -524,7 +538,7 @@ namespace Titanium.Web.Proxy
             if (!RunTime.IsWindows)
             {
                 throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
-                            Please manually confugure you operating system to use this proxy's port and address.");
+                            Please manually configure your operating system to use this proxy's port and address.");
             }
 
             systemProxySettingsManager.RemoveProxy(protocolType);
