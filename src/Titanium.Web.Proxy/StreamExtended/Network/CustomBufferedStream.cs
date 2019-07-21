@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         // default to UTF-8
         private static readonly Encoding encoding = Encoding.UTF8;
 
-        private static bool networkStreamHack = true;
+        private static readonly bool networkStreamHack = true;
 
         private int bufferLength;
 
