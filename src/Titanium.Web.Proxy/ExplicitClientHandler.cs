@@ -265,8 +265,8 @@ namespace Titanium.Web.Proxy
 
                                     try
                                     {
-                                        await clientStream.ReadAsync(data, 0, available, cancellationToken);
                                         // clientStream.Available should be at most BufferSize because it is using the same buffer size
+                                        await clientStream.ReadAsync(data, 0, available, cancellationToken);
                                         await connection.StreamWriter.WriteAsync(data, 0, available, true, cancellationToken);
                                     }
                                     finally
@@ -279,10 +279,13 @@ namespace Titanium.Web.Proxy
                                 ((ConnectResponse)connectArgs.HttpClient.Response).ServerHelloInfo = serverHelloInfo;
                             }
 
-                            await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool, BufferSize,
-                                (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
-                                (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
-                                connectArgs.CancellationTokenSource, ExceptionFunc);
+                            if (!clientStream.IsClosed && !connection.Stream.IsClosed)
+                            {
+                                await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool, BufferSize,
+                                    (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
+                                    (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
+                                    connectArgs.CancellationTokenSource, ExceptionFunc);
+                            }
                         }
                         finally
                         {

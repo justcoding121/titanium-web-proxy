@@ -3744,6 +3744,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.RemoveEndPoint
   nameWithType: ProxyServer.RemoveEndPoint
+- uid: Titanium.Web.Proxy.ProxyServer.RestoreOriginalProxySettings
+  name: RestoreOriginalProxySettings()
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_RestoreOriginalProxySettings
+  commentId: M:Titanium.Web.Proxy.ProxyServer.RestoreOriginalProxySettings
+  fullName: Titanium.Web.Proxy.ProxyServer.RestoreOriginalProxySettings()
+  nameWithType: ProxyServer.RestoreOriginalProxySettings()
+- uid: Titanium.Web.Proxy.ProxyServer.RestoreOriginalProxySettings*
+  name: RestoreOriginalProxySettings
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_RestoreOriginalProxySettings_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.RestoreOriginalProxySettings
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.RestoreOriginalProxySettings
+  nameWithType: ProxyServer.RestoreOriginalProxySettings
 - uid: Titanium.Web.Proxy.ProxyServer.ReuseSocket
   name: ReuseSocket
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ReuseSocket

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,12 +17,13 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     /// <seealso cref="System.IO.Stream" />
     public class CustomBufferedStream : Stream, ICustomStreamReader
     {
-        private readonly Stream baseStream;
         private readonly bool leaveOpen;
         private byte[] streamBuffer;
 
         // default to UTF-8
         private static readonly Encoding encoding = Encoding.UTF8;
+
+        private static readonly bool networkStreamHack = true;
 
         private int bufferLength;
 
@@ -39,7 +41,27 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         public event EventHandler<DataEventArgs> DataWrite;
 
+        public Stream BaseStream { get; }
+
         public bool IsClosed => closed;
+
+        static CustomBufferedStream()
+        {
+            // TODO: remove this hack when removing .NET 4.x support
+            try
+            {
+                var method = typeof(NetworkStream).GetMethod(nameof(Stream.ReadAsync),
+                    new Type[] { typeof(byte[]), typeof(int), typeof(int), typeof(CancellationToken) });
+                if (method != null && method.DeclaringType != typeof(Stream))
+                {
+                    networkStreamHack = false;
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CustomBufferedStream"/> class.
@@ -50,7 +72,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="leaveOpen"><see langword="true" /> to leave the stream open after disposing the <see cref="T:CustomBufferedStream" /> object; otherwise, <see langword="false" />.</param>
         public CustomBufferedStream(Stream baseStream, IBufferPool bufferPool, int bufferSize, bool leaveOpen = false)
         {
-            this.baseStream = baseStream;
+            BaseStream = baseStream;
             BufferSize = bufferSize;
             this.leaveOpen = leaveOpen;
             streamBuffer = bufferPool.GetBuffer(bufferSize);
@@ -62,7 +84,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         public override void Flush()
         {
-            baseStream.Flush();
+            BaseStream.Flush();
         }
 
         /// <summary>
@@ -77,7 +99,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         {
             bufferLength = 0;
             bufferPos = 0;
-            return baseStream.Seek(offset, origin);
+            return BaseStream.Seek(offset, origin);
         }
 
         /// <summary>
@@ -86,7 +108,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="value">The desired length of the current stream in bytes.</param>
         public override void SetLength(long value)
         {
-            baseStream.SetLength(value);
+            BaseStream.SetLength(value);
         }
 
         /// <summary>
@@ -126,7 +148,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         public override void Write(byte[] buffer, int offset, int count)
         {
             OnDataWrite(buffer, offset, count);
-            baseStream.Write(buffer, offset, count);
+            BaseStream.Write(buffer, offset, count);
         }
 
         /// <summary>
@@ -159,7 +181,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </returns>
         public override Task FlushAsync(CancellationToken cancellationToken = default)
         {
-            return baseStream.FlushAsync(cancellationToken);
+            return BaseStream.FlushAsync(cancellationToken);
         }
 
         /// <summary>
@@ -328,7 +350,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         {
             OnDataWrite(buffer, offset, count);
 
-            await baseStream.WriteAsync(buffer, offset, count, cancellationToken);
+            await BaseStream.WriteAsync(buffer, offset, count, cancellationToken);
         }
 
         /// <summary>
@@ -342,7 +364,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             {
                 buffer[0] = value;
                 OnDataWrite(buffer, 0, 1);
-                baseStream.Write(buffer, 0, 1);
+                BaseStream.Write(buffer, 0, 1);
             }
             finally
             {
@@ -372,7 +394,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
                 closed = true;
                 if (!leaveOpen)
                 {
-                    baseStream.Dispose();
+                    BaseStream.Dispose();
                 }
 
                 var buffer = streamBuffer;
@@ -384,27 +406,27 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <summary>
         /// When overridden in a derived class, gets a value indicating whether the current stream supports reading.
         /// </summary>
-        public override bool CanRead => baseStream.CanRead;
+        public override bool CanRead => BaseStream.CanRead;
 
         /// <summary>
         /// When overridden in a derived class, gets a value indicating whether the current stream supports seeking.
         /// </summary>
-        public override bool CanSeek => baseStream.CanSeek;
+        public override bool CanSeek => BaseStream.CanSeek;
 
         /// <summary>
         /// When overridden in a derived class, gets a value indicating whether the current stream supports writing.
         /// </summary>
-        public override bool CanWrite => baseStream.CanWrite;
+        public override bool CanWrite => BaseStream.CanWrite;
 
         /// <summary>
         /// Gets a value that determines whether the current stream can time out.
         /// </summary>
-        public override bool CanTimeout => baseStream.CanTimeout;
+        public override bool CanTimeout => BaseStream.CanTimeout;
 
         /// <summary>
         /// When overridden in a derived class, gets the length in bytes of the stream.
         /// </summary>
-        public override long Length => baseStream.Length;
+        public override long Length => BaseStream.Length;
 
         /// <summary>
         /// Gets a value indicating whether data is available.
@@ -421,8 +443,8 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         public override long Position
         {
-            get => baseStream.Position;
-            set => baseStream.Position = value;
+            get => BaseStream.Position;
+            set => BaseStream.Position = value;
         }
 
         /// <summary>
@@ -430,8 +452,8 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         public override int ReadTimeout
         {
-            get => baseStream.ReadTimeout;
-            set => baseStream.ReadTimeout = value;
+            get => BaseStream.ReadTimeout;
+            set => BaseStream.ReadTimeout = value;
         }
 
         /// <summary>
@@ -439,8 +461,8 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         public override int WriteTimeout
         {
-            get => baseStream.WriteTimeout;
-            set => baseStream.WriteTimeout = value;
+            get => BaseStream.WriteTimeout;
+            set => BaseStream.WriteTimeout = value;
         }
 
         /// <summary>
@@ -450,29 +472,35 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         {
             if (closed)
             {
-                return false;
+                throw new Exception("Stream is already closed");
             }
 
             if (bufferLength > 0)
             {
                 //normally we fill the buffer only when it is empty, but sometimes we need more data
-                //move the remanining data to the beginning of the buffer 
+                //move the remaining data to the beginning of the buffer 
                 Buffer.BlockCopy(streamBuffer, bufferPos, streamBuffer, 0, bufferLength);
             }
 
             bufferPos = 0;
 
-            int readBytes = baseStream.Read(streamBuffer, bufferLength, streamBuffer.Length - bufferLength);
-            bool result = readBytes > 0;
-            if (result)
+            bool result = false;
+            try
             {
-                OnDataRead(streamBuffer, bufferLength, readBytes);
-                bufferLength += readBytes;
+                int readBytes = BaseStream.Read(streamBuffer, bufferLength, streamBuffer.Length - bufferLength);
+                result = readBytes > 0;
+                if (result)
+                {
+                    OnDataRead(streamBuffer, bufferLength, readBytes);
+                    bufferLength += readBytes;
+                }
             }
-            else
+            finally
             {
-                closed = true;
-                throw new EndOfStreamException();
+                if (!result)
+                {
+                    closed = true;
+                }
             }
 
             return result;
@@ -488,7 +516,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         {
             if (closed)
             {
-                return false;
+                throw new Exception("Stream is already closed");
             }
 
             if (bufferLength > 0)
@@ -506,17 +534,23 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             bufferPos = 0;
 
-            int readBytes = await baseStream.ReadAsync(streamBuffer, bufferLength, bytesToRead, cancellationToken);
-            bool result = readBytes > 0;
-            if (result)
+            bool result = false;
+            try
             {
-                OnDataRead(streamBuffer, bufferLength, readBytes);
-                bufferLength += readBytes;
+                int readBytes = await BaseStream.ReadAsync(streamBuffer, bufferLength, bytesToRead, cancellationToken);
+                result = readBytes > 0;
+                if (result)
+                {
+                    OnDataRead(streamBuffer, bufferLength, readBytes);
+                    bufferLength += readBytes;
+                }
             }
-            else
+            finally
             {
-                closed = true;
-                throw new EndOfStreamException();
+                if (!result)
+                {
+                    closed = true;
+                }
             }
 
             return result;
@@ -610,8 +644,6 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             buffer = newBuffer;
         }
 
-#if NET45 || NETSTANDARD2_0
-
         /// <summary>        
         /// Base Stream.BeginRead will call this.Read and block thread (we don't want this, Network stream handles async)
         /// In order to really async Reading Launch this.ReadAsync as Task will fire NetworkStream.ReadAsync
@@ -622,6 +654,11 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <returns></returns>
         public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
         {
+            if (!networkStreamHack)
+            {
+                return base.BeginRead(buffer, offset, count, callback, state);
+            }
+
             var vAsyncResult = this.ReadAsync(buffer, offset, count);
 
             vAsyncResult.ContinueWith(pAsyncResult =>
@@ -640,6 +677,11 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <returns></returns>
         public override int EndRead(IAsyncResult asyncResult)
         {
+            if (!networkStreamHack)
+            {
+                return base.EndRead(asyncResult);
+            }
+
             return ((TaskResult<int>)asyncResult).Result;
         }
 
@@ -653,6 +695,11 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <returns></returns>
         public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
         {
+            if (!networkStreamHack)
+            {
+                return base.BeginWrite(buffer, offset, count, callback, state);
+            }
+
             var vAsyncResult = this.WriteAsync(buffer, offset, count);
 
             vAsyncResult.ContinueWith(pAsyncResult =>
@@ -664,9 +711,13 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         }
         public override void EndWrite(IAsyncResult asyncResult)
         {
+            if (!networkStreamHack)
+            {
+                base.EndWrite(asyncResult);
+                return;
+            }
+
             ((TaskResult)asyncResult).GetResult();
         }
-
-#endif
     }
 }

@@ -65,6 +65,11 @@ namespace Titanium.Web.Proxy
                 // (assuming HTTP connection is kept alive by client)
                 while (true)
                 {
+                    if (clientStream.IsClosed)
+                    {
+                        return;
+                    }
+
                     // read the request line
                     string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
 
@@ -255,11 +260,11 @@ namespace Titanium.Web.Proxy
                                 throw new Exception("Session was terminated by user.");
                             }
 
-                            //Release server connection for each HTTP session instead of per client connection.
-                            //This will be more efficient especially when client is idly holding server connection 
-                            //between sessions without using it.
-                            //Do not release authenticated connections for performance reasons.
-                            //Otherwise it will keep authenticating per session.
+                            // Release server connection for each HTTP session instead of per client connection.
+                            // This will be more efficient especially when client is idly holding server connection 
+                            // between sessions without using it.
+                            // Do not release authenticated connections for performance reasons.
+                            // Otherwise it will keep authenticating per session.
                             if (EnableConnectionPool && connection != null
                                     && !connection.IsWinAuthenticated)
                             {

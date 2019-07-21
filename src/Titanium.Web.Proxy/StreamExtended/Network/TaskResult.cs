@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Titanium.Web.Proxy.StreamExtended
+namespace Titanium.Web.Proxy.StreamExtended.Network
 {
     /// <summary>
     /// Mimic a Task but you can set AsyncState
@@ -11,18 +11,22 @@ namespace Titanium.Web.Proxy.StreamExtended
     public class TaskResult : IAsyncResult
     {
         Task Task;
-        object mAsyncState;
+        readonly object asyncState;
 
         public TaskResult(Task pTask, object state)
         {
             Task = pTask;
-            mAsyncState = state;
+            asyncState = state;
         }
 
-        public object AsyncState => mAsyncState;
+        public object AsyncState => asyncState;
+
         public WaitHandle AsyncWaitHandle => ((IAsyncResult)Task).AsyncWaitHandle;
+
         public bool CompletedSynchronously => ((IAsyncResult)Task).CompletedSynchronously;
+
         public bool IsCompleted => Task.IsCompleted;
+
         public void GetResult() { this.Task.GetAwaiter().GetResult(); }
     }
 
@@ -33,20 +37,22 @@ namespace Titanium.Web.Proxy.StreamExtended
     public class TaskResult<T> : IAsyncResult
     {
         Task<T> Task;
-        object mAsyncState;
+        readonly object asyncState;
 
         public TaskResult(Task<T> pTask, object state)
         {
             Task = pTask;
-            mAsyncState = state;
+            asyncState = state;
         }
 
-        public object AsyncState => mAsyncState;
+        public object AsyncState => asyncState;
+
         public WaitHandle AsyncWaitHandle => ((IAsyncResult)Task).AsyncWaitHandle;
+
         public bool CompletedSynchronously => ((IAsyncResult)Task).CompletedSynchronously;
+
         public bool IsCompleted => Task.IsCompleted;
+
         public T Result => Task.Result;
     }
-
-
 }

@@ -54,6 +54,7 @@
             </TabItem>
         </TabControl>
         <StackPanel Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal">
+            <ToggleButton IsChecked="True" Content="On/Off" Click="ButtonProxyOnOff_OnClick" />
             <TextBlock Text="ClientConnectionCount:" />
             <TextBlock Text="{Binding ClientConnectionCount}" Margin="10,0,20,0" />
             <TextBlock Text="ServerConnectionCount:" />
