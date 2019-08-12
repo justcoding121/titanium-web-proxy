@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -266,6 +268,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             SslApplicationProtocol negotiatedApplicationProtocol = default;
 
+            bool retry = true;
+            var enabledSslProtocols = proxyServer.SupportedSslProtocols;
+
+            retry:
             try
             {
                 tcpClient = new TcpClient(upStreamEndPoint)
@@ -365,7 +371,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         ApplicationProtocols = applicationProtocols,
                         TargetHost = remoteHostName,
                         ClientCertificates = null,
-                        EnabledSslProtocols = proxyServer.SupportedSslProtocols,
+                        EnabledSslProtocols = enabledSslProtocols,
                         CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                     };
                     await sslStream.AuthenticateAsClientAsync(options, cancellationToken);
@@ -379,6 +385,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     }
 
                 }
+            }
+            catch (IOException ex) when (ex.HResult == unchecked((int)0x80131620) && retry)
+            {
+                enabledSslProtocols = SslProtocols.Tls;
+                retry = false;
+                goto retry;
             }
             catch (Exception)
             {
