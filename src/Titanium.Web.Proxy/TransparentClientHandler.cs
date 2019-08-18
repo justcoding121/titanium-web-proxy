@@ -62,8 +62,9 @@ namespace Titanium.Web.Proxy
 
                     if (endPoint.DecryptSsl && args.DecryptSsl)
                     {
+                        clientConnection.SslProtocol = clientHelloInfo.SslProtocol;
 
-                        //do client authentication using certificate
+                        // do client authentication using certificate
                         X509Certificate2 certificate = null;
                         try
                         {
