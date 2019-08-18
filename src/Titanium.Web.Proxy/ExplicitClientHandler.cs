@@ -152,7 +152,8 @@ namespace Titanium.Web.Proxy
 
                                 http2Supported = connection.NegotiatedApplicationProtocol ==
                                                  SslApplicationProtocol.Http2;
-                                //release connection back to pool instead of closing when connection pool is enabled.
+                                
+                                // release connection back to pool instead of closing when connection pool is enabled.
                                 await tcpConnectionFactory.Release(connection, true);
                             }
                             catch (Exception)

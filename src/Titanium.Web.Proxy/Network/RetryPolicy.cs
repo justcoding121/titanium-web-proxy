@@ -37,10 +37,10 @@ namespace Titanium.Web.Proxy.Network
             {
                 try
                 {
-                    //setup connection
+                    // setup connection
                     currentConnection = currentConnection as TcpServerConnection ??
                                       await generator();
-                    //try
+                    // try
                     @continue = await action(currentConnection);
 
                 }
@@ -65,12 +65,12 @@ namespace Titanium.Web.Proxy.Network
             return new RetryResult(currentConnection, exception, @continue);
         }
 
-        //before retry clear connection
+        // before retry clear connection
         private async Task disposeConnection()
         {
             if (currentConnection != null)
             {
-                //close connection on error
+                // close connection on error
                 await tcpConnectionFactory.Release(currentConnection, true);
                 currentConnection = null;
             }

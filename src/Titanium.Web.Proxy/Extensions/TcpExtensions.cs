@@ -50,11 +50,11 @@ namespace Titanium.Web.Proxy.Extensions
 
                 socket.Blocking = false;
                 socket.Send(tmp, 0, 0);
-                //Connected.
+                // Connected.
             }
             catch
             {
-                //Should we let 10035 == WSAEWOULDBLOCK as valid connection?
+                // Should we let 10035 == WSAEWOULDBLOCK as valid connection?
                 return false;
             }
             finally

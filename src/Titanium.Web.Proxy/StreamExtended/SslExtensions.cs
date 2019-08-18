@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.StreamExtended
 
         private static string GetExtensionData(int value, byte[] data)
         {
-            //https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
+            // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
             switch (value)
             {
                 case 0:
@@ -59,8 +59,8 @@ namespace Titanium.Web.Proxy.StreamExtended
 
         private static string GetSupportedGroup(byte[] data)
         {
-            //https://datatracker.ietf.org/doc/draft-ietf-tls-rfc4492bis/?include_text=1
-            List<string> list = new List<string>();
+            // https://datatracker.ietf.org/doc/draft-ietf-tls-rfc4492bis/?include_text=1
+            var list = new List<string>();
             if (data.Length < 2)
             {
                 return string.Empty;
@@ -73,70 +73,70 @@ namespace Titanium.Web.Proxy.StreamExtended
                 switch (namedCurve)
                 {
                     case 1:
-                        list.Add("sect163k1 [0x1]"); //deprecated
+                        list.Add("sect163k1 [0x1]"); // deprecated
                         break;
                     case 2:
-                        list.Add("sect163r1 [0x2]"); //deprecated
+                        list.Add("sect163r1 [0x2]"); // deprecated
                         break;
                     case 3:
-                        list.Add("sect163r2 [0x3]"); //deprecated
+                        list.Add("sect163r2 [0x3]"); // deprecated
                         break;
                     case 4:
-                        list.Add("sect193r1 [0x4]"); //deprecated
+                        list.Add("sect193r1 [0x4]"); // deprecated
                         break;
                     case 5:
-                        list.Add("sect193r2 [0x5]"); //deprecated
+                        list.Add("sect193r2 [0x5]"); // deprecated
                         break;
                     case 6:
-                        list.Add("sect233k1 [0x6]"); //deprecated
+                        list.Add("sect233k1 [0x6]"); // deprecated
                         break;
                     case 7:
-                        list.Add("sect233r1 [0x7]"); //deprecated
+                        list.Add("sect233r1 [0x7]"); // deprecated
                         break;
                     case 8:
-                        list.Add("sect239k1 [0x8]"); //deprecated
+                        list.Add("sect239k1 [0x8]"); // deprecated
                         break;
                     case 9:
-                        list.Add("sect283k1 [0x9]"); //deprecated
+                        list.Add("sect283k1 [0x9]"); // deprecated
                         break;
                     case 10:
-                        list.Add("sect283r1 [0xA]"); //deprecated
+                        list.Add("sect283r1 [0xA]"); // deprecated
                         break;
                     case 11:
-                        list.Add("sect409k1 [0xB]"); //deprecated
+                        list.Add("sect409k1 [0xB]"); // deprecated
                         break;
                     case 12:
-                        list.Add("sect409r1 [0xC]"); //deprecated
+                        list.Add("sect409r1 [0xC]"); // deprecated
                         break;
                     case 13:
-                        list.Add("sect571k1 [0xD]"); //deprecated
+                        list.Add("sect571k1 [0xD]"); // deprecated
                         break;
                     case 14:
-                        list.Add("sect571r1 [0xE]"); //deprecated
+                        list.Add("sect571r1 [0xE]"); // deprecated
                         break;
                     case 15:
-                        list.Add("secp160k1 [0xF]"); //deprecated
+                        list.Add("secp160k1 [0xF]"); // deprecated
                         break;
                     case 16:
-                        list.Add("secp160r1 [0x10]"); //deprecated
+                        list.Add("secp160r1 [0x10]"); // deprecated
                         break;
                     case 17:
-                        list.Add("secp160r2 [0x11]"); //deprecated
+                        list.Add("secp160r2 [0x11]"); // deprecated
                         break;
                     case 18:
-                        list.Add("secp192k1 [0x12]"); //deprecated
+                        list.Add("secp192k1 [0x12]"); // deprecated
                         break;
                     case 19:
-                        list.Add("secp192r1 [0x13]"); //deprecated
+                        list.Add("secp192r1 [0x13]"); // deprecated
                         break;
                     case 20:
-                        list.Add("secp224k1 [0x14]"); //deprecated
+                        list.Add("secp224k1 [0x14]"); // deprecated
                         break;
                     case 21:
-                        list.Add("secp224r1 [0x15]"); //deprecated
+                        list.Add("secp224r1 [0x15]"); // deprecated
                         break;
                     case 22:
-                        list.Add("secp256k1 [0x16]"); //deprecated
+                        list.Add("secp256k1 [0x16]"); // deprecated
                         break;
                     case 23:
                         list.Add("secp256r1 [0x17]");
@@ -178,10 +178,10 @@ namespace Titanium.Web.Proxy.StreamExtended
                         list.Add("ffdhe8192 [0x0104]");
                         break;
                     case 65281:
-                        list.Add("arbitrary_explicit_prime_curves [0xFF01]"); //deprecated
+                        list.Add("arbitrary_explicit_prime_curves [0xFF01]"); // deprecated
                         break;
                     case 65282:
-                        list.Add("arbitrary_explicit_char2_curves [0xFF02]"); //deprecated
+                        list.Add("arbitrary_explicit_char2_curves [0xFF02]"); // deprecated
                         break;
                     default:
                         list.Add($"unknown [0x{namedCurve:X4}]");
@@ -318,7 +318,7 @@ namespace Titanium.Web.Proxy.StreamExtended
 
         private static string GetExtensionName(int value)
         {
-            //https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
+            // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
             switch (value)
             {
                 case 0:

@@ -51,8 +51,8 @@ namespace Titanium.Web.Proxy
                 }
             }
 
-            //save original values so that if user changes them
-            //we can still use original values when syphoning out data from attached tcp connection.
+            // save original values so that if user changes them
+            // we can still use original values when syphoning out data from attached tcp connection.
             response.SetOriginalHeaders();
 
             // if user requested call back then do it
@@ -66,10 +66,10 @@ namespace Titanium.Web.Proxy
 
             var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
 
-            //user set custom response by ignoring original response from server.
+            // user set custom response by ignoring original response from server.
             if (response.Locked)
             {
-                //write custom user response with body and return.
+                // write custom user response with body and return.
                 await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
 
                 if (args.HttpClient.Connection != null

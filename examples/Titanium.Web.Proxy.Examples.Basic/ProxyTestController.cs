@@ -193,7 +193,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             string ext = System.IO.Path.GetExtension(e.HttpClient.Request.RequestUri.AbsolutePath);
 
-            //access user data set in request to do something with it
+            // access user data set in request to do something with it
             //var userData = e.HttpClient.UserData as CustomUserData;
 
             //if (ext == ".gif" || ext == ".png" || ext == ".jpg")

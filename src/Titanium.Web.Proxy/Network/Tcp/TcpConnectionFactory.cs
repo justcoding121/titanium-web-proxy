@@ -25,15 +25,15 @@ namespace Titanium.Web.Proxy.Network.Tcp
     internal class TcpConnectionFactory : IDisposable
     {
 
-        //Tcp server connection pool cache
+        // Tcp server connection pool cache
         private readonly ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>> cache
             = new ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>>();
 
-        //Tcp connections waiting to be disposed by cleanup task
+        // Tcp connections waiting to be disposed by cleanup task
         private readonly ConcurrentBag<TcpServerConnection> disposalBag =
             new ConcurrentBag<TcpServerConnection>();
 
-        //cache object race operations lock
+        // cache object race operations lock
         private readonly SemaphoreSlim @lock = new SemaphoreSlim(1);
 
         private volatile bool runCleanUpTask = true;
@@ -55,7 +55,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             // That can create cache miss for same server connection unnecessarily especially when prefetching with Connect.
             // http version 2 is separated using applicationProtocols below.
             var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}-" +
-                                                  //when creating Tcp client isConnect won't matter
+                                                  // when creating Tcp client isConnect won't matter
                                                   $"{isHttps}-");
             if (applicationProtocols != null)
             {
@@ -238,7 +238,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             ProxyServer proxyServer, SessionEventArgsBase session, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
             CancellationToken cancellationToken)
         {
-            //deny connection to proxy end points to avoid infinite connection loop.
+            // deny connection to proxy end points to avoid infinite connection loop.
             if (Server.ProxyEndPoints.Any(x => x.Port == remotePort)
                     && NetworkHelper.IsLocalIpAddress(remoteHostName))
             {
@@ -288,7 +288,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds)
                 };
 
-                //linux has a bug with socket reuse in .net core.
+                // linux has a bug with socket reuse in .net core.
                 if (proxyServer.ReuseSocket && RunTime.IsWindows)
                 {
                     tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
@@ -550,7 +550,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
                 finally
                 {
-                    //cleanup every 3 seconds by default
+                    // cleanup every 3 seconds by default
                     await Task.Delay(1000 * 3);
                 }
 

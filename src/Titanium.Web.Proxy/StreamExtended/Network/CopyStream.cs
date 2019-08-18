@@ -63,7 +63,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         public void Flush()
         {
-            //send out the current data from from the buffer
+            // send out the current data from from the buffer
             if (bufferLength > 0)
             {
                 writer.Write(buffer, 0, bufferLength);
@@ -73,7 +73,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         public async Task FlushAsync(CancellationToken cancellationToken = default)
         {
-            //send out the current data from from the buffer
+            // send out the current data from from the buffer
             if (bufferLength > 0)
             {
                 await writer.WriteAsync(buffer, 0, bufferLength, cancellationToken);
