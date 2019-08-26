@@ -71,7 +71,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
             cacheKeyBuilder.Append(externalProxy != null ? $"{externalProxy.GetCacheKey()}-" : string.Empty);
 
             return cacheKeyBuilder.ToString();
-
         }
 
         /// <summary>
@@ -280,20 +279,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
             retry:
             try
             {
-                tcpClient = new TcpClient(upStreamEndPoint)
-                {
-                    NoDelay = proxyServer.NoDelay,
-                    ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
-                    SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
-                    LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds)
-                };
-
-                // linux has a bug with socket reuse in .net core.
-                if (proxyServer.ReuseSocket && RunTime.IsWindows)
-                {
-                    tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                }
-
                 var hostname = useUpstreamProxy ? externalProxy.HostName : remoteHostName;
                 var port = useUpstreamProxy ? externalProxy.Port : remotePort;
 
@@ -312,6 +297,27 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     try
                     {
+                        var ipAddress = ipAddresses[i];
+                        if (upStreamEndPoint == null)
+                        {
+                            tcpClient = new TcpClient(ipAddress.AddressFamily);
+                        }
+                        else
+                        {
+                            tcpClient = new TcpClient(upStreamEndPoint);
+                        }
+
+                        tcpClient.NoDelay = proxyServer.NoDelay;
+                        tcpClient.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                        tcpClient.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                        tcpClient.LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds);
+
+                        // linux has a bug with socket reuse in .net core.
+                        if (proxyServer.ReuseSocket && RunTime.IsWindows)
+                        {
+                            tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                        }
+
                         await tcpClient.ConnectAsync(ipAddresses[i], port);
                         break;
                     }

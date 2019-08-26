@@ -268,7 +268,7 @@ namespace Titanium.Web.Proxy
         ///     Local adapter/NIC endpoint where proxy makes request via.
         ///     Defaults via any IP addresses of this machine.
         /// </summary>
-        public IPEndPoint UpStreamEndPoint { get; set; } = new IPEndPoint(IPAddress.Any, 0);
+        public IPEndPoint UpStreamEndPoint { get; set; }
 
         /// <summary>
         ///     A list of IpAddress and port this proxy is listening to.
