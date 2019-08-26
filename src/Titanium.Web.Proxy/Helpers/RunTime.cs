@@ -42,7 +42,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         public static bool IsMac => isRunningOnMac;
 
-        //https://github.com/qmatteoq/DesktopBridgeHelpers/blob/master/DesktopBridge.Helpers/Helpers.cs
+        // https://github.com/qmatteoq/DesktopBridgeHelpers/blob/master/DesktopBridge.Helpers/Helpers.cs
         private class UwpHelper
         {
             const long APPMODEL_ERROR_NO_PACKAGE = 15700L;

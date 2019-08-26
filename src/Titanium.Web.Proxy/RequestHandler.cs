@@ -163,7 +163,7 @@ namespace Titanium.Web.Proxy
                                 await args.GetRequestBody(cancellationToken);
                             }
 
-                            //we need this to syphon out data from connection if API user changes them.
+                            // we need this to syphon out data from connection if API user changes them.
                             request.SetOriginalHeaders();
 
                             args.TimeLine["Request Received"] = DateTime.Now;
@@ -191,7 +191,7 @@ namespace Titanium.Web.Proxy
                                 continue;
                             }
 
-                            //If prefetch task is available.
+                            // If prefetch task is available.
                             if (connection == null && prefetchTask != null)
                             {
                                 try
@@ -226,11 +226,11 @@ namespace Titanium.Web.Proxy
                                   clientConnection.NegotiatedApplicationProtocol,
                                   cancellationToken, cancellationTokenSource);
 
-                            //update connection to latest used
+                            // update connection to latest used
                             connection = result.LatestConnection;
                             closeServerConnection = !result.Continue;
 
-                            //throw if exception happened
+                            // throw if exception happened
                             if (!result.IsSuccess)
                             {
                                 throw result.Exception;
@@ -241,7 +241,7 @@ namespace Titanium.Web.Proxy
                                 return;
                             }
 
-                            //user requested
+                            // user requested
                             if (args.HttpClient.CloseServerConnection)
                             {
                                 closeServerConnection = true;
@@ -304,13 +304,13 @@ namespace Titanium.Web.Proxy
           TcpServerConnection serverConnection, SslApplicationProtocol sslApplicationProtocol,
           CancellationToken cancellationToken, CancellationTokenSource cancellationTokenSource)
         {
-            //a connection generator task with captured parameters via closure.
+            // a connection generator task with captured parameters via closure.
             Func<Task<TcpServerConnection>> generator = () =>
                             tcpConnectionFactory.GetServerConnection(this, args, isConnect: false,
                                     applicationProtocol: sslApplicationProtocol,
                                     noCache: false, cancellationToken: cancellationToken);
 
-            //for connection pool, retry fails until cache is exhausted.   
+            // for connection pool, retry fails until cache is exhausted.   
             return await retryPolicy<ServerConnectionException>().ExecuteAsync(async (connection) =>
             {
                 args.TimeLine["Connection Ready"] = DateTime.Now;
@@ -390,12 +390,12 @@ namespace Titanium.Web.Proxy
             {
                 var supportedAcceptEncoding = new List<string>();
 
-                //only allow proxy supported compressions
+                // only allow proxy supported compressions
                 supportedAcceptEncoding.AddRange(acceptEncoding.Split(',')
                     .Select(x => x.Trim())
                     .Where(x => ProxyConstants.ProxySupportedCompressions.Contains(x)));
 
-                //uncompressed is always supported by proxy
+                // uncompressed is always supported by proxy
                 supportedAcceptEncoding.Add("identity");
 
                 requestHeaders.SetOrAddHeaderValue(KnownHeaders.AcceptEncoding,

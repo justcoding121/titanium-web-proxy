@@ -122,7 +122,9 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private SystemProxyManager systemProxySettingsManager { get; }
 
-        //Number of exception retries when connection pool is enabled.
+        /// <summary>
+        ///     Number of exception retries when connection pool is enabled.
+        /// </summary>
         private int retries => EnableConnectionPool ? MaxCachedConnections : 0;
 
         /// <summary>
@@ -266,7 +268,7 @@ namespace Titanium.Web.Proxy
         ///     Local adapter/NIC endpoint where proxy makes request via.
         ///     Defaults via any IP addresses of this machine.
         /// </summary>
-        public IPEndPoint UpStreamEndPoint { get; set; } = new IPEndPoint(IPAddress.Any, 0);
+        public IPEndPoint UpStreamEndPoint { get; set; }
 
         /// <summary>
         ///     A list of IpAddress and port this proxy is listening to.
@@ -660,7 +662,7 @@ namespace Titanium.Web.Proxy
         {
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
 
-            //linux/macOS has a bug with socket reuse in .net core.
+            // linux/macOS has a bug with socket reuse in .net core.
             if (ReuseSocket && RunTime.IsWindows)
             {
                 endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
@@ -871,13 +873,13 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         internal async Task InvokeConnectionCreateEvent(TcpClient client, bool isClientConnection)
         {
-            //client connection created
+            // client connection created
             if (isClientConnection && OnClientConnectionCreate != null)
             {
                 await OnClientConnectionCreate.InvokeAsync(this, client, ExceptionFunc);
             }
 
-            //server connection created
+            // server connection created
             if (!isClientConnection && OnServerConnectionCreate != null)
             {
                 await OnServerConnectionCreate.InvokeAsync(this, client, ExceptionFunc);

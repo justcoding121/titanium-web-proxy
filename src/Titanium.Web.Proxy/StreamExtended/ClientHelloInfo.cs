@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Authentication;
 using System.Text;
 using Titanium.Web.Proxy.StreamExtended.Models;
 
@@ -50,6 +51,33 @@ namespace Titanium.Web.Proxy.StreamExtended
         internal int EntensionsStartPosition { get; set; }
 
         public Dictionary<string, SslExtension> Extensions { get; set; }
+
+        public SslProtocols SslProtocol
+        {
+            get
+            {
+                int major = MajorVersion;
+                int minor = MinorVersion;
+                if (major == 3 && minor == 3)
+                    return SslProtocols.Tls12;
+
+                if (major == 3 && minor == 2)
+                    return SslProtocols.Tls11;
+
+                if (major == 3 && minor == 1)
+                    return SslProtocols.Tls;
+
+#pragma warning disable 618
+                if (major == 3 && minor == 0)
+                    return SslProtocols.Ssl3;
+
+                if (major == 2 && minor == 0)
+                    return SslProtocols.Ssl2;
+#pragma warning restore 618
+
+                return SslProtocols.None;
+            }
+        }
 
         private static string SslVersionToString(int major, int minor)
         {

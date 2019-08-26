@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.IntegrationTests.Setup
 {
-    //set up a kestrel test server
+    // set up a kestrel test server
     public class TestServer : IDisposable
     {
         public string ListeningHttpUrl => $"http://localhost:{HttpListeningPort}";

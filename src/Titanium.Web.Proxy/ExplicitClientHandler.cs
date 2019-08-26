@@ -134,6 +134,7 @@ namespace Titanium.Web.Proxy
 
                     if (decryptSsl && isClientHello)
                     {
+                        clientConnection.SslProtocol = clientHelloInfo.SslProtocol;
                         connectRequest.RequestUri = new Uri("https://" + httpUrl);
 
                         bool http2Supported = false;
@@ -151,7 +152,8 @@ namespace Titanium.Web.Proxy
 
                                 http2Supported = connection.NegotiatedApplicationProtocol ==
                                                  SslApplicationProtocol.Http2;
-                                //release connection back to pool instead of closing when connection pool is enabled.
+                                
+                                // release connection back to pool instead of closing when connection pool is enabled.
                                 await tcpConnectionFactory.Release(connection, true);
                             }
                             catch (Exception)
@@ -165,15 +167,15 @@ namespace Titanium.Web.Proxy
                             IPAddress[] ipAddresses = null;
                             try
                             {
-                                //make sure the host can be resolved before creating the prefetch task
+                                // make sure the host can be resolved before creating the prefetch task
                                 ipAddresses = await Dns.GetHostAddressesAsync(connectArgs.HttpClient.Request.RequestUri.Host);
                             }
                             catch (SocketException) { }
 
                             if (ipAddresses != null && ipAddresses.Length > 0)
                             {
-                                //don't pass cancellation token here
-                                //it could cause floating server connections when client exits
+                                // don't pass cancellation token here
+                                // it could cause floating server connections when client exits
                                 prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(this, connectArgs,
                                                         isConnect: true, applicationProtocols: null, noCache: false,
                                                         cancellationToken: CancellationToken.None);

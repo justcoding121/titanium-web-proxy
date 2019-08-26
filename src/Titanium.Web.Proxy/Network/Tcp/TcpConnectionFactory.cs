@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,15 +25,15 @@ namespace Titanium.Web.Proxy.Network.Tcp
     internal class TcpConnectionFactory : IDisposable
     {
 
-        //Tcp server connection pool cache
+        // Tcp server connection pool cache
         private readonly ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>> cache
             = new ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>>();
 
-        //Tcp connections waiting to be disposed by cleanup task
+        // Tcp connections waiting to be disposed by cleanup task
         private readonly ConcurrentBag<TcpServerConnection> disposalBag =
             new ConcurrentBag<TcpServerConnection>();
 
-        //cache object race operations lock
+        // cache object race operations lock
         private readonly SemaphoreSlim @lock = new SemaphoreSlim(1);
 
         private volatile bool runCleanUpTask = true;
@@ -46,14 +48,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
             bool isHttps, List<SslApplicationProtocol> applicationProtocols,
-            ProxyServer proxyServer, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy)
+            IPEndPoint upStreamEndPoint, ExternalProxy externalProxy)
         {
-            //http version is ignored since its an application level decision b/w HTTP 1.0/1.1
-            //also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
-            //That can create cache miss for same server connection unnecessarily especially when prefetching with Connect.
-            //http version 2 is separated using applicationProtocols below.
+            // http version is ignored since its an application level decision b/w HTTP 1.0/1.1
+            // also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
+            // That can create cache miss for same server connection unnecessarily especially when prefetching with Connect.
+            // http version 2 is separated using applicationProtocols below.
             var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}-" +
-                                                  //when creating Tcp client isConnect won't matter
+                                                  // when creating Tcp client isConnect won't matter
                                                   $"{isHttps}-");
             if (applicationProtocols != null)
             {
@@ -69,7 +71,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
             cacheKeyBuilder.Append(externalProxy != null ? $"{externalProxy.GetCacheKey()}-" : string.Empty);
 
             return cacheKeyBuilder.ToString();
-
         }
 
         /// <summary>
@@ -101,7 +102,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 session.HttpClient.Request.RequestUri.Host,
                 session.HttpClient.Request.RequestUri.Port,
                 isHttps, applicationProtocols,
-                server, session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
+                session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
                 customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy));
         }
 
@@ -109,9 +110,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         ///     Create a server connection.
         /// </summary>
+        /// <param name="server">The proxy server.</param>
         /// <param name="session">The session event arguments.</param>
         /// <param name="isConnect">Is this a CONNECT request.</param>
         /// <param name="applicationProtocol"></param>
+        /// <param name="noCache">if set to <c>true</c> [no cache].</param>
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
         internal Task<TcpServerConnection> GetServerConnection(ProxyServer server, SessionEventArgsBase session, bool isConnect,
@@ -129,9 +132,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         ///     Create a server connection.
         /// </summary>
+        /// <param name="server">The proxy server.</param>
         /// <param name="session">The session event arguments.</param>
         /// <param name="isConnect">Is this a CONNECT request.</param>
         /// <param name="applicationProtocols"></param>
+        /// <param name="noCache">if set to <c>true</c> [no cache].</param>
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
         internal async Task<TcpServerConnection> GetServerConnection(ProxyServer server, SessionEventArgsBase session, bool isConnect,
@@ -166,6 +171,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="applicationProtocols">The list of HTTPS application level protocol to negotiate if needed.</param>
         /// <param name="isConnect">Is this a CONNECT request.</param>
         /// <param name="proxyServer">The current ProxyServer instance.</param>
+        /// <param name="session">The session.</param>
         /// <param name="upStreamEndPoint">The local upstream endpoint to make request via.</param>
         /// <param name="externalProxy">The external proxy to make request via.</param>
         /// <param name="noCache">Not from cache/create new connection.</param>
@@ -176,9 +182,9 @@ namespace Titanium.Web.Proxy.Network.Tcp
             ProxyServer proxyServer, SessionEventArgsBase session, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
             bool noCache, CancellationToken cancellationToken)
         {
+            var sslProtocol = session.ProxyClient.Connection.SslProtocol;
             var cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
-                isHttps, applicationProtocols,
-                proxyServer, upStreamEndPoint, externalProxy);
+                isHttps, applicationProtocols, upStreamEndPoint, externalProxy);
 
             if (proxyServer.EnableConnectionPool && !noCache)
             {
@@ -202,7 +208,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
             }
 
-            var connection = await createServerConnection(remoteHostName, remotePort, httpVersion, isHttps,
+            var connection = await createServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
                 applicationProtocols, isConnect, proxyServer, session, upStreamEndPoint, externalProxy, cancellationToken);
 
             connection.CacheKey = cacheKey;
@@ -217,6 +223,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="remotePort">The remote port.</param>
         /// <param name="httpVersion">The http version to use.</param>
         /// <param name="isHttps">Is this a HTTPS request.</param>
+        /// <param name="sslProtocol">The SSL protocol.</param>
         /// <param name="applicationProtocols">The list of HTTPS application level protocol to negotiate if needed.</param>
         /// <param name="isConnect">Is this a CONNECT request.</param>
         /// <param name="proxyServer">The current ProxyServer instance.</param>
@@ -226,11 +233,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
         private async Task<TcpServerConnection> createServerConnection(string remoteHostName, int remotePort,
-            Version httpVersion, bool isHttps, List<SslApplicationProtocol> applicationProtocols, bool isConnect,
+            Version httpVersion, bool isHttps, SslProtocols sslProtocol, List<SslApplicationProtocol> applicationProtocols, bool isConnect,
             ProxyServer proxyServer, SessionEventArgsBase session, IPEndPoint upStreamEndPoint, ExternalProxy externalProxy,
             CancellationToken cancellationToken)
         {
-            //deny connection to proxy end points to avoid infinite connection loop.
+            // deny connection to proxy end points to avoid infinite connection loop.
             if (Server.ProxyEndPoints.Any(x => x.Port == remotePort)
                     && NetworkHelper.IsLocalIpAddress(remoteHostName))
             {
@@ -266,22 +273,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             SslApplicationProtocol negotiatedApplicationProtocol = default;
 
+            bool retry = true;
+            var enabledSslProtocols = sslProtocol;
+
+            retry:
             try
             {
-                tcpClient = new TcpClient(upStreamEndPoint)
-                {
-                    NoDelay = proxyServer.NoDelay,
-                    ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
-                    SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000,
-                    LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds)
-                };
-
-                //linux has a bug with socket reuse in .net core.
-                if (proxyServer.ReuseSocket && RunTime.IsWindows)
-                {
-                    tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                }
-
                 var hostname = useUpstreamProxy ? externalProxy.HostName : remoteHostName;
                 var port = useUpstreamProxy ? externalProxy.Port : remotePort;
 
@@ -300,6 +297,27 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     try
                     {
+                        var ipAddress = ipAddresses[i];
+                        if (upStreamEndPoint == null)
+                        {
+                            tcpClient = new TcpClient(ipAddress.AddressFamily);
+                        }
+                        else
+                        {
+                            tcpClient = new TcpClient(upStreamEndPoint);
+                        }
+
+                        tcpClient.NoDelay = proxyServer.NoDelay;
+                        tcpClient.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                        tcpClient.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                        tcpClient.LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds);
+
+                        // linux has a bug with socket reuse in .net core.
+                        if (proxyServer.ReuseSocket && RunTime.IsWindows)
+                        {
+                            tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                        }
+
                         await tcpClient.ConnectAsync(ipAddresses[i], port);
                         break;
                     }
@@ -365,7 +383,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         ApplicationProtocols = applicationProtocols,
                         TargetHost = remoteHostName,
                         ClientCertificates = null,
-                        EnabledSslProtocols = proxyServer.SupportedSslProtocols,
+                        EnabledSslProtocols = enabledSslProtocols,
                         CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                     };
                     await sslStream.AuthenticateAsClientAsync(options, cancellationToken);
@@ -379,6 +397,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     }
 
                 }
+            }
+            catch (IOException ex) when (ex.HResult == unchecked((int)0x80131620) && retry && enabledSslProtocols >= SslProtocols.Tls11)
+            {
+                enabledSslProtocols = SslProtocols.Tls;
+                retry = false;
+                goto retry;
             }
             catch (Exception)
             {
@@ -532,7 +556,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
                 finally
                 {
-                    //cleanup every 3 seconds by default
+                    // cleanup every 3 seconds by default
                     await Task.Delay(1000 * 3);
                 }
 

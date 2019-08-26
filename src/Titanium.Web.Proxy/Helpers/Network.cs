@@ -41,7 +41,7 @@ namespace Titanium.Web.Proxy.Helpers
                 return true;
             }
 
-            //if hostname matches local host name
+            // if hostname matches local host name
             if (hostName.Equals(localhostName, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
