@@ -210,7 +210,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                             // int cbBuffer;
                             // int BufferType;
                             // pvBuffer;
-                            //What we need to do here is to grab a hold of the pvBuffer allocate by the individual
+                            // What we need to do here is to grab a hold of the pvBuffer allocate by the individual
                             // SecBuffer and release it...
                             int currentOffset = index * Marshal.SizeOf(typeof(Buffer));
                             var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers,

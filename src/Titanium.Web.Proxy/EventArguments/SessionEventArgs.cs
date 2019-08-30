@@ -615,36 +615,36 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
         public void Respond(Response response, bool closeServerConnection = false)
         {
-            //request already send/ready to be sent.
+            // request already send/ready to be sent.
             if (HttpClient.Request.Locked)
             {
-                //response already received from server and ready to be sent to client.
+                // response already received from server and ready to be sent to client.
                 if (HttpClient.Response.Locked)
                 {
                     throw new Exception("You cannot call this function after response is sent to the client.");
                 }
 
-                //cleanup original response.
+                // cleanup original response.
                 if (closeServerConnection)
                 {
-                    //no need to cleanup original connection.
-                    //it will be closed any way.
+                    // no need to cleanup original connection.
+                    // it will be closed any way.
                     TerminateServerConnection();
                 }
 
                 response.SetOriginalHeaders(HttpClient.Response);
 
-                //response already received from server but not yet ready to sent to client.         
+                // response already received from server but not yet ready to sent to client.         
                 HttpClient.Response = response;
                 HttpClient.Response.Locked = true;
             }
-            //request not yet sent/not yet ready to be sent.
+            // request not yet sent/not yet ready to be sent.
             else
             {
                 HttpClient.Request.Locked = true;
                 HttpClient.Request.CancelRequest = true;
               
-                //set new response.
+                // set new response.
                 HttpClient.Response = response;
                 HttpClient.Response.Locked = true;
             }

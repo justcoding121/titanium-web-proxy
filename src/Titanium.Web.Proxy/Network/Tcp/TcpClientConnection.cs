@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Security;
 #endif
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -31,6 +32,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
         public EndPoint LocalEndPoint => tcpClient.Client.LocalEndPoint;
 
         public EndPoint RemoteEndPoint => tcpClient.Client.RemoteEndPoint;
+
+        internal SslProtocols SslProtocol { get; set; }
 
         internal SslApplicationProtocol NegotiatedApplicationProtocol { get; set; }
 
@@ -79,9 +82,9 @@ namespace Titanium.Web.Proxy.Network.Tcp
         {
             Task.Run(async () =>
             {
-                //delay calling tcp connection close()
-                //so that client have enough time to call close first.
-                //This way we can push tcp Time_Wait to client side when possible.
+                // delay calling tcp connection close()
+                // so that client have enough time to call close first.
+                // This way we can push tcp Time_Wait to client side when possible.
                 await Task.Delay(1000);
                 proxyServer.UpdateClientConnectionCount(false);
                 tcpClient.CloseSocket();

@@ -483,7 +483,7 @@ namespace Titanium.Web.Proxy.Network
             var cancellationToken = clearCertificatesTokenSource.Token;
             while (!cancellationToken.IsCancellationRequested)
             {
-                var cutOff = DateTime.Now.AddMinutes(-1 * CertificateCacheTimeOutMinutes);
+                var cutOff = DateTime.Now.AddMinutes(-CertificateCacheTimeOutMinutes);
 
                 var outdated = cachedCertificates.Where(x => x.Value.LastAccess < cutOff).ToList();
 

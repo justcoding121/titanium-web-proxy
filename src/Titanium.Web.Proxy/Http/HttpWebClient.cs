@@ -104,8 +104,7 @@ namespace Titanium.Web.Proxy.Http
             }
             else
             {
-                var uri = Request.RequestUri;
-                url = uri.IsWellFormedOriginalString() ? uri.PathAndQuery : uri.GetComponents(UriComponents.PathAndQuery, UriFormat.Unescaped);
+                url = Request.RequestUri.GetOriginalPathAndQuery();
             }
 
             // prepare the request & headers

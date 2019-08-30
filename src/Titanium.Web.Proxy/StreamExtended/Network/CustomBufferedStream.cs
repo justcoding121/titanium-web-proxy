@@ -51,7 +51,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             try
             {
                 var method = typeof(NetworkStream).GetMethod(nameof(Stream.ReadAsync),
-                    new Type[] { typeof(byte[]), typeof(int), typeof(int), typeof(CancellationToken) });
+                    new[] { typeof(byte[]), typeof(int), typeof(int), typeof(CancellationToken) });
                 if (method != null && method.DeclaringType != typeof(Stream))
                 {
                     networkStreamHack = false;
@@ -257,13 +257,13 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
                 await FillBufferAsync(cancellationToken);
             }
 
-            //When index is greater than the buffer size
+            // When index is greater than the buffer size
             if (streamBuffer.Length <= index)
             {
                 throw new Exception("Requested Peek index exceeds the buffer size. Consider increasing the buffer size.");
             }
 
-            //When index is greater than the buffer size
+            // When index is greater than the buffer size
             if (Available <= index)
             {
                 return -1;
@@ -287,7 +287,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
                 await FillBufferAsync(cancellationToken);
             }
 
-            //When index is greater than the buffer size
+            // When index is greater than the buffer size
             if (streamBuffer.Length <= (index + size))
             {
                 throw new Exception("Requested Peek index and size exceeds the buffer size. Consider increasing the buffer size.");
@@ -477,8 +477,8 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             if (bufferLength > 0)
             {
-                //normally we fill the buffer only when it is empty, but sometimes we need more data
-                //move the remaining data to the beginning of the buffer 
+                // normally we fill the buffer only when it is empty, but sometimes we need more data
+                // move the remaining data to the beginning of the buffer 
                 Buffer.BlockCopy(streamBuffer, bufferPos, streamBuffer, 0, bufferLength);
             }
 
@@ -521,8 +521,8 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             if (bufferLength > 0)
             {
-                //normally we fill the buffer only when it is empty, but sometimes we need more data
-                //move the remaining data to the beginning of the buffer 
+                // normally we fill the buffer only when it is empty, but sometimes we need more data
+                // move the remaining data to the beginning of the buffer 
                 Buffer.BlockCopy(streamBuffer, bufferPos, streamBuffer, 0, bufferLength);
             }
 
@@ -586,7 +586,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
                     byte newChar = reader.ReadByteFromBuffer();
                     buffer[bufferDataLength] = newChar;
 
-                    //if new line
+                    // if new line
                     if (newChar == '\n')
                     {
                         if (lastChar == '\r')
@@ -599,7 +599,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
                     bufferDataLength++;
 
-                    //store last char for new line comparison
+                    // store last char for new line comparison
                     lastChar = newChar;
 
                     if (bufferDataLength == buffer.Length)
@@ -663,8 +663,8 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             vAsyncResult.ContinueWith(pAsyncResult =>
             {
-                //use TaskExtended to pass State as AsyncObject
-                //callback will call EndRead (otherwise, it will block)
+                // use TaskExtended to pass State as AsyncObject
+                // callback will call EndRead (otherwise, it will block)
                 callback?.Invoke(new TaskResult<int>(pAsyncResult, state));
             });
 
@@ -684,8 +684,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             return ((TaskResult<int>)asyncResult).Result;
         }
-
-
+        
         /// <summary>
         /// Fix the .net bug with SslStream slow WriteAsync
         /// https://github.com/justcoding121/Titanium-Web-Proxy/issues/495
@@ -709,6 +708,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             return vAsyncResult;
         }
+
         public override void EndWrite(IAsyncResult asyncResult)
         {
             if (!networkStreamHack)

@@ -34,8 +34,8 @@ namespace Titanium.Web.Proxy.StreamExtended
         /// <returns></returns>
         public static async Task<ClientHelloInfo> PeekClientHello(CustomBufferedStream clientStream, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
-            //detects the HTTPS ClientHello message as it is described in the following url:
-            //https://stackoverflow.com/questions/3897883/how-to-detect-an-incoming-ssl-https-handshake-ssl-wire-format
+            // detects the HTTPS ClientHello message as it is described in the following url:
+            // https://stackoverflow.com/questions/3897883/how-to-detect-an-incoming-ssl-https-handshake-ssl-wire-format
 
             int recordType = await clientStream.PeekByteAsync(0, cancellationToken);
             if (recordType == -1)
@@ -45,7 +45,7 @@ namespace Titanium.Web.Proxy.StreamExtended
 
             if ((recordType & 0x80) == 0x80)
             {
-                //SSL 2
+                // SSL 2
                 var peekStream = new CustomBufferedPeekStream(clientStream, bufferPool, 1);
 
                 // length value + minimum length
@@ -105,14 +105,14 @@ namespace Titanium.Web.Proxy.StreamExtended
             {
                 var peekStream = new CustomBufferedPeekStream(clientStream, bufferPool, 1);
 
-                //should contain at least 43 bytes
+                // should contain at least 43 bytes
                 // 2 version + 2 length + 1 type + 3 length(?) + 2 version +  32 random + 1 sessionid length
                 if (!await peekStream.EnsureBufferLength(43, cancellationToken))
                 {
                     return null;
                 }
 
-                //SSL 3.0 or TLS 1.0, 1.1 and 1.2
+                // SSL 3.0 or TLS 1.0, 1.1 and 1.2
                 int majorVersion = peekStream.ReadByte();
                 int minorVersion = peekStream.ReadByte();
 
@@ -220,8 +220,8 @@ namespace Titanium.Web.Proxy.StreamExtended
         /// <returns></returns>
         public static async Task<ServerHelloInfo> PeekServerHello(CustomBufferedStream serverStream, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
-            //detects the HTTPS ClientHello message as it is described in the following url:
-            //https://stackoverflow.com/questions/3897883/how-to-detect-an-incoming-ssl-https-handshake-ssl-wire-format
+            // detects the HTTPS ClientHello message as it is described in the following url:
+            // https://stackoverflow.com/questions/3897883/how-to-detect-an-incoming-ssl-https-handshake-ssl-wire-format
 
             int recordType = await serverStream.PeekByteAsync(0, cancellationToken);
             if (recordType == -1)
@@ -231,7 +231,7 @@ namespace Titanium.Web.Proxy.StreamExtended
 
             if ((recordType & 0x80) == 0x80)
             {
-                //SSL 2
+                // SSL 2
                 // not tested. SSL2 is deprecated
                 var peekStream = new CustomBufferedPeekStream(serverStream, bufferPool, 1);
 
@@ -284,14 +284,14 @@ namespace Titanium.Web.Proxy.StreamExtended
             {
                 var peekStream = new CustomBufferedPeekStream(serverStream, bufferPool, 1);
 
-                //should contain at least 43 bytes
+                // should contain at least 43 bytes
                 // 2 version + 2 length + 1 type + 3 length(?) + 2 version +  32 random + 1 sessionid length
                 if (!await peekStream.EnsureBufferLength(43, cancellationToken))
                 {
                     return null;
                 }
 
-                //SSL 3.0 or TLS 1.0, 1.1 and 1.2
+                // SSL 3.0 or TLS 1.0, 1.1 and 1.2
                 int majorVersion = peekStream.ReadByte();
                 int minorVersion = peekStream.ReadByte();
 
