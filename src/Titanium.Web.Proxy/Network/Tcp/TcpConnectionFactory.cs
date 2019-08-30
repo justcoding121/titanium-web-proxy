@@ -327,6 +327,9 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         {
                             throw new Exception($"Could not establish connection to {hostname}", e);
                         }
+
+                        // dispose the current TcpClient and try the next address
+                        tcpClient?.Dispose();
                     }
                 }
 
