@@ -529,12 +529,6 @@ references:
   commentId: F:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.BufferPool
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.BufferPool
   nameWithType: SessionEventArgsBase.BufferPool
-- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.BufferSize
-  name: BufferSize
-  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_BufferSize
-  commentId: F:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.BufferSize
-  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.BufferSize
-  nameWithType: SessionEventArgsBase.BufferSize
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientEndPoint
   name: ClientEndPoint
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ClientEndPoint
@@ -2865,19 +2859,6 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.IpAddress
   nameWithType: ProxyEndPoint.IpAddress
-- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.IpV6Enabled
-  name: IpV6Enabled
-  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_IpV6Enabled
-  commentId: P:Titanium.Web.Proxy.Models.ProxyEndPoint.IpV6Enabled
-  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.IpV6Enabled
-  nameWithType: ProxyEndPoint.IpV6Enabled
-- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.IpV6Enabled*
-  name: IpV6Enabled
-  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_IpV6Enabled_
-  commentId: Overload:Titanium.Web.Proxy.Models.ProxyEndPoint.IpV6Enabled
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.IpV6Enabled
-  nameWithType: ProxyEndPoint.IpV6Enabled
 - uid: Titanium.Web.Proxy.Models.ProxyEndPoint.Port
   name: Port
   href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_Port
@@ -3369,19 +3350,6 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.BufferPool
   nameWithType: ProxyServer.BufferPool
-- uid: Titanium.Web.Proxy.ProxyServer.BufferSize
-  name: BufferSize
-  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BufferSize
-  commentId: P:Titanium.Web.Proxy.ProxyServer.BufferSize
-  fullName: Titanium.Web.Proxy.ProxyServer.BufferSize
-  nameWithType: ProxyServer.BufferSize
-- uid: Titanium.Web.Proxy.ProxyServer.BufferSize*
-  name: BufferSize
-  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BufferSize_
-  commentId: Overload:Titanium.Web.Proxy.ProxyServer.BufferSize
-  isSpec: "True"
-  fullName: Titanium.Web.Proxy.ProxyServer.BufferSize
-  nameWithType: ProxyServer.BufferSize
 - uid: Titanium.Web.Proxy.ProxyServer.CertificateManager
   name: CertificateManager
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_CertificateManager
