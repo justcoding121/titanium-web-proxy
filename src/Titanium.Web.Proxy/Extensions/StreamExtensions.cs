@@ -18,11 +18,10 @@ namespace Titanium.Web.Proxy.Extensions
         /// <param name="output"></param>
         /// <param name="onCopy"></param>
         /// <param name="bufferPool"></param>
-        /// <param name="bufferSize"></param>
         internal static Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy,
-            IBufferPool bufferPool, int bufferSize)
+            IBufferPool bufferPool)
         {
-            return CopyToAsync(input, output, onCopy, bufferPool, bufferSize, CancellationToken.None);
+            return CopyToAsync(input, output, onCopy, bufferPool, CancellationToken.None);
         }
 
         /// <summary>
@@ -32,12 +31,11 @@ namespace Titanium.Web.Proxy.Extensions
         /// <param name="output"></param>
         /// <param name="onCopy"></param>
         /// <param name="bufferPool"></param>
-        /// <param name="bufferSize"></param>
         /// <param name="cancellationToken"></param>
         internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy,
-            IBufferPool bufferPool, int bufferSize, CancellationToken cancellationToken)
+            IBufferPool bufferPool, CancellationToken cancellationToken)
         {
-            var buffer = bufferPool.GetBuffer(bufferSize);
+            var buffer = bufferPool.GetBuffer();
             try
             {
                 while (!cancellationToken.IsCancellationRequested)

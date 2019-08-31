@@ -95,12 +95,7 @@ namespace Titanium.Web.Proxy
             bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
             bool trustRootCertificateAsAdmin = false)
         {
-
-            if (BufferPool == null)
-            {
-                BufferPool = new DefaultBufferPool();
-            }
-
+            BufferPool = new DefaultBufferPool();
             ProxyEndPoints = new List<ProxyEndPoint>();
             tcpConnectionFactory = new TcpConnectionFactory(this);
             if (RunTime.IsWindows && !RunTime.IsUwpOnWindows)
@@ -189,12 +184,6 @@ namespace Titanium.Web.Proxy
         /// Defaults to true, no nagle algorithm is used.
         /// </summary>
         public bool NoDelay { get; set; } = true;
-
-        /// <summary>
-        ///     Buffer size in bytes used throughout this proxy.
-        ///     Default value is 8192 bytes.
-        /// </summary>
-        public int BufferSize { get; set; } = 8192;
 
         /// <summary>
         ///     Seconds client/server connection are to be kept alive when waiting for read/write to complete.

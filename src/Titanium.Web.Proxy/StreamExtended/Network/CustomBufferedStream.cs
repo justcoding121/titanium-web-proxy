@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     ///     of UTF-8 encoded string or raw bytes asynchronously from last read position.
     /// </summary>
     /// <seealso cref="System.IO.Stream" />
-    public class CustomBufferedStream : Stream, ICustomStreamReader
+    internal class CustomBufferedStream : Stream, ICustomStreamReader
     {
         private readonly bool leaveOpen;
         private byte[] streamBuffer;
@@ -34,8 +34,6 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         private bool closed;
 
         private readonly IBufferPool bufferPool;
-
-        public int BufferSize { get; }
 
         public event EventHandler<DataEventArgs> DataRead;
 
@@ -68,14 +66,12 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         /// <param name="baseStream">The base stream.</param>
         /// <param name="bufferPool">Bufferpool.</param>
-        /// <param name="bufferSize">Size of the buffer.</param>
         /// <param name="leaveOpen"><see langword="true" /> to leave the stream open after disposing the <see cref="T:CustomBufferedStream" /> object; otherwise, <see langword="false" />.</param>
-        public CustomBufferedStream(Stream baseStream, IBufferPool bufferPool, int bufferSize, bool leaveOpen = false)
+        public CustomBufferedStream(Stream baseStream, IBufferPool bufferPool, bool leaveOpen = false)
         {
             BaseStream = baseStream;
-            BufferSize = bufferSize;
             this.leaveOpen = leaveOpen;
-            streamBuffer = bufferPool.GetBuffer(bufferSize);
+            streamBuffer = bufferPool.GetBuffer();
             this.bufferPool = bufferPool;
         }
 
@@ -278,9 +274,10 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="buffer">The buffer to copy.</param>
         /// <param name="offset">The offset where copying.</param>
         /// <param name="index">The index.</param>
+        /// <param name="count">The count.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        public async Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int size, CancellationToken cancellationToken = default)
+        public async Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int count, CancellationToken cancellationToken = default)
         {
             if (Available <= index)
             {
@@ -288,19 +285,19 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             }
 
             // When index is greater than the buffer size
-            if (streamBuffer.Length <= (index + size))
+            if (streamBuffer.Length <= (index + count))
             {
                 throw new Exception("Requested Peek index and size exceeds the buffer size. Consider increasing the buffer size.");
             }
 
-            if (Available <= (index + size))
+            if (Available <= (index + count))
             {
                 return -1;
             }
 
-            Buffer.BlockCopy(streamBuffer, index, buffer, offset, size);
+            Buffer.BlockCopy(streamBuffer, index, buffer, offset, count);
 
-            return size;
+            return count;
         }
 
         /// <summary>
@@ -359,7 +356,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="value">The byte to write to the stream.</param>
         public override void WriteByte(byte value)
         {
-            var buffer = bufferPool.GetBuffer(BufferSize);
+            var buffer = bufferPool.GetBuffer();
             try
             {
                 buffer[0] = value;
@@ -576,7 +573,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             int bufferDataLength = 0;
 
             // try to use buffer from the buffer pool, usually it is enough
-            var bufferPoolBuffer = bufferPool.GetBuffer(reader.BufferSize);
+            var bufferPoolBuffer = bufferPool.GetBuffer();
             var buffer = bufferPoolBuffer;
 
             try

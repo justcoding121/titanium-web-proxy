@@ -21,10 +21,11 @@ namespace Titanium.Web.Proxy.EventArguments
     public abstract class SessionEventArgsBase : EventArgs, IDisposable
     {
         internal readonly CancellationTokenSource CancellationTokenSource;
+
         internal TcpServerConnection ServerConnection => HttpClient.Connection;
+
         internal TcpClientConnection ClientConnection => ProxyClient.Connection;
 
-        protected readonly int BufferSize;
         protected readonly IBufferPool BufferPool;
         protected readonly ExceptionHandler ExceptionFunc;
 
@@ -36,10 +37,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
         /// </summary>
-        private SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
-            CancellationTokenSource cancellationTokenSource)
+        private SessionEventArgsBase(ProxyServer server)
         {
-            BufferSize = server.BufferSize;
             BufferPool = server.BufferPool;
             ExceptionFunc = server.ExceptionFunc;
             TimeLine["Session Created"] = DateTime.Now;
@@ -47,7 +46,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
             CancellationTokenSource cancellationTokenSource,
-            Request request) : this(server, endPoint, cancellationTokenSource)
+            Request request) : this(server)
         {
             CancellationTokenSource = cancellationTokenSource;
 

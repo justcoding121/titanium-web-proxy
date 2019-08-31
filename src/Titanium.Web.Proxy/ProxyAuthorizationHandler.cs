@@ -111,6 +111,7 @@ namespace Titanium.Web.Proxy
         ///     Create an authentication required response.
         /// </summary>
         /// <param name="description">Response description.</param>
+        /// <param name="continuation">The continuation.</param>
         /// <returns></returns>
         private Response createAuthentication407Response(string description, string continuation = null)
         {

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,38 +9,32 @@ using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    internal enum IpVersion
-    {
-        Ipv4 = 1,
-        Ipv6 = 2
-    }
-
     internal class TcpHelper
     {
         /// <summary>
         ///     Gets the process id by local port number.
         /// </summary>
         /// <returns>Process id.</returns>
-        internal static unsafe int GetProcessIdByLocalPort(IpVersion ipVersion, int localPort)
+        internal static unsafe int GetProcessIdByLocalPort(AddressFamily addressFamily, int localPort)
         {
             var tcpTable = IntPtr.Zero;
             int tcpTableLength = 0;
 
-            int ipVersionValue = ipVersion == IpVersion.Ipv4 ? NativeMethods.AfInet : NativeMethods.AfInet6;
+            int addressFamilyValue = addressFamily == AddressFamily.InterNetwork ? NativeMethods.AfInet : NativeMethods.AfInet6;
             const int allPid = (int)NativeMethods.TcpTableType.OwnerPidAll;
 
-            if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, false, ipVersionValue, allPid, 0) != 0)
+            if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, false, addressFamilyValue, allPid, 0) != 0)
             {
                 try
                 {
                     tcpTable = Marshal.AllocHGlobal(tcpTableLength);
-                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, ipVersionValue, allPid,
+                    if (NativeMethods.GetExtendedTcpTable(tcpTable, ref tcpTableLength, true, addressFamilyValue, allPid,
                             0) == 0)
                     {
                         int rowCount = *(int*)tcpTable;
                         uint portInNetworkByteOrder = toNetworkByteOrder((uint)localPort);
 
-                        if (ipVersion == IpVersion.Ipv4)
+                        if (addressFamily == AddressFamily.InterNetwork)
                         {
                             var rowPtr = (NativeMethods.TcpRow*)(tcpTable + 4);
 
@@ -102,23 +97,21 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="clientStream"></param>
         /// <param name="serverStream"></param>
         /// <param name="bufferPool"></param>
-        /// <param name="bufferSize"></param>
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
         /// <param name="cancellationTokenSource"></param>
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
-        private static async Task sendRawTap(Stream clientStream, Stream serverStream,
-            IBufferPool bufferPool, int bufferSize,
+        private static async Task sendRawTap(Stream clientStream, Stream serverStream, IBufferPool bufferPool,
             Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive,
             CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)
         {
             // Now async relay all server=>client & client=>server data
             var sendRelay =
-                clientStream.CopyToAsync(serverStream, onDataSend, bufferPool, bufferSize, cancellationTokenSource.Token);
+                clientStream.CopyToAsync(serverStream, onDataSend, bufferPool, cancellationTokenSource.Token);
             var receiveRelay =
-                serverStream.CopyToAsync(clientStream, onDataReceive, bufferPool, bufferSize, cancellationTokenSource.Token);
+                serverStream.CopyToAsync(clientStream, onDataReceive, bufferPool, cancellationTokenSource.Token);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             cancellationTokenSource.Cancel();
@@ -134,20 +127,18 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="clientStream"></param>
         /// <param name="serverStream"></param>
         /// <param name="bufferPool"></param>
-        /// <param name="bufferSize"></param>
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
         /// <param name="cancellationTokenSource"></param>
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
-        internal static Task SendRaw(Stream clientStream, Stream serverStream, 
-            IBufferPool bufferPool, int bufferSize,
+        internal static Task SendRaw(Stream clientStream, Stream serverStream, IBufferPool bufferPool, 
             Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive,
             CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)
         {
             // todo: fix APM mode
-            return sendRawTap(clientStream, serverStream, bufferPool, bufferSize, onDataSend, onDataReceive,
+            return sendRawTap(clientStream, serverStream, bufferPool, onDataSend, onDataReceive,
                 cancellationTokenSource,
                 exceptionFunc);
         }

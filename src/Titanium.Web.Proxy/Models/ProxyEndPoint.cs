@@ -43,14 +43,6 @@ namespace Titanium.Web.Proxy.Models
         public bool DecryptSsl { get; }
 
         /// <summary>
-        ///     Is IPv6 enabled?
-        /// </summary>
-        public bool IpV6Enabled => Equals(IpAddress, IPAddress.IPv6Any)
-                                   || Equals(IpAddress, IPAddress.IPv6Loopback)
-                                   || Equals(IpAddress, IPAddress.IPv6None);
-
-
-        /// <summary>
         ///     Generic certificate to use for SSL decryption.
         /// </summary>
         public X509Certificate2 GenericCertificate { get; set; }

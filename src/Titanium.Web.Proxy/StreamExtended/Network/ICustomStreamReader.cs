@@ -9,8 +9,6 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     /// </summary>
     public interface ICustomStreamReader
     {
-        int BufferSize { get; }
-
         int Available { get; }
 
         bool DataAvailable { get; }
@@ -43,9 +41,10 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="buffer">The buffer to copy.</param>
         /// <param name="offset">The offset where copying.</param>
         /// <param name="index">The index.</param>
+        /// <param name="count">The count.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int size, CancellationToken cancellationToken = default);
+        Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int count, CancellationToken cancellationToken = default);
 
         byte ReadByteFromBuffer();
 

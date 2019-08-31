@@ -18,8 +18,6 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             Position = startPosition;
         }
 
-        int ICustomStreamReader.BufferSize => baseStream.BufferSize;
-
         /// <summary>
         /// Gets a value indicating whether data is available.
         /// </summary>
@@ -92,11 +90,12 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="buffer">The buffer to copy.</param>
         /// <param name="offset">The offset where copying.</param>
         /// <param name="index">The index.</param>
+        /// <param name="count">The count.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        Task<int> ICustomStreamReader.PeekBytesAsync(byte[] buffer, int offset, int index, int size, CancellationToken cancellationToken)
+        Task<int> ICustomStreamReader.PeekBytesAsync(byte[] buffer, int offset, int index, int count, CancellationToken cancellationToken)
         {
-            return baseStream.PeekBytesAsync(buffer, offset, index, size, cancellationToken);
+            return baseStream.PeekBytesAsync(buffer, offset, index, count, cancellationToken);
         }
 
         /// <summary>
@@ -114,7 +113,6 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Reads a byte from buffer.
         /// </summary>
         /// <returns></returns>
-        /// <exception cref="Exception">Buffer is empty</exception>
         byte ICustomStreamReader.ReadByteFromBuffer()
         {
             return ReadByte();

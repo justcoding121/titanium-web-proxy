@@ -17,8 +17,6 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         private readonly IBufferPool bufferPool;
 
-        public int BufferSize { get; }
-
         private int bufferLength;
 
         private byte[] buffer;
@@ -31,12 +29,11 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         public long ReadBytes { get; private set; }
 
-        public CopyStream(ICustomStreamReader reader, ICustomStreamWriter writer, IBufferPool bufferPool, int bufferSize)
+        public CopyStream(ICustomStreamReader reader, ICustomStreamWriter writer, IBufferPool bufferPool)
         {
             this.reader = reader;
             this.writer = writer;
-            BufferSize = bufferSize;
-            buffer = bufferPool.GetBuffer(bufferSize);
+            buffer = bufferPool.GetBuffer();
             this.bufferPool = bufferPool;
         }
 
@@ -94,7 +91,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             int result = reader.Read(buffer, offset, count);
             if (result > 0)
             {
-                if (bufferLength + result > BufferSize)
+                if (bufferLength + result > bufferPool.BufferSize)
                 {
                     Flush();
                 }
@@ -113,7 +110,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             int result = await reader.ReadAsync(buffer, offset, count, cancellationToken);
             if (result > 0)
             {
-                if (bufferLength + result > BufferSize)
+                if (bufferLength + result > bufferPool.BufferSize)
                 {
                     await FlushAsync(cancellationToken);
                 }

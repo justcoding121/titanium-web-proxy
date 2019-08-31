@@ -60,8 +60,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 // If client is localhost get the process id
                 if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
                 {
-                    var ipVersion = endPoint.IpV6Enabled ? IpVersion.Ipv6 : IpVersion.Ipv4;
-                    processId = TcpHelper.GetProcessIdByLocalPort(ipVersion, remoteEndPoint.Port);
+                    processId = TcpHelper.GetProcessIdByLocalPort(endPoint.IpAddress.AddressFamily, remoteEndPoint.Port);
                 }
                 else
                 {

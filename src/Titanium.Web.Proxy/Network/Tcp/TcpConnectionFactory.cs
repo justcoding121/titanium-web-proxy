@@ -76,8 +76,9 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         ///     Gets the connection cache key.
         /// </summary>
+        /// <param name="server">The server.</param>
         /// <param name="session">The session event arguments.</param>
-        /// <param name="applicationProtocol"></param>
+        /// <param name="applicationProtocol">The application protocol.</param>
         /// <returns></returns>
         internal async Task<string> GetConnectionCacheKey(ProxyServer server, SessionEventArgsBase session,
             SslApplicationProtocol applicationProtocol)
@@ -340,11 +341,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                 await proxyServer.InvokeConnectionCreateEvent(tcpClient, false);
 
-                stream = new CustomBufferedStream(tcpClient.GetStream(), proxyServer.BufferPool, proxyServer.BufferSize);
+                stream = new CustomBufferedStream(tcpClient.GetStream(), proxyServer.BufferPool);
 
                 if (useUpstreamProxy && (isConnect || isHttps))
                 {
-                    var writer = new HttpRequestWriter(stream, proxyServer.BufferPool, proxyServer.BufferSize);
+                    var writer = new HttpRequestWriter(stream, proxyServer.BufferPool);
                     var connectRequest = new ConnectRequest
                     {
                         OriginalUrl = $"{remoteHostName}:{remotePort}",
@@ -379,7 +380,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 {
                     var sslStream = new SslStream(stream, false, proxyServer.ValidateServerCertificate,
                         proxyServer.SelectClientCertificate);
-                    stream = new CustomBufferedStream(sslStream, proxyServer.BufferPool, proxyServer.BufferSize);
+                    stream = new CustomBufferedStream(sslStream, proxyServer.BufferPool);
 
                     var options = new SslClientAuthenticationOptions
                     {
@@ -423,7 +424,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 IsHttps = isHttps,
                 NegotiatedApplicationProtocol = negotiatedApplicationProtocol,
                 UseUpstreamProxy = useUpstreamProxy,
-                StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferPool, proxyServer.BufferSize),
+                StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferPool),
                 Stream = stream,
                 Version = httpVersion
             };
