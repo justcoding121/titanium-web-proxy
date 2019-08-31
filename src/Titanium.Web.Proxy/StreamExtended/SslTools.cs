@@ -10,7 +10,7 @@ namespace Titanium.Web.Proxy.StreamExtended
     /// <summary>
     /// Use this class to peek SSL client/server hello information.
     /// </summary>
-    public class SslTools
+    internal class SslTools
     {
         /// <summary>
         ///     Is the given stream starts with an SSL client hello?

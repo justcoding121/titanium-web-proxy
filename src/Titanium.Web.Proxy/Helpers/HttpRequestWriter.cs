@@ -8,8 +8,8 @@ namespace Titanium.Web.Proxy.Helpers
 {
     internal sealed class HttpRequestWriter : HttpWriter
     {
-        internal HttpRequestWriter(Stream stream, IBufferPool bufferPool, int bufferSize) 
-            : base(stream, bufferPool, bufferSize)
+        internal HttpRequestWriter(Stream stream, IBufferPool bufferPool) 
+            : base(stream, bufferPool)
         {
         }
 

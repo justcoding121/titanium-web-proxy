@@ -20,14 +20,11 @@ namespace Titanium.Web.Proxy.Helpers
 
         private static readonly Encoding encoder = Encoding.ASCII;
 
-        internal HttpWriter(Stream stream, IBufferPool bufferPool, int bufferSize)
+        internal HttpWriter(Stream stream, IBufferPool bufferPool)
         {
-            BufferSize = bufferSize;
             this.stream = stream;
             this.bufferPool = bufferPool;
         }
-
-        internal int BufferSize { get; }
 
         /// <summary>
         ///     Writes a line async
@@ -48,9 +45,9 @@ namespace Titanium.Web.Proxy.Helpers
         {
             int newLineChars = addNewLine ? newLine.Length : 0;
             int charCount = value.Length;
-            if (charCount < BufferSize - newLineChars)
+            if (charCount < bufferPool.BufferSize - newLineChars)
             {
-                var buffer = bufferPool.GetBuffer(BufferSize);
+                var buffer = bufferPool.GetBuffer();
                 try
                 {
                     int idx = encoder.GetBytes(value, 0, charCount, buffer, 0);
@@ -246,7 +243,7 @@ namespace Titanium.Web.Proxy.Helpers
         private async Task copyBytesFromStream(ICustomStreamReader reader, long count, Action<byte[], int, int> onCopy,
             CancellationToken cancellationToken)
         {
-            var buffer = bufferPool.GetBuffer(BufferSize);
+            var buffer = bufferPool.GetBuffer();
 
             try
             {

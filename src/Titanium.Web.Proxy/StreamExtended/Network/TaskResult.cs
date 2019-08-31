@@ -7,7 +7,6 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     /// <summary>
     /// Mimic a Task but you can set AsyncState
     /// </summary>
-    /// <typeparam name="T"></typeparam>
     public class TaskResult : IAsyncResult
     {
         Task Task;
@@ -31,7 +30,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     }
 
     /// <summary>
-    /// Mimic a Task<T> but you can set AsyncState
+    /// Mimic a Task&lt;T&gt; but you can set AsyncState
     /// </summary>
     /// <typeparam name="T"></typeparam>
     public class TaskResult<T> : IAsyncResult

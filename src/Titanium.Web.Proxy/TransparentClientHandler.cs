@@ -32,8 +32,8 @@ namespace Titanium.Web.Proxy
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
 
-            var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferPool, BufferSize);
-            var clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool, BufferSize);
+            var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferPool);
+            var clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool);
 
             SslStream sslStream = null;
 
@@ -78,9 +78,9 @@ namespace Titanium.Web.Proxy
                             await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
 
                             // HTTPS server created - we can now decrypt the client's traffic
-                            clientStream = new CustomBufferedStream(sslStream, BufferPool, BufferSize);
+                            clientStream = new CustomBufferedStream(sslStream, BufferPool);
 
-                            clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool, BufferSize);
+                            clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool);
                         }
                         catch (Exception e)
                         {
@@ -109,7 +109,7 @@ namespace Titanium.Web.Proxy
                             if (available > 0)
                             {
                                 // send the buffered data
-                                var data = BufferPool.GetBuffer(BufferSize);
+                                var data = BufferPool.GetBuffer();
                                 try
                                 {
                                     // clientStream.Available should be at most BufferSize because it is using the same buffer size
@@ -124,7 +124,7 @@ namespace Titanium.Web.Proxy
 
                             if (!clientStream.IsClosed && !connection.Stream.IsClosed)
                             {
-                                await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool, BufferSize,
+                                await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool,
                                     null, null, cancellationTokenSource, ExceptionFunc);
                             }
                         }

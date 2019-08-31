@@ -63,10 +63,8 @@ namespace Titanium.Web.Proxy
                 await invokeBeforeResponse(args);
             }
 
-            await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool, BufferSize,
-                (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); },
-                (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); },
-                cancellationTokenSource, ExceptionFunc);
+            await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool,
+                args.OnDataSent, args.OnDataReceived, cancellationTokenSource, ExceptionFunc);
         }
     }
 }

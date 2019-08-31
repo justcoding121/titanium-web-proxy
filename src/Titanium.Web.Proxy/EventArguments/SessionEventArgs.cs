@@ -121,7 +121,6 @@ namespace Titanium.Web.Proxy.EventArguments
                     // Now set the flag to true
                     // So that next time we can deliver body from cache
                     request.IsBodyRead = true;
-                    OnDataSent(body, 0, body.Length);
                 }
             }
         }
@@ -194,7 +193,6 @@ namespace Titanium.Web.Proxy.EventArguments
                     // Now set the flag to true
                     // So that next time we can deliver body from cache
                     response.IsBodyRead = true;
-                    OnDataReceived(body, 0, body.Length);
                 }
             }
         }
@@ -203,7 +201,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             using (var bodyStream = new MemoryStream())
             {
-                var writer = new HttpWriter(bodyStream, BufferPool, BufferSize);
+                var writer = new HttpWriter(bodyStream, BufferPool);
 
                 if (isRequest)
                 {
@@ -235,7 +233,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             using (var bodyStream = new MemoryStream())
             {
-                var writer = new HttpWriter(bodyStream, BufferPool, BufferSize);
+                var writer = new HttpWriter(bodyStream, BufferPool);
                 await copyBodyAsync(isRequest, true, writer, TransformationMode.None, null, cancellationToken);
             }
         }
@@ -256,7 +254,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 var reader = getStreamReader(true);
                 string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
 
-                using (var copyStream = new CopyStream(reader, writer, BufferPool, BufferSize))
+                using (var copyStream = new CopyStream(reader, writer, BufferPool))
                 {
                     while (contentLength > copyStream.ReadBytes)
                     {
@@ -317,7 +315,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             try
             {
-                using (var bufStream = new CustomBufferedStream(s, BufferPool, BufferSize, true))
+                using (var bufStream = new CustomBufferedStream(s, BufferPool, true))
                 {
                     await writer.CopyBodyAsync(bufStream, false, -1, onCopy, cancellationToken);
                 }
@@ -339,7 +337,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             int bufferDataLength = 0;
 
-            var buffer = BufferPool.GetBuffer(BufferSize);
+            var buffer = BufferPool.GetBuffer();
             try
             {
                 int boundaryLength = boundary.Length + 4;

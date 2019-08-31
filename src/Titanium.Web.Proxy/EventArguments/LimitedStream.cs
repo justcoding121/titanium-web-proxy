@@ -132,7 +132,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (bytesRemaining != -1)
             {
-                var buffer = bufferPool.GetBuffer(baseStream.BufferSize);
+                var buffer = bufferPool.GetBuffer();
                 try
                 {
                     int res = await ReadAsync(buffer, 0, buffer.Length);

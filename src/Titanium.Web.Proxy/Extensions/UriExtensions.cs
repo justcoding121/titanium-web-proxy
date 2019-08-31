@@ -12,5 +12,5 @@ namespace Titanium.Web.Proxy.Extensions
 
             return uri.IsWellFormedOriginalString() ? uri.PathAndQuery : uri.GetComponents(UriComponents.PathAndQuery, UriFormat.Unescaped);
         }
-    }
+    }   
 }

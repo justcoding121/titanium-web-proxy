@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Net;
 using System.Runtime.CompilerServices;
 using Titanium.Web.Proxy.Examples.Wpf.Annotations;
 using Titanium.Web.Proxy.Http;
@@ -21,6 +22,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         public int Number { get; set; }
 
         public HttpWebClient HttpClient { get; set; }
+
+        public IPEndPoint ClientEndPoint { get; set; }
 
         public bool IsTunnelConnect { get; set; }
 

@@ -128,39 +128,35 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         ///     Determines whether is connect method.
         /// </summary>
-        /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsConnectMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, CancellationToken cancellationToken = default)
+        internal static Task<int> IsConnectMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
-            return startsWith(clientStreamReader, bufferPool, bufferSize, "CONNECT", cancellationToken);
+            return startsWith(clientStreamReader, bufferPool, "CONNECT", cancellationToken);
         }
 
         /// <summary>
         ///     Determines whether is pri method (HTTP/2).
         /// </summary>
-        /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when PRI, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsPriMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, CancellationToken cancellationToken = default)
+        internal static Task<int> IsPriMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
-            return startsWith(clientStreamReader, bufferPool, bufferSize, "PRI", cancellationToken);
+            return startsWith(clientStreamReader, bufferPool, "PRI", cancellationToken);
         }
 
         /// <summary>
         ///     Determines whether the stream starts with the given string.
         /// </summary>
-        /// <param name="clientStreamReader">The client stream reader.</param>
-        /// <param name="expectedStart">The expected start.</param>
         /// <returns>
         ///     1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
         /// </returns>
-        private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, string expectedStart, CancellationToken cancellationToken = default)
+        private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, string expectedStart, CancellationToken cancellationToken = default)
         {
             int iRet = -1;
             const int lengthToCheck = 10;
             byte[] buffer = null;
             try
             {
-                buffer = bufferPool.GetBuffer(Math.Max(bufferSize, lengthToCheck));
+                buffer = bufferPool.GetBuffer(Math.Max(bufferPool.BufferSize, lengthToCheck));
 
                 int peeked = await clientStreamReader.PeekBytesAsync(buffer, 0, 0, lengthToCheck, cancellationToken);
 

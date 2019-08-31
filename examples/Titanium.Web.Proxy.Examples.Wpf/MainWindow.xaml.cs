@@ -226,10 +226,11 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 Number = lastSessionNumber,
                 HttpClient = e.HttpClient,
+                ClientEndPoint = e.ClientEndPoint,
                 IsTunnelConnect = isTunnelConnect
             };
 
-            if (isTunnelConnect || e.HttpClient.Request.UpgradeToWebSocket)
+            //if (isTunnelConnect || e.HttpClient.Request.UpgradeToWebSocket)
             {
                 e.DataReceived += (sender, args) =>
                 {
