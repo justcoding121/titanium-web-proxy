@@ -231,40 +231,69 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             };
 
             //if (isTunnelConnect || e.HttpClient.Request.UpgradeToWebSocket)
+            e.DataReceived += (sender, args) =>
             {
-                e.DataReceived += (sender, args) =>
+                var session = (SessionEventArgsBase)sender;
+                if (sessionDictionary.TryGetValue(session.HttpClient, out var li))
+                {
+                    var tunnelType = session.HttpClient.ConnectRequest?.TunnelType ?? TunnelType.Unknown;
+                    if (tunnelType != TunnelType.Unknown)
+                    {
+                        li.Protocol = TunnelTypeToString(tunnelType);
+                    }
+
+                    li.ReceivedDataCount += args.Count;
+
+                    AppendTransferLog(session.GetHashCode() + (isTunnelConnect ? "_tunnel" : "") + "_received",
+                        args.Buffer, args.Offset, args.Count);
+                }
+            };
+
+            e.DataSent += (sender, args) =>
+            {
+                var session = (SessionEventArgsBase)sender;
+                if (sessionDictionary.TryGetValue(session.HttpClient, out var li))
+                {
+                    var tunnelType = session.HttpClient.ConnectRequest?.TunnelType ?? TunnelType.Unknown;
+                    if (tunnelType != TunnelType.Unknown)
+                    {
+                        li.Protocol = TunnelTypeToString(tunnelType);
+                    }
+
+                    li.SentDataCount += args.Count;
+
+                    AppendTransferLog(session.GetHashCode() + (isTunnelConnect ? "_tunnel" : "") + "_sent",
+                        args.Buffer, args.Offset, args.Count);
+                }
+            };
+
+            if (e is TunnelConnectSessionEventArgs te)
+            {
+                te.DecryptedDataReceived += (sender, args) =>
                 {
                     var session = (SessionEventArgsBase)sender;
-                    if (sessionDictionary.TryGetValue(session.HttpClient, out var li))
-                    {
-                        var tunnelType = session.HttpClient.ConnectRequest?.TunnelType ?? TunnelType.Unknown;
-                        if (tunnelType != TunnelType.Unknown)
-                        {
-                            li.Protocol = TunnelTypeToString(tunnelType);
-                        }
-
-                        li.ReceivedDataCount += args.Count;
-                    }
+                    AppendTransferLog(session.GetHashCode() + "_decrypted_received", args.Buffer, args.Offset,
+                        args.Count);
                 };
 
-                e.DataSent += (sender, args) =>
+                te.DecryptedDataSent += (sender, args) =>
                 {
                     var session = (SessionEventArgsBase)sender;
-                    if (sessionDictionary.TryGetValue(session.HttpClient, out var li))
-                    {
-                        var tunnelType = session.HttpClient.ConnectRequest?.TunnelType ?? TunnelType.Unknown;
-                        if (tunnelType != TunnelType.Unknown)
-                        {
-                            li.Protocol = TunnelTypeToString(tunnelType);
-                        }
-
-                        li.SentDataCount += args.Count;
-                    }
+                    AppendTransferLog(session.GetHashCode() + "_decrypted_sent", args.Buffer, args.Offset, args.Count);
                 };
             }
 
             item.Update();
             return item;
+        }
+
+        private void AppendTransferLog(string fileName, byte[] buffer, int offset, int count)
+        {
+            //string basePath = @"c:\!titanium\";
+            //using (var fs = new FileStream(basePath + fileName, FileMode.Append, FileAccess.Write, FileShare.Read))
+            //{
+            //    fs.Write(buffer, offset, count);
+            //}
         }
 
         private string TunnelTypeToString(TunnelType tunnelType)

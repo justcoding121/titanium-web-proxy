@@ -216,6 +216,8 @@ namespace Titanium.Web.Proxy
 
                             // HTTPS server created - we can now decrypt the client's traffic
                             clientStream = new CustomBufferedStream(sslStream, BufferPool);
+                            clientStream.DataRead += (o, args) => connectArgs.OnDecryptedDataSent(args.Buffer, args.Offset, args.Count);
+                            clientStream.DataWrite += (o, args) => connectArgs.OnDecryptedDataReceived(args.Buffer, args.Offset, args.Count);
                             clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool);
                         }
                         catch (Exception e)
@@ -286,7 +288,8 @@ namespace Titanium.Web.Proxy
                             if (!clientStream.IsClosed && !connection.Stream.IsClosed)
                             {
                                 await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool,
-                                    null, null, connectArgs.CancellationTokenSource, ExceptionFunc);
+                                    null, null,
+                                    connectArgs.CancellationTokenSource, ExceptionFunc);
                             }
                         }
                         finally
@@ -336,8 +339,8 @@ namespace Titanium.Web.Proxy
                             await connection.StreamWriter.WriteLineAsync(cancellationToken);
 #if NETCOREAPP2_1
                             await Http2Helper.SendHttp2(clientStream, connection.Stream, BufferPool.BufferSize,
-                                (buffer, offset, count) => { connectArgs.OnDataSent(buffer, offset, count); },
-                                (buffer, offset, count) => { connectArgs.OnDataReceived(buffer, offset, count); },
+                                (buffer, offset, count) => { connectArgs.OnDecryptedDataSent(buffer, offset, count); },
+                                (buffer, offset, count) => { connectArgs.OnDecryptedDataReceived(buffer, offset, count); },
                                 () => new SessionEventArgs(this, endPoint, cancellationTokenSource)
                                 {
                                     ProxyClient = { Connection = clientConnection },
