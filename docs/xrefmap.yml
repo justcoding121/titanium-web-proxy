@@ -709,6 +709,18 @@ references:
   commentId: T:Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs
   fullName: Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs
   nameWithType: TunnelConnectSessionEventArgs
+- uid: Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DecryptedDataReceived
+  name: DecryptedDataReceived
+  href: api/Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_DecryptedDataReceived
+  commentId: E:Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DecryptedDataReceived
+  fullName: Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DecryptedDataReceived
+  nameWithType: TunnelConnectSessionEventArgs.DecryptedDataReceived
+- uid: Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DecryptedDataSent
+  name: DecryptedDataSent
+  href: api/Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_DecryptedDataSent
+  commentId: E:Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DecryptedDataSent
+  fullName: Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DecryptedDataSent
+  nameWithType: TunnelConnectSessionEventArgs.DecryptedDataSent
 - uid: Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DecryptSsl
   name: DecryptSsl
   href: api/Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_DecryptSsl
