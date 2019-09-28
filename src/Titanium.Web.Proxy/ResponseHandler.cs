@@ -58,7 +58,7 @@ namespace Titanium.Web.Proxy
             // if user requested call back then do it
             if (!response.Locked)
             {
-                await invokeBeforeResponse(args);
+                await onBeforeResponse(args);
             }
 
             // it may changed in the user event
@@ -132,7 +132,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="args"></param>
         /// <returns></returns>
-        private async Task invokeBeforeResponse(SessionEventArgs args)
+        private async Task onBeforeResponse(SessionEventArgs args)
         {
             if (BeforeResponse != null)
             {
@@ -145,7 +145,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="args"></param>
         /// <returns></returns>
-        private async Task invokeAfterResponse(SessionEventArgs args)
+        private async Task onAfterResponse(SessionEventArgs args)
         {
             if (AfterResponse != null)
             {

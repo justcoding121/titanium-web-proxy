@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-#if NETCOREAPP2_1
+#if NETCOREAPP2_1 || NETSTANDARD2_1
 using System.Net.Security;
 #endif
 using System.Text.RegularExpressions;
@@ -143,7 +143,7 @@ namespace Titanium.Web.Proxy
                                 // proxy authorization check
                                 if (httpsConnectHostname == null && await checkAuthorization(args) == false)
                                 {
-                                    await invokeBeforeResponse(args);
+                                    await onBeforeResponse(args);
 
                                     // send the response
                                     await clientStreamWriter.WriteResponseAsync(args.HttpClient.Response,
@@ -166,10 +166,8 @@ namespace Titanium.Web.Proxy
                             // we need this to syphon out data from connection if API user changes them.
                             request.SetOriginalHeaders();
 
-                            args.TimeLine["Request Received"] = DateTime.Now;
-
                             // If user requested interception do it
-                            await invokeBeforeRequest(args);
+                            await onBeforeRequest(args);
 
                             var response = args.HttpClient.Response;
 
@@ -286,7 +284,7 @@ namespace Titanium.Web.Proxy
                     }
                     finally
                     {
-                        await invokeAfterResponse(args);
+                        await onAfterResponse(args);
                         args.Dispose();
                     }
                 }
@@ -410,8 +408,10 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="args">The session event arguments.</param>
         /// <returns></returns>
-        private async Task invokeBeforeRequest(SessionEventArgs args)
+        private async Task onBeforeRequest(SessionEventArgs args)
         {
+            args.TimeLine["Request Received"] = DateTime.Now;
+
             if (BeforeRequest != null)
             {
                 await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);

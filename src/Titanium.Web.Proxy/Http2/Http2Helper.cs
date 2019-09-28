@@ -1,4 +1,4 @@
-﻿#if NETCOREAPP2_1
+﻿#if NETCOREAPP2_1 || NETSTANDARD2_1
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -24,8 +24,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     Task-based Asynchronous Pattern
         /// </summary>
         /// <returns></returns>
-        internal static async Task SendHttp2(Stream clientStream, Stream serverStream, int bufferSize,
-            Action<byte[], int, int> onDataSend, Action<byte[], int, int> onDataReceive,
+        internal static async Task SendHttp2(Stream clientStream, Stream serverStream,
             Func<SessionEventArgs> sessionFactory,
             Func<SessionEventArgs, Task> onBeforeRequest, Func<SessionEventArgs, Task> onBeforeResponse,
             CancellationTokenSource cancellationTokenSource, Guid connectionId,
@@ -38,13 +37,13 @@ namespace Titanium.Web.Proxy.Http2
 
             // Now async relay all server=>client & client=>server data
             var sendRelay =
-                copyHttp2FrameAsync(clientStream, serverStream, onDataSend, clientSettings, serverSettings, 
+                copyHttp2FrameAsync(clientStream, serverStream, clientSettings, serverSettings, 
                     sessionFactory, sessions, onBeforeRequest, 
-                    bufferSize, connectionId, true, cancellationTokenSource.Token, exceptionFunc);
+                    connectionId, true, cancellationTokenSource.Token, exceptionFunc);
             var receiveRelay =
-                copyHttp2FrameAsync(serverStream, clientStream, onDataReceive, serverSettings, clientSettings, 
+                copyHttp2FrameAsync(serverStream, clientStream, serverSettings, clientSettings, 
                     sessionFactory, sessions, onBeforeResponse, 
-                    bufferSize, connectionId, false, cancellationTokenSource.Token, exceptionFunc);
+                    connectionId, false, cancellationTokenSource.Token, exceptionFunc);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             cancellationTokenSource.Cancel();
@@ -52,11 +51,11 @@ namespace Titanium.Web.Proxy.Http2
             await Task.WhenAll(sendRelay, receiveRelay);
         }
 
-        private static async Task copyHttp2FrameAsync(Stream input, Stream output, Action<byte[], int, int> onCopy,
+        private static async Task copyHttp2FrameAsync(Stream input, Stream output,
             Http2Settings localSettings, Http2Settings remoteSettings,
             Func<SessionEventArgs> sessionFactory, ConcurrentDictionary<int, SessionEventArgs>  sessions, 
             Func<SessionEventArgs, Task> onBeforeRequestResponse,
-            int bufferSize, Guid connectionId, bool isClient, CancellationToken cancellationToken,
+            Guid connectionId, bool isClient, CancellationToken cancellationToken,
             ExceptionHandler exceptionFunc)
         {
             int headerTableSize = 0;
@@ -69,7 +68,6 @@ namespace Titanium.Web.Proxy.Http2
             {
                 var frameHeaderBuffer = frameHeader.Buffer;
                 int read = await forceRead(input, frameHeaderBuffer, 0, 9, cancellationToken);
-                onCopy(frameHeaderBuffer, 0, read);
                 if (read != 9)
                 {
                     return;
@@ -92,7 +90,6 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 read = await forceRead(input, buffer, 0, length, cancellationToken);
-                onCopy(buffer, 0, read);
                 if (read != length)
                 {
                     return;
@@ -127,6 +124,11 @@ namespace Titanium.Web.Proxy.Http2
                 //System.Diagnostics.Debug.WriteLine("CONN: " + connectionId + ", CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
                 if (type == Http2FrameType.Data && args != null)
                 {
+                    if (isClient) 
+                        args.OnDataSent(buffer, 0, read);
+                    else
+                        args.OnDataReceived(buffer, 0, read);
+
                     rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
 
                     bool padded = (flags & Http2FrameFlag.Padded) != 0;
@@ -182,8 +184,10 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             args = sessionFactory();
                             args.IsPromise = true;
-                            sessions.TryAdd(streamId, args);
-                            sessions.TryAdd(promisedStreamId, args);
+                            if (!sessions.TryAdd(streamId, args))
+                                ;
+                            if (!sessions.TryAdd(promisedStreamId, args))
+                                ;
                         }
 
                         System.Diagnostics.Debug.WriteLine("PROMISE STREAM: " + streamId + ", " + promisedStreamId +
@@ -201,7 +205,8 @@ namespace Titanium.Web.Proxy.Http2
                         if (!sessions.TryGetValue(streamId, out args))
                         {
                             args = sessionFactory();
-                            sessions.TryAdd(streamId, args);
+                            if (!sessions.TryAdd(streamId, args))
+                                ;
                         }
 
                         rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;

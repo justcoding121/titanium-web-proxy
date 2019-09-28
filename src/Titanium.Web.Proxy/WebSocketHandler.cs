@@ -60,7 +60,7 @@ namespace Titanium.Web.Proxy
             // If user requested call back then do it
             if (!args.HttpClient.Response.Locked)
             {
-                await invokeBeforeResponse(args);
+                await onBeforeResponse(args);
             }
 
             await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool,
