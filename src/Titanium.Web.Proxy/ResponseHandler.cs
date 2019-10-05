@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy
             args.ReRequest = false;
 
             // check for windows authentication
-            if (isWindowsAuthenticationEnabledAndSupported)
+            if (args.EnableWinAuth)
             {
                 if (response.StatusCode == (int)HttpStatusCode.Unauthorized)
                 {
