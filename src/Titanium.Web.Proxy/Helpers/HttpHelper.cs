@@ -151,20 +151,28 @@ namespace Titanium.Web.Proxy.Helpers
         /// </returns>
         private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, string expectedStart, CancellationToken cancellationToken = default)
         {
-            int iRet = -1;
             const int lengthToCheck = 10;
             byte[] buffer = null;
             try
             {
-                buffer = bufferPool.GetBuffer(Math.Max(bufferPool.BufferSize, lengthToCheck));
-
-                int peeked = await clientStreamReader.PeekBytesAsync(buffer, 0, 0, lengthToCheck, cancellationToken);
-
-                if (peeked > 0)
+                if (bufferPool.BufferSize < lengthToCheck)
                 {
-                    bool isExpected = true;
+                    throw new Exception($"Buffer is too small. Minimum size is {lengthToCheck} bytes");
+                }
 
-                    for (int i = 0; i < lengthToCheck; i++)
+                buffer = bufferPool.GetBuffer(bufferPool.BufferSize);
+
+                bool isExpected = true;
+                int i = 0;
+                while (i < lengthToCheck)
+                {
+                    int peeked = await clientStreamReader.PeekBytesAsync(buffer, i, i, lengthToCheck - i, cancellationToken);
+                    if (peeked == 0)
+                        return - 1;
+
+                    peeked += i;
+
+                    while (i < peeked)
                     {
                         int b = buffer[i];
 
@@ -173,23 +181,23 @@ namespace Titanium.Web.Proxy.Helpers
                         else
                         {
                             char ch = (char)b;
-                            if (!char.IsLetter(ch))
+                            if (ch < 'A' || ch > 'z' || (ch > 'Z' && ch < 'a')) // ASCII letter
                                 return -1;
                             else if (i >= expectedStart.Length || ch != expectedStart[i])
-                                isExpected = false;                            
+                                isExpected = false;
                         }
-                    }
 
-                    // only letters
-                    iRet = isExpected ? 1 : 0;
+                        i++;
+                    }
                 }
+
+                // only letters
+                return 0;
             }
             finally
             {
                 bufferPool.ReturnBuffer(buffer);
-                buffer = null;
             }
-            return iRet;
         }
     }
 }
