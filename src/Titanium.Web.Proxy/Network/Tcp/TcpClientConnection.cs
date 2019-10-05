@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net;
-#if NETCOREAPP2_1
+#if NETCOREAPP2_1 || NETSTANDARD2_1
 using System.Net.Security;
 #endif
 using System.Net.Sockets;

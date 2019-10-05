@@ -288,8 +288,7 @@ namespace Titanium.Web.Proxy
                             if (!clientStream.IsClosed && !connection.Stream.IsClosed)
                             {
                                 await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool,
-                                    null, null,
-                                    connectArgs.CancellationTokenSource, ExceptionFunc);
+                                    null, null, connectArgs.CancellationTokenSource, ExceptionFunc);
                             }
                         }
                         finally
@@ -338,17 +337,15 @@ namespace Titanium.Web.Proxy
                             await connection.StreamWriter.WriteLineAsync("SM", cancellationToken);
                             await connection.StreamWriter.WriteLineAsync(cancellationToken);
 #if NETCOREAPP2_1
-                            await Http2Helper.SendHttp2(clientStream, connection.Stream, BufferPool.BufferSize,
-                                (buffer, offset, count) => { connectArgs.OnDecryptedDataSent(buffer, offset, count); },
-                                (buffer, offset, count) => { connectArgs.OnDecryptedDataReceived(buffer, offset, count); },
+                            await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                 () => new SessionEventArgs(this, endPoint, cancellationTokenSource)
                                 {
                                     ProxyClient = { Connection = clientConnection },
                                     HttpClient = { ConnectRequest = connectArgs?.HttpClient.ConnectRequest },
                                     UserData = connectArgs?.UserData
                                 },
-                                async args => { await invokeBeforeRequest(args); },
-                                async args => { await invokeBeforeResponse(args); },
+                                async args => { await onBeforeRequest(args); },
+                                async args => { await onBeforeResponse(args); },
                                 connectArgs.CancellationTokenSource, clientConnection.Id, ExceptionFunc);
 #endif
                         }

@@ -391,7 +391,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                     };
                     await sslStream.AuthenticateAsClientAsync(options, cancellationToken);
-#if NETCOREAPP2_1
+#if NETCOREAPP2_1 || NETSTANDARD2_1
                     negotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
 #endif
 

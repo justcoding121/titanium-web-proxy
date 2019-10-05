@@ -235,6 +235,7 @@ namespace Titanium.Web.Proxy
         ///     The buffer pool used throughout this proxy instance.
         ///     Set custom implementations by implementing this interface.
         ///     By default this uses DefaultBufferPool implementation available in StreamExtended library package.
+        ///     Buffer size should be at least 10 bytes.
         /// </summary>
         public IBufferPool BufferPool { get; set; }
 
