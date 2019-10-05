@@ -20,6 +20,8 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public abstract class SessionEventArgsBase : EventArgs, IDisposable
     {
+        private static bool isWindowsAuthenticationSupported => RunTime.IsWindows;
+
         internal readonly CancellationTokenSource CancellationTokenSource;
 
         internal TcpServerConnection ServerConnection => HttpClient.Connection;
@@ -28,6 +30,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         protected readonly IBufferPool BufferPool;
         protected readonly ExceptionHandler ExceptionFunc;
+        private bool enableWinAuth;
 
         /// <summary>
         /// Relative milliseconds for various events.
@@ -53,6 +56,7 @@ namespace Titanium.Web.Proxy.EventArguments
             ProxyClient = new ProxyClient();
             HttpClient = new HttpWebClient(request);
             LocalEndPoint = endPoint;
+            EnableWinAuth = server.EnableWinAuth && isWindowsAuthenticationSupported;
 
             HttpClient.ProcessId = new Lazy<int>(() => ProxyClient.Connection.GetProcessId(endPoint));
         }
@@ -70,6 +74,21 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             get => HttpClient.UserData;
             set => HttpClient.UserData = value;
+        }
+
+        /// <summary>
+        ///     Enable/disable Windows Authentication (NTLM/Kerberos) for the current session.
+        /// </summary>
+        public bool EnableWinAuth
+        {
+            get => enableWinAuth;
+            set
+            {
+                if (!isWindowsAuthenticationSupported)
+                    throw new Exception("Windows Authentication is not supported");
+
+                enableWinAuth = value;
+            }
         }
 
         /// <summary>

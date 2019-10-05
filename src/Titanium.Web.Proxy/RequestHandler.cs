@@ -27,9 +27,6 @@ namespace Titanium.Web.Proxy
     /// </summary>
     public partial class ProxyServer
     {
-        private bool isWindowsAuthenticationEnabledAndSupported =>
-            EnableWinAuth && RunTime.IsWindows;
-
         /// <summary>
         ///     This is the core request handler method for a particular connection from client.
         ///     Will create new session (request/response) sequence until
@@ -158,7 +155,7 @@ namespace Titanium.Web.Proxy
                             // if win auth is enabled
                             // we need a cache of request body
                             // so that we can send it after authentication in WinAuthHandler.cs
-                            if (isWindowsAuthenticationEnabledAndSupported && request.HasBody)
+                            if (args.EnableWinAuth && request.HasBody)
                             {
                                 await args.GetRequestBody(cancellationToken);
                             }
