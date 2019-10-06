@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             {
                 Assert.AreEqual("Test", session.UserData);
 
-                return await Task.FromResult(new Models.ExternalProxy()
+                return await Task.FromResult(new Models.ExternalProxy
                 {
                     HostName = "localhost",
                     Port = proxy2.ProxyEndPoints[0].Port

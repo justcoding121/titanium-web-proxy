@@ -18,7 +18,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Setup
         public TestProxyServer(bool isReverseProxy, ProxyServer upStreamProxy = null)
         {
             ProxyServer = new ProxyServer();
-            ProxyEndPoint explicitEndPoint = isReverseProxy ?
+            var explicitEndPoint = isReverseProxy ?
                 (ProxyEndPoint)new TransparentProxyEndPoint(IPAddress.Any, 0, true) :
                 new ExplicitProxyEndPoint(IPAddress.Any, 0, true);
 
@@ -26,13 +26,13 @@ namespace Titanium.Web.Proxy.IntegrationTests.Setup
 
             if (upStreamProxy != null)
             {
-                ProxyServer.UpStreamHttpProxy = new ExternalProxy()
+                ProxyServer.UpStreamHttpProxy = new ExternalProxy
                 {
                     HostName = "localhost",
                     Port = upStreamProxy.ProxyEndPoints[0].Port
                 };
 
-                ProxyServer.UpStreamHttpsProxy = new ExternalProxy()
+                ProxyServer.UpStreamHttpsProxy = new ExternalProxy
                 {
                     HostName = "localhost",
                     Port = upStreamProxy.ProxyEndPoints[0].Port

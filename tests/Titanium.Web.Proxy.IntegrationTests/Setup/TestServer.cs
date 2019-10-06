@@ -62,14 +62,9 @@ namespace Titanium.Web.Proxy.IntegrationTests.Setup
                         .Get<IServerAddressesFeature>()
                         .Addresses.ToArray();
 
-            string httpAddress = addresses[0];
-            HttpListeningPort = int.Parse(httpAddress.Split(':')[2]);
-
-            string httpsAddress = addresses[1];
-            HttpsListeningPort = int.Parse(httpsAddress.Split(':')[2]);
-
-            string tcpAddress = addresses[2];
-            TcpListeningPort = int.Parse(tcpAddress.Split(':')[2]);
+            HttpListeningPort = new Uri(addresses[0]).Port;
+            HttpsListeningPort = new Uri(addresses[1]).Port;
+            TcpListeningPort = new Uri(addresses[2]).Port;
         }
 
         Func<HttpContext, Task> requestHandler = null;

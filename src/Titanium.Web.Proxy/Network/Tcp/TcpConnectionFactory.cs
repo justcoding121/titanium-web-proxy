@@ -294,6 +294,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     session.TimeLine["Dns Resolved"] = DateTime.Now;
                 }
 
+                Array.Sort(ipAddresses, (x, y) => x.AddressFamily.CompareTo(y.AddressFamily));
+
                 for (int i = 0; i < ipAddresses.Length; i++)
                 {
                     try
@@ -319,7 +321,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                             tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                         }
 
-                        await tcpClient.ConnectAsync(ipAddresses[i], port);
+                        await tcpClient.ConnectAsync(ipAddress, port);
                         break;
                     }
                     catch (Exception e)
