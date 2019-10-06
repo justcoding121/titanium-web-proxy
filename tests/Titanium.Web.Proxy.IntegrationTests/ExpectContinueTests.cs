@@ -22,7 +22,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
         {
             var testSuite = new TestSuite();
             var server = testSuite.GetServer();
-            var continueServer = new HttpContinueServer()
+            var continueServer = new HttpContinueServer
             {
                 ExpectationResponse = HttpStatusCode.Continue,
                 ResponseBody = "I am server. I received your greetings."
@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
         {
             var testSuite = new TestSuite();
             var server = testSuite.GetServer();
-            var continueServer = new HttpContinueServer() { ExpectationResponse = HttpStatusCode.ExpectationFailed };
+            var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.ExpectationFailed };
             server.HandleTcpRequest(continueServer.HandleRequest);
 
             var proxy = testSuite.GetReverseProxy();
@@ -73,7 +73,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
         {
             var testSuite = new TestSuite();
             var server = testSuite.GetServer();
-            var continueServer = new HttpContinueServer() { ExpectationResponse = HttpStatusCode.NotFound };
+            var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.NotFound };
             server.HandleTcpRequest(continueServer.HandleRequest);
 
             var proxy = testSuite.GetReverseProxy();
@@ -96,7 +96,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
         {
             var testSuite = new TestSuite();
             var server = testSuite.GetServer();
-            var continueServer = new HttpContinueServer() { ExpectationResponse = HttpStatusCode.Continue };
+            var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.Continue };
             server.HandleTcpRequest(continueServer.HandleRequest);
 
             var dbzEx = new DivideByZeroException("Undefined");

@@ -24,7 +24,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             try
             {
                 Request.ParseRequestLine(line, out var method, out var url, out var version);
-                RequestResponseBase request = new Request()
+                RequestResponseBase request = new Request
                 {
                     Method = method, RequestUriString = url, HttpVersion = version
                 };
@@ -69,7 +69,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             try
             {
                 Response.ParseResponseLine(line, out var version, out var status, out var desc);
-                RequestResponseBase response = new Response()
+                RequestResponseBase response = new Response
                 {
                     HttpVersion = version, StatusCode = status, StatusDescription = desc
                 };

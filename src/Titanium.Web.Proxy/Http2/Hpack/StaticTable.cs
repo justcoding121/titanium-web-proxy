@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// Appendix A: Static Table Definition
         /// </summary>
         /// <see cref="http://tools.ietf.org/html/rfc7541#appendix-A"/>
-        private static readonly List<HttpHeader> staticTable = new List<HttpHeader>()
+        private static readonly List<HttpHeader> staticTable = new List<HttpHeader>
         {
             /*  1 */
             new HttpHeader(":authority", string.Empty),

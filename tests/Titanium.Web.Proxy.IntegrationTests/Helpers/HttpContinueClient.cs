@@ -9,6 +9,8 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
 {
     class HttpContinueClient
     {
+        private const int waitTimeout = 200;
+
         private static Encoding MsgEncoding = HttpHelper.GetEncodingFromContentType(null);
 
         public async Task<Response> Post(string server, int port, string content)
@@ -37,7 +39,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
             {
                 var readTask = client.GetStream().ReadAsync(buffer, 0, 1024);
-                if (!readTask.Wait(200))
+                if (!readTask.Wait(waitTimeout))
                     return null;
 
                 responseMsg += MsgEncoding.GetString(buffer, 0, readTask.Result);
@@ -52,7 +54,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
                 {
                     var readTask = client.GetStream().ReadAsync(buffer, 0, 1024);
-                    if (!readTask.Wait(200))
+                    if (!readTask.Wait(waitTimeout))
                         return null;
                     responseMsg += MsgEncoding.GetString(buffer, 0, readTask.Result);
                 }
