@@ -248,23 +248,22 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <returns></returns>
         public async Task<int> PeekByteAsync(int index, CancellationToken cancellationToken = default)
         {
-            if (Available <= index)
-            {
-                await FillBufferAsync(cancellationToken);
-            }
-
             // When index is greater than the buffer size
             if (streamBuffer.Length <= index)
             {
                 throw new Exception("Requested Peek index exceeds the buffer size. Consider increasing the buffer size.");
             }
 
-            // When index is greater than the buffer size
-            if (Available <= index)
+            while (Available <= index)
             {
-                return -1;
+                // When index is greater than the buffer size
+                bool fillResult = await FillBufferAsync(cancellationToken);
+                if (!fillResult)
+                {
+                    return -1;
+                }
             }
-            
+
             return streamBuffer[bufferPos + index];
         }
 
@@ -279,24 +278,27 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <returns></returns>
         public async Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int count, CancellationToken cancellationToken = default)
         {
-            if (Available <= index)
-            {
-                await FillBufferAsync(cancellationToken);
-            }
-
             // When index is greater than the buffer size
-            if (streamBuffer.Length <= (index + count))
+            if (streamBuffer.Length <= index + count)
             {
                 throw new Exception("Requested Peek index and size exceeds the buffer size. Consider increasing the buffer size.");
             }
 
-            if (Available <= (index + count))
+            while (Available <= index)
             {
-                return -1;
+                bool fillResult = await FillBufferAsync(cancellationToken);
+                if (!fillResult)
+                {
+                    return 0;
+                }
+            }
+
+            if (Available - index < count)
+            {
+                count = Available - index;
             }
 
             Buffer.BlockCopy(streamBuffer, index, buffer, offset, count);
-
             return count;
         }
 
@@ -516,17 +518,17 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
                 throw new Exception("Stream is already closed");
             }
 
+            int bytesToRead = streamBuffer.Length - bufferLength;
+            if (bytesToRead == 0)
+            {
+                return false;
+            }
+
             if (bufferLength > 0)
             {
                 // normally we fill the buffer only when it is empty, but sometimes we need more data
                 // move the remaining data to the beginning of the buffer 
                 Buffer.BlockCopy(streamBuffer, bufferPos, streamBuffer, 0, bufferLength);
-            }
-
-            int bytesToRead = streamBuffer.Length - bufferLength;
-            if (bytesToRead == 0)
-            {
-                return false;
             }
 
             bufferPos = 0;

@@ -168,7 +168,7 @@ namespace Titanium.Web.Proxy.Helpers
                 {
                     int peeked = await clientStreamReader.PeekBytesAsync(buffer, i, i, lengthToCheck - i, cancellationToken);
                     if (peeked == 0)
-                        return - 1;
+                        return -1;
 
                     peeked += i;
 
