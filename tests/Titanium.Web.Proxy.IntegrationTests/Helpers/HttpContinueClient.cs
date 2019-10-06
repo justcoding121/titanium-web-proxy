@@ -39,6 +39,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 var readTask = client.GetStream().ReadAsync(buffer, 0, 1024);
                 if (!readTask.Wait(200))
                     return null;
+
                 responseMsg += MsgEncoding.GetString(buffer, 0, readTask.Result);
             }
 
@@ -58,10 +59,8 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
 
                 return response;
             }
-            else
-            {
-                return response;
-            }
+
+            return response;
         }
     }
 }

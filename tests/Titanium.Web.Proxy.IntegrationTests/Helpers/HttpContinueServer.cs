@@ -66,6 +66,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             {
                 Console.WriteLine($"{ex.GetType()}: {ex.Message}");
             }
+
             return request;
         }
 
@@ -87,6 +88,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             {
                 Console.WriteLine($"{ex.GetType()}: {ex.Message}");
             }
+
             return request;
         }
     }
