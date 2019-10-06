@@ -210,7 +210,7 @@ namespace Titanium.Web.Proxy
                             options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;
                             await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
 
-#if NETCOREAPP2_1
+#if NETSTANDARD2_1
                             clientConnection.NegotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
 #endif
 
@@ -336,7 +336,7 @@ namespace Titanium.Web.Proxy
                             await connection.StreamWriter.WriteLineAsync(cancellationToken);
                             await connection.StreamWriter.WriteLineAsync("SM", cancellationToken);
                             await connection.StreamWriter.WriteLineAsync(cancellationToken);
-#if NETCOREAPP2_1
+#if NETSTANDARD2_1
                             await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                 () => new SessionEventArgs(this, endPoint, cancellationTokenSource)
                                 {

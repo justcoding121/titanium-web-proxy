@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.Extensions
             return null;
         }
 
-#if NETCOREAPP2_1 || NETSTANDARD2_1
+#if NETSTANDARD2_1
         internal static List<SslApplicationProtocol> GetAlpn(this ClientHelloInfo clientHelloInfo)
         {
             if (clientHelloInfo.Extensions != null && clientHelloInfo.Extensions.TryGetValue("ALPN", out var alpnExtension))
@@ -78,7 +78,7 @@ namespace Titanium.Web.Proxy.Extensions
 #endif
     }
 
-#if !NETCOREAPP2_1 && !NETSTANDARD2_1
+#if !NETSTANDARD2_1
     internal enum SslApplicationProtocol
     {
         Http11,

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-#if NETCOREAPP2_1 || NETSTANDARD2_1
+#if NETSTANDARD2_1
 using System.Net.Security;
 #endif
 using System.Text.RegularExpressions;

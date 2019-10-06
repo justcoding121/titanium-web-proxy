@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Net;
-#if NETCOREAPP2_1 || NETSTANDARD2_1
+#if NETSTANDARD2_1
 using System.Net.Security;
 #endif
 using System.Net.Sockets;
