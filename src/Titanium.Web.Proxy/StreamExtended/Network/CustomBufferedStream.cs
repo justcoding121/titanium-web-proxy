@@ -36,9 +36,9 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         private readonly IBufferPool bufferPool;
 
-        public event EventHandler<DataEventArgs> DataRead;
+        public event EventHandler<DataEventArgs>? DataRead;
 
-        public event EventHandler<DataEventArgs> DataWrite;
+        public event EventHandler<DataEventArgs>? DataWrite;
 
         public Stream BaseStream { get; }
 
@@ -510,7 +510,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        public async Task<bool> FillBufferAsync(CancellationToken cancellationToken = default)
+        public async ValueTask<bool> FillBufferAsync(CancellationToken cancellationToken = default)
         {
             if (closed)
             {
@@ -558,7 +558,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        public Task<string> ReadLineAsync(CancellationToken cancellationToken = default)
+        public Task<string?> ReadLineAsync(CancellationToken cancellationToken = default)
         {
             return ReadLineInternalAsync(this, bufferPool, cancellationToken);
         }

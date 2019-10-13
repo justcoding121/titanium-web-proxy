@@ -158,7 +158,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="proxyServerValues"></param>
         /// <returns></returns>
-        internal static List<HttpSystemProxyValue> GetSystemProxyValues(string proxyServerValues)
+        internal static List<HttpSystemProxyValue> GetSystemProxyValues(string? proxyServerValues)
         {
             var result = new List<HttpSystemProxyValue>();
 
@@ -167,7 +167,7 @@ namespace Titanium.Web.Proxy.Helpers
                 return result;
             }
 
-            var proxyValues = proxyServerValues.Split(';');
+            var proxyValues = proxyServerValues!.Split(';');
 
             if (proxyValues.Length > 0)
             {

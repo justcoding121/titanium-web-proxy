@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="initialConnection">Initial Tcp connection to use.</param>
         /// <returns>Returns the latest connection used and the latest exception if any.</returns>
         internal async Task<RetryResult> ExecuteAsync(Func<TcpServerConnection, Task<bool>> action,
-            Func<Task<TcpServerConnection>> generator, TcpServerConnection initialConnection)
+            Func<Task<TcpServerConnection>> generator, TcpServerConnection? initialConnection)
         {
             currentConnection = initialConnection;
             bool @continue = true;
@@ -79,15 +79,13 @@ namespace Titanium.Web.Proxy.Network
 
     internal class RetryResult
     {
-        internal bool IsSuccess => Exception == null;
-        
-        internal TcpServerConnection LatestConnection { get; }
+        internal TcpServerConnection? LatestConnection { get; }
         
         internal Exception? Exception { get; }
         
         internal bool Continue { get; }
 
-        internal RetryResult(TcpServerConnection lastConnection, Exception? exception, bool @continue)
+        internal RetryResult(TcpServerConnection? lastConnection, Exception? exception, bool @continue)
         {
             LatestConnection = lastConnection;
             Exception = exception;

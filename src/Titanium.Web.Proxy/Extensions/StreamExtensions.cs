@@ -32,7 +32,7 @@ namespace Titanium.Web.Proxy.Extensions
         /// <param name="onCopy"></param>
         /// <param name="bufferPool"></param>
         /// <param name="cancellationToken"></param>
-        internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int> onCopy,
+        internal static async Task CopyToAsync(this Stream input, Stream output, Action<byte[], int, int>? onCopy,
             IBufferPool bufferPool, CancellationToken cancellationToken)
         {
             var buffer = bufferPool.GetBuffer();

@@ -128,7 +128,7 @@ namespace Titanium.Web.Proxy
 
             if (!string.IsNullOrWhiteSpace(continuation))
             {
-                return createContinuationResponse(response, continuation);
+                return createContinuationResponse(response, continuation!);
             }
 
             if (ProxyBasicAuthenticateFunc != null)

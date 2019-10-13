@@ -77,15 +77,19 @@ namespace Titanium.Web.Proxy.Extensions
         }
 #endif
     }
+}
 
 #if !NETSTANDARD2_1
+namespace System.Net.Security
+{
     internal enum SslApplicationProtocol
     {
         Http11,
         Http2
     }
 
-    [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType", Justification = "Reviewed.")]
+    [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType", Justification =
+        "Reviewed.")]
     internal class SslClientAuthenticationOptions
     {
         internal bool AllowRenegotiation { get; set; }
@@ -125,5 +129,5 @@ namespace Titanium.Web.Proxy.Extensions
 
         internal EncryptionPolicy EncryptionPolicy { get; set; }
     }
-#endif
 }
+#endif

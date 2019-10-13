@@ -52,8 +52,8 @@ namespace Titanium.Web.Proxy.Network
         /// Useful to prevent multiple threads working on same certificate generation 
         /// when burst certificate generation requests happen for same certificate.
         /// </summary>
-        private readonly ConcurrentDictionary<string, Task<X509Certificate2>> pendingCertificateCreationTasks
-                            = new ConcurrentDictionary<string, Task<X509Certificate2>>();
+        private readonly ConcurrentDictionary<string, Task<X509Certificate2?>> pendingCertificateCreationTasks
+                            = new ConcurrentDictionary<string, Task<X509Certificate2?>>();
 
         private readonly CancellationTokenSource clearCertificatesTokenSource
                             = new CancellationTokenSource();
@@ -334,8 +334,7 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="storeName"></param>
         /// <param name="storeLocation"></param>
         /// <param name="certificate"></param>
-        private void uninstallCertificate(StoreName storeName, StoreLocation storeLocation,
-            X509Certificate2 certificate)
+        private void uninstallCertificate(StoreName storeName, StoreLocation storeLocation, X509Certificate2? certificate)
         {
             if (certificate == null)
             {
@@ -447,7 +446,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="certificateName"></param>
         /// <returns></returns>
-        public async Task<X509Certificate2> CreateServerCertificate(string certificateName)
+        public async Task<X509Certificate2?> CreateServerCertificate(string certificateName)
         {
             // check in cache first
             if (cachedCertificates.TryGetValue(certificateName, out var cached))

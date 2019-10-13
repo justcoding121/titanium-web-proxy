@@ -66,7 +66,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="contentType"></param>  
         /// <returns></returns>
-        internal static Encoding GetEncodingFromContentType(string contentType)
+        internal static Encoding GetEncodingFromContentType(string? contentType)
         {
             try
             {
@@ -108,7 +108,7 @@ namespace Titanium.Web.Proxy.Helpers
             return defaultEncoding;
         }
 
-        internal static ReadOnlyMemory<char> GetBoundaryFromContentType(string contentType)
+        internal static ReadOnlyMemory<char> GetBoundaryFromContentType(string? contentType)
         {
             if (contentType != null)
             {
@@ -196,16 +196,14 @@ namespace Titanium.Web.Proxy.Helpers
         private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, string expectedStart, CancellationToken cancellationToken = default)
         {
             const int lengthToCheck = 10;
-            byte[]? buffer = null;
+            if (bufferPool.BufferSize < lengthToCheck)
+            {
+                throw new Exception($"Buffer is too small. Minimum size is {lengthToCheck} bytes");
+            }
+
+            byte[] buffer = bufferPool.GetBuffer(bufferPool.BufferSize);
             try
             {
-                if (bufferPool.BufferSize < lengthToCheck)
-                {
-                    throw new Exception($"Buffer is too small. Minimum size is {lengthToCheck} bytes");
-                }
-
-                buffer = bufferPool.GetBuffer(bufferPool.BufferSize);
-
                 bool isExpected = true;
                 int i = 0;
                 while (i < lengthToCheck)

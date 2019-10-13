@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Net;
-#if NETSTANDARD2_1
 using System.Net.Security;
-#endif
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
@@ -49,7 +47,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         ///     Http version
         /// </summary>
-        internal Version Version { get; set; }
+        internal Version Version { get; set; } = HttpHeader.VersionUnknown;
 
         private readonly TcpClient tcpClient;
 
@@ -66,7 +64,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         ///     Server stream
         /// </summary>
-        internal CustomBufferedStream Stream { get; set; }
+        internal CustomBufferedStream? Stream { get; set; }
 
         /// <summary>
         ///     Last time this connection was used

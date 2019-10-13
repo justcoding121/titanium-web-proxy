@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Sockets;
-#if NETSTANDARD2_1
 using System.Net.Security;
-#endif
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -84,8 +82,7 @@ namespace Titanium.Web.Proxy
                     {
                         try
                         {
-                            Request.ParseRequestLine(httpCmd, out string httpMethod, out string httpUrl,
-                                out var version);
+                            Request.ParseRequestLine(httpCmd, out string httpMethod, out string httpUrl, out var version);
 
                             // Read the request headers in to unique and non-unique header collections
                             await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,
@@ -224,7 +221,7 @@ namespace Titanium.Web.Proxy
                             closeServerConnection = !result.Continue;
 
                             // throw if exception happened
-                            if (!result.IsSuccess)
+                            if (result.Exception != null)
                             {
                                 throw result.Exception;
                             }
@@ -347,7 +344,6 @@ namespace Titanium.Web.Proxy
                 var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
                 var response = args.HttpClient.Response;
 
-
                 var headerBuilder = new HeaderBuilder();
                 headerBuilder.WriteResponseLine(response.HttpVersion, response.StatusCode, response.StatusDescription);
                 headerBuilder.WriteHeaders(response.Headers);
@@ -362,12 +358,12 @@ namespace Titanium.Web.Proxy
                 if (request.IsBodyRead)
                 {
                     var writer = args.HttpClient.Connection.StreamWriter;
-                    await writer.WriteBodyAsync(body, request.IsChunked, cancellationToken);
+                    await writer.WriteBodyAsync(body!, request.IsChunked, cancellationToken);
                 }
                 else if (!request.ExpectationFailed)
                 {
                     // get the request body unless an unsuccessful 100 continue request was made
-                    HttpWriter writer = args.HttpClient.Connection.StreamWriter;
+                    HttpWriter writer = args.HttpClient.Connection.StreamWriter!;
                     await args.CopyRequestBodyAsync(writer, TransformationMode.None, cancellationToken);
                 }
             }

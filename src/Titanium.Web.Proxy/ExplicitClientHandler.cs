@@ -309,7 +309,7 @@ namespace Titanium.Web.Proxy
                         connectArgs.HttpClient.ConnectRequest!.TunnelType = TunnelType.Http2;
 
                         // HTTP/2 Connection Preface
-                        string line = await clientStream.ReadLineAsync(cancellationToken);
+                        string? line = await clientStream.ReadLineAsync(cancellationToken);
                         if (line != string.Empty)
                         {
                             throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
@@ -332,11 +332,9 @@ namespace Titanium.Web.Proxy
                                                         noCache: true, cancellationToken: cancellationToken);
                         try
                         {
-                            await connection.StreamWriter.WriteLineAsync("PRI * HTTP/2.0", cancellationToken);
-                            await connection.StreamWriter.WriteLineAsync(cancellationToken);
-                            await connection.StreamWriter.WriteLineAsync("SM", cancellationToken);
-                            await connection.StreamWriter.WriteLineAsync(cancellationToken);
 #if NETSTANDARD2_1
+                            var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
+                            await connection.StreamWriter.WriteAsync(connectionPreface, cancellationToken);
                             await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                 () => new SessionEventArgs(this, endPoint, cancellationTokenSource)
                                 {

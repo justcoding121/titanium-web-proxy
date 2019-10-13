@@ -69,7 +69,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Fills the buffer asynchronous.
         /// </summary>
         /// <returns></returns>
-        Task<bool> ICustomStreamReader.FillBufferAsync(CancellationToken cancellationToken)
+        ValueTask<bool> ICustomStreamReader.FillBufferAsync(CancellationToken cancellationToken)
         {
             return baseStream.FillBufferAsync(cancellationToken);
         }
@@ -141,7 +141,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        Task<string> ICustomStreamReader.ReadLineAsync(CancellationToken cancellationToken)
+        Task<string?> ICustomStreamReader.ReadLineAsync(CancellationToken cancellationToken)
         {
             return CustomBufferedStream.ReadLineInternalAsync(this, bufferPool, cancellationToken);
         }

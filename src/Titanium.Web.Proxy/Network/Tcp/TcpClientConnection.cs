@@ -1,9 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net;
-#if NETSTANDARD2_1
 using System.Net.Security;
-#endif
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Threading.Tasks;

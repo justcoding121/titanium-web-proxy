@@ -111,7 +111,7 @@ namespace Titanium.Web.Proxy
                 // initial value will match exactly any of the schemes
                 if (scheme != null)
                 {
-                    string clientToken = WinAuthHandler.GetInitialAuthToken(request.Host, scheme, args.HttpClient.Data);
+                    string clientToken = WinAuthHandler.GetInitialAuthToken(request.Host!, scheme, args.HttpClient.Data);
 
                     string auth = string.Concat(scheme, clientToken);
 
@@ -127,7 +127,6 @@ namespace Titanium.Web.Proxy
                 else
                 {
                     // challenge value will start with any of the scheme selected
-
                     scheme = authSchemes.First(x =>
                         authHeader.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase) &&
                         authHeader.Value.Length > x.Length + 1);

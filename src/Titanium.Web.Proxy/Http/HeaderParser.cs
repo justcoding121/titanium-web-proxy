@@ -10,10 +10,10 @@ namespace Titanium.Web.Proxy.Http
         internal static async Task ReadHeaders(ICustomStreamReader reader, HeaderCollection headerCollection,
             CancellationToken cancellationToken)
         {
-            string tmpLine;
+            string? tmpLine;
             while (!string.IsNullOrEmpty(tmpLine = await reader.ReadLineAsync(cancellationToken)))
             {
-                int colonIndex = tmpLine.IndexOf(':');
+                int colonIndex = tmpLine!.IndexOf(':');
                 if (colonIndex == -1)
                 {
                     throw new Exception("Header line should contain a colon character.");

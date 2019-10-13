@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Manage system proxy settings.
         /// </summary>
-        private SystemProxyManager systemProxySettingsManager { get; }
+        private SystemProxyManager? systemProxySettingsManager { get; }
 
         /// <summary>
         ///     Number of exception retries when connection pool is enabled.
@@ -249,18 +249,18 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     External proxy used for Http requests.
         /// </summary>
-        public ExternalProxy UpStreamHttpProxy { get; set; }
+        public ExternalProxy? UpStreamHttpProxy { get; set; }
 
         /// <summary>
         ///     External proxy used for Https requests.
         /// </summary>
-        public ExternalProxy UpStreamHttpsProxy { get; set; }
+        public ExternalProxy? UpStreamHttpsProxy { get; set; }
 
         /// <summary>
         ///     Local adapter/NIC endpoint where proxy makes request via.
         ///     Defaults via any IP addresses of this machine.
         /// </summary>
-        public IPEndPoint UpStreamEndPoint { get; set; }
+        public IPEndPoint? UpStreamEndPoint { get; set; }
 
         /// <summary>
         ///     A list of IpAddress and port this proxy is listening to.
@@ -271,7 +271,7 @@ namespace Titanium.Web.Proxy
         ///     A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP(S) requests.
         ///     User should return the ExternalProxy object with valid credentials.
         /// </summary>
-        public Func<SessionEventArgsBase, Task<ExternalProxy>> GetCustomUpStreamProxyFunc { get; set; }
+        public Func<SessionEventArgsBase, Task<ExternalProxy?>>? GetCustomUpStreamProxyFunc { get; set; }
 
         /// <summary>
         ///     Callback for error events in this proxy instance.
@@ -344,12 +344,12 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Customize TcpClient used for client connection upon create.
         /// </summary>
-        public event AsyncEventHandler<TcpClient> OnClientConnectionCreate;
+        public event AsyncEventHandler<TcpClient>? OnClientConnectionCreate;
 
         /// <summary>
         ///     Customize TcpClient used for server connection upon create.
         /// </summary>
-        public event AsyncEventHandler<TcpClient> OnServerConnectionCreate;
+        public event AsyncEventHandler<TcpClient>? OnServerConnectionCreate;
 
         /// <summary>
         /// Customize the minimum ThreadPool size (increase it on a server)
@@ -706,7 +706,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="sessionEventArgs">The session.</param>
         /// <returns>The external proxy as task result.</returns>
-        private Task<ExternalProxy> getSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
+        private Task<ExternalProxy?> getSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
         {
             var proxy = systemProxyResolver.GetProxy(sessionEventArgs.HttpClient.Request.RequestUri);
             return Task.FromResult(proxy);

@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Fills the buffer asynchronous.
         /// </summary>
         /// <returns></returns>
-        Task<bool> FillBufferAsync(CancellationToken cancellationToken = default);
+        ValueTask<bool> FillBufferAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Peeks a byte from buffer.
@@ -74,6 +74,6 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        Task<string> ReadLineAsync(CancellationToken cancellationToken = default);
+        Task<string?> ReadLineAsync(CancellationToken cancellationToken = default);
     }
 }

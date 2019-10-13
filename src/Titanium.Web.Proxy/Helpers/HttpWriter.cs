@@ -192,8 +192,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onCopy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task copyBodyChunkedAsync(ICustomStreamReader reader, Action<byte[], int, int> onCopy,
-            CancellationToken cancellationToken)
+        private async Task copyBodyChunkedAsync(ICustomStreamReader reader, Action<byte[], int, int>? onCopy, CancellationToken cancellationToken)
         {
             while (true)
             {
@@ -233,7 +232,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onCopy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task copyBytesFromStream(ICustomStreamReader reader, long count, Action<byte[], int, int> onCopy,
+        private async Task copyBytesFromStream(ICustomStreamReader reader, long count, Action<byte[], int, int>? onCopy,
             CancellationToken cancellationToken)
         {
             var buffer = bufferPool.GetBuffer();

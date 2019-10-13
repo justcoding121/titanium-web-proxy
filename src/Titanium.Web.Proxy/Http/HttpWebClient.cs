@@ -60,7 +60,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Override UpStreamEndPoint for this request; Local NIC via request is made
         /// </summary>
-        public IPEndPoint UpStreamEndPoint { get; set; }
+        public IPEndPoint? UpStreamEndPoint { get; set; }
 
         /// <summary>
         ///     Headers passed with Connect.
@@ -182,11 +182,8 @@ namespace Titanium.Web.Proxy.Http
             string httpStatus;
             try
             {
-                httpStatus = await Connection.Stream.ReadLineAsync(cancellationToken);
-                if (httpStatus == null)
-                {
-                    throw new ServerConnectionException("Server connection was closed.");
-                }
+                httpStatus = await Connection.Stream.ReadLineAsync(cancellationToken) ??
+                             throw new ServerConnectionException("Server connection was closed.");
             }
             catch (Exception e) when (!(e is ServerConnectionException))
             {
@@ -195,7 +192,8 @@ namespace Titanium.Web.Proxy.Http
 
             if (httpStatus == string.Empty)
             {
-                httpStatus = await Connection.Stream.ReadLineAsync(cancellationToken);
+                httpStatus = await Connection.Stream.ReadLineAsync(cancellationToken) ??
+                    throw new ServerConnectionException("Server connection was closed.");
             }
 
             Response.ParseResponseLine(httpStatus, out var version, out int statusCode, out string statusDescription);
