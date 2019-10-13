@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy.StreamExtended
 
         internal int EntensionsStartPosition { get; set; }
 
-        public Dictionary<string, SslExtension> Extensions { get; set; }
+        public Dictionary<string, SslExtension>? Extensions { get; set; }
 
         private static string SslVersionToString(int major, int minor)
         {

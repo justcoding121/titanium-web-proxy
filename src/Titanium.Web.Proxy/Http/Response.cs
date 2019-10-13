@@ -2,8 +2,8 @@
 using System.ComponentModel;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -36,7 +36,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Response Status description.
         /// </summary>
-        public string StatusDescription { get; set; }
+        public string StatusDescription { get; set; } = string.Empty;
 
         /// <summary>
         ///     Has response body?
@@ -78,7 +78,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Connection);
+                string? headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Connection);
 
                 if (headerValue != null)
                 {
@@ -99,15 +99,10 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var sb = new StringBuilder();
-                sb.Append($"{CreateResponseLine(HttpVersion, StatusCode, StatusDescription)}{ProxyConstants.NewLine}");
-                foreach (var header in Headers)
-                {
-                    sb.Append($"{header.ToString()}{ProxyConstants.NewLine}");
-                }
-
-                sb.Append(ProxyConstants.NewLine);
-                return sb.ToString();
+                var headerBuilder = new HeaderBuilder();
+                headerBuilder.WriteResponseLine(HttpVersion, StatusCode, StatusDescription);
+                headerBuilder.WriteHeaders(Headers);
+                return HttpHelper.HeaderEncoding.GetString(headerBuilder.GetBytes());
             }
         }
 
@@ -126,30 +121,42 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal static string CreateResponseLine(Version version, int statusCode, string statusDescription)
-        {
-            return $"HTTP/{version.Major}.{version.Minor} {statusCode} {statusDescription}";
-        }
-
         internal static void ParseResponseLine(string httpStatus, out Version version, out int statusCode,
             out string statusDescription)
         {
-            var httpResult = httpStatus.Split(ProxyConstants.SpaceSplit, 3);
-            if (httpResult.Length <= 1)
+            int firstSpace = httpStatus.IndexOf(' ');
+            if (firstSpace == -1)
             {
                 throw new Exception("Invalid HTTP status line: " + httpStatus);
             }
 
-            string httpVersion = httpResult[0];
+            var httpVersion = httpStatus.AsSpan(0, firstSpace);
 
             version = HttpHeader.Version11;
-            if (httpVersion.EqualsIgnoreCase("HTTP/1.0"))
+            if (httpVersion.EqualsIgnoreCase("HTTP/1.0".AsSpan()))
             {
                 version = HttpHeader.Version10;
             }
 
-            statusCode = int.Parse(httpResult[1]);
-            statusDescription = httpResult.Length > 2 ? httpResult[2] : string.Empty;
+            int secondSpace = httpStatus.IndexOf(' ', firstSpace + 1);
+            if (secondSpace != -1)
+            {
+#if NETSTANDARD2_1
+                statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1, secondSpace - firstSpace - 1));
+#else
+                statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1, secondSpace - firstSpace - 1).ToString());
+#endif
+                statusDescription = httpStatus.AsSpan(secondSpace + 1).ToString();
+            }
+            else
+            {
+#if NETSTANDARD2_1
+                statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1));
+#else
+                statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1).ToString());
+#endif
+                statusDescription = string.Empty;
+            }
         }
     }
 }

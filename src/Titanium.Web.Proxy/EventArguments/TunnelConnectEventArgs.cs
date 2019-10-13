@@ -45,12 +45,12 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Fired when decrypted data is sent within this session to server/client.
         /// </summary>
-        public event EventHandler<DataEventArgs> DecryptedDataSent;
+        public event EventHandler<DataEventArgs>? DecryptedDataSent;
 
         /// <summary>
         ///     Fired when decrypted data is received within this session from client/server.
         /// </summary>
-        public event EventHandler<DataEventArgs> DecryptedDataReceived;
+        public event EventHandler<DataEventArgs>? DecryptedDataReceived;
 
         internal void OnDecryptedDataSent(byte[] buffer, int offset, int count)
         {

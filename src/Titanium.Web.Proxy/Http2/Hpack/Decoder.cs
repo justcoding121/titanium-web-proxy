@@ -519,15 +519,14 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 var headerField = StaticTable.Get(index);
                 return headerField;
             }
-            else if (index - StaticTable.Length <= dynamicTable.Length())
+
+            if (index - StaticTable.Length <= dynamicTable.Length())
             {
                 var headerField = dynamicTable.GetEntry(index - StaticTable.Length);
                 return headerField;
             }
-            else
-            {
-                throw new IOException("illegal index value (" + index + ")");
-            }
+
+            throw new IOException("illegal index value (" + index + ")");
         }
 
         private void ReadName(int index)

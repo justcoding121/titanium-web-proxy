@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         private int bufferLength;
 
-        private byte[] buffer;
+        private readonly byte[] buffer;
 
         private bool disposed;
 
@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             this.bufferPool = bufferPool;
         }
 
-        public async Task<bool> FillBufferAsync(CancellationToken cancellationToken = default)
+        public async ValueTask<bool> FillBufferAsync(CancellationToken cancellationToken = default)
         {
             await FlushAsync(cancellationToken);
             return await reader.FillBufferAsync(cancellationToken);
@@ -124,7 +124,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             return result;
         }
 
-        public Task<string> ReadLineAsync(CancellationToken cancellationToken = default)
+        public Task<string?> ReadLineAsync(CancellationToken cancellationToken = default)
         {
             return CustomBufferedStream.ReadLineInternalAsync(this, bufferPool, cancellationToken);
         }
@@ -134,9 +134,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             if (!disposed)
             {
                 disposed = true;
-                var b = buffer;
-                buffer = null;
-                bufferPool.ReturnBuffer(b);
+                bufferPool.ReturnBuffer(buffer);
             }
         }
     }

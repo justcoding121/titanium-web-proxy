@@ -32,7 +32,7 @@ namespace Titanium.Web.Proxy.StreamExtended
         /// <param name="bufferPool"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public static async Task<ClientHelloInfo> PeekClientHello(CustomBufferedStream clientStream, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        public static async Task<ClientHelloInfo?> PeekClientHello(CustomBufferedStream clientStream, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
             // detects the HTTPS ClientHello message as it is described in the following url:
             // https://stackoverflow.com/questions/3897883/how-to-detect-an-incoming-ssl-https-handshake-ssl-wire-format
@@ -88,13 +88,12 @@ namespace Titanium.Web.Proxy.StreamExtended
                 byte[] sessionId = peekStream.ReadBytes(sessionIdLength);
                 byte[] random = peekStream.ReadBytes(randomLength);
 
-                var clientHelloInfo = new ClientHelloInfo
+                var clientHelloInfo = new ClientHelloInfo(sessionId)
                 {
                     HandshakeVersion = 2,
                     MajorVersion = majorVersion,
                     MinorVersion = minorVersion,
                     Random = random,
-                    SessionId = sessionId,
                     Ciphers = ciphers,
                     ClientHelloLength = peekStream.Position,
                 };
@@ -171,20 +170,19 @@ namespace Titanium.Web.Proxy.StreamExtended
 
                 int extenstionsStartPosition = peekStream.Position;
 
-                Dictionary<string, SslExtension> extensions = null;
+                Dictionary<string, SslExtension>? extensions = null;
 
                 if(extenstionsStartPosition < recordLength + 5)
                 {
                     extensions = await ReadExtensions(majorVersion, minorVersion, peekStream, bufferPool, cancellationToken);
                 }
 
-                var clientHelloInfo = new ClientHelloInfo
+                var clientHelloInfo = new ClientHelloInfo(sessionId)
                 {
                     HandshakeVersion = 3,
                     MajorVersion = majorVersion,
                     MinorVersion = minorVersion,
                     Random = random,
-                    SessionId = sessionId,
                     Ciphers = ciphers,
                     CompressionData = compressionData,
                     ClientHelloLength = peekStream.Position,
@@ -218,7 +216,7 @@ namespace Titanium.Web.Proxy.StreamExtended
         /// <param name="bufferPool"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public static async Task<ServerHelloInfo> PeekServerHello(CustomBufferedStream serverStream, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        public static async Task<ServerHelloInfo?> PeekServerHello(CustomBufferedStream serverStream, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
             // detects the HTTPS ClientHello message as it is described in the following url:
             // https://stackoverflow.com/questions/3897883/how-to-detect-an-incoming-ssl-https-handshake-ssl-wire-format
@@ -324,7 +322,7 @@ namespace Titanium.Web.Proxy.StreamExtended
 
                 int extenstionsStartPosition = peekStream.Position;
 
-                Dictionary<string, SslExtension> extensions = null;
+                Dictionary<string, SslExtension>? extensions = null;
 
                 if (extenstionsStartPosition < recordLength + 5)
                 {
@@ -351,9 +349,9 @@ namespace Titanium.Web.Proxy.StreamExtended
             return null;
         }
 
-        private static async Task<Dictionary<string, SslExtension>> ReadExtensions(int majorVersion, int minorVersion, CustomBufferedPeekStream peekStream, IBufferPool bufferPool, CancellationToken cancellationToken)
+        private static async Task<Dictionary<string, SslExtension>?> ReadExtensions(int majorVersion, int minorVersion, CustomBufferedPeekStream peekStream, IBufferPool bufferPool, CancellationToken cancellationToken)
         {
-            Dictionary<string, SslExtension> extensions = null;
+            Dictionary<string, SslExtension>? extensions = null;
             if (majorVersion > 3 || majorVersion == 3 && minorVersion >= 1)
             {
                 if (await peekStream.EnsureBufferLength(2, cancellationToken))

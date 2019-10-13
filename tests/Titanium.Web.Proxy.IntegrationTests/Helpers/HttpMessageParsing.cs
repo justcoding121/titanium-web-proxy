@@ -7,6 +7,8 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
 {
     internal static class HttpMessageParsing
     {
+        private static readonly char[] colonSplit = { ':' };
+
         /// <summary>
         /// This is a terribly inefficient way of reading & parsing an
         /// http request, but it's good enough for testing purposes.
@@ -30,7 +32,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 };
                 while (!string.IsNullOrEmpty(line = reader.ReadLine()))
                 {
-                    var header = line.Split(ProxyConstants.ColonSplit, 2);
+                    var header = line.Split(colonSplit, 2);
                     request.Headers.AddHeader(header[0], header[1]);
                 }
 
@@ -76,7 +78,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
 
                 while (!string.IsNullOrEmpty(line = reader.ReadLine()))
                 {
-                    var header = line.Split(ProxyConstants.ColonSplit, 2);
+                    var header = line.Split(colonSplit, 2);
                     response.Headers.AddHeader(header[0], header[1]);
                 }
 

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -19,12 +18,12 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Cached body content as byte array.
         /// </summary>
-        protected byte[] BodyInternal { get; private set; }
+        protected byte[]? BodyInternal { get; private set; }
 
         /// <summary>
         ///     Cached body as string.
         /// </summary>
-        private string bodyString;
+        private string? bodyString;
 
         /// <summary>
         ///     Store whether the original request/response has body or not, since the user may change the parameters.
@@ -48,13 +47,13 @@ namespace Titanium.Web.Proxy.Http
         ///     Store whether the original request/response content-encoding, since the user may change the parameters.
         ///     We need this detail to syphon out attached tcp connection for reuse.
         /// </summary>
-        internal string OriginalContentEncoding { get; set; }
+        internal string? OriginalContentEncoding { get; set; }
 
-        internal TaskCompletionSource<bool> ReadHttp2BeforeHandlerTaskCompletionSource;
+        internal TaskCompletionSource<bool>? ReadHttp2BeforeHandlerTaskCompletionSource;
 
-        internal TaskCompletionSource<bool> ReadHttp2BodyTaskCompletionSource;
+        internal TaskCompletionSource<bool>? ReadHttp2BodyTaskCompletionSource;
 
-        internal MemoryStream Http2BodyData;
+        internal MemoryStream? Http2BodyData;
 
         internal bool Http2IgnoreBodyFrames;
 
@@ -87,7 +86,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.ContentLength);
+                string? headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.ContentLength);
 
                 if (headerValue == null)
                 {
@@ -119,7 +118,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Content encoding for this request/response.
         /// </summary>
-        public string ContentEncoding => Headers.GetHeaderValueOrNull(KnownHeaders.ContentEncoding)?.Trim();
+        public string? ContentEncoding => Headers.GetHeaderValueOrNull(KnownHeaders.ContentEncoding)?.Trim();
 
         /// <summary>
         ///     Encoding for this request/response.
@@ -129,7 +128,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Content-type of the request/response.
         /// </summary>
-        public string ContentType
+        public string? ContentType
         {
             get => Headers.GetHeaderValueOrNull(KnownHeaders.ContentType);
             set => Headers.SetOrAddHeaderValue(KnownHeaders.ContentType, value);
@@ -142,7 +141,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
+                string? headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
                 return headerValue != null && headerValue.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked);
             }
 
@@ -174,7 +173,7 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 EnsureBodyAvailable();
-                return BodyInternal;
+                return BodyInternal!;
             }
 
             internal set
@@ -233,7 +232,7 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal byte[] CompressBodyAndUpdateContentLength()
+        internal byte[]? CompressBodyAndUpdateContentLength()
         {
             if (!IsBodyRead && BodyInternal == null)
             {
@@ -241,7 +240,7 @@ namespace Titanium.Web.Proxy.Http
             }
 
             bool isChunked = IsChunked;
-            string contentEncoding = ContentEncoding;
+            string? contentEncoding = ContentEncoding;
 
             if (HasBody)
             {

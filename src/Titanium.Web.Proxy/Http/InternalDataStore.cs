@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -13,7 +13,8 @@ namespace Titanium.Web.Proxy.Http
             }
             else
             {
-                value = default;
+                // hack: https://stackoverflow.com/questions/54593923/nullable-reference-types-with-generic-return-type
+                value = default!;
             }
 
             return result;

@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         private const int bucketSize = 17;
 
         // a linked hash map of header fields
-        private readonly HeaderEntry[] headerFields = new HeaderEntry[bucketSize];
+        private readonly HeaderEntry?[] headerFields = new HeaderEntry[bucketSize];
         private readonly HeaderEntry head = new HeaderEntry(-1, string.Empty, string.Empty, int.MaxValue, null);
         private int size;
 
@@ -299,7 +299,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <returns>The entry.</returns>
         /// <param name="name">Name.</param>
         /// <param name="value">Value.</param>
-        private HeaderEntry getEntry(string name, string value)
+        private HeaderEntry? getEntry(string name, string value)
         {
             if (length() == 0 || name == null || value == null)
             {
@@ -400,7 +400,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <summary>
         /// Remove and return the oldest header field from the dynamic table.
         /// </summary>
-        private HttpHeader remove()
+        private HttpHeader? remove()
         {
             if (size == 0)
             {
@@ -423,7 +423,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                     }
                     else
                     {
-                        prev.Next = next;
+                        prev!.Next = next;
                     }
 
                     eldest.Remove();
@@ -500,7 +500,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             public HeaderEntry After { get; set; }
 
             // These fields comprise the chained list for header fields with the same hash.
-            public HeaderEntry Next { get; set; }
+            public HeaderEntry? Next { get; set; }
 
             public int Hash { get; }
 
@@ -514,7 +514,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             /// <param name="value">Value.</param>
             /// <param name="index">Index.</param>
             /// <param name="next">Next.</param>
-            public HeaderEntry(int hash, string name, string value, int index, HeaderEntry next) : base(name, value, true)
+            public HeaderEntry(int hash, string name, string value, int index, HeaderEntry? next) : base(name, value, true)
             {
                 Index = index;
                 Hash = hash;

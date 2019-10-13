@@ -1,4 +1,4 @@
-//
+﻿//
 // Nancy.Authentication.Ntlm.Protocol.Type3Message - Authentication
 //
 // Author:
@@ -58,7 +58,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         /// <summary>
         ///     Username
         /// </summary>
-        internal string Username { get; private set; }
+        internal string? Username { get; private set; }
 
         internal Common.NtlmFlags Flags { get; set; }
 

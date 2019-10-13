@@ -9,8 +9,8 @@ namespace Titanium.Web.Proxy.Helpers
 {
     internal class ProxyInfo
     {
-        internal ProxyInfo(bool? autoDetect, string autoConfigUrl, int? proxyEnable, string proxyServer,
-            string proxyOverride)
+        internal ProxyInfo(bool? autoDetect, string? autoConfigUrl, int? proxyEnable, string? proxyServer,
+            string? proxyOverride)
         {
             AutoDetect = autoDetect;
             AutoConfigUrl = autoConfigUrl;
@@ -54,13 +54,13 @@ namespace Titanium.Web.Proxy.Helpers
 
         internal bool? AutoDetect { get; }
 
-        internal string AutoConfigUrl { get; }
+        internal string? AutoConfigUrl { get; }
 
         internal int? ProxyEnable { get; }
 
-        internal string ProxyServer { get; }
+        internal string? ProxyServer { get; }
 
-        internal string ProxyOverride { get; }
+        internal string? ProxyOverride { get; }
 
         internal bool BypassLoopback { get; }
 
@@ -158,7 +158,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="proxyServerValues"></param>
         /// <returns></returns>
-        internal static List<HttpSystemProxyValue> GetSystemProxyValues(string proxyServerValues)
+        internal static List<HttpSystemProxyValue> GetSystemProxyValues(string? proxyServerValues)
         {
             var result = new List<HttpSystemProxyValue>();
 
@@ -167,7 +167,7 @@ namespace Titanium.Web.Proxy.Helpers
                 return result;
             }
 
-            var proxyValues = proxyServerValues.Split(';');
+            var proxyValues = proxyServerValues!.Split(';');
 
             if (proxyValues.Length > 0)
             {
@@ -190,7 +190,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="value"></param>
         /// <returns></returns>
-        private static HttpSystemProxyValue parseProxyValue(string value)
+        private static HttpSystemProxyValue? parseProxyValue(string value)
         {
             string tmp = Regex.Replace(value, @"\s+", " ").Trim();
 

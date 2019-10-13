@@ -8,7 +8,6 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -17,7 +16,9 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class HttpWebClient
     {
-        internal HttpWebClient(Request request)
+        private TcpServerConnection? connection;
+
+        internal HttpWebClient(Request? request)
         {
             Request = request ?? new Request();
             Response = new Response();
@@ -26,7 +27,20 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Connection to server
         /// </summary>
-        internal TcpServerConnection Connection { get; set; }
+        internal TcpServerConnection Connection
+        {
+            get
+            {
+                if (connection == null)
+                {
+                    throw new Exception("Connection is null");
+                }
+
+                return connection;
+            }
+        }
+
+        internal bool HasConnection => connection != null;
 
         /// <summary>
         ///     Should we close the server connection at the end of this HTTP request/response session.
@@ -41,17 +55,17 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Gets or sets the user data.
         /// </summary>
-        public object UserData { get; set; }
+        public object? UserData { get; set; }
 
         /// <summary>
         ///     Override UpStreamEndPoint for this request; Local NIC via request is made
         /// </summary>
-        public IPEndPoint UpStreamEndPoint { get; set; }
+        public IPEndPoint? UpStreamEndPoint { get; set; }
 
         /// <summary>
         ///     Headers passed with Connect.
         /// </summary>
-        public ConnectRequest ConnectRequest { get; internal set; }
+        public ConnectRequest? ConnectRequest { get; internal set; }
 
         /// <summary>
         ///     Web Request.
@@ -81,7 +95,7 @@ namespace Titanium.Web.Proxy.Http
         internal void SetConnection(TcpServerConnection serverConnection)
         {
             serverConnection.LastAccess = DateTime.Now;
-            Connection = serverConnection;
+            connection = serverConnection;
         }
 
         /// <summary>
@@ -107,19 +121,19 @@ namespace Titanium.Web.Proxy.Http
                 url = Request.RequestUri.GetOriginalPathAndQuery();
             }
 
-            // prepare the request & headers
-            await writer.WriteLineAsync(Request.CreateRequestLine(Request.Method, url, Request.HttpVersion), cancellationToken);
+            var headerBuilder = new HeaderBuilder();
 
-            var headerBuilder = new StringBuilder();
-            
+            // prepare the request & headers
+            headerBuilder.WriteRequestLine(Request.Method, url, Request.HttpVersion);
+
             // Send Authentication to Upstream proxy if needed
             if (!isTransparent && upstreamProxy != null
                                && Connection.IsHttps == false
                                && !string.IsNullOrEmpty(upstreamProxy.UserName)
                                && upstreamProxy.Password != null)
             {
-                headerBuilder.Append($"{HttpHeader.ProxyConnectionKeepAlive}{ProxyConstants.NewLine}");
-                headerBuilder.Append($"{HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password)}{ProxyConstants.NewLine}");
+                headerBuilder.WriteHeader(HttpHeader.ProxyConnectionKeepAlive);
+                headerBuilder.WriteHeader(HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password));
             }
 
             // write request headers
@@ -127,13 +141,15 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (isTransparent || header.Name != KnownHeaders.ProxyAuthorization)
                 {
-                    headerBuilder.Append($"{header}{ProxyConstants.NewLine}");
+                    headerBuilder.WriteHeader(header);
                 }
             }
 
-            headerBuilder.Append(ProxyConstants.NewLine);
-            
-            await writer.WriteAsync(headerBuilder.ToString(), cancellationToken);
+            headerBuilder.WriteLine();
+
+            var data = headerBuilder.GetBytes();
+
+            await writer.WriteAsync(data, 0, data.Length, cancellationToken);
 
             if (enable100ContinueBehaviour && Request.ExpectContinue)
             {
@@ -166,11 +182,8 @@ namespace Titanium.Web.Proxy.Http
             string httpStatus;
             try
             {
-                httpStatus = await Connection.Stream.ReadLineAsync(cancellationToken);
-                if (httpStatus == null)
-                {
-                    throw new ServerConnectionException("Server connection was closed.");
-                }
+                httpStatus = await Connection.Stream.ReadLineAsync(cancellationToken) ??
+                             throw new ServerConnectionException("Server connection was closed.");
             }
             catch (Exception e) when (!(e is ServerConnectionException))
             {
@@ -179,7 +192,8 @@ namespace Titanium.Web.Proxy.Http
 
             if (httpStatus == string.Empty)
             {
-                httpStatus = await Connection.Stream.ReadLineAsync(cancellationToken);
+                httpStatus = await Connection.Stream.ReadLineAsync(cancellationToken) ??
+                    throw new ServerConnectionException("Server connection was closed.");
             }
 
             Response.ParseResponseLine(httpStatus, out var version, out int statusCode, out string statusDescription);
@@ -197,7 +211,7 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         internal void FinishSession()
         {
-            Connection = null;
+            connection = null;
 
             ConnectRequest?.FinishSession();
             Request?.FinishSession();

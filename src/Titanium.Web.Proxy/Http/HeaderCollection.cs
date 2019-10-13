@@ -71,7 +71,7 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         /// <param name="name"></param>
         /// <returns></returns>
-        public List<HttpHeader> GetHeaders(string name)
+        public List<HttpHeader>? GetHeaders(string name)
         {
             if (headers.ContainsKey(name))
             {
@@ -89,7 +89,7 @@ namespace Titanium.Web.Proxy.Http
             return null;
         }
 
-        public HttpHeader GetFirstHeader(string name)
+        public HttpHeader? GetFirstHeader(string name)
         {
             if (headers.TryGetValue(name, out var header))
             {
@@ -198,7 +198,7 @@ namespace Titanium.Web.Proxy.Http
         ///     Adds the given header objects to Request
         /// </summary>
         /// <param name="newHeaders"></param>
-        public void AddHeaders(IEnumerable<KeyValuePair<string, HttpHeader>> newHeaders)
+        public void AddHeaders(IEnumerable<KeyValuePair<string, HttpHeader>>? newHeaders)
         {
             if (newHeaders == null)
             {
@@ -272,7 +272,7 @@ namespace Titanium.Web.Proxy.Http
             nonUniqueHeaders.Clear();
         }
 
-        internal string GetHeaderValueOrNull(string headerName)
+        internal string? GetHeaderValueOrNull(string headerName)
         {
             if (headers.TryGetValue(headerName, out var header))
             {
@@ -282,8 +282,14 @@ namespace Titanium.Web.Proxy.Http
             return null;
         }
 
-        internal void SetOrAddHeaderValue(string headerName, string value)
+        internal void SetOrAddHeaderValue(string headerName, string? value)
         {
+            if (value == null)
+            {
+                RemoveHeader(headerName);
+                return;
+            }
+
             if (headers.TryGetValue(headerName, out var header))
             {
                 header.Value = value;
@@ -300,7 +306,7 @@ namespace Titanium.Web.Proxy.Http
         internal void FixProxyHeaders()
         {
             // If proxy-connection close was returned inform to close the connection
-            string proxyHeader = GetHeaderValueOrNull(KnownHeaders.ProxyConnection);
+            string? proxyHeader = GetHeaderValueOrNull(KnownHeaders.ProxyConnection);
             RemoveHeader(KnownHeaders.ProxyConnection);
 
             if (proxyHeader != null)

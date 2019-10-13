@@ -3,8 +3,8 @@ using System.ComponentModel;
 using System.Text;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -85,7 +85,7 @@ namespace Titanium.Web.Proxy.Http
         ///     Note: Changing this does NOT change host in RequestUri.
         ///     Users can set new RequestUri separately.
         /// </summary>
-        public string Host
+        public string? Host
         {
             get => Headers.GetHeaderValueOrNull(KnownHeaders.Host);
             set => Headers.SetOrAddHeaderValue(KnownHeaders.Host, value);
@@ -98,7 +98,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Expect);
+                string? headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Expect);
                 return headerValue != null && headerValue.Equals(KnownHeaders.Expect100Continue);
             }
         }
@@ -126,7 +126,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
+                string? headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
 
                 if (headerValue == null)
                 {
@@ -154,15 +154,10 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var sb = new StringBuilder();
-                sb.Append($"{CreateRequestLine(Method, RequestUriString, HttpVersion)}{ProxyConstants.NewLine}");
-                foreach (var header in Headers)
-                {
-                    sb.Append($"{header.ToString()}{ProxyConstants.NewLine}");
-                }
-
-                sb.Append(ProxyConstants.NewLine);
-                return sb.ToString();
+                var headerBuilder = new HeaderBuilder();
+                headerBuilder.WriteRequestLine(Method, RequestUriString, HttpVersion);
+                headerBuilder.WriteHeaders(Headers);
+                return HttpHelper.HeaderEncoding.GetString(headerBuilder.GetBytes());
             }
         }
 
@@ -197,38 +192,41 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal static string CreateRequestLine(string httpMethod, string httpUrl, Version version)
-        {
-            return $"{httpMethod} {httpUrl} HTTP/{version.Major}.{version.Minor}";
-        }
-
         internal static void ParseRequestLine(string httpCmd, out string httpMethod, out string httpUrl,
             out Version version)
         {
-            // break up the line into three components (method, remote URL & Http Version)
-            var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
-
-            if (httpCmdSplit.Length < 2)
+            int firstSpace = httpCmd.IndexOf(' ');
+            if (firstSpace == -1)
             {
+                // does not contain at least 2 parts
                 throw new Exception("Invalid HTTP request line: " + httpCmd);
             }
 
+            int lastSpace = httpCmd.LastIndexOf(' ');
+
+            // break up the line into three components (method, remote URL & Http Version)
+
             // Find the request Verb
-            httpMethod = httpCmdSplit[0];
+            httpMethod = httpCmd.Substring(0, firstSpace);
             if (!isAllUpper(httpMethod))
             {
                 httpMethod = httpMethod.ToUpper();
             }
 
-            httpUrl = httpCmdSplit[1];
-
-            // parse the HTTP version
             version = HttpHeader.Version11;
-            if (httpCmdSplit.Length == 3)
-            {
-                string httpVersion = httpCmdSplit[2].Trim();
 
-                if (httpVersion.EqualsIgnoreCase("HTTP/1.0"))
+            if (firstSpace == lastSpace)
+            {
+                httpUrl = httpCmd.AsSpan(firstSpace + 1).ToString();
+            }
+            else
+            {
+                httpUrl = httpCmd.AsSpan(firstSpace + 1, lastSpace - firstSpace - 1).ToString();
+
+                // parse the HTTP version
+                var httpVersion = httpCmd.AsSpan(lastSpace + 1);
+
+                if (httpVersion.EqualsIgnoreCase("HTTP/1.0".AsSpan(0)))
                 {
                     version = HttpHeader.Version10;
                 }

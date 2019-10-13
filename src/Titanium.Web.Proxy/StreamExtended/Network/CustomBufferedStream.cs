@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.StreamExtended.Network
@@ -18,10 +19,10 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     internal class CustomBufferedStream : Stream, ICustomStreamReader
     {
         private readonly bool leaveOpen;
-        private byte[] streamBuffer;
+        private readonly byte[] streamBuffer;
 
         // default to UTF-8
-        private static readonly Encoding encoding = Encoding.UTF8;
+        private static Encoding encoding => HttpHelper.HeaderEncoding;
 
         private static readonly bool networkStreamHack = true;
 
@@ -35,9 +36,9 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         private readonly IBufferPool bufferPool;
 
-        public event EventHandler<DataEventArgs> DataRead;
+        public event EventHandler<DataEventArgs>? DataRead;
 
-        public event EventHandler<DataEventArgs> DataWrite;
+        public event EventHandler<DataEventArgs>? DataWrite;
 
         public Stream BaseStream { get; }
 
@@ -396,9 +397,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
                     BaseStream.Dispose();
                 }
 
-                var buffer = streamBuffer;
-                streamBuffer = null;
-                bufferPool.ReturnBuffer(buffer);
+                bufferPool.ReturnBuffer(streamBuffer);
             }
         }
 
@@ -511,7 +510,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        public async Task<bool> FillBufferAsync(CancellationToken cancellationToken = default)
+        public async ValueTask<bool> FillBufferAsync(CancellationToken cancellationToken = default)
         {
             if (closed)
             {
@@ -559,7 +558,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        public Task<string> ReadLineAsync(CancellationToken cancellationToken = default)
+        public Task<string?> ReadLineAsync(CancellationToken cancellationToken = default)
         {
             return ReadLineInternalAsync(this, bufferPool, cancellationToken);
         }
@@ -568,7 +567,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        internal static async Task<string> ReadLineInternalAsync(ICustomStreamReader reader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        internal static async Task<string?> ReadLineInternalAsync(ICustomStreamReader reader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
             byte lastChar = default;
 

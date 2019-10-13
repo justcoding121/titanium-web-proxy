@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Extensions
         internal static readonly List<SslApplicationProtocol> Http2ProtocolAsList =
             new List<SslApplicationProtocol> { SslApplicationProtocol.Http2 };
 
-        internal static string GetServerName(this ClientHelloInfo clientHelloInfo)
+        internal static string? GetServerName(this ClientHelloInfo clientHelloInfo)
         {
             if (clientHelloInfo.Extensions != null &&
                 clientHelloInfo.Extensions.TryGetValue("server_name", out var serverNameExtension))
@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy.Extensions
         }
 
 #if NETSTANDARD2_1
-        internal static List<SslApplicationProtocol> GetAlpn(this ClientHelloInfo clientHelloInfo)
+        internal static List<SslApplicationProtocol>? GetAlpn(this ClientHelloInfo clientHelloInfo)
         {
             if (clientHelloInfo.Extensions != null && clientHelloInfo.Extensions.TryGetValue("ALPN", out var alpnExtension))
             {
@@ -77,15 +77,19 @@ namespace Titanium.Web.Proxy.Extensions
         }
 #endif
     }
+}
 
 #if !NETSTANDARD2_1
+namespace System.Net.Security
+{
     internal enum SslApplicationProtocol
     {
         Http11,
         Http2
     }
 
-    [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType", Justification = "Reviewed.")]
+    [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType", Justification =
+        "Reviewed.")]
     internal class SslClientAuthenticationOptions
     {
         internal bool AllowRenegotiation { get; set; }
@@ -111,7 +115,7 @@ namespace Titanium.Web.Proxy.Extensions
     {
         internal bool AllowRenegotiation { get; set; }
 
-        internal X509Certificate ServerCertificate { get; set; }
+        internal X509Certificate? ServerCertificate { get; set; }
 
         internal bool ClientCertificateRequired { get; set; }
 
@@ -119,11 +123,11 @@ namespace Titanium.Web.Proxy.Extensions
 
         internal X509RevocationMode CertificateRevocationCheckMode { get; set; }
 
-        internal List<SslApplicationProtocol> ApplicationProtocols { get; set; }
+        internal List<SslApplicationProtocol>? ApplicationProtocols { get; set; }
 
-        internal RemoteCertificateValidationCallback RemoteCertificateValidationCallback { get; set; }
+        internal RemoteCertificateValidationCallback? RemoteCertificateValidationCallback { get; set; }
 
         internal EncryptionPolicy EncryptionPolicy { get; set; }
     }
-#endif
 }
+#endif

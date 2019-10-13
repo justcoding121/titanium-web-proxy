@@ -40,7 +40,7 @@ namespace Titanium.Web.Proxy.StreamExtended
             }
         }
 
-        public byte[] SessionId { get; set; }
+        public byte[] SessionId { get; }
 
         public int[] Ciphers { get; set; }
 
@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy.StreamExtended
 
         internal int EntensionsStartPosition { get; set; }
 
-        public Dictionary<string, SslExtension> Extensions { get; set; }
+        public Dictionary<string, SslExtension>? Extensions { get; set; }
 
         public SslProtocols SslProtocol
         {
@@ -77,6 +77,11 @@ namespace Titanium.Web.Proxy.StreamExtended
 
                 return SslProtocols.None;
             }
+        }
+
+        public ClientHelloInfo(byte[] sessionId)
+        {
+            SessionId = sessionId;
         }
 
         private static string SslVersionToString(int major, int minor)

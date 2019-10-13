@@ -91,7 +91,7 @@ namespace Titanium.Web.Proxy
         ///     Should we attempt to trust certificates with elevated permissions by
         ///     prompting for UAC if required?
         /// </param>
-        public ProxyServer(string rootCertificateName, string rootCertificateIssuerName,
+        public ProxyServer(string? rootCertificateName, string? rootCertificateIssuerName,
             bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
             bool trustRootCertificateAsAdmin = false)
         {
@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Manage system proxy settings.
         /// </summary>
-        private SystemProxyManager systemProxySettingsManager { get; }
+        private SystemProxyManager? systemProxySettingsManager { get; }
 
         /// <summary>
         ///     Number of exception retries when connection pool is enabled.
@@ -229,7 +229,9 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     List of supported Ssl versions.
         /// </summary>
+#pragma warning disable 618
         public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Ssl3 | SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12;
+#pragma warning restore 618
 
         /// <summary>
         ///     The buffer pool used throughout this proxy instance.
@@ -247,18 +249,18 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     External proxy used for Http requests.
         /// </summary>
-        public ExternalProxy UpStreamHttpProxy { get; set; }
+        public ExternalProxy? UpStreamHttpProxy { get; set; }
 
         /// <summary>
         ///     External proxy used for Https requests.
         /// </summary>
-        public ExternalProxy UpStreamHttpsProxy { get; set; }
+        public ExternalProxy? UpStreamHttpsProxy { get; set; }
 
         /// <summary>
         ///     Local adapter/NIC endpoint where proxy makes request via.
         ///     Defaults via any IP addresses of this machine.
         /// </summary>
-        public IPEndPoint UpStreamEndPoint { get; set; }
+        public IPEndPoint? UpStreamEndPoint { get; set; }
 
         /// <summary>
         ///     A list of IpAddress and port this proxy is listening to.
@@ -269,7 +271,7 @@ namespace Titanium.Web.Proxy
         ///     A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP(S) requests.
         ///     User should return the ExternalProxy object with valid credentials.
         /// </summary>
-        public Func<SessionEventArgsBase, Task<ExternalProxy>> GetCustomUpStreamProxyFunc { get; set; }
+        public Func<SessionEventArgsBase, Task<ExternalProxy?>>? GetCustomUpStreamProxyFunc { get; set; }
 
         /// <summary>
         ///     Callback for error events in this proxy instance.
@@ -307,47 +309,47 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Event occurs when client connection count changed.
         /// </summary>
-        public event EventHandler ClientConnectionCountChanged;
+        public event EventHandler? ClientConnectionCountChanged;
 
         /// <summary>
         ///     Event occurs when server connection count changed.
         /// </summary>
-        public event EventHandler ServerConnectionCountChanged;
+        public event EventHandler? ServerConnectionCountChanged;
 
         /// <summary>
         ///     Event to override the default verification logic of remote SSL certificate received during authentication.
         /// </summary>
-        public event AsyncEventHandler<CertificateValidationEventArgs> ServerCertificateValidationCallback;
+        public event AsyncEventHandler<CertificateValidationEventArgs>? ServerCertificateValidationCallback;
 
         /// <summary>
         ///     Event to override client certificate selection during mutual SSL authentication.
         /// </summary>
-        public event AsyncEventHandler<CertificateSelectionEventArgs> ClientCertificateSelectionCallback;
+        public event AsyncEventHandler<CertificateSelectionEventArgs>? ClientCertificateSelectionCallback;
 
         /// <summary>
         ///     Intercept request event to server.
         /// </summary>
-        public event AsyncEventHandler<SessionEventArgs> BeforeRequest;
+        public event AsyncEventHandler<SessionEventArgs>? BeforeRequest;
 
         /// <summary>
         ///     Intercept response event from server.
         /// </summary>
-        public event AsyncEventHandler<SessionEventArgs> BeforeResponse;
+        public event AsyncEventHandler<SessionEventArgs>? BeforeResponse;
 
         /// <summary>
         ///     Intercept after response event from server.
         /// </summary>
-        public event AsyncEventHandler<SessionEventArgs> AfterResponse;
+        public event AsyncEventHandler<SessionEventArgs>? AfterResponse;
 
         /// <summary>
         ///     Customize TcpClient used for client connection upon create.
         /// </summary>
-        public event AsyncEventHandler<TcpClient> OnClientConnectionCreate;
+        public event AsyncEventHandler<TcpClient>? OnClientConnectionCreate;
 
         /// <summary>
         ///     Customize TcpClient used for server connection upon create.
         /// </summary>
-        public event AsyncEventHandler<TcpClient> OnServerConnectionCreate;
+        public event AsyncEventHandler<TcpClient>? OnServerConnectionCreate;
 
         /// <summary>
         /// Customize the minimum ThreadPool size (increase it on a server)
@@ -471,7 +473,7 @@ namespace Titanium.Web.Proxy
                 endPoint.IsSystemHttpsProxy = true;
             }
 
-            string proxyType = null;
+            string? proxyType = null;
             switch (protocolType)
             {
                 case ProxyProtocolType.Http:
@@ -572,7 +574,7 @@ namespace Titanium.Web.Proxy
             if (systemProxySettingsManager != null && RunTime.IsWindows && !RunTime.IsUwpOnWindows)
             {
                 var proxyInfo = systemProxySettingsManager.GetProxyInfoFromRegistry();
-                if (proxyInfo.Proxies != null)
+                if (proxyInfo?.Proxies != null)
                 {
                     var protocolToRemove = ProxyProtocolType.None;
                     foreach (var proxy in proxyInfo.Proxies.Values)
@@ -704,7 +706,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="sessionEventArgs">The session.</param>
         /// <returns>The external proxy as task result.</returns>
-        private Task<ExternalProxy> getSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
+        private Task<ExternalProxy?> getSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
         {
             var proxy = systemProxyResolver.GetProxy(sessionEventArgs.HttpClient.Request.RequestUri);
             return Task.FromResult(proxy);
@@ -717,7 +719,7 @@ namespace Titanium.Web.Proxy
         {
             var endPoint = (ProxyEndPoint)asyn.AsyncState;
 
-            TcpClient tcpClient = null;
+            TcpClient? tcpClient = null;
 
             try
             {

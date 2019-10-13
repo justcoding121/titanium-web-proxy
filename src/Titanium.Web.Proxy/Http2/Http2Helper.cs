@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Compression;
@@ -12,11 +13,15 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
+using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
+using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
 
 namespace Titanium.Web.Proxy.Http2
 {
     internal class Http2Helper
     {
+        public static readonly byte[] ConnectionPreface = Encoding.ASCII.GetBytes("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
+
         /// <summary>
         ///     relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers
         ///     as prefix
@@ -59,11 +64,11 @@ namespace Titanium.Web.Proxy.Http2
             ExceptionHandler exceptionFunc)
         {
             int headerTableSize = 0;
-            Decoder decoder = null;
+            Decoder? decoder = null;
 
             var frameHeader = new Http2FrameHeader();
             frameHeader.Buffer = new byte[9];
-            byte[] buffer = null;
+            byte[]? buffer = null;
             while (true)
             {
                 var frameHeaderBuffer = frameHeader.Buffer;
@@ -98,8 +103,8 @@ namespace Titanium.Web.Proxy.Http2
                 bool sendPacket = true;
                 bool endStream = false;
 
-                SessionEventArgs args = null;
-                RequestResponseBase rr = null;
+                SessionEventArgs? args = null;
+                RequestResponseBase? rr = null;
                 if (type == Http2FrameType.Data || type == Http2FrameType.Headers/* || type == Http2FrameType.PushPromise*/)
                 {
                     if (!sessions.TryGetValue(streamId, out args))
@@ -156,7 +161,7 @@ namespace Titanium.Web.Proxy.Http2
                             length -= buffer[0];
                         }
 
-                        data.Write(buffer, offset, length);
+                        data!.Write(buffer, offset, length);
                     }
                 }
                 else if (type == Http2FrameType.Headers/* || type == Http2FrameType.PushPromise*/)
@@ -247,9 +252,16 @@ namespace Titanium.Web.Proxy.Http2
 
                         if (rr is Request request)
                         {
+                            string? method = headerListener.Method;
+                            string? path = headerListener.Path;
+                            if (method == null || path == null)
+                            {
+                                throw new Exception("HTTP/2 Missing method or path");
+                            }
+
                             request.HttpVersion = HttpVersion.Version20;
-                            request.Method = headerListener.Method;
-                            request.OriginalUrl = headerListener.Path;
+                            request.Method = method;
+                            request.OriginalUrl = path;
 
                             request.RequestUri = headerListener.GetUri();
                         }
@@ -259,6 +271,7 @@ namespace Titanium.Web.Proxy.Http2
                             response.HttpVersion = HttpVersion.Version20;
                             int.TryParse(headerListener.Status, out int statusCode);
                             response.StatusCode = statusCode;
+                            response.StatusDescription = string.Empty;
                         }
                     }
                     catch (Exception ex)
@@ -348,12 +361,12 @@ namespace Titanium.Web.Proxy.Http2
                     }
                 }
 
-                if (endStream && rr.ReadHttp2BodyTaskCompletionSource != null)
+                if (endStream && rr!.ReadHttp2BodyTaskCompletionSource != null)
                 {
                     if (!rr.BodyAvailable)
                     {
                         var data = rr.Http2BodyData;
-                        var body = data.ToArray();
+                        var body = data!.ToArray();
 
                         if (rr.ContentEncoding != null)
                         {
@@ -389,7 +402,7 @@ namespace Titanium.Web.Proxy.Http2
                         await rr.Http2BeforeHandlerTask;
                     }
 
-                    if (args.IsPromise)
+                    if (args!.IsPromise)
                     {
                         breakpoint();
                     }
@@ -501,7 +514,7 @@ namespace Titanium.Web.Proxy.Http2
             if (rr.HasBody && rr.IsBodyRead)
             {
                 int pos = 0;
-                while (pos < body.Length)
+                while (pos < body!.Length)
                 {
                     int bodyFrameLength = Math.Min(buffer.Length, body.Length - pos);
                     Buffer.BlockCopy(body, pos, buffer, 0, bodyFrameLength);
@@ -554,15 +567,15 @@ namespace Titanium.Web.Proxy.Http2
         {
             private readonly Action<string, string> addHeaderFunc;
 
-            public string Method { get; private set; }
+            public string? Method { get; private set; }
 
-            public string Status { get; private set; }
+            public string? Status { get; private set; }
 
-            private string authority;
+            private string? authority;
 
-            private string scheme;
+            private string? scheme;
 
-            public string Path { get; private set; }
+            public string? Path { get; private set; }
 
             public MyHeaderListener(Action<string, string> addHeaderFunc)
             {
