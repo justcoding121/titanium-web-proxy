@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Response Status description.
         /// </summary>
-        public string StatusDescription { get; set; }
+        public string StatusDescription { get; set; } = string.Empty;
 
         /// <summary>
         ///     Has response body?
@@ -120,11 +120,6 @@ namespace Titanium.Web.Proxy.Http
                                     "Use SessionEventArgs.GetResponseBody() or SessionEventArgs.GetResponseBodyAsString() " +
                                     "method to read the response body.");
             }
-        }
-
-        internal static string CreateResponseLine(Version version, int statusCode, string statusDescription)
-        {
-            return $"HTTP/{version.Major}.{version.Minor} {statusCode} {statusDescription}";
         }
 
         internal static void ParseResponseLine(string httpStatus, out Version version, out int statusCode,

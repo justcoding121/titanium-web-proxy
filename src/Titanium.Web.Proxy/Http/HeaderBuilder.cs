@@ -73,9 +73,9 @@ namespace Titanium.Web.Proxy.Http
             var buf = ArrayPool<byte>.Shared.Rent(str.Length * 4);
             var span = new Span<byte>(buf);
 
-            encoding.GetBytes(str.AsSpan(), span);
+            int bytes = encoding.GetBytes(str.AsSpan(), span);
 
-            stream.Write(span);
+            stream.Write(span.Slice(0, bytes));
             ArrayPool<byte>.Shared.Return(buf);
 #else
             var data = encoding.GetBytes(str);

@@ -259,6 +259,7 @@ namespace Titanium.Web.Proxy.Http2
                             response.HttpVersion = HttpVersion.Version20;
                             int.TryParse(headerListener.Status, out int statusCode);
                             response.StatusCode = statusCode;
+                            response.StatusDescription = string.Empty;
                         }
                     }
                     catch (Exception ex)

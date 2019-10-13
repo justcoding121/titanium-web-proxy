@@ -157,12 +157,7 @@ namespace Titanium.Web.Proxy.Http
             {
                 var headerBuilder = new HeaderBuilder();
                 headerBuilder.WriteRequestLine(Method, RequestUriString, HttpVersion);
-                foreach (var header in Headers)
-                {
-                    headerBuilder.WriteHeader(header);
-                }
-
-                headerBuilder.WriteLine();
+                headerBuilder.WriteHeaders(Headers);
                 return HttpHelper.HeaderEncoding.GetString(headerBuilder.GetBytes());
             }
         }
