@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy.Exceptions
         /// <param name="message">Message for this exception</param>
         /// <param name="innerException">Associated inner exception</param>
         /// <param name="session">Instance of <see cref="EventArguments.SessionEventArgs" /> associated to the exception</param>
-        internal ProxyHttpException(string message, Exception innerException, SessionEventArgs session) : base(
+        internal ProxyHttpException(string message, Exception? innerException, SessionEventArgs session) : base(
             message, innerException)
         {
             Session = session;

@@ -46,12 +46,12 @@ namespace Titanium.Web.Proxy
         private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, TcpClientConnection clientConnection,
             CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
             CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, TunnelConnectSessionEventArgs connectArgs,
-            Task<TcpServerConnection> prefetchConnectionTask = null)
+            Task<TcpServerConnection>? prefetchConnectionTask = null)
         {
             var connectRequest = connectArgs?.HttpClient.ConnectRequest;
 
             var prefetchTask = prefetchConnectionTask;
-            TcpServerConnection connection = null;
+            TcpServerConnection? connection = null;
             bool closeServerConnection = false;
 
             try

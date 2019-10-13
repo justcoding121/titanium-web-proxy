@@ -43,7 +43,7 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         protected SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint,
-            Request request, CancellationTokenSource cancellationTokenSource)
+            Request? request, CancellationTokenSource cancellationTokenSource)
             : base(server, endPoint, cancellationTokenSource, request)
         {
         }
@@ -519,7 +519,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="html">HTML content to sent.</param>
         /// <param name="headers">HTTP response headers.</param>
         /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
-        public void Ok(string html, Dictionary<string, HttpHeader> headers = null,
+        public void Ok(string html, Dictionary<string, HttpHeader>? headers = null,
             bool closeServerConnection = false)
         {
             var response = new OkResponse();

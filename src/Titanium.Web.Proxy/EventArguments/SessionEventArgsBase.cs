@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
             CancellationTokenSource cancellationTokenSource,
-            Request request) : this(server)
+            Request? request) : this(server)
         {
             CancellationTokenSource = cancellationTokenSource;
 
