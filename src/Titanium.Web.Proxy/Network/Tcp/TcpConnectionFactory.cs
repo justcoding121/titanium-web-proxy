@@ -417,7 +417,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 throw;
             }
 
-            return new TcpServerConnection(proxyServer, tcpClient)
+            return new TcpServerConnection(proxyServer, tcpClient, stream)
             {
                 UpStreamProxy = externalProxy,
                 UpStreamEndPoint = upStreamEndPoint,
@@ -426,8 +426,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 IsHttps = isHttps,
                 NegotiatedApplicationProtocol = negotiatedApplicationProtocol,
                 UseUpstreamProxy = useUpstreamProxy,
-                StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferPool),
-                Stream = stream,
                 Version = httpVersion
             };
         }

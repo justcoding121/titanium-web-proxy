@@ -22,7 +22,7 @@ namespace Titanium.Web.Proxy.EventArguments
     {
         private static bool isWindowsAuthenticationSupported => RunTime.IsWindows;
 
-        internal readonly CancellationTokenSource CancellationTokenSource;
+        internal readonly CancellationTokenSource? CancellationTokenSource;
 
         internal TcpServerConnection ServerConnection => HttpClient.Connection;
 
