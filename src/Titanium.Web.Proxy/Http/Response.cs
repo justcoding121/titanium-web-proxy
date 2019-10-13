@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 
@@ -99,15 +100,10 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var sb = new StringBuilder();
-                sb.Append($"{CreateResponseLine(HttpVersion, StatusCode, StatusDescription)}{ProxyConstants.NewLine}");
-                foreach (var header in Headers)
-                {
-                    sb.Append($"{header.ToString()}{ProxyConstants.NewLine}");
-                }
-
-                sb.Append(ProxyConstants.NewLine);
-                return sb.ToString();
+                var headerBuilder = new HeaderBuilder();
+                headerBuilder.WriteResponseLine(HttpVersion, StatusCode, StatusDescription);
+                headerBuilder.WriteHeaders(Headers);
+                return HttpHelper.HeaderEncoding.GetString(headerBuilder.GetBytes());
             }
         }
 

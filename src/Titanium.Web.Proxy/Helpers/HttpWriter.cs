@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -86,28 +87,20 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         ///     Write the headers to client
         /// </summary>
-        /// <param name="headers"></param>
-        /// <param name="flush"></param>
+        /// <param name="header"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        internal async Task WriteHeadersAsync(HeaderCollection headers, bool flush = true,
-            CancellationToken cancellationToken = default)
+        internal async Task WriteHeadersAsync(HeaderBuilder header, CancellationToken cancellationToken = default)
         {
-            var headerBuilder = new StringBuilder();
-            foreach (var header in headers)
-            {
-                headerBuilder.Append($"{header.ToString()}{ProxyConstants.NewLine}");
-            }
-            headerBuilder.Append(ProxyConstants.NewLine);
-
-            await WriteAsync(headerBuilder.ToString(), cancellationToken);
-
-            if (flush)
-            {
-                await stream.FlushAsync(cancellationToken);
-            }
+            await WriteAsync(header.GetBytes(), true, cancellationToken);
         }
 
+        /// <summary>
+        ///     Writes the data to the stream.
+        /// </summary>
+        /// <param name="data">The data.</param>
+        /// <param name="flush">Should we flush after write?</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
         internal async Task WriteAsync(byte[] data, bool flush = false, CancellationToken cancellationToken = default)
         {
             await stream.WriteAsync(data, 0, data.Length, cancellationToken);
@@ -280,14 +273,14 @@ namespace Titanium.Web.Proxy.Helpers
         ///     Writes the request/response headers and body.
         /// </summary>
         /// <param name="requestResponse"></param>
-        /// <param name="flush"></param>
+        /// <param name="headerBuilder"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        protected async Task WriteAsync(RequestResponseBase requestResponse, bool flush = true,
-            CancellationToken cancellationToken = default)
+        protected async Task WriteAsync(RequestResponseBase requestResponse, HeaderBuilder headerBuilder, CancellationToken cancellationToken = default)
         {
             var body = requestResponse.CompressBodyAndUpdateContentLength();
-            await WriteHeadersAsync(requestResponse.Headers, flush, cancellationToken);
+            headerBuilder.WriteHeaders(requestResponse.Headers);
+            await WriteAsync(headerBuilder.GetBytes(), true, cancellationToken);
 
             if (body != null)
             {
@@ -322,5 +315,31 @@ namespace Titanium.Web.Proxy.Helpers
         {
             return stream.WriteAsync(buffer, offset, count, cancellationToken);
         }
+
+#if NETSTANDARD2_1
+        /// <summary>
+        ///     Asynchronously writes a sequence of bytes to the current stream, advances the current position within this stream by the number of bytes written, and monitors cancellation requests.
+        /// </summary>
+        /// <param name="buffer">The buffer to write data from.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests. The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
+        /// <returns>A task that represents the asynchronous write operation.</returns>
+        public ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+        {
+            return stream.WriteAsync(buffer, cancellationToken);
+        }
+#else
+        /// <summary>
+        ///     Asynchronously writes a sequence of bytes to the current stream, advances the current position within this stream by the number of bytes written, and monitors cancellation requests.
+        /// </summary>
+        /// <param name="buffer">The buffer to write data from.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests. The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
+        /// <returns>A task that represents the asynchronous write operation.</returns>
+        public Task WriteAsync2(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+        {
+            var buf = ArrayPool<byte>.Shared.Rent(buffer.Length);
+            buffer.CopyTo(buf);
+            return stream.WriteAsync(buf, 0, buf.Length, cancellationToken);
+        }
+#endif
     }
 }

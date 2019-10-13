@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Text;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 
@@ -154,15 +155,15 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var sb = new StringBuilder();
-                sb.Append($"{CreateRequestLine(Method, RequestUriString, HttpVersion)}{ProxyConstants.NewLine}");
+                var headerBuilder = new HeaderBuilder();
+                headerBuilder.WriteRequestLine(Method, RequestUriString, HttpVersion);
                 foreach (var header in Headers)
                 {
-                    sb.Append($"{header}{ProxyConstants.NewLine}");
+                    headerBuilder.WriteHeader(header);
                 }
 
-                sb.Append(ProxyConstants.NewLine);
-                return sb.ToString();
+                headerBuilder.WriteLine();
+                return HttpHelper.HeaderEncoding.GetString(headerBuilder.GetBytes());
             }
         }
 
@@ -195,11 +196,6 @@ namespace Titanium.Web.Proxy.Http
                                         "method to read the request body.");
                 }
             }
-        }
-
-        internal static string CreateRequestLine(string httpMethod, string httpUrl, Version version)
-        {
-            return $"{httpMethod} {httpUrl} HTTP/{version.Major}.{version.Minor}";
         }
 
         internal static void ParseRequestLine(string httpCmd, out string httpMethod, out string httpUrl,

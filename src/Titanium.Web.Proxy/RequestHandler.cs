@@ -217,7 +217,7 @@ namespace Titanium.Web.Proxy
                                 connection = null;
                             }
 
-                            var result = await handleHttpSessionRequest(httpCmd, args, connection,
+                            var result = await handleHttpSessionRequest(httpMethod, httpUrl, version, args, connection,
                                   clientConnection.NegotiatedApplicationProtocol,
                                   cancellationToken, cancellationTokenSource);
 
@@ -295,7 +295,7 @@ namespace Titanium.Web.Proxy
             }
         }
 
-        private async Task<RetryResult> handleHttpSessionRequest(string httpCmd, SessionEventArgs args,
+        private async Task<RetryResult> handleHttpSessionRequest(string requestHttpMethod, string requestHttpUrl, Version requestVersion, SessionEventArgs args,
           TcpServerConnection serverConnection, SslApplicationProtocol sslApplicationProtocol,
           CancellationToken cancellationToken, CancellationTokenSource cancellationTokenSource)
         {
@@ -315,7 +315,7 @@ namespace Titanium.Web.Proxy
                     args.HttpClient.ConnectRequest.TunnelType = TunnelType.Websocket;
 
                     // if upgrading to websocket then relay the request without reading the contents
-                    await handleWebSocketUpgrade(httpCmd, args, args.HttpClient.Request,
+                    await handleWebSocketUpgrade(requestHttpMethod, requestHttpUrl, requestVersion, args, args.HttpClient.Request,
                         args.HttpClient.Response, args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamWriter,
                         connection, cancellationTokenSource, cancellationToken);
                     return false;
@@ -346,9 +346,13 @@ namespace Titanium.Web.Proxy
             {
                 var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
                 var response = args.HttpClient.Response;
-                await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.StatusCode,
-                    response.StatusDescription, cancellationToken);
-                await clientStreamWriter.WriteHeadersAsync(response.Headers, cancellationToken: cancellationToken);
+
+
+                var headerBuilder = new HeaderBuilder();
+                headerBuilder.WriteResponseLine(response.HttpVersion, response.StatusCode, response.StatusDescription);
+                headerBuilder.WriteHeaders(response.Headers);
+                await clientStreamWriter.WriteHeadersAsync(headerBuilder, cancellationToken);
+                
                 await args.ClearResponse(cancellationToken);
             }
 

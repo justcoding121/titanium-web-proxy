@@ -135,11 +135,11 @@ namespace Titanium.Web.Proxy.EventArguments
             HttpClient.Response = new Response();
         }
 
-        internal void OnMultipartRequestPartSent(string boundary, HeaderCollection headers)
+        internal void OnMultipartRequestPartSent(ReadOnlySpan<char> boundary, HeaderCollection headers)
         {
             try
             {
-                MultipartRequestPartSent?.Invoke(this, new MultipartRequestPartSentEventArgs(boundary, headers));
+                MultipartRequestPartSent?.Invoke(this, new MultipartRequestPartSentEventArgs(boundary.ToString(), headers));
             }
             catch (Exception ex)
             {
@@ -252,7 +252,7 @@ namespace Titanium.Web.Proxy.EventArguments
             if (contentLength > 0 && hasMulipartEventSubscribers && request.IsMultipartFormData)
             {
                 var reader = getStreamReader(true);
-                string boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
+                var boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
 
                 using (var copyStream = new CopyStream(reader, writer, BufferPool))
                 {
@@ -268,7 +268,7 @@ namespace Titanium.Web.Proxy.EventArguments
                         {
                             var headers = new HeaderCollection();
                             await HeaderParser.ReadHeaders(copyStream, headers, cancellationToken);
-                            OnMultipartRequestPartSent(boundary, headers);
+                            OnMultipartRequestPartSent(boundary.Span, headers);
                         }
                     }
 
@@ -333,7 +333,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        private async Task<long> readUntilBoundaryAsync(ICustomStreamReader reader, long totalBytesToRead, string boundary, CancellationToken cancellationToken)
+        private async Task<long> readUntilBoundaryAsync(ICustomStreamReader reader, long totalBytesToRead, ReadOnlyMemory<char> boundary, CancellationToken cancellationToken)
         {
             int bufferDataLength = 0;
 
@@ -360,7 +360,7 @@ namespace Titanium.Web.Proxy.EventArguments
                             bool ok = true;
                             for (int i = 0; i < boundary.Length; i++)
                             {
-                                if (buffer[startIdx + i] != boundary[i])
+                                if (buffer[startIdx + i] != boundary.Span[i])
                                 {
                                     ok = false;
                                     break;

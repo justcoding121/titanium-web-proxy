@@ -107,11 +107,10 @@ namespace Titanium.Web.Proxy.Http
                 url = Request.RequestUri.GetOriginalPathAndQuery();
             }
 
-            var headerBuilder = new StringBuilder();
+            var headerBuilder = new HeaderBuilder();
 
             // prepare the request & headers
-            headerBuilder.Append(Request.CreateRequestLine(Request.Method, url, Request.HttpVersion));
-            headerBuilder.Append(ProxyConstants.NewLine);
+            headerBuilder.WriteRequestLine(Request.Method, url, Request.HttpVersion);
 
             // Send Authentication to Upstream proxy if needed
             if (!isTransparent && upstreamProxy != null
@@ -119,8 +118,8 @@ namespace Titanium.Web.Proxy.Http
                                && !string.IsNullOrEmpty(upstreamProxy.UserName)
                                && upstreamProxy.Password != null)
             {
-                headerBuilder.Append($"{HttpHeader.ProxyConnectionKeepAlive}{ProxyConstants.NewLine}");
-                headerBuilder.Append($"{HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password)}{ProxyConstants.NewLine}");
+                headerBuilder.WriteHeader(HttpHeader.ProxyConnectionKeepAlive);
+                headerBuilder.WriteHeader(HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password));
             }
 
             // write request headers
@@ -128,13 +127,15 @@ namespace Titanium.Web.Proxy.Http
             {
                 if (isTransparent || header.Name != KnownHeaders.ProxyAuthorization)
                 {
-                    headerBuilder.Append($"{header}{ProxyConstants.NewLine}");
+                    headerBuilder.WriteHeader(header);
                 }
             }
 
-            headerBuilder.Append(ProxyConstants.NewLine);
-            
-            await writer.WriteAsync(headerBuilder.ToString(), cancellationToken);
+            headerBuilder.WriteLine();
+
+            var data = headerBuilder.GetBytes();
+
+            await writer.WriteAsync(data, 0, data.Length, cancellationToken);
 
             if (enable100ContinueBehaviour && Request.ExpectContinue)
             {

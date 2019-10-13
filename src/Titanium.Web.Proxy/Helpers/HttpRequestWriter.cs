@@ -17,15 +17,13 @@ namespace Titanium.Web.Proxy.Helpers
         ///     Writes the request.
         /// </summary>
         /// <param name="request">The request object.</param>
-        /// <param name="flush">Should we flush after write?</param>
         /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
         /// <returns></returns>
-        internal async Task WriteRequestAsync(Request request, bool flush = true,
-            CancellationToken cancellationToken = default)
+        internal async Task WriteRequestAsync(Request request, CancellationToken cancellationToken = default)
         {
-            await WriteLineAsync(Request.CreateRequestLine(request.Method, request.RequestUriString, request.HttpVersion),
-                cancellationToken);
-            await WriteAsync(request, flush, cancellationToken);
+            var headerBuilder = new HeaderBuilder();
+            headerBuilder.WriteRequestLine(request.Method, request.RequestUriString, request.HttpVersion);
+            await WriteAsync(request, headerBuilder, cancellationToken);
         }
     }
 }

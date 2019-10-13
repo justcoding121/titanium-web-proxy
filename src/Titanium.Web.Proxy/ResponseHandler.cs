@@ -91,9 +91,8 @@ namespace Titanium.Web.Proxy
 
                 // clear current response
                 await args.ClearResponse(cancellationToken);
-                var httpCmd = Request.CreateRequestLine(args.HttpClient.Request.Method, 
-                    args.HttpClient.Request.RequestUriString, args.HttpClient.Request.HttpVersion);
-                await handleHttpSessionRequest(httpCmd, args, null, args.ClientConnection.NegotiatedApplicationProtocol,
+                await handleHttpSessionRequest(args.HttpClient.Request.Method, args.HttpClient.Request.RequestUriString, args.HttpClient.Request.HttpVersion, 
+                    args, null, args.ClientConnection.NegotiatedApplicationProtocol,
                             cancellationToken, args.CancellationTokenSource);
                 return;
             }
@@ -112,9 +111,10 @@ namespace Titanium.Web.Proxy
             else
             {
                 // Write back response status to client
-                await clientStreamWriter.WriteResponseStatusAsync(response.HttpVersion, response.StatusCode,
-                    response.StatusDescription, cancellationToken);
-                await clientStreamWriter.WriteHeadersAsync(response.Headers, cancellationToken: cancellationToken);
+                var headerBuilder = new HeaderBuilder();
+                headerBuilder.WriteResponseLine(response.HttpVersion, response.StatusCode, response.StatusDescription);
+                headerBuilder.WriteHeaders(response.Headers);
+                await clientStreamWriter.WriteHeadersAsync(headerBuilder, cancellationToken);
 
                 // Write body if exists
                 if (response.HasBody)

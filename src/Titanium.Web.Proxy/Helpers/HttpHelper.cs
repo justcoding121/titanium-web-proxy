@@ -18,10 +18,54 @@ namespace Titanium.Web.Proxy.Helpers
 
         public static Encoding HeaderEncoding => defaultEncoding;
 
+        struct SemicolonSplitEnumerator
+        {
+            private readonly ReadOnlyMemory<char> data;
+
+            private ReadOnlyMemory<char> current;
+
+            private int idx;
+
+            public SemicolonSplitEnumerator(string str) : this(str.AsMemory())
+            {
+            }
+
+            public SemicolonSplitEnumerator(ReadOnlyMemory<char> data)
+            {
+                this.data = data;
+                current = null;
+                idx = 0;
+            }
+
+            public SemicolonSplitEnumerator GetEnumerator() { return this; }
+
+            public bool MoveNext()
+            {
+                if (this.idx > data.Length) return false;
+
+                int idx = data.Span.Slice(this.idx).IndexOf(';');
+                if (idx == -1)
+                {
+                    idx = data.Length;
+                }
+                else
+                {
+                    idx += this.idx;
+                }
+
+                current = data.Slice(this.idx, idx - this.idx);
+                this.idx = idx + 1;
+                return true;
+            }
+
+
+            public ReadOnlyMemory<char> Current => current;
+        }
+
         /// <summary>
         ///     Gets the character encoding of request/response from content-type header
         /// </summary>
-        /// <param name="contentType"></param>
+        /// <param name="contentType"></param>  
         /// <returns></returns>
         internal static Encoding GetEncodingFromContentType(string contentType)
         {
@@ -34,24 +78,24 @@ namespace Titanium.Web.Proxy.Helpers
                 }
 
                 // extract the encoding by finding the charset
-                var parameters = contentType.Split(ProxyConstants.SemiColonSplit);
-                foreach (string parameter in parameters)
+                foreach (var p in new SemicolonSplitEnumerator(contentType))
                 {
-                    var split = parameter.Split(ProxyConstants.EqualSplit, 2);
-                    if (split.Length == 2 && split[0].Trim().EqualsIgnoreCase(KnownHeaders.ContentTypeCharset))
+                    var parameter = p.Span;
+                    int equalsIndex = parameter.IndexOf('=');
+                    if (equalsIndex != -1 && parameter.Slice(0, equalsIndex).TrimStart().EqualsIgnoreCase(KnownHeaders.ContentTypeCharset.AsSpan()))
                     {
-                        string value = split[1];
-                        if (value.EqualsIgnoreCase("x-user-defined"))
+                        var value = parameter.Slice(equalsIndex + 1);
+                        if (value.EqualsIgnoreCase("x-user-defined".AsSpan()))
                         {
                             continue;
                         }
 
                         if (value.Length > 2 && value[0] == '"' && value[value.Length - 1] == '"')
                         {
-                            value = value.Substring(1, value.Length - 2);
+                            value = value.Slice(1, value.Length - 2);
                         }
 
-                        return Encoding.GetEncoding(value);
+                        return Encoding.GetEncoding(value.ToString());
                     }
                 }
             }
@@ -65,21 +109,20 @@ namespace Titanium.Web.Proxy.Helpers
             return defaultEncoding;
         }
 
-        internal static string GetBoundaryFromContentType(string contentType)
+        internal static ReadOnlyMemory<char> GetBoundaryFromContentType(string contentType)
         {
             if (contentType != null)
             {
                 // extract the boundary
-                var parameters = contentType.Split(ProxyConstants.SemiColonSplit);
-                foreach (string parameter in parameters)
+                foreach (var parameter in new SemicolonSplitEnumerator(contentType))
                 {
-                    var split = parameter.Split(ProxyConstants.EqualSplit, 2);
-                    if (split.Length == 2 && split[0].Trim().EqualsIgnoreCase(KnownHeaders.ContentTypeBoundary))
+                    int equalsIndex = parameter.Span.IndexOf('=');
+                    if (equalsIndex != -1 && parameter.Span.Slice(0, equalsIndex).TrimStart().EqualsIgnoreCase(KnownHeaders.ContentTypeBoundary.AsSpan()))
                     {
-                        string value = split[1];
-                        if (value.Length > 2 && value[0] == '"' && value[value.Length - 1] == '"')
+                        var value = parameter.Slice(equalsIndex + 1);
+                        if (value.Length > 2 && value.Span[0] == '"' && value.Span[value.Length - 1] == '"')
                         {
-                            value = value.Substring(1, value.Length - 2);
+                            value = value.Slice(1, value.Length - 2);
                         }
 
                         return value;

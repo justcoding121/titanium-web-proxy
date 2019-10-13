@@ -12,10 +12,6 @@ namespace Titanium.Web.Proxy.Shared
     {
         internal static readonly char DotSplit = '.';
 
-        internal static readonly char[] ColonSplit = { ':' };
-        internal static readonly char[] SemiColonSplit = { ';' };
-        internal static readonly char[] EqualSplit = { '=' };
-
         internal static readonly string NewLine = "\r\n";
         internal static readonly byte[] NewLineBytes = { (byte)'\r', (byte)'\n' };
 

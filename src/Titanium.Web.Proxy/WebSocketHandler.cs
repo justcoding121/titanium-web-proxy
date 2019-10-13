@@ -16,16 +16,17 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Handle upgrade to websocket
         /// </summary>
-        private async Task handleWebSocketUpgrade(string httpCmd,
+        private async Task handleWebSocketUpgrade(string requestHttpMethod, string requestHttpUrl, Version requestVersion,
             SessionEventArgs args, Request request, Response response,
             CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
             TcpServerConnection serverConnection,
             CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
         {
             // prepare the prefix content
-            await serverConnection.StreamWriter.WriteLineAsync(httpCmd, cancellationToken);
-            await serverConnection.StreamWriter.WriteHeadersAsync(request.Headers,
-                cancellationToken: cancellationToken);
+            var headerBuilder = new HeaderBuilder();
+            headerBuilder.WriteRequestLine(requestHttpMethod, requestHttpUrl, requestVersion);
+            headerBuilder.WriteHeaders(request.Headers);
+            await serverConnection.StreamWriter.WriteHeadersAsync(headerBuilder, cancellationToken);
 
             string httpStatus;
             try
