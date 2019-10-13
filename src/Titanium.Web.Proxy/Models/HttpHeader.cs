@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using System.Text;
 using Titanium.Web.Proxy.Http;
 
@@ -16,13 +17,21 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         public const int HttpHeaderOverhead = 32;
 
-        internal static readonly Version VersionUnknown = new Version(0, 0);
+#if NETSTANDARD2_1
+        internal static Version VersionUnknown => HttpVersion.Unknown;
+#else
+        internal static Version VersionUnknown { get; } = new Version(0, 0);
+#endif
 
-        internal static readonly Version Version10 = new Version(1, 0);
+        internal static Version Version10 => HttpVersion.Version10;
 
-        internal static readonly Version Version11 = new Version(1, 1);
+        internal static Version Version11 => HttpVersion.Version11;
 
-        internal static readonly Version Version20 = new Version(2, 0);
+#if NETSTANDARD2_1
+        internal static Version Version20 => HttpVersion.Version20;
+#else
+        internal static Version Version20 { get; } = new Version(2, 0);
+#endif
 
         internal static readonly HttpHeader ProxyConnectionKeepAlive = new HttpHeader("Proxy-Connection", "keep-alive");
 

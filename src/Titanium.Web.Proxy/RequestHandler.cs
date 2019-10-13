@@ -45,7 +45,7 @@ namespace Titanium.Web.Proxy
         /// <param name="prefetchConnectionTask">Prefetched server connection for current client using Connect/SNI headers.</param>
         private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, TcpClientConnection clientConnection,
             CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
-            CancellationTokenSource cancellationTokenSource, string httpsConnectHostname, TunnelConnectSessionEventArgs connectArgs,
+            CancellationTokenSource cancellationTokenSource, string? httpsConnectHostname, TunnelConnectSessionEventArgs? connectArgs,
             Task<TcpServerConnection>? prefetchConnectionTask = null)
         {
             var connectRequest = connectArgs?.HttpClient.ConnectRequest;
@@ -107,8 +107,8 @@ namespace Titanium.Web.Proxy
                             }
                             else
                             {
-                                string host = args.HttpClient.Request.Host ?? httpsConnectHostname;
-                                string hostAndPath = host;
+                                string? host = args.HttpClient.Request.Host ?? httpsConnectHostname;
+                                string? hostAndPath = host;
                                 if (httpUrl.StartsWith("/"))
                                 {
                                     hostAndPath += httpUrl;
@@ -288,15 +288,17 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                await tcpConnectionFactory.Release(connection,
-                        closeServerConnection);
+                if (connection != null)
+                {
+                    await tcpConnectionFactory.Release(connection, closeServerConnection);
+                }
 
                 await tcpConnectionFactory.Release(prefetchTask, closeServerConnection);
             }
         }
 
         private async Task<RetryResult> handleHttpSessionRequest(string requestHttpMethod, string requestHttpUrl, Version requestVersion, SessionEventArgs args,
-          TcpServerConnection serverConnection, SslApplicationProtocol sslApplicationProtocol,
+          TcpServerConnection? serverConnection, SslApplicationProtocol sslApplicationProtocol,
           CancellationToken cancellationToken, CancellationTokenSource cancellationTokenSource)
         {
             // a connection generator task with captured parameters via closure.
@@ -312,7 +314,7 @@ namespace Titanium.Web.Proxy
 
                 if (args.HttpClient.Request.UpgradeToWebSocket)
                 {
-                    args.HttpClient.ConnectRequest.TunnelType = TunnelType.Websocket;
+                    args.HttpClient.ConnectRequest!.TunnelType = TunnelType.Websocket;
 
                     // if upgrading to websocket then relay the request without reading the contents
                     await handleWebSocketUpgrade(requestHttpMethod, requestHttpUrl, requestVersion, args, args.HttpClient.Request,
@@ -383,7 +385,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private void prepareRequestHeaders(HeaderCollection requestHeaders)
         {
-            string acceptEncoding = requestHeaders.GetHeaderValueOrNull(KnownHeaders.AcceptEncoding);
+            string? acceptEncoding = requestHeaders.GetHeaderValueOrNull(KnownHeaders.AcceptEncoding);
 
             if (acceptEncoding != null)
             {

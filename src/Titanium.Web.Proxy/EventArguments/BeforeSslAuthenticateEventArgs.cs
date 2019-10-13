@@ -10,16 +10,17 @@ namespace Titanium.Web.Proxy.EventArguments
     {
         internal readonly CancellationTokenSource TaskCancellationSource;
 
-        internal BeforeSslAuthenticateEventArgs(CancellationTokenSource taskCancellationSource)
+        internal BeforeSslAuthenticateEventArgs(CancellationTokenSource taskCancellationSource, string sniHostName)
         {
             TaskCancellationSource = taskCancellationSource;
+            SniHostName = sniHostName;
         }
 
         /// <summary>
         ///     The server name indication hostname if available. Otherwise the generic certificate hostname of
         ///     TransparentEndPoint.
         /// </summary>
-        public string SniHostName { get; internal set; }
+        public string SniHostName { get; }
 
         /// <summary>
         ///     Should we decrypt the SSL request?

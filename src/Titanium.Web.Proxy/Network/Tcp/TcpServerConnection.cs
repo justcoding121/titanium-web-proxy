@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         internal bool IsClosed => Stream.IsClosed;
 
-        internal ExternalProxy UpStreamProxy { get; set; }
+        internal ExternalProxy? UpStreamProxy { get; set; }
 
         internal string HostName { get; set; }
 
@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         ///     Local NIC via connection is made
         /// </summary>
-        internal IPEndPoint UpStreamEndPoint { get; set; }
+        internal IPEndPoint? UpStreamEndPoint { get; set; }
 
         /// <summary>
         ///     Http version
@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         ///     Used to write lines to server
         /// </summary>
-        internal HttpRequestWriter StreamWriter { get; set; }
+        internal HttpRequestWriter? StreamWriter { get; set; }
 
         /// <summary>
         ///     Server stream

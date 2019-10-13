@@ -53,11 +53,11 @@ namespace Titanium.Web.Proxy
         /// <param name="remoteCertificate">The remote certificate of server.</param>
         /// <param name="acceptableIssuers">The acceptable issues for client certificate as listed by server.</param>
         /// <returns></returns>
-        internal X509Certificate SelectClientCertificate(object sender, string targetHost,
+        internal X509Certificate? SelectClientCertificate(object sender, string targetHost,
             X509CertificateCollection localCertificates,
             X509Certificate remoteCertificate, string[] acceptableIssuers)
         {
-            X509Certificate clientCertificate = null;
+            X509Certificate? clientCertificate = null;
 
             if (acceptableIssuers != null && acceptableIssuers.Length > 0 && localCertificates != null &&
                 localCertificates.Count > 0)

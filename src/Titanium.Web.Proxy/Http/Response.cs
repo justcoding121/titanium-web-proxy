@@ -79,7 +79,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Connection);
+                string? headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Connection);
 
                 if (headerValue != null)
                 {

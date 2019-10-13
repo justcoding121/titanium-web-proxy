@@ -148,7 +148,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         internal Task CopyBodyAsync(ICustomStreamReader streamReader, bool isChunked, long contentLength,
-            Action<byte[], int, int> onCopy, CancellationToken cancellationToken)
+            Action<byte[], int, int>? onCopy, CancellationToken cancellationToken)
         {
             // For chunked request we need to read data as they arrive, until we reach a chunk end symbol
             if (isChunked)

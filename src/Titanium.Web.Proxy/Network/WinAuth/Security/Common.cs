@@ -224,9 +224,9 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                 }
             }
 
-            internal byte[] GetBytes()
+            internal byte[]? GetBytes()
             {
-                byte[] buffer = null;
+                byte[]? buffer = null;
 
                 if (pBuffers == IntPtr.Zero)
                 {

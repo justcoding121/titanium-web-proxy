@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         private int bufferLength;
 
-        private byte[] buffer;
+        private readonly byte[] buffer;
 
         private bool disposed;
 
@@ -134,9 +134,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             if (!disposed)
             {
                 disposed = true;
-                var b = buffer;
-                buffer = null;
-                bufferPool.ReturnBuffer(b);
+                bufferPool.ReturnBuffer(buffer);
             }
         }
     }

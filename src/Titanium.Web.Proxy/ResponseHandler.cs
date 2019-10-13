@@ -72,8 +72,7 @@ namespace Titanium.Web.Proxy
                 // write custom user response with body and return.
                 await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
 
-                if (args.HttpClient.Connection != null
-                    && !args.HttpClient.CloseServerConnection)
+                if (args.HttpClient.HasConnection && !args.HttpClient.CloseServerConnection)
                 {
                     // syphon out the original response body from server connection
                     // so that connection will be good to be reused.
@@ -87,7 +86,10 @@ namespace Titanium.Web.Proxy
             // likely after making modifications from User Response Handler
             if (args.ReRequest)
             {
-                await tcpConnectionFactory.Release(args.HttpClient.Connection);
+                if (args.HttpClient.HasConnection)
+                {
+                    await tcpConnectionFactory.Release(args.HttpClient.Connection);
+                }
 
                 // clear current response
                 await args.ClearResponse(cancellationToken);

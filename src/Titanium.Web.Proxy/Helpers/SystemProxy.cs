@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy.Helpers
         internal const int InternetOptionSettingsChanged = 39;
         internal const int InternetOptionRefresh = 37;
 
-        private ProxyInfo originalValues;
+        private ProxyInfo? originalValues;
 
         public SystemProxyManager()
         {
@@ -90,8 +90,8 @@ namespace Titanium.Web.Proxy.Helpers
                 saveOriginalProxyConfiguration(reg);
                 prepareRegistry(reg);
 
-                string exisitingContent = reg.GetValue(regProxyServer) as string;
-                var existingSystemProxyValues = ProxyInfo.GetSystemProxyValues(exisitingContent);
+                string? existingContent = reg.GetValue(regProxyServer) as string;
+                var existingSystemProxyValues = ProxyInfo.GetSystemProxyValues(existingContent);
                 existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);
                 if ((protocolType & ProxyProtocolType.Http) != 0)
                 {
@@ -141,9 +141,9 @@ namespace Titanium.Web.Proxy.Helpers
 
                 if (reg.GetValue(regProxyServer) != null)
                 {
-                    string exisitingContent = reg.GetValue(regProxyServer) as string;
+                    string? existingContent = reg.GetValue(regProxyServer) as string;
 
-                    var existingSystemProxyValues = ProxyInfo.GetSystemProxyValues(exisitingContent);
+                    var existingSystemProxyValues = ProxyInfo.GetSystemProxyValues(existingContent);
                     existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);
 
                     if (existingSystemProxyValues.Count != 0)
@@ -284,7 +284,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        internal ProxyInfo GetProxyInfoFromRegistry()
+        internal ProxyInfo? GetProxyInfoFromRegistry()
         {
             using (var reg = openInternetSettingsKey())
             {

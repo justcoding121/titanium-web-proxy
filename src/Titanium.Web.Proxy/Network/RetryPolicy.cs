@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.Network
         private readonly int retries;
         private readonly TcpConnectionFactory tcpConnectionFactory;
 
-        private TcpServerConnection currentConnection;
+        private TcpServerConnection? currentConnection;
 
         internal RetryPolicy(int retries, TcpConnectionFactory tcpConnectionFactory)
         {
@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy.Network
         {
             currentConnection = initialConnection;
             bool @continue = true;
-            Exception exception = null;
+            Exception? exception = null;
 
             var attempts = retries;
 
@@ -80,11 +80,14 @@ namespace Titanium.Web.Proxy.Network
     internal class RetryResult
     {
         internal bool IsSuccess => Exception == null;
+        
         internal TcpServerConnection LatestConnection { get; }
-        internal Exception Exception { get; }
+        
+        internal Exception? Exception { get; }
+        
         internal bool Continue { get; }
 
-        internal RetryResult(TcpServerConnection lastConnection, Exception exception, bool @continue)
+        internal RetryResult(TcpServerConnection lastConnection, Exception? exception, bool @continue)
         {
             LatestConnection = lastConnection;
             Exception = exception;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Runtime.CompilerServices;
@@ -42,7 +42,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
 
         public bool BypassOnLocal { get; internal set; }
 
-        public Uri AutomaticConfigurationScript { get; internal set; }
+        public Uri? AutomaticConfigurationScript { get; internal set; }
 
         public bool AutomaticallyDetectSettings { get; internal set; }
 
@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             dispose(true);
         }
 
-        public bool GetAutoProxies(Uri destination, out IList<string> proxyList)
+        public bool GetAutoProxies(Uri destination, out IList<string>? proxyList)
         {
             proxyList = null;
             if (session == null || session.IsInvalid || state == AutoWebProxyState.UnrecognizedScheme)
@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                 return false;
             }
 
-            string proxyListString = null;
+            string? proxyListString = null;
             var errorCode = NativeMethods.WinHttp.ErrorCodes.AudodetectionFailed;
             if (AutomaticallyDetectSettings && !autoDetectFailed)
             {
@@ -88,14 +88,14 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
 
             if (!string.IsNullOrEmpty(proxyListString))
             {
-                proxyListString = removeWhitespaces(proxyListString);
+                proxyListString = removeWhitespaces(proxyListString!);
                 proxyList = proxyListString.Split(';');
             }
 
             return true;
         }
 
-        public ExternalProxy GetProxy(Uri destination)
+        public ExternalProxy? GetProxy(Uri destination)
         {
             if (GetAutoProxies(destination, out var proxies))
             {
@@ -131,12 +131,12 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             var protocolType = ProxyInfo.ParseProtocolType(destination.Scheme);
             if (protocolType.HasValue)
             {
-                HttpSystemProxyValue value = null;
+                HttpSystemProxyValue? value = null;
                 if (ProxyInfo?.Proxies?.TryGetValue(protocolType.Value, out value) == true)
                 {
                     var systemProxy = new ExternalProxy
                     {
-                        HostName = value.HostName,
+                        HostName = value!.HostName,
                         Port = value.Port
                     };
 
@@ -210,7 +210,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             session.Close();
         }
 
-        private int getAutoProxies(Uri destination, Uri scriptLocation, out string proxyListString)
+        private int getAutoProxies(Uri destination, Uri? scriptLocation, out string? proxyListString)
         {
             int num = 0;
             var autoProxyOptions = new NativeMethods.WinHttp.WINHTTP_AUTOPROXY_OPTIONS();
@@ -247,7 +247,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
         }
 
         private bool winHttpGetProxyForUrl(string destination,
-            ref NativeMethods.WinHttp.WINHTTP_AUTOPROXY_OPTIONS autoProxyOptions, out string proxyListString)
+            ref NativeMethods.WinHttp.WINHTTP_AUTOPROXY_OPTIONS autoProxyOptions, out string? proxyListString)
         {
             proxyListString = null;
             bool flag;

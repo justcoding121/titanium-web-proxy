@@ -86,7 +86,7 @@ namespace Titanium.Web.Proxy.Http
         ///     Note: Changing this does NOT change host in RequestUri.
         ///     Users can set new RequestUri separately.
         /// </summary>
-        public string Host
+        public string? Host
         {
             get => Headers.GetHeaderValueOrNull(KnownHeaders.Host);
             set => Headers.SetOrAddHeaderValue(KnownHeaders.Host, value);
@@ -99,7 +99,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Expect);
+                string? headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Expect);
                 return headerValue != null && headerValue.Equals(KnownHeaders.Expect100Continue);
             }
         }
@@ -127,7 +127,7 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
+                string? headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
 
                 if (headerValue == null)
                 {

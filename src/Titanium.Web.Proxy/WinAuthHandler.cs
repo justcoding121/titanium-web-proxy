@@ -47,8 +47,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private async Task handle401UnAuthorized(SessionEventArgs args)
         {
-            string headerName = null;
-            HttpHeader authHeader = null;
+            string? headerName = null;
+            HttpHeader? authHeader = null;
 
             var response = args.HttpClient.Response;
 
@@ -91,7 +91,7 @@ namespace Titanium.Web.Proxy
 
             if (authHeader != null)
             {
-                string scheme = authSchemes.Contains(authHeader.Value) ? authHeader.Value : null;
+                string? scheme = authSchemes.Contains(authHeader.Value) ? authHeader.Value : null;
 
                 var expectedAuthState =
                     scheme == null ? State.WinAuthState.INITIAL_TOKEN : State.WinAuthState.UNAUTHORIZED;

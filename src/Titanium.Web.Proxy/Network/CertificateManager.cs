@@ -66,7 +66,7 @@ namespace Titanium.Web.Proxy.Network
 
         private string issuer;
 
-        private X509Certificate2 rootCertificate;
+        private X509Certificate2? rootCertificate;
 
         private string rootCertificateName;
 
@@ -87,7 +87,7 @@ namespace Titanium.Web.Proxy.Network
         ///     prompting for UAC if required?
         /// </param>
         /// <param name="exceptionFunc"></param>
-        internal CertificateManager(string rootCertificateName, string rootCertificateIssuerName,
+        internal CertificateManager(string? rootCertificateName, string? rootCertificateIssuerName,
             bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin,
             ExceptionHandler exceptionFunc)
         {
@@ -156,7 +156,7 @@ namespace Titanium.Web.Proxy.Network
 
                 if (value != engine)
                 {
-                    certEngine = null;
+                    certEngine = null!;
                     engine = value;
                 }
 
@@ -210,7 +210,7 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         ///     The root certificate.
         /// </summary>
-        public X509Certificate2 RootCertificate
+        public X509Certificate2? RootCertificate
         {
             get => rootCertificate;
             set
@@ -268,6 +268,11 @@ namespace Titanium.Web.Proxy.Network
         /// <returns></returns>
         private bool rootCertificateInstalled(StoreLocation storeLocation)
         {
+            if (RootCertificate == null)
+            {
+                throw new Exception("Root certificate is null.");
+            }
+
             string value = $"{RootCertificate.Issuer}";
             return findCertificates(StoreName.Root, storeLocation, value).Count > 0
                    && (CertificateEngine != CertificateEngine.DefaultWindows
@@ -298,8 +303,7 @@ namespace Titanium.Web.Proxy.Network
         {
             if (RootCertificate == null)
             {
-                ExceptionFunc(new Exception("Could not install certificate as it is null or empty."));
-                return;
+                throw new Exception("Could not install certificate as it is null or empty.");
             }
 
             var x509Store = new X509Store(storeName, storeLocation);
@@ -361,12 +365,19 @@ namespace Titanium.Web.Proxy.Network
 
         private X509Certificate2 makeCertificate(string certificateName, bool isRootCertificate)
         {
+            //if (isRoot != (null == signingCertificate))
+            //{
+            //    throw new ArgumentException(
+            //        "You must specify a Signing Certificate if and only if you are not creating a root.",
+            //        nameof(signingCertificate));
+            //}
+
             if (!isRootCertificate && RootCertificate == null)
             {
                 CreateRootCertificate();
             }
 
-            var certificate = certEngine.MakeCertificate(certificateName, isRootCertificate, RootCertificate);
+            var certificate = certEngine.MakeCertificate(certificateName, isRootCertificate ? null : RootCertificate);
 
             if (CertificateEngine == CertificateEngine.DefaultWindows)
             {
@@ -382,9 +393,9 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="certificateName"></param>
         /// <param name="isRootCertificate"></param>
         /// <returns></returns>
-        internal X509Certificate2 CreateCertificate(string certificateName, bool isRootCertificate)
+        internal X509Certificate2? CreateCertificate(string certificateName, bool isRootCertificate)
         {
-            X509Certificate2 certificate;
+            X509Certificate2? certificate;
             try
             {
                 if (!isRootCertificate && SaveFakeCertificates)
@@ -589,7 +600,7 @@ namespace Titanium.Web.Proxy.Network
         ///     Loads root certificate from current executing assembly location with expected name rootCert.pfx.
         /// </summary>
         /// <returns></returns>
-        public X509Certificate2 LoadRootCertificate()
+        public X509Certificate2? LoadRootCertificate()
         {
             try
             {
@@ -671,7 +682,7 @@ namespace Titanium.Web.Proxy.Network
             installCertificate(StoreName.My, StoreLocation.CurrentUser);
 
             string pfxFileName = Path.GetTempFileName();
-            File.WriteAllBytes(pfxFileName, RootCertificate.Export(X509ContentType.Pkcs12, PfxPassword));
+            File.WriteAllBytes(pfxFileName, RootCertificate!.Export(X509ContentType.Pkcs12, PfxPassword));
 
             // currentUser\Root, currentMachine\Personal &  currentMachine\Root
             var info = new ProcessStartInfo

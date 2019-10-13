@@ -38,16 +38,16 @@ namespace Titanium.Web.Proxy
             var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferPool);
             var clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool);
 
-            Task<TcpServerConnection> prefetchConnectionTask = null;
+            Task<TcpServerConnection>? prefetchConnectionTask = null;
             bool closeServerConnection = false;
             bool calledRequestHandler = false;
 
-            SslStream sslStream = null;
+            SslStream? sslStream = null;
 
             try
             {
-                string connectHostname = null;
-                TunnelConnectSessionEventArgs connectArgs = null;
+                string? connectHostname = null;
+                TunnelConnectSessionEventArgs? connectArgs = null;
                 
                 // Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
                 if (await HttpHelper.IsConnectMethod(clientStream, BufferPool, cancellationToken) == 1)
@@ -126,7 +126,7 @@ namespace Titanium.Web.Proxy
                     var clientHelloInfo = await SslTools.PeekClientHello(clientStream, BufferPool, cancellationToken);
 
                     bool isClientHello = clientHelloInfo != null;
-                    if (isClientHello)
+                    if (clientHelloInfo != null)
                     {
                         connectRequest.TunnelType = TunnelType.Https;
                         connectRequest.ClientHelloInfo = clientHelloInfo;
@@ -134,7 +134,7 @@ namespace Titanium.Web.Proxy
 
                     await endPoint.InvokeBeforeTunnelConnectResponse(this, connectArgs, ExceptionFunc, isClientHello);
 
-                    if (decryptSsl && isClientHello)
+                    if (decryptSsl && clientHelloInfo != null)
                     {
                         clientConnection.SslProtocol = clientHelloInfo.SslProtocol;
                         connectRequest.RequestUri = new Uri("https://" + httpUrl);
@@ -166,7 +166,7 @@ namespace Titanium.Web.Proxy
 
                         if (EnableTcpServerConnectionPrefetch)
                         {
-                            IPAddress[] ipAddresses = null;
+                            IPAddress[]? ipAddresses = null;
                             try
                             {
                                 // make sure the host can be resolved before creating the prefetch task
@@ -184,7 +184,7 @@ namespace Titanium.Web.Proxy
                             }
                         }
 
-                        X509Certificate2 certificate = null;
+                        X509Certificate2? certificate = null;
                         try
                         {
                             sslStream = new SslStream(clientStream, false);
@@ -306,7 +306,7 @@ namespace Titanium.Web.Proxy
                     string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
                     if (httpCmd == "PRI * HTTP/2.0")
                     {
-                        connectArgs.HttpClient.ConnectRequest.TunnelType = TunnelType.Http2;
+                        connectArgs.HttpClient.ConnectRequest!.TunnelType = TunnelType.Http2;
 
                         // HTTP/2 Connection Preface
                         string line = await clientStream.ReadLineAsync(cancellationToken);

@@ -70,7 +70,7 @@ namespace Titanium.Web.Proxy.EventArguments
         ///     Returns a user data for this request/response session which is
         ///     same as the user data of HttpClient.
         /// </summary>
-        public object UserData
+        public object? UserData
         {
             get => HttpClient.UserData;
             set => HttpClient.UserData = value;
@@ -112,7 +112,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Are we using a custom upstream HTTP(S) proxy?
         /// </summary>
-        public ExternalProxy CustomUpStreamProxyUsed { get; internal set; }
+        public ExternalProxy? CustomUpStreamProxyUsed { get; internal set; }
 
         /// <summary>
         ///     Local endpoint via which we make the request.
@@ -127,7 +127,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     The last exception that happened.
         /// </summary>
-        public Exception Exception { get; internal set; }
+        public Exception? Exception { get; internal set; }
 
         /// <summary>
         ///     Implements cleanup here.
@@ -146,12 +146,12 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Fired when data is sent within this session to server/client.
         /// </summary>
-        public event EventHandler<DataEventArgs> DataSent;
+        public event EventHandler<DataEventArgs>? DataSent;
 
         /// <summary>
         ///     Fired when data is received within this session from client/server.
         /// </summary>
-        public event EventHandler<DataEventArgs> DataReceived;
+        public event EventHandler<DataEventArgs>? DataReceived;
 
         internal void OnDataSent(byte[] buffer, int offset, int count)
         {

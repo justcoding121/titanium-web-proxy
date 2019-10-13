@@ -17,6 +17,8 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class HttpWebClient
     {
+        private TcpServerConnection? connection;
+
         internal HttpWebClient(Request? request)
         {
             Request = request ?? new Request();
@@ -26,7 +28,20 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Connection to server
         /// </summary>
-        internal TcpServerConnection Connection { get; set; }
+        internal TcpServerConnection Connection
+        {
+            get
+            {
+                if (connection == null)
+                {
+                    throw new Exception("Connection is null");
+                }
+
+                return connection;
+            }
+        }
+
+        internal bool HasConnection => connection != null;
 
         /// <summary>
         ///     Should we close the server connection at the end of this HTTP request/response session.
@@ -41,7 +56,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Gets or sets the user data.
         /// </summary>
-        public object UserData { get; set; }
+        public object? UserData { get; set; }
 
         /// <summary>
         ///     Override UpStreamEndPoint for this request; Local NIC via request is made
@@ -51,7 +66,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Headers passed with Connect.
         /// </summary>
-        public ConnectRequest ConnectRequest { get; internal set; }
+        public ConnectRequest? ConnectRequest { get; internal set; }
 
         /// <summary>
         ///     Web Request.
@@ -81,7 +96,7 @@ namespace Titanium.Web.Proxy.Http
         internal void SetConnection(TcpServerConnection serverConnection)
         {
             serverConnection.LastAccess = DateTime.Now;
-            Connection = serverConnection;
+            connection = serverConnection;
         }
 
         /// <summary>
@@ -199,7 +214,7 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         internal void FinishSession()
         {
-            Connection = null;
+            connection = null;
 
             ConnectRequest?.FinishSession();
             Request?.FinishSession();

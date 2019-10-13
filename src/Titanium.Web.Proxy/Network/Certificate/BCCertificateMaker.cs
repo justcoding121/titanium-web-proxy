@@ -48,9 +48,9 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="isRoot">if set to <c>true</c> [is root].</param>
         /// <param name="signingCert">The signing cert.</param>
         /// <returns>X509Certificate2 instance.</returns>
-        public X509Certificate2 MakeCertificate(string sSubjectCn, bool isRoot, X509Certificate2 signingCert = null)
+        public X509Certificate2 MakeCertificate(string sSubjectCn, X509Certificate2? signingCert = null)
         {
-            return makeCertificateInternal(sSubjectCn, isRoot, true, signingCert);
+            return makeCertificateInternal(sSubjectCn, true, signingCert);
         }
 
         /// <summary>
@@ -66,12 +66,12 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="hostName">The host name</param>
         /// <returns>X509Certificate2 instance.</returns>
         /// <exception cref="PemException">Malformed sequence in RSA private key</exception>
-        private static X509Certificate2 generateCertificate(string hostName,
+        private static X509Certificate2 generateCertificate(string? hostName,
             string subjectName,
             string issuerName, DateTime validFrom,
             DateTime validTo, int keyStrength = 2048,
             string signatureAlgorithm = "SHA256WithRSA",
-            AsymmetricKeyParameter issuerPrivateKey = null)
+            AsymmetricKeyParameter? issuerPrivateKey = null)
         {
             // Generating Random Numbers
             var randomGenerator = new CryptoApiRandomGenerator();
@@ -162,11 +162,11 @@ namespace Titanium.Web.Proxy.Network.Certificate
         private static X509Certificate2 withPrivateKey(X509Certificate certificate, AsymmetricKeyParameter privateKey)
         {
             const string password = "password";
-            Pkcs12Store store = null;
+            Pkcs12Store store;
 
             if(RunTime.IsRunningOnMono)
             {
-                Pkcs12StoreBuilder builder = new Pkcs12StoreBuilder();
+                var builder = new Pkcs12StoreBuilder();
                 builder.SetUseDerEncoding(true);
                 store = builder.Build();
             }
@@ -190,7 +190,6 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <summary>
         ///     Makes the certificate internal.
         /// </summary>
-        /// <param name="isRoot">if set to <c>true</c> [is root].</param>
         /// <param name="hostName">hostname for certificate</param>
         /// <param name="subjectName">The full subject.</param>
         /// <param name="validFrom">The valid from.</param>
@@ -201,18 +200,10 @@ namespace Titanium.Web.Proxy.Network.Certificate
         ///     You must specify a Signing Certificate if and only if you are not creating a
         ///     root.
         /// </exception>
-        private X509Certificate2 makeCertificateInternal(bool isRoot,
-            string hostName, string subjectName,
-            DateTime validFrom, DateTime validTo, X509Certificate2 signingCertificate)
+        private X509Certificate2 makeCertificateInternal(string hostName, string subjectName,
+            DateTime validFrom, DateTime validTo, X509Certificate2? signingCertificate)
         {
-            if (isRoot != (null == signingCertificate))
-            {
-                throw new ArgumentException(
-                    "You must specify a Signing Certificate if and only if you are not creating a root.",
-                    nameof(signingCertificate));
-            }
-
-            if (isRoot)
+            if (signingCertificate == null)
             {
                 return generateCertificate(null, subjectName, subjectName, validFrom, validTo);
             }
@@ -226,18 +217,17 @@ namespace Titanium.Web.Proxy.Network.Certificate
         ///     Makes the certificate internal.
         /// </summary>
         /// <param name="subject">The s subject cn.</param>
-        /// <param name="isRoot">if set to <c>true</c> [is root].</param>
         /// <param name="switchToMtaIfNeeded">if set to <c>true</c> [switch to MTA if needed].</param>
         /// <param name="signingCert">The signing cert.</param>
         /// <param name="cancellationToken">Task cancellation token</param>
         /// <returns>X509Certificate2.</returns>
-        private X509Certificate2 makeCertificateInternal(string subject, bool isRoot,
-            bool switchToMtaIfNeeded, X509Certificate2 signingCert = null,
+        private X509Certificate2 makeCertificateInternal(string subject,
+            bool switchToMtaIfNeeded, X509Certificate2? signingCert = null,
             CancellationToken cancellationToken = default)
         {
-            return makeCertificateInternal(isRoot, subject, $"CN={subject}",
+            return makeCertificateInternal(subject, $"CN={subject}",
                 DateTime.UtcNow.AddDays(-certificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays),
-                isRoot ? null : signingCert);
+                signingCert);
         }
     }
 }

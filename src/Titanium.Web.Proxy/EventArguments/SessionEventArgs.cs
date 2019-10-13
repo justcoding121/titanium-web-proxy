@@ -70,7 +70,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Occurs when multipart request part sent.
         /// </summary>
-        public event EventHandler<MultipartRequestPartSentEventArgs> MultipartRequestPartSent;
+        public event EventHandler<MultipartRequestPartSentEventArgs>? MultipartRequestPartSent;
 
         private ICustomStreamReader getStreamReader(bool isRequest)
         {
@@ -105,7 +105,7 @@ namespace Titanium.Web.Proxy.EventArguments
                     request.ReadHttp2BodyTaskCompletionSource = tcs;
 
                     // signal to HTTP/2 copy frame method to continue
-                    request.ReadHttp2BeforeHandlerTaskCompletionSource.SetResult(true);
+                    request.ReadHttp2BeforeHandlerTaskCompletionSource!.SetResult(true);
 
                     await tcs.Task;
 
@@ -177,7 +177,7 @@ namespace Titanium.Web.Proxy.EventArguments
                     response.ReadHttp2BodyTaskCompletionSource = tcs;
 
                     // signal to HTTP/2 copy frame method to continue
-                    response.ReadHttp2BeforeHandlerTaskCompletionSource.SetResult(true);
+                    response.ReadHttp2BeforeHandlerTaskCompletionSource!.SetResult(true);
 
                     await tcs.Task;
 
@@ -286,7 +286,7 @@ namespace Titanium.Web.Proxy.EventArguments
             await copyBodyAsync(false, false, writer, transformation, OnDataReceived, cancellationToken);
         }
 
-        private async Task copyBodyAsync(bool isRequest, bool useOriginalHeaderValues, HttpWriter writer, TransformationMode transformation, Action<byte[], int, int> onCopy, CancellationToken cancellationToken)
+        private async Task copyBodyAsync(bool isRequest, bool useOriginalHeaderValues, HttpWriter writer, TransformationMode transformation, Action<byte[], int, int>? onCopy, CancellationToken cancellationToken)
         {
             var stream = getStreamReader(isRequest);
 
@@ -302,9 +302,9 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             LimitedStream limitedStream;
-            Stream decompressStream = null;
+            Stream? decompressStream = null;
 
-            string contentEncoding = useOriginalHeaderValues ? requestResponse.OriginalContentEncoding : requestResponse.ContentEncoding;
+            string? contentEncoding = useOriginalHeaderValues ? requestResponse.OriginalContentEncoding : requestResponse.ContentEncoding;
 
             Stream s = limitedStream = new LimitedStream(stream, BufferPool, isChunked, contentLength);
 
@@ -541,7 +541,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="result">The html content bytes.</param>
         /// <param name="headers">The HTTP headers.</param>
         /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
-        public void Ok(byte[] result, Dictionary<string, HttpHeader> headers = null,
+        public void Ok(byte[] result, Dictionary<string, HttpHeader>? headers = null,
             bool closeServerConnection = false)
         {
             var response = new OkResponse();
@@ -562,7 +562,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="headers">The HTTP headers.</param>
         /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
         public void GenericResponse(string html, HttpStatusCode status,
-            Dictionary<string, HttpHeader> headers = null, bool closeServerConnection = false)
+            Dictionary<string, HttpHeader>? headers = null, bool closeServerConnection = false)
         {
             var response = new GenericResponse(status);
             response.HttpVersion = HttpClient.Request.HttpVersion;

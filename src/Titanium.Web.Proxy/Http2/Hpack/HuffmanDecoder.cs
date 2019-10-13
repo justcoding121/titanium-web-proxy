@@ -69,7 +69,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 while (bits >= 8)
                 {
                     int c = (current >> (bits - 8)) & 0xFF;
-                    node = node.Children[c];
+                    node = node.Children![c];
                     bits -= node.Bits;
                     if (node.IsTerminal)
                     {
@@ -87,7 +87,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             while (bits > 0)
             {
                 int c = (current << (8 - bits)) & 0xFF;
-                node = node.Children[c];
+                node = node.Children![c];
                 if (node.IsTerminal && node.Bits <= bits)
                 {
                     bits -= node.Bits;
@@ -121,7 +121,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             public int Bits { get; }
 
             // internal nodes have children
-            public Node[] Children { get; }
+            public Node[]? Children { get; }
 
             /// <summary>
             /// Initializes a new instance of the <see cref="HuffmanDecoder"/> class.
@@ -173,7 +173,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
 
                 length -= 8;
                 int i = (code >> length) & 0xFF;
-                if (current.Children[i] == null)
+                if (current.Children![i] == null)
                 {
                     current.Children[i] = new Node();
                 }
@@ -187,7 +187,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             int end = 1 << shift;
             for (int i = start; i < start + end; i++)
             {
-                current.Children[i] = terminal;
+                current.Children![i] = terminal;
             }
         }
     }

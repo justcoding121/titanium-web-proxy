@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy.Http.Responses
             StatusDescription = statusDescription;
         }
 
-        internal static string Get(int code)
+        internal static string? Get(int code)
         {
             switch (code)
             {

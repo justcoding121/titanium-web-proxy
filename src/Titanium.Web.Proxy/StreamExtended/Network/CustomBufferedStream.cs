@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     internal class CustomBufferedStream : Stream, ICustomStreamReader
     {
         private readonly bool leaveOpen;
-        private byte[] streamBuffer;
+        private readonly byte[] streamBuffer;
 
         // default to UTF-8
         private static Encoding encoding => HttpHelper.HeaderEncoding;
@@ -397,9 +397,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
                     BaseStream.Dispose();
                 }
 
-                var buffer = streamBuffer;
-                streamBuffer = null;
-                bufferPool.ReturnBuffer(buffer);
+                bufferPool.ReturnBuffer(streamBuffer);
             }
         }
 
@@ -569,7 +567,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        internal static async Task<string> ReadLineInternalAsync(ICustomStreamReader reader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        internal static async Task<string?> ReadLineInternalAsync(ICustomStreamReader reader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
             byte lastChar = default;
 

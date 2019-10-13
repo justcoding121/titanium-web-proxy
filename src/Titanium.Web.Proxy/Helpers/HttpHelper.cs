@@ -197,7 +197,7 @@ namespace Titanium.Web.Proxy.Helpers
         private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, string expectedStart, CancellationToken cancellationToken = default)
         {
             const int lengthToCheck = 10;
-            byte[] buffer = null;
+            byte[]? buffer = null;
             try
             {
                 if (bufferPool.BufferSize < lengthToCheck)
