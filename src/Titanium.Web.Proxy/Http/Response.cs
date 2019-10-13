@@ -134,22 +134,39 @@ namespace Titanium.Web.Proxy.Http
         internal static void ParseResponseLine(string httpStatus, out Version version, out int statusCode,
             out string statusDescription)
         {
-            var httpResult = httpStatus.Split(ProxyConstants.SpaceSplit, 3);
-            if (httpResult.Length <= 1)
+            int firstSpace = httpStatus.IndexOf(' ');
+            if (firstSpace == -1)
             {
                 throw new Exception("Invalid HTTP status line: " + httpStatus);
             }
 
-            string httpVersion = httpResult[0];
+            var httpVersion = httpStatus.AsSpan(0, firstSpace);
 
             version = HttpHeader.Version11;
-            if (httpVersion.EqualsIgnoreCase("HTTP/1.0"))
+            if (httpVersion.EqualsIgnoreCase("HTTP/1.0".AsSpan()))
             {
                 version = HttpHeader.Version10;
             }
 
-            statusCode = int.Parse(httpResult[1]);
-            statusDescription = httpResult.Length > 2 ? httpResult[2] : string.Empty;
+            int secondSpace = httpStatus.IndexOf(' ', firstSpace + 1);
+            if (secondSpace != -1)
+            {
+#if NETSTANDARD2_1
+                statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1, secondSpace - firstSpace - 1));
+#else
+                statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1, secondSpace - firstSpace - 1).ToString());
+#endif
+                statusDescription = httpStatus.AsSpan(secondSpace + 1).ToString();
+            }
+            else
+            {
+#if NETSTANDARD2_1
+                statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1));
+#else
+                statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1).ToString());
+#endif
+                statusDescription = string.Empty;
+            }
         }
     }
 }

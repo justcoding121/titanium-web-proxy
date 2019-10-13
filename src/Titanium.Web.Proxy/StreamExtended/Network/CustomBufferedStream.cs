@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.StreamExtended.Network
@@ -21,7 +22,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         private byte[] streamBuffer;
 
         // default to UTF-8
-        private static readonly Encoding encoding = Encoding.UTF8;
+        private static Encoding encoding => HttpHelper.HeaderEncoding;
 
         private static readonly bool networkStreamHack = true;
 

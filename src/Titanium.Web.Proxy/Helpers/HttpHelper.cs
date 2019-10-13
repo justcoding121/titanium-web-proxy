@@ -16,6 +16,8 @@ namespace Titanium.Web.Proxy.Helpers
     {
         private static readonly Encoding defaultEncoding = Encoding.GetEncoding("ISO-8859-1");
 
+        public static Encoding HeaderEncoding => defaultEncoding;
+
         /// <summary>
         ///     Gets the character encoding of request/response from content-type header
         /// </summary>

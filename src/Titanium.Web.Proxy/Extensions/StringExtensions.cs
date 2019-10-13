@@ -10,6 +10,11 @@ namespace Titanium.Web.Proxy.Extensions
             return str.Equals(value, StringComparison.CurrentCultureIgnoreCase);
         }
 
+        internal static bool EqualsIgnoreCase(this ReadOnlySpan<char> str, ReadOnlySpan<char> value)
+        {
+            return str.Equals(value, StringComparison.CurrentCultureIgnoreCase);
+        }
+
         internal static bool ContainsIgnoreCase(this string str, string value)
         {
             return CultureInfo.CurrentCulture.CompareInfo.IndexOf(str, value, CompareOptions.IgnoreCase) >= 0;

@@ -18,7 +18,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         private static readonly byte[] newLine = ProxyConstants.NewLineBytes;
 
-        private static readonly Encoding encoder = Encoding.ASCII;
+        private static Encoding encoding => HttpHelper.HeaderEncoding;
 
         internal HttpWriter(Stream stream, IBufferPool bufferPool)
         {
@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy.Helpers
                 var buffer = bufferPool.GetBuffer();
                 try
                 {
-                    int idx = encoder.GetBytes(value, 0, charCount, buffer, 0);
+                    int idx = encoding.GetBytes(value, 0, charCount, buffer, 0);
                     if (newLineChars > 0)
                     {
                         Buffer.BlockCopy(newLine, 0, buffer, idx, newLineChars);
@@ -67,7 +67,7 @@ namespace Titanium.Web.Proxy.Helpers
             else
             {
                 var buffer = new byte[charCount + newLineChars + 1];
-                int idx = encoder.GetBytes(value, 0, charCount, buffer, 0);
+                int idx = encoding.GetBytes(value, 0, charCount, buffer, 0);
                 if (newLineChars > 0)
                 {
                     Buffer.BlockCopy(newLine, 0, buffer, idx, newLineChars);

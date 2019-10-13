@@ -30,30 +30,35 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                var header = httpHeaders.GetFirstHeader(KnownHeaders.ProxyAuthorization);
-                if (header == null)
+                var headerObj = httpHeaders.GetFirstHeader(KnownHeaders.ProxyAuthorization);
+                if (headerObj == null)
                 {
                     session.HttpClient.Response = createAuthentication407Response("Proxy Authentication Required");
                     return false;
                 }
 
-                var headerValueParts = header.Value.Split(ProxyConstants.SpaceSplit);
+                string header = headerObj.Value;
+                int firstSpace = header.IndexOf(' ');
 
-                if (headerValueParts.Length != 2)
+                // header value should contain exactly 1 space
+                if (firstSpace == -1 || header.IndexOf(' ', firstSpace + 1) != -1)
                 {
                     // Return not authorized
                     session.HttpClient.Response = createAuthentication407Response("Proxy Authentication Invalid");
                     return false;
                 }
 
+                var authenticationType = header.AsMemory(0, firstSpace);
+                var credentials = header.AsMemory(firstSpace + 1);
+
                 if (ProxyBasicAuthenticateFunc != null)
                 {
-                    return await authenticateUserBasic(session, headerValueParts);
+                    return await authenticateUserBasic(session, authenticationType, credentials);
                 }
 
                 if (ProxySchemeAuthenticateFunc != null)
                 {
-                    var result = await ProxySchemeAuthenticateFunc(session, headerValueParts[0], headerValueParts[1]);
+                    var result = await ProxySchemeAuthenticateFunc(session, authenticationType.ToString(), credentials.ToString());
 
                     if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
                     {
@@ -78,16 +83,16 @@ namespace Titanium.Web.Proxy
             }
         }
 
-        private async Task<bool> authenticateUserBasic(SessionEventArgsBase session, string[] headerValueParts)
+        private async Task<bool> authenticateUserBasic(SessionEventArgsBase session, ReadOnlyMemory<char> authenticationType, ReadOnlyMemory<char> credentials)
         {
-            if (!headerValueParts[0].EqualsIgnoreCase(KnownHeaders.ProxyAuthorizationBasic))
+            if (!authenticationType.Span.EqualsIgnoreCase(KnownHeaders.ProxyAuthorizationBasic.AsSpan()))
             {
                 // Return not authorized
                 session.HttpClient.Response = createAuthentication407Response("Proxy Authentication Invalid");
                 return false;
             }
 
-            string decoded = Encoding.UTF8.GetString(Convert.FromBase64String(headerValueParts[1]));
+            string decoded = Encoding.UTF8.GetString(Convert.FromBase64String(credentials.ToString()));
             int colonIndex = decoded.IndexOf(':');
             if (colonIndex == -1)
             {

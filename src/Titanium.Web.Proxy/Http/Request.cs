@@ -158,7 +158,7 @@ namespace Titanium.Web.Proxy.Http
                 sb.Append($"{CreateRequestLine(Method, RequestUriString, HttpVersion)}{ProxyConstants.NewLine}");
                 foreach (var header in Headers)
                 {
-                    sb.Append($"{header.ToString()}{ProxyConstants.NewLine}");
+                    sb.Append($"{header}{ProxyConstants.NewLine}");
                 }
 
                 sb.Append(ProxyConstants.NewLine);
@@ -205,30 +205,38 @@ namespace Titanium.Web.Proxy.Http
         internal static void ParseRequestLine(string httpCmd, out string httpMethod, out string httpUrl,
             out Version version)
         {
-            // break up the line into three components (method, remote URL & Http Version)
-            var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
-
-            if (httpCmdSplit.Length < 2)
+            int firstSpace = httpCmd.IndexOf(' ');
+            if (firstSpace == -1)
             {
+                // does not contain at least 2 parts
                 throw new Exception("Invalid HTTP request line: " + httpCmd);
             }
 
+            int lastSpace = httpCmd.LastIndexOf(' ');
+
+            // break up the line into three components (method, remote URL & Http Version)
+
             // Find the request Verb
-            httpMethod = httpCmdSplit[0];
+            httpMethod = httpCmd.Substring(0, firstSpace);
             if (!isAllUpper(httpMethod))
             {
                 httpMethod = httpMethod.ToUpper();
             }
 
-            httpUrl = httpCmdSplit[1];
-
-            // parse the HTTP version
             version = HttpHeader.Version11;
-            if (httpCmdSplit.Length == 3)
-            {
-                string httpVersion = httpCmdSplit[2].Trim();
 
-                if (httpVersion.EqualsIgnoreCase("HTTP/1.0"))
+            if (firstSpace == lastSpace)
+            {
+                httpUrl = httpCmd.AsSpan(firstSpace + 1).ToString();
+            }
+            else
+            {
+                httpUrl = httpCmd.AsSpan(firstSpace + 1, lastSpace - firstSpace - 1).ToString();
+
+                // parse the HTTP version
+                var httpVersion = httpCmd.AsSpan(lastSpace + 1);
+
+                if (httpVersion.EqualsIgnoreCase("HTTP/1.0".AsSpan(0)))
                 {
                     version = HttpHeader.Version10;
                 }

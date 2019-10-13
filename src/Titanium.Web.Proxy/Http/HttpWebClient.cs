@@ -107,11 +107,12 @@ namespace Titanium.Web.Proxy.Http
                 url = Request.RequestUri.GetOriginalPathAndQuery();
             }
 
-            // prepare the request & headers
-            await writer.WriteLineAsync(Request.CreateRequestLine(Request.Method, url, Request.HttpVersion), cancellationToken);
-
             var headerBuilder = new StringBuilder();
-            
+
+            // prepare the request & headers
+            headerBuilder.Append(Request.CreateRequestLine(Request.Method, url, Request.HttpVersion));
+            headerBuilder.Append(ProxyConstants.NewLine);
+
             // Send Authentication to Upstream proxy if needed
             if (!isTransparent && upstreamProxy != null
                                && Connection.IsHttps == false
