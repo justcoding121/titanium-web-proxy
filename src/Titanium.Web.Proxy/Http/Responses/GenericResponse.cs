@@ -1,5 +1,4 @@
 ﻿using System.Net;
-using System.Web;
 
 namespace Titanium.Web.Proxy.Http.Responses
 {

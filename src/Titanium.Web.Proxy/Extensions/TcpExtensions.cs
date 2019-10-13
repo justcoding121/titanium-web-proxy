@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Net.Sockets;
-using System.Reflection;
 
 namespace Titanium.Web.Proxy.Extensions
 {
