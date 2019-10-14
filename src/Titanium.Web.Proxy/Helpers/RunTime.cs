@@ -74,10 +74,10 @@ namespace Titanium.Web.Proxy.Helpers
                     return false; // play it safe if we can not figure out what the framework is
 
                 // make sure we are on .NETCoreApp
-                if (ver.Contains(".NETCoreApp", StringComparison.InvariantCultureIgnoreCase))
+                ver = ver.ToLower(); // make everything lowercase to simplify comparison
+                if (ver.Contains(".netcoreapp", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    var versionString = ver.Replace(".NETCoreApp,Version=v", "",
-                        StringComparison.InvariantCultureIgnoreCase);
+                    var versionString = ver.Replace(".netcoreapp,version=v", "");
                     var versionArr = versionString.Split('.');
                     var majorVersion = Convert.ToInt32(versionArr[0]);
 
