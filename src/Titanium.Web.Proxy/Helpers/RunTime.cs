@@ -75,7 +75,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 // make sure we are on .NETCoreApp
                 ver = ver.ToLower(); // make everything lowercase to simplify comparison
-                if (ver.Contains(".netcoreapp", StringComparison.InvariantCultureIgnoreCase))
+                if (ver.Contains(".netcoreapp"))
                 {
                     var versionString = ver.Replace(".netcoreapp,version=v", "");
                     var versionArr = versionString.Split('.');
