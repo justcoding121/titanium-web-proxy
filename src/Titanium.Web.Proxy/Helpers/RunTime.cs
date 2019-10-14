@@ -1,6 +1,8 @@
-﻿using System;
+using System;
+using System.Reflection;
 using System.Text;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -41,7 +43,63 @@ namespace Titanium.Web.Proxy.Helpers
         public static bool IsUwpOnWindows => IsWindows && UwpHelper.IsRunningAsUwp();
 
         public static bool IsMac => isRunningOnMac;
+        
+        /// <summary>
+        /// Is socket reuse available to use?
+        /// </summary>
+        public static bool IsSocketReuseAvailable => isSocketReuseAvailable();
 
+        private static bool? _isSocketReuseAvailable;
+
+        private static bool isSocketReuseAvailable()
+        {
+            // use the cached value if we have one
+            if (_isSocketReuseAvailable != null)
+                return _isSocketReuseAvailable.Value;
+
+            try
+            {
+                if (IsWindows)
+                {
+                    // since we are on windows just return true
+                    // store the result in our static object so we don't have to be bothered going through all this more than once
+                    _isSocketReuseAvailable = true;
+                    return true;
+                }
+
+                // get the currently running framework name and version (EX: .NETFramework,Version=v4.5.1) (Ex: .NETCoreApp,Version=v2.0)
+                string ver = Assembly.GetEntryAssembly()?.GetCustomAttribute<TargetFrameworkAttribute>()?.FrameworkName;
+
+                if (ver == null)
+                    return false; // play it safe if we can not figure out what the framework is
+
+                // make sure we are on .NETCoreApp
+                if (ver.Contains(".NETCoreApp", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    var versionString = ver.Replace(".NETCoreApp,Version=v", "",
+                        StringComparison.InvariantCultureIgnoreCase);
+                    var versionArr = versionString.Split('.');
+                    var majorVersion = Convert.ToInt32(versionArr[0]);
+
+                    var result = majorVersion >= 3; // version 3 and up supports socket reuse
+
+                    // store the result in our static object so we don't have to be bothered going through all this more than once
+                    _isSocketReuseAvailable = result;
+                    return result;
+                }
+
+                // store the result in our static object so we don't have to be bothered going through all this more than once
+                _isSocketReuseAvailable = false;
+                return false;
+            }
+            catch
+            {
+                // store the result in our static object so we don't have to be bothered going through all this more than once
+                _isSocketReuseAvailable = false;
+                return false;
+            }
+        }
+        
         // https://github.com/qmatteoq/DesktopBridgeHelpers/blob/master/DesktopBridge.Helpers/Helpers.cs
         private class UwpHelper
         {
