@@ -315,7 +315,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         tcpClient.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
                         tcpClient.LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds);
 
-                        if (proxyServer.ReuseSocket && RunTime.IsSocketReuseAvailable)
+                        // linux has a bug with socket reuse in .net core.
+                        if (proxyServer.ReuseSocket && RunTime.IsWindows)
                         {
                             tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                         }
