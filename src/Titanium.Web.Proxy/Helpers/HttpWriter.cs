@@ -87,12 +87,13 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         ///     Write the headers to client
         /// </summary>
-        /// <param name="header"></param>
+        /// <param name="headerBuilder"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        internal async Task WriteHeadersAsync(HeaderBuilder header, CancellationToken cancellationToken = default)
+        internal async Task WriteHeadersAsync(HeaderBuilder headerBuilder, CancellationToken cancellationToken = default)
         {
-            await WriteAsync(header.GetBytes(), true, cancellationToken);
+            var buffer = headerBuilder.GetBuffer();
+            await WriteAsync(buffer.Array, buffer.Offset, buffer.Count, true, cancellationToken);
         }
 
         /// <summary>
@@ -279,7 +280,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             var body = requestResponse.CompressBodyAndUpdateContentLength();
             headerBuilder.WriteHeaders(requestResponse.Headers);
-            await WriteAsync(headerBuilder.GetBytes(), true, cancellationToken);
+            await WriteHeadersAsync(headerBuilder, cancellationToken);
 
             if (body != null)
             {

@@ -147,9 +147,7 @@ namespace Titanium.Web.Proxy.Http
 
             headerBuilder.WriteLine();
 
-            var data = headerBuilder.GetBytes();
-
-            await writer.WriteAsync(data, 0, data.Length, cancellationToken);
+            await writer.WriteHeadersAsync(headerBuilder, cancellationToken);
 
             if (enable100ContinueBehaviour && Request.ExpectContinue)
             {
