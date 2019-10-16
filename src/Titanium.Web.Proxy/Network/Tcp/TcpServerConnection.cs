@@ -15,12 +15,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpServerConnection : IDisposable
     {
-        internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient)
+        internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient, CustomBufferedStream stream)
         {
             this.tcpClient = tcpClient;
             LastAccess = DateTime.Now;
             this.proxyServer = proxyServer;
             this.proxyServer.UpdateServerConnectionCount(true);
+            StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferPool);
+            Stream = stream;
         }
 
         private ProxyServer proxyServer { get; }
@@ -59,12 +61,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         ///     Used to write lines to server
         /// </summary>
-        internal HttpRequestWriter? StreamWriter { get; set; }
+        internal HttpRequestWriter StreamWriter { get; }
 
         /// <summary>
         ///     Server stream
         /// </summary>
-        internal CustomBufferedStream? Stream { get; set; }
+        internal CustomBufferedStream Stream { get; }
 
         /// <summary>
         ///     Last time this connection was used

@@ -315,8 +315,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         tcpClient.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
                         tcpClient.LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds);
 
-                        // linux has a bug with socket reuse in .net core.
-                        if (proxyServer.ReuseSocket && RunTime.IsWindows)
+                        if (proxyServer.ReuseSocket && RunTime.IsSocketReuseAvailable)
                         {
                             tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                         }
@@ -417,7 +416,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 throw;
             }
 
-            return new TcpServerConnection(proxyServer, tcpClient)
+            return new TcpServerConnection(proxyServer, tcpClient, stream)
             {
                 UpStreamProxy = externalProxy,
                 UpStreamEndPoint = upStreamEndPoint,
@@ -426,8 +425,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 IsHttps = isHttps,
                 NegotiatedApplicationProtocol = negotiatedApplicationProtocol,
                 UseUpstreamProxy = useUpstreamProxy,
-                StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferPool),
-                Stream = stream,
                 Version = httpVersion
             };
         }

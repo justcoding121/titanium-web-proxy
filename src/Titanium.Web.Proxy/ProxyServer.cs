@@ -55,7 +55,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Upstream proxy manager.
         /// </summary>
-        private WinHttpWebProxyFinder systemProxyResolver;
+        private WinHttpWebProxyFinder? systemProxyResolver;
 
         
         /// <inheritdoc />
@@ -421,7 +421,7 @@ namespace Titanium.Web.Proxy
         /// <param name="protocolType">The proxy protocol type.</param>
         public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType)
         {
-            if (!RunTime.IsWindows)
+            if (systemProxySettingsManager == null)
             {
                 throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually confugure you operating system to use this proxy's port and address.");
@@ -515,7 +515,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void RestoreOriginalProxySettings()
         {
-            if (!RunTime.IsWindows)
+            if (systemProxySettingsManager == null)
             {
                 throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually configure your operating system to use this proxy's port and address.");
@@ -529,7 +529,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemProxy(ProxyProtocolType protocolType)
         {
-            if (!RunTime.IsWindows)
+            if (systemProxySettingsManager == null)
             {
                 throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually configure your operating system to use this proxy's port and address.");
@@ -543,7 +543,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableAllSystemProxies()
         {
-            if (!RunTime.IsWindows)
+            if (systemProxySettingsManager == null)
             {
                 throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually confugure you operating system to use this proxy's port and address.");
@@ -622,7 +622,7 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is not running.");
             }
 
-            if (RunTime.IsWindows && !RunTime.IsUwpOnWindows)
+            if (systemProxySettingsManager != null)
             {
                 bool setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
                     .Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
@@ -654,8 +654,7 @@ namespace Titanium.Web.Proxy
         {
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
 
-            // linux/macOS has a bug with socket reuse in .net core.
-            if (ReuseSocket && RunTime.IsWindows)
+            if (ReuseSocket && RunTime.IsSocketReuseAvailable)
             {
                 endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             }
