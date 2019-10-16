@@ -654,8 +654,7 @@ namespace Titanium.Web.Proxy
         {
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
 
-            // linux/macOS has a bug with socket reuse in .net core.
-            if (ReuseSocket && RunTime.IsWindows)
+            if (ReuseSocket && RunTime.IsSocketReuseAvailable)
             {
                 endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             }
