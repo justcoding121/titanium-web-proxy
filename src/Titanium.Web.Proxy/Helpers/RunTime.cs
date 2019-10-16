@@ -1,6 +1,8 @@
-﻿using System;
+using System;
+using System.Reflection;
 using System.Text;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace Titanium.Web.Proxy.Helpers
 {
