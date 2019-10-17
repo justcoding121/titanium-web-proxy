@@ -74,6 +74,6 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        Task<string?> ReadLineAsync(CancellationToken cancellationToken = default);
+        ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken = default);
     }
 }

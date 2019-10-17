@@ -121,8 +121,7 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal static void ParseResponseLine(string httpStatus, out Version version, out int statusCode,
-            out string statusDescription)
+        internal static void ParseResponseLine(string httpStatus, out Version version, out int statusCode, out string statusDescription)
         {
             int firstSpace = httpStatus.IndexOf(' ');
             if (firstSpace == -1)

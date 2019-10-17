@@ -31,11 +31,8 @@ namespace Titanium.Web.Proxy
             string httpStatus;
             try
             {
-                httpStatus = await serverConnection.Stream.ReadLineAsync(cancellationToken);
-                if (httpStatus == null)
-                {
-                    throw new ServerConnectionException("Server connection was closed.");
-                }
+                httpStatus = await serverConnection.Stream.ReadLineAsync(cancellationToken)
+                             ?? throw new ServerConnectionException("Server connection was closed.");
             }
             catch (Exception e) when (!(e is ServerConnectionException))
             {

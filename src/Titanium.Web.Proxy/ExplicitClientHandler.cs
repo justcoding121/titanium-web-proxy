@@ -53,13 +53,13 @@ namespace Titanium.Web.Proxy
                 if (await HttpHelper.IsConnectMethod(clientStream, BufferPool, cancellationToken) == 1)
                 {
                     // read the first line HTTP command
-                    string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
+                    string? httpCmd = await clientStream.ReadLineAsync(cancellationToken);
                     if (string.IsNullOrEmpty(httpCmd))
                     {
                         return;
                     }
 
-                    Request.ParseRequestLine(httpCmd, out string _, out string httpUrl, out var version);
+                    Request.ParseRequestLine(httpCmd!, out string _, out string httpUrl, out var version);
 
                     var httpRemoteUri = new Uri("http://" + httpUrl);
                     connectHostname = httpRemoteUri.Host;
@@ -303,7 +303,7 @@ namespace Titanium.Web.Proxy
                 if (connectArgs != null && await HttpHelper.IsPriMethod(clientStream, BufferPool, cancellationToken) == 1)
                 {
                     // todo
-                    string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
+                    string? httpCmd = await clientStream.ReadLineAsync(cancellationToken);
                     if (httpCmd == "PRI * HTTP/2.0")
                     {
                         connectArgs.HttpClient.ConnectRequest!.TunnelType = TunnelType.Http2;

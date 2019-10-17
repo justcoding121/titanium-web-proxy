@@ -11,6 +11,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -364,7 +365,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                     await writer.WriteRequestAsync(connectRequest, cancellationToken: cancellationToken);
 
-                    string httpStatus = await stream.ReadLineAsync(cancellationToken);
+                    string httpStatus = await stream.ReadLineAsync(cancellationToken)
+                                         ?? throw new ServerConnectionException("Server connection was closed.");
 
                     Response.ParseResponseLine(httpStatus, out _, out int statusCode, out string statusDescription);
 

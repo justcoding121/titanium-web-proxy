@@ -64,8 +64,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     // read the request line
-                    string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
-
+                    string? httpCmd = await clientStream.ReadLineAsync(cancellationToken);
                     if (string.IsNullOrEmpty(httpCmd))
                     {
                         return;
@@ -82,7 +81,7 @@ namespace Titanium.Web.Proxy
                     {
                         try
                         {
-                            Request.ParseRequestLine(httpCmd, out string httpMethod, out string httpUrl, out var version);
+                            Request.ParseRequestLine(httpCmd!, out string httpMethod, out string httpUrl, out var version);
 
                             // Read the request headers in to unique and non-unique header collections
                             await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,

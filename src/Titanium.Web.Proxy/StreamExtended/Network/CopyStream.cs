@@ -124,7 +124,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             return result;
         }
 
-        public Task<string?> ReadLineAsync(CancellationToken cancellationToken = default)
+        public ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken = default)
         {
             return CustomBufferedStream.ReadLineInternalAsync(this, bufferPool, cancellationToken);
         }

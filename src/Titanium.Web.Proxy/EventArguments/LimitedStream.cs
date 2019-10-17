@@ -49,12 +49,12 @@ namespace Titanium.Web.Proxy.EventArguments
             if (readChunkTrail)
             {
                 // read the chunk trail of the previous chunk
-                string s = baseStream.ReadLineAsync().Result;
+                string? s = baseStream.ReadLineAsync().Result;
             }
 
             readChunkTrail = true;
 
-            string chunkHead = baseStream.ReadLineAsync().Result;
+            string? chunkHead = baseStream.ReadLineAsync().Result;
             int idx = chunkHead.IndexOf(";", StringComparison.Ordinal);
             if (idx >= 0)
             {
@@ -73,7 +73,9 @@ namespace Titanium.Web.Proxy.EventArguments
                 bytesRemaining = -1;
 
                 // chunk trail
-                baseStream.ReadLineAsync().Wait();
+                var task = baseStream.ReadLineAsync();
+                if (!task.IsCompleted)
+                    task.AsTask().Wait();
             }
         }
 

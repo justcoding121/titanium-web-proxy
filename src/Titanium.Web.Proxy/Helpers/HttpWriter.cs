@@ -197,7 +197,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             while (true)
             {
-                string chunkHead = await reader.ReadLineAsync(cancellationToken);
+                string? chunkHead = await reader.ReadLineAsync(cancellationToken);
                 int idx = chunkHead.IndexOf(";");
                 if (idx >= 0)
                 {
