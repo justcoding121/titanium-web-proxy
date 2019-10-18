@@ -33,7 +33,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="index">The index.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        Task<int> PeekByteAsync(int index, CancellationToken cancellationToken = default);
+        ValueTask<int> PeekByteAsync(int index, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Peeks bytes asynchronous.
@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="count">The count.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int count, CancellationToken cancellationToken = default);
+        ValueTask<int> PeekBytesAsync(byte[] buffer, int offset, int index, int count, CancellationToken cancellationToken = default);
 
         byte ReadByteFromBuffer();
 
@@ -67,8 +67,15 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="bytesToRead"></param>
         /// <param name="cancellationToken"></param>
         /// <returns>The number of bytes read</returns>
-        Task<int> ReadAsync(byte[] buffer, int offset, int bytesToRead,
-            CancellationToken cancellationToken = default);
+        Task<int> ReadAsync(byte[] buffer, int offset, int bytesToRead, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Read the specified number (or less) of raw bytes from the base stream to the given buffer to the specified offset
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns>The number of bytes read</returns>
+        ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Read a line from the byte stream

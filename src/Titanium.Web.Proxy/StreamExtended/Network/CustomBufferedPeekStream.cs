@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
@@ -93,7 +94,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="count">The count.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        Task<int> ICustomStreamReader.PeekBytesAsync(byte[] buffer, int offset, int index, int count, CancellationToken cancellationToken)
+        ValueTask<int> ICustomStreamReader.PeekBytesAsync(byte[] buffer, int offset, int index, int count, CancellationToken cancellationToken)
         {
             return baseStream.PeekBytesAsync(buffer, offset, index, count, cancellationToken);
         }
@@ -104,7 +105,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="index">The index.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        Task<int> ICustomStreamReader.PeekByteAsync(int index, CancellationToken cancellationToken)
+        ValueTask<int> ICustomStreamReader.PeekByteAsync(int index, CancellationToken cancellationToken)
         {
             return baseStream.PeekByteAsync(index, cancellationToken);
         }
@@ -134,6 +135,17 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         Task<int> ICustomStreamReader.ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             return baseStream.ReadAsync(buffer, offset, count, cancellationToken);
+        }
+
+        /// <summary>
+        /// Reads the asynchronous.
+        /// </summary>
+        /// <param name="buffer">The buffer.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns></returns>
+        public ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            return baseStream.ReadAsync(buffer, cancellationToken);
         }
 
         /// <summary>

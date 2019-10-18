@@ -48,12 +48,12 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             return reader.PeekByteFromBuffer(index);
         }
 
-        public Task<int> PeekByteAsync(int index, CancellationToken cancellationToken = default)
+        public ValueTask<int> PeekByteAsync(int index, CancellationToken cancellationToken = default)
         {
             return reader.PeekByteAsync(index, cancellationToken);
         }
 
-        public Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int size, CancellationToken cancellationToken = default)
+        public ValueTask<int> PeekBytesAsync(byte[] buffer, int offset, int index, int size, CancellationToken cancellationToken = default)
         {
             return reader.PeekBytesAsync(buffer, offset, index, size, cancellationToken);
         }
@@ -116,6 +116,25 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
                 }
 
                 Buffer.BlockCopy(buffer, offset, this.buffer, bufferLength, result);
+                bufferLength += result;
+                ReadBytes += result;
+                await FlushAsync(cancellationToken);
+            }
+
+            return result;
+        }
+
+        public async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            int result = await reader.ReadAsync(buffer, cancellationToken);
+            if (result > 0)
+            {
+                if (bufferLength + result > bufferPool.BufferSize)
+                {
+                    await FlushAsync(cancellationToken);
+                }
+
+                buffer.Span.Slice(0, result).CopyTo(new Span<byte>(this.buffer, bufferLength, result));
                 bufferLength += result;
                 ReadBytes += result;
                 await FlushAsync(cancellationToken);
