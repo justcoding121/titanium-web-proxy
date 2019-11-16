@@ -78,7 +78,7 @@ namespace Titanium.Web.Proxy.EventArguments
             get => enableWinAuth;
             set
             {
-                if (!isWindowsAuthenticationSupported)
+                if (value && !isWindowsAuthenticationSupported)
                     throw new Exception("Windows Authentication is not supported");
 
                 enableWinAuth = value;
