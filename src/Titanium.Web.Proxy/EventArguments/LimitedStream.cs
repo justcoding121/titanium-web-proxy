@@ -54,7 +54,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             readChunkTrail = true;
 
-            string? chunkHead = baseStream.ReadLineAsync().Result;
+            string? chunkHead = baseStream.ReadLineAsync().Result!;
             int idx = chunkHead.IndexOf(";", StringComparison.Ordinal);
             if (idx >= 0)
             {

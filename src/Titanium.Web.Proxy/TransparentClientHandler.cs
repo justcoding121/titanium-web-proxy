@@ -133,8 +133,7 @@ namespace Titanium.Web.Proxy
 
                 // HTTPS server created - we can now decrypt the client's traffic
                 // Now create the request
-                await handleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
-                    cancellationTokenSource, httpsHostName, null, null);
+                await handleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter, cancellationTokenSource);
             }
             catch (ProxyException e)
             {

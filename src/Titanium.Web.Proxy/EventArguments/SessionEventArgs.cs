@@ -38,7 +38,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Constructor to initialize the proxy
         /// </summary>
         internal SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint, ProxyClient proxyClient, ConnectRequest? connectRequest, CancellationTokenSource cancellationTokenSource)
-            : base(server, endPoint, proxyClient, connectRequest, null, cancellationTokenSource)
+            : base(server, endPoint, proxyClient, connectRequest, new Request(), cancellationTokenSource)
         {
         }
 
@@ -304,7 +304,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             if (transformation == TransformationMode.Uncompress && contentEncoding != null)
             {
-                s = decompressStream = DecompressionFactory.Create(contentEncoding, s);
+                s = decompressStream = DecompressionFactory.Create(CompressionUtil.CompressionNameToEnum(contentEncoding), s);
             }
 
             try

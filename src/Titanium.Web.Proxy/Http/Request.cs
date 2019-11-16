@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy.Http
         public bool IsHttps => RequestUri.Scheme == ProxyServer.UriSchemeHttps;
 
         private ByteString originalUrlData;
-        private ByteString urlData;
+        private protected ByteString UrlData;
 
         internal ByteString OriginalUrlData
         {
@@ -33,9 +33,13 @@ namespace Titanium.Web.Proxy.Http
             set
             {
                 originalUrlData = value;
-                urlData = value;
+                UrlData = value;
             }
         }
+
+        internal string Scheme { get; set; } = ProxyServer.UriSchemeHttp;
+
+        internal string? Hostname { get; set; }
 
         /// <summary>
         ///     The original request Url.
@@ -45,15 +49,45 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Request HTTP Uri.
         /// </summary>
-        public Uri RequestUri { get; set; }
+        public Uri RequestUri
+        {
+            get
+            {
+                string url;
+                if (startsWithUriScheme(UrlData))
+                {
+                    url = UrlData.GetString();
+                }
+                else
+                {
+                    string? host = Host ?? Hostname;
+                    string? hostAndPath = host;
+                    if (UrlData.Length > 0 && UrlData[0] == '/')
+                    {
+                        hostAndPath += UrlData.GetString();
+                    }
+
+                    url = string.Concat(Scheme == ProxyServer.UriSchemeHttps ? "https://" : "http://", hostAndPath);
+                }
+
+                try
+                {
+                    return new Uri(url);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Invalid URI: '{url}'", ex);
+                }
+            }
+        }
 
         /// <summary>
         ///     The request url as it is in the HTTP header
         /// </summary>
         public string Url
         {
-            get => urlData.GetString();
-            set => urlData = value.GetByteString();
+            get => UrlData.GetString();
+            set => UrlData = value.GetByteString();
         }
 
         [Obsolete("This property is obsolete. Use Url property instead")]
@@ -142,7 +176,7 @@ namespace Titanium.Web.Proxy.Http
                     return false;
                 }
 
-                return headerValue.EqualsIgnoreCase(KnownHeaders.UpgradeWebsocket);
+                return headerValue.EqualsIgnoreCase(KnownHeaders.UpgradeWebsocket.String);
             }
         }
 
@@ -256,5 +290,46 @@ namespace Titanium.Web.Proxy.Http
             return true;
         }
 
+        private bool startsWithUriScheme(ByteString str)
+        {
+            if (str.Length < 3)
+            {
+                return false;
+            }
+
+            // regex: "^[a-z]*://"
+            int i;
+            
+            for (i = 0; i < str.Length - 3; i++)
+            {
+                byte ch = str[i];
+                if (ch == ':')
+                {
+                    break;
+                }
+
+                if (ch < 'A' || ch > 'z' || (ch > 'Z' && ch < 'a')) // ASCII letter
+                {
+                    return false;
+                }
+            }
+
+            if (str[i++] != ':')
+            {
+                return false;
+            }
+
+            if (str[i++] != '/')
+            {
+                return false;
+            }
+
+            if (str[i] != '/')
+            {
+                return false;
+            }
+
+            return true;
+        }
     }
 }

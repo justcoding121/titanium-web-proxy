@@ -142,7 +142,7 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 string? headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
-                return headerValue != null && headerValue.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked);
+                return headerValue != null && headerValue.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked.String);
             }
 
             set
@@ -219,7 +219,7 @@ namespace Titanium.Web.Proxy.Http
         /// <param name="encodingType"></param>
         /// <param name="body"></param>
         /// <returns></returns>
-        internal byte[] GetCompressedBody(string encodingType, byte[] body)
+        internal byte[] GetCompressedBody(HttpCompression encodingType, byte[] body)
         {
             using (var ms = new MemoryStream())
             {
@@ -247,7 +247,7 @@ namespace Titanium.Web.Proxy.Http
                 var body = Body;
                 if (contentEncoding != null && body != null)
                 {
-                    body = GetCompressedBody(contentEncoding, body);
+                    body = GetCompressedBody(CompressionUtil.CompressionNameToEnum(contentEncoding), body);
 
                     if (isChunked == false)
                     {

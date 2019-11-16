@@ -33,7 +33,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             proxy.Enable100ContinueBehaviour = true;
             proxy.BeforeRequest += (sender, e) =>
             {
-                e.HttpClient.Request.RequestUri = new Uri(server.ListeningTcpUrl);
+                e.HttpClient.Request.Url = server.ListeningTcpUrl;
                 return Task.CompletedTask;
             };
 
@@ -57,7 +57,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             proxy.Enable100ContinueBehaviour = true;
             proxy.BeforeRequest += (sender, e) =>
             {
-                e.HttpClient.Request.RequestUri = new Uri(server.ListeningTcpUrl);
+                e.HttpClient.Request.Url = server.ListeningTcpUrl;
                 return Task.CompletedTask;
             };
 
@@ -80,7 +80,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             proxy.Enable100ContinueBehaviour = true;
             proxy.BeforeRequest += (sender, e) =>
             {
-                e.HttpClient.Request.RequestUri = new Uri(server.ListeningTcpUrl);
+                e.HttpClient.Request.Url = server.ListeningTcpUrl;
                 return Task.CompletedTask;
             };
 
@@ -108,7 +108,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             {
                 try
                 {
-                    e.HttpClient.Request.RequestUri = new Uri(server.ListeningTcpUrl);
+                    e.HttpClient.Request.Url = server.ListeningTcpUrl;
                     throw dbzEx;
                 }
                 catch

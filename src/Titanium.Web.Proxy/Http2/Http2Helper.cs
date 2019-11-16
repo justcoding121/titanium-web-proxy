@@ -70,11 +70,10 @@ namespace Titanium.Web.Proxy.Http2
             Decoder? decoder = null;
 
             var frameHeader = new Http2FrameHeader();
-            frameHeader.Buffer = new byte[9];
+            var frameHeaderBuffer = new byte[9];
             byte[]? buffer = null;
             while (true)
             {
-                var frameHeaderBuffer = frameHeader.Buffer;
                 int read = await forceRead(input, frameHeaderBuffer, 0, 9, cancellationToken);
                 if (read != 9)
                 {
@@ -265,8 +264,10 @@ namespace Titanium.Web.Proxy.Http2
                             request.HttpVersion = HttpVersion.Version20;
                             request.Method = method.GetString();
                             request.OriginalUrlData = path;
+                            request.Scheme = headerListener.Scheme;
+                            request.Hostname = headerListener.Authority.GetString();
 
-                            request.RequestUri = headerListener.GetUri();
+                            //request.RequestUri = headerListener.GetUri();
                         }
                         else
                         {
@@ -302,7 +303,7 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             rr.ReadHttp2BeforeHandlerTaskCompletionSource = null;
                             tcs.SetResult(true);
-                            await sendHeader(remoteSettings, frameHeader, rr, endStream, output, args.IsPromise);
+                            await sendHeader(remoteSettings, frameHeader, frameHeaderBuffer, rr, endStream, output, args.IsPromise);
                         }
                         else
                         {
@@ -379,7 +380,7 @@ namespace Titanium.Web.Proxy.Http2
                             using (var ms = new MemoryStream())
                             {
                                 using (var zip =
-                                    DecompressionFactory.Create(rr.ContentEncoding, new MemoryStream(body)))
+                                    DecompressionFactory.Create(CompressionUtil.CompressionNameToEnum(rr.ContentEncoding), new MemoryStream(body)))
                                 {
                                     zip.CopyTo(ms);
                                 }
@@ -413,7 +414,7 @@ namespace Titanium.Web.Proxy.Http2
                         breakpoint();
                     }
 
-                    await sendBody(remoteSettings, rr, frameHeader, buffer, output);
+                    await sendBody(remoteSettings, rr, frameHeader, frameHeaderBuffer, buffer, output);
                 }
 
                 if (!isClient && endStream)
@@ -425,8 +426,8 @@ namespace Titanium.Web.Proxy.Http2
                 if (sendPacket)
                 {
                     // do not cancel the write operation
-                    var buf = frameHeader.CopyToBuffer();
-                    await output.WriteAsync(buf, 0, buf.Length/*, cancellationToken*/);
+                    frameHeader.CopyToBuffer(frameHeaderBuffer);
+                    await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length/*, cancellationToken*/);
                     await output.WriteAsync(buffer, 0, length /*, cancellationToken*/);
                 }
 
@@ -450,7 +451,7 @@ namespace Titanium.Web.Proxy.Http2
             ;
         }
 
-        private static async Task sendHeader(Http2Settings settings, Http2FrameHeader frameHeader, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)
+        private static async Task sendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)
         {
             var encoder = new Encoder(settings.HeaderTableSize);
             var ms = new MemoryStream();
@@ -507,15 +508,15 @@ namespace Titanium.Web.Proxy.Http2
             //headerBuffer[4] = (byte)(flags & ~((int)Http2FrameFlag.Padded));
 
             // send the header
-            var buf = frameHeader.CopyToBuffer();
-            await output.WriteAsync(buf, 0, buf.Length/*, cancellationToken*/);
+            frameHeader.CopyToBuffer(frameHeaderBuffer);
+            await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length/*, cancellationToken*/);
             await output.WriteAsync(data, 0, data.Length /*, cancellationToken*/);
         }
 
-        private static async Task sendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader, byte[] buffer, Stream output)
+        private static async Task sendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, byte[] buffer, Stream output)
         {
             var body = rr.CompressBodyAndUpdateContentLength();
-            await sendHeader(settings, frameHeader, rr, !(rr.HasBody && rr.IsBodyRead), output, false);
+            await sendHeader(settings, frameHeader, frameHeaderBuffer, rr, !(rr.HasBody && rr.IsBodyRead), output, false);
 
             if (rr.HasBody && rr.IsBodyRead)
             {
@@ -530,8 +531,8 @@ namespace Titanium.Web.Proxy.Http2
                     frameHeader.Type = Http2FrameType.Data;
                     frameHeader.Flags = pos < body.Length ? (Http2FrameFlag)0 : Http2FrameFlag.EndStream;
 
-                    var buf = frameHeader.CopyToBuffer();
-                    await output.WriteAsync(buf, 0, buf.Length/*, cancellationToken*/);
+                    frameHeader.CopyToBuffer(frameHeaderBuffer);
+                    await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length/*, cancellationToken*/);
                     await output.WriteAsync(buffer, 0, bodyFrameLength /*, cancellationToken*/);
                 }
             }
@@ -571,17 +572,39 @@ namespace Titanium.Web.Proxy.Http2
 
         class MyHeaderListener : IHeaderListener
         {
+            private static ByteString SchemeHttp = (ByteString)ProxyServer.UriSchemeHttp;
+
+            private static ByteString SchemeHttps = (ByteString)ProxyServer.UriSchemeHttps;
+
             private readonly Action<ByteString, ByteString> addHeaderFunc;
 
             public ByteString Method { get; private set; }
 
             public ByteString Status { get; private set; }
 
-            private ByteString authority;
+            public ByteString Authority { get; private set; }
 
             private ByteString scheme;
 
             public ByteString Path { get; private set; }
+
+            public string Scheme
+            {
+                get
+                {
+                    if (scheme.Equals(SchemeHttp))
+                    {
+                        return ProxyServer.UriSchemeHttp;
+                    }
+
+                    if (scheme.Equals(SchemeHttps))
+                    {
+                        return ProxyServer.UriSchemeHttps;
+                    }
+
+                    return string.Empty;
+                }
+            }
 
             public MyHeaderListener(Action<ByteString, ByteString> addHeaderFunc)
             {
@@ -599,7 +622,7 @@ namespace Titanium.Web.Proxy.Http2
                             Method = value;
                             return;
                         case ":authority":
-                            authority = value;
+                            Authority = value;
                             return;
                         case ":scheme":
                             scheme = value;
@@ -618,20 +641,20 @@ namespace Titanium.Web.Proxy.Http2
 
             public Uri GetUri()
             {
-                if (authority.Length == 0)
+                if (Authority.Length == 0)
                 {
                     // todo
-                    authority = HttpHeader.Encoding.GetBytes("abc.abc");
+                    Authority = HttpHeader.Encoding.GetBytes("abc.abc");
                 }
 
-                var bytes = new byte[scheme.Length + 3 + authority.Length + Path.Length];
+                var bytes = new byte[scheme.Length + 3 + Authority.Length + Path.Length];
                 scheme.Span.CopyTo(bytes);
                 int idx = scheme.Length;
                 bytes[idx++] = (byte)':';
                 bytes[idx++] = (byte)'/';
                 bytes[idx++] = (byte)'/';
-                authority.Span.CopyTo(bytes.AsSpan(idx, authority.Length));
-                idx += authority.Length;
+                Authority.Span.CopyTo(bytes.AsSpan(idx, Authority.Length));
+                idx += Authority.Length;
                 Path.Span.CopyTo(bytes.AsSpan(idx, Path.Length));
 
                 return new Uri(HttpHeader.Encoding.GetString(bytes));

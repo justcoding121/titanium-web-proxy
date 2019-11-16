@@ -38,5 +38,10 @@ namespace Titanium.Web.Proxy.Models
         public static implicit operator ByteString(byte[] data) => new ByteString(data);
 
         public static implicit operator ByteString(ReadOnlyMemory<byte> data) => new ByteString(data);
+
+        public byte this[int i]
+        {
+            get => Span[i];
+        }
     }
 }
