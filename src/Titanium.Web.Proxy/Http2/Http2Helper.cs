@@ -1,4 +1,6 @@
-﻿#if NETSTANDARD2_1
+﻿
+using Titanium.Web.Proxy.Extensions;
+#if NETSTANDARD2_1
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -13,6 +15,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
+using Titanium.Web.Proxy.Models;
 using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
 using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
 
@@ -234,7 +237,7 @@ namespace Titanium.Web.Proxy.Http2
                         (name, value) =>
                         {
                             var headers = isClient ? args.HttpClient.Request.Headers : args.HttpClient.Response.Headers;
-                            headers.AddHeader(name, value);
+                            headers.AddHeader(new HttpHeader(name, value));
                         });
                     try
                     {
@@ -252,16 +255,16 @@ namespace Titanium.Web.Proxy.Http2
 
                         if (rr is Request request)
                         {
-                            string? method = headerListener.Method;
-                            string? path = headerListener.Path;
-                            if (method == null || path == null)
+                            var method = headerListener.Method;
+                            var path = headerListener.Path;
+                            if (method.Length == 0 || path.Length == 0)
                             {
                                 throw new Exception("HTTP/2 Missing method or path");
                             }
 
                             request.HttpVersion = HttpVersion.Version20;
-                            request.Method = method;
-                            request.OriginalUrl = path;
+                            request.Method = method.GetString();
+                            request.OriginalUrlData = path;
 
                             request.RequestUri = headerListener.GetUri();
                         }
@@ -269,7 +272,10 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             var response = (Response)rr;
                             response.HttpVersion = HttpVersion.Version20;
-                            int.TryParse(headerListener.Status, out int statusCode);
+
+                            // todo: avoid string conversion
+                            string statusHack = HttpHeader.Encoding.GetString(headerListener.Status.Span);
+                            int.TryParse(statusHack, out int statusCode);
                             response.StatusCode = statusCode;
                             response.StatusDescription = string.Empty;
                         }
@@ -461,21 +467,21 @@ namespace Titanium.Web.Proxy.Http2
 
             if (rr is Request request)
             {
-                encoder.EncodeHeader(writer, ":method", request.Method);
-                encoder.EncodeHeader(writer, ":authority", request.RequestUri.Host);
-                encoder.EncodeHeader(writer, ":scheme", request.RequestUri.Scheme);
-                encoder.EncodeHeader(writer, ":path", request.RequestUriString, false,
+                encoder.EncodeHeader(writer, StaticTable.KnownHeaderMethod, request.Method.GetByteString());
+                encoder.EncodeHeader(writer, StaticTable.KnownHeaderAuhtority, request.RequestUri.Host.GetByteString());
+                encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme, request.RequestUri.Scheme.GetByteString());
+                encoder.EncodeHeader(writer, StaticTable.KnownHeaderPath, request.Url.GetByteString(), false,
                     HpackUtil.IndexType.None, false);
             }
             else
             {
                 var response = (Response)rr;
-                encoder.EncodeHeader(writer, ":status", response.StatusCode.ToString());
+                encoder.EncodeHeader(writer, StaticTable.KnownHeaderStatus, response.StatusCode.ToString().GetByteString());
             }
 
             foreach (var header in rr.Headers)
             {
-                encoder.EncodeHeader(writer, header.Name.ToLower(), header.Value);
+                encoder.EncodeHeader(writer, header.NameData, header.ValueData);
             }
 
             var data = ms.ToArray();
@@ -565,28 +571,29 @@ namespace Titanium.Web.Proxy.Http2
 
         class MyHeaderListener : IHeaderListener
         {
-            private readonly Action<string, string> addHeaderFunc;
+            private readonly Action<ByteString, ByteString> addHeaderFunc;
 
-            public string? Method { get; private set; }
+            public ByteString Method { get; private set; }
 
-            public string? Status { get; private set; }
+            public ByteString Status { get; private set; }
 
-            private string? authority;
+            private ByteString authority;
 
-            private string? scheme;
+            private ByteString scheme;
 
-            public string? Path { get; private set; }
+            public ByteString Path { get; private set; }
 
-            public MyHeaderListener(Action<string, string> addHeaderFunc)
+            public MyHeaderListener(Action<ByteString, ByteString> addHeaderFunc)
             {
                 this.addHeaderFunc = addHeaderFunc;
             }
 
-            public void AddHeader(string name, string value, bool sensitive)
+            public void AddHeader(ByteString name, ByteString value, bool sensitive)
             {
-                if (name[0] == ':')
+                if (name.Span[0] == ':')
                 {
-                    switch (name)
+                    string nameStr = Encoding.ASCII.GetString(name.Span);
+                    switch (nameStr)
                     {
                         case ":method":
                             Method = value;
@@ -611,13 +618,23 @@ namespace Titanium.Web.Proxy.Http2
 
             public Uri GetUri()
             {
-                if (authority == null)
+                if (authority.Length == 0)
                 {
                     // todo
-                    authority = "abc.abc";
+                    authority = HttpHeader.Encoding.GetBytes("abc.abc");
                 }
 
-                return new Uri(scheme + "://" + authority + Path);
+                var bytes = new byte[scheme.Length + 3 + authority.Length + Path.Length];
+                scheme.Span.CopyTo(bytes);
+                int idx = scheme.Length;
+                bytes[idx++] = (byte)':';
+                bytes[idx++] = (byte)'/';
+                bytes[idx++] = (byte)'/';
+                authority.Span.CopyTo(bytes.AsSpan(idx, authority.Length));
+                idx += authority.Length;
+                Path.Span.CopyTo(bytes.AsSpan(idx, Path.Length));
+
+                return new Uri(HttpHeader.Encoding.GetString(bytes));
             }
         }
     }

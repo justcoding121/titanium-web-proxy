@@ -8,7 +8,12 @@ namespace Titanium.Web.Proxy.Network
     /// </summary>
     internal sealed class CachedCertificate
     {
-        internal X509Certificate2 Certificate { get; set; }
+        public CachedCertificate(X509Certificate2 certificate)
+        {
+            Certificate = certificate;
+        }
+        
+        internal X509Certificate2 Certificate { get; }
 
         /// <summary>
         ///     Last time this certificate was used.

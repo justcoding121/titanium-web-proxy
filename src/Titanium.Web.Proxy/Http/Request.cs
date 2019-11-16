@@ -14,12 +14,33 @@ namespace Titanium.Web.Proxy.Http
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class Request : RequestResponseBase
     {
-        private string originalUrl;
-
         /// <summary>
         ///     Request Method.
         /// </summary>
         public string Method { get; set; }
+
+        /// <summary>
+        ///     Is Https?
+        /// </summary>
+        public bool IsHttps => RequestUri.Scheme == ProxyServer.UriSchemeHttps;
+
+        private ByteString originalUrlData;
+        private ByteString urlData;
+
+        internal ByteString OriginalUrlData
+        {
+            get => originalUrlData;
+            set
+            {
+                originalUrlData = value;
+                urlData = value;
+            }
+        }
+
+        /// <summary>
+        ///     The original request Url.
+        /// </summary>
+        public string OriginalUrl => originalUrlData.GetString();
 
         /// <summary>
         ///     Request HTTP Uri.
@@ -27,27 +48,20 @@ namespace Titanium.Web.Proxy.Http
         public Uri RequestUri { get; set; }
 
         /// <summary>
-        ///     Is Https?
+        ///     The request url as it is in the HTTP header
         /// </summary>
-        public bool IsHttps => RequestUri.Scheme == ProxyServer.UriSchemeHttps;
-
-        /// <summary>
-        ///     The original request Url.
-        /// </summary>
-        public string OriginalUrl
+        public string Url
         {
-            get => originalUrl;
-            internal set
-            {
-                originalUrl = value;
-                RequestUriString = value;
-            }
+            get => urlData.GetString();
+            set => urlData = value.GetByteString();
         }
 
-        /// <summary>
-        ///     The request uri as it is in the HTTP header
-        /// </summary>
-        public string RequestUriString { get; set; }
+        [Obsolete("This property is obsolete. Use Url property instead")]
+        public string RequestUriString
+        {
+            get => Url;
+            set => Url = value;
+        }
 
         /// <summary>
         ///     Has request body?
@@ -109,11 +123,6 @@ namespace Titanium.Web.Proxy.Http
         public bool IsMultipartFormData => ContentType?.StartsWith("multipart/form-data") == true;
 
         /// <summary>
-        ///     Request Url.
-        /// </summary>
-        public string Url => RequestUri.OriginalString;
-
-        /// <summary>
         ///     Cancels the client HTTP request without sending to server.
         ///     This should be set when API user responds with custom response.
         /// </summary>
@@ -155,9 +164,9 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 var headerBuilder = new HeaderBuilder();
-                headerBuilder.WriteRequestLine(Method, RequestUriString, HttpVersion);
+                headerBuilder.WriteRequestLine(Method, Url, HttpVersion);
                 headerBuilder.WriteHeaders(Headers);
-                return headerBuilder.GetString(HttpHelper.HeaderEncoding);
+                return headerBuilder.GetString(HttpHeader.Encoding);
             }
         }
 

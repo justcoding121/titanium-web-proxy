@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Network;
@@ -19,7 +20,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         private static readonly byte[] newLine = ProxyConstants.NewLineBytes;
 
-        private static Encoding encoding => HttpHelper.HeaderEncoding;
+        private static Encoding encoding => HttpHeader.Encoding;
 
         internal HttpWriter(Stream stream, IBufferPool bufferPool)
         {
@@ -148,7 +149,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onCopy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        internal Task CopyBodyAsync(ICustomStreamReader streamReader, bool isChunked, long contentLength,
+        internal Task CopyBodyAsync(CustomBufferedStream streamReader, bool isChunked, long contentLength,
             Action<byte[], int, int>? onCopy, CancellationToken cancellationToken)
         {
             // For chunked request we need to read data as they arrive, until we reach a chunk end symbol
@@ -193,7 +194,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onCopy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task copyBodyChunkedAsync(ICustomStreamReader reader, Action<byte[], int, int>? onCopy, CancellationToken cancellationToken)
+        private async Task copyBodyChunkedAsync(CustomBufferedStream reader, Action<byte[], int, int>? onCopy, CancellationToken cancellationToken)
         {
             while (true)
             {
@@ -233,7 +234,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onCopy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task copyBytesFromStream(ICustomStreamReader reader, long count, Action<byte[], int, int>? onCopy,
+        private async Task copyBytesFromStream(CustomBufferedStream reader, long count, Action<byte[], int, int>? onCopy,
             CancellationToken cancellationToken)
         {
             var buffer = bufferPool.GetBuffer();

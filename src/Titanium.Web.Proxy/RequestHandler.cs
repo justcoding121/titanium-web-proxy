@@ -70,10 +70,8 @@ namespace Titanium.Web.Proxy
                         return;
                     }
 
-                    var args = new SessionEventArgs(this, endPoint, cancellationTokenSource)
+                    var args = new SessionEventArgs(this, endPoint, new ProxyClient(clientConnection, clientStream, clientStreamWriter), connectRequest, cancellationTokenSource)
                     {
-                        ProxyClient = { Connection = clientConnection },
-                        HttpClient = { ConnectRequest = connectRequest },
                         UserData = connectArgs?.UserData
                     };
 
@@ -122,12 +120,10 @@ namespace Titanium.Web.Proxy
 
                             var request = args.HttpClient.Request;
                             request.RequestUri = httpRemoteUri;
-                            request.OriginalUrl = httpUrl;
+                            request.OriginalUrlData = HttpHeader.Encoding.GetBytes(httpUrl);
 
                             request.Method = httpMethod;
                             request.HttpVersion = version;
-                            args.ProxyClient.ClientStream = clientStream;
-                            args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                             if (!args.IsTransparent)
                             {

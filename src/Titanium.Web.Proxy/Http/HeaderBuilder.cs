@@ -67,7 +67,7 @@ namespace Titanium.Web.Proxy.Http
 
         public void Write(string str)
         {
-            var encoding = HttpHelper.HeaderEncoding;
+            var encoding = HttpHeader.Encoding;
 
 #if NETSTANDARD2_1
             var buf = ArrayPool<byte>.Shared.Rent(str.Length * 4);

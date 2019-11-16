@@ -7,7 +7,7 @@ namespace Titanium.Web.Proxy.Http
 {
     internal static class HeaderParser
     {
-        internal static async Task ReadHeaders(ICustomStreamReader reader, HeaderCollection headerCollection,
+        internal static async Task ReadHeaders(ILineStream reader, HeaderCollection headerCollection,
             CancellationToken cancellationToken)
         {
             string? tmpLine;
@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy.Http
                 }
 
                 string headerName = tmpLine.AsSpan(0, colonIndex).ToString();
-                string headerValue = tmpLine.AsSpan(colonIndex + 1).ToString();
+                string headerValue = tmpLine.AsSpan(colonIndex + 1).TrimStart().ToString();
                 headerCollection.AddHeader(headerName, headerValue);
             }
         }

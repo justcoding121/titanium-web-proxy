@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 
 namespace Titanium.Web.Proxy.Extensions
 {
@@ -12,5 +13,5 @@ namespace Titanium.Web.Proxy.Extensions
 
             return uri.IsWellFormedOriginalString() ? uri.PathAndQuery : uri.GetComponents(UriComponents.PathAndQuery, UriFormat.Unescaped);
         }
-    }   
+    }
 }

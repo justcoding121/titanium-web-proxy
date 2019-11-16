@@ -14,6 +14,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended;
 using Titanium.Web.Proxy.StreamExtended.Network;
@@ -67,18 +68,16 @@ namespace Titanium.Web.Proxy
                     var connectRequest = new ConnectRequest
                     {
                         RequestUri = httpRemoteUri,
-                        OriginalUrl = httpUrl,
+                        OriginalUrlData = HttpHeader.Encoding.GetBytes(httpUrl),
                         HttpVersion = version
                     };
 
                     await HeaderParser.ReadHeaders(clientStream, connectRequest.Headers, cancellationToken);
 
                     connectArgs = new TunnelConnectSessionEventArgs(this, endPoint, connectRequest,
-                        cancellationTokenSource);
+                        new ProxyClient(clientConnection, clientStream, clientStreamWriter), cancellationTokenSource);
                     clientStream.DataRead += (o, args) => connectArgs.OnDataSent(args.Buffer, args.Offset, args.Count);
                     clientStream.DataWrite += (o, args) => connectArgs.OnDataReceived(args.Buffer, args.Offset, args.Count);
-                    connectArgs.ProxyClient.Connection = clientConnection;
-                    connectArgs.ProxyClient.ClientStream = clientStream;
 
                     await endPoint.InvokeBeforeTunnelConnectRequest(this, connectArgs, ExceptionFunc);
 
@@ -336,10 +335,8 @@ namespace Titanium.Web.Proxy
                             var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
                             await connection.StreamWriter.WriteAsync(connectionPreface, cancellationToken);
                             await Http2Helper.SendHttp2(clientStream, connection.Stream,
-                                () => new SessionEventArgs(this, endPoint, cancellationTokenSource)
+                                () => new SessionEventArgs(this, endPoint, new ProxyClient(clientConnection, clientStream, clientStreamWriter), connectArgs?.HttpClient.ConnectRequest, cancellationTokenSource)
                                 {
-                                    ProxyClient = { Connection = clientConnection },
-                                    HttpClient = { ConnectRequest = connectArgs?.HttpClient.ConnectRequest },
                                     UserData = connectArgs?.UserData
                                 },
                                 async args => { await onBeforeRequest(args); },

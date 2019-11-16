@@ -26,14 +26,14 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             try
             {
                 Request.ParseRequestLine(line, out var method, out var url, out var version);
-                RequestResponseBase request = new Request
+                var request = new Request
                 {
-                    Method = method, RequestUriString = url, HttpVersion = version
+                    Method = method, Url = url, HttpVersion = version
                 };
                 while (!string.IsNullOrEmpty(line = reader.ReadLine()))
                 {
                     var header = line.Split(colonSplit, 2);
-                    request.Headers.AddHeader(header[0], header[1]);
+                    request.Headers.AddHeader(header[0].Trim(), header[1].Trim());
                 }
 
                 // First zero-length line denotes end of headers. If we
@@ -42,10 +42,10 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                     return null;
 
                 if (!requireBody)
-                    return request as Request;
+                    return request;
 
-                if (parseBody(reader, ref request))
-                    return request as Request;
+                if (parseBody(reader, request))
+                    return request;
             }
             catch
             {
@@ -71,7 +71,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             try
             {
                 Response.ParseResponseLine(line, out var version, out var status, out var desc);
-                RequestResponseBase response = new Response
+                var response = new Response
                 {
                     HttpVersion = version, StatusCode = status, StatusDescription = desc
                 };
@@ -87,8 +87,8 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 if (line?.Length != 0)
                     return null;
 
-                if (parseBody(reader, ref response))
-                    return response as Response;
+                if (parseBody(reader, response))
+                    return response;
             }
             catch
             {
@@ -98,7 +98,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             return null;
         }
 
-        private static bool parseBody(StringReader reader, ref RequestResponseBase obj)
+        private static bool parseBody(StringReader reader, RequestResponseBase obj)
         {
             obj.OriginalContentLength = obj.ContentLength;
             if (obj.ContentLength <= 0)

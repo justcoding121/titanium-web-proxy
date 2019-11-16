@@ -102,7 +102,7 @@ namespace Titanium.Web.Proxy.Http
                 var headerBuilder = new HeaderBuilder();
                 headerBuilder.WriteResponseLine(HttpVersion, StatusCode, StatusDescription);
                 headerBuilder.WriteHeaders(Headers);
-                return headerBuilder.GetString(HttpHelper.HeaderEncoding);
+                return headerBuilder.GetString(HttpHeader.Encoding);
             }
         }
 

@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         ///     underlying TCP Listener object
         /// </summary>
-        internal TcpListener Listener { get; set; }
+        internal TcpListener? Listener { get; set; }
 
         /// <summary>
         ///     Ip Address we are listening.
@@ -45,6 +45,6 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         ///     Generic certificate to use for SSL decryption.
         /// </summary>
-        public X509Certificate2 GenericCertificate { get; set; }
+        public X509Certificate2? GenericCertificate { get; set; }
     }
 }

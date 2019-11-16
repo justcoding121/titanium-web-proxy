@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Net;
 using System.Text;
+using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Models
@@ -33,6 +35,10 @@ namespace Titanium.Web.Proxy.Models
         internal static Version Version20 { get; } = new Version(2, 0);
 #endif
 
+        internal static readonly Encoding DefaultEncoding = Encoding.GetEncoding("ISO-8859-1");
+
+        public static Encoding Encoding => DefaultEncoding;
+
         internal static readonly HttpHeader ProxyConnectionKeepAlive = new HttpHeader("Proxy-Connection", "keep-alive");
 
         /// <summary>
@@ -47,30 +53,45 @@ namespace Titanium.Web.Proxy.Models
                 throw new Exception("Name cannot be null or empty");
             }
 
-            Name = name.Trim();
-            Value = value.Trim();
+            NameData = name.Trim().GetByteString();
+            ValueData = value.Trim().GetByteString();
         }
 
-        protected HttpHeader(string name, string value, bool headerEntry)
+        internal HttpHeader(ByteString name, ByteString value)
+        {
+            if (name.Length == 0)
+            {
+                throw new Exception("Name cannot be empty");
+            }
+
+            NameData = name;
+            ValueData = value;
+        }
+
+        private protected HttpHeader(ByteString name, ByteString value, bool headerEntry)
         {
             // special header entry created in inherited class with empty name
-            Name = name.Trim();
-            Value = value.Trim();
+            NameData = name;
+            ValueData = value;
         }
 
         /// <summary>
         ///     Header Name.
         /// </summary>
-        public string Name { get; }
+        public string Name => NameData.GetString();
+
+        internal ByteString NameData { get; }
 
         /// <summary>
         ///     Header Value.
         /// </summary>
-        public string Value { get; set; }
+        public string Value => ValueData.GetString();
+
+        internal ByteString ValueData { get; set; }
 
         public int Size => Name.Length + Value.Length + HttpHeaderOverhead;
 
-        public static int SizeOf(string name, string value)
+        internal static int SizeOf(ByteString name, ByteString value)
         {
             return name.Length + value.Length + HttpHeaderOverhead;
         }
@@ -84,7 +105,7 @@ namespace Titanium.Web.Proxy.Models
             return $"{Name}: {Value}";
         }
 
-        internal static HttpHeader GetProxyAuthorizationHeader(string userName, string password)
+        internal static HttpHeader GetProxyAuthorizationHeader(string? userName, string? password)
         {
             var result = new HttpHeader(KnownHeaders.ProxyAuthorization,
                 "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{userName}:{password}")));

@@ -22,7 +22,7 @@ using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http2.Hpack
 {
-    public class Decoder
+    internal class Decoder
     {
         private readonly DynamicTable dynamicTable;
 
@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         private int skipLength;
         private int nameLength;
         private int valueLength;
-        private string name;
+        private ByteString name;
 
         private enum State
         {
@@ -248,7 +248,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                                 if (indexType == HpackUtil.IndexType.None)
                                 {
                                     // Name is unused so skip bytes
-                                    name = string.Empty;
+                                    name = ByteString.Empty;
                                     skipLength = nameLength;
                                     state = State.SkipLiteralHeaderName;
                                     break;
@@ -258,7 +258,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                                 if (nameLength + HttpHeader.HttpHeaderOverhead > dynamicTable.Capacity)
                                 {
                                     dynamicTable.Clear();
-                                    name = string.Empty;
+                                    name = Array.Empty<byte>();
                                     skipLength = nameLength;
                                     state = State.SkipLiteralHeaderName;
                                     break;
@@ -292,7 +292,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                             if (indexType == HpackUtil.IndexType.None)
                             {
                                 // Name is unused so skip bytes
-                                name = string.Empty;
+                                name = ByteString.Empty;
                                 skipLength = nameLength;
                                 state = State.SkipLiteralHeaderName;
                                 break;
@@ -302,7 +302,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                             if (nameLength + HttpHeader.HttpHeaderOverhead > dynamicTable.Capacity)
                             {
                                 dynamicTable.Clear();
-                                name = string.Empty;
+                                name = ByteString.Empty;
                                 skipLength = nameLength;
                                 state = State.SkipLiteralHeaderName;
                                 break;
@@ -375,7 +375,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
 
                             if (valueLength == 0)
                             {
-                                InsertHeader(headerListener, name, string.Empty, indexType);
+                                InsertHeader(headerListener, name, Array.Empty<byte>(), indexType);
                                 state = State.ReadHeaderRepresentation;
                             }
                             else
@@ -531,16 +531,16 @@ namespace Titanium.Web.Proxy.Http2.Hpack
 
         private void ReadName(int index)
         {
-            name = GetHeaderField(index).Name;
+            name = GetHeaderField(index).NameData;
         }
 
         private void IndexHeader(int index, IHeaderListener headerListener)
         {
             var headerField = GetHeaderField(index);
-            AddHeader(headerListener, headerField.Name, headerField.Value, false);
+            AddHeader(headerListener, headerField.NameData, headerField.ValueData, false);
         }
 
-        private void InsertHeader(IHeaderListener headerListener, string name, string value, HpackUtil.IndexType indexType)
+        private void InsertHeader(IHeaderListener headerListener, ByteString name, ByteString value, HpackUtil.IndexType indexType)
         {
             AddHeader(headerListener, name, value, indexType == HpackUtil.IndexType.Never);
 
@@ -559,7 +559,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             }
         }
 
-        private void AddHeader(IHeaderListener headerListener, string name, string value, bool sensitive)
+        private void AddHeader(IHeaderListener headerListener, ByteString name, ByteString value, bool sensitive)
         {
             if (name.Length == 0)
             {
@@ -592,7 +592,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             return true;
         }
 
-        private string ReadStringLiteral(BinaryReader input, int length)
+        private ByteString ReadStringLiteral(BinaryReader input, int length)
         {
             var buf = new byte[length];
             int lengthToRead = length;
@@ -607,7 +607,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 throw new IOException("decompression failure");
             }
 
-            return huffmanEncoded ? HuffmanDecoder.Instance.Decode(buf) : Encoding.UTF8.GetString(buf);
+            return new ByteString(huffmanEncoded ? HuffmanDecoder.Instance.Decode(buf) : buf);
         }
 
         // Unsigned Little Endian Base 128 Variable-Length Integer Encoding

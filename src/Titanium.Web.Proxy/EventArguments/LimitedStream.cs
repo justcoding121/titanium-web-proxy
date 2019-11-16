@@ -11,13 +11,13 @@ namespace Titanium.Web.Proxy.EventArguments
     internal class LimitedStream : Stream
     {
         private readonly IBufferPool bufferPool;
-        private readonly ICustomStreamReader baseStream;
+        private readonly CustomBufferedStream baseStream;
         private readonly bool isChunked;
         private long bytesRemaining;
 
         private bool readChunkTrail;
 
-        internal LimitedStream(ICustomStreamReader baseStream, IBufferPool bufferPool, bool isChunked,
+        internal LimitedStream(CustomBufferedStream baseStream, IBufferPool bufferPool, bool isChunked,
             long contentLength)
         {  
             this.baseStream = baseStream;

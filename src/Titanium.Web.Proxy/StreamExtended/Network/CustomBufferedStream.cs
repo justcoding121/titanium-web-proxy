@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.StreamExtended.Network
@@ -16,13 +17,12 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     ///     of UTF-8 encoded string or raw bytes asynchronously from last read position.
     /// </summary>
     /// <seealso cref="System.IO.Stream" />
-    internal class CustomBufferedStream : Stream, ICustomStreamReader
+    internal class CustomBufferedStream : Stream, IPeekStream, ILineStream
     {
         private readonly bool leaveOpen;
         private readonly byte[] streamBuffer;
 
-        // default to UTF-8
-        private static Encoding encoding => HttpHelper.HeaderEncoding;
+        private static Encoding encoding => HttpHeader.Encoding;
 
         private static readonly bool networkStreamHack = true;
 
@@ -606,7 +606,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        internal static async ValueTask<string?> ReadLineInternalAsync(ICustomStreamReader reader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        internal static async ValueTask<string?> ReadLineInternalAsync(ILineStream reader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
             byte lastChar = default;
 

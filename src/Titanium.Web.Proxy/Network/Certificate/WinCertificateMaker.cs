@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
         private readonly Type typeX509PrivateKey;
 
-        private object sharedPrivateKey;
+        private object? sharedPrivateKey;
 
         /// <summary>
         ///     Constructor.

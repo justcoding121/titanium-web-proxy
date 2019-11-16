@@ -60,15 +60,30 @@ namespace Titanium.Web.Proxy.Network
 
         private readonly object rootCertCreationLock = new object();
 
-        private ICertificateMaker certEngine;
+        private ICertificateMaker? certEngineValue;
+
+        private ICertificateMaker certEngine
+        {
+            get
+            {
+                if (certEngineValue == null)
+                {
+                    certEngineValue = engine == CertificateEngine.BouncyCastle
+                        ? (ICertificateMaker)new BCCertificateMaker(ExceptionFunc)
+                        : new WinCertificateMaker(ExceptionFunc);
+                }
+
+                return certEngineValue;
+            }
+        }
 
         private CertificateEngine engine;
 
-        private string issuer;
+        private string? issuer;
 
         private X509Certificate2? rootCertificate;
 
-        private string rootCertificateName;
+        private string? rootCertificateName;
 
         private ICertificateCache certificateCache = new DefaultCertificateDiskCache();
 
@@ -156,15 +171,8 @@ namespace Titanium.Web.Proxy.Network
 
                 if (value != engine)
                 {
-                    certEngine = null!;
+                    certEngineValue = null!;
                     engine = value;
-                }
-
-                if (certEngine == null)
-                {
-                    certEngine = engine == CertificateEngine.BouncyCastle
-                        ? (ICertificateMaker)new BCCertificateMaker(ExceptionFunc)
-                        : new WinCertificateMaker(ExceptionFunc);
                 }
             }
         }
@@ -468,10 +476,7 @@ namespace Titanium.Web.Proxy.Network
                 var result = CreateCertificate(certificateName, false);
                 if (result != null)
                 {
-                    cachedCertificates.TryAdd(certificateName, new CachedCertificate
-                    {
-                        Certificate = result
-                    });
+                    cachedCertificates.TryAdd(certificateName, new CachedCertificate(result));
                 }
 
                 return result;

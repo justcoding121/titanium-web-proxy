@@ -18,10 +18,12 @@ namespace Titanium.Web.Proxy.Http
     {
         private TcpServerConnection? connection;
 
-        internal HttpWebClient(Request? request)
+        internal HttpWebClient(ConnectRequest? connectRequest, Request? request, Lazy<int> processIdFunc)
         {
+            ConnectRequest = connectRequest;
             Request = request ?? new Request();
             Response = new Response();
+            ProcessId = processIdFunc;
         }
 
         /// <summary>
@@ -65,7 +67,7 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Headers passed with Connect.
         /// </summary>
-        public ConnectRequest? ConnectRequest { get; internal set; }
+        public ConnectRequest? ConnectRequest { get; }
 
         /// <summary>
         ///     Web Request.
@@ -114,7 +116,7 @@ namespace Titanium.Web.Proxy.Http
             string url;
             if (useUpstreamProxy || isTransparent)
             {
-                url = Request.RequestUriString;
+                url = Request.Url;
             }
             else
             {

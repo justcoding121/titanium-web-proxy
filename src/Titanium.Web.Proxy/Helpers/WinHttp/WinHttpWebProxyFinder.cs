@@ -34,9 +34,9 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             }
         }
 
-        public ICredentials Credentials { get; set; }
+        public ICredentials? Credentials { get; set; }
 
-        public ProxyInfo ProxyInfo { get; internal set; }
+        public ProxyInfo? ProxyInfo { get; internal set; }
 
         public bool BypassLoopback { get; internal set; }
 
@@ -46,7 +46,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
 
         public bool AutomaticallyDetectSettings { get; internal set; }
 
-        private WebProxy proxy { get; set; }
+        private WebProxy? proxy { get; set; }
 
         public void Dispose()
         {

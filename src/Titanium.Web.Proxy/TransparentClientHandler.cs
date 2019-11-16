@@ -12,6 +12,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended;
 using Titanium.Web.Proxy.StreamExtended.Network;
@@ -81,11 +82,8 @@ namespace Titanium.Web.Proxy
                         catch (Exception e)
                         {
                             var certname = certificate?.GetNameInfo(X509NameType.SimpleName, false);
-                            var session = new SessionEventArgs(this, endPoint, cancellationTokenSource)
-                            {
-                                ProxyClient = { Connection = clientConnection },
-                                HttpClient = { ConnectRequest = null }
-                            };
+                            var session = new SessionEventArgs(this, endPoint, new ProxyClient(clientConnection, clientStream, clientStreamWriter), null,
+                                cancellationTokenSource);
                             throw new ProxyConnectException(
                                 $"Couldn't authenticate host '{httpsHostName}' with certificate '{certname}'.", e, session);
                         }
