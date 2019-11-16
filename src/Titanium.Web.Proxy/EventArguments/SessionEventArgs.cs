@@ -22,8 +22,6 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public class SessionEventArgs : SessionEventArgsBase
     {
-        private static readonly byte[] emptyData = new byte[0];
-
         /// <summary>
         /// Backing field for corresponding public property
         /// </summary>
@@ -110,7 +108,10 @@ namespace Titanium.Web.Proxy.EventArguments
                 else
                 {
                     var body = await readBodyAsync(true, cancellationToken);
-                    request.Body = body;
+                    if (!request.BodyAvailable)
+                    {
+                        request.Body = body;
+                    }
 
                     // Now set the flag to true
                     // So that next time we can deliver body from cache
@@ -182,7 +183,10 @@ namespace Titanium.Web.Proxy.EventArguments
                 else
                 {
                     var body = await readBodyAsync(false, cancellationToken);
-                    response.Body = body;
+                    if (!response.BodyAvailable)
+                    {
+                        response.Body = body;
+                    }
 
                     // Now set the flag to true
                     // So that next time we can deliver body from cache
@@ -595,7 +599,7 @@ namespace Titanium.Web.Proxy.EventArguments
             var response = new RedirectResponse();
             response.HttpVersion = HttpClient.Request.HttpVersion;
             response.Headers.AddHeader(KnownHeaders.Location, url);
-            response.Body = emptyData;
+            response.Body = Array.Empty<byte>();
 
             Respond(response, closeServerConnection);
         }
