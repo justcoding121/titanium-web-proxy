@@ -263,9 +263,9 @@ namespace Titanium.Web.Proxy.Http2
 
                             request.HttpVersion = HttpVersion.Version20;
                             request.Method = method.GetString();
+                            request.IsHttps = headerListener.Scheme == ProxyServer.UriSchemeHttps;
+                            request.Authority = headerListener.Authority.GetString();
                             request.OriginalUrlData = path;
-                            request.Scheme = headerListener.Scheme;
-                            request.Hostname = headerListener.Authority.GetString();
 
                             //request.RequestUri = headerListener.GetUri();
                         }
@@ -468,9 +468,10 @@ namespace Titanium.Web.Proxy.Http2
 
             if (rr is Request request)
             {
+                var uri = request.RequestUri;
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderMethod, request.Method.GetByteString());
-                encoder.EncodeHeader(writer, StaticTable.KnownHeaderAuhtority, request.RequestUri.Host.GetByteString());
-                encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme, request.RequestUri.Scheme.GetByteString());
+                encoder.EncodeHeader(writer, StaticTable.KnownHeaderAuhtority, uri.Authority.GetByteString());
+                encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme, uri.Scheme.GetByteString());
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderPath, request.Url.GetByteString(), false,
                     HpackUtil.IndexType.None, false);
             }
@@ -572,10 +573,6 @@ namespace Titanium.Web.Proxy.Http2
 
         class MyHeaderListener : IHeaderListener
         {
-            private static ByteString SchemeHttp = (ByteString)ProxyServer.UriSchemeHttp;
-
-            private static ByteString SchemeHttps = (ByteString)ProxyServer.UriSchemeHttps;
-
             private readonly Action<ByteString, ByteString> addHeaderFunc;
 
             public ByteString Method { get; private set; }
@@ -592,12 +589,12 @@ namespace Titanium.Web.Proxy.Http2
             {
                 get
                 {
-                    if (scheme.Equals(SchemeHttp))
+                    if (scheme.Equals(ProxyServer.UriSchemeHttp8))
                     {
                         return ProxyServer.UriSchemeHttp;
                     }
 
-                    if (scheme.Equals(SchemeHttps))
+                    if (scheme.Equals(ProxyServer.UriSchemeHttps8))
                     {
                         return ProxyServer.UriSchemeHttps;
                     }

@@ -125,9 +125,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             session.CustomUpStreamProxyUsed = customUpStreamProxy;
 
+            var uri = session.HttpClient.Request.RequestUri;
             return GetConnectionCacheKey(
-                session.HttpClient.Request.RequestUri.Host,
-                session.HttpClient.Request.RequestUri.Port,
+                uri.Host,
+                uri.Port,
                 isHttps, applicationProtocols,
                 session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
                 customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy));
@@ -179,9 +180,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             session.CustomUpStreamProxyUsed = customUpStreamProxy;
 
+            var uri = session.HttpClient.Request.RequestUri;
             return await GetServerConnection(
-                session.HttpClient.Request.RequestUri.Host,
-                session.HttpClient.Request.RequestUri.Port,
+                uri.Host,
+                uri.Port,
                 session.HttpClient.Request.HttpVersion,
                 isHttps, applicationProtocols, isConnect,
                 server, session, session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
@@ -372,9 +374,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 if (useUpstreamProxy && (isConnect || isHttps))
                 {
                     var writer = new HttpRequestWriter(stream, proxyServer.BufferPool);
-                    var connectRequest = new ConnectRequest(remoteHostName)
+                    string authority = $"{remoteHostName}:{remotePort}";
+                    var connectRequest = new ConnectRequest(authority)
                     {
-                        OriginalUrlData = HttpHeader.Encoding.GetBytes($"{remoteHostName}:{remotePort}"),
+                        IsHttps = isHttps,
+                        OriginalUrlData = HttpHeader.Encoding.GetBytes(authority),
                         HttpVersion = httpVersion
                     };
 

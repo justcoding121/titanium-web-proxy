@@ -121,6 +121,10 @@ namespace Titanium.Web.Proxy.Http
             else
             {
                 url = Request.RequestUri.GetOriginalPathAndQuery();
+                if (url == string.Empty)
+                {
+                    url = "/";
+                }
             }
 
             var headerBuilder = new HeaderBuilder();

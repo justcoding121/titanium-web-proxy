@@ -34,7 +34,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
 
             var buffer = new byte[1024];
             var responseMsg = string.Empty;
-            Response response = null;
+            Response response;
 
             while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
             {
