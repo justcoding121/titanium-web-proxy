@@ -5,6 +5,8 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.StreamExtended.Network
@@ -15,13 +17,12 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     ///     of UTF-8 encoded string or raw bytes asynchronously from last read position.
     /// </summary>
     /// <seealso cref="System.IO.Stream" />
-    public class CustomBufferedStream : Stream, ICustomStreamReader
+    internal class CustomBufferedStream : Stream, IPeekStream, ILineStream
     {
         private readonly bool leaveOpen;
-        private byte[] streamBuffer;
+        private readonly byte[] streamBuffer;
 
-        // default to UTF-8
-        private static readonly Encoding encoding = Encoding.UTF8;
+        private static Encoding encoding => HttpHeader.Encoding;
 
         private static readonly bool networkStreamHack = true;
 
@@ -35,11 +36,9 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         private readonly IBufferPool bufferPool;
 
-        public int BufferSize { get; }
+        public event EventHandler<DataEventArgs>? DataRead;
 
-        public event EventHandler<DataEventArgs> DataRead;
-
-        public event EventHandler<DataEventArgs> DataWrite;
+        public event EventHandler<DataEventArgs>? DataWrite;
 
         public Stream BaseStream { get; }
 
@@ -68,14 +67,12 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         /// <param name="baseStream">The base stream.</param>
         /// <param name="bufferPool">Bufferpool.</param>
-        /// <param name="bufferSize">Size of the buffer.</param>
         /// <param name="leaveOpen"><see langword="true" /> to leave the stream open after disposing the <see cref="T:CustomBufferedStream" /> object; otherwise, <see langword="false" />.</param>
-        public CustomBufferedStream(Stream baseStream, IBufferPool bufferPool, int bufferSize, bool leaveOpen = false)
+        public CustomBufferedStream(Stream baseStream, IBufferPool bufferPool, bool leaveOpen = false)
         {
             BaseStream = baseStream;
-            BufferSize = bufferSize;
             this.leaveOpen = leaveOpen;
-            streamBuffer = bufferPool.GetBuffer(bufferSize);
+            streamBuffer = bufferPool.GetBuffer();
             this.bufferPool = bufferPool;
         }
 
@@ -160,7 +157,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <returns>
         /// A task that represents the asynchronous copy operation.
         /// </returns>
-        public override async Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken = default)
+        public override async Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
         {
             if (bufferLength > 0)
             {
@@ -179,7 +176,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <returns>
         /// A task that represents the asynchronous flush operation.
         /// </returns>
-        public override Task FlushAsync(CancellationToken cancellationToken = default)
+        public override Task FlushAsync(CancellationToken cancellationToken)
         {
             return BaseStream.FlushAsync(cancellationToken);
         }
@@ -204,7 +201,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// less than the requested number, or it can be 0 (zero)
         /// if the end of the stream has been reached.
         /// </returns>
-        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken = default)
+        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             if (bufferLength == 0)
             {
@@ -215,6 +212,45 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             if (available > 0)
             {
                 Buffer.BlockCopy(streamBuffer, bufferPos, buffer, offset, available);
+                bufferPos += available;
+                bufferLength -= available;
+            }
+
+            return available;
+        }
+
+        /// <summary>
+        /// Asynchronously reads a sequence of bytes from the current stream,
+        /// advances the position within the stream by the number of bytes read,
+        /// and monitors cancellation requests.
+        /// </summary>
+        /// <param name="buffer">The buffer to write the data into.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests. 
+        /// The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
+        /// <returns>
+        /// A task that represents the asynchronous read operation.
+        /// The value of the parameter contains the total 
+        /// number of bytes read into the buffer.
+        /// The result value can be less than the number of bytes
+        /// requested if the number of bytes currently available is
+        /// less than the requested number, or it can be 0 (zero)
+        /// if the end of the stream has been reached.
+        /// </returns>
+#if NETSTANDARD2_1
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+#else
+        public async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+#endif
+        {
+            if (bufferLength == 0)
+            {
+                await FillBufferAsync(cancellationToken);
+            }
+
+            int available = Math.Min(bufferLength, buffer.Length);
+            if (available > 0)
+            {
+                new Span<byte>(streamBuffer, bufferPos, available).CopyTo(buffer.Span);
                 bufferPos += available;
                 bufferLength -= available;
             }
@@ -250,25 +286,24 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="index">The index.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        public async Task<int> PeekByteAsync(int index, CancellationToken cancellationToken = default)
+        public async ValueTask<int> PeekByteAsync(int index, CancellationToken cancellationToken = default)
         {
-            if (Available <= index)
-            {
-                await FillBufferAsync(cancellationToken);
-            }
-
             // When index is greater than the buffer size
             if (streamBuffer.Length <= index)
             {
                 throw new Exception("Requested Peek index exceeds the buffer size. Consider increasing the buffer size.");
             }
 
-            // When index is greater than the buffer size
-            if (Available <= index)
+            while (Available <= index)
             {
-                return -1;
+                // When index is greater than the buffer size
+                bool fillResult = await FillBufferAsync(cancellationToken);
+                if (!fillResult)
+                {
+                    return -1;
+                }
             }
-            
+
             return streamBuffer[bufferPos + index];
         }
 
@@ -278,29 +313,33 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="buffer">The buffer to copy.</param>
         /// <param name="offset">The offset where copying.</param>
         /// <param name="index">The index.</param>
+        /// <param name="count">The count.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        public async Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int size, CancellationToken cancellationToken = default)
+        public async ValueTask<int> PeekBytesAsync(byte[] buffer, int offset, int index, int count, CancellationToken cancellationToken = default)
         {
-            if (Available <= index)
-            {
-                await FillBufferAsync(cancellationToken);
-            }
-
             // When index is greater than the buffer size
-            if (streamBuffer.Length <= (index + size))
+            if (streamBuffer.Length <= index + count)
             {
                 throw new Exception("Requested Peek index and size exceeds the buffer size. Consider increasing the buffer size.");
             }
 
-            if (Available <= (index + size))
+            while (Available <= index)
             {
-                return -1;
+                bool fillResult = await FillBufferAsync(cancellationToken);
+                if (!fillResult)
+                {
+                    return 0;
+                }
             }
 
-            Buffer.BlockCopy(streamBuffer, index, buffer, offset, size);
+            if (Available - index < count)
+            {
+                count = Available - index;
+            }
 
-            return size;
+            Buffer.BlockCopy(streamBuffer, index, buffer, offset, count);
+            return count;
         }
 
         /// <summary>
@@ -346,7 +385,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// A task that represents the asynchronous write operation.
         /// </returns>
         [DebuggerStepThrough]
-        public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken = default)
+        public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             OnDataWrite(buffer, offset, count);
 
@@ -359,7 +398,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="value">The byte to write to the stream.</param>
         public override void WriteByte(byte value)
         {
-            var buffer = bufferPool.GetBuffer(BufferSize);
+            var buffer = bufferPool.GetBuffer();
             try
             {
                 buffer[0] = value;
@@ -397,9 +436,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
                     BaseStream.Dispose();
                 }
 
-                var buffer = streamBuffer;
-                streamBuffer = null;
-                bufferPool.ReturnBuffer(buffer);
+                bufferPool.ReturnBuffer(streamBuffer);
             }
         }
 
@@ -512,11 +549,17 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        public async Task<bool> FillBufferAsync(CancellationToken cancellationToken = default)
+        public async ValueTask<bool> FillBufferAsync(CancellationToken cancellationToken = default)
         {
             if (closed)
             {
                 throw new Exception("Stream is already closed");
+            }
+
+            int bytesToRead = streamBuffer.Length - bufferLength;
+            if (bytesToRead == 0)
+            {
+                return false;
             }
 
             if (bufferLength > 0)
@@ -524,12 +567,6 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
                 // normally we fill the buffer only when it is empty, but sometimes we need more data
                 // move the remaining data to the beginning of the buffer 
                 Buffer.BlockCopy(streamBuffer, bufferPos, streamBuffer, 0, bufferLength);
-            }
-
-            int bytesToRead = streamBuffer.Length - bufferLength;
-            if (bytesToRead == 0)
-            {
-                return false;
             }
 
             bufferPos = 0;
@@ -560,7 +597,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        public Task<string> ReadLineAsync(CancellationToken cancellationToken = default)
+        public ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken = default)
         {
             return ReadLineInternalAsync(this, bufferPool, cancellationToken);
         }
@@ -569,14 +606,14 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        internal static async Task<string> ReadLineInternalAsync(ICustomStreamReader reader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        internal static async ValueTask<string?> ReadLineInternalAsync(ILineStream reader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
             byte lastChar = default;
 
             int bufferDataLength = 0;
 
             // try to use buffer from the buffer pool, usually it is enough
-            var bufferPoolBuffer = bufferPool.GetBuffer(reader.BufferSize);
+            var bufferPoolBuffer = bufferPool.GetBuffer();
             var buffer = bufferPoolBuffer;
 
             try

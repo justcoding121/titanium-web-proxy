@@ -22,7 +22,7 @@ namespace Titanium.Web.Proxy.Exceptions
         /// </summary>
         /// <param name="message">Exception message</param>
         /// <param name="innerException">Inner exception associated</param>
-        protected ProxyException(string message, Exception innerException) : base(message, innerException)
+        protected ProxyException(string message, Exception? innerException) : base(message, innerException)
         {
         }
     }

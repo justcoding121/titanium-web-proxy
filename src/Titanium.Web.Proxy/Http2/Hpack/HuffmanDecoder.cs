@@ -54,7 +54,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <param name="buf">the string literal to be decoded</param>
         /// <returns>the output stream for the compressed data</returns>
         /// <exception cref="IOException">throws IOException if an I/O error occurs. In particular, an <code>IOException</code> may be thrown if the output stream has been closed.</exception>
-        public string Decode(byte[] buf)
+        public ReadOnlyMemory<byte> Decode(byte[] buf)
         {
             var resultBuf = new byte[buf.Length * 2];
             int resultSize = 0;
@@ -69,7 +69,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 while (bits >= 8)
                 {
                     int c = (current >> (bits - 8)) & 0xFF;
-                    node = node.Children[c];
+                    node = node.Children![c];
                     bits -= node.Bits;
                     if (node.IsTerminal)
                     {
@@ -87,7 +87,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             while (bits > 0)
             {
                 int c = (current << (8 - bits)) & 0xFF;
-                node = node.Children[c];
+                node = node.Children![c];
                 if (node.IsTerminal && node.Bits <= bits)
                 {
                     bits -= node.Bits;
@@ -109,7 +109,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 throw new IOException("Invalid Padding");
             }
 
-            return Encoding.UTF8.GetString(resultBuf, 0, resultSize);
+            return resultBuf.AsMemory(0, resultSize);
         }
 
         private class Node
@@ -121,7 +121,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             public int Bits { get; }
 
             // internal nodes have children
-            public Node[] Children { get; }
+            public Node[]? Children { get; }
 
             /// <summary>
             /// Initializes a new instance of the <see cref="HuffmanDecoder"/> class.
@@ -173,7 +173,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
 
                 length -= 8;
                 int i = (code >> length) & 0xFF;
-                if (current.Children[i] == null)
+                if (current.Children![i] == null)
                 {
                     current.Children[i] = new Node();
                 }
@@ -187,7 +187,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             int end = 1 << shift;
             for (int i = start; i < start + end; i++)
             {
-                current.Children[i] = terminal;
+                current.Children![i] = terminal;
             }
         }
     }

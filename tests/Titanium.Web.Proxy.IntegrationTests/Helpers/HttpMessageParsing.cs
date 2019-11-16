@@ -7,11 +7,14 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
 {
     internal static class HttpMessageParsing
     {
+        private static readonly char[] colonSplit = { ':' };
+
         /// <summary>
         /// This is a terribly inefficient way of reading & parsing an
         /// http request, but it's good enough for testing purposes.
         /// </summary>
         /// <param name="messageText">The request message</param>
+        /// <param name="requireBody"></param>
         /// <returns>Request object if message complete, null otherwise</returns>
         internal static Request ParseRequest(string messageText, bool requireBody)
         {
@@ -23,16 +26,14 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             try
             {
                 Request.ParseRequestLine(line, out var method, out var url, out var version);
-                RequestResponseBase request = new Request()
+                var request = new Request
                 {
-                    Method = method,
-                    RequestUriString = url,
-                    HttpVersion = version
+                    Method = method, Url = url, HttpVersion = version
                 };
                 while (!string.IsNullOrEmpty(line = reader.ReadLine()))
                 {
-                    var header = line.Split(ProxyConstants.ColonSplit, 2);
-                    request.Headers.AddHeader(header[0], header[1]);
+                    var header = line.Split(colonSplit, 2);
+                    request.Headers.AddHeader(header[0].Trim(), header[1].Trim());
                 }
 
                 // First zero-length line denotes end of headers. If we
@@ -41,12 +42,15 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                     return null;
 
                 if (!requireBody)
-                    return request as Request;
+                    return request;
 
-                if (parseBody(reader, ref request))
-                    return request as Request;
+                if (parseBody(reader, request))
+                    return request;
             }
-            catch { }
+            catch
+            {
+                // ignore
+            }
 
             return null;
         }
@@ -63,19 +67,18 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             var line = reader.ReadLine();
             if (string.IsNullOrEmpty(line))
                 return null;
+
             try
             {
                 Response.ParseResponseLine(line, out var version, out var status, out var desc);
-                RequestResponseBase response = new Response()
+                var response = new Response
                 {
-                    HttpVersion = version,
-                    StatusCode = status,
-                    StatusDescription = desc
+                    HttpVersion = version, StatusCode = status, StatusDescription = desc
                 };
 
                 while (!string.IsNullOrEmpty(line = reader.ReadLine()))
                 {
-                    var header = line.Split(ProxyConstants.ColonSplit, 2);
+                    var header = line.Split(colonSplit, 2);
                     response.Headers.AddHeader(header[0], header[1]);
                 }
 
@@ -84,15 +87,18 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 if (line?.Length != 0)
                     return null;
 
-                if (parseBody(reader, ref response))
-                    return response as Response;
+                if (parseBody(reader, response))
+                    return response;
             }
-            catch { }
+            catch
+            {
+                // ignore
+            }
 
             return null;
         }
 
-        private static bool parseBody(StringReader reader, ref RequestResponseBase obj)
+        private static bool parseBody(StringReader reader, RequestResponseBase obj)
         {
             obj.OriginalContentLength = obj.ContentLength;
             if (obj.ContentLength <= 0)
@@ -100,14 +106,11 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 // no body, done
                 return true;
             }
-            else
-            {
-                obj.Body = Encoding.ASCII.GetBytes(reader.ReadToEnd());
-                if (obj.ContentLength == obj.OriginalContentLength)
-                    return true; // done reading body
-                else
-                    return false; // not done reading body
-            }
+
+            obj.Body = Encoding.ASCII.GetBytes(reader.ReadToEnd());
+                
+            // done reading body
+            return obj.ContentLength == obj.OriginalContentLength;
         }
     }
 }

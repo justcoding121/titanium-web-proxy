@@ -1,5 +1,4 @@
 ﻿using System.Net;
-using System.Web;
 
 namespace Titanium.Web.Proxy.Http.Responses
 {
@@ -15,7 +14,7 @@ namespace Titanium.Web.Proxy.Http.Responses
         public GenericResponse(HttpStatusCode status)
         {
             StatusCode = (int)status;
-            StatusDescription = Get(StatusCode);
+            StatusDescription = Get(StatusCode) ?? string.Empty;
         }
 
         /// <summary>
@@ -29,7 +28,7 @@ namespace Titanium.Web.Proxy.Http.Responses
             StatusDescription = statusDescription;
         }
 
-        internal static string Get(int code)
+        internal static string? Get(int code)
         {
             switch (code)
             {
@@ -98,6 +97,7 @@ namespace Titanium.Web.Proxy.Http.Responses
                 case 510: return "Not Extended";
                 case 511: return "Network Authentication Required";
             }
+
             return null;
         }
     }

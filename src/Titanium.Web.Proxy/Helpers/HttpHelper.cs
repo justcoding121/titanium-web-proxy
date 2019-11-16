@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Net;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Network;
@@ -14,42 +14,84 @@ namespace Titanium.Web.Proxy.Helpers
 {
     internal static class HttpHelper
     {
-        private static readonly Encoding defaultEncoding = Encoding.GetEncoding("ISO-8859-1");
+        struct SemicolonSplitEnumerator
+        {
+            private readonly ReadOnlyMemory<char> data;
+
+            private ReadOnlyMemory<char> current;
+
+            private int idx;
+
+            public SemicolonSplitEnumerator(string str) : this(str.AsMemory())
+            {
+            }
+
+            public SemicolonSplitEnumerator(ReadOnlyMemory<char> data)
+            {
+                this.data = data;
+                current = null;
+                idx = 0;
+            }
+
+            public SemicolonSplitEnumerator GetEnumerator() { return this; }
+
+            public bool MoveNext()
+            {
+                if (this.idx > data.Length) return false;
+
+                int idx = data.Span.Slice(this.idx).IndexOf(';');
+                if (idx == -1)
+                {
+                    idx = data.Length;
+                }
+                else
+                {
+                    idx += this.idx;
+                }
+
+                current = data.Slice(this.idx, idx - this.idx);
+                this.idx = idx + 1;
+                return true;
+            }
+
+
+            public ReadOnlyMemory<char> Current => current;
+        }
 
         /// <summary>
         ///     Gets the character encoding of request/response from content-type header
         /// </summary>
-        /// <param name="contentType"></param>
+        /// <param name="contentType"></param>  
         /// <returns></returns>
-        internal static Encoding GetEncodingFromContentType(string contentType)
+        internal static Encoding GetEncodingFromContentType(string? contentType)
         {
             try
             {
                 // return default if not specified
                 if (contentType == null)
                 {
-                    return defaultEncoding;
+                    return HttpHeader.DefaultEncoding;
                 }
 
                 // extract the encoding by finding the charset
-                var parameters = contentType.Split(ProxyConstants.SemiColonSplit);
-                foreach (string parameter in parameters)
+                foreach (var p in new SemicolonSplitEnumerator(contentType))
                 {
-                    var split = parameter.Split(ProxyConstants.EqualSplit, 2);
-                    if (split.Length == 2 && split[0].Trim().EqualsIgnoreCase(KnownHeaders.ContentTypeCharset))
+                    var parameter = p.Span;
+                    int equalsIndex = parameter.IndexOf('=');
+                    if (equalsIndex != -1 && KnownHeaders.ContentTypeCharset.Equals(parameter.Slice(0, equalsIndex).TrimStart()))
                     {
-                        string value = split[1];
-                        if (value.EqualsIgnoreCase("x-user-defined"))
+                        var value = parameter.Slice(equalsIndex + 1);
+                        if (value.EqualsIgnoreCase("x-user-defined".AsSpan()))
                         {
                             continue;
                         }
 
                         if (value.Length > 2 && value[0] == '"' && value[value.Length - 1] == '"')
                         {
-                            value = value.Substring(1, value.Length - 2);
+                            value = value.Slice(1, value.Length - 2);
                         }
 
-                        return Encoding.GetEncoding(value);
+                        return Encoding.GetEncoding(value.ToString());
                     }
                 }
             }
@@ -60,24 +102,23 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             // return default if not specified
-            return defaultEncoding;
+            return HttpHeader.DefaultEncoding;
         }
 
-        internal static string GetBoundaryFromContentType(string contentType)
+        internal static ReadOnlyMemory<char> GetBoundaryFromContentType(string? contentType)
         {
             if (contentType != null)
             {
                 // extract the boundary
-                var parameters = contentType.Split(ProxyConstants.SemiColonSplit);
-                foreach (string parameter in parameters)
+                foreach (var parameter in new SemicolonSplitEnumerator(contentType))
                 {
-                    var split = parameter.Split(ProxyConstants.EqualSplit, 2);
-                    if (split.Length == 2 && split[0].Trim().EqualsIgnoreCase(KnownHeaders.ContentTypeBoundary))
+                    int equalsIndex = parameter.Span.IndexOf('=');
+                    if (equalsIndex != -1 && KnownHeaders.ContentTypeBoundary.Equals(parameter.Span.Slice(0, equalsIndex).TrimStart()))
                     {
-                        string value = split[1];
-                        if (value.Length > 2 && value[0] == '"' && value[value.Length - 1] == '"')
+                        var value = parameter.Slice(equalsIndex + 1);
+                        if (value.Length > 2 && value.Span[0] == '"' && value.Span[value.Length - 1] == '"')
                         {
-                            value = value.Substring(1, value.Length - 2);
+                            value = value.Slice(1, value.Length - 2);
                         }
 
                         return value;
@@ -128,47 +169,49 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         ///     Determines whether is connect method.
         /// </summary>
-        /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsConnectMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, CancellationToken cancellationToken = default)
+        internal static Task<int> IsConnectMethod(CustomBufferedStream clientStreamReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
-            return startsWith(clientStreamReader, bufferPool, bufferSize, "CONNECT", cancellationToken);
+            return startsWith(clientStreamReader, bufferPool, "CONNECT", cancellationToken);
         }
 
         /// <summary>
         ///     Determines whether is pri method (HTTP/2).
         /// </summary>
-        /// <param name="clientStreamReader">The client stream reader.</param>
         /// <returns>1: when PRI, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsPriMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, CancellationToken cancellationToken = default)
+        internal static Task<int> IsPriMethod(CustomBufferedStream clientStreamReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
-            return startsWith(clientStreamReader, bufferPool, bufferSize, "PRI", cancellationToken);
+            return startsWith(clientStreamReader, bufferPool, "PRI", cancellationToken);
         }
 
         /// <summary>
         ///     Determines whether the stream starts with the given string.
         /// </summary>
-        /// <param name="clientStreamReader">The client stream reader.</param>
-        /// <param name="expectedStart">The expected start.</param>
         /// <returns>
         ///     1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
         /// </returns>
-        private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, int bufferSize, string expectedStart, CancellationToken cancellationToken = default)
+        private static async Task<int> startsWith(CustomBufferedStream clientStreamReader, IBufferPool bufferPool, string expectedStart, CancellationToken cancellationToken = default)
         {
-            int iRet = -1;
             const int lengthToCheck = 10;
-            byte[] buffer = null;
+            if (bufferPool.BufferSize < lengthToCheck)
+            {
+                throw new Exception($"Buffer is too small. Minimum size is {lengthToCheck} bytes");
+            }
+
+            byte[] buffer = bufferPool.GetBuffer(bufferPool.BufferSize);
             try
             {
-                buffer = bufferPool.GetBuffer(Math.Max(bufferSize, lengthToCheck));
-
-                int peeked = await clientStreamReader.PeekBytesAsync(buffer, 0, 0, lengthToCheck, cancellationToken);
-
-                if (peeked > 0)
+                bool isExpected = true;
+                int i = 0;
+                while (i < lengthToCheck)
                 {
-                    bool isExpected = true;
+                    int peeked = await clientStreamReader.PeekBytesAsync(buffer, i, i, lengthToCheck - i, cancellationToken);
+                    if (peeked <= 0)
+                        return -1;
 
-                    for (int i = 0; i < lengthToCheck; i++)
+                    peeked += i;
+
+                    while (i < peeked)
                     {
                         int b = buffer[i];
 
@@ -177,23 +220,23 @@ namespace Titanium.Web.Proxy.Helpers
                         else
                         {
                             char ch = (char)b;
-                            if (!char.IsLetter(ch))
+                            if (ch < 'A' || ch > 'z' || (ch > 'Z' && ch < 'a')) // ASCII letter
                                 return -1;
                             else if (i >= expectedStart.Length || ch != expectedStart[i])
-                                isExpected = false;                            
+                                isExpected = false;
                         }
-                    }
 
-                    // only letters
-                    iRet = isExpected ? 1 : 0;
+                        i++;
+                    }
                 }
+
+                // only letters
+                return 0;
             }
             finally
             {
                 bufferPool.ReturnBuffer(buffer);
-                buffer = null;
             }
-            return iRet;
         }
     }
 }

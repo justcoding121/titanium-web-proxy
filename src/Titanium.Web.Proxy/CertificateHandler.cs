@@ -22,15 +22,10 @@ namespace Titanium.Web.Proxy
             // if user callback is registered then do it
             if (ServerCertificateValidationCallback != null)
             {
-                var args = new CertificateValidationEventArgs
-                {
-                    Certificate = certificate,
-                    Chain = chain,
-                    SslPolicyErrors = sslPolicyErrors
-                };
+                var args = new CertificateValidationEventArgs(certificate, chain, sslPolicyErrors);
 
                 // why is the sender null?
-                ServerCertificateValidationCallback.InvokeAsync(this, args, exceptionFunc).Wait();
+                ServerCertificateValidationCallback.InvokeAsync(this, args, ExceptionFunc).Wait();
                 return args.IsValid;
             }
 
@@ -53,11 +48,11 @@ namespace Titanium.Web.Proxy
         /// <param name="remoteCertificate">The remote certificate of server.</param>
         /// <param name="acceptableIssuers">The acceptable issues for client certificate as listed by server.</param>
         /// <returns></returns>
-        internal X509Certificate SelectClientCertificate(object sender, string targetHost,
+        internal X509Certificate? SelectClientCertificate(object sender, string targetHost,
             X509CertificateCollection localCertificates,
             X509Certificate remoteCertificate, string[] acceptableIssuers)
         {
-            X509Certificate clientCertificate = null;
+            X509Certificate? clientCertificate = null;
 
             if (acceptableIssuers != null && acceptableIssuers.Length > 0 && localCertificates != null &&
                 localCertificates.Count > 0)
@@ -90,7 +85,7 @@ namespace Titanium.Web.Proxy
                 };
 
                 // why is the sender null?
-                ClientCertificateSelectionCallback.InvokeAsync(this, args, exceptionFunc).Wait();
+                ClientCertificateSelectionCallback.InvokeAsync(this, args, ExceptionFunc).Wait();
                 return args.ClientCertificate;
             }
 

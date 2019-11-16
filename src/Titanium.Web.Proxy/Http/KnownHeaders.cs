@@ -6,46 +6,46 @@
     public static class KnownHeaders
     {
         // Both
-        public const string Connection = "Connection";
-        public const string ConnectionClose = "close";
-        public const string ConnectionKeepAlive = "keep-alive";
+        public static KnownHeader Connection = "Connection";
+        public static KnownHeader ConnectionClose = "close";
+        public static KnownHeader ConnectionKeepAlive = "keep-alive";
 
-        public const string ContentLength = "Content-Length";
+        public static KnownHeader ContentLength = "Content-Length";
 
-        public const string ContentType = "Content-Type";
-        public const string ContentTypeCharset = "charset";
-        public const string ContentTypeBoundary = "boundary";
+        public static KnownHeader ContentType = "Content-Type";
+        public static KnownHeader ContentTypeCharset = "charset";
+        public static KnownHeader ContentTypeBoundary = "boundary";
 
-        public const string Upgrade = "Upgrade";
-        public const string UpgradeWebsocket = "websocket";
+        public static KnownHeader Upgrade = "Upgrade";
+        public static KnownHeader UpgradeWebsocket = "websocket";
 
         // Request headers
-        public const string AcceptEncoding = "Accept-Encoding";
+        public static KnownHeader AcceptEncoding = "Accept-Encoding";
 
-        public const string Authorization = "Authorization";
+        public static KnownHeader Authorization = "Authorization";
 
-        public const string Expect = "Expect";
-        public const string Expect100Continue = "100-continue";
+        public static KnownHeader Expect = "Expect";
+        public static KnownHeader Expect100Continue = "100-continue";
 
-        public const string Host = "Host";
+        public static KnownHeader Host = "Host";
 
-        public const string ProxyAuthorization = "Proxy-Authorization";
-        public const string ProxyAuthorizationBasic = "basic";
+        public static KnownHeader ProxyAuthorization = "Proxy-Authorization";
+        public static KnownHeader ProxyAuthorizationBasic = "basic";
 
-        public const string ProxyConnection = "Proxy-Connection";
-        public const string ProxyConnectionClose = "close";
+        public static KnownHeader ProxyConnection = "Proxy-Connection";
+        public static KnownHeader ProxyConnectionClose = "close";
 
         // Response headers
-        public const string ContentEncoding = "Content-Encoding";
-        public const string ContentEncodingDeflate = "deflate";
-        public const string ContentEncodingGzip = "gzip";
-        public const string ContentEncodingBrotli = "br";
+        public static KnownHeader ContentEncoding = "Content-Encoding";
+        public static KnownHeader ContentEncodingDeflate = "deflate";
+        public static KnownHeader ContentEncodingGzip = "gzip";
+        public static KnownHeader ContentEncodingBrotli = "br";
 
-        public const string Location = "Location";
+        public static KnownHeader Location = "Location";
 
-        public const string ProxyAuthenticate = "Proxy-Authenticate";
+        public static KnownHeader ProxyAuthenticate = "Proxy-Authenticate";
 
-        public const string TransferEncoding = "Transfer-Encoding";
-        public const string TransferEncodingChunked = "chunked";
+        public static KnownHeader TransferEncoding = "Transfer-Encoding";
+        public static KnownHeader TransferEncodingChunked = "chunked";
     }
 }

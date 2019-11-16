@@ -1,5 +1,5 @@
-﻿using System.Net;
-using System.Security.Cryptography.X509Certificates;
+﻿using System.Diagnostics;
+using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
@@ -10,6 +10,7 @@ namespace Titanium.Web.Proxy.Models
     ///     A proxy endpoint that the client is aware of.
     ///     So client application know that it is communicating with a proxy server.
     /// </summary>
+    [DebuggerDisplay("Explicit: {IpAddress}:{Port}")]
     public class ExplicitProxyEndPoint : ProxyEndPoint
     {
         /// <summary>
@@ -33,13 +34,13 @@ namespace Titanium.Web.Proxy.Models
         ///     Set the <see cref="TunnelConnectSessionEventArgs.DecryptSsl" /> property to false if this HTTP connect request
         ///     shouldn't be decrypted and instead be relayed.
         /// </summary>
-        public event AsyncEventHandler<TunnelConnectSessionEventArgs> BeforeTunnelConnectRequest;
+        public event AsyncEventHandler<TunnelConnectSessionEventArgs>? BeforeTunnelConnectRequest;
 
         /// <summary>
         ///     Intercept tunnel connect response.
         ///     Valid only for explicit endpoints.
         /// </summary>
-        public event AsyncEventHandler<TunnelConnectSessionEventArgs> BeforeTunnelConnectResponse;
+        public event AsyncEventHandler<TunnelConnectSessionEventArgs>? BeforeTunnelConnectResponse;
 
         internal async Task InvokeBeforeTunnelConnectRequest(ProxyServer proxyServer,
             TunnelConnectSessionEventArgs connectArgs, ExceptionHandler exceptionFunc)

@@ -1,9 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net;
-#if NETCOREAPP2_1
 using System.Net.Security;
-#endif
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Threading.Tasks;
@@ -60,8 +58,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 // If client is localhost get the process id
                 if (NetworkHelper.IsLocalIpAddress(remoteEndPoint.Address))
                 {
-                    var ipVersion = endPoint.IpV6Enabled ? IpVersion.Ipv6 : IpVersion.Ipv4;
-                    processId = TcpHelper.GetProcessIdByLocalPort(ipVersion, remoteEndPoint.Port);
+                    processId = TcpHelper.GetProcessIdByLocalPort(endPoint.IpAddress.AddressFamily, remoteEndPoint.Port);
                 }
                 else
                 {

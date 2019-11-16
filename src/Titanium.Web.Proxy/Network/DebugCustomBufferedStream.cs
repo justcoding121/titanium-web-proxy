@@ -19,8 +19,8 @@ namespace Titanium.Web.Proxy.Network
 
         private readonly FileStream fileStreamSent;
 
-        public DebugCustomBufferedStream(Guid connectionId, string type, Stream baseStream, IBufferPool bufferPool, int bufferSize, bool leaveOpen = false) 
-            : base(baseStream, bufferPool, bufferSize, leaveOpen)
+        public DebugCustomBufferedStream(Guid connectionId, string type, Stream baseStream, IBufferPool bufferPool, bool leaveOpen = false) 
+            : base(baseStream, bufferPool, leaveOpen)
         {
             Counter = Interlocked.Increment(ref counter);
             fileStreamSent = new FileStream(Path.Combine(basePath, $"{connectionId}_{type}_{Counter}_sent.dat"), FileMode.Create);

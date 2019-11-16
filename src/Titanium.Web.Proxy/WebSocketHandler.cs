@@ -16,25 +16,23 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Handle upgrade to websocket
         /// </summary>
-        private async Task handleWebSocketUpgrade(string httpCmd,
+        private async Task handleWebSocketUpgrade(string requestHttpMethod, string requestHttpUrl, Version requestVersion,
             SessionEventArgs args, Request request, Response response,
             CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
             TcpServerConnection serverConnection,
             CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
         {
             // prepare the prefix content
-            await serverConnection.StreamWriter.WriteLineAsync(httpCmd, cancellationToken);
-            await serverConnection.StreamWriter.WriteHeadersAsync(request.Headers,
-                cancellationToken: cancellationToken);
+            var headerBuilder = new HeaderBuilder();
+            headerBuilder.WriteRequestLine(requestHttpMethod, requestHttpUrl, requestVersion);
+            headerBuilder.WriteHeaders(request.Headers);
+            await serverConnection.StreamWriter.WriteHeadersAsync(headerBuilder, cancellationToken);
 
             string httpStatus;
             try
             {
-                httpStatus = await serverConnection.Stream.ReadLineAsync(cancellationToken);
-                if (httpStatus == null)
-                {
-                    throw new ServerConnectionException("Server connection was closed.");
-                }
+                httpStatus = await serverConnection.Stream.ReadLineAsync(cancellationToken)
+                             ?? throw new ServerConnectionException("Server connection was closed.");
             }
             catch (Exception e) when (!(e is ServerConnectionException))
             {
@@ -60,13 +58,11 @@ namespace Titanium.Web.Proxy
             // If user requested call back then do it
             if (!args.HttpClient.Response.Locked)
             {
-                await invokeBeforeResponse(args);
+                await onBeforeResponse(args);
             }
 
-            await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool, BufferSize,
-                (buffer, offset, count) => { args.OnDataSent(buffer, offset, count); },
-                (buffer, offset, count) => { args.OnDataReceived(buffer, offset, count); },
-                cancellationTokenSource, ExceptionFunc);
+            await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool,
+                args.OnDataSent, args.OnDataReceived, cancellationTokenSource, ExceptionFunc);
         }
     }
 }

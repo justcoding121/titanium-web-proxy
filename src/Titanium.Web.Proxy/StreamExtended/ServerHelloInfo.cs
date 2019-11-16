@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,13 +16,25 @@ namespace Titanium.Web.Proxy.StreamExtended
             "DEFLATE"
         };
 
-        public int HandshakeVersion { get; set; }
+        public ServerHelloInfo(int handshakeVersion, int majorVersion, int minorVersion, byte[] random,
+            byte[] sessionId, int cipherSuite, int serverHelloLength)
+        {
+            HandshakeVersion = handshakeVersion;
+            MajorVersion = majorVersion;
+            MinorVersion = minorVersion;
+            Random = random;
+            SessionId = sessionId;
+            CipherSuite = cipherSuite;
+            ServerHelloLength = serverHelloLength;
+        }
 
-        public int MajorVersion { get; set; }
+        public int HandshakeVersion { get; }
 
-        public int MinorVersion { get; set; }
+        public int MajorVersion { get; }
 
-        public byte[] Random { get; set; }
+        public int MinorVersion { get; }
+
+        public byte[] Random { get; }
 
         public DateTime Time
         {
@@ -39,17 +51,17 @@ namespace Titanium.Web.Proxy.StreamExtended
             }
         }
 
-        public byte[] SessionId { get; set; }
+        public byte[] SessionId { get; }
 
-        public int CipherSuite { get; set; }
+        public int CipherSuite { get; }
 
         public byte CompressionMethod { get; set; }
 
-        internal int ServerHelloLength { get; set; }
+        internal int ServerHelloLength { get; }
 
         internal int EntensionsStartPosition { get; set; }
 
-        public Dictionary<string, SslExtension> Extensions { get; set; }
+        public Dictionary<string, SslExtension>? Extensions { get; set; }
 
         private static string SslVersionToString(int major, int minor)
         {

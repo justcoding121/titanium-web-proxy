@@ -13,8 +13,8 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                 ref WINHTTP_CURRENT_USER_IE_PROXY_CONFIG proxyConfig);
 
             [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-            internal static extern WinHttpHandle WinHttpOpen(string userAgent, AccessType accessType, string proxyName,
-                string proxyBypass, int dwFlags);
+            internal static extern WinHttpHandle WinHttpOpen(string? userAgent, AccessType accessType, string? proxyName,
+                string? proxyBypass, int dwFlags);
 
             [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
             internal static extern bool WinHttpSetTimeouts(WinHttpHandle session, int resolveTimeout,
@@ -66,7 +66,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             {
                 public AutoProxyFlags Flags;
                 public AutoDetectType AutoDetectFlags;
-                [MarshalAs(UnmanagedType.LPWStr)] public string AutoConfigUrl;
+                [MarshalAs(UnmanagedType.LPWStr)] public string? AutoConfigUrl;
                 private readonly IntPtr lpvReserved;
                 private readonly int dwReserved;
                 public bool AutoLogonIfChallenged;

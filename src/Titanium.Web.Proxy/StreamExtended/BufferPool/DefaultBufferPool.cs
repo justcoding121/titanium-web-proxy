@@ -1,5 +1,4 @@
 ﻿using System.Buffers;
-using System.Collections.Concurrent;
 
 namespace Titanium.Web.Proxy.StreamExtended.BufferPool
 {
@@ -9,8 +8,23 @@ namespace Titanium.Web.Proxy.StreamExtended.BufferPool
     ///     Works well when all consumers ask for buffers with the same size.
     ///     If your application would use variable size buffers consider implementing IBufferPool using System.Buffers library from Microsoft.
     /// </summary>
-    public class DefaultBufferPool : IBufferPool
+    internal class DefaultBufferPool : IBufferPool
     {
+        /// <summary>
+        ///     Buffer size in bytes used throughout this proxy.
+        ///     Default value is 8192 bytes.
+        /// </summary>
+        public int BufferSize { get; set; } = 8192;
+
+        /// <summary>
+        /// Gets a buffer with a default size.
+        /// </summary>
+        /// <returns></returns>
+        public byte[] GetBuffer()
+        {
+            return ArrayPool<byte>.Shared.Rent(BufferSize);
+        }
+
         /// <summary>
         /// Gets a buffer.
         /// </summary>

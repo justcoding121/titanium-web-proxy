@@ -1,6 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
+﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
@@ -10,7 +8,7 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.EventArguments;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 
@@ -24,7 +22,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
         {
             var testSuite = new TestSuite();
             var server = testSuite.GetServer();
-            var continueServer = new HttpContinueServer()
+            var continueServer = new HttpContinueServer
             {
                 ExpectationResponse = HttpStatusCode.Continue,
                 ResponseBody = "I am server. I received your greetings."
@@ -35,7 +33,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             proxy.Enable100ContinueBehaviour = true;
             proxy.BeforeRequest += (sender, e) =>
             {
-                e.HttpClient.Request.RequestUri = new Uri(server.ListeningTcpUrl);
+                e.HttpClient.Request.Url = server.ListeningTcpUrl;
                 return Task.CompletedTask;
             };
 
@@ -52,14 +50,14 @@ namespace Titanium.Web.Proxy.IntegrationTests
         {
             var testSuite = new TestSuite();
             var server = testSuite.GetServer();
-            var continueServer = new HttpContinueServer() { ExpectationResponse = HttpStatusCode.ExpectationFailed };
+            var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.ExpectationFailed };
             server.HandleTcpRequest(continueServer.HandleRequest);
 
             var proxy = testSuite.GetReverseProxy();
             proxy.Enable100ContinueBehaviour = true;
             proxy.BeforeRequest += (sender, e) =>
             {
-                e.HttpClient.Request.RequestUri = new Uri(server.ListeningTcpUrl);
+                e.HttpClient.Request.Url = server.ListeningTcpUrl;
                 return Task.CompletedTask;
             };
 
@@ -75,14 +73,14 @@ namespace Titanium.Web.Proxy.IntegrationTests
         {
             var testSuite = new TestSuite();
             var server = testSuite.GetServer();
-            var continueServer = new HttpContinueServer() { ExpectationResponse = HttpStatusCode.NotFound };
+            var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.NotFound };
             server.HandleTcpRequest(continueServer.HandleRequest);
 
             var proxy = testSuite.GetReverseProxy();
             proxy.Enable100ContinueBehaviour = true;
             proxy.BeforeRequest += (sender, e) =>
             {
-                e.HttpClient.Request.RequestUri = new Uri(server.ListeningTcpUrl);
+                e.HttpClient.Request.Url = server.ListeningTcpUrl;
                 return Task.CompletedTask;
             };
 
@@ -98,7 +96,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
         {
             var testSuite = new TestSuite();
             var server = testSuite.GetServer();
-            var continueServer = new HttpContinueServer() { ExpectationResponse = HttpStatusCode.Continue };
+            var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.Continue };
             server.HandleTcpRequest(continueServer.HandleRequest);
 
             var dbzEx = new DivideByZeroException("Undefined");
@@ -110,7 +108,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             {
                 try
                 {
-                    e.HttpClient.Request.RequestUri = new Uri(server.ListeningTcpUrl);
+                    e.HttpClient.Request.Url = server.ListeningTcpUrl;
                     throw dbzEx;
                 }
                 catch
@@ -124,6 +122,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
 
                     e.Respond(serverError);
                 }
+
                 return Task.CompletedTask;
             };
 

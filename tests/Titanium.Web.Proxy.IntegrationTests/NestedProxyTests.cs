@@ -1,11 +1,11 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Titanium.Web.Proxy.IntegrationTests
 {
@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             {
                 Assert.AreEqual("Test", session.UserData);
 
-                return await Task.FromResult(new Models.ExternalProxy()
+                return await Task.FromResult(new Models.ExternalProxy
                 {
                     HostName = "localhost",
                     Port = proxy2.ProxyEndPoints[0].Port

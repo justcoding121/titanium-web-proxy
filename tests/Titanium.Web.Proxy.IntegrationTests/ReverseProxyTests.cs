@@ -1,9 +1,9 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Titanium.Web.Proxy.IntegrationTests
 {
@@ -24,7 +24,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             var proxy = testSuite.GetReverseProxy();
             proxy.BeforeRequest += async (sender, e) =>
             {
-                e.HttpClient.Request.RequestUri = new Uri(server.ListeningHttpUrl);
+                e.HttpClient.Request.Url = server.ListeningHttpUrl;
                 await Task.FromResult(0);
             };
 
@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             var proxy = testSuite.GetReverseProxy();
             proxy.BeforeRequest += async (sender, e) =>
             {
-                e.HttpClient.Request.RequestUri = new Uri(server.ListeningHttpUrl);
+                e.HttpClient.Request.Url = server.ListeningHttpUrl;
                 await Task.FromResult(0);
             };
 
@@ -82,7 +82,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             var proxy = testSuite.GetReverseProxy();
             proxy.BeforeRequest += async (sender, e) =>
             {
-                e.HttpClient.Request.RequestUri = new Uri(server.ListeningHttpsUrl);
+                e.HttpClient.Request.Url = server.ListeningHttpsUrl;
                 await Task.FromResult(0);
             };
 
@@ -111,7 +111,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             var proxy = testSuite.GetReverseProxy();
             proxy.BeforeRequest += async (sender, e) =>
             {
-                e.HttpClient.Request.RequestUri = new Uri(server.ListeningHttpsUrl);
+                e.HttpClient.Request.Url = server.ListeningHttpsUrl;
                 await Task.FromResult(0);
             };
 

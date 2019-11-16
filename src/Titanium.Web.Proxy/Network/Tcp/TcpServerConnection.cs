@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Net;
-#if NETCOREAPP2_1
 using System.Net.Security;
-#endif
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
@@ -17,19 +15,33 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpServerConnection : IDisposable
     {
-        internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient)
+        internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient, CustomBufferedStream stream,
+            string hostName, int port, bool isHttps, SslApplicationProtocol negotiatedApplicationProtocol,
+            Version version, bool useUpstreamProxy, ExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string cacheKey)
         {
             this.tcpClient = tcpClient;
             LastAccess = DateTime.Now;
             this.proxyServer = proxyServer;
             this.proxyServer.UpdateServerConnectionCount(true);
+            StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferPool);
+            Stream = stream;
+            HostName = hostName;
+            Port = port;
+            IsHttps = isHttps;
+            NegotiatedApplicationProtocol = negotiatedApplicationProtocol;
+            Version = version;
+            UseUpstreamProxy = useUpstreamProxy;
+            UpStreamProxy = upStreamProxy;
+            UpStreamEndPoint = upStreamEndPoint;
+
+            CacheKey = cacheKey;
         }
 
         private ProxyServer proxyServer { get; }
 
         internal bool IsClosed => Stream.IsClosed;
 
-        internal ExternalProxy UpStreamProxy { get; set; }
+        internal ExternalProxy? UpStreamProxy { get; set; }
 
         internal string HostName { get; set; }
 
@@ -44,12 +56,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         ///     Local NIC via connection is made
         /// </summary>
-        internal IPEndPoint UpStreamEndPoint { get; set; }
+        internal IPEndPoint? UpStreamEndPoint { get; set; }
 
         /// <summary>
         ///     Http version
         /// </summary>
-        internal Version Version { get; set; }
+        internal Version Version { get; set; } = HttpHeader.VersionUnknown;
 
         private readonly TcpClient tcpClient;
 
@@ -61,12 +73,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         ///     Used to write lines to server
         /// </summary>
-        internal HttpRequestWriter StreamWriter { get; set; }
+        internal HttpRequestWriter StreamWriter { get; }
 
         /// <summary>
         ///     Server stream
         /// </summary>
-        internal CustomBufferedStream Stream { get; set; }
+        internal CustomBufferedStream Stream { get; }
 
         /// <summary>
         ///     Last time this connection was used

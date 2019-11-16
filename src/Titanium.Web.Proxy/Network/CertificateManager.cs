@@ -52,23 +52,38 @@ namespace Titanium.Web.Proxy.Network
         /// Useful to prevent multiple threads working on same certificate generation 
         /// when burst certificate generation requests happen for same certificate.
         /// </summary>
-        private readonly ConcurrentDictionary<string, Task<X509Certificate2>> pendingCertificateCreationTasks
-                            = new ConcurrentDictionary<string, Task<X509Certificate2>>();
+        private readonly ConcurrentDictionary<string, Task<X509Certificate2?>> pendingCertificateCreationTasks
+                            = new ConcurrentDictionary<string, Task<X509Certificate2?>>();
 
         private readonly CancellationTokenSource clearCertificatesTokenSource
                             = new CancellationTokenSource();
 
         private readonly object rootCertCreationLock = new object();
 
-        private ICertificateMaker certEngine;
+        private ICertificateMaker? certEngineValue;
+
+        private ICertificateMaker certEngine
+        {
+            get
+            {
+                if (certEngineValue == null)
+                {
+                    certEngineValue = engine == CertificateEngine.BouncyCastle
+                        ? (ICertificateMaker)new BCCertificateMaker(ExceptionFunc)
+                        : new WinCertificateMaker(ExceptionFunc);
+                }
+
+                return certEngineValue;
+            }
+        }
 
         private CertificateEngine engine;
 
-        private string issuer;
+        private string? issuer;
 
-        private X509Certificate2 rootCertificate;
+        private X509Certificate2? rootCertificate;
 
-        private string rootCertificateName;
+        private string? rootCertificateName;
 
         private ICertificateCache certificateCache = new DefaultCertificateDiskCache();
 
@@ -87,7 +102,7 @@ namespace Titanium.Web.Proxy.Network
         ///     prompting for UAC if required?
         /// </param>
         /// <param name="exceptionFunc"></param>
-        internal CertificateManager(string rootCertificateName, string rootCertificateIssuerName,
+        internal CertificateManager(string? rootCertificateName, string? rootCertificateIssuerName,
             bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin,
             ExceptionHandler exceptionFunc)
         {
@@ -156,15 +171,8 @@ namespace Titanium.Web.Proxy.Network
 
                 if (value != engine)
                 {
-                    certEngine = null;
+                    certEngineValue = null!;
                     engine = value;
-                }
-
-                if (certEngine == null)
-                {
-                    certEngine = engine == CertificateEngine.BouncyCastle
-                        ? (ICertificateMaker)new BCCertificateMaker(ExceptionFunc)
-                        : new WinCertificateMaker(ExceptionFunc);
                 }
             }
         }
@@ -210,7 +218,7 @@ namespace Titanium.Web.Proxy.Network
         /// <summary>
         ///     The root certificate.
         /// </summary>
-        public X509Certificate2 RootCertificate
+        public X509Certificate2? RootCertificate
         {
             get => rootCertificate;
             set
@@ -268,6 +276,11 @@ namespace Titanium.Web.Proxy.Network
         /// <returns></returns>
         private bool rootCertificateInstalled(StoreLocation storeLocation)
         {
+            if (RootCertificate == null)
+            {
+                throw new Exception("Root certificate is null.");
+            }
+
             string value = $"{RootCertificate.Issuer}";
             return findCertificates(StoreName.Root, storeLocation, value).Count > 0
                    && (CertificateEngine != CertificateEngine.DefaultWindows
@@ -298,8 +311,7 @@ namespace Titanium.Web.Proxy.Network
         {
             if (RootCertificate == null)
             {
-                ExceptionFunc(new Exception("Could not install certificate as it is null or empty."));
-                return;
+                throw new Exception("Could not install certificate as it is null or empty.");
             }
 
             var x509Store = new X509Store(storeName, storeLocation);
@@ -330,8 +342,7 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="storeName"></param>
         /// <param name="storeLocation"></param>
         /// <param name="certificate"></param>
-        private void uninstallCertificate(StoreName storeName, StoreLocation storeLocation,
-            X509Certificate2 certificate)
+        private void uninstallCertificate(StoreName storeName, StoreLocation storeLocation, X509Certificate2? certificate)
         {
             if (certificate == null)
             {
@@ -361,12 +372,19 @@ namespace Titanium.Web.Proxy.Network
 
         private X509Certificate2 makeCertificate(string certificateName, bool isRootCertificate)
         {
+            //if (isRoot != (null == signingCertificate))
+            //{
+            //    throw new ArgumentException(
+            //        "You must specify a Signing Certificate if and only if you are not creating a root.",
+            //        nameof(signingCertificate));
+            //}
+
             if (!isRootCertificate && RootCertificate == null)
             {
                 CreateRootCertificate();
             }
 
-            var certificate = certEngine.MakeCertificate(certificateName, isRootCertificate, RootCertificate);
+            var certificate = certEngine.MakeCertificate(certificateName, isRootCertificate ? null : RootCertificate);
 
             if (CertificateEngine == CertificateEngine.DefaultWindows)
             {
@@ -382,9 +400,9 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="certificateName"></param>
         /// <param name="isRootCertificate"></param>
         /// <returns></returns>
-        internal X509Certificate2 CreateCertificate(string certificateName, bool isRootCertificate)
+        internal X509Certificate2? CreateCertificate(string certificateName, bool isRootCertificate)
         {
-            X509Certificate2 certificate;
+            X509Certificate2? certificate;
             try
             {
                 if (!isRootCertificate && SaveFakeCertificates)
@@ -436,7 +454,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="certificateName"></param>
         /// <returns></returns>
-        public async Task<X509Certificate2> CreateServerCertificate(string certificateName)
+        public async Task<X509Certificate2?> CreateServerCertificate(string certificateName)
         {
             // check in cache first
             if (cachedCertificates.TryGetValue(certificateName, out var cached))
@@ -458,10 +476,7 @@ namespace Titanium.Web.Proxy.Network
                 var result = CreateCertificate(certificateName, false);
                 if (result != null)
                 {
-                    cachedCertificates.TryAdd(certificateName, new CachedCertificate
-                    {
-                        Certificate = result
-                    });
+                    cachedCertificates.TryAdd(certificateName, new CachedCertificate(result));
                 }
 
                 return result;
@@ -589,7 +604,7 @@ namespace Titanium.Web.Proxy.Network
         ///     Loads root certificate from current executing assembly location with expected name rootCert.pfx.
         /// </summary>
         /// <returns></returns>
-        public X509Certificate2 LoadRootCertificate()
+        public X509Certificate2? LoadRootCertificate()
         {
             try
             {
@@ -671,7 +686,7 @@ namespace Titanium.Web.Proxy.Network
             installCertificate(StoreName.My, StoreLocation.CurrentUser);
 
             string pfxFileName = Path.GetTempFileName();
-            File.WriteAllBytes(pfxFileName, RootCertificate.Export(X509ContentType.Pkcs12, PfxPassword));
+            File.WriteAllBytes(pfxFileName, RootCertificate!.Export(X509ContentType.Pkcs12, PfxPassword));
 
             // currentUser\Root, currentMachine\Personal &  currentMachine\Root
             var info = new ProcessStartInfo

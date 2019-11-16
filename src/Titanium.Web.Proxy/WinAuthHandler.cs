@@ -47,8 +47,8 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private async Task handle401UnAuthorized(SessionEventArgs args)
         {
-            string headerName = null;
-            HttpHeader authHeader = null;
+            string? headerName = null;
+            HttpHeader? authHeader = null;
 
             var response = args.HttpClient.Response;
 
@@ -91,7 +91,7 @@ namespace Titanium.Web.Proxy
 
             if (authHeader != null)
             {
-                string scheme = authSchemes.Contains(authHeader.Value) ? authHeader.Value : null;
+                string? scheme = authSchemes.Contains(authHeader.Value) ? authHeader.Value : null;
 
                 var expectedAuthState =
                     scheme == null ? State.WinAuthState.INITIAL_TOKEN : State.WinAuthState.UNAUTHORIZED;
@@ -111,7 +111,7 @@ namespace Titanium.Web.Proxy
                 // initial value will match exactly any of the schemes
                 if (scheme != null)
                 {
-                    string clientToken = WinAuthHandler.GetInitialAuthToken(request.Host, scheme, args.HttpClient.Data);
+                    string clientToken = WinAuthHandler.GetInitialAuthToken(request.Host!, scheme, args.HttpClient.Data);
 
                     string auth = string.Concat(scheme, clientToken);
 
@@ -127,13 +127,12 @@ namespace Titanium.Web.Proxy
                 else
                 {
                     // challenge value will start with any of the scheme selected
-
                     scheme = authSchemes.First(x =>
                         authHeader.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase) &&
                         authHeader.Value.Length > x.Length + 1);
 
                     string serverToken = authHeader.Value.Substring(scheme.Length + 1);
-                    string clientToken = WinAuthHandler.GetFinalAuthToken(request.Host, serverToken, args.HttpClient.Data);
+                    string clientToken = WinAuthHandler.GetFinalAuthToken(request.Host!, serverToken, args.HttpClient.Data);
 
                     string auth = string.Concat(scheme, clientToken);
 

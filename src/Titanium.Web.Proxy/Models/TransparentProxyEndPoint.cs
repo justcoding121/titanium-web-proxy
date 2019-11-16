@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.Diagnostics;
+using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
@@ -9,6 +10,7 @@ namespace Titanium.Web.Proxy.Models
     ///     A proxy end point client is not aware of.
     ///     Useful when requests are redirected to this proxy end point through port forwarding via router.
     /// </summary>
+    [DebuggerDisplay("Transparent: {IpAddress}:{Port}")]
     public class TransparentProxyEndPoint : ProxyEndPoint
     {
         /// <summary>
@@ -32,7 +34,7 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         ///     Before Ssl authentication this event is fired.
         /// </summary>
-        public event AsyncEventHandler<BeforeSslAuthenticateEventArgs> BeforeSslAuthenticate;
+        public event AsyncEventHandler<BeforeSslAuthenticateEventArgs>? BeforeSslAuthenticate;
 
         internal async Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
             BeforeSslAuthenticateEventArgs connectArgs, ExceptionHandler exceptionFunc)

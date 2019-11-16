@@ -9,6 +9,8 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
 {
     class HttpContinueClient
     {
+        private const int waitTimeout = 200;
+
         private static Encoding MsgEncoding = HttpHelper.GetEncodingFromContentType(null);
 
         public async Task<Response> Post(string server, int port, string content)
@@ -20,7 +22,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             var request = new Request
             {
                 Method = "POST",
-                RequestUriString = "/",
+                Url = "/",
                 HttpVersion = new Version(1, 1)
             };
             request.Headers.AddHeader(KnownHeaders.Host, server);
@@ -32,13 +34,14 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
 
             var buffer = new byte[1024];
             var responseMsg = string.Empty;
-            Response response = null;
+            Response response;
 
             while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
             {
                 var readTask = client.GetStream().ReadAsync(buffer, 0, 1024);
-                if (!readTask.Wait(200))
+                if (!readTask.Wait(waitTimeout))
                     return null;
+
                 responseMsg += MsgEncoding.GetString(buffer, 0, readTask.Result);
             }
 
@@ -51,17 +54,15 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
                 {
                     var readTask = client.GetStream().ReadAsync(buffer, 0, 1024);
-                    if (!readTask.Wait(200))
+                    if (!readTask.Wait(waitTimeout))
                         return null;
                     responseMsg += MsgEncoding.GetString(buffer, 0, readTask.Result);
                 }
 
                 return response;
             }
-            else
-            {
-                return response;
-            }
+
+            return response;
         }
     }
 }

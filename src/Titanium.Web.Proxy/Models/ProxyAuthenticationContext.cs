@@ -30,7 +30,7 @@
         /// <summary>
         /// An optional continuation token to return to the caller if set
         /// </summary>
-        public string Continuation { get; set; }
+        public string? Continuation { get; set; }
 
         public static ProxyAuthenticationContext Failed()
         {

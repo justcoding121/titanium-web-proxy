@@ -11,10 +11,10 @@ namespace Titanium.Web.Proxy.Network
         private const string defaultCertificateDirectoryName = "crts";
         private const string defaultCertificateFileExtension = ".pfx";
         private const string defaultRootCertificateFileName = "rootCert" + defaultCertificateFileExtension;
-        private string rootCertificatePath;
-        private string certificatePath;
+        private string? rootCertificatePath;
+        private string? certificatePath;
 
-        public X509Certificate2 LoadRootCertificate(string pathOrName, string password, X509KeyStorageFlags storageFlags)
+        public X509Certificate2? LoadRootCertificate(string pathOrName, string password, X509KeyStorageFlags storageFlags)
         {
             string path = getRootCertificatePath(pathOrName);
             return loadCertificate(path, password, storageFlags);
@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.Network
         }
 
         /// <inheritdoc />
-        public X509Certificate2 LoadCertificate(string subjectName, X509KeyStorageFlags storageFlags)
+        public X509Certificate2? LoadCertificate(string subjectName, X509KeyStorageFlags storageFlags)
         {
             string path = Path.Combine(getCertificatePath(), subjectName + defaultCertificateFileExtension);
             return loadCertificate(path, string.Empty, storageFlags);
@@ -56,7 +56,7 @@ namespace Titanium.Web.Proxy.Network
             certificatePath = null;
         }
 
-        private X509Certificate2 loadCertificate(string path, string password, X509KeyStorageFlags storageFlags)
+        private X509Certificate2? loadCertificate(string path, string password, X509KeyStorageFlags storageFlags)
         {
             byte[] exported;
 

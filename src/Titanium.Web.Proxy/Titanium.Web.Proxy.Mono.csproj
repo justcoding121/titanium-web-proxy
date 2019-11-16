@@ -7,7 +7,7 @@
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>StrongNameKey.snk</AssemblyOriginatorKeyFile>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
-    <LangVersion>7.1</LangVersion>
+    <LangVersion>8.0</LangVersion>
     <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 

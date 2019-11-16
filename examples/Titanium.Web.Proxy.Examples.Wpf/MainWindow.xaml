@@ -31,6 +31,7 @@
                     <GridViewColumn Header="Process" DisplayMemberBinding="{Binding Process}" />
                     <GridViewColumn Header="SentBytes" DisplayMemberBinding="{Binding SentDataCount}" />
                     <GridViewColumn Header="ReceivedBytes" DisplayMemberBinding="{Binding ReceivedDataCount}" />
+                    <GridViewColumn Header="ClientEndPoint" DisplayMemberBinding="{Binding ClientEndPoint}" />
                 </GridView>
             </ListView.View>
         </ListView>

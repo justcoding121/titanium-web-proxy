@@ -8,6 +8,10 @@ namespace Titanium.Web.Proxy.StreamExtended.BufferPool
     /// </summary>
     public interface IBufferPool : IDisposable
     {
+        int BufferSize { get; }
+
+        byte[] GetBuffer();
+
         byte[] GetBuffer(int bufferSize);
 
         void ReturnBuffer(byte[] buffer);

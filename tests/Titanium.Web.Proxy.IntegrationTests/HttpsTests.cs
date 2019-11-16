@@ -47,7 +47,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             var proxy = testSuite.GetProxy();
             proxy.BeforeRequest += async (sender, e) =>
             {
-                e.HttpClient.Request.RequestUri = new Uri(server.ListeningHttpUrl);
+                e.HttpClient.Request.Url = server.ListeningHttpUrl;
                 await Task.FromResult(0);
             };
 

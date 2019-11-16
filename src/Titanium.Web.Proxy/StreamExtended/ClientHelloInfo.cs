@@ -17,19 +17,19 @@ namespace Titanium.Web.Proxy.StreamExtended
             "DEFLATE"
         };
 
-        public int HandshakeVersion { get; set; }
+        public int HandshakeVersion { get; }
 
-        public int MajorVersion { get; set; }
+        public int MajorVersion { get; }
 
-        public int MinorVersion { get; set; }
+        public int MinorVersion { get; }
 
-        public byte[] Random { get; set; }
+        public byte[] Random { get; }
 
         public DateTime Time
         {
             get
             {
-                DateTime time = DateTime.MinValue;
+                var time = DateTime.MinValue;
                 if (Random.Length > 3)
                 {
                     time = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -40,17 +40,17 @@ namespace Titanium.Web.Proxy.StreamExtended
             }
         }
 
-        public byte[] SessionId { get; set; }
+        public byte[] SessionId { get; }
 
-        public int[] Ciphers { get; set; }
+        public int[] Ciphers { get; }
 
-        public byte[] CompressionData { get; set; }
+        public byte[]? CompressionData { get; internal set; }
 
-        internal int ClientHelloLength { get; set; }
+        internal int ClientHelloLength { get; }
 
-        internal int EntensionsStartPosition { get; set; }
+        internal int ExtensionsStartPosition { get; set; }
 
-        public Dictionary<string, SslExtension> Extensions { get; set; }
+        public Dictionary<string, SslExtension>? Extensions { get; set; }
 
         public SslProtocols SslProtocol
         {
@@ -77,6 +77,17 @@ namespace Titanium.Web.Proxy.StreamExtended
 
                 return SslProtocols.None;
             }
+        }
+
+        internal ClientHelloInfo(int handshakeVersion, int majorVersion, int minorVersion, byte[] random, byte[] sessionId, int[] ciphers, int clientHelloLength)
+        {
+            HandshakeVersion = handshakeVersion;
+            MajorVersion = majorVersion;
+            MinorVersion = minorVersion;
+            Random = random;
+            SessionId = sessionId;
+            Ciphers = ciphers;
+            ClientHelloLength = clientHelloLength;
         }
 
         private static string SslVersionToString(int major, int minor)

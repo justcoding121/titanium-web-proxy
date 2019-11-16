@@ -2,6 +2,8 @@
 using System.Threading;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
@@ -13,10 +15,9 @@ namespace Titanium.Web.Proxy.EventArguments
         private bool? isHttpsConnect;
 
         internal TunnelConnectSessionEventArgs(ProxyServer server, ProxyEndPoint endPoint, ConnectRequest connectRequest,
-            CancellationTokenSource cancellationTokenSource)
-            : base(server, endPoint, cancellationTokenSource, connectRequest)
+            ProxyClient proxyClient, CancellationTokenSource cancellationTokenSource)
+            : base(server, endPoint, proxyClient, connectRequest, connectRequest, cancellationTokenSource)
         {
-            HttpClient.ConnectRequest = connectRequest;
         }
 
         /// <summary>
@@ -39,6 +40,40 @@ namespace Titanium.Web.Proxy.EventArguments
                    throw new Exception("The value of this property is known in the BeforeTunnelConnectResponse event");
 
             internal set => isHttpsConnect = value;
+        }
+
+        /// <summary>
+        ///     Fired when decrypted data is sent within this session to server/client.
+        /// </summary>
+        public event EventHandler<DataEventArgs>? DecryptedDataSent;
+
+        /// <summary>
+        ///     Fired when decrypted data is received within this session from client/server.
+        /// </summary>
+        public event EventHandler<DataEventArgs>? DecryptedDataReceived;
+
+        internal void OnDecryptedDataSent(byte[] buffer, int offset, int count)
+        {
+            try
+            {
+                DecryptedDataSent?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            }
+            catch (Exception ex)
+            {
+                ExceptionFunc(new Exception("Exception thrown in user event", ex));
+            }
+        }
+
+        internal void OnDecryptedDataReceived(byte[] buffer, int offset, int count)
+        {
+            try
+            {
+                DecryptedDataReceived?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            }
+            catch (Exception ex)
+            {
+                ExceptionFunc(new Exception("Exception thrown in user event", ex));
+            }
         }
     }
 }

@@ -18,149 +18,104 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http2.Hpack
 {
-    public static class StaticTable
+    internal static class StaticTable
     {
         /// <summary>
         /// Appendix A: Static Table Definition
         /// </summary>
         /// <see cref="http://tools.ietf.org/html/rfc7541#appendix-A"/>
-        private static readonly List<HttpHeader> staticTable = new List<HttpHeader>()
+        private static readonly List<HttpHeader> staticTable;
+
+        private static readonly Dictionary<ByteString, int> staticIndexByName;
+
+        public static ByteString KnownHeaderAuhtority = (ByteString)":authority";
+        
+        public static ByteString KnownHeaderMethod = (ByteString)":method";
+
+        public static ByteString KnownHeaderPath = (ByteString)":path";
+
+        public static ByteString KnownHeaderScheme = (ByteString)":scheme";
+
+        public static ByteString KnownHeaderStatus = (ByteString)":status";
+
+        static StaticTable()
         {
-            /*  1 */
-            new HttpHeader(":authority", string.Empty),
-            /*  2 */
-            new HttpHeader(":method", "GET"),
-            /*  3 */
-            new HttpHeader(":method", "POST"),
-            /*  4 */
-            new HttpHeader(":path", "/"),
-            /*  5 */
-            new HttpHeader(":path", "/index.html"),
-            /*  6 */
-            new HttpHeader(":scheme", "http"),
-            /*  7 */
-            new HttpHeader(":scheme", "https"),
-            /*  8 */
-            new HttpHeader(":status", "200"),
-            /*  9 */
-            new HttpHeader(":status", "204"),
-            /* 10 */
-            new HttpHeader(":status", "206"),
-            /* 11 */
-            new HttpHeader(":status", "304"),
-            /* 12 */
-            new HttpHeader(":status", "400"),
-            /* 13 */
-            new HttpHeader(":status", "404"),
-            /* 14 */
-            new HttpHeader(":status", "500"),
-            /* 15 */
-            new HttpHeader("Accept-Charset", string.Empty),
-            /* 16 */
-            new HttpHeader("Accept-Encoding", "gzip, deflate"),
-            /* 17 */
-            new HttpHeader("Accept-Language", string.Empty),
-            /* 18 */
-            new HttpHeader("Accept-Ranges", string.Empty),
-            /* 19 */
-            new HttpHeader("Accept", string.Empty),
-            /* 20 */
-            new HttpHeader("Access-Control-Allow-Origin", string.Empty),
-            /* 21 */
-            new HttpHeader("Age", string.Empty),
-            /* 22 */
-            new HttpHeader("Allow", string.Empty),
-            /* 23 */
-            new HttpHeader("Authorization", string.Empty),
-            /* 24 */
-            new HttpHeader("Cache-Control", string.Empty),
-            /* 25 */
-            new HttpHeader("Content-Disposition", string.Empty),
-            /* 26 */
-            new HttpHeader("Content-Encoding", string.Empty),
-            /* 27 */
-            new HttpHeader("Content-Language", string.Empty),
-            /* 28 */
-            new HttpHeader("Content-Length", string.Empty),
-            /* 29 */
-            new HttpHeader("Content-Location", string.Empty),
-            /* 30 */
-            new HttpHeader("Content-Range", string.Empty),
-            /* 31 */
-            new HttpHeader("Content-Type", string.Empty),
-            /* 32 */
-            new HttpHeader("Cookie", string.Empty),
-            /* 33 */
-            new HttpHeader("Date", string.Empty),
-            /* 34 */
-            new HttpHeader("ETag", string.Empty),
-            /* 35 */
-            new HttpHeader("Expect", string.Empty),
-            /* 36 */
-            new HttpHeader("Expires", string.Empty),
-            /* 37 */
-            new HttpHeader("From", string.Empty),
-            /* 38 */
-            new HttpHeader("Host", string.Empty),
-            /* 39 */
-            new HttpHeader("If-Match", string.Empty),
-            /* 40 */
-            new HttpHeader("If-Modified-Since", string.Empty),
-            /* 41 */
-            new HttpHeader("If-None-Match", string.Empty),
-            /* 42 */
-            new HttpHeader("If-Range", string.Empty),
-            /* 43 */
-            new HttpHeader("If-Unmodified-Since", string.Empty),
-            /* 44 */
-            new HttpHeader("Last-Modified", string.Empty),
-            /* 45 */
-            new HttpHeader("Link", string.Empty),
-            /* 46 */
-            new HttpHeader("Location", string.Empty),
-            /* 47 */
-            new HttpHeader("Max-Forwards", string.Empty),
-            /* 48 */
-            new HttpHeader("Proxy-Authenticate", string.Empty),
-            /* 49 */
-            new HttpHeader("Proxy-Authorization", string.Empty),
-            /* 50 */
-            new HttpHeader("Range", string.Empty),
-            /* 51 */
-            new HttpHeader("Referer", string.Empty),
-            /* 52 */
-            new HttpHeader("Refresh", string.Empty),
-            /* 53 */
-            new HttpHeader("Retry-After", string.Empty),
-            /* 54 */
-            new HttpHeader("Server", string.Empty),
-            /* 55 */
-            new HttpHeader("Set-Cookie", string.Empty),
-            /* 56 */
-            new HttpHeader("Strict-Transport-Security", string.Empty),
-            /* 57 */
-            new HttpHeader("Transfer-Encoding", string.Empty),
-            /* 58 */
-            new HttpHeader("User-Agent", string.Empty),
-            /* 59 */
-            new HttpHeader("Vary", string.Empty),
-            /* 60 */
-            new HttpHeader("Via", string.Empty),
-            /* 61 */
-            new HttpHeader("WWW-Authenticate", string.Empty)
-        };
+            const int entryCount = 61;
+            staticTable = new List<HttpHeader>(entryCount);
+            staticIndexByName = new Dictionary<ByteString, int>(entryCount);
+            create(KnownHeaderAuhtority, string.Empty); // 1
+            create(KnownHeaderMethod, "GET"); // 2
+            create(KnownHeaderMethod, "POST"); // 3
+            create(KnownHeaderPath, "/"); // 4
+            create(KnownHeaderPath, "/index.html"); // 5
+            create(KnownHeaderScheme, "http"); // 6
+            create(KnownHeaderScheme, "https"); // 7
+            create(KnownHeaderStatus, "200"); // 8
+            create(KnownHeaderStatus, "204"); // 9
+            create(KnownHeaderStatus, "206"); // 10
+            create(KnownHeaderStatus, "304"); // 11
+            create(KnownHeaderStatus, "400"); // 12
+            create(KnownHeaderStatus, "404"); // 13
+            create(KnownHeaderStatus, "500"); // 14
+            create("Accept-Charset", string.Empty); // 15
+            create("Accept-Encoding", "gzip, deflate"); // 16
+            create("Accept-Language", string.Empty); // 17
+            create("Accept-Ranges", string.Empty); // 18
+            create("Accept", string.Empty); // 19
+            create("Access-Control-Allow-Origin", string.Empty); // 20
+            create("Age", string.Empty); // 21
+            create("Allow", string.Empty); // 22
+            create("Authorization", string.Empty); // 23
+            create("Cache-Control", string.Empty); // 24
+            create("Content-Disposition", string.Empty); // 25
+            create("Content-Encoding", string.Empty); // 26
+            create("Content-Language", string.Empty); // 27
+            create("Content-Length", string.Empty); // 28
+            create("Content-Location", string.Empty); // 29
+            create("Content-Range", string.Empty); // 30
+            create("Content-Type", string.Empty); // 31
+            create("Cookie", string.Empty); // 32
+            create("Date", string.Empty); // 33
+            create("ETag", string.Empty); // 34
+            create("Expect", string.Empty); // 35
+            create("Expires", string.Empty); // 36
+            create("From", string.Empty); // 37
+            create("Host", string.Empty); // 38
+            create("If-Match", string.Empty); // 39
+            create("If-Modified-Since", string.Empty); // 40
+            create("If-None-Match", string.Empty); // 41
+            create("If-Range", string.Empty); // 42
+            create("If-Unmodified-Since", string.Empty); // 43
+            create("Last-Modified", string.Empty); // 44
+            create("Link", string.Empty); // 45
+            create("Location", string.Empty); // 46
+            create("Max-Forwards", string.Empty); // 47
+            create("Proxy-Authenticate", string.Empty); // 48
+            create("Proxy-Authorization", string.Empty); // 49
+            create("Range", string.Empty); // 50
+            create("Referer", string.Empty); // 51
+            create("Refresh", string.Empty); // 52
+            create("Retry-After", string.Empty); // 53
+            create("Server", string.Empty); // 54
+            create("Set-Cookie", string.Empty); // 55
+            create("Strict-Transport-Security", string.Empty); // 56
+            create("Transfer-Encoding", string.Empty); // 57
+            create("User-Agent", string.Empty); // 58
+            create("Vary", string.Empty); // 59
+            create("Via", string.Empty); // 60
+            create("WWW-Authenticate", string.Empty); // 61
+        }
 
-        private static readonly Dictionary<string, int> staticIndexByName = createMap();
-
-        /// <summary>
-        /// The number of header fields in the static table.
-        /// </summary>
-        /// <value>The length.</value>
-        public static int Length => staticTable.Count;
+    /// <summary>
+    /// The number of header fields in the static table.
+    /// </summary>
+    /// <value>The length.</value>
+    public static int Length => staticTable.Count;
 
         /// <summary>
         /// Return the http header field at the given index value.
@@ -178,7 +133,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// </summary>
         /// <returns>The index.</returns>
         /// <param name="name">Name.</param>
-        public static int GetIndex(string name)
+        public static int GetIndex(ByteString name)
         {
             if (!staticIndexByName.TryGetValue(name, out int index))
             {
@@ -195,7 +150,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <returns>The index.</returns>
         /// <param name="name">Name.</param>
         /// <param name="value">Value.</param>
-        public static int GetIndex(string name, string value)
+        public static int GetIndex(ByteString name, ByteString value)
         {
             int index = GetIndex(name);
             if (index == -1)
@@ -207,12 +162,12 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             while (index <= Length)
             {
                 var entry = Get(index);
-                if (!name.Equals(entry.Name, StringComparison.OrdinalIgnoreCase))
+                if (!name.Equals(entry.NameData))
                 {
                     break;
                 }
 
-                if (HpackUtil.Equals(value, entry.Value))
+                if (Equals(value, entry.Value))
                 {
                     return index;
                 }
@@ -223,25 +178,15 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             return -1;
         }
 
-        /// <summary>
-        /// create a map of header name to index value to allow quick lookup
-        /// </summary>
-        /// <returns>The map.</returns>
-        private static Dictionary<string, int> createMap()
+        private static void create(string name, string value)
         {
-            int length = staticTable.Count;
-            var ret = new Dictionary<string, int>(length);
+            create((ByteString)name.ToLower(), value);
+        }
 
-            // Iterate through the static table in reverse order to
-            // save the smallest index for a given name in the map.
-            for (int index = length; index > 0; index--)
-            {
-                var entry = Get(index);
-                string name = entry.Name.ToLower();
-                ret[name] = index;
-            }
-
-            return ret;
+        private static void create(ByteString name, string value)
+        {
+            staticTable.Add(new HttpHeader(name, (ByteString)value));
+            staticIndexByName[name] = staticTable.Count;
         }
     }
 }

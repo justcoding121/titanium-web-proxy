@@ -278,7 +278,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
             }
 
             @lock.Release();
-
         }
 
         ///// <summary>

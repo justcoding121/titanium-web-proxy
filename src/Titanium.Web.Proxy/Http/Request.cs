@@ -3,8 +3,8 @@ using System.ComponentModel;
 using System.Text;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.Http
 {
@@ -14,40 +14,109 @@ namespace Titanium.Web.Proxy.Http
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class Request : RequestResponseBase
     {
-        private string originalUrl;
-
         /// <summary>
         ///     Request Method.
         /// </summary>
         public string Method { get; set; }
 
         /// <summary>
-        ///     Request HTTP Uri.
-        /// </summary>
-        public Uri RequestUri { get; set; }
-
-        /// <summary>
         ///     Is Https?
         /// </summary>
-        public bool IsHttps => RequestUri.Scheme == ProxyServer.UriSchemeHttps;
+        public bool IsHttps { get; internal set; }
+
+        private ByteString originalUrlData;
+        private ByteString urlData;
+
+        internal ByteString OriginalUrlData
+        {
+            get => originalUrlData;
+            set
+            {
+                originalUrlData = value;
+                UrlData = value;
+            }
+        }
+
+        private protected ByteString UrlData
+        {
+            get => urlData;
+            set
+            {
+                urlData = value;
+                var scheme = getUriScheme(UrlData);
+                if (scheme.Length > 0)
+                {
+                    IsHttps = scheme.Equals(ProxyServer.UriSchemeHttps8);
+                }
+            }
+        }
+
+        internal string? Authority { get; set; }
 
         /// <summary>
         ///     The original request Url.
         /// </summary>
-        public string OriginalUrl
+        public string OriginalUrl => originalUrlData.GetString();
+
+        /// <summary>
+        ///     Request HTTP Uri.
+        /// </summary>
+        public Uri RequestUri
         {
-            get => originalUrl;
-            internal set
+            get
             {
-                originalUrl = value;
-                RequestUriString = value;
+                string url = UrlData.GetString();
+                if (getUriScheme(UrlData).Length == 0)
+                {
+                    string? hostAndPath = Host ?? Authority;
+
+                    if (url.StartsWith("/"))
+                    {
+                        hostAndPath += url;
+                    }
+                    else
+                    {
+                        //throw new Exception($"Invalid URL: '{url}'");
+                    }
+
+                    url = string.Concat(IsHttps ? "https://" : "http://", hostAndPath);
+                }
+
+                try
+                {
+                    return new Uri(url);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Invalid URI: '{url}'", ex);
+                }
             }
         }
 
         /// <summary>
-        ///     The request uri as it is in the HTTP header
+        ///     The request url as it is in the HTTP header
         /// </summary>
-        public string RequestUriString { get; set; }
+        public string Url
+        {
+            get => UrlData.GetString();
+            set
+            {
+                UrlData = value.GetByteString();
+
+                if (Host != null)
+                {
+                    var uri = new Uri(value);
+                    Host = uri.Authority;
+                }
+            }
+        }
+
+        [Obsolete("This property is obsolete. Use Url property instead")]
+        public string RequestUriString
+        {
+            get => Url;
+            set => Url = value;
+        }
 
         /// <summary>
         ///     Has request body?
@@ -85,7 +154,7 @@ namespace Titanium.Web.Proxy.Http
         ///     Note: Changing this does NOT change host in RequestUri.
         ///     Users can set new RequestUri separately.
         /// </summary>
-        public string Host
+        public string? Host
         {
             get => Headers.GetHeaderValueOrNull(KnownHeaders.Host);
             set => Headers.SetOrAddHeaderValue(KnownHeaders.Host, value);
@@ -98,8 +167,8 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Expect);
-                return headerValue != null && headerValue.Equals(KnownHeaders.Expect100Continue);
+                string? headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Expect);
+                return KnownHeaders.Expect100Continue.Equals(headerValue);
             }
         }
 
@@ -107,11 +176,6 @@ namespace Titanium.Web.Proxy.Http
         ///     Does this request contain multipart/form-data?
         /// </summary>
         public bool IsMultipartFormData => ContentType?.StartsWith("multipart/form-data") == true;
-
-        /// <summary>
-        ///     Request Url.
-        /// </summary>
-        public string Url => RequestUri.OriginalString;
 
         /// <summary>
         ///     Cancels the client HTTP request without sending to server.
@@ -126,14 +190,14 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
+                string? headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
 
                 if (headerValue == null)
                 {
                     return false;
                 }
 
-                return headerValue.EqualsIgnoreCase(KnownHeaders.UpgradeWebsocket);
+                return headerValue.EqualsIgnoreCase(KnownHeaders.UpgradeWebsocket.String);
             }
         }
 
@@ -154,15 +218,10 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                var sb = new StringBuilder();
-                sb.Append($"{CreateRequestLine(Method, RequestUriString, HttpVersion)}{ProxyConstants.NewLine}");
-                foreach (var header in Headers)
-                {
-                    sb.Append($"{header.ToString()}{ProxyConstants.NewLine}");
-                }
-
-                sb.Append(ProxyConstants.NewLine);
-                return sb.ToString();
+                var headerBuilder = new HeaderBuilder();
+                headerBuilder.WriteRequestLine(Method, Url, HttpVersion);
+                headerBuilder.WriteHeaders(Headers);
+                return headerBuilder.GetString(HttpHeader.Encoding);
             }
         }
 
@@ -197,38 +256,41 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal static string CreateRequestLine(string httpMethod, string httpUrl, Version version)
-        {
-            return $"{httpMethod} {httpUrl} HTTP/{version.Major}.{version.Minor}";
-        }
-
         internal static void ParseRequestLine(string httpCmd, out string httpMethod, out string httpUrl,
             out Version version)
         {
-            // break up the line into three components (method, remote URL & Http Version)
-            var httpCmdSplit = httpCmd.Split(ProxyConstants.SpaceSplit, 3);
-
-            if (httpCmdSplit.Length < 2)
+            int firstSpace = httpCmd.IndexOf(' ');
+            if (firstSpace == -1)
             {
+                // does not contain at least 2 parts
                 throw new Exception("Invalid HTTP request line: " + httpCmd);
             }
 
+            int lastSpace = httpCmd.LastIndexOf(' ');
+
+            // break up the line into three components (method, remote URL & Http Version)
+
             // Find the request Verb
-            httpMethod = httpCmdSplit[0];
+            httpMethod = httpCmd.Substring(0, firstSpace);
             if (!isAllUpper(httpMethod))
             {
                 httpMethod = httpMethod.ToUpper();
             }
 
-            httpUrl = httpCmdSplit[1];
-
-            // parse the HTTP version
             version = HttpHeader.Version11;
-            if (httpCmdSplit.Length == 3)
-            {
-                string httpVersion = httpCmdSplit[2].Trim();
 
-                if (httpVersion.EqualsIgnoreCase("HTTP/1.0"))
+            if (firstSpace == lastSpace)
+            {
+                httpUrl = httpCmd.AsSpan(firstSpace + 1).ToString();
+            }
+            else
+            {
+                httpUrl = httpCmd.AsSpan(firstSpace + 1, lastSpace - firstSpace - 1).ToString();
+
+                // parse the HTTP version
+                var httpVersion = httpCmd.AsSpan(lastSpace + 1);
+
+                if (httpVersion.EqualsIgnoreCase("HTTP/1.0".AsSpan(0)))
                 {
                     version = HttpHeader.Version10;
                 }
@@ -249,5 +311,46 @@ namespace Titanium.Web.Proxy.Http
             return true;
         }
 
+        private ByteString getUriScheme(ByteString str)
+        {
+            if (str.Length < 3)
+            {
+                return ByteString.Empty;
+            }
+
+            // regex: "^[a-z]*://"
+            int i;
+            
+            for (i = 0; i < str.Length - 3; i++)
+            {
+                byte ch = str[i];
+                if (ch == ':')
+                {
+                    break;
+                }
+
+                if (ch < 'A' || ch > 'z' || (ch > 'Z' && ch < 'a')) // ASCII letter
+                {
+                    return ByteString.Empty;
+                }
+            }
+
+            if (str[i++] != ':')
+            {
+                return ByteString.Empty;
+            }
+
+            if (str[i++] != '/')
+            {
+                return ByteString.Empty;
+            }
+
+            if (str[i] != '/')
+            {
+                return ByteString.Empty;
+            }
+
+            return new ByteString(str.Data.Slice(0, i - 2));
+        }
     }
 }

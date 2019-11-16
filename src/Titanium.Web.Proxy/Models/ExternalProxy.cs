@@ -11,9 +11,9 @@ namespace Titanium.Web.Proxy.Models
         private static readonly Lazy<NetworkCredential> defaultCredentials =
             new Lazy<NetworkCredential>(() => CredentialCache.DefaultNetworkCredentials);
 
-        private string password;
+        private string? password;
 
-        private string userName;
+        private string? userName;
 
         /// <summary>
         ///     Use default windows credentials?
@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         ///     Username.
         /// </summary>
-        public string UserName
+        public string? UserName
         {
             get => UseDefaultCredentials ? defaultCredentials.Value.UserName : userName;
             set
@@ -45,7 +45,7 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         ///     Password.
         /// </summary>
-        public string Password
+        public string? Password
         {
             get => UseDefaultCredentials ? defaultCredentials.Value.Password : password;
             set
@@ -62,21 +62,12 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         ///     Host name.
         /// </summary>
-        public string HostName { get; set; }
+        public string HostName { get; set; } = string.Empty;
 
         /// <summary>
         ///     Port.
         /// </summary>
         public int Port { get; set; }
-
-        /// <summary>
-        /// Get cache key for Tcp connection cache.
-        /// </summary>
-        /// <returns></returns>
-        internal string GetCacheKey()
-        {
-            return $"{HostName}-{Port}" + (UseDefaultCredentials ? $"-{UserName}-{Password}" : string.Empty);
-        }
 
         /// <summary>
         ///     returns data in Hostname:port format.
