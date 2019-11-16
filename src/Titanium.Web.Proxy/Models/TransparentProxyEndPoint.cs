@@ -10,7 +10,7 @@ namespace Titanium.Web.Proxy.Models
     ///     A proxy end point client is not aware of.
     ///     Useful when requests are redirected to this proxy end point through port forwarding via router.
     /// </summary>
-    [DebuggerDisplay("Explicit: {IpAddress}:{Port}")]
+    [DebuggerDisplay("Transparent: {IpAddress}:{Port}")]
     public class TransparentProxyEndPoint : ProxyEndPoint
     {
         /// <summary>
