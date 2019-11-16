@@ -19,6 +19,8 @@
 		  <dependency id="BrotliSharpLib" version="0.3.3" />
 		  <dependency id="Microsoft.Win32.Registry" version="4.6.0" />
 		  <dependency id="System.Buffers" version="4.5.0" />
+		  <dependency id="System.Memory" version="4.5.3" />
+		  <dependency id="System.Threading.Tasks.Extensions" version="4.5.3" />
 		  <dependency id="System.Security.Principal.Windows" version="4.6.0" />
 	  </group>
 	  <group targetFramework="netstandard2.1">
@@ -26,6 +28,8 @@
 		  <dependency id="BrotliSharpLib" version="0.3.3" />
 		  <dependency id="Microsoft.Win32.Registry" version="4.6.0" />
 		  <dependency id="System.Buffers" version="4.5.0" />
+		  <dependency id="System.Memory" version="4.5.3" />
+		  <dependency id="System.Threading.Tasks.Extensions" version="4.5.3" />
 		  <dependency id="System.Security.Principal.Windows" version="4.6.0" />
 	  </group>
     </dependencies>
