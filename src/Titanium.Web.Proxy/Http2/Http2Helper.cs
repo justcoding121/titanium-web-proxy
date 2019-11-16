@@ -389,7 +389,10 @@ namespace Titanium.Web.Proxy.Http2
                             }
                         }
 
-                        rr.Body = body;
+                        if (!rr.BodyAvailable)
+                        {
+                            rr.Body = body;
+                        }
                     }
 
                     rr.IsBodyRead = true;
