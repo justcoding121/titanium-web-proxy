@@ -17,10 +17,11 @@
 
 using System;
 using System.IO;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http2.Hpack
 {
-    public class HuffmanEncoder
+    internal class HuffmanEncoder
     {
         /// <summary>
         /// Huffman Encoder
@@ -42,39 +43,15 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// </summary>
         /// <param name="output">the output stream for the compressed data</param>
         /// <param name="data">the string literal to be Huffman encoded</param>
-        /// <exception cref="IOException">if an I/O error occurs.</exception>
-        /// <see cref="Encode(BinaryWriter,byte[],int,int)"/>
-        public void Encode(BinaryWriter output, byte[] data)
-        {
-            Encode(output, data, 0, data.Length);
-        }
-
-        /// <summary>
-        /// Compresses the input string literal using the Huffman coding.
-        /// </summary>
-        /// <param name="output">the output stream for the compressed data</param>
-        /// <param name="data">the string literal to be Huffman encoded</param>
-        /// <param name="off">the start offset in the data</param>
-        /// <param name="len">the number of bytes to encode</param>
         /// <exception cref="IOException">if an I/O error occurs. In particular, an <code>IOException</code> may be thrown if the output stream has been closed.</exception>
-        public void Encode(BinaryWriter output, byte[] data, int off, int len)
+        public void Encode(BinaryWriter output, ByteString data)
         {
             if (output == null)
             {
                 throw new ArgumentNullException(nameof(output));
             }
 
-            if (data == null)
-            {
-                throw new ArgumentNullException(nameof(data));
-            }
-
-            if (off < 0 || len < 0 || (off + len) < 0 || off > data.Length || (off + len) > data.Length)
-            {
-                throw new IndexOutOfRangeException();
-            }
-
-            if (len == 0)
+            if (data.Length == 0)
             {
                 return;
             }
@@ -82,9 +59,9 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             long current = 0L;
             int n = 0;
 
-            for (int i = 0; i < len; i++)
+            for (int i = 0; i < data.Length; i++)
             {
-                int b = data[off + i] & 0xFF;
+                int b = data.Span[i] & 0xFF;
                 uint code = (uint)codes[b];
                 int nbits = lengths[b];
 
@@ -112,15 +89,10 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// </summary>
         /// <returns>the number of bytes required to Huffman encode <code>data</code></returns>
         /// <param name="data">the string literal to be Huffman encoded</param>
-        public int GetEncodedLength(byte[] data)
+        public int GetEncodedLength(ByteString data)
         {
-            if (data == null)
-            {
-                throw new ArgumentNullException(nameof(data));
-            }
-
             long len = 0L;
-            foreach (byte b in data)
+            foreach (byte b in data.Span)
             {
                 len += lengths[b];
             }

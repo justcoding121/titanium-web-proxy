@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http
@@ -292,7 +293,7 @@ namespace Titanium.Web.Proxy.Http
 
             if (headers.TryGetValue(headerName, out var header))
             {
-                header.Value = value;
+                header.ValueData = value.GetByteString();
             }
             else
             {

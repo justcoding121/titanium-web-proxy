@@ -10,7 +10,7 @@ namespace Titanium.Web.Proxy.Http
 {
     internal class HeaderBuilder
     {
-        private MemoryStream stream = new MemoryStream();
+        private readonly MemoryStream stream = new MemoryStream();
 
         public void WriteRequestLine(string httpMethod, string httpUrl, Version version)
         {
@@ -67,7 +67,7 @@ namespace Titanium.Web.Proxy.Http
 
         public void Write(string str)
         {
-            var encoding = HttpHelper.HeaderEncoding;
+            var encoding = HttpHeader.Encoding;
 
 #if NETSTANDARD2_1
             var buf = ArrayPool<byte>.Shared.Rent(str.Length * 4);
@@ -83,9 +83,16 @@ namespace Titanium.Web.Proxy.Http
 #endif
         }
 
-        public byte[] GetBytes()
+        public ArraySegment<byte> GetBuffer()
         {
-            return stream.ToArray();
+            stream.TryGetBuffer(out var buffer);
+            return buffer;
+        }
+
+        public string GetString(Encoding encoding)
+        {
+            stream.TryGetBuffer(out var buffer);
+            return encoding.GetString(buffer.Array, buffer.Offset, buffer.Count);
         }
     }
 }

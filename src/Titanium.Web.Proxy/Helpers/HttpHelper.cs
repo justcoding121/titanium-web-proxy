@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Network;
@@ -13,10 +14,6 @@ namespace Titanium.Web.Proxy.Helpers
 {
     internal static class HttpHelper
     {
-        private static readonly Encoding defaultEncoding = Encoding.GetEncoding("ISO-8859-1");
-
-        public static Encoding HeaderEncoding => defaultEncoding;
-
         struct SemicolonSplitEnumerator
         {
             private readonly ReadOnlyMemory<char> data;
@@ -73,7 +70,7 @@ namespace Titanium.Web.Proxy.Helpers
                 // return default if not specified
                 if (contentType == null)
                 {
-                    return defaultEncoding;
+                    return HttpHeader.DefaultEncoding;
                 }
 
                 // extract the encoding by finding the charset
@@ -105,7 +102,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             // return default if not specified
-            return defaultEncoding;
+            return HttpHeader.DefaultEncoding;
         }
 
         internal static ReadOnlyMemory<char> GetBoundaryFromContentType(string? contentType)
@@ -173,7 +170,7 @@ namespace Titanium.Web.Proxy.Helpers
         ///     Determines whether is connect method.
         /// </summary>
         /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsConnectMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        internal static Task<int> IsConnectMethod(CustomBufferedStream clientStreamReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
             return startsWith(clientStreamReader, bufferPool, "CONNECT", cancellationToken);
         }
@@ -182,7 +179,7 @@ namespace Titanium.Web.Proxy.Helpers
         ///     Determines whether is pri method (HTTP/2).
         /// </summary>
         /// <returns>1: when PRI, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsPriMethod(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        internal static Task<int> IsPriMethod(CustomBufferedStream clientStreamReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
             return startsWith(clientStreamReader, bufferPool, "PRI", cancellationToken);
         }
@@ -193,7 +190,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns>
         ///     1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
         /// </returns>
-        private static async Task<int> startsWith(ICustomStreamReader clientStreamReader, IBufferPool bufferPool, string expectedStart, CancellationToken cancellationToken = default)
+        private static async Task<int> startsWith(CustomBufferedStream clientStreamReader, IBufferPool bufferPool, string expectedStart, CancellationToken cancellationToken = default)
         {
             const int lengthToCheck = 10;
             if (bufferPool.BufferSize < lengthToCheck)

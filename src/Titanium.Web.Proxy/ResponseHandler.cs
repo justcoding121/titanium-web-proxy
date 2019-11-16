@@ -93,7 +93,7 @@ namespace Titanium.Web.Proxy
 
                 // clear current response
                 await args.ClearResponse(cancellationToken);
-                await handleHttpSessionRequest(args.HttpClient.Request.Method, args.HttpClient.Request.RequestUriString, args.HttpClient.Request.HttpVersion, 
+                await handleHttpSessionRequest(args.HttpClient.Request.Method, args.HttpClient.Request.Url, args.HttpClient.Request.HttpVersion, 
                     args, null, args.ClientConnection.NegotiatedApplicationProtocol,
                             cancellationToken, args.CancellationTokenSource);
                 return;

@@ -11,6 +11,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -48,27 +49,52 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
             bool isHttps, List<SslApplicationProtocol>? applicationProtocols,
-            IPEndPoint upStreamEndPoint, ExternalProxy? externalProxy)
+            IPEndPoint? upStreamEndPoint, ExternalProxy? externalProxy)
         {
             // http version is ignored since its an application level decision b/w HTTP 1.0/1.1
             // also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
             // That can create cache miss for same server connection unnecessarily especially when prefetching with Connect.
             // http version 2 is separated using applicationProtocols below.
-            var cacheKeyBuilder = new StringBuilder($"{remoteHostName}-{remotePort}-" +
-                                                  // when creating Tcp client isConnect won't matter
-                                                  $"{isHttps}-");
+            var cacheKeyBuilder = new StringBuilder();
+            cacheKeyBuilder.Append(remoteHostName);
+            cacheKeyBuilder.Append("-");
+            cacheKeyBuilder.Append(remotePort);
+            cacheKeyBuilder.Append("-");
+            // when creating Tcp client isConnect won't matter
+            cacheKeyBuilder.Append(isHttps);
+
             if (applicationProtocols != null)
             {
                 foreach (var protocol in applicationProtocols.OrderBy(x => x))
                 {
-                    cacheKeyBuilder.Append($"{protocol}-");
+                    cacheKeyBuilder.Append("-");
+                    cacheKeyBuilder.Append(protocol);
                 }
             }
 
-            cacheKeyBuilder.Append(upStreamEndPoint != null
-                ? $"{upStreamEndPoint.Address}-{upStreamEndPoint.Port}-"
-                : string.Empty);
-            cacheKeyBuilder.Append(externalProxy != null ? $"{externalProxy.GetCacheKey()}-" : string.Empty);
+            if (upStreamEndPoint != null)
+            {
+                cacheKeyBuilder.Append("-");
+                cacheKeyBuilder.Append(upStreamEndPoint.Address);
+                cacheKeyBuilder.Append("-");
+                cacheKeyBuilder.Append(upStreamEndPoint.Port);
+            }
+
+            if (externalProxy != null)
+            {
+                cacheKeyBuilder.Append("-");
+                cacheKeyBuilder.Append(externalProxy.HostName);
+                cacheKeyBuilder.Append("-");
+                cacheKeyBuilder.Append(externalProxy.Port);
+
+                if (externalProxy.UseDefaultCredentials)
+                {
+                    cacheKeyBuilder.Append("-");
+                    cacheKeyBuilder.Append(externalProxy.UserName);
+                    cacheKeyBuilder.Append("-");
+                    cacheKeyBuilder.Append(externalProxy.Password);
+                }
+            }
 
             return cacheKeyBuilder.ToString();
         }
@@ -180,7 +206,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <returns></returns>
         internal async Task<TcpServerConnection> GetServerConnection(string remoteHostName, int remotePort,
             Version httpVersion, bool isHttps, List<SslApplicationProtocol>? applicationProtocols, bool isConnect,
-            ProxyServer proxyServer, SessionEventArgsBase? session, IPEndPoint upStreamEndPoint, ExternalProxy? externalProxy,
+            ProxyServer proxyServer, SessionEventArgsBase? session, IPEndPoint? upStreamEndPoint, ExternalProxy? externalProxy,
             bool noCache, CancellationToken cancellationToken)
         {
             var sslProtocol = session?.ProxyClient.Connection.SslProtocol ?? SslProtocols.None;
@@ -210,9 +236,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             }
 
             var connection = await createServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
-                applicationProtocols, isConnect, proxyServer, session, upStreamEndPoint, externalProxy, cancellationToken);
-
-            connection.CacheKey = cacheKey;
+                applicationProtocols, isConnect, proxyServer, session, upStreamEndPoint, externalProxy, cacheKey, cancellationToken);
 
             return connection;
         }
@@ -231,11 +255,12 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="session">The http session.</param>
         /// <param name="upStreamEndPoint">The local upstream endpoint to make request via.</param>
         /// <param name="externalProxy">The external proxy to make request via.</param>
+        /// <param name="cacheKey">The connection cache key</param>
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
         private async Task<TcpServerConnection> createServerConnection(string remoteHostName, int remotePort,
             Version httpVersion, bool isHttps, SslProtocols sslProtocol, List<SslApplicationProtocol>? applicationProtocols, bool isConnect,
-            ProxyServer proxyServer, SessionEventArgsBase? session, IPEndPoint upStreamEndPoint, ExternalProxy? externalProxy,
+            ProxyServer proxyServer, SessionEventArgsBase? session, IPEndPoint? upStreamEndPoint, ExternalProxy? externalProxy, string cacheKey,
             CancellationToken cancellationToken)
         {
             // deny connection to proxy end points to avoid infinite connection loop.
@@ -280,8 +305,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
             retry:
             try
             {
-                var hostname = useUpstreamProxy ? externalProxy!.HostName : remoteHostName;
-                var port = useUpstreamProxy ? externalProxy!.Port : remotePort;
+                string hostname = useUpstreamProxy ? externalProxy!.HostName : remoteHostName;
+                int port = useUpstreamProxy ? externalProxy!.Port : remotePort;
 
                 var ipAddresses = await Dns.GetHostAddressesAsync(hostname);
                 if (ipAddresses == null || ipAddresses.Length == 0)
@@ -349,7 +374,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     var writer = new HttpRequestWriter(stream, proxyServer.BufferPool);
                     var connectRequest = new ConnectRequest
                     {
-                        OriginalUrl = $"{remoteHostName}:{remotePort}",
+                        OriginalUrlData = HttpHeader.Encoding.GetBytes($"{remoteHostName}:{remotePort}"),
                         HttpVersion = httpVersion
                     };
 
@@ -364,7 +389,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
                     await writer.WriteRequestAsync(connectRequest, cancellationToken: cancellationToken);
 
-                    string httpStatus = await stream.ReadLineAsync(cancellationToken);
+                    string httpStatus = await stream.ReadLineAsync(cancellationToken)
+                                         ?? throw new ServerConnectionException("Server connection was closed.");
 
                     Response.ParseResponseLine(httpStatus, out _, out int statusCode, out string statusDescription);
 
@@ -416,17 +442,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 throw;
             }
 
-            return new TcpServerConnection(proxyServer, tcpClient, stream)
-            {
-                UpStreamProxy = externalProxy,
-                UpStreamEndPoint = upStreamEndPoint,
-                HostName = remoteHostName,
-                Port = remotePort,
-                IsHttps = isHttps,
-                NegotiatedApplicationProtocol = negotiatedApplicationProtocol,
-                UseUpstreamProxy = useUpstreamProxy,
-                Version = httpVersion
-            };
+            return new TcpServerConnection(proxyServer, tcpClient, stream, remoteHostName, remotePort, isHttps,
+                negotiatedApplicationProtocol, httpVersion, useUpstreamProxy, externalProxy, upStreamEndPoint, cacheKey);
         }
 
 

@@ -22,7 +22,7 @@ namespace Titanium.Web.Proxy.EventArguments
     {
         private static bool isWindowsAuthenticationSupported => RunTime.IsWindows;
 
-        internal readonly CancellationTokenSource? CancellationTokenSource;
+        internal readonly CancellationTokenSource CancellationTokenSource;
 
         internal TcpServerConnection ServerConnection => HttpClient.Connection;
 
@@ -40,25 +40,19 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
         /// </summary>
-        private SessionEventArgsBase(ProxyServer server)
+        private protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
+            ProxyClient proxyClient, ConnectRequest? connectRequest, Request? request, CancellationTokenSource cancellationTokenSource)
         {
             BufferPool = server.BufferPool;
             ExceptionFunc = server.ExceptionFunc;
             TimeLine["Session Created"] = DateTime.Now;
-        }
 
-        protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
-            CancellationTokenSource cancellationTokenSource,
-            Request? request) : this(server)
-        {
             CancellationTokenSource = cancellationTokenSource;
 
-            ProxyClient = new ProxyClient();
-            HttpClient = new HttpWebClient(request);
+            ProxyClient = proxyClient;
+            HttpClient = new HttpWebClient(connectRequest, request, new Lazy<int>(() => ProxyClient.Connection.GetProcessId(endPoint)));
             LocalEndPoint = endPoint;
             EnableWinAuth = server.EnableWinAuth && isWindowsAuthenticationSupported;
-
-            HttpClient.ProcessId = new Lazy<int>(() => ProxyClient.Connection.GetProcessId(endPoint));
         }
 
         /// <summary>
@@ -84,7 +78,7 @@ namespace Titanium.Web.Proxy.EventArguments
             get => enableWinAuth;
             set
             {
-                if (!isWindowsAuthenticationSupported)
+                if (value && !isWindowsAuthenticationSupported)
                     throw new Exception("Windows Authentication is not supported");
 
                 enableWinAuth = value;

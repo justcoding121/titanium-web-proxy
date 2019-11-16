@@ -15,7 +15,9 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpServerConnection : IDisposable
     {
-        internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient, CustomBufferedStream stream)
+        internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient, CustomBufferedStream stream,
+            string hostName, int port, bool isHttps, SslApplicationProtocol negotiatedApplicationProtocol,
+            Version version, bool useUpstreamProxy, ExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string cacheKey)
         {
             this.tcpClient = tcpClient;
             LastAccess = DateTime.Now;
@@ -23,6 +25,16 @@ namespace Titanium.Web.Proxy.Network.Tcp
             this.proxyServer.UpdateServerConnectionCount(true);
             StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferPool);
             Stream = stream;
+            HostName = hostName;
+            Port = port;
+            IsHttps = isHttps;
+            NegotiatedApplicationProtocol = negotiatedApplicationProtocol;
+            Version = version;
+            UseUpstreamProxy = useUpstreamProxy;
+            UpStreamProxy = upStreamProxy;
+            UpStreamEndPoint = upStreamEndPoint;
+
+            CacheKey = cacheKey;
         }
 
         private ProxyServer proxyServer { get; }

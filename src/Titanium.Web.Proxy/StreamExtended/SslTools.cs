@@ -13,19 +13,6 @@ namespace Titanium.Web.Proxy.StreamExtended
     internal class SslTools
     {
         /// <summary>
-        ///     Is the given stream starts with an SSL client hello?
-        /// </summary>
-        /// <param name="stream"></param>
-        /// <param name="bufferPool"></param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public static async Task<bool> IsClientHello(CustomBufferedStream stream, IBufferPool  bufferPool, CancellationToken cancellationToken)
-        {
-            var clientHello = await PeekClientHello(stream, bufferPool, cancellationToken);
-            return clientHello != null;
-        }
-
-        /// <summary>
         ///     Peek the SSL client hello information.
         /// </summary>
         /// <param name="clientStream"></param>
@@ -46,7 +33,7 @@ namespace Titanium.Web.Proxy.StreamExtended
             if ((recordType & 0x80) == 0x80)
             {
                 // SSL 2
-                var peekStream = new CustomBufferedPeekStream(clientStream, bufferPool, 1);
+                var peekStream = new PeekStreamReader(clientStream, 1);
 
                 // length value + minimum length
                 if (!await peekStream.EnsureBufferLength(10, cancellationToken))
@@ -88,21 +75,14 @@ namespace Titanium.Web.Proxy.StreamExtended
                 byte[] sessionId = peekStream.ReadBytes(sessionIdLength);
                 byte[] random = peekStream.ReadBytes(randomLength);
 
-                var clientHelloInfo = new ClientHelloInfo(sessionId)
-                {
-                    HandshakeVersion = 2,
-                    MajorVersion = majorVersion,
-                    MinorVersion = minorVersion,
-                    Random = random,
-                    Ciphers = ciphers,
-                    ClientHelloLength = peekStream.Position,
-                };
+                var clientHelloInfo = new ClientHelloInfo(2, majorVersion, minorVersion, random, sessionId, ciphers,
+                    peekStream.Position);
 
                 return clientHelloInfo;
             }
             else if (recordType == 0x16)
             {
-                var peekStream = new CustomBufferedPeekStream(clientStream, bufferPool, 1);
+                var peekStream = new PeekStreamReader(clientStream, 1);
 
                 // should contain at least 43 bytes
                 // 2 version + 2 length + 1 type + 3 length(?) + 2 version +  32 random + 1 sessionid length
@@ -168,25 +148,19 @@ namespace Titanium.Web.Proxy.StreamExtended
 
                 byte[] compressionData = peekStream.ReadBytes(length);
 
-                int extenstionsStartPosition = peekStream.Position;
+                int extensionsStartPosition = peekStream.Position;
 
                 Dictionary<string, SslExtension>? extensions = null;
 
-                if(extenstionsStartPosition < recordLength + 5)
+                if(extensionsStartPosition < recordLength + 5)
                 {
                     extensions = await ReadExtensions(majorVersion, minorVersion, peekStream, bufferPool, cancellationToken);
                 }
 
-                var clientHelloInfo = new ClientHelloInfo(sessionId)
+                var clientHelloInfo = new ClientHelloInfo(3, majorVersion, minorVersion, random, sessionId, ciphers, peekStream.Position)
                 {
-                    HandshakeVersion = 3,
-                    MajorVersion = majorVersion,
-                    MinorVersion = minorVersion,
-                    Random = random,
-                    Ciphers = ciphers,
+                    ExtensionsStartPosition = extensionsStartPosition,
                     CompressionData = compressionData,
-                    ClientHelloLength = peekStream.Position,
-                    EntensionsStartPosition = extenstionsStartPosition,
                     Extensions = extensions,
                 };
 
@@ -231,7 +205,7 @@ namespace Titanium.Web.Proxy.StreamExtended
             {
                 // SSL 2
                 // not tested. SSL2 is deprecated
-                var peekStream = new CustomBufferedPeekStream(serverStream, bufferPool, 1);
+                var peekStream = new PeekStreamReader(serverStream, 1);
 
                 // length value + minimum length
                 if (!await peekStream.EnsureBufferLength(39, cancellationToken))
@@ -265,22 +239,14 @@ namespace Titanium.Web.Proxy.StreamExtended
                 byte[] sessionId = peekStream.ReadBytes(1);
                 int cipherSuite = peekStream.ReadInt16();
 
-                var serverHelloInfo = new ServerHelloInfo
-                {
-                    HandshakeVersion = 2,
-                    MajorVersion = majorVersion,
-                    MinorVersion = minorVersion,
-                    Random = random,
-                    SessionId = sessionId,
-                    CipherSuite = cipherSuite,
-                    ServerHelloLength = peekStream.Position,
-                };
+                var serverHelloInfo = new ServerHelloInfo(2, majorVersion, minorVersion, random, sessionId, cipherSuite,
+                    peekStream.Position);
 
                 return serverHelloInfo;
             }
             else if (recordType == 0x16)
             {
-                var peekStream = new CustomBufferedPeekStream(serverStream, bufferPool, 1);
+                var peekStream = new PeekStreamReader(serverStream, 1);
 
                 // should contain at least 43 bytes
                 // 2 version + 2 length + 1 type + 3 length(?) + 2 version +  32 random + 1 sessionid length
@@ -329,16 +295,9 @@ namespace Titanium.Web.Proxy.StreamExtended
                    extensions = await ReadExtensions(majorVersion, minorVersion, peekStream, bufferPool, cancellationToken);
                 }
 
-                var serverHelloInfo = new ServerHelloInfo
+                var serverHelloInfo = new ServerHelloInfo(3, majorVersion, minorVersion, random, sessionId, cipherSuite, peekStream.Position)
                 {
-                    HandshakeVersion = 3,
-                    MajorVersion = majorVersion,
-                    MinorVersion = minorVersion,
-                    Random = random,
-                    SessionId = sessionId,
-                    CipherSuite = cipherSuite,
                     CompressionMethod = compressionMethod,
-                    ServerHelloLength = peekStream.Position,
                     EntensionsStartPosition = extenstionsStartPosition,
                     Extensions = extensions,
                 };
@@ -349,24 +308,24 @@ namespace Titanium.Web.Proxy.StreamExtended
             return null;
         }
 
-        private static async Task<Dictionary<string, SslExtension>?> ReadExtensions(int majorVersion, int minorVersion, CustomBufferedPeekStream peekStream, IBufferPool bufferPool, CancellationToken cancellationToken)
+        private static async Task<Dictionary<string, SslExtension>?> ReadExtensions(int majorVersion, int minorVersion, PeekStreamReader peekStreamReader, IBufferPool bufferPool, CancellationToken cancellationToken)
         {
             Dictionary<string, SslExtension>? extensions = null;
             if (majorVersion > 3 || majorVersion == 3 && minorVersion >= 1)
             {
-                if (await peekStream.EnsureBufferLength(2, cancellationToken))
+                if (await peekStreamReader.EnsureBufferLength(2, cancellationToken))
                 {
-                    int extensionsLength = peekStream.ReadInt16();
+                    int extensionsLength = peekStreamReader.ReadInt16();
 
-                    if (await peekStream.EnsureBufferLength(extensionsLength, cancellationToken))
+                    if (await peekStreamReader.EnsureBufferLength(extensionsLength, cancellationToken))
                     {
                         extensions = new Dictionary<string, SslExtension>();
                         int idx = 0;
                         while (extensionsLength > 3)
                         {
-                            int id = peekStream.ReadInt16();
-                            int length = peekStream.ReadInt16();
-                            byte[] data = peekStream.ReadBytes(length);
+                            int id = peekStreamReader.ReadInt16();
+                            int length = peekStreamReader.ReadInt16();
+                            byte[] data = peekStreamReader.ReadBytes(length);
                             var extension = SslExtensions.GetExtension(id, data, idx++);
                             extensions[extension.Name] = extension;
                             extensionsLength -= 4 + length;

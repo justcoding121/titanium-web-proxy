@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.StreamExtended.Network
@@ -16,13 +17,12 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     ///     of UTF-8 encoded string or raw bytes asynchronously from last read position.
     /// </summary>
     /// <seealso cref="System.IO.Stream" />
-    internal class CustomBufferedStream : Stream, ICustomStreamReader
+    internal class CustomBufferedStream : Stream, IPeekStream, ILineStream
     {
         private readonly bool leaveOpen;
         private readonly byte[] streamBuffer;
 
-        // default to UTF-8
-        private static Encoding encoding => HttpHelper.HeaderEncoding;
+        private static Encoding encoding => HttpHeader.Encoding;
 
         private static readonly bool networkStreamHack = true;
 
@@ -157,7 +157,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <returns>
         /// A task that represents the asynchronous copy operation.
         /// </returns>
-        public override async Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken = default)
+        public override async Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
         {
             if (bufferLength > 0)
             {
@@ -176,7 +176,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <returns>
         /// A task that represents the asynchronous flush operation.
         /// </returns>
-        public override Task FlushAsync(CancellationToken cancellationToken = default)
+        public override Task FlushAsync(CancellationToken cancellationToken)
         {
             return BaseStream.FlushAsync(cancellationToken);
         }
@@ -201,7 +201,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// less than the requested number, or it can be 0 (zero)
         /// if the end of the stream has been reached.
         /// </returns>
-        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken = default)
+        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             if (bufferLength == 0)
             {
@@ -212,6 +212,45 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             if (available > 0)
             {
                 Buffer.BlockCopy(streamBuffer, bufferPos, buffer, offset, available);
+                bufferPos += available;
+                bufferLength -= available;
+            }
+
+            return available;
+        }
+
+        /// <summary>
+        /// Asynchronously reads a sequence of bytes from the current stream,
+        /// advances the position within the stream by the number of bytes read,
+        /// and monitors cancellation requests.
+        /// </summary>
+        /// <param name="buffer">The buffer to write the data into.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests. 
+        /// The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
+        /// <returns>
+        /// A task that represents the asynchronous read operation.
+        /// The value of the parameter contains the total 
+        /// number of bytes read into the buffer.
+        /// The result value can be less than the number of bytes
+        /// requested if the number of bytes currently available is
+        /// less than the requested number, or it can be 0 (zero)
+        /// if the end of the stream has been reached.
+        /// </returns>
+#if NETSTANDARD2_1
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+#else
+        public async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+#endif
+        {
+            if (bufferLength == 0)
+            {
+                await FillBufferAsync(cancellationToken);
+            }
+
+            int available = Math.Min(bufferLength, buffer.Length);
+            if (available > 0)
+            {
+                new Span<byte>(streamBuffer, bufferPos, available).CopyTo(buffer.Span);
                 bufferPos += available;
                 bufferLength -= available;
             }
@@ -247,7 +286,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="index">The index.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        public async Task<int> PeekByteAsync(int index, CancellationToken cancellationToken = default)
+        public async ValueTask<int> PeekByteAsync(int index, CancellationToken cancellationToken = default)
         {
             // When index is greater than the buffer size
             if (streamBuffer.Length <= index)
@@ -277,7 +316,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="count">The count.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns></returns>
-        public async Task<int> PeekBytesAsync(byte[] buffer, int offset, int index, int count, CancellationToken cancellationToken = default)
+        public async ValueTask<int> PeekBytesAsync(byte[] buffer, int offset, int index, int count, CancellationToken cancellationToken = default)
         {
             // When index is greater than the buffer size
             if (streamBuffer.Length <= index + count)
@@ -346,7 +385,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// A task that represents the asynchronous write operation.
         /// </returns>
         [DebuggerStepThrough]
-        public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken = default)
+        public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             OnDataWrite(buffer, offset, count);
 
@@ -558,7 +597,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        public Task<string?> ReadLineAsync(CancellationToken cancellationToken = default)
+        public ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken = default)
         {
             return ReadLineInternalAsync(this, bufferPool, cancellationToken);
         }
@@ -567,7 +606,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        internal static async Task<string?> ReadLineInternalAsync(ICustomStreamReader reader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        internal static async ValueTask<string?> ReadLineInternalAsync(ILineStream reader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
             byte lastChar = default;
 

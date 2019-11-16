@@ -9,6 +9,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
@@ -36,15 +37,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint,
-            CancellationTokenSource cancellationTokenSource)
-            : this(server, endPoint, null, cancellationTokenSource)
-        {
-        }
-
-        protected SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint,
-            Request? request, CancellationTokenSource cancellationTokenSource)
-            : base(server, endPoint, cancellationTokenSource, request)
+        internal SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint, ProxyClient proxyClient, ConnectRequest? connectRequest, CancellationTokenSource cancellationTokenSource)
+            : base(server, endPoint, proxyClient, connectRequest, null, cancellationTokenSource)
         {
         }
 
@@ -72,7 +66,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public event EventHandler<MultipartRequestPartSentEventArgs>? MultipartRequestPartSent;
 
-        private ICustomStreamReader getStreamReader(bool isRequest)
+        private CustomBufferedStream getStreamReader(bool isRequest)
         {
             return isRequest ? ProxyClient.ClientStream : HttpClient.Connection.Stream;
         }
@@ -333,7 +327,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        private async Task<long> readUntilBoundaryAsync(ICustomStreamReader reader, long totalBytesToRead, ReadOnlyMemory<char> boundary, CancellationToken cancellationToken)
+        private async Task<long> readUntilBoundaryAsync(ILineStream reader, long totalBytesToRead, ReadOnlyMemory<char> boundary, CancellationToken cancellationToken)
         {
             int bufferDataLength = 0;
 

@@ -64,17 +64,14 @@ namespace Titanium.Web.Proxy
                     }
 
                     // read the request line
-                    string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
-
+                    string? httpCmd = await clientStream.ReadLineAsync(cancellationToken);
                     if (string.IsNullOrEmpty(httpCmd))
                     {
                         return;
                     }
 
-                    var args = new SessionEventArgs(this, endPoint, cancellationTokenSource)
+                    var args = new SessionEventArgs(this, endPoint, new ProxyClient(clientConnection, clientStream, clientStreamWriter), connectRequest, cancellationTokenSource)
                     {
-                        ProxyClient = { Connection = clientConnection },
-                        HttpClient = { ConnectRequest = connectRequest },
                         UserData = connectArgs?.UserData
                     };
 
@@ -82,7 +79,7 @@ namespace Titanium.Web.Proxy
                     {
                         try
                         {
-                            Request.ParseRequestLine(httpCmd, out string httpMethod, out string httpUrl, out var version);
+                            Request.ParseRequestLine(httpCmd!, out string httpMethod, out string httpUrl, out var version);
 
                             // Read the request headers in to unique and non-unique header collections
                             await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,
@@ -123,12 +120,10 @@ namespace Titanium.Web.Proxy
 
                             var request = args.HttpClient.Request;
                             request.RequestUri = httpRemoteUri;
-                            request.OriginalUrl = httpUrl;
+                            request.OriginalUrlData = HttpHeader.Encoding.GetBytes(httpUrl);
 
                             request.Method = httpMethod;
                             request.HttpVersion = version;
-                            args.ProxyClient.ClientStream = clientStream;
-                            args.ProxyClient.ClientStreamWriter = clientStreamWriter;
 
                             if (!args.IsTransparent)
                             {

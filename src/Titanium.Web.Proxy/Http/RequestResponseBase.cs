@@ -57,7 +57,7 @@ namespace Titanium.Web.Proxy.Http
 
         internal bool Http2IgnoreBodyFrames;
 
-        internal Task Http2BeforeHandlerTask;
+        internal Task? Http2BeforeHandlerTask;
 
         /// <summary>
         ///     Priority used only in HTTP/2

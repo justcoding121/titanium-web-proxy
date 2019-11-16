@@ -54,7 +54,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <param name="buf">the string literal to be decoded</param>
         /// <returns>the output stream for the compressed data</returns>
         /// <exception cref="IOException">throws IOException if an I/O error occurs. In particular, an <code>IOException</code> may be thrown if the output stream has been closed.</exception>
-        public string Decode(byte[] buf)
+        public ReadOnlyMemory<byte> Decode(byte[] buf)
         {
             var resultBuf = new byte[buf.Length * 2];
             int resultSize = 0;
@@ -109,7 +109,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 throw new IOException("Invalid Padding");
             }
 
-            return Encoding.UTF8.GetString(resultBuf, 0, resultSize);
+            return resultBuf.AsMemory(0, resultSize);
         }
 
         private class Node

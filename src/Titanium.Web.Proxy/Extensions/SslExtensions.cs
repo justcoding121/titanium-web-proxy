@@ -94,19 +94,19 @@ namespace System.Net.Security
     {
         internal bool AllowRenegotiation { get; set; }
 
-        internal string TargetHost { get; set; }
+        internal string? TargetHost { get; set; }
 
-        internal X509CertificateCollection ClientCertificates { get; set; }
+        internal X509CertificateCollection? ClientCertificates { get; set; }
 
-        internal LocalCertificateSelectionCallback LocalCertificateSelectionCallback { get; set; }
+        internal LocalCertificateSelectionCallback? LocalCertificateSelectionCallback { get; set; }
 
         internal SslProtocols EnabledSslProtocols { get; set; }
 
         internal X509RevocationMode CertificateRevocationCheckMode { get; set; }
 
-        internal List<SslApplicationProtocol> ApplicationProtocols { get; set; }
+        internal List<SslApplicationProtocol>? ApplicationProtocols { get; set; }
 
-        internal RemoteCertificateValidationCallback RemoteCertificateValidationCallback { get; set; }
+        internal RemoteCertificateValidationCallback? RemoteCertificateValidationCallback { get; set; }
 
         internal EncryptionPolicy EncryptionPolicy { get; set; }
     }

@@ -102,7 +102,7 @@ namespace Titanium.Web.Proxy.Http
                 var headerBuilder = new HeaderBuilder();
                 headerBuilder.WriteResponseLine(HttpVersion, StatusCode, StatusDescription);
                 headerBuilder.WriteHeaders(Headers);
-                return HttpHelper.HeaderEncoding.GetString(headerBuilder.GetBytes());
+                return headerBuilder.GetString(HttpHeader.Encoding);
             }
         }
 
@@ -121,8 +121,7 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal static void ParseResponseLine(string httpStatus, out Version version, out int statusCode,
-            out string statusDescription)
+        internal static void ParseResponseLine(string httpStatus, out Version version, out int statusCode, out string statusDescription)
         {
             int firstSpace = httpStatus.IndexOf(' ');
             if (firstSpace == -1)

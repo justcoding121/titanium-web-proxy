@@ -132,7 +132,7 @@ namespace Titanium.Web.Proxy
                         authHeader.Value.Length > x.Length + 1);
 
                     string serverToken = authHeader.Value.Substring(scheme.Length + 1);
-                    string clientToken = WinAuthHandler.GetFinalAuthToken(request.Host, serverToken, args.HttpClient.Data);
+                    string clientToken = WinAuthHandler.GetFinalAuthToken(request.Host!, serverToken, args.HttpClient.Data);
 
                     string auth = string.Concat(scheme, clientToken);
 

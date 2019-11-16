@@ -22,15 +22,10 @@ namespace Titanium.Web.Proxy
             // if user callback is registered then do it
             if (ServerCertificateValidationCallback != null)
             {
-                var args = new CertificateValidationEventArgs
-                {
-                    Certificate = certificate,
-                    Chain = chain,
-                    SslPolicyErrors = sslPolicyErrors
-                };
+                var args = new CertificateValidationEventArgs(certificate, chain, sslPolicyErrors);
 
                 // why is the sender null?
-                ServerCertificateValidationCallback.InvokeAsync(this, args, exceptionFunc).Wait();
+                ServerCertificateValidationCallback.InvokeAsync(this, args, ExceptionFunc).Wait();
                 return args.IsValid;
             }
 
@@ -90,7 +85,7 @@ namespace Titanium.Web.Proxy
                 };
 
                 // why is the sender null?
-                ClientCertificateSelectionCallback.InvokeAsync(this, args, exceptionFunc).Wait();
+                ClientCertificateSelectionCallback.InvokeAsync(this, args, ExceptionFunc).Wait();
                 return args.ClientCertificate;
             }
 

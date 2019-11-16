@@ -47,24 +47,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         internal Message(byte[] message)
         {
             type = 3;
-            Decode(message);
-        }
 
-        /// <summary>
-        ///     Domain name
-        /// </summary>
-        internal string Domain { get; private set; }
-
-        /// <summary>
-        ///     Username
-        /// </summary>
-        internal string? Username { get; private set; }
-
-        internal Common.NtlmFlags Flags { get; set; }
-
-        // methods
-        private void Decode(byte[] message)
-        {
             if (message == null)
             {
                 throw new ArgumentNullException(nameof(message));
@@ -107,6 +90,18 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
             Username = DecodeString(message, userOff, userLen);
         }
+
+        /// <summary>
+        ///     Domain name
+        /// </summary>
+        internal string Domain { get; private set; }
+
+        /// <summary>
+        ///     Username
+        /// </summary>
+        internal string Username { get; private set; }
+
+        internal Common.NtlmFlags Flags { get; set; }
 
         private string DecodeString(byte[] buffer, int offset, int len)
         {

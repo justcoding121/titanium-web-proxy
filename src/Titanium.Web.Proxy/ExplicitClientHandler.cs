@@ -14,6 +14,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended;
 using Titanium.Web.Proxy.StreamExtended.Network;
@@ -53,13 +54,13 @@ namespace Titanium.Web.Proxy
                 if (await HttpHelper.IsConnectMethod(clientStream, BufferPool, cancellationToken) == 1)
                 {
                     // read the first line HTTP command
-                    string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
+                    string? httpCmd = await clientStream.ReadLineAsync(cancellationToken);
                     if (string.IsNullOrEmpty(httpCmd))
                     {
                         return;
                     }
 
-                    Request.ParseRequestLine(httpCmd, out string _, out string httpUrl, out var version);
+                    Request.ParseRequestLine(httpCmd!, out string _, out string httpUrl, out var version);
 
                     var httpRemoteUri = new Uri("http://" + httpUrl);
                     connectHostname = httpRemoteUri.Host;
@@ -67,18 +68,16 @@ namespace Titanium.Web.Proxy
                     var connectRequest = new ConnectRequest
                     {
                         RequestUri = httpRemoteUri,
-                        OriginalUrl = httpUrl,
+                        OriginalUrlData = HttpHeader.Encoding.GetBytes(httpUrl),
                         HttpVersion = version
                     };
 
                     await HeaderParser.ReadHeaders(clientStream, connectRequest.Headers, cancellationToken);
 
                     connectArgs = new TunnelConnectSessionEventArgs(this, endPoint, connectRequest,
-                        cancellationTokenSource);
+                        new ProxyClient(clientConnection, clientStream, clientStreamWriter), cancellationTokenSource);
                     clientStream.DataRead += (o, args) => connectArgs.OnDataSent(args.Buffer, args.Offset, args.Count);
                     clientStream.DataWrite += (o, args) => connectArgs.OnDataReceived(args.Buffer, args.Offset, args.Count);
-                    connectArgs.ProxyClient.Connection = clientConnection;
-                    connectArgs.ProxyClient.ClientStream = clientStream;
 
                     await endPoint.InvokeBeforeTunnelConnectRequest(this, connectArgs, ExceptionFunc);
 
@@ -303,7 +302,7 @@ namespace Titanium.Web.Proxy
                 if (connectArgs != null && await HttpHelper.IsPriMethod(clientStream, BufferPool, cancellationToken) == 1)
                 {
                     // todo
-                    string httpCmd = await clientStream.ReadLineAsync(cancellationToken);
+                    string? httpCmd = await clientStream.ReadLineAsync(cancellationToken);
                     if (httpCmd == "PRI * HTTP/2.0")
                     {
                         connectArgs.HttpClient.ConnectRequest!.TunnelType = TunnelType.Http2;
@@ -336,10 +335,8 @@ namespace Titanium.Web.Proxy
                             var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
                             await connection.StreamWriter.WriteAsync(connectionPreface, cancellationToken);
                             await Http2Helper.SendHttp2(clientStream, connection.Stream,
-                                () => new SessionEventArgs(this, endPoint, cancellationTokenSource)
+                                () => new SessionEventArgs(this, endPoint, new ProxyClient(clientConnection, clientStream, clientStreamWriter), connectArgs?.HttpClient.ConnectRequest, cancellationTokenSource)
                                 {
-                                    ProxyClient = { Connection = clientConnection },
-                                    HttpClient = { ConnectRequest = connectArgs?.HttpClient.ConnectRequest },
                                     UserData = connectArgs?.UserData
                                 },
                                 async args => { await onBeforeRequest(args); },
