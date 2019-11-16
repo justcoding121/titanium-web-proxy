@@ -70,7 +70,7 @@ namespace Titanium.Web.Proxy.Http
             var encoding = HttpHeader.Encoding;
 
 #if NETSTANDARD2_1
-            var buf = ArrayPool<byte>.Shared.Rent(str.Length * 4);
+            var buf = ArrayPool<byte>.Shared.Rent(encoding.GetMaxByteCount(str.Length));
             var span = new Span<byte>(buf);
 
             int bytes = encoding.GetBytes(str.AsSpan(), span);

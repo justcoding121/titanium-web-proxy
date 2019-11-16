@@ -62,12 +62,15 @@ namespace Titanium.Web.Proxy
 
                     Request.ParseRequestLine(httpCmd!, out string _, out string httpUrl, out var version);
 
-                    var httpRemoteUri = new Uri("http://" + httpUrl);
-                    connectHostname = httpRemoteUri.Host;
-
-                    var connectRequest = new ConnectRequest
+                    connectHostname = httpUrl;
+                    int idx = connectHostname.IndexOf(":");
+                    if (idx >= 0)
                     {
-                        RequestUri = httpRemoteUri,
+                        connectHostname = connectHostname.Substring(0, idx);
+                    }
+
+                    var connectRequest = new ConnectRequest(connectHostname)
+                    {
                         OriginalUrlData = HttpHeader.Encoding.GetBytes(httpUrl),
                         HttpVersion = version
                     };
@@ -127,6 +130,7 @@ namespace Titanium.Web.Proxy
                     bool isClientHello = clientHelloInfo != null;
                     if (clientHelloInfo != null)
                     {
+                        connectRequest.Scheme = ProxyServer.UriSchemeHttps;
                         connectRequest.TunnelType = TunnelType.Https;
                         connectRequest.ClientHelloInfo = clientHelloInfo;
                     }
@@ -136,7 +140,6 @@ namespace Titanium.Web.Proxy
                     if (decryptSsl && clientHelloInfo != null)
                     {
                         clientConnection.SslProtocol = clientHelloInfo.SslProtocol;
-                        connectRequest.RequestUri = new Uri("https://" + httpUrl);
 
                         bool http2Supported = false;
 
@@ -355,7 +358,7 @@ namespace Titanium.Web.Proxy
 
                 // Now create the request
                 await handleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter,
-                    cancellationTokenSource, connectHostname, connectArgs, prefetchConnectionTask);
+                    cancellationTokenSource, connectArgs, prefetchConnectionTask);
             }
             catch (ProxyException e)
             {

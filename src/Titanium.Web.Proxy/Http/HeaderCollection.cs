@@ -105,6 +105,21 @@ namespace Titanium.Web.Proxy.Http
             return null;
         }
 
+        internal HttpHeader? GetFirstHeader(KnownHeader name)
+        {
+            if (headers.TryGetValue(name.String, out var header))
+            {
+                return header;
+            }
+
+            if (nonUniqueHeaders.TryGetValue(name.String, out var h))
+            {
+                return h.FirstOrDefault();
+            }
+
+            return null;
+        }
+
         /// <summary>
         ///     Returns all headers
         /// </summary>
@@ -125,6 +140,16 @@ namespace Titanium.Web.Proxy.Http
         /// <param name="name"></param>
         /// <param name="value"></param>
         public void AddHeader(string name, string value)
+        {
+            AddHeader(new HttpHeader(name, value));
+        }
+
+        internal void AddHeader(KnownHeader name, string value)
+        {
+            AddHeader(new HttpHeader(name, value));
+        }
+
+        internal void AddHeader(KnownHeader name, KnownHeader value)
         {
             AddHeader(new HttpHeader(name, value));
         }
@@ -240,6 +265,27 @@ namespace Titanium.Web.Proxy.Http
         }
 
         /// <summary>
+        ///     removes all headers with given name
+        /// </summary>
+        /// <param name="headerName"></param>
+        /// <returns>
+        ///     True if header was removed
+        ///     False if no header exists with given name
+        /// </returns>
+        public bool RemoveHeader(KnownHeader headerName)
+        {
+            bool result = headers.Remove(headerName.String);
+
+            // do not convert to '||' expression to avoid lazy evaluation
+            if (nonUniqueHeaders.Remove(headerName.String))
+            {
+                result = true;
+            }
+
+            return result;
+        }
+
+        /// <summary>
         ///     Removes given header object if it exist
         /// </summary>
         /// <param name="header">Returns true if header exists and was removed </param>
@@ -273,9 +319,9 @@ namespace Titanium.Web.Proxy.Http
             nonUniqueHeaders.Clear();
         }
 
-        internal string? GetHeaderValueOrNull(string headerName)
+        internal string? GetHeaderValueOrNull(KnownHeader headerName)
         {
-            if (headers.TryGetValue(headerName, out var header))
+            if (headers.TryGetValue(headerName.String, out var header))
             {
                 return header.Value;
             }
@@ -283,7 +329,7 @@ namespace Titanium.Web.Proxy.Http
             return null;
         }
 
-        internal void SetOrAddHeaderValue(string headerName, string? value)
+        internal void SetOrAddHeaderValue(KnownHeader headerName, string? value)
         {
             if (value == null)
             {
@@ -291,13 +337,25 @@ namespace Titanium.Web.Proxy.Http
                 return;
             }
 
-            if (headers.TryGetValue(headerName, out var header))
+            if (headers.TryGetValue(headerName.String, out var header))
             {
-                header.ValueData = value.GetByteString();
+                header.SetValue(value);
             }
             else
             {
-                headers.Add(headerName, new HttpHeader(headerName, value));
+                headers.Add(headerName.String, new HttpHeader(headerName, value));
+            }
+        }
+
+        internal void SetOrAddHeaderValue(KnownHeader headerName, KnownHeader value)
+        {
+            if (headers.TryGetValue(headerName.String, out var header))
+            {
+                header.SetValue(value);
+            }
+            else
+            {
+                headers.Add(headerName.String, new HttpHeader(headerName, value));
             }
         }
 

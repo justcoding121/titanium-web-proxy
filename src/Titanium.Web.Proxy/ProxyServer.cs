@@ -45,7 +45,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Backing field for exposed public property.
         /// </summary>
-        private ExceptionHandler exceptionFunc;
+        private ExceptionHandler? exceptionFunc;
 
         /// <summary>
         ///     Backing field for exposed public property.
@@ -291,14 +291,14 @@ namespace Titanium.Web.Proxy
         ///     Parameters are username and password as provided by client.
         ///     Should return true for successful authentication.
         /// </summary>
-        public Func<SessionEventArgsBase, string, string, Task<bool>> ProxyBasicAuthenticateFunc { get; set; }
+        public Func<SessionEventArgsBase, string, string, Task<bool>>? ProxyBasicAuthenticateFunc { get; set; }
 
         /// <summary>
         ///     A pluggable callback to authenticate clients by scheme instead of requiring basic authentication through ProxyBasicAuthenticateFunc.
         ///     Parameters are current working session, schemeType, and token as provided by a calling client.
         ///     Should return success for successful authentication, continuation if the package requests, or failure.
         /// </summary>
-        public Func<SessionEventArgsBase, string, string, Task<ProxyAuthenticationContext>> ProxySchemeAuthenticateFunc { get; set; }
+        public Func<SessionEventArgsBase, string, string, Task<ProxyAuthenticationContext>>? ProxySchemeAuthenticateFunc { get; set; }
 
         /// <summary>
         ///     A collection of scheme types, e.g. basic, NTLM, Kerberos, Negotiate, to return if scheme authentication is required.
@@ -707,7 +707,7 @@ namespace Titanium.Web.Proxy
         /// <returns>The external proxy as task result.</returns>
         private Task<ExternalProxy?> getSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
         {
-            var proxy = systemProxyResolver.GetProxy(sessionEventArgs.HttpClient.Request.RequestUri);
+            var proxy = systemProxyResolver!.GetProxy(sessionEventArgs.HttpClient.Request.RequestUri);
             return Task.FromResult(proxy);
         }
 

@@ -78,7 +78,7 @@ namespace Titanium.Web.Proxy.Helpers
                 {
                     var parameter = p.Span;
                     int equalsIndex = parameter.IndexOf('=');
-                    if (equalsIndex != -1 && parameter.Slice(0, equalsIndex).TrimStart().EqualsIgnoreCase(KnownHeaders.ContentTypeCharset.AsSpan()))
+                    if (equalsIndex != -1 && KnownHeaders.ContentTypeCharset.Equals(parameter.Slice(0, equalsIndex).TrimStart()))
                     {
                         var value = parameter.Slice(equalsIndex + 1);
                         if (value.EqualsIgnoreCase("x-user-defined".AsSpan()))
@@ -113,7 +113,7 @@ namespace Titanium.Web.Proxy.Helpers
                 foreach (var parameter in new SemicolonSplitEnumerator(contentType))
                 {
                     int equalsIndex = parameter.Span.IndexOf('=');
-                    if (equalsIndex != -1 && parameter.Span.Slice(0, equalsIndex).TrimStart().EqualsIgnoreCase(KnownHeaders.ContentTypeBoundary.AsSpan()))
+                    if (equalsIndex != -1 && KnownHeaders.ContentTypeBoundary.Equals(parameter.Span.Slice(0, equalsIndex).TrimStart()))
                     {
                         var value = parameter.Slice(equalsIndex + 1);
                         if (value.Length > 2 && value.Span[0] == '"' && value.Span[value.Length - 1] == '"')

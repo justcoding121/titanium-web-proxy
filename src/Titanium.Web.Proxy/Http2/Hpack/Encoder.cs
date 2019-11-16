@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         private const int bucketSize = 17;
 
         // a linked hash map of header fields
-        private readonly HeaderEntry?[] headerFields = new HeaderEntry[bucketSize];
+        private readonly HeaderEntry[] headerFields = new HeaderEntry[bucketSize];
         private readonly HeaderEntry head = new HeaderEntry(-1, ByteString.Empty, ByteString.Empty, int.MaxValue, null);
         private int size;
 
@@ -337,7 +337,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             int h = hash(name);
             int i = Encoder.index(h);
             int index = -1;
-            for (var e = headerFields[i]; e != null; e = e.Next)
+            for (HeaderEntry? e = headerFields[i]; e != null; e = e.Next)
             {
                 if (e.Hash == h && name.Equals(e.NameData))
                 {
@@ -521,6 +521,8 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 Index = index;
                 Hash = hash;
                 Next = next;
+                Before = this;
+                After = this;
             }
 
             /// <summary>

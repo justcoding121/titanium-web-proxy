@@ -10,15 +10,15 @@ namespace Titanium.Web.Proxy.Compression
     /// </summary>
     internal static class CompressionFactory
     {
-        internal static Stream Create(string type, Stream stream, bool leaveOpen = true)
+        internal static Stream Create(HttpCompression type, Stream stream, bool leaveOpen = true)
         {
             switch (type)
             {
-                case KnownHeaders.ContentEncodingGzip:
+                case HttpCompression.Gzip:
                     return new GZipStream(stream, CompressionMode.Compress, leaveOpen);
-                case KnownHeaders.ContentEncodingDeflate:
+                case HttpCompression.Deflate:
                     return new DeflateStream(stream, CompressionMode.Compress, leaveOpen);
-                case KnownHeaders.ContentEncodingBrotli:
+                case HttpCompression.Brotli:
                     return new BrotliSharpLib.BrotliStream(stream, CompressionMode.Compress, leaveOpen);
                 default:
                     throw new Exception($"Unsupported compression mode: {type}");

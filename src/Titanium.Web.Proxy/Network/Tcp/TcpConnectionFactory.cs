@@ -372,7 +372,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 if (useUpstreamProxy && (isConnect || isHttps))
                 {
                     var writer = new HttpRequestWriter(stream, proxyServer.BufferPool);
-                    var connectRequest = new ConnectRequest
+                    var connectRequest = new ConnectRequest(remoteHostName)
                     {
                         OriginalUrlData = HttpHeader.Encoding.GetBytes($"{remoteHostName}:{remotePort}"),
                         HttpVersion = httpVersion

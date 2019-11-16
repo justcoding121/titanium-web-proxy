@@ -62,7 +62,7 @@ namespace Titanium.Web.Proxy.Extensions
             }
         }
 
-        private static async Task<T> withCancellation<T>(this Task<T> task, CancellationToken cancellationToken)
+        private static async Task<T> withCancellation<T>(this Task<T> task, CancellationToken cancellationToken) where  T : struct
         {
             var tcs = new TaskCompletionSource<bool>();
             using (cancellationToken.Register(s => ((TaskCompletionSource<bool>)s).TrySetResult(true), tcs))

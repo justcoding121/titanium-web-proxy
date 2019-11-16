@@ -52,7 +52,7 @@ namespace Titanium.Web.Proxy
 
                 if (ProxyBasicAuthenticateFunc != null)
                 {
-                    return await authenticateUserBasic(session, authenticationType, credentials);
+                    return await authenticateUserBasic(session, authenticationType, credentials, ProxyBasicAuthenticateFunc);
                 }
 
                 if (ProxySchemeAuthenticateFunc != null)
@@ -82,9 +82,11 @@ namespace Titanium.Web.Proxy
             }
         }
 
-        private async Task<bool> authenticateUserBasic(SessionEventArgsBase session, ReadOnlyMemory<char> authenticationType, ReadOnlyMemory<char> credentials)
+        private async Task<bool> authenticateUserBasic(SessionEventArgsBase session,
+            ReadOnlyMemory<char> authenticationType, ReadOnlyMemory<char> credentials,
+            Func<SessionEventArgsBase, string, string, Task<bool>> proxyBasicAuthenticateFunc)
         {
-            if (!authenticationType.Span.EqualsIgnoreCase(KnownHeaders.ProxyAuthorizationBasic.AsSpan()))
+            if (!KnownHeaders.ProxyAuthorizationBasic.Equals(authenticationType.Span))
             {
                 // Return not authorized
                 session.HttpClient.Response = createAuthentication407Response("Proxy Authentication Invalid");
@@ -102,7 +104,7 @@ namespace Titanium.Web.Proxy
 
             string username = decoded.Substring(0, colonIndex);
             string password = decoded.Substring(colonIndex + 1);
-            bool authenticated = await ProxyBasicAuthenticateFunc(session, username, password);
+            bool authenticated = await proxyBasicAuthenticateFunc(session, username, password);
             if (!authenticated)
             {
                 session.HttpClient.Response = createAuthentication407Response("Proxy Authentication Invalid");

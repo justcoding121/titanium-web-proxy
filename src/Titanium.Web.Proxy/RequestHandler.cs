@@ -33,15 +33,11 @@ namespace Titanium.Web.Proxy
         /// <param name="clientStream">The client stream.</param>
         /// <param name="clientStreamWriter">The client stream writer.</param>
         /// <param name="cancellationTokenSource">The cancellation token source for this async task.</param>
-        /// <param name="httpsConnectHostname">
-        ///     The https hostname as appeared in CONNECT request if this is a HTTPS request from
-        ///     explicit endpoint.
-        /// </param>
         /// <param name="connectArgs">The Connect request if this is a HTTPS request from explicit endpoint.</param>
         /// <param name="prefetchConnectionTask">Prefetched server connection for current client using Connect/SNI headers.</param>
         private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, TcpClientConnection clientConnection,
             CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
-            CancellationTokenSource cancellationTokenSource, string? httpsConnectHostname, TunnelConnectSessionEventArgs? connectArgs,
+            CancellationTokenSource cancellationTokenSource, TunnelConnectSessionEventArgs? connectArgs = null,
             Task<TcpServerConnection>? prefetchConnectionTask = null)
         {
             var connectRequest = connectArgs?.HttpClient.ConnectRequest;
@@ -85,41 +81,13 @@ namespace Titanium.Web.Proxy
                             await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,
                                 cancellationToken);
 
-                            Uri httpRemoteUri;
-                            if (ProxyConstants.UriSchemeRegex.IsMatch(httpUrl))
-                            {
-                                try
-                                {
-                                    httpRemoteUri = new Uri(httpUrl);
-                                }
-                                catch (Exception ex)
-                                {
-                                    throw new Exception($"Invalid URI: '{httpUrl}'", ex);
-                                }
-                            }
-                            else
-                            {
-                                string? host = args.HttpClient.Request.Host ?? httpsConnectHostname;
-                                string? hostAndPath = host;
-                                if (httpUrl.StartsWith("/"))
-                                {
-                                    hostAndPath += httpUrl;
-                                }
-
-                                string url = string.Concat(httpsConnectHostname == null ? "http://" : "https://",
-                                    hostAndPath);
-                                try
-                                {
-                                    httpRemoteUri = new Uri(url);
-                                }
-                                catch (Exception ex)
-                                {
-                                    throw new Exception($"Invalid URI: '{url}'", ex);
-                                }
-                            }
-
                             var request = args.HttpClient.Request;
-                            request.RequestUri = httpRemoteUri;
+                            if (connectRequest != null)
+                            {
+                                request.Scheme = connectRequest.Scheme;
+                                request.Hostname = connectRequest.Hostname;
+                            }
+
                             request.OriginalUrlData = HttpHeader.Encoding.GetBytes(httpUrl);
 
                             request.Method = httpMethod;
@@ -128,7 +96,7 @@ namespace Titanium.Web.Proxy
                             if (!args.IsTransparent)
                             {
                                 // proxy authorization check
-                                if (httpsConnectHostname == null && await checkAuthorization(args) == false)
+                                if (connectRequest == null && await checkAuthorization(args) == false)
                                 {
                                     await onBeforeResponse(args);
 

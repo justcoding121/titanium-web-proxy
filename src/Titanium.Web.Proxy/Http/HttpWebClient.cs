@@ -18,10 +18,10 @@ namespace Titanium.Web.Proxy.Http
     {
         private TcpServerConnection? connection;
 
-        internal HttpWebClient(ConnectRequest? connectRequest, Request? request, Lazy<int> processIdFunc)
+        internal HttpWebClient(ConnectRequest? connectRequest, Request request, Lazy<int> processIdFunc)
         {
             ConnectRequest = connectRequest;
-            Request = request ?? new Request();
+            Request = request;
             Response = new Response();
             ProcessId = processIdFunc;
         }
@@ -141,7 +141,7 @@ namespace Titanium.Web.Proxy.Http
             // write request headers
             foreach (var header in Request.Headers)
             {
-                if (isTransparent || header.Name != KnownHeaders.ProxyAuthorization)
+                if (isTransparent || header.Name != KnownHeaders.ProxyAuthorization.String)
                 {
                     headerBuilder.WriteHeader(header);
                 }

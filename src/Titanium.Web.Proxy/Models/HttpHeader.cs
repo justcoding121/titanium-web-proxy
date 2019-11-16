@@ -41,6 +41,10 @@ namespace Titanium.Web.Proxy.Models
 
         internal static readonly HttpHeader ProxyConnectionKeepAlive = new HttpHeader("Proxy-Connection", "keep-alive");
 
+        private string? nameString;
+
+        private string? valueString;
+
         /// <summary>
         ///     Initialize a new instance.
         /// </summary>
@@ -53,8 +57,29 @@ namespace Titanium.Web.Proxy.Models
                 throw new Exception("Name cannot be null or empty");
             }
 
-            NameData = name.Trim().GetByteString();
-            ValueData = value.Trim().GetByteString();
+            nameString = name.Trim();
+            NameData = nameString.GetByteString();
+            
+            valueString = value.Trim();
+            ValueData = valueString.GetByteString();
+        }
+
+        internal HttpHeader(KnownHeader name, string value)
+        {
+            nameString = name.String;
+            NameData = name.String8;
+
+            valueString = value.Trim();
+            ValueData = valueString.GetByteString();
+        }
+
+        internal HttpHeader(KnownHeader name, KnownHeader value)
+        {
+            nameString = name.String;
+            NameData = name.String8;
+
+            valueString = value.String;
+            ValueData = value.String8;
         }
 
         internal HttpHeader(ByteString name, ByteString value)
@@ -78,22 +103,34 @@ namespace Titanium.Web.Proxy.Models
         /// <summary>
         ///     Header Name.
         /// </summary>
-        public string Name => NameData.GetString();
+        public string Name => nameString ??= NameData.GetString();
 
         internal ByteString NameData { get; }
 
         /// <summary>
         ///     Header Value.
         /// </summary>
-        public string Value => ValueData.GetString();
+        public string Value => valueString ??= ValueData.GetString();
 
-        internal ByteString ValueData { get; set; }
+        internal ByteString ValueData { get; private set; }
 
         public int Size => Name.Length + Value.Length + HttpHeaderOverhead;
 
         internal static int SizeOf(ByteString name, ByteString value)
         {
             return name.Length + value.Length + HttpHeaderOverhead;
+        }
+
+        internal void SetValue(string value)
+        {
+            valueString = value;
+            ValueData = value.GetByteString();
+        }
+
+        internal void SetValue(KnownHeader value)
+        {
+            valueString = value.String;
+            ValueData = value.String8;
         }
 
         /// <summary>

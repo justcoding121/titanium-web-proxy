@@ -66,9 +66,9 @@ namespace Titanium.Web.Proxy.Helpers
 
         internal bool BypassOnLocal { get; }
 
-        internal Dictionary<ProxyProtocolType, HttpSystemProxyValue> Proxies { get; }
+        internal Dictionary<ProxyProtocolType, HttpSystemProxyValue>? Proxies { get; }
 
-        internal string[] BypassList { get; }
+        internal string[]? BypassList { get; }
 
         private static string bypassStringEscape(string rawString)
         {
@@ -171,7 +171,15 @@ namespace Titanium.Web.Proxy.Helpers
 
             if (proxyValues.Length > 0)
             {
-                result.AddRange(proxyValues.Select(parseProxyValue).Where(parsedValue => parsedValue != null));
+                foreach (string str in proxyValues)
+                {
+                    var proxyValue = parseProxyValue(str);
+                    if (proxyValue != null)
+                    {
+                        result.Add(proxyValue);
+                    }
+
+                }
             }
             else
             {
