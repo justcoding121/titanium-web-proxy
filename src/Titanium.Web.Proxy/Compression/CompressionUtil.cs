@@ -7,13 +7,13 @@ namespace Titanium.Web.Proxy.Compression
     {
         public static HttpCompression CompressionNameToEnum(string name)
         {
-            if (KnownHeaders.ContentEncodingGzip.Equals(name.AsSpan()))
+            if (KnownHeaders.ContentEncodingGzip.Equals(name))
                 return HttpCompression.Gzip;
 
-            if (KnownHeaders.ContentEncodingDeflate.Equals(name.AsSpan()))
+            if (KnownHeaders.ContentEncodingDeflate.Equals(name))
                 return HttpCompression.Deflate;
 
-            if (KnownHeaders.ContentEncodingBrotli.Equals(name.AsSpan()))
+            if (KnownHeaders.ContentEncodingBrotli.Equals(name))
                 return HttpCompression.Brotli;
 
             return HttpCompression.Unsupported;

@@ -9,10 +9,10 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class ConnectRequest : Request
     {
-        public ConnectRequest(string hostname)
+        public ConnectRequest(string authority)
         {
             Method = "CONNECT";
-            Hostname = hostname;
+            Authority = authority;
         }
 
         public TunnelType TunnelType { get; internal set; }

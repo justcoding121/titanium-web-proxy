@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.Diagnostics;
+using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
@@ -9,6 +10,7 @@ namespace Titanium.Web.Proxy.Models
     ///     A proxy end point client is not aware of.
     ///     Useful when requests are redirected to this proxy end point through port forwarding via router.
     /// </summary>
+    [DebuggerDisplay("Explicit: {IpAddress}:{Port}")]
     public class TransparentProxyEndPoint : ProxyEndPoint
     {
         /// <summary>

@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.Diagnostics;
+using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
@@ -9,6 +10,7 @@ namespace Titanium.Web.Proxy.Models
     ///     A proxy endpoint that the client is aware of.
     ///     So client application know that it is communicating with a proxy server.
     /// </summary>
+    [DebuggerDisplay("Explicit: {IpAddress}:{Port}")]
     public class ExplicitProxyEndPoint : ProxyEndPoint
     {
         /// <summary>

@@ -84,8 +84,8 @@ namespace Titanium.Web.Proxy
                             var request = args.HttpClient.Request;
                             if (connectRequest != null)
                             {
-                                request.Scheme = connectRequest.Scheme;
-                                request.Hostname = connectRequest.Hostname;
+                                request.IsHttps = connectRequest.IsHttps;
+                                request.Authority = connectRequest.Authority;
                             }
 
                             request.OriginalUrlData = HttpHeader.Encoding.GetBytes(httpUrl);

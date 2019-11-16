@@ -47,7 +47,6 @@ namespace Titanium.Web.Proxy
 
             try
             {
-                string? connectHostname = null;
                 TunnelConnectSessionEventArgs? connectArgs = null;
                 
                 // Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
@@ -62,14 +61,7 @@ namespace Titanium.Web.Proxy
 
                     Request.ParseRequestLine(httpCmd!, out string _, out string httpUrl, out var version);
 
-                    connectHostname = httpUrl;
-                    int idx = connectHostname.IndexOf(":");
-                    if (idx >= 0)
-                    {
-                        connectHostname = connectHostname.Substring(0, idx);
-                    }
-
-                    var connectRequest = new ConnectRequest(connectHostname)
+                    var connectRequest = new ConnectRequest(httpUrl)
                     {
                         OriginalUrlData = HttpHeader.Encoding.GetBytes(httpUrl),
                         HttpVersion = version
@@ -130,7 +122,7 @@ namespace Titanium.Web.Proxy
                     bool isClientHello = clientHelloInfo != null;
                     if (clientHelloInfo != null)
                     {
-                        connectRequest.Scheme = ProxyServer.UriSchemeHttps;
+                        connectRequest.IsHttps = true;
                         connectRequest.TunnelType = TunnelType.Https;
                         connectRequest.ClientHelloInfo = clientHelloInfo;
                     }
@@ -184,6 +176,13 @@ namespace Titanium.Web.Proxy
                                                         isConnect: true, applicationProtocols: null, noCache: false,
                                                         cancellationToken: CancellationToken.None);
                             }
+                        }
+
+                        string connectHostname = httpUrl;
+                        int idx = connectHostname.IndexOf(":");
+                        if (idx >= 0)
+                        {
+                            connectHostname = connectHostname.Substring(0, idx);
                         }
 
                         X509Certificate2? certificate = null;

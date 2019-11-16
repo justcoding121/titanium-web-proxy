@@ -22,10 +22,10 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Is Https?
         /// </summary>
-        public bool IsHttps => RequestUri.Scheme == ProxyServer.UriSchemeHttps;
+        public bool IsHttps { get; internal set; }
 
         private ByteString originalUrlData;
-        private protected ByteString UrlData;
+        private ByteString urlData;
 
         internal ByteString OriginalUrlData
         {
@@ -37,9 +37,21 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal string Scheme { get; set; } = ProxyServer.UriSchemeHttp;
+        private protected ByteString UrlData
+        {
+            get => urlData;
+            set
+            {
+                urlData = value;
+                var scheme = getUriScheme(UrlData);
+                if (scheme.Length > 0)
+                {
+                    IsHttps = scheme.Equals(ProxyServer.UriSchemeHttps8);
+                }
+            }
+        }
 
-        internal string? Hostname { get; set; }
+        internal string? Authority { get; set; }
 
         /// <summary>
         ///     The original request Url.
@@ -53,21 +65,21 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string url;
-                if (startsWithUriScheme(UrlData))
+                string url = UrlData.GetString();
+                if (getUriScheme(UrlData).Length == 0)
                 {
-                    url = UrlData.GetString();
-                }
-                else
-                {
-                    string? host = Host ?? Hostname;
-                    string? hostAndPath = host;
-                    if (UrlData.Length > 0 && UrlData[0] == '/')
+                    string? hostAndPath = Host ?? Authority;
+
+                    if (url.StartsWith("/"))
                     {
-                        hostAndPath += UrlData.GetString();
+                        hostAndPath += url;
+                    }
+                    else
+                    {
+                        //throw new Exception($"Invalid URL: '{url}'");
                     }
 
-                    url = string.Concat(Scheme == ProxyServer.UriSchemeHttps ? "https://" : "http://", hostAndPath);
+                    url = string.Concat(IsHttps ? "https://" : "http://", hostAndPath);
                 }
 
                 try
@@ -87,7 +99,16 @@ namespace Titanium.Web.Proxy.Http
         public string Url
         {
             get => UrlData.GetString();
-            set => UrlData = value.GetByteString();
+            set
+            {
+                UrlData = value.GetByteString();
+
+                if (Host != null)
+                {
+                    var uri = new Uri(value);
+                    Host = uri.Authority;
+                }
+            }
         }
 
         [Obsolete("This property is obsolete. Use Url property instead")]
@@ -147,7 +168,7 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 string? headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Expect);
-                return headerValue != null && headerValue.Equals(KnownHeaders.Expect100Continue);
+                return KnownHeaders.Expect100Continue.Equals(headerValue);
             }
         }
 
@@ -290,11 +311,11 @@ namespace Titanium.Web.Proxy.Http
             return true;
         }
 
-        private bool startsWithUriScheme(ByteString str)
+        private ByteString getUriScheme(ByteString str)
         {
             if (str.Length < 3)
             {
-                return false;
+                return ByteString.Empty;
             }
 
             // regex: "^[a-z]*://"
@@ -310,26 +331,26 @@ namespace Titanium.Web.Proxy.Http
 
                 if (ch < 'A' || ch > 'z' || (ch > 'Z' && ch < 'a')) // ASCII letter
                 {
-                    return false;
+                    return ByteString.Empty;
                 }
             }
 
             if (str[i++] != ':')
             {
-                return false;
+                return ByteString.Empty;
             }
 
             if (str[i++] != '/')
             {
-                return false;
+                return ByteString.Empty;
             }
 
             if (str[i] != '/')
             {
-                return false;
+                return ByteString.Empty;
             }
 
-            return true;
+            return new ByteString(str.Data.Slice(0, i - 2));
         }
     }
 }

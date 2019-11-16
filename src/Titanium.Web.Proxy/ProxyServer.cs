@@ -32,6 +32,10 @@ namespace Titanium.Web.Proxy
         internal static readonly string UriSchemeHttp = Uri.UriSchemeHttp;
         internal static readonly string UriSchemeHttps = Uri.UriSchemeHttps;
 
+        internal static ByteString UriSchemeHttp8 = (ByteString)UriSchemeHttp;
+        internal static ByteString UriSchemeHttps8 = (ByteString)UriSchemeHttps;
+
+
         /// <summary>
         ///     A default exception log func.
         /// </summary>
