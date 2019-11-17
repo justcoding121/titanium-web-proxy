@@ -99,7 +99,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 // This way we can push tcp Time_Wait to server side when possible.
                 await Task.Delay(1000);
                 proxyServer.UpdateServerConnectionCount(false);
-                Stream.BaseStream?.Dispose();
+                Stream.Dispose();
                 TcpClient.CloseSocket();
             });
 

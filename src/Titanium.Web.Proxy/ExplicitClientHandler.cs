@@ -385,11 +385,6 @@ namespace Titanium.Web.Proxy
 
                 sslStream?.Dispose();
                 clientStream.Dispose();
-
-                if (!cancellationTokenSource.IsCancellationRequested)
-                {
-                    cancellationTokenSource.Cancel();
-                }
             }
         }
     }
