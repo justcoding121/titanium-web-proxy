@@ -49,7 +49,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
             bool isHttps, List<SslApplicationProtocol>? applicationProtocols,
-            IPEndPoint? upStreamEndPoint, ExternalProxy? externalProxy)
+            IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy)
         {
             // http version is ignored since its an application level decision b/w HTTP 1.0/1.1
             // also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
             }
 
-            ExternalProxy? customUpStreamProxy = null;
+            IExternalProxy? customUpStreamProxy = null;
 
             bool isHttps = session.IsHttps;
             if (server.GetCustomUpStreamProxyFunc != null)
@@ -170,7 +170,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal async Task<TcpServerConnection> GetServerConnection(ProxyServer server, SessionEventArgsBase session, bool isConnect,
             List<SslApplicationProtocol>? applicationProtocols, bool noCache, CancellationToken cancellationToken)
         {
-            ExternalProxy? customUpStreamProxy = null;
+            IExternalProxy? customUpStreamProxy = null;
 
             bool isHttps = session.IsHttps;
             if (server.GetCustomUpStreamProxyFunc != null)
@@ -208,7 +208,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <returns></returns>
         internal async Task<TcpServerConnection> GetServerConnection(string remoteHostName, int remotePort,
             Version httpVersion, bool isHttps, List<SslApplicationProtocol>? applicationProtocols, bool isConnect,
-            ProxyServer proxyServer, SessionEventArgsBase? session, IPEndPoint? upStreamEndPoint, ExternalProxy? externalProxy,
+            ProxyServer proxyServer, SessionEventArgsBase? session, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
             bool noCache, CancellationToken cancellationToken)
         {
             var sslProtocol = session?.ProxyClient.Connection.SslProtocol ?? SslProtocols.None;
@@ -262,7 +262,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <returns></returns>
         private async Task<TcpServerConnection> createServerConnection(string remoteHostName, int remotePort,
             Version httpVersion, bool isHttps, SslProtocols sslProtocol, List<SslApplicationProtocol>? applicationProtocols, bool isConnect,
-            ProxyServer proxyServer, SessionEventArgsBase? session, IPEndPoint? upStreamEndPoint, ExternalProxy? externalProxy, string cacheKey,
+            ProxyServer proxyServer, SessionEventArgsBase? session, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy, string cacheKey,
             CancellationToken cancellationToken)
         {
             // deny connection to proxy end points to avoid infinite connection loop.
@@ -304,7 +304,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             bool retry = true;
             var enabledSslProtocols = sslProtocol;
 
-            retry:
+retry:
             try
             {
                 string hostname = useUpstreamProxy ? externalProxy!.HostName : remoteHostName;
