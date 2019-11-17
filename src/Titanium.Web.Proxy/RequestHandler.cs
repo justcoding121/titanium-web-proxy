@@ -353,7 +353,7 @@ namespace Titanium.Web.Proxy
                 supportedAcceptEncoding.Add("identity");
 
                 requestHeaders.SetOrAddHeaderValue(KnownHeaders.AcceptEncoding,
-                    string.Join(",", supportedAcceptEncoding));
+                    string.Join(", ", supportedAcceptEncoding));
             }
 
             requestHeaders.FixProxyHeaders();

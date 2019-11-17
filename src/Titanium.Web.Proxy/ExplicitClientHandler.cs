@@ -121,7 +121,6 @@ namespace Titanium.Web.Proxy
                     bool isClientHello = clientHelloInfo != null;
                     if (clientHelloInfo != null)
                     {
-                        connectRequest.IsHttps = true;
                         connectRequest.TunnelType = TunnelType.Https;
                         connectRequest.ClientHelloInfo = clientHelloInfo;
                     }
@@ -130,6 +129,7 @@ namespace Titanium.Web.Proxy
 
                     if (decryptSsl && clientHelloInfo != null)
                     {
+                        connectRequest.IsHttps = true; // todo: move this line to the previous "if"
                         clientConnection.SslProtocol = clientHelloInfo.SslProtocol;
 
                         bool http2Supported = false;
