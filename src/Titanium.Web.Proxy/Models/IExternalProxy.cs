@@ -5,17 +5,17 @@
         /// <summary>
         ///     Use default windows credentials?
         /// </summary>
-        public bool UseDefaultCredentials { get; set; }
+        bool UseDefaultCredentials { get; set; }
 
         /// <summary>
         ///     Bypass this proxy for connections to localhost?
         /// </summary>
-        public bool BypassLocalhost { get; set; }
+        bool BypassLocalhost { get; set; }
 
         /// <summary>
         ///     Username.
         /// </summary>
-        public string? UserName { get; set; }
+        string? UserName { get; set; }
 
         /// <summary>
         ///     Password.
