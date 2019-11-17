@@ -803,7 +803,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="clientStream">The client stream.</param>
         /// <param name="exception">The exception.</param>
-        private void onException(CustomBufferedStream clientStream, Exception exception)
+        private void onException(HttpClientStream clientStream, Exception exception)
         {
             ExceptionFunc(exception);
         }

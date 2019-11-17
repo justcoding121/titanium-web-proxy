@@ -211,7 +211,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             ProxyServer proxyServer, SessionEventArgsBase? session, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
             bool noCache, CancellationToken cancellationToken)
         {
-            var sslProtocol = session?.ProxyClient.Connection.SslProtocol ?? SslProtocols.None;
+            var sslProtocol = session?.ClientConnection.SslProtocol ?? SslProtocols.None;
             var cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
                 isHttps, applicationProtocols, upStreamEndPoint, externalProxy);
 
@@ -297,7 +297,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             }
 
             TcpClient? tcpClient = null;
-            CustomBufferedStream? stream = null;
+            HttpServerStream? stream = null;
 
             SslApplicationProtocol negotiatedApplicationProtocol = default;
 
@@ -323,6 +323,7 @@ retry:
 
                 Array.Sort(ipAddresses, (x, y) => x.AddressFamily.CompareTo(y.AddressFamily));
 
+                Exception lastException = null;
                 for (int i = 0; i < ipAddresses.Length; i++)
                 {
                     try
@@ -352,14 +353,16 @@ retry:
                     }
                     catch (Exception e)
                     {
-                        if (i == ipAddresses.Length - 1)
-                        {
-                            throw new Exception($"Could not establish connection to {hostname}", e);
-                        }
-
                         // dispose the current TcpClient and try the next address
+                        lastException = e;
                         tcpClient?.Dispose();
+                        tcpClient = null;
                     }
+                }
+
+                if (tcpClient == null)
+                {
+                    throw new Exception($"Could not establish connection to {hostname}", lastException);
                 }
 
                 if (session != null)
@@ -367,13 +370,12 @@ retry:
                     session.TimeLine["Connection Established"] = DateTime.Now;
                 }
 
-                await proxyServer.InvokeConnectionCreateEvent(tcpClient!, false);
+                await proxyServer.InvokeConnectionCreateEvent(tcpClient, false);
 
-                stream = new CustomBufferedStream(tcpClient!.GetStream(), proxyServer.BufferPool);
+                stream = new HttpServerStream(tcpClient.GetStream(), proxyServer.BufferPool);
 
                 if (useUpstreamProxy && (isConnect || isHttps))
                 {
-                    var writer = new HttpRequestWriter(stream, proxyServer.BufferPool);
                     string authority = $"{remoteHostName}:{remotePort}";
                     var connectRequest = new ConnectRequest(authority)
                     {
@@ -391,7 +393,7 @@ retry:
                             HttpHeader.GetProxyAuthorizationHeader(externalProxy.UserName, externalProxy.Password));
                     }
 
-                    await writer.WriteRequestAsync(connectRequest, cancellationToken: cancellationToken);
+                    await stream.WriteRequestAsync(connectRequest, cancellationToken: cancellationToken);
 
                     string httpStatus = await stream.ReadLineAsync(cancellationToken)
                                          ?? throw new ServerConnectionException("Server connection was closed.");
@@ -411,7 +413,7 @@ retry:
                 {
                     var sslStream = new SslStream(stream, false, proxyServer.ValidateServerCertificate,
                         proxyServer.SelectClientCertificate);
-                    stream = new CustomBufferedStream(sslStream, proxyServer.BufferPool);
+                    stream = new HttpServerStream(sslStream, proxyServer.BufferPool);
 
                     var options = new SslClientAuthenticationOptions
                     {
@@ -435,6 +437,9 @@ retry:
             }
             catch (IOException ex) when (ex.HResult == unchecked((int)0x80131620) && retry && enabledSslProtocols >= SslProtocols.Tls11)
             {
+                stream?.Dispose();
+                tcpClient?.Close();
+
                 enabledSslProtocols = SslProtocols.Tls;
                 retry = false;
                 goto retry;

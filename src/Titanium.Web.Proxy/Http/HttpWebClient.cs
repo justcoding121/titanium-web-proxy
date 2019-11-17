@@ -111,7 +111,7 @@ namespace Titanium.Web.Proxy.Http
 
             bool useUpstreamProxy = upstreamProxy != null && Connection.IsHttps == false;
 
-            var writer = Connection.StreamWriter;
+            var serverStream = Connection.Stream;
 
             string url;
             if (useUpstreamProxy || isTransparent)
@@ -153,7 +153,7 @@ namespace Titanium.Web.Proxy.Http
 
             headerBuilder.WriteLine();
 
-            await writer.WriteHeadersAsync(headerBuilder, cancellationToken);
+            await serverStream.WriteHeadersAsync(headerBuilder, cancellationToken);
 
             if (enable100ContinueBehaviour && Request.ExpectContinue)
             {

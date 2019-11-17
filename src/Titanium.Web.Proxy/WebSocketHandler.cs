@@ -18,15 +18,14 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private async Task handleWebSocketUpgrade(string requestHttpMethod, string requestHttpUrl, Version requestVersion,
             SessionEventArgs args, Request request, Response response,
-            CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
-            TcpServerConnection serverConnection,
+            HttpClientStream clientStream, TcpServerConnection serverConnection,
             CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
         {
             // prepare the prefix content
             var headerBuilder = new HeaderBuilder();
             headerBuilder.WriteRequestLine(requestHttpMethod, requestHttpUrl, requestVersion);
             headerBuilder.WriteHeaders(request.Headers);
-            await serverConnection.StreamWriter.WriteHeadersAsync(headerBuilder, cancellationToken);
+            await serverConnection.Stream.WriteHeadersAsync(headerBuilder, cancellationToken);
 
             string httpStatus;
             try
@@ -51,7 +50,7 @@ namespace Titanium.Web.Proxy
 
             if (!args.IsTransparent)
             {
-                await clientStreamWriter.WriteResponseAsync(response,
+                await clientStream.WriteResponseAsync(response,
                     cancellationToken: cancellationToken);
             }
 

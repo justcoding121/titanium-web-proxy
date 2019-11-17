@@ -64,13 +64,13 @@ namespace Titanium.Web.Proxy
             // it may changed in the user event
             response = args.HttpClient.Response;
 
-            var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
+            var clientStream = args.ClientStream;
 
             // user set custom response by ignoring original response from server.
             if (response.Locked)
             {
                 // write custom user response with body and return.
-                await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
+                await clientStream.WriteResponseAsync(response, cancellationToken: cancellationToken);
 
                 if (args.HttpClient.HasConnection && !args.HttpClient.CloseServerConnection)
                 {
@@ -108,7 +108,7 @@ namespace Titanium.Web.Proxy
 
             if (response.IsBodyRead)
             {
-                await clientStreamWriter.WriteResponseAsync(response, cancellationToken: cancellationToken);
+                await clientStream.WriteResponseAsync(response, cancellationToken: cancellationToken);
             }
             else
             {
@@ -116,12 +116,12 @@ namespace Titanium.Web.Proxy
                 var headerBuilder = new HeaderBuilder();
                 headerBuilder.WriteResponseLine(response.HttpVersion, response.StatusCode, response.StatusDescription);
                 headerBuilder.WriteHeaders(response.Headers);
-                await clientStreamWriter.WriteHeadersAsync(headerBuilder, cancellationToken);
+                await clientStream.WriteHeadersAsync(headerBuilder, cancellationToken);
 
                 // Write body if exists
                 if (response.HasBody)
                 {
-                    await args.CopyResponseBodyAsync(clientStreamWriter, TransformationMode.None,
+                    await args.CopyResponseBodyAsync(clientStream, TransformationMode.None,
                         cancellationToken);
                 }
             }

@@ -15,15 +15,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpServerConnection : IDisposable
     {
-        internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient, CustomBufferedStream stream,
+        internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient, HttpServerStream stream,
             string hostName, int port, bool isHttps, SslApplicationProtocol negotiatedApplicationProtocol,
             Version version, bool useUpstreamProxy, IExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string cacheKey)
         {
-            this.tcpClient = tcpClient;
+            TcpClient = tcpClient;
             LastAccess = DateTime.Now;
             this.proxyServer = proxyServer;
             this.proxyServer.UpdateServerConnectionCount(true);
-            StreamWriter = new HttpRequestWriter(stream, proxyServer.BufferPool);
             Stream = stream;
             HostName = hostName;
             Port = port;
@@ -63,22 +62,15 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         internal Version Version { get; set; } = HttpHeader.VersionUnknown;
 
-        private readonly TcpClient tcpClient;
-
         /// <summary>
         /// The TcpClient.
         /// </summary>
-        internal TcpClient TcpClient => tcpClient;
+        internal TcpClient TcpClient { get; }
 
         /// <summary>
         ///     Used to write lines to server
         /// </summary>
-        internal HttpRequestWriter StreamWriter { get; }
-
-        /// <summary>
-        ///     Server stream
-        /// </summary>
-        internal CustomBufferedStream Stream { get; }
+        internal HttpServerStream Stream { get; }
 
         /// <summary>
         ///     Last time this connection was used
@@ -107,8 +99,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 // This way we can push tcp Time_Wait to server side when possible.
                 await Task.Delay(1000);
                 proxyServer.UpdateServerConnectionCount(false);
-                Stream?.Dispose();
-                tcpClient.CloseSocket();
+                Stream.BaseStream?.Dispose();
+                TcpClient.CloseSocket();
             });
 
         }

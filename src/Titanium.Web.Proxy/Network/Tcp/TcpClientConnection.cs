@@ -86,7 +86,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 proxyServer.UpdateClientConnectionCount(false);
                 tcpClient.CloseSocket();
             });
-           
         }
     }
 }

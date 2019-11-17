@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Models;
 using Titanium.Web.Proxy.StreamExtended.Network;
@@ -19,7 +20,7 @@ namespace Titanium.Web.Proxy.StreamExtended
         /// <param name="bufferPool"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public static async Task<ClientHelloInfo?> PeekClientHello(CustomBufferedStream clientStream, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        public static async Task<ClientHelloInfo?> PeekClientHello(IPeekStream clientStream, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
             // detects the HTTPS ClientHello message as it is described in the following url:
             // https://stackoverflow.com/questions/3897883/how-to-detect-an-incoming-ssl-https-handshake-ssl-wire-format
@@ -177,7 +178,7 @@ namespace Titanium.Web.Proxy.StreamExtended
         /// <param name="bufferPool"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public static async Task<bool> IsServerHello(CustomBufferedStream stream, IBufferPool bufferPool, CancellationToken cancellationToken)
+        public static async Task<bool> IsServerHello(IPeekStream stream, IBufferPool bufferPool, CancellationToken cancellationToken)
         {
             var serverHello = await PeekServerHello(stream, bufferPool, cancellationToken);
             return serverHello != null;
@@ -189,7 +190,7 @@ namespace Titanium.Web.Proxy.StreamExtended
         /// <param name="bufferPool"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public static async Task<ServerHelloInfo?> PeekServerHello(CustomBufferedStream serverStream, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        public static async Task<ServerHelloInfo?> PeekServerHello(IPeekStream serverStream, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
             // detects the HTTPS ClientHello message as it is described in the following url:
             // https://stackoverflow.com/questions/3897883/how-to-detect-an-incoming-ssl-https-handshake-ssl-wire-format

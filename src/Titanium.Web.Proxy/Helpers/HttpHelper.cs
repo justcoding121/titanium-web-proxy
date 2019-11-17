@@ -170,18 +170,18 @@ namespace Titanium.Web.Proxy.Helpers
         ///     Determines whether is connect method.
         /// </summary>
         /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsConnectMethod(CustomBufferedStream clientStreamReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        internal static Task<int> IsConnectMethod(IPeekStream httpReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
-            return startsWith(clientStreamReader, bufferPool, "CONNECT", cancellationToken);
+            return startsWith(httpReader, bufferPool, "CONNECT", cancellationToken);
         }
 
         /// <summary>
         ///     Determines whether is pri method (HTTP/2).
         /// </summary>
         /// <returns>1: when PRI, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsPriMethod(CustomBufferedStream clientStreamReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        internal static Task<int> IsPriMethod(IPeekStream httpReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
-            return startsWith(clientStreamReader, bufferPool, "PRI", cancellationToken);
+            return startsWith(httpReader, bufferPool, "PRI", cancellationToken);
         }
 
         /// <summary>
@@ -190,7 +190,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns>
         ///     1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
         /// </returns>
-        private static async Task<int> startsWith(CustomBufferedStream clientStreamReader, IBufferPool bufferPool, string expectedStart, CancellationToken cancellationToken = default)
+        private static async Task<int> startsWith(IPeekStream httpReader, IBufferPool bufferPool, string expectedStart, CancellationToken cancellationToken = default)
         {
             const int lengthToCheck = 10;
             if (bufferPool.BufferSize < lengthToCheck)
@@ -205,7 +205,7 @@ namespace Titanium.Web.Proxy.Helpers
                 int i = 0;
                 while (i < lengthToCheck)
                 {
-                    int peeked = await clientStreamReader.PeekBytesAsync(buffer, i, i, lengthToCheck - i, cancellationToken);
+                    int peeked = await httpReader.PeekBytesAsync(buffer, i, i, lengthToCheck - i, cancellationToken);
                     if (peeked <= 0)
                         return -1;
 

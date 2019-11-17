@@ -33,8 +33,7 @@ namespace Titanium.Web.Proxy
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
 
-            var clientStream = new CustomBufferedStream(clientConnection.GetStream(), BufferPool);
-            var clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool);
+            var clientStream = new HttpClientStream(clientConnection.GetStream(), BufferPool);
 
             SslStream? sslStream = null;
 
@@ -75,14 +74,12 @@ namespace Titanium.Web.Proxy
                             await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
 
                             // HTTPS server created - we can now decrypt the client's traffic
-                            clientStream = new CustomBufferedStream(sslStream, BufferPool);
-
-                            clientStreamWriter = new HttpResponseWriter(clientStream, BufferPool);
+                            clientStream = new HttpClientStream(sslStream, BufferPool);
                         }
                         catch (Exception e)
                         {
                             var certname = certificate?.GetNameInfo(X509NameType.SimpleName, false);
-                            var session = new SessionEventArgs(this, endPoint, new ProxyClient(clientConnection, clientStream, clientStreamWriter), null,
+                            var session = new SessionEventArgs(this, endPoint, clientConnection, clientStream, null,
                                 cancellationTokenSource);
                             throw new ProxyConnectException(
                                 $"Couldn't authenticate host '{httpsHostName}' with certificate '{certname}'.", e, session);
@@ -108,7 +105,7 @@ namespace Titanium.Web.Proxy
                                 {
                                     // clientStream.Available should be at most BufferSize because it is using the same buffer size
                                     await clientStream.ReadAsync(data, 0, available, cancellationToken);
-                                    await connection.StreamWriter.WriteAsync(data, 0, available, true, cancellationToken);
+                                    await connection.Stream.WriteAsync(data, 0, available, true, cancellationToken);
                                 }
                                 finally
                                 {
@@ -133,7 +130,7 @@ namespace Titanium.Web.Proxy
 
                 // HTTPS server created - we can now decrypt the client's traffic
                 // Now create the request
-                await handleHttpSessionRequest(endPoint, clientConnection, clientStream, clientStreamWriter, cancellationTokenSource);
+                await handleHttpSessionRequest(endPoint, clientConnection, clientStream, cancellationTokenSource);
             }
             catch (ProxyException e)
             {

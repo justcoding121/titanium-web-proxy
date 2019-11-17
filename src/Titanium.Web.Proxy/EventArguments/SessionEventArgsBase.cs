@@ -26,7 +26,12 @@ namespace Titanium.Web.Proxy.EventArguments
 
         internal TcpServerConnection ServerConnection => HttpClient.Connection;
 
-        internal TcpClientConnection ClientConnection => ProxyClient.Connection;
+        /// <summary>
+        ///     Holds a reference to client
+        /// </summary>
+        internal TcpClientConnection ClientConnection { get; }
+
+        internal HttpClientStream ClientStream { get; }
 
         protected readonly IBufferPool BufferPool;
         protected readonly ExceptionHandler ExceptionFunc;
@@ -41,7 +46,7 @@ namespace Titanium.Web.Proxy.EventArguments
         ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
         /// </summary>
         private protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
-            ProxyClient proxyClient, ConnectRequest? connectRequest, Request request, CancellationTokenSource cancellationTokenSource)
+            TcpClientConnection clientConnection, HttpClientStream clientStream, ConnectRequest? connectRequest, Request request, CancellationTokenSource cancellationTokenSource)
         {
             BufferPool = server.BufferPool;
             ExceptionFunc = server.ExceptionFunc;
@@ -49,16 +54,12 @@ namespace Titanium.Web.Proxy.EventArguments
 
             CancellationTokenSource = cancellationTokenSource;
 
-            ProxyClient = proxyClient;
-            HttpClient = new HttpWebClient(connectRequest, request, new Lazy<int>(() => ProxyClient.Connection.GetProcessId(endPoint)));
+            ClientConnection = clientConnection;
+            ClientStream = clientStream;
+            HttpClient = new HttpWebClient(connectRequest, request, new Lazy<int>(() => clientConnection.GetProcessId(endPoint)));
             LocalEndPoint = endPoint;
             EnableWinAuth = server.EnableWinAuth && isWindowsAuthenticationSupported;
         }
-
-        /// <summary>
-        ///     Holds a reference to client
-        /// </summary>
-        internal ProxyClient ProxyClient { get; }
 
         /// <summary>
         ///     Returns a user data for this request/response session which is
@@ -93,7 +94,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Client End Point.
         /// </summary>
-        public IPEndPoint ClientEndPoint => (IPEndPoint)ProxyClient.Connection.RemoteEndPoint;
+        public IPEndPoint ClientEndPoint => (IPEndPoint)ClientConnection.RemoteEndPoint;
 
         /// <summary>
         ///    The web client used to communicate with server for this session.
