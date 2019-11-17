@@ -805,13 +805,6 @@ namespace Titanium.Web.Proxy
         /// <param name="exception">The exception.</param>
         private void onException(CustomBufferedStream clientStream, Exception exception)
         {
-#if DEBUG
-            if (clientStream is DebugCustomBufferedStream debugStream)
-            {
-                debugStream.LogException(exception);
-            }
-#endif
-
             ExceptionFunc(exception);
         }
 

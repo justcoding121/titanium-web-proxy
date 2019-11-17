@@ -127,11 +127,10 @@ namespace Titanium.Web.Proxy.StreamExtended
                     return null;
                 }
 
-                byte[] ciphersData = peekStream.ReadBytes(length);
-                int[] ciphers = new int[ciphersData.Length / 2];
+                int[] ciphers = new int[length / 2];
                 for (int i = 0; i < ciphers.Length; i++)
                 {
-                    ciphers[i] = (ciphersData[2 * i] << 8) + ciphersData[2 * i + 1];
+                    ciphers[i] = peekStream.ReadInt16();
                 }
 
                 length = peekStream.ReadByte();
@@ -286,11 +285,11 @@ namespace Titanium.Web.Proxy.StreamExtended
                 int cipherSuite = peekStream.ReadInt16();
                 byte compressionMethod = peekStream.ReadByte();
 
-                int extenstionsStartPosition = peekStream.Position;
+                int extensionsStartPosition = peekStream.Position;
 
                 Dictionary<string, SslExtension>? extensions = null;
 
-                if (extenstionsStartPosition < recordLength + 5)
+                if (extensionsStartPosition < recordLength + 5)
                 {
                    extensions = await ReadExtensions(majorVersion, minorVersion, peekStream, bufferPool, cancellationToken);
                 }
@@ -298,7 +297,7 @@ namespace Titanium.Web.Proxy.StreamExtended
                 var serverHelloInfo = new ServerHelloInfo(3, majorVersion, minorVersion, random, sessionId, cipherSuite, peekStream.Position)
                 {
                     CompressionMethod = compressionMethod,
-                    EntensionsStartPosition = extenstionsStartPosition,
+                    EntensionsStartPosition = extensionsStartPosition,
                     Extensions = extensions,
                 };
 
