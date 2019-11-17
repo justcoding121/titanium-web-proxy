@@ -6,7 +6,7 @@ namespace Titanium.Web.Proxy.Models
     /// <summary>
     ///     An upstream proxy this proxy uses if any.
     /// </summary>
-    public class ExternalProxy
+    public class ExternalProxy : IExternalProxy
     {
         private static readonly Lazy<NetworkCredential> defaultCredentials =
             new Lazy<NetworkCredential>(() => CredentialCache.DefaultNetworkCredentials);
