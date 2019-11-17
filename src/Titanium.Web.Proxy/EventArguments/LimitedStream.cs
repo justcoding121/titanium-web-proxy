@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
@@ -11,16 +12,16 @@ namespace Titanium.Web.Proxy.EventArguments
     internal class LimitedStream : Stream
     {
         private readonly IBufferPool bufferPool;
-        private readonly CustomBufferedStream baseStream;
+        private readonly IHttpStreamReader baseReader;
         private readonly bool isChunked;
         private long bytesRemaining;
 
         private bool readChunkTrail;
 
-        internal LimitedStream(CustomBufferedStream baseStream, IBufferPool bufferPool, bool isChunked,
+        internal LimitedStream(IHttpStreamReader baseStream, IBufferPool bufferPool, bool isChunked,
             long contentLength)
         {  
-            this.baseStream = baseStream;
+            this.baseReader = baseStream;
             this.bufferPool = bufferPool;
             this.isChunked = isChunked;
             bytesRemaining = isChunked
@@ -49,12 +50,12 @@ namespace Titanium.Web.Proxy.EventArguments
             if (readChunkTrail)
             {
                 // read the chunk trail of the previous chunk
-                string? s = baseStream.ReadLineAsync().Result;
+                string? s = baseReader.ReadLineAsync().Result;
             }
 
             readChunkTrail = true;
 
-            string? chunkHead = baseStream.ReadLineAsync().Result!;
+            string? chunkHead = baseReader.ReadLineAsync().Result!;
             int idx = chunkHead.IndexOf(";", StringComparison.Ordinal);
             if (idx >= 0)
             {
@@ -73,7 +74,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 bytesRemaining = -1;
 
                 // chunk trail
-                var task = baseStream.ReadLineAsync();
+                var task = baseReader.ReadLineAsync();
                 if (!task.IsCompleted)
                     task.AsTask().Wait();
             }
@@ -119,7 +120,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
 
             int toRead = (int)Math.Min(count, bytesRemaining);
-            int res = baseStream.Read(buffer, offset, toRead);
+            int res = baseReader.Read(buffer, offset, toRead);
             bytesRemaining -= res;
 
             if (res == 0)

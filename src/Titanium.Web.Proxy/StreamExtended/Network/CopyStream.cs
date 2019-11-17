@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.StreamExtended.Network
@@ -11,9 +12,9 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     /// </summary>
     internal class CopyStream : ILineStream, IDisposable
     {
-        private readonly CustomBufferedStream reader;
+        private readonly IHttpStreamReader reader;
 
-        private readonly ICustomStreamWriter writer;
+        private readonly IHttpStreamWriter writer;
 
         private readonly IBufferPool bufferPool;
 
@@ -27,7 +28,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         public long ReadBytes { get; private set; }
 
-        public CopyStream(CustomBufferedStream reader, ICustomStreamWriter writer, IBufferPool bufferPool)
+        public CopyStream(IHttpStreamReader reader, IHttpStreamWriter writer, IBufferPool bufferPool)
         {
             this.reader = reader;
             this.writer = writer;
@@ -61,7 +62,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         public ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken = default)
         {
-            return CustomBufferedStream.ReadLineInternalAsync(this, bufferPool, cancellationToken);
+            return HttpStream.ReadLineInternalAsync(this, bufferPool, cancellationToken);
         }
 
         public void Dispose()

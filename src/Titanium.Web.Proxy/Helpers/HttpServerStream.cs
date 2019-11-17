@@ -6,9 +6,9 @@ using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.Helpers
 {
-    internal sealed class HttpRequestWriter : HttpWriter
+    internal sealed class HttpServerStream : HttpStream
     {
-        internal HttpRequestWriter(Stream stream, IBufferPool bufferPool) 
+        internal HttpServerStream(Stream stream, IBufferPool bufferPool) 
             : base(stream, bufferPool)
         {
         }
