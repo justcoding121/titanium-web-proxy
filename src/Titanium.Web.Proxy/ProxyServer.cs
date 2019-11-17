@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private WinHttpWebProxyFinder? systemProxyResolver;
 
-
+        
         /// <inheritdoc />
         /// <summary>
         ///     Initializes a new instance of ProxyServer class with provided parameters.
@@ -145,7 +145,7 @@ namespace Titanium.Web.Proxy
         ///     Defaults to false.
         /// </summary>
         public bool EnableWinAuth { get; set; }
-
+        
         /// <summary>
         ///     Enable disable HTTP/2 support.
         ///     Warning: HTTP/2 support is very limited
@@ -253,12 +253,12 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     External proxy used for Http requests.
         /// </summary>
-        public IExternalProxy? UpStreamHttpProxy { get; set; }
+        public ExternalProxy? UpStreamHttpProxy { get; set; }
 
         /// <summary>
         ///     External proxy used for Https requests.
         /// </summary>
-        public IExternalProxy? UpStreamHttpsProxy { get; set; }
+        public ExternalProxy? UpStreamHttpsProxy { get; set; }
 
         /// <summary>
         ///     Local adapter/NIC endpoint where proxy makes request via.
@@ -275,7 +275,7 @@ namespace Titanium.Web.Proxy
         ///     A callback to provide authentication credentials for up stream proxy this proxy is using for HTTP(S) requests.
         ///     User should return the ExternalProxy object with valid credentials.
         /// </summary>
-        public Func<SessionEventArgsBase, Task<IExternalProxy?>>? GetCustomUpStreamProxyFunc { get; set; }
+        public Func<SessionEventArgsBase, Task<ExternalProxy?>>? GetCustomUpStreamProxyFunc { get; set; }
 
         /// <summary>
         ///     Callback for error events in this proxy instance.
@@ -709,7 +709,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="sessionEventArgs">The session.</param>
         /// <returns>The external proxy as task result.</returns>
-        private Task<IExternalProxy?> getSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
+        private Task<ExternalProxy?> getSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
         {
             var proxy = systemProxyResolver!.GetProxy(sessionEventArgs.HttpClient.Request.RequestUri);
             return Task.FromResult(proxy);

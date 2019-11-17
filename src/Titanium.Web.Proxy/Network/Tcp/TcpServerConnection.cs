@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
     {
         internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient, CustomBufferedStream stream,
             string hostName, int port, bool isHttps, SslApplicationProtocol negotiatedApplicationProtocol,
-            Version version, bool useUpstreamProxy, IExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string cacheKey)
+            Version version, bool useUpstreamProxy, ExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string cacheKey)
         {
             this.tcpClient = tcpClient;
             LastAccess = DateTime.Now;
@@ -41,7 +41,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         internal bool IsClosed => Stream.IsClosed;
 
-        internal IExternalProxy? UpStreamProxy { get; set; }
+        internal ExternalProxy? UpStreamProxy { get; set; }
 
         internal string HostName { get; set; }
 
