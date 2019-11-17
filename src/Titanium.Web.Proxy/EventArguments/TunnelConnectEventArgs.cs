@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Threading;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
+using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
@@ -15,8 +17,8 @@ namespace Titanium.Web.Proxy.EventArguments
         private bool? isHttpsConnect;
 
         internal TunnelConnectSessionEventArgs(ProxyServer server, ProxyEndPoint endPoint, ConnectRequest connectRequest,
-            ProxyClient proxyClient, CancellationTokenSource cancellationTokenSource)
-            : base(server, endPoint, proxyClient, connectRequest, connectRequest, cancellationTokenSource)
+            TcpClientConnection clientConnection, HttpClientStream clientStream, CancellationTokenSource cancellationTokenSource)
+            : base(server, endPoint, clientConnection, clientStream, connectRequest, connectRequest, cancellationTokenSource)
         {
         }
 

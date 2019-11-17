@@ -53,5 +53,5 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             return buffer;
         }
-    }
+    }   
 }

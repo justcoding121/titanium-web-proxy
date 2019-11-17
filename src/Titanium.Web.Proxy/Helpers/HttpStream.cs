@@ -1,24 +1,23 @@
 ﻿using System;
+using System.Buffers;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Shared;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
-namespace Titanium.Web.Proxy.StreamExtended.Network
+namespace Titanium.Web.Proxy.Helpers
 {
-    /// <summary>
-    ///     A custom network stream inherited from stream
-    ///     with an underlying read buffer supporting both read/write 
-    ///     of UTF-8 encoded string or raw bytes asynchronously from last read position.
-    /// </summary>
-    /// <seealso cref="System.IO.Stream" />
-    internal class CustomBufferedStream : Stream, IPeekStream, ILineStream
+    internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekStream
     {
+        private readonly bool swallowException;
         private readonly bool leaveOpen;
         private readonly byte[] streamBuffer;
 
@@ -40,11 +39,11 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         public event EventHandler<DataEventArgs>? DataWrite;
 
-        public Stream BaseStream { get; }
+        private Stream baseStream { get; }
 
         public bool IsClosed => closed;
 
-        static CustomBufferedStream()
+        static HttpStream()
         {
             // TODO: remove this hack when removing .NET 4.x support
             try
@@ -62,15 +61,22 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             }
         }
 
+        private static readonly byte[] newLine = ProxyConstants.NewLineBytes;
+
         /// <summary>
-        /// Initializes a new instance of the <see cref="CustomBufferedStream"/> class.
+        /// Initializes a new instance of the <see cref="HttpStream"/> class.
         /// </summary>
         /// <param name="baseStream">The base stream.</param>
         /// <param name="bufferPool">Bufferpool.</param>
         /// <param name="leaveOpen"><see langword="true" /> to leave the stream open after disposing the <see cref="T:CustomBufferedStream" /> object; otherwise, <see langword="false" />.</param>
-        public CustomBufferedStream(Stream baseStream, IBufferPool bufferPool, bool leaveOpen = false)
+        internal HttpStream(Stream baseStream, IBufferPool bufferPool, bool leaveOpen = false)
         {
-            BaseStream = baseStream;
+            if (baseStream is NetworkStream)
+            {
+                swallowException = true;
+            }
+
+            this.baseStream = baseStream;
             this.leaveOpen = leaveOpen;
             streamBuffer = bufferPool.GetBuffer();
             this.bufferPool = bufferPool;
@@ -81,7 +87,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         public override void Flush()
         {
-            BaseStream.Flush();
+            baseStream.Flush();
         }
 
         /// <summary>
@@ -96,7 +102,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         {
             bufferLength = 0;
             bufferPos = 0;
-            return BaseStream.Seek(offset, origin);
+            return baseStream.Seek(offset, origin);
         }
 
         /// <summary>
@@ -105,7 +111,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <param name="value">The desired length of the current stream in bytes.</param>
         public override void SetLength(long value)
         {
-            BaseStream.SetLength(value);
+            baseStream.SetLength(value);
         }
 
         /// <summary>
@@ -138,14 +144,14 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <summary>
         /// When overridden in a derived class, writes a sequence of bytes to the current stream and advances the current position within this stream by the number of bytes written.
         /// </summary>
-        /// <param name="buffer">An array of bytes. This method copies <paramref name="count" /> bytes from <paramref name="buffer" /> to the current stream.</param>
-        /// <param name="offset">The zero-based byte offset in <paramref name="buffer" /> at which to begin copying bytes to the current stream.</param>
+        /// <param name="buffer">An array of bytes. This method copies count bytes from buffer to the current stream.</param>
+        /// <param name="offset">The zero-based byte offset in buffer at which to begin copying bytes to the current stream.</param>
         /// <param name="count">The number of bytes to be written to the current stream.</param>
         [DebuggerStepThrough]
         public override void Write(byte[] buffer, int offset, int count)
         {
             OnDataWrite(buffer, offset, count);
-            BaseStream.Write(buffer, offset, count);
+            baseStream.Write(buffer, offset, count);
         }
 
         /// <summary>
@@ -178,7 +184,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </returns>
         public override Task FlushAsync(CancellationToken cancellationToken)
         {
-            return BaseStream.FlushAsync(cancellationToken);
+            return baseStream.FlushAsync(cancellationToken);
         }
 
         /// <summary>
@@ -378,18 +384,14 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// Asynchronously writes a sequence of bytes to the current stream, advances the current position within this stream by the number of bytes written, and monitors cancellation requests.
         /// </summary>
         /// <param name="buffer">The buffer to write data from.</param>
-        /// <param name="offset">The zero-based byte offset in <paramref name="buffer" /> from which to begin copying bytes to the stream.</param>
+        /// <param name="offset">The zero-based byte offset in buffer from which to begin copying bytes to the stream.</param>
         /// <param name="count">The maximum number of bytes to write.</param>
-        /// <param name="cancellationToken">The token to monitor for cancellation requests. The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
-        /// <returns>
-        /// A task that represents the asynchronous write operation.
-        /// </returns>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests. The default value is <see cref="P:System.Threading.CancellationToken.None"></see>.</param>
         [DebuggerStepThrough]
         public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             OnDataWrite(buffer, offset, count);
-
-            await BaseStream.WriteAsync(buffer, offset, count, cancellationToken);
+            await baseStream.WriteAsync(buffer, offset, count, cancellationToken);
         }
 
         /// <summary>
@@ -403,7 +405,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             {
                 buffer[0] = value;
                 OnDataWrite(buffer, 0, 1);
-                BaseStream.Write(buffer, 0, 1);
+                baseStream.Write(buffer, 0, 1);
             }
             finally
             {
@@ -433,7 +435,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
                 closed = true;
                 if (!leaveOpen)
                 {
-                    BaseStream.Dispose();
+                    baseStream.Dispose();
                 }
 
                 bufferPool.ReturnBuffer(streamBuffer);
@@ -443,27 +445,27 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// <summary>
         /// When overridden in a derived class, gets a value indicating whether the current stream supports reading.
         /// </summary>
-        public override bool CanRead => BaseStream.CanRead;
+        public override bool CanRead => baseStream.CanRead;
 
         /// <summary>
         /// When overridden in a derived class, gets a value indicating whether the current stream supports seeking.
         /// </summary>
-        public override bool CanSeek => BaseStream.CanSeek;
+        public override bool CanSeek => baseStream.CanSeek;
 
         /// <summary>
         /// When overridden in a derived class, gets a value indicating whether the current stream supports writing.
         /// </summary>
-        public override bool CanWrite => BaseStream.CanWrite;
+        public override bool CanWrite => baseStream.CanWrite;
 
         /// <summary>
         /// Gets a value that determines whether the current stream can time out.
         /// </summary>
-        public override bool CanTimeout => BaseStream.CanTimeout;
+        public override bool CanTimeout => baseStream.CanTimeout;
 
         /// <summary>
         /// When overridden in a derived class, gets the length in bytes of the stream.
         /// </summary>
-        public override long Length => BaseStream.Length;
+        public override long Length => baseStream.Length;
 
         /// <summary>
         /// Gets a value indicating whether data is available.
@@ -480,8 +482,8 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         public override long Position
         {
-            get => BaseStream.Position;
-            set => BaseStream.Position = value;
+            get => baseStream.Position;
+            set => baseStream.Position = value;
         }
 
         /// <summary>
@@ -489,8 +491,8 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         public override int ReadTimeout
         {
-            get => BaseStream.ReadTimeout;
-            set => BaseStream.ReadTimeout = value;
+            get => baseStream.ReadTimeout;
+            set => baseStream.ReadTimeout = value;
         }
 
         /// <summary>
@@ -498,8 +500,8 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         /// </summary>
         public override int WriteTimeout
         {
-            get => BaseStream.WriteTimeout;
-            set => BaseStream.WriteTimeout = value;
+            get => baseStream.WriteTimeout;
+            set => baseStream.WriteTimeout = value;
         }
 
         /// <summary>
@@ -524,7 +526,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             bool result = false;
             try
             {
-                int readBytes = BaseStream.Read(streamBuffer, bufferLength, streamBuffer.Length - bufferLength);
+                int readBytes = baseStream.Read(streamBuffer, bufferLength, streamBuffer.Length - bufferLength);
                 result = readBytes > 0;
                 if (result)
                 {
@@ -574,13 +576,18 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             bool result = false;
             try
             {
-                int readBytes = await BaseStream.ReadAsync(streamBuffer, bufferLength, bytesToRead, cancellationToken);
+                int readBytes = await baseStream.ReadAsync(streamBuffer, bufferLength, bytesToRead, cancellationToken);
                 result = readBytes > 0;
                 if (result)
                 {
                     OnDataRead(streamBuffer, bufferLength, readBytes);
                     bufferLength += readBytes;
                 }
+            }
+            catch
+            {
+                if (!swallowException)
+                    throw;
             }
             finally
             {
@@ -721,7 +728,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             return ((TaskResult<int>)asyncResult).Result;
         }
-        
+
         /// <summary>
         /// Fix the .net bug with SslStream slow WriteAsync
         /// https://github.com/justcoding121/Titanium-Web-Proxy/issues/495
@@ -756,5 +763,292 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             ((TaskResult)asyncResult).GetResult();
         }
+
+        /// <summary>
+        ///     Writes a line async
+        /// </summary>
+        /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
+        /// <returns></returns>
+        internal Task WriteLineAsync(CancellationToken cancellationToken = default)
+        {
+            return WriteAsync(newLine, cancellationToken: cancellationToken);
+        }
+
+        internal Task WriteAsync(string value, CancellationToken cancellationToken = default)
+        {
+            return writeAsyncInternal(value, false, cancellationToken);
+        }
+
+        private async Task writeAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken)
+        {
+            int newLineChars = addNewLine ? newLine.Length : 0;
+            int charCount = value.Length;
+            if (charCount < bufferPool.BufferSize - newLineChars)
+            {
+                var buffer = bufferPool.GetBuffer();
+                try
+                {
+                    int idx = encoding.GetBytes(value, 0, charCount, buffer, 0);
+                    if (newLineChars > 0)
+                    {
+                        Buffer.BlockCopy(newLine, 0, buffer, idx, newLineChars);
+                        idx += newLineChars;
+                    }
+
+                    await baseStream.WriteAsync(buffer, 0, idx, cancellationToken);
+                }
+                finally
+                {
+                    bufferPool.ReturnBuffer(buffer);
+                }
+            }
+            else
+            {
+                var buffer = new byte[charCount + newLineChars + 1];
+                int idx = encoding.GetBytes(value, 0, charCount, buffer, 0);
+                if (newLineChars > 0)
+                {
+                    Buffer.BlockCopy(newLine, 0, buffer, idx, newLineChars);
+                    idx += newLineChars;
+                }
+
+                await baseStream.WriteAsync(buffer, 0, idx, cancellationToken);
+            }
+        }
+
+        internal Task WriteLineAsync(string value, CancellationToken cancellationToken = default)
+        {
+            return writeAsyncInternal(value, true, cancellationToken);
+        }
+
+        /// <summary>
+        ///     Write the headers to client
+        /// </summary>
+        /// <param name="headerBuilder"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        internal async Task WriteHeadersAsync(HeaderBuilder headerBuilder, CancellationToken cancellationToken = default)
+        {
+            var buffer = headerBuilder.GetBuffer();
+            await WriteAsync(buffer.Array, buffer.Offset, buffer.Count, true, cancellationToken);
+        }
+
+        /// <summary>
+        ///     Writes the data to the stream.
+        /// </summary>
+        /// <param name="data">The data.</param>
+        /// <param name="flush">Should we flush after write?</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        internal async Task WriteAsync(byte[] data, bool flush = false, CancellationToken cancellationToken = default)
+        {
+            await baseStream.WriteAsync(data, 0, data.Length, cancellationToken);
+            if (flush)
+            {
+                await baseStream.FlushAsync(cancellationToken);
+            }
+        }
+
+        internal async Task WriteAsync(byte[] data, int offset, int count, bool flush,
+            CancellationToken cancellationToken = default)
+        {
+            await baseStream.WriteAsync(data, offset, count, cancellationToken);
+            if (flush)
+            {
+                await baseStream.FlushAsync(cancellationToken);
+            }
+        }
+
+        /// <summary>
+        ///     Writes the byte array body to the stream; optionally chunked
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="isChunked"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        internal Task WriteBodyAsync(byte[] data, bool isChunked, CancellationToken cancellationToken)
+        {
+            if (isChunked)
+            {
+                return writeBodyChunkedAsync(data, cancellationToken);
+            }
+
+            return WriteAsync(data, cancellationToken: cancellationToken);
+        }
+
+        /// <summary>
+        ///     Copies the specified content length number of bytes to the output stream from the given inputs stream
+        ///     optionally chunked
+        /// </summary>
+        /// <param name="streamReader"></param>
+        /// <param name="isChunked"></param>
+        /// <param name="contentLength"></param>
+        /// <param name="onCopy"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public Task CopyBodyAsync(IHttpStreamReader streamReader, bool isChunked, long contentLength,
+            Action<byte[], int, int>? onCopy, CancellationToken cancellationToken)
+        {
+            // For chunked request we need to read data as they arrive, until we reach a chunk end symbol
+            if (isChunked)
+            {
+                return copyBodyChunkedAsync(streamReader, onCopy, cancellationToken);
+            }
+
+            // http 1.0 or the stream reader limits the stream
+            if (contentLength == -1)
+            {
+                contentLength = long.MaxValue;
+            }
+
+            // If not chunked then its easy just read the amount of bytes mentioned in content length header
+            return copyBytesFromStream(streamReader, contentLength, onCopy, cancellationToken);
+        }
+
+        /// <summary>
+        ///     Copies the given input bytes to output stream chunked
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        private async Task writeBodyChunkedAsync(byte[] data, CancellationToken cancellationToken)
+        {
+            var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
+
+            await WriteAsync(chunkHead, cancellationToken: cancellationToken);
+            await WriteLineAsync(cancellationToken);
+            await WriteAsync(data, cancellationToken: cancellationToken);
+            await WriteLineAsync(cancellationToken);
+
+            await WriteLineAsync("0", cancellationToken);
+            await WriteLineAsync(cancellationToken);
+        }
+
+        /// <summary>
+        ///     Copies the streams chunked
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <param name="onCopy"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        private async Task copyBodyChunkedAsync(IHttpStreamReader reader, Action<byte[], int, int>? onCopy, CancellationToken cancellationToken)
+        {
+            while (true)
+            {
+                string chunkHead = (await reader.ReadLineAsync(cancellationToken))!;
+                int idx = chunkHead.IndexOf(";");
+                if (idx >= 0)
+                {
+                    chunkHead = chunkHead.Substring(0, idx);
+                }
+
+                int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
+
+                await WriteLineAsync(chunkHead, cancellationToken);
+
+                if (chunkSize != 0)
+                {
+                    await copyBytesFromStream(reader, chunkSize, onCopy, cancellationToken);
+                }
+
+                await WriteLineAsync(cancellationToken);
+
+                // chunk trail
+                await reader.ReadLineAsync(cancellationToken);
+
+                if (chunkSize == 0)
+                {
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Copies the specified bytes to the stream from the input stream
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <param name="count"></param>
+        /// <param name="onCopy"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        private async Task copyBytesFromStream(IHttpStreamReader reader, long count, Action<byte[], int, int>? onCopy,
+            CancellationToken cancellationToken)
+        {
+            var buffer = bufferPool.GetBuffer();
+
+            try
+            {
+                long remainingBytes = count;
+
+                while (remainingBytes > 0)
+                {
+                    int bytesToRead = buffer.Length;
+                    if (remainingBytes < bytesToRead)
+                    {
+                        bytesToRead = (int)remainingBytes;
+                    }
+
+                    int bytesRead = await reader.ReadAsync(buffer, 0, bytesToRead, cancellationToken);
+                    if (bytesRead == 0)
+                    {
+                        break;
+                    }
+
+                    remainingBytes -= bytesRead;
+
+                    await baseStream.WriteAsync(buffer, 0, bytesRead, cancellationToken);
+
+                    onCopy?.Invoke(buffer, 0, bytesRead);
+                }
+            }
+            finally
+            {
+                bufferPool.ReturnBuffer(buffer);
+            }
+        }
+
+        /// <summary>
+        ///     Writes the request/response headers and body.
+        /// </summary>
+        /// <param name="requestResponse"></param>
+        /// <param name="headerBuilder"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        protected async Task WriteAsync(RequestResponseBase requestResponse, HeaderBuilder headerBuilder, CancellationToken cancellationToken = default)
+        {
+            var body = requestResponse.CompressBodyAndUpdateContentLength();
+            headerBuilder.WriteHeaders(requestResponse.Headers);
+            await WriteHeadersAsync(headerBuilder, cancellationToken);
+
+            if (body != null)
+            {
+                await WriteBodyAsync(body, requestResponse.IsChunked, cancellationToken);
+            }
+        }
+
+#if NETSTANDARD2_1
+        /// <summary>
+        ///     Asynchronously writes a sequence of bytes to the current stream, advances the current position within this stream by the number of bytes written, and monitors cancellation requests.
+        /// </summary>
+        /// <param name="buffer">The buffer to write data from.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests. The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
+        /// <returns>A task that represents the asynchronous write operation.</returns>
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            return baseStream.WriteAsync(buffer, cancellationToken);
+        }
+#else
+        /// <summary>
+        ///     Asynchronously writes a sequence of bytes to the current stream, advances the current position within this stream by the number of bytes written, and monitors cancellation requests.
+        /// </summary>
+        /// <param name="buffer">The buffer to write data from.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests. The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
+        /// <returns>A task that represents the asynchronous write operation.</returns>
+        public Task WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+        {
+            var buf = ArrayPool<byte>.Shared.Rent(buffer.Length);
+            buffer.CopyTo(buf);
+            return baseStream.WriteAsync(buf, 0, buf.Length, cancellationToken);
+        }
+#endif
     }
 }
