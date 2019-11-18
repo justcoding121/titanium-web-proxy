@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Reflection;
 using System.Text;
 using System.Runtime.InteropServices;
@@ -13,6 +13,25 @@ namespace Titanium.Web.Proxy.Helpers
     {
         private static readonly Lazy<bool> isRunningOnMono = new Lazy<bool>(() => Type.GetType("Mono.Runtime") != null);
 
+#if NET45
+        /// <summary>
+        /// cache for Windows platform check
+        /// </summary>
+        /// <returns></returns>
+        private static bool isRunningOnWindows => true;
+
+        /// <summary>
+        ///     cache for mono runtime check
+        /// </summary>
+        /// <returns></returns>
+        private static bool isRunningOnLinux => false;
+
+        /// <summary>
+        ///     cache for mac runtime check
+        /// </summary>
+        /// <returns></returns>
+        private static bool isRunningOnMac => false;
+#else
         /// <summary>
         /// cache for Windows platform check
         /// </summary>
@@ -30,7 +49,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <returns></returns>
         private static bool isRunningOnMac => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
-      
+#endif
+
         /// <summary>
         ///     Is running on Mono?
         /// </summary>

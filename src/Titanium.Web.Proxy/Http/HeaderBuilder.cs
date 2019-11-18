@@ -85,14 +85,22 @@ namespace Titanium.Web.Proxy.Http
 
         public ArraySegment<byte> GetBuffer()
         {
+#if NET45
+            return new ArraySegment<byte>(stream.ToArray());
+#else
             stream.TryGetBuffer(out var buffer);
             return buffer;
+#endif
         }
 
         public string GetString(Encoding encoding)
         {
+#if NET45
+            return encoding.GetString(stream.ToArray());
+#else
             stream.TryGetBuffer(out var buffer);
             return encoding.GetString(buffer.Array, buffer.Offset, buffer.Count);
+#endif
         }
     }
 }
