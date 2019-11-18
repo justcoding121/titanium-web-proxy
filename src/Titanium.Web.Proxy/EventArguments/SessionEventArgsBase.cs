@@ -107,7 +107,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Are we using a custom upstream HTTP(S) proxy?
         /// </summary>
-        public IExternalProxy? CustomUpStreamProxyUsed { get; internal set; }
+        public IExternalProxy? CustomUpStreamProxyUsed { get; set; }
 
         /// <summary>
         ///     Local endpoint via which we make the request.
