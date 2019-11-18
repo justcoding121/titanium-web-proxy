@@ -31,13 +31,11 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint">The proxy endpoint.</param>
         /// <param name="clientConnection">The client connection.</param>
         /// <param name="clientStream">The client stream.</param>
-        /// <param name="clientStreamWriter">The client stream writer.</param>
         /// <param name="cancellationTokenSource">The cancellation token source for this async task.</param>
         /// <param name="connectArgs">The Connect request if this is a HTTPS request from explicit endpoint.</param>
         /// <param name="prefetchConnectionTask">Prefetched server connection for current client using Connect/SNI headers.</param>
         private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, TcpClientConnection clientConnection,
-            CustomBufferedStream clientStream, HttpResponseWriter clientStreamWriter,
-            CancellationTokenSource cancellationTokenSource, TunnelConnectSessionEventArgs? connectArgs = null,
+            HttpClientStream clientStream, CancellationTokenSource cancellationTokenSource, TunnelConnectSessionEventArgs? connectArgs = null,
             Task<TcpServerConnection>? prefetchConnectionTask = null)
         {
             var connectRequest = connectArgs?.HttpClient.ConnectRequest;
@@ -66,7 +64,7 @@ namespace Titanium.Web.Proxy
                         return;
                     }
 
-                    var args = new SessionEventArgs(this, endPoint, new ProxyClient(clientConnection, clientStream, clientStreamWriter), connectRequest, cancellationTokenSource)
+                    var args = new SessionEventArgs(this, endPoint, clientConnection, clientStream, connectRequest, cancellationTokenSource)
                     {
                         UserData = connectArgs?.UserData
                     };
@@ -101,7 +99,7 @@ namespace Titanium.Web.Proxy
                                     await onBeforeResponse(args);
 
                                     // send the response
-                                    await clientStreamWriter.WriteResponseAsync(args.HttpClient.Response,
+                                    await clientStream.WriteResponseAsync(args.HttpClient.Response,
                                         cancellationToken: cancellationToken);
                                     return;
                                 }
@@ -276,7 +274,7 @@ namespace Titanium.Web.Proxy
 
                     // if upgrading to websocket then relay the request without reading the contents
                     await handleWebSocketUpgrade(requestHttpMethod, requestHttpUrl, requestVersion, args, args.HttpClient.Request,
-                        args.HttpClient.Response, args.ProxyClient.ClientStream, args.ProxyClient.ClientStreamWriter,
+                        args.HttpClient.Response, args.ClientStream,
                         connection, cancellationTokenSource, cancellationToken);
                     return false;
                 }
@@ -304,13 +302,13 @@ namespace Titanium.Web.Proxy
             // If a successful 100 continue request was made, inform that to the client and reset response
             if (request.ExpectationSucceeded)
             {
-                var clientStreamWriter = args.ProxyClient.ClientStreamWriter;
+                var writer = args.ClientStream;
                 var response = args.HttpClient.Response;
 
                 var headerBuilder = new HeaderBuilder();
                 headerBuilder.WriteResponseLine(response.HttpVersion, response.StatusCode, response.StatusDescription);
                 headerBuilder.WriteHeaders(response.Headers);
-                await clientStreamWriter.WriteHeadersAsync(headerBuilder, cancellationToken);
+                await writer.WriteHeadersAsync(headerBuilder, cancellationToken);
                 
                 await args.ClearResponse(cancellationToken);
             }
@@ -320,14 +318,12 @@ namespace Titanium.Web.Proxy
             {
                 if (request.IsBodyRead)
                 {
-                    var writer = args.HttpClient.Connection.StreamWriter;
-                    await writer.WriteBodyAsync(body!, request.IsChunked, cancellationToken);
+                    await args.HttpClient.Connection.Stream.WriteBodyAsync(body!, request.IsChunked, cancellationToken);
                 }
                 else if (!request.ExpectationFailed)
                 {
                     // get the request body unless an unsuccessful 100 continue request was made
-                    HttpWriter writer = args.HttpClient.Connection.StreamWriter!;
-                    await args.CopyRequestBodyAsync(writer, TransformationMode.None, cancellationToken);
+                    await args.CopyRequestBodyAsync(args.HttpClient.Connection.Stream, TransformationMode.None, cancellationToken);
                 }
             }
 
@@ -357,7 +353,7 @@ namespace Titanium.Web.Proxy
                 supportedAcceptEncoding.Add("identity");
 
                 requestHeaders.SetOrAddHeaderValue(KnownHeaders.AcceptEncoding,
-                    string.Join(",", supportedAcceptEncoding));
+                    string.Join(", ", supportedAcceptEncoding));
             }
 
             requestHeaders.FixProxyHeaders();
