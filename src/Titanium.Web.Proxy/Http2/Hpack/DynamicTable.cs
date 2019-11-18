@@ -23,7 +23,11 @@ namespace Titanium.Web.Proxy.Http2.Hpack
     public class DynamicTable
     {
         // a circular queue of header fields
+#if NET45
+        HttpHeader[] headerFields = new HttpHeader[0];
+#else
         HttpHeader[] headerFields = Array.Empty<HttpHeader>();
+#endif
         int head;
         int tail;
 

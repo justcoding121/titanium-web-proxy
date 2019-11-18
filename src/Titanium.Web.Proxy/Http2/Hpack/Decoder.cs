@@ -258,7 +258,11 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                                 if (nameLength + HttpHeader.HttpHeaderOverhead > dynamicTable.Capacity)
                                 {
                                     dynamicTable.Clear();
+#if NET45
+                                    name = Net45Compatibility.EmptyArray;
+#else
                                     name = Array.Empty<byte>();
+#endif
                                     skipLength = nameLength;
                                     state = State.SkipLiteralHeaderName;
                                     break;
@@ -375,7 +379,11 @@ namespace Titanium.Web.Proxy.Http2.Hpack
 
                             if (valueLength == 0)
                             {
-                                InsertHeader(headerListener, name, Array.Empty<byte>(), indexType);
+#if NET45
+                                InsertHeader(headerListener, name, Net45Compatibility.EmptyArray, indexType);
+#else
+                                name = Array.Empty<byte>();
+#endif
                                 state = State.ReadHeaderRepresentation;
                             }
                             else

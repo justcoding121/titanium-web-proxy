@@ -51,7 +51,7 @@ namespace Titanium.Web.Proxy
                 // Loop through each subsequent request on this particular client connection
                 // (assuming HTTP connection is kept alive by client)
                 while (true)
-                {
+                {   
                     if (clientStream.IsClosed)
                     {
                         return;
