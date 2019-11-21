@@ -26,6 +26,11 @@ namespace Titanium.Web.Proxy.Http
             return String.AsSpan().EqualsIgnoreCase(value);
         }
 
+        internal bool Equals(string value)
+        {
+            return String.EqualsIgnoreCase(value);
+        }
+
         public static implicit operator KnownHeader(string str) => new KnownHeader(str);
     }
 }
