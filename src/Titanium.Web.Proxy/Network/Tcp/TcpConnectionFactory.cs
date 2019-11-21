@@ -348,7 +348,38 @@ retry:
                             tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                         }
 
-                        await tcpClient.ConnectAsync(ipAddress, port);
+                        var connectTask = tcpClient.ConnectAsync(ipAddress, port);
+                        await Task.WhenAny(connectTask, Task.Delay(proxyServer.ConnectTimeOutSeconds * 1000));
+                        if (!connectTask.IsCompleted || !tcpClient.Connected)
+                        {
+                            // here we can just do some cleanup and let the loop continue since
+                            // we will either get a connection or wind up with a null tcpClient
+                            // which will throw
+                            try
+                            {
+                                connectTask.Dispose();
+
+                            }
+                            catch
+                            {
+                                // ignore
+                            }
+                            try
+                            {
+#if NET45
+                                tcpClient?.Close();
+#else
+                                tcpClient?.Dispose();
+#endif
+                                tcpClient = null;
+                            }
+                            catch
+                            {
+                                // ignore
+                            }
+
+                            continue;
+                        }
                         break;
                     }
                     catch (Exception e)

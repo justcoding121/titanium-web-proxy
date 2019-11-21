@@ -197,6 +197,12 @@ namespace Titanium.Web.Proxy
         public int ConnectionTimeOutSeconds { get; set; } = 60;
 
         /// <summary>
+        ///     Seconds server connection are to wait for connection to be established.
+        ///     Default value is 20 seconds.
+        /// </summary>
+        public int ConnectTimeOutSeconds { get; set; } = 20;
+
+        /// <summary>
         ///     Maximum number of concurrent connections per remote host in cache.
         ///     Only valid when connection pooling is enabled.
         ///     Default value is 2.
