@@ -355,7 +355,11 @@ retry:
                     {
                         // dispose the current TcpClient and try the next address
                         lastException = e;
+#if NET45
+                        tcpClient?.Close();
+#else
                         tcpClient?.Dispose();
+#endif
                         tcpClient = null;
                     }
                 }
