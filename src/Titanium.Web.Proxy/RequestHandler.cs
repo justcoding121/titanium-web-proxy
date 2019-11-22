@@ -257,6 +257,8 @@ namespace Titanium.Web.Proxy
           TcpServerConnection? serverConnection, SslApplicationProtocol sslApplicationProtocol,
           CancellationToken cancellationToken, CancellationTokenSource cancellationTokenSource)
         {
+            args.HttpClient.Request.Locked = true;
+
             // a connection generator task with captured parameters via closure.
             Func<Task<TcpServerConnection>> generator = () =>
                             tcpConnectionFactory.GetServerConnection(this, args, isConnect: false,
@@ -266,6 +268,9 @@ namespace Titanium.Web.Proxy
             // for connection pool, retry fails until cache is exhausted.   
             return await retryPolicy<ServerConnectionException>().ExecuteAsync(async (connection) =>
             {
+                // set the connection and send request headers
+                args.HttpClient.SetConnection(connection);
+
                 args.TimeLine["Connection Ready"] = DateTime.Now;
 
                 if (args.HttpClient.Request.UpgradeToWebSocket)
@@ -290,12 +295,9 @@ namespace Titanium.Web.Proxy
         {
             var cancellationToken = args.CancellationTokenSource.Token;
             var request = args.HttpClient.Request;
-            request.Locked = true;
 
             var body = request.CompressBodyAndUpdateContentLength();
 
-            // set the connection and send request headers
-            args.HttpClient.SetConnection(connection);
             await args.HttpClient.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
                 cancellationToken);
 
