@@ -284,6 +284,12 @@ namespace Titanium.Web.Proxy
         public Func<SessionEventArgsBase, Task<IExternalProxy?>>? GetCustomUpStreamProxyFunc { get; set; }
 
         /// <summary>
+        ///     A callback to provide a chance for an upstream proxy failure to be handled by a new upstream proxy.
+        ///     User should return the ExternalProxy object with valid credentials or null.
+        /// </summary>
+        public Func<SessionEventArgsBase, Task<IExternalProxy?>>? CustomUpStreamProxyFailureFunc { get; set; }
+
+        /// <summary>
         ///     Callback for error events in this proxy instance.
         /// </summary>
         public ExceptionHandler ExceptionFunc

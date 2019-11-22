@@ -397,6 +397,16 @@ retry:
 
                 if (tcpClient == null)
                 {
+                    if (session != null && proxyServer.CustomUpStreamProxyFailureFunc != null)
+                    {
+                        var newUpstreamProxy = await proxyServer.CustomUpStreamProxyFailureFunc(session);
+                        if (newUpstreamProxy != null)
+                        {
+                            session.CustomUpStreamProxyUsed = newUpstreamProxy;
+                            session.TimeLine["Retrying Upstream Proxy Connection"] = DateTime.Now;
+                            return await createServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol, applicationProtocols, isConnect, proxyServer, session, upStreamEndPoint, externalProxy, cacheKey, cancellationToken);
+                        }
+                    }
                     throw new Exception($"Could not establish connection to {hostname}", lastException);
                 }
 
