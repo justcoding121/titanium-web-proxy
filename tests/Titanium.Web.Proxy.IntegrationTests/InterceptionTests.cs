@@ -15,9 +15,12 @@ namespace Titanium.Web.Proxy.IntegrationTests
         {
             var testSuite = new TestSuite();
 
+            bool serverCalled = false;
+
             var server = testSuite.GetServer();
             server.HandleRequest((context) =>
             {
+                serverCalled = true;
                 return context.Response.WriteAsync("I am server. I received your greetings.");
             });
 
@@ -37,11 +40,11 @@ namespace Titanium.Web.Proxy.IntegrationTests
 
             var response = await client.GetAsync(new Uri(server.ListeningHttpUrl));
 
+            Assert.IsFalse(serverCalled, "Server should not be called.");
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
 
             var body = await response.Content.ReadAsStringAsync();
             Assert.IsTrue(body.Contains("TitaniumWebProxy-Stopped!!"));
-
         }
 
         [TestMethod]
@@ -76,7 +79,6 @@ namespace Titanium.Web.Proxy.IntegrationTests
 
             var body = await response.Content.ReadAsStringAsync();
             Assert.IsTrue(body.Contains("TitaniumWebProxy-Stopped!!"));
-
         }
 
         [TestMethod]
@@ -111,7 +113,6 @@ namespace Titanium.Web.Proxy.IntegrationTests
 
             var body = await response.Content.ReadAsStringAsync();
             Assert.IsTrue(body.Contains("TitaniumWebProxy-Stopped!!"));
-
         }
 
 
@@ -147,7 +148,6 @@ namespace Titanium.Web.Proxy.IntegrationTests
 
             var body = await response.Content.ReadAsStringAsync();
             Assert.IsTrue(body.Contains("TitaniumWebProxy-Stopped!!"));
-
         }
 
         [TestMethod]
@@ -181,7 +181,6 @@ namespace Titanium.Web.Proxy.IntegrationTests
 
             var body = await response.Content.ReadAsStringAsync();
             Assert.IsTrue(body.Contains("TitaniumWebProxy-Stopped!!"));
-
         }
     }
 }

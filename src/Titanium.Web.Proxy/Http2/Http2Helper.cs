@@ -265,7 +265,7 @@ namespace Titanium.Web.Proxy.Http2
                             request.Method = method.GetString();
                             request.IsHttps = headerListener.Scheme == ProxyServer.UriSchemeHttps;
                             request.Authority = headerListener.Authority.GetString();
-                            request.OriginalUrlData = path;
+                            request.RequestUriString8 = path;
 
                             //request.RequestUri = headerListener.GetUri();
                         }

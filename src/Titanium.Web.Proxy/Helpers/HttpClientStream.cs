@@ -20,10 +20,13 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="response">The response object.</param>
         /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
         /// <returns>The Task.</returns>
-        internal async Task WriteResponseAsync(Response response, CancellationToken cancellationToken = default)
+        internal async ValueTask WriteResponseAsync(Response response, CancellationToken cancellationToken = default)
         {
             var headerBuilder = new HeaderBuilder();
+            
+            // Write back response status to client
             headerBuilder.WriteResponseLine(response.HttpVersion, response.StatusCode, response.StatusDescription);
+            
             await WriteAsync(response, headerBuilder, cancellationToken);
         }
     }

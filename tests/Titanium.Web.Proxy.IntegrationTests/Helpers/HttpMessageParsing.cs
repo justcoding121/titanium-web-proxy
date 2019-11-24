@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 Request.ParseRequestLine(line, out var method, out var url, out var version);
                 var request = new Request
                 {
-                    Method = method, Url = url, HttpVersion = version
+                    Method = method, RequestUriString8 = url, HttpVersion = version
                 };
                 while (!string.IsNullOrEmpty(line = reader.ReadLine()))
                 {

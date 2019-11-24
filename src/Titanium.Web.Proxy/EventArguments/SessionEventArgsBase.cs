@@ -33,6 +33,10 @@ namespace Titanium.Web.Proxy.EventArguments
 
         internal HttpClientStream ClientStream { get; }
 
+        public Guid ClientConnectionId => ClientConnection.Id;
+
+        public Guid ServerConnectionId => HttpClient.HasConnection ? ServerConnection.Id : Guid.Empty;
+
         protected readonly IBufferPool BufferPool;
         protected readonly ExceptionHandler ExceptionFunc;
         private bool enableWinAuth;
