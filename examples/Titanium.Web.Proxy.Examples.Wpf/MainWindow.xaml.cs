@@ -146,13 +146,15 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 if (sessionDictionary.TryGetValue(e.HttpClient, out var item))
                 {
-                    item.Update();
+                    item.Update(e);
                 }
             });
         }
 
         private async Task ProxyServer_BeforeRequest(object sender, SessionEventArgs e)
         {
+            //if (e.HttpClient.Request.HttpVersion.Major != 2) return;
+
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() => { item = addSession(e); });
 
@@ -175,7 +177,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 if (sessionDictionary.TryGetValue(e.HttpClient, out item))
                 {
-                    item.Update();
+                    item.Update(e);
                 }
             });
 
@@ -190,7 +192,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                     e.HttpClient.Response.KeepBody = true;
                     await e.GetResponseBody();
 
-                    await Dispatcher.InvokeAsync(() => { item.Update(); });
+                    await Dispatcher.InvokeAsync(() => { item.Update(e); });
                     if (item == SelectedSession)
                     {
                         await Dispatcher.InvokeAsync(selectedSessionChanged);
@@ -225,6 +227,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var item = new SessionListItem
             {
                 Number = lastSessionNumber,
+                ClientConnectionId = e.ClientConnectionId,
+                ServerConnectionId = e.ServerConnectionId,
                 HttpClient = e.HttpClient,
                 ClientEndPoint = e.ClientEndPoint,
                 IsTunnelConnect = isTunnelConnect
@@ -236,7 +240,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 var session = (SessionEventArgsBase)sender;
                 if (sessionDictionary.TryGetValue(session.HttpClient, out var li))
                 {
-                    var tunnelType = session.HttpClient.ConnectRequest?.TunnelType ?? TunnelType.Unknown;
+                    var connectRequest = session.HttpClient.ConnectRequest;
+                    var tunnelType = connectRequest?.TunnelType ?? TunnelType.Unknown;
                     if (tunnelType != TunnelType.Unknown)
                     {
                         li.Protocol = TunnelTypeToString(tunnelType);
@@ -244,6 +249,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
                     li.ReceivedDataCount += args.Count;
 
+                    //if (tunnelType == TunnelType.Http2)
                     AppendTransferLog(session.GetHashCode() + (isTunnelConnect ? "_tunnel" : "") + "_received",
                         args.Buffer, args.Offset, args.Count);
                 }
@@ -254,7 +260,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 var session = (SessionEventArgsBase)sender;
                 if (sessionDictionary.TryGetValue(session.HttpClient, out var li))
                 {
-                    var tunnelType = session.HttpClient.ConnectRequest?.TunnelType ?? TunnelType.Unknown;
+                    var connectRequest = session.HttpClient.ConnectRequest;
+                    var tunnelType = connectRequest?.TunnelType ?? TunnelType.Unknown;
                     if (tunnelType != TunnelType.Unknown)
                     {
                         li.Protocol = TunnelTypeToString(tunnelType);
@@ -262,7 +269,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
                     li.SentDataCount += args.Count;
 
-                    AppendTransferLog(session.GetHashCode() + (isTunnelConnect ? "_tunnel" : "") + "_sent",
+                    //if (tunnelType == TunnelType.Http2)
+                    AppendTransferLog( session.GetHashCode() + (isTunnelConnect ? "_tunnel" : "") + "_sent",
                         args.Buffer, args.Offset, args.Count);
                 }
             };
@@ -272,6 +280,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 te.DecryptedDataReceived += (sender, args) =>
                 {
                     var session = (SessionEventArgsBase)sender;
+                    //var tunnelType = session.HttpClient.ConnectRequest?.TunnelType ?? TunnelType.Unknown;
+                    //if (tunnelType == TunnelType.Http2)
                     AppendTransferLog(session.GetHashCode() + "_decrypted_received", args.Buffer, args.Offset,
                         args.Count);
                 };
@@ -279,11 +289,13 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 te.DecryptedDataSent += (sender, args) =>
                 {
                     var session = (SessionEventArgsBase)sender;
+                    //var tunnelType = session.HttpClient.ConnectRequest?.TunnelType ?? TunnelType.Unknown;
+                    //if (tunnelType == TunnelType.Http2)
                     AppendTransferLog(session.GetHashCode() + "_decrypted_sent", args.Buffer, args.Offset, args.Count);
                 };
             }
 
-            item.Update();
+            item.Update(e);
             return item;
         }
 
@@ -362,9 +374,15 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             //string hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
             var sb = new StringBuilder();
+            sb.AppendLine("URI: " + request.RequestUri);
             sb.Append(request.HeaderText);
             sb.Append(request.Encoding.GetString(data));
-            sb.Append(truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null);
+            if (truncated)
+            {
+                sb.AppendLine();
+                sb.Append($"Data is truncated after {truncateLimit} bytes");
+            }
+
             sb.Append((request as ConnectRequest)?.ClientHelloInfo);
             TextBoxRequest.Text = sb.ToString();
 
@@ -381,7 +399,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             sb = new StringBuilder();
             sb.Append(response.HeaderText);
             sb.Append(response.Encoding.GetString(data));
-            sb.Append(truncated ? Environment.NewLine + $"Data is truncated after {truncateLimit} bytes" : null);
+            if (truncated)
+            {
+                sb.AppendLine();
+                sb.Append($"Data is truncated after {truncateLimit} bytes");
+            }
+
             sb.Append((response as ConnectResponse)?.ServerHelloInfo);
             if (SelectedSession.Exception != null)
             {

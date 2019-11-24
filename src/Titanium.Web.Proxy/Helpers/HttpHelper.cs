@@ -170,7 +170,7 @@ namespace Titanium.Web.Proxy.Helpers
         ///     Determines whether is connect method.
         /// </summary>
         /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsConnectMethod(IPeekStream httpReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        internal static ValueTask<int> IsConnectMethod(IPeekStream httpReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
             return startsWith(httpReader, bufferPool, "CONNECT", cancellationToken);
         }
@@ -179,7 +179,7 @@ namespace Titanium.Web.Proxy.Helpers
         ///     Determines whether is pri method (HTTP/2).
         /// </summary>
         /// <returns>1: when PRI, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static Task<int> IsPriMethod(IPeekStream httpReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        internal static ValueTask<int> IsPriMethod(IPeekStream httpReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
             return startsWith(httpReader, bufferPool, "PRI", cancellationToken);
         }
@@ -190,7 +190,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns>
         ///     1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
         /// </returns>
-        private static async Task<int> startsWith(IPeekStream httpReader, IBufferPool bufferPool, string expectedStart, CancellationToken cancellationToken = default)
+        private static async ValueTask<int> startsWith(IPeekStream httpReader, IBufferPool bufferPool, string expectedStart, CancellationToken cancellationToken = default)
         {
             const int lengthToCheck = 10;
             if (bufferPool.BufferSize < lengthToCheck)

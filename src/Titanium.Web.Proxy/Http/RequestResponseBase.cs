@@ -210,6 +210,8 @@ namespace Titanium.Web.Proxy.Http
         internal bool Locked { get; set; }
 
         internal bool BodyAvailable => BodyInternal != null;
+        
+        internal bool IsBodySent { get; set; }
 
         internal abstract void EnsureBodyAvailable(bool throwWhenNotReadYet = true);
 

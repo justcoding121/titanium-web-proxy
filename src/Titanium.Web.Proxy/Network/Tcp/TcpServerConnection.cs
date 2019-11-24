@@ -15,9 +15,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpServerConnection : IDisposable
     {
+        public Guid Id { get; } = Guid.NewGuid();
+
         internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient, HttpServerStream stream,
             string hostName, int port, bool isHttps, SslApplicationProtocol negotiatedApplicationProtocol,
-            Version version, bool useUpstreamProxy, IExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string cacheKey)
+            Version version, IExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string cacheKey)
         {
             TcpClient = tcpClient;
             LastAccess = DateTime.Now;
@@ -29,7 +31,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
             IsHttps = isHttps;
             NegotiatedApplicationProtocol = negotiatedApplicationProtocol;
             Version = version;
-            UseUpstreamProxy = useUpstreamProxy;
             UpStreamProxy = upStreamProxy;
             UpStreamEndPoint = upStreamEndPoint;
 
@@ -49,8 +50,6 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal bool IsHttps { get; set; }
 
         internal SslApplicationProtocol NegotiatedApplicationProtocol { get; set; }
-
-        internal bool UseUpstreamProxy { get; set; }
 
         /// <summary>
         ///     Local NIC via connection is made

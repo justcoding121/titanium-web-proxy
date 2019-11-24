@@ -7,7 +7,7 @@ namespace Titanium.Web.Proxy.Http
 {
     internal static class HeaderParser
     {
-        internal static async Task ReadHeaders(ILineStream reader, HeaderCollection headerCollection,
+        internal static async ValueTask ReadHeaders(ILineStream reader, HeaderCollection headerCollection,
             CancellationToken cancellationToken)
         {
             string? tmpLine;

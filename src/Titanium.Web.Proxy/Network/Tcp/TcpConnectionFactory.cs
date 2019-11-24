@@ -281,19 +281,23 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
             }
 
-            bool useUpstreamProxy = false;
+            bool useUpstreamProxy1 = false;
 
             // check if external proxy is set for HTTP/HTTPS
-            if (externalProxy != null &&
-                !(externalProxy.HostName == remoteHostName && externalProxy.Port == remotePort))
+            if (externalProxy != null && !(externalProxy.HostName == remoteHostName && externalProxy.Port == remotePort))
             {
-                useUpstreamProxy = true;
+                useUpstreamProxy1 = true;
 
                 // check if we need to ByPass
                 if (externalProxy.BypassLocalhost && NetworkHelper.IsLocalIpAddress(remoteHostName))
                 {
-                    useUpstreamProxy = false;
+                    useUpstreamProxy1 = false;
                 }
+            }
+
+            if (!useUpstreamProxy1)
+            {
+                externalProxy = null;
             }
 
             TcpClient? tcpClient = null;
@@ -307,8 +311,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
 retry:
             try
             {
-                string hostname = useUpstreamProxy ? externalProxy!.HostName : remoteHostName;
-                int port = useUpstreamProxy ? externalProxy!.Port : remotePort;
+                string hostname = externalProxy != null ? externalProxy.HostName : remoteHostName;
+                int port = externalProxy?.Port ?? remotePort;
 
                 var ipAddresses = await Dns.GetHostAddressesAsync(hostname);
                 if (ipAddresses == null || ipAddresses.Length == 0)
@@ -358,7 +362,6 @@ retry:
                             try
                             {
                                 connectTask.Dispose();
-
                             }
                             catch
                             {
@@ -407,6 +410,7 @@ retry:
                             return await createServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol, applicationProtocols, isConnect, proxyServer, session, upStreamEndPoint, externalProxy, cacheKey, cancellationToken);
                         }
                     }
+
                     throw new Exception($"Could not establish connection to {hostname}", lastException);
                 }
 
@@ -419,34 +423,30 @@ retry:
 
                 stream = new HttpServerStream(tcpClient.GetStream(), proxyServer.BufferPool);
 
-                if (useUpstreamProxy && (isConnect || isHttps))
+                if (externalProxy != null && (isConnect || isHttps))
                 {
                     string authority = $"{remoteHostName}:{remotePort}";
                     var connectRequest = new ConnectRequest(authority)
                     {
                         IsHttps = isHttps,
-                        OriginalUrlData = HttpHeader.Encoding.GetBytes(authority),
+                        RequestUriString8 = HttpHeader.Encoding.GetBytes(authority),
                         HttpVersion = httpVersion
                     };
 
                     connectRequest.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionKeepAlive);
 
-                    if (!string.IsNullOrEmpty(externalProxy!.UserName) && externalProxy.Password != null)
+                    if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
                     {
                         connectRequest.Headers.AddHeader(HttpHeader.ProxyConnectionKeepAlive);
-                        connectRequest.Headers.AddHeader(
-                            HttpHeader.GetProxyAuthorizationHeader(externalProxy.UserName, externalProxy.Password));
+                        connectRequest.Headers.AddHeader(HttpHeader.GetProxyAuthorizationHeader(externalProxy.UserName, externalProxy.Password));
                     }
 
                     await stream.WriteRequestAsync(connectRequest, cancellationToken: cancellationToken);
 
-                    string httpStatus = await stream.ReadLineAsync(cancellationToken)
-                                         ?? throw new ServerConnectionException("Server connection was closed.");
+                    var httpStatus = await stream.ReadResponseStatus(cancellationToken);
 
-                    Response.ParseResponseLine(httpStatus, out _, out int statusCode, out string statusDescription);
-
-                    if (statusCode != 200 && !statusDescription.EqualsIgnoreCase("OK")
-                                          && !statusDescription.EqualsIgnoreCase("Connection Established"))
+                    if (httpStatus.StatusCode != 200 && !httpStatus.Description.EqualsIgnoreCase("OK")
+                                                     && !httpStatus.Description.EqualsIgnoreCase("Connection Established"))
                     {
                         throw new Exception("Upstream proxy failed to create a secure tunnel");
                     }
@@ -496,7 +496,7 @@ retry:
             }
 
             return new TcpServerConnection(proxyServer, tcpClient, stream, remoteHostName, remotePort, isHttps,
-                negotiatedApplicationProtocol, httpVersion, useUpstreamProxy, externalProxy, upStreamEndPoint, cacheKey);
+                negotiatedApplicationProtocol, httpVersion, externalProxy, upStreamEndPoint, cacheKey);
         }
 
 
@@ -669,4 +669,3 @@ retry:
         }
     }
 }
-

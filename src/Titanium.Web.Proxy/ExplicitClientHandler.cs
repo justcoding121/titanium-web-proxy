@@ -58,11 +58,11 @@ namespace Titanium.Web.Proxy
                         return;
                     }
 
-                    Request.ParseRequestLine(httpCmd!, out string _, out string httpUrl, out var version);
+                    Request.ParseRequestLine(httpCmd!, out string _, out var httpUrl, out var version);
 
-                    var connectRequest = new ConnectRequest(httpUrl)
+                    var connectRequest = new ConnectRequest(httpUrl.GetString())
                     {
-                        OriginalUrlData = HttpHeader.Encoding.GetBytes(httpUrl),
+                        RequestUriString8 = httpUrl,
                         HttpVersion = version
                     };
 
@@ -91,8 +91,7 @@ namespace Titanium.Web.Proxy
                         }
 
                         // send the response
-                        await clientStream.WriteResponseAsync(connectArgs.HttpClient.Response,
-                            cancellationToken: cancellationToken);
+                        await clientStream.WriteResponseAsync(connectArgs.HttpClient.Response, cancellationToken);
                         return;
                     }
 
@@ -101,8 +100,7 @@ namespace Titanium.Web.Proxy
                         await endPoint.InvokeBeforeTunnelConnectResponse(this, connectArgs, ExceptionFunc);
 
                         // send the response
-                        await clientStream.WriteResponseAsync(connectArgs.HttpClient.Response,
-                            cancellationToken: cancellationToken);
+                        await clientStream.WriteResponseAsync(connectArgs.HttpClient.Response, cancellationToken);
                         return;
                     }
 
@@ -114,7 +112,7 @@ namespace Titanium.Web.Proxy
                     response.Headers.FixProxyHeaders();
                     connectArgs.HttpClient.Response = response;
 
-                    await clientStream.WriteResponseAsync(response, cancellationToken: cancellationToken);
+                    await clientStream.WriteResponseAsync(response, cancellationToken);
 
                     var clientHelloInfo = await SslTools.PeekClientHello(clientStream, BufferPool, cancellationToken);
 
@@ -177,7 +175,7 @@ namespace Titanium.Web.Proxy
                             }
                         }
 
-                        string connectHostname = httpUrl;
+                        string connectHostname = httpUrl.GetString();
                         int idx = connectHostname.IndexOf(":");
                         if (idx >= 0)
                         {

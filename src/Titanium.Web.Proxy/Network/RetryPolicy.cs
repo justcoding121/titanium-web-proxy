@@ -38,8 +38,8 @@ namespace Titanium.Web.Proxy.Network
                 try
                 {
                     // setup connection
-                    currentConnection = currentConnection as TcpServerConnection ??
-                                      await generator();
+                    currentConnection ??= await generator();
+
                     // try
                     @continue = await action(currentConnection);
 

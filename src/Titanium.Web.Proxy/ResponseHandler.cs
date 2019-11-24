@@ -70,7 +70,7 @@ namespace Titanium.Web.Proxy
             if (response.Locked)
             {
                 // write custom user response with body and return.
-                await clientStream.WriteResponseAsync(response, cancellationToken: cancellationToken);
+                await clientStream.WriteResponseAsync(response, cancellationToken);
 
                 if (args.HttpClient.HasConnection && !args.HttpClient.CloseServerConnection)
                 {
@@ -93,8 +93,7 @@ namespace Titanium.Web.Proxy
 
                 // clear current response
                 await args.ClearResponse(cancellationToken);
-                await handleHttpSessionRequest(args.HttpClient.Request.Method, args.HttpClient.Request.Url, args.HttpClient.Request.HttpVersion, 
-                    args, null, args.ClientConnection.NegotiatedApplicationProtocol,
+                await handleHttpSessionRequest(args, null, args.ClientConnection.NegotiatedApplicationProtocol,
                             cancellationToken, args.CancellationTokenSource);
                 return;
             }
@@ -106,25 +105,24 @@ namespace Titanium.Web.Proxy
                 response.Headers.FixProxyHeaders();
             }
 
-            if (response.IsBodyRead)
-            {
-                await clientStream.WriteResponseAsync(response, cancellationToken: cancellationToken);
-            }
-            else
-            {
-                // Write back response status to client
-                var headerBuilder = new HeaderBuilder();
-                headerBuilder.WriteResponseLine(response.HttpVersion, response.StatusCode, response.StatusDescription);
-                headerBuilder.WriteHeaders(response.Headers);
-                await clientStream.WriteHeadersAsync(headerBuilder, cancellationToken);
+            await clientStream.WriteResponseAsync(response, cancellationToken);
 
-                // Write body if exists
-                if (response.HasBody)
+            if (response.OriginalHasBody)
+            {
+                if (response.IsBodySent)
                 {
-                    await args.CopyResponseBodyAsync(clientStream, TransformationMode.None,
-                        cancellationToken);
+                    // syphon out body
+                    await args.SyphonOutBodyAsync(false, cancellationToken);
+                }
+                else
+                {
+                    // Copy body if exists
+                    var serverStream = args.HttpClient.Connection.Stream;
+                    await serverStream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
+                        args.OnDataReceived, cancellationToken);
                 }
             }
+
 
             args.TimeLine["Response Sent"] = DateTime.Now;
         }
