@@ -190,6 +190,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy),
                 noCache, cancellationToken);
         }
+
         /// <summary>
         ///     Gets a TCP connection to server from connection pool.
         /// </summary>
@@ -441,7 +442,7 @@ retry:
                         connectRequest.Headers.AddHeader(HttpHeader.GetProxyAuthorizationHeader(externalProxy.UserName, externalProxy.Password));
                     }
 
-                    await stream.WriteRequestAsync(connectRequest, cancellationToken: cancellationToken);
+                    await stream.WriteRequestAsync(connectRequest, cancellationToken);
 
                     var httpStatus = await stream.ReadResponseStatus(cancellationToken);
 
