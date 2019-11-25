@@ -58,8 +58,8 @@ namespace Titanium.Web.Proxy
                     }
 
                     // read the request line
-                    string? httpCmd = await clientStream.ReadLineAsync(cancellationToken);
-                    if (string.IsNullOrEmpty(httpCmd))
+                    var requestLine = await clientStream.ReadRequestLine(cancellationToken);
+                    if (requestLine.IsEmpty())
                     {
                         return;
                     }
@@ -73,8 +73,6 @@ namespace Titanium.Web.Proxy
                     {
                         try
                         {
-                            Request.ParseRequestLine(httpCmd!, out string httpMethod, out ByteString httpUrl, out var version);
-
                             // Read the request headers in to unique and non-unique header collections
                             await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,
                                 cancellationToken);
@@ -86,10 +84,10 @@ namespace Titanium.Web.Proxy
                                 request.Authority = connectRequest.Authority;
                             }
 
-                            request.RequestUriString8 = httpUrl;
+                            request.RequestUriString8 = requestLine.RequestUri;
 
-                            request.Method = httpMethod;
-                            request.HttpVersion = version;
+                            request.Method = requestLine.Method;
+                            request.HttpVersion = requestLine.Version;
 
                             if (!args.IsTransparent)
                             {
@@ -332,6 +330,11 @@ namespace Titanium.Web.Proxy
                 }
                 else if (!request.ExpectationFailed)
                 {
+                    if (args.ClientStream.IsClosed)
+                    {
+                        ;
+                    }
+
                     // get the request body unless an unsuccessful 100 continue request was made
                     await args.CopyRequestBodyAsync(args.HttpClient.Connection.Stream, TransformationMode.None, cancellationToken);
                 }

@@ -52,18 +52,16 @@ namespace Titanium.Web.Proxy
                 if (await HttpHelper.IsConnectMethod(clientStream, BufferPool, cancellationToken) == 1)
                 {
                     // read the first line HTTP command
-                    string? httpCmd = await clientStream.ReadLineAsync(cancellationToken);
-                    if (string.IsNullOrEmpty(httpCmd))
+                    var requestLine = await clientStream.ReadRequestLine(cancellationToken);
+                    if (requestLine.IsEmpty())
                     {
                         return;
                     }
 
-                    Request.ParseRequestLine(httpCmd!, out string _, out var httpUrl, out var version);
-
-                    var connectRequest = new ConnectRequest(httpUrl.GetString())
+                    var connectRequest = new ConnectRequest(requestLine.RequestUri.GetString())
                     {
-                        RequestUriString8 = httpUrl,
-                        HttpVersion = version
+                        RequestUriString8 = requestLine.RequestUri,
+                        HttpVersion = requestLine.Version
                     };
 
                     await HeaderParser.ReadHeaders(clientStream, connectRequest.Headers, cancellationToken);
@@ -105,7 +103,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     // write back successful CONNECT response
-                    var response = ConnectResponse.CreateSuccessfulConnectResponse(version);
+                    var response = ConnectResponse.CreateSuccessfulConnectResponse(requestLine.Version);
 
                     // Set ContentLength explicitly to properly handle HTTP 1.0
                     response.ContentLength = 0;
@@ -175,7 +173,7 @@ namespace Titanium.Web.Proxy
                             }
                         }
 
-                        string connectHostname = httpUrl.GetString();
+                        string connectHostname = requestLine.RequestUri.GetString();
                         int idx = connectHostname.IndexOf(":");
                         if (idx >= 0)
                         {
@@ -214,6 +212,8 @@ namespace Titanium.Web.Proxy
 
                             // HTTPS server created - we can now decrypt the client's traffic
                             clientStream = new HttpClientStream(sslStream, BufferPool);
+                            sslStream = null; // clientStream was created, no need to keep SSL stream reference
+
                             clientStream.DataRead += (o, args) => connectArgs.OnDecryptedDataSent(args.Buffer, args.Offset, args.Count);
                             clientStream.DataWrite += (o, args) => connectArgs.OnDecryptedDataReceived(args.Buffer, args.Offset, args.Count);
                         }

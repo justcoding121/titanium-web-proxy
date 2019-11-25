@@ -29,5 +29,19 @@ namespace Titanium.Web.Proxy.Helpers
             
             await WriteAsync(response, headerBuilder, cancellationToken);
         }
+
+        internal async ValueTask<RequestStatusInfo> ReadRequestLine(CancellationToken cancellationToken = default)
+        {
+            // read the first line HTTP command
+            string? httpCmd = await ReadLineAsync(cancellationToken);
+            if (string.IsNullOrEmpty(httpCmd))
+            {
+                return default;
+            }
+
+            Request.ParseRequestLine(httpCmd!, out string method, out var requestUri, out var version);
+
+            return new RequestStatusInfo { Method = method, RequestUri = requestUri, Version = version };
+        }
     }
 }

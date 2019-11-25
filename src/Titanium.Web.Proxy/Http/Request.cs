@@ -254,7 +254,7 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal static void ParseRequestLine(string httpCmd, out string httpMethod, out ByteString httpUrl,
+        internal static void ParseRequestLine(string httpCmd, out string method, out ByteString requestUri,
             out Version version)
         {
             int firstSpace = httpCmd.IndexOf(' ');
@@ -269,21 +269,21 @@ namespace Titanium.Web.Proxy.Http
             // break up the line into three components (method, remote URL & Http Version)
 
             // Find the request Verb
-            httpMethod = httpCmd.Substring(0, firstSpace);
-            if (!isAllUpper(httpMethod))
+            method = httpCmd.Substring(0, firstSpace);
+            if (!isAllUpper(method))
             {
-                httpMethod = httpMethod.ToUpper();
+                method = method.ToUpper();
             }
 
             version = HttpHeader.Version11;
 
             if (firstSpace == lastSpace)
             {
-                httpUrl = (ByteString)httpCmd.AsSpan(firstSpace + 1).ToString();
+                requestUri = (ByteString)httpCmd.AsSpan(firstSpace + 1).ToString();
             }
             else
             {
-                httpUrl = (ByteString)httpCmd.AsSpan(firstSpace + 1, lastSpace - firstSpace - 1).ToString();
+                requestUri = (ByteString)httpCmd.AsSpan(firstSpace + 1, lastSpace - firstSpace - 1).ToString();
 
                 // parse the HTTP version
                 var httpVersion = httpCmd.AsSpan(lastSpace + 1);
