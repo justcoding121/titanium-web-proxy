@@ -125,6 +125,12 @@ namespace Titanium.Web.Proxy.EventArguments
         public Exception? Exception { get; internal set; }
 
         /// <summary>
+        ///     The number of tries that have been done to connect to a custom upstream proxy.
+        ///     This could use a more declarative name but idk what that is at the moment!
+        /// </summary>
+        public int CustomUpstreamProxyTries { get; internal set; }
+
+        /// <summary>
         ///     Implements cleanup here.
         /// </summary>
         public virtual void Dispose()

@@ -43,8 +43,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.CertificateManager.SaveFakeCertificates = true;
 
             // this is just to show the functionality, provided implementations use junk value
-            //proxyServer.GetCustomUpStreamProxyFunc = onGetCustomUpStreamProxyFunc;
-            //proxyServer.CustomUpStreamProxyFailureFunc = onCustomUpStreamProxyFailureFunc;
+            proxyServer.GetCustomUpStreamProxyFunc = onGetCustomUpStreamProxyFunc;
+            proxyServer.CustomUpStreamProxyFailureFunc = onCustomUpStreamProxyFailureFunc;
 
             // optionally set the Certificate Engine
             // Under Mono or Non-Windows runtimes only BouncyCastle will be supported
@@ -128,8 +128,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task<IExternalProxy> onCustomUpStreamProxyFailureFunc(SessionEventArgsBase arg)
         {
-            // this is just to show the functionality, provided values are junk
-            return new ExternalProxy() { BypassLocalhost = false, HostName = "127.0.0.10", Port = 9191, Password = "fake2", UserName = "fake2", UseDefaultCredentials = false };
+            if (arg.CustomUpstreamProxyTries < 2) // try a max of 2 extra times to get a connection
+            {
+                // this is just to show the functionality, provided values are junk
+                return new ExternalProxy() { BypassLocalhost = false, HostName = "127.0.0.10", Port = 9191, Password = "fake2", UserName = "fake2", UseDefaultCredentials = false };
+            }
+
+            // we have reached our max retries so just bail out by not returning a new proxy
+            return null;
         }
 
         private async Task onBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
