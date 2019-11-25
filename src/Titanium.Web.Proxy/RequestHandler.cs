@@ -330,11 +330,6 @@ namespace Titanium.Web.Proxy
                 }
                 else if (!request.ExpectationFailed)
                 {
-                    if (args.ClientStream.IsClosed)
-                    {
-                        ;
-                    }
-
                     // get the request body unless an unsuccessful 100 continue request was made
                     await args.CopyRequestBodyAsync(args.HttpClient.Connection.Stream, TransformationMode.None, cancellationToken);
                 }

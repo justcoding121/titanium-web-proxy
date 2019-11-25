@@ -261,7 +261,7 @@ namespace Titanium.Web.Proxy.EventArguments
             else
             {
                 await reader.CopyBodyAsync(request, false, writer, transformation, OnDataSent, cancellationToken);
-            }   
+            }
         }
 
         private async Task copyResponseBodyAsync(IHttpStreamWriter writer, TransformationMode transformation, CancellationToken cancellationToken)
