@@ -43,8 +43,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.CertificateManager.SaveFakeCertificates = true;
 
             // this is just to show the functionality, provided implementations use junk value
-            proxyServer.GetCustomUpStreamProxyFunc = onGetCustomUpStreamProxyFunc;
-            proxyServer.CustomUpStreamProxyFailureFunc = onCustomUpStreamProxyFailureFunc;
+            //proxyServer.GetCustomUpStreamProxyFunc = onGetCustomUpStreamProxyFunc;
+            //proxyServer.CustomUpStreamProxyFailureFunc = onCustomUpStreamProxyFailureFunc;
 
             // optionally set the Certificate Engine
             // Under Mono or Non-Windows runtimes only BouncyCastle will be supported
