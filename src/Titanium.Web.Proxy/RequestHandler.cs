@@ -261,11 +261,19 @@ namespace Titanium.Web.Proxy
             // do not cache server connections for WebSockets
             bool noCache = args.HttpClient.Request.UpgradeToWebSocket;
 
+            if (noCache)
+            {
+                serverConnection = null;
+            }
+
             // a connection generator task with captured parameters via closure.
             Func<Task<TcpServerConnection>> generator = () =>
-                            tcpConnectionFactory.GetServerConnection(this, args, isConnect: false,
-                                    applicationProtocol: sslApplicationProtocol,
-                                    noCache: noCache, cancellationToken: cancellationToken);
+                tcpConnectionFactory.GetServerConnection(this,
+                    args,
+                    false,
+                    sslApplicationProtocol,
+                    noCache,
+                    cancellationToken);
 
             // for connection pool, retry fails until cache is exhausted.   
             return await retryPolicy<ServerConnectionException>().ExecuteAsync(async (connection) =>
