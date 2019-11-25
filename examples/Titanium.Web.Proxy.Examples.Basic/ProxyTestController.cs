@@ -128,7 +128,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task<IExternalProxy> onCustomUpStreamProxyFailureFunc(SessionEventArgsBase arg)
         {
-            if (arg.CustomUpstreamProxyTries < 2) // try a max of 2 extra times to get a connection
+            if (arg.CustomUpStreamProxyTries < 2) // try a max of 2 extra times to get a connection
             {
                 // this is just to show the functionality, provided values are junk
                 return new ExternalProxy() { BypassLocalhost = false, HostName = "127.0.0.10", Port = 9191, Password = "fake2", UserName = "fake2", UseDefaultCredentials = false };

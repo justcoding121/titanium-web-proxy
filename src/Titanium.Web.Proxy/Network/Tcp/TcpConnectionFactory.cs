@@ -399,7 +399,7 @@ retry:
                 {
                     if (session != null && proxyServer.CustomUpStreamProxyFailureFunc != null)
                     {
-                        session.CustomUpstreamProxyTries++;
+                        session.CustomUpStreamProxyTries++;
 
                         var newUpstreamProxy = await proxyServer.CustomUpStreamProxyFailureFunc(session);
                         if (newUpstreamProxy != null)
