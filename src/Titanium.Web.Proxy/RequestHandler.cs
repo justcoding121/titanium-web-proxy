@@ -291,13 +291,13 @@ namespace Titanium.Web.Proxy
                 }
 
                 // construct the web request that we are going to issue on behalf of the client.
-                await handleHttpSessionRequest(connection, args);
+                await handleHttpSessionRequest(args);
                 return true;
 
             }, generator, serverConnection);
         }
 
-        private async Task handleHttpSessionRequest(TcpServerConnection connection, SessionEventArgs args)
+        private async Task handleHttpSessionRequest(SessionEventArgs args)
         {
             var cancellationToken = args.CancellationTokenSource.Token;
             var request = args.HttpClient.Request;
