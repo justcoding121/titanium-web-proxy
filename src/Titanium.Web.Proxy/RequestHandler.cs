@@ -58,8 +58,8 @@ namespace Titanium.Web.Proxy
                     }
 
                     // read the request line
-                    string? httpCmd = await clientStream.ReadLineAsync(cancellationToken);
-                    if (string.IsNullOrEmpty(httpCmd))
+                    var requestLine = await clientStream.ReadRequestLine(cancellationToken);
+                    if (requestLine.IsEmpty())
                     {
                         return;
                     }
@@ -73,8 +73,6 @@ namespace Titanium.Web.Proxy
                     {
                         try
                         {
-                            Request.ParseRequestLine(httpCmd!, out string httpMethod, out ByteString httpUrl, out var version);
-
                             // Read the request headers in to unique and non-unique header collections
                             await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,
                                 cancellationToken);
@@ -86,10 +84,10 @@ namespace Titanium.Web.Proxy
                                 request.Authority = connectRequest.Authority;
                             }
 
-                            request.RequestUriString8 = httpUrl;
+                            request.RequestUriString8 = requestLine.RequestUri;
 
-                            request.Method = httpMethod;
-                            request.HttpVersion = version;
+                            request.Method = requestLine.Method;
+                            request.HttpVersion = requestLine.Version;
 
                             if (!args.IsTransparent)
                             {
@@ -293,13 +291,13 @@ namespace Titanium.Web.Proxy
                 }
 
                 // construct the web request that we are going to issue on behalf of the client.
-                await handleHttpSessionRequest(connection, args);
+                await handleHttpSessionRequest(args);
                 return true;
 
             }, generator, serverConnection);
         }
 
-        private async Task handleHttpSessionRequest(TcpServerConnection connection, SessionEventArgs args)
+        private async Task handleHttpSessionRequest(SessionEventArgs args)
         {
             var cancellationToken = args.CancellationTokenSource.Token;
             var request = args.HttpClient.Request;
