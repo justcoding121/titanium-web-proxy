@@ -10,6 +10,8 @@ namespace Titanium.Web.Proxy
     class Net45Compatibility
     {
         public static byte[] EmptyArray = new byte[0];
+
+        public static Task CompletedTask = new Task(() => { });
     }
 }
 #endif

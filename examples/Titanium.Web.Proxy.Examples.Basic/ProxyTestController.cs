@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Security;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -10,6 +12,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Examples.Basic
 {
@@ -22,6 +25,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
         public ProxyTestController()
         {
             proxyServer = new ProxyServer();
+
+            //proxyServer.EnableHttp2 = true;
+
             // generate root certificate without storing it in file system
             //proxyServer.CertificateManager.CreateRootCertificate(false);
 
@@ -32,11 +38,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
             {
                 if (exception is ProxyHttpException phex)
                 {
-                    await writeToConsole(exception.Message + ": " + phex.InnerException?.Message, true);
+                    await writeToConsole(exception.Message + ": " + phex.InnerException?.Message, ConsoleColor.Red);
                 }
                 else
                 {
-                    await writeToConsole(exception.Message, true);
+                    await writeToConsole(exception.Message, ConsoleColor.Red);
                 }
             };
             proxyServer.ForwardToUpstreamGateway = true;
@@ -146,6 +152,38 @@ namespace Titanium.Web.Proxy.Examples.Basic
             }
         }
 
+        private void WebSocket_DataSent(object sender, DataEventArgs e)
+        {
+            var args = (SessionEventArgs)sender;
+            WebSocketDataSentReceived(args, e, true);
+        }
+
+        private void WebSocket_DataReceived(object sender, DataEventArgs e)
+        {
+            var args = (SessionEventArgs)sender;
+            WebSocketDataSentReceived(args, e, false);
+        }
+
+        private void WebSocketDataSentReceived(SessionEventArgs args, DataEventArgs e, bool sent)
+        {
+            var color = sent ? ConsoleColor.Green : ConsoleColor.Blue;
+
+            foreach (var frame in args.WebSocketDecoder.Decode(e.Buffer, e.Offset, e.Count))
+            {
+                if (frame.OpCode == WebsocketOpCode.Binary)
+                {
+                    var data = frame.Data.ToArray();
+                    string str = string.Join(",", data.ToArray().Select(x => x.ToString("X2")));
+                    writeToConsole(str, color).Wait();
+                }
+
+                if (frame.OpCode == WebsocketOpCode.Text)
+                {
+                    writeToConsole(frame.GetText(), color).Wait();
+                }
+            }
+        }
+
         private Task onBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
         {
             return Task.FromResult(false);
@@ -205,6 +243,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task onResponse(object sender, SessionEventArgs e)
         {
+            if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Websocket)
+            {
+                e.DataSent += WebSocket_DataSent;
+                e.DataReceived += WebSocket_DataReceived;
+            }
+
             await writeToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
             string ext = System.IO.Path.GetExtension(e.HttpClient.Request.RequestUri.AbsolutePath);
@@ -277,14 +321,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
             return Task.FromResult(0);
         }
 
-        private async Task writeToConsole(string message, bool useRedColor = false)
+        private async Task writeToConsole(string message, ConsoleColor? consoleColor = null)
         {
             await @lock.WaitAsync();
 
-            if (useRedColor)
+            if (consoleColor.HasValue)
             {
                 ConsoleColor existing = Console.ForegroundColor;
-                Console.ForegroundColor = ConsoleColor.Red;
+                Console.ForegroundColor = consoleColor.Value;
                 Console.WriteLine(message);
                 Console.ForegroundColor = existing;
             }
