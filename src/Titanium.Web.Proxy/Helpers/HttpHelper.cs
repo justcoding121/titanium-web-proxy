@@ -167,32 +167,11 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         /// <summary>
-        ///     Determines whether is connect method.
+        ///     Gets the HTTP method from the stream.
         /// </summary>
-        /// <returns>1: when CONNECT, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static ValueTask<int> IsConnectMethod(IPeekStream httpReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
+        public static async ValueTask<KnownMethod> GetMethod(IPeekStream httpReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
         {
-            return startsWith(httpReader, bufferPool, "CONNECT", cancellationToken);
-        }
-
-        /// <summary>
-        ///     Determines whether is pri method (HTTP/2).
-        /// </summary>
-        /// <returns>1: when PRI, 0: when valid HTTP method, -1: otherwise</returns>
-        internal static ValueTask<int> IsPriMethod(IPeekStream httpReader, IBufferPool bufferPool, CancellationToken cancellationToken = default)
-        {
-            return startsWith(httpReader, bufferPool, "PRI", cancellationToken);
-        }
-
-        /// <summary>
-        ///     Determines whether the stream starts with the given string.
-        /// </summary>
-        /// <returns>
-        ///     1: when starts with the given string, 0: when valid HTTP method, -1: otherwise
-        /// </returns>
-        private static async ValueTask<int> startsWith(IPeekStream httpReader, IBufferPool bufferPool, string expectedStart, CancellationToken cancellationToken = default)
-        {
-            const int lengthToCheck = 10;
+            const int lengthToCheck = 20;
             if (bufferPool.BufferSize < lengthToCheck)
             {
                 throw new Exception($"Buffer is too small. Minimum size is {lengthToCheck} bytes");
@@ -201,13 +180,12 @@ namespace Titanium.Web.Proxy.Helpers
             byte[] buffer = bufferPool.GetBuffer(bufferPool.BufferSize);
             try
             {
-                bool isExpected = true;
                 int i = 0;
                 while (i < lengthToCheck)
                 {
                     int peeked = await httpReader.PeekBytesAsync(buffer, i, i, lengthToCheck - i, cancellationToken);
                     if (peeked <= 0)
-                        return -1;
+                        return KnownMethod.Invalid;
 
                     peeked += i;
 
@@ -216,27 +194,94 @@ namespace Titanium.Web.Proxy.Helpers
                         int b = buffer[i];
 
                         if (b == ' ' && i > 2)
-                            return isExpected ? 1 : 0;
-                        else
-                        {
-                            char ch = (char)b;
-                            if (ch < 'A' || ch > 'z' || (ch > 'Z' && ch < 'a')) // ASCII letter
-                                return -1;
-                            else if (i >= expectedStart.Length || ch != expectedStart[i])
-                                isExpected = false;
-                        }
+                            return getKnownMethod(buffer.AsSpan(0, i));
+
+                        char ch = (char)b;
+                        if ((ch < 'A' || ch > 'z' || (ch > 'Z' && ch < 'a')) && (ch != '-')) // ASCII letter
+                            return KnownMethod.Invalid;
 
                         i++;
                     }
                 }
 
-                // only letters
-                return 0;
+                // only letters, but no space (or shorter than 3 characters)
+                return KnownMethod.Invalid;
             }
             finally
             {
                 bufferPool.ReturnBuffer(buffer);
             }
+        }
+
+        private static KnownMethod getKnownMethod(ReadOnlySpan<byte> method)
+        {
+            // the following methods are supported:
+            // Connect
+            // Delete
+            // Get
+            // Head
+            // Options
+            // Post
+            // Put
+            // Trace
+            // Pri
+
+            // method parameter should have at least 3 bytes
+            byte b1 = method[0];
+            byte b2 = method[1];
+            byte b3 = method[2];
+
+            switch (method.Length)
+            {
+                case 3:
+                    // Get or Put
+                    if (b1 == 'G')
+                        return b2 == 'E' && b3 == 'T' ? KnownMethod.Get : KnownMethod.Unknown;
+
+                    if (b1 == 'P')
+                    {
+                        if (b2 == 'U')
+                            return b3 == 'T' ? KnownMethod.Put : KnownMethod.Unknown;
+
+                        if (b2 == 'R')
+                            return b3 == 'I' ? KnownMethod.Pri : KnownMethod.Unknown;
+                    }
+
+                    break;
+                case 4:
+                    // Head or Post
+                    if (b1 == 'H')
+                        return b2 == 'E' && b3 == 'A' && method[3] == 'D' ? KnownMethod.Head : KnownMethod.Unknown;
+
+                    if (b1 == 'P')
+                        return b2 == 'O' && b3 == 'S' && method[3] == 'T' ? KnownMethod.Post : KnownMethod.Unknown;
+
+                    break;
+                case 5:
+                    // Trace
+                    if (b1 == 'T')
+                        return b2 == 'R' && b3 == 'A' && method[3] == 'C' && method[4] == 'E' ? KnownMethod.Trace : KnownMethod.Unknown;
+
+                    break;
+                case 6:
+                    // Delete
+                    if (b1 == 'D')
+                        return b2 == 'E' && b3 == 'L' && method[3] == 'E' && method[4] == 'T' && method[5] == 'E' ? KnownMethod.Delete : KnownMethod.Unknown;
+
+                    break;
+                case 7:
+                    // Connect or Options
+                    if (b1 == 'C')
+                        return b2 == 'O' && b3 == 'N' && method[3] == 'N' && method[4] == 'E' && method[5] == 'C' && method[6] == 'T' ? KnownMethod.Connect : KnownMethod.Unknown;
+
+                    if (b1 == 'O')
+                        return b2 == 'P' && b3 == 'T' && method[3] == 'I' && method[4] == 'O' && method[5] == 'N' && method[6] == 'S' ? KnownMethod.Options : KnownMethod.Unknown;
+
+                    break;
+            }
+
+
+            return KnownMethod.Unknown;
         }
     }
 }
