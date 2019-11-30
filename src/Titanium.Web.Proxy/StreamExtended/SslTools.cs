@@ -216,7 +216,7 @@ namespace Titanium.Web.Proxy.StreamExtended
                 int recordLength = ((recordType & 0x7f) << 8) + peekStream.ReadByte();
                 if (recordLength < 38)
                 {
-                    // Message body too short.
+                    // Message body too short.  
                     return null;
                 }
 
