@@ -650,7 +650,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                     if (bufferDataLength == buffer.Length)
                     {
-                        ResizeBuffer(ref buffer, bufferDataLength * 2);
+                        resizeBuffer(ref buffer, bufferDataLength * 2);
                     }
                 }
             }
@@ -683,7 +683,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="buffer"></param>
         /// <param name="size"></param>
-        private static void ResizeBuffer(ref byte[] buffer, long size)
+        private static void resizeBuffer(ref byte[] buffer, long size)
         {
             var newBuffer = new byte[size];
             Buffer.BlockCopy(buffer, 0, newBuffer, 0, buffer.Length);
@@ -889,7 +889,7 @@ namespace Titanium.Web.Proxy.Helpers
             string? contentEncoding = useOriginalHeaderValues ? requestResponse.OriginalContentEncoding : requestResponse.ContentEncoding;
 
             Stream s = limitedStream = new LimitedStream(this, bufferPool, isChunked, contentLength);
-
+            
             if (transformation == TransformationMode.Uncompress && contentEncoding != null)
             {
                 s = decompressStream = DecompressionFactory.Create(CompressionUtil.CompressionNameToEnum(contentEncoding), s);

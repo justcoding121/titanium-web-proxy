@@ -154,7 +154,7 @@ namespace Titanium.Web.Proxy.StreamExtended
 
                 if(extensionsStartPosition < recordLength + 5)
                 {
-                    extensions = await ReadExtensions(majorVersion, minorVersion, peekStream, bufferPool, cancellationToken);
+                    extensions = await ReadExtensions(majorVersion, minorVersion, peekStream, cancellationToken);
                 }
 
                 var clientHelloInfo = new ClientHelloInfo(3, majorVersion, minorVersion, random, sessionId, ciphers, peekStream.Position)
@@ -292,7 +292,7 @@ namespace Titanium.Web.Proxy.StreamExtended
 
                 if (extensionsStartPosition < recordLength + 5)
                 {
-                   extensions = await ReadExtensions(majorVersion, minorVersion, peekStream, bufferPool, cancellationToken);
+                   extensions = await ReadExtensions(majorVersion, minorVersion, peekStream, cancellationToken);
                 }
 
                 var serverHelloInfo = new ServerHelloInfo(3, majorVersion, minorVersion, random, sessionId, cipherSuite, peekStream.Position)
@@ -308,7 +308,7 @@ namespace Titanium.Web.Proxy.StreamExtended
             return null;
         }
 
-        private static async Task<Dictionary<string, SslExtension>?> ReadExtensions(int majorVersion, int minorVersion, PeekStreamReader peekStreamReader, IBufferPool bufferPool, CancellationToken cancellationToken)
+        private static async Task<Dictionary<string, SslExtension>?> ReadExtensions(int majorVersion, int minorVersion, PeekStreamReader peekStreamReader, CancellationToken cancellationToken)
         {
             Dictionary<string, SslExtension>? extensions = null;
             if (majorVersion > 3 || majorVersion == 3 && minorVersion >= 1)

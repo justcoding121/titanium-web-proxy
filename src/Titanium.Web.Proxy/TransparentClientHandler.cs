@@ -75,14 +75,15 @@ namespace Titanium.Web.Proxy
 
                             // HTTPS server created - we can now decrypt the client's traffic
                             clientStream = new HttpClientStream(sslStream, BufferPool);
+                            sslStream = null; // clientStream was created, no need to keep SSL stream reference
                         }
                         catch (Exception e)
                         {
-                            var certname = certificate?.GetNameInfo(X509NameType.SimpleName, false);
+                            var certName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
                             var session = new SessionEventArgs(this, endPoint, clientConnection, clientStream, null,
                                 cancellationTokenSource);
                             throw new ProxyConnectException(
-                                $"Couldn't authenticate host '{httpsHostName}' with certificate '{certname}'.", e, session);
+                                $"Couldn't authenticate host '{httpsHostName}' with certificate '{certName}'.", e, session);
                         }
                       
                     }
