@@ -7,6 +7,8 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Compression;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
@@ -648,7 +650,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                     if (bufferDataLength == buffer.Length)
                     {
-                        ResizeBuffer(ref buffer, bufferDataLength * 2);
+                        resizeBuffer(ref buffer, bufferDataLength * 2);
                     }
                 }
             }
@@ -681,7 +683,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="buffer"></param>
         /// <param name="size"></param>
-        private static void ResizeBuffer(ref byte[] buffer, long size)
+        private static void resizeBuffer(ref byte[] buffer, long size)
         {
             var newBuffer = new byte[size];
             Buffer.BlockCopy(buffer, 0, newBuffer, 0, buffer.Length);
@@ -769,17 +771,12 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
         /// <returns></returns>
-        internal Task WriteLineAsync(CancellationToken cancellationToken = default)
+        public ValueTask WriteLineAsync(CancellationToken cancellationToken = default)
         {
             return WriteAsync(newLine, cancellationToken: cancellationToken);
         }
 
-        internal Task WriteAsync(string value, CancellationToken cancellationToken = default)
-        {
-            return writeAsyncInternal(value, false, cancellationToken);
-        }
-
-        private async Task writeAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken)
+        private async ValueTask writeAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken)
         {
             int newLineChars = addNewLine ? newLine.Length : 0;
             int charCount = value.Length;
@@ -816,7 +813,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        internal Task WriteLineAsync(string value, CancellationToken cancellationToken = default)
+        public ValueTask WriteLineAsync(string value, CancellationToken cancellationToken = default)
         {
             return writeAsyncInternal(value, true, cancellationToken);
         }
@@ -839,7 +836,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="data">The data.</param>
         /// <param name="flush">Should we flush after write?</param>
         /// <param name="cancellationToken">The cancellation token.</param>
-        internal async Task WriteAsync(byte[] data, bool flush = false, CancellationToken cancellationToken = default)
+        internal async ValueTask WriteAsync(byte[] data, bool flush = false, CancellationToken cancellationToken = default)
         {
             await baseStream.WriteAsync(data, 0, data.Length, cancellationToken);
             if (flush)
@@ -865,7 +862,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="isChunked"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        internal Task WriteBodyAsync(byte[] data, bool isChunked, CancellationToken cancellationToken)
+        internal ValueTask WriteBodyAsync(byte[] data, bool isChunked, CancellationToken cancellationToken)
         {
             if (isChunked)
             {
@@ -875,23 +872,60 @@ namespace Titanium.Web.Proxy.Helpers
             return WriteAsync(data, cancellationToken: cancellationToken);
         }
 
+        public async Task CopyBodyAsync(RequestResponseBase requestResponse, bool useOriginalHeaderValues, IHttpStreamWriter writer, TransformationMode transformation, Action<byte[], int, int>? onCopy, CancellationToken cancellationToken)
+        {
+            bool isChunked = useOriginalHeaderValues ? requestResponse.OriginalIsChunked : requestResponse.IsChunked;
+            long contentLength = useOriginalHeaderValues ? requestResponse.OriginalContentLength : requestResponse.ContentLength;
+
+            if (transformation == TransformationMode.None)
+            {
+                await CopyBodyAsync(writer, isChunked, contentLength, onCopy, cancellationToken);
+                return;
+            }
+
+            LimitedStream limitedStream;
+            Stream? decompressStream = null;
+
+            string? contentEncoding = useOriginalHeaderValues ? requestResponse.OriginalContentEncoding : requestResponse.ContentEncoding;
+
+            Stream s = limitedStream = new LimitedStream(this, bufferPool, isChunked, contentLength);
+            
+            if (transformation == TransformationMode.Uncompress && contentEncoding != null)
+            {
+                s = decompressStream = DecompressionFactory.Create(CompressionUtil.CompressionNameToEnum(contentEncoding), s);
+            }
+
+            try
+            {
+                var http = new HttpStream(s, bufferPool, true);
+                await http.CopyBodyAsync(writer, false, -1, onCopy, cancellationToken);
+            }
+            finally
+            {
+                decompressStream?.Dispose();
+
+                await limitedStream.Finish();
+                limitedStream.Dispose();
+            }
+        }
+
         /// <summary>
         ///     Copies the specified content length number of bytes to the output stream from the given inputs stream
         ///     optionally chunked
         /// </summary>
-        /// <param name="streamReader"></param>
+        /// <param name="writer"></param>
         /// <param name="isChunked"></param>
         /// <param name="contentLength"></param>
         /// <param name="onCopy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public Task CopyBodyAsync(IHttpStreamReader streamReader, bool isChunked, long contentLength,
+        public Task CopyBodyAsync(IHttpStreamWriter writer, bool isChunked, long contentLength,
             Action<byte[], int, int>? onCopy, CancellationToken cancellationToken)
         {
             // For chunked request we need to read data as they arrive, until we reach a chunk end symbol
             if (isChunked)
             {
-                return copyBodyChunkedAsync(streamReader, onCopy, cancellationToken);
+                return copyBodyChunkedAsync(writer, onCopy, cancellationToken);
             }
 
             // http 1.0 or the stream reader limits the stream
@@ -901,7 +935,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             // If not chunked then its easy just read the amount of bytes mentioned in content length header
-            return copyBytesFromStream(streamReader, contentLength, onCopy, cancellationToken);
+            return copyBytesToStream(writer, contentLength, onCopy, cancellationToken);
         }
 
         /// <summary>
@@ -910,7 +944,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="data"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task writeBodyChunkedAsync(byte[] data, CancellationToken cancellationToken)
+        private async ValueTask writeBodyChunkedAsync(byte[] data, CancellationToken cancellationToken)
         {
             var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
 
@@ -926,15 +960,15 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         ///     Copies the streams chunked
         /// </summary>
-        /// <param name="reader"></param>
+        /// <param name="writer"></param>
         /// <param name="onCopy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task copyBodyChunkedAsync(IHttpStreamReader reader, Action<byte[], int, int>? onCopy, CancellationToken cancellationToken)
+        private async Task copyBodyChunkedAsync(IHttpStreamWriter writer, Action<byte[], int, int>? onCopy, CancellationToken cancellationToken)
         {
             while (true)
             {
-                string chunkHead = (await reader.ReadLineAsync(cancellationToken))!;
+                string chunkHead = (await ReadLineAsync(cancellationToken))!;
                 int idx = chunkHead.IndexOf(";");
                 if (idx >= 0)
                 {
@@ -943,17 +977,17 @@ namespace Titanium.Web.Proxy.Helpers
 
                 int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
 
-                await WriteLineAsync(chunkHead, cancellationToken);
+                await writer.WriteLineAsync(chunkHead, cancellationToken);
 
                 if (chunkSize != 0)
                 {
-                    await copyBytesFromStream(reader, chunkSize, onCopy, cancellationToken);
+                    await copyBytesToStream(writer, chunkSize, onCopy, cancellationToken);
                 }
 
-                await WriteLineAsync(cancellationToken);
+                await writer.WriteLineAsync(cancellationToken);
 
                 // chunk trail
-                await reader.ReadLineAsync(cancellationToken);
+                await ReadLineAsync(cancellationToken);
 
                 if (chunkSize == 0)
                 {
@@ -965,12 +999,12 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         ///     Copies the specified bytes to the stream from the input stream
         /// </summary>
-        /// <param name="reader"></param>
+        /// <param name="writer"></param>
         /// <param name="count"></param>
         /// <param name="onCopy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task copyBytesFromStream(IHttpStreamReader reader, long count, Action<byte[], int, int>? onCopy,
+        private async Task copyBytesToStream(IHttpStreamWriter writer, long count, Action<byte[], int, int>? onCopy,
             CancellationToken cancellationToken)
         {
             var buffer = bufferPool.GetBuffer();
@@ -987,7 +1021,7 @@ namespace Titanium.Web.Proxy.Helpers
                         bytesToRead = (int)remainingBytes;
                     }
 
-                    int bytesRead = await reader.ReadAsync(buffer, 0, bytesToRead, cancellationToken);
+                    int bytesRead = await ReadAsync(buffer, 0, bytesToRead, cancellationToken);
                     if (bytesRead == 0)
                     {
                         break;
@@ -995,7 +1029,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                     remainingBytes -= bytesRead;
 
-                    await baseStream.WriteAsync(buffer, 0, bytesRead, cancellationToken);
+                    await writer.WriteAsync(buffer, 0, bytesRead, cancellationToken);
 
                     onCopy?.Invoke(buffer, 0, bytesRead);
                 }
@@ -1013,15 +1047,17 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="headerBuilder"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        protected async Task WriteAsync(RequestResponseBase requestResponse, HeaderBuilder headerBuilder, CancellationToken cancellationToken = default)
+        protected async ValueTask WriteAsync(RequestResponseBase requestResponse, HeaderBuilder headerBuilder, CancellationToken cancellationToken = default)
         {
             var body = requestResponse.CompressBodyAndUpdateContentLength();
+
             headerBuilder.WriteHeaders(requestResponse.Headers);
             await WriteHeadersAsync(headerBuilder, cancellationToken);
 
             if (body != null)
             {
                 await WriteBodyAsync(body, requestResponse.IsChunked, cancellationToken);
+                requestResponse.IsBodySent = true;
             }
         }
 

@@ -103,9 +103,8 @@ namespace Titanium.Web.Proxy.Http
         /// <summary>
         ///     Prepare and send the http(s) request
         /// </summary>
-        /// <returns></returns>
-        internal async Task SendRequest(bool enable100ContinueBehaviour, bool isTransparent,
-            CancellationToken cancellationToken)
+        /// <returns></returns> 
+        internal async Task SendRequest(bool enable100ContinueBehaviour, bool isTransparent, CancellationToken cancellationToken)
         {
             var upstreamProxy = Connection.UpStreamProxy;
 
@@ -114,23 +113,17 @@ namespace Titanium.Web.Proxy.Http
             var serverStream = Connection.Stream;
 
             string url;
-            if (useUpstreamProxy || isTransparent)
+            if (!useUpstreamProxy || isTransparent)
             {
-                url = Request.Url;
+                url = Request.RequestUriString;
             }
             else
             {
-                url = Request.RequestUri.GetOriginalPathAndQuery();
-                if (url == string.Empty)
-                {
-                    url = "/";
-                }
+                url = Request.RequestUri.ToString();
             }
 
-            var headerBuilder = new HeaderBuilder();
-
-            // prepare the request & headers
-            headerBuilder.WriteRequestLine(Request.Method, url, Request.HttpVersion);
+            string? upstreamProxyUserName = null;
+            string? upstreamProxyPassword = null;
 
             // Send Authentication to Upstream proxy if needed
             if (!isTransparent && upstreamProxy != null
@@ -138,21 +131,16 @@ namespace Titanium.Web.Proxy.Http
                                && !string.IsNullOrEmpty(upstreamProxy.UserName)
                                && upstreamProxy.Password != null)
             {
-                headerBuilder.WriteHeader(HttpHeader.ProxyConnectionKeepAlive);
-                headerBuilder.WriteHeader(HttpHeader.GetProxyAuthorizationHeader(upstreamProxy.UserName, upstreamProxy.Password));
+                upstreamProxyUserName = upstreamProxy.UserName;
+                upstreamProxyPassword = upstreamProxy.Password;
             }
+
+            // prepare the request & headers
+            var headerBuilder = new HeaderBuilder();
+            headerBuilder.WriteRequestLine(Request.Method, url, Request.HttpVersion);
+            headerBuilder.WriteHeaders(Request.Headers, !isTransparent, upstreamProxyUserName, upstreamProxyPassword);
 
             // write request headers
-            foreach (var header in Request.Headers)
-            {
-                if (isTransparent || header.Name != KnownHeaders.ProxyAuthorization.String)
-                {
-                    headerBuilder.WriteHeader(header);
-                }
-            }
-
-            headerBuilder.WriteLine();
-
             await serverStream.WriteHeadersAsync(headerBuilder, cancellationToken);
 
             if (enable100ContinueBehaviour && Request.ExpectContinue)
@@ -183,28 +171,10 @@ namespace Titanium.Web.Proxy.Http
                 return;
             }
 
-            string httpStatus;
-            try
-            {
-                httpStatus = await Connection.Stream.ReadLineAsync(cancellationToken) ??
-                             throw new ServerConnectionException("Server connection was closed.");
-            }
-            catch (Exception e) when (!(e is ServerConnectionException))
-            {
-                throw new ServerConnectionException("Server connection was closed.");
-            }
-
-            if (httpStatus == string.Empty)
-            {
-                httpStatus = await Connection.Stream.ReadLineAsync(cancellationToken) ??
-                    throw new ServerConnectionException("Server connection was closed.");
-            }
-
-            Response.ParseResponseLine(httpStatus, out var version, out int statusCode, out string statusDescription);
-
-            Response.HttpVersion = version;
-            Response.StatusCode = statusCode;
-            Response.StatusDescription = statusDescription;
+            var httpStatus = await Connection.Stream.ReadResponseStatus(cancellationToken);
+            Response.HttpVersion = httpStatus.Version;
+            Response.StatusCode = httpStatus.StatusCode;
+            Response.StatusDescription = httpStatus.Description;
 
             // Read the response headers in to unique and non-unique header collections
             await HeaderParser.ReadHeaders(Connection.Stream, Response.Headers, cancellationToken);

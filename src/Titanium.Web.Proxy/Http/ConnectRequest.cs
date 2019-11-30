@@ -1,5 +1,6 @@
 ﻿using System;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.StreamExtended;
 
 namespace Titanium.Web.Proxy.Http
@@ -9,7 +10,7 @@ namespace Titanium.Web.Proxy.Http
     /// </summary>
     public class ConnectRequest : Request
     {
-        public ConnectRequest(string authority)
+        internal ConnectRequest(ByteString authority)
         {
             Method = "CONNECT";
             Authority = authority;

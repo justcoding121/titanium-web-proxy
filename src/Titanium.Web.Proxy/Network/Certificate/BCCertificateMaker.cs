@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
-using System.Threading;
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
@@ -219,11 +218,9 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="subject">The s subject cn.</param>
         /// <param name="switchToMtaIfNeeded">if set to <c>true</c> [switch to MTA if needed].</param>
         /// <param name="signingCert">The signing cert.</param>
-        /// <param name="cancellationToken">Task cancellation token</param>
         /// <returns>X509Certificate2.</returns>
         private X509Certificate2 makeCertificateInternal(string subject,
-            bool switchToMtaIfNeeded, X509Certificate2? signingCert = null,
-            CancellationToken cancellationToken = default)
+            bool switchToMtaIfNeeded, X509Certificate2? signingCert = null)
         {
             return makeCertificateInternal(subject, $"CN={subject}",
                 DateTime.UtcNow.AddDays(-certificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays),

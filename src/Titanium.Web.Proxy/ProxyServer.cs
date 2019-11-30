@@ -197,6 +197,12 @@ namespace Titanium.Web.Proxy
         public int ConnectionTimeOutSeconds { get; set; } = 60;
 
         /// <summary>
+        ///     Seconds server connection are to wait for connection to be established.
+        ///     Default value is 20 seconds.
+        /// </summary>
+        public int ConnectTimeOutSeconds { get; set; } = 20;
+
+        /// <summary>
         ///     Maximum number of concurrent connections per remote host in cache.
         ///     Only valid when connection pooling is enabled.
         ///     Default value is 2.
@@ -276,6 +282,12 @@ namespace Titanium.Web.Proxy
         ///     User should return the ExternalProxy object with valid credentials.
         /// </summary>
         public Func<SessionEventArgsBase, Task<IExternalProxy?>>? GetCustomUpStreamProxyFunc { get; set; }
+
+        /// <summary>
+        ///     A callback to provide a chance for an upstream proxy failure to be handled by a new upstream proxy.
+        ///     User should return the ExternalProxy object with valid credentials or null.
+        /// </summary>
+        public Func<SessionEventArgsBase, Task<IExternalProxy?>>? CustomUpStreamProxyFailureFunc { get; set; }
 
         /// <summary>
         ///     Callback for error events in this proxy instance.

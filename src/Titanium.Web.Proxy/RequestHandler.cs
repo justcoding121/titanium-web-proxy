@@ -58,8 +58,8 @@ namespace Titanium.Web.Proxy
                     }
 
                     // read the request line
-                    string? httpCmd = await clientStream.ReadLineAsync(cancellationToken);
-                    if (string.IsNullOrEmpty(httpCmd))
+                    var requestLine = await clientStream.ReadRequestLine(cancellationToken);
+                    if (requestLine.IsEmpty())
                     {
                         return;
                     }
@@ -73,8 +73,6 @@ namespace Titanium.Web.Proxy
                     {
                         try
                         {
-                            Request.ParseRequestLine(httpCmd!, out string httpMethod, out string httpUrl, out var version);
-
                             // Read the request headers in to unique and non-unique header collections
                             await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,
                                 cancellationToken);
@@ -86,10 +84,10 @@ namespace Titanium.Web.Proxy
                                 request.Authority = connectRequest.Authority;
                             }
 
-                            request.OriginalUrlData = HttpHeader.Encoding.GetBytes(httpUrl);
+                            request.RequestUriString8 = requestLine.RequestUri;
 
-                            request.Method = httpMethod;
-                            request.HttpVersion = version;
+                            request.Method = requestLine.Method;
+                            request.HttpVersion = requestLine.Version;
 
                             if (!args.IsTransparent)
                             {
@@ -99,8 +97,7 @@ namespace Titanium.Web.Proxy
                                     await onBeforeResponse(args);
 
                                     // send the response
-                                    await clientStream.WriteResponseAsync(args.HttpClient.Response,
-                                        cancellationToken: cancellationToken);
+                                    await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
                                     return;
                                 }
 
@@ -173,7 +170,7 @@ namespace Titanium.Web.Proxy
                                 connection = null;
                             }
 
-                            var result = await handleHttpSessionRequest(httpMethod, httpUrl, version, args, connection,
+                            var result = await handleHttpSessionRequest(args, connection,
                                   clientConnection.NegotiatedApplicationProtocol,
                                   cancellationToken, cancellationTokenSource);
 
@@ -253,19 +250,35 @@ namespace Titanium.Web.Proxy
             }
         }
 
-        private async Task<RetryResult> handleHttpSessionRequest(string requestHttpMethod, string requestHttpUrl, Version requestVersion, SessionEventArgs args,
+        private async Task<RetryResult> handleHttpSessionRequest(SessionEventArgs args,
           TcpServerConnection? serverConnection, SslApplicationProtocol sslApplicationProtocol,
           CancellationToken cancellationToken, CancellationTokenSource cancellationTokenSource)
         {
+            args.HttpClient.Request.Locked = true;
+
+            // do not cache server connections for WebSockets
+            bool noCache = args.HttpClient.Request.UpgradeToWebSocket;
+
+            if (noCache)
+            {
+                serverConnection = null;
+            }
+
             // a connection generator task with captured parameters via closure.
             Func<Task<TcpServerConnection>> generator = () =>
-                            tcpConnectionFactory.GetServerConnection(this, args, isConnect: false,
-                                    applicationProtocol: sslApplicationProtocol,
-                                    noCache: false, cancellationToken: cancellationToken);
+                tcpConnectionFactory.GetServerConnection(this,
+                    args,
+                    false,
+                    sslApplicationProtocol,
+                    noCache,
+                    cancellationToken);
 
             // for connection pool, retry fails until cache is exhausted.   
             return await retryPolicy<ServerConnectionException>().ExecuteAsync(async (connection) =>
             {
+                // set the connection and send request headers
+                args.HttpClient.SetConnection(connection);
+
                 args.TimeLine["Connection Ready"] = DateTime.Now;
 
                 if (args.HttpClient.Request.UpgradeToWebSocket)
@@ -273,29 +286,24 @@ namespace Titanium.Web.Proxy
                     args.HttpClient.ConnectRequest!.TunnelType = TunnelType.Websocket;
 
                     // if upgrading to websocket then relay the request without reading the contents
-                    await handleWebSocketUpgrade(requestHttpMethod, requestHttpUrl, requestVersion, args, args.HttpClient.Request,
-                        args.HttpClient.Response, args.ClientStream,
-                        connection, cancellationTokenSource, cancellationToken);
+                    await handleWebSocketUpgrade(args, args.ClientStream, connection, cancellationTokenSource, cancellationToken);
                     return false;
                 }
 
                 // construct the web request that we are going to issue on behalf of the client.
-                await handleHttpSessionRequest(connection, args);
+                await handleHttpSessionRequest(args);
                 return true;
 
             }, generator, serverConnection);
         }
 
-        private async Task handleHttpSessionRequest(TcpServerConnection connection, SessionEventArgs args)
+        private async Task handleHttpSessionRequest(SessionEventArgs args)
         {
             var cancellationToken = args.CancellationTokenSource.Token;
             var request = args.HttpClient.Request;
-            request.Locked = true;
 
             var body = request.CompressBodyAndUpdateContentLength();
 
-            // set the connection and send request headers
-            args.HttpClient.SetConnection(connection);
             await args.HttpClient.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
                 cancellationToken);
 

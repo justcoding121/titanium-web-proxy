@@ -16,42 +16,25 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Handle upgrade to websocket
         /// </summary>
-        private async Task handleWebSocketUpgrade(string requestHttpMethod, string requestHttpUrl, Version requestVersion,
-            SessionEventArgs args, Request request, Response response,
+        private async Task handleWebSocketUpgrade(SessionEventArgs args,
             HttpClientStream clientStream, TcpServerConnection serverConnection,
             CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
         {
-            // prepare the prefix content
-            var headerBuilder = new HeaderBuilder();
-            headerBuilder.WriteRequestLine(requestHttpMethod, requestHttpUrl, requestVersion);
-            headerBuilder.WriteHeaders(request.Headers);
-            await serverConnection.Stream.WriteHeadersAsync(headerBuilder, cancellationToken);
+            await serverConnection.Stream.WriteRequestAsync(args.HttpClient.Request, cancellationToken);
 
-            string httpStatus;
-            try
-            {
-                httpStatus = await serverConnection.Stream.ReadLineAsync(cancellationToken)
-                             ?? throw new ServerConnectionException("Server connection was closed.");
-            }
-            catch (Exception e) when (!(e is ServerConnectionException))
-            {
-                throw new ServerConnectionException("Server connection was closed.", e);
-            }
-
-            Response.ParseResponseLine(httpStatus, out var responseVersion,
-                out int responseStatusCode,
-                out string responseStatusDescription);
-            response.HttpVersion = responseVersion;
-            response.StatusCode = responseStatusCode;
-            response.StatusDescription = responseStatusDescription;
+            var httpStatus = await serverConnection.Stream.ReadResponseStatus(cancellationToken);
+            
+            var response = args.HttpClient.Response;
+            response.HttpVersion = httpStatus.Version;
+            response.StatusCode = httpStatus.StatusCode;
+            response.StatusDescription = httpStatus.Description;
 
             await HeaderParser.ReadHeaders(serverConnection.Stream, response.Headers,
                 cancellationToken);
 
             if (!args.IsTransparent)
             {
-                await clientStream.WriteResponseAsync(response,
-                    cancellationToken: cancellationToken);
+                await clientStream.WriteResponseAsync(response, cancellationToken);
             }
 
             // If user requested call back then do it

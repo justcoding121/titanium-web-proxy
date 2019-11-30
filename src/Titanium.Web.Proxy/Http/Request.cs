@@ -24,26 +24,15 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public bool IsHttps { get; internal set; }
 
-        private ByteString originalUrlData;
-        private ByteString urlData;
+        private ByteString requestUriString8;
 
-        internal ByteString OriginalUrlData
+        internal ByteString RequestUriString8
         {
-            get => originalUrlData;
+            get => requestUriString8;
             set
             {
-                originalUrlData = value;
-                UrlData = value;
-            }
-        }
-
-        private protected ByteString UrlData
-        {
-            get => urlData;
-            set
-            {
-                urlData = value;
-                var scheme = getUriScheme(UrlData);
+                requestUriString8 = value;
+                var scheme = getUriScheme(value);
                 if (scheme.Length > 0)
                 {
                     IsHttps = scheme.Equals(ProxyServer.UriSchemeHttps8);
@@ -51,12 +40,7 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal string? Authority { get; set; }
-
-        /// <summary>
-        ///     The original request Url.
-        /// </summary>
-        public string OriginalUrl => originalUrlData.GetString();
+        internal ByteString Authority { get; set; }
 
         /// <summary>
         ///     Request HTTP Uri.
@@ -65,10 +49,33 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
-                string url = UrlData.GetString();
-                if (getUriScheme(UrlData).Length == 0)
+                string url = Url;
+                try
                 {
-                    string? hostAndPath = Host ?? Authority;
+                    return new Uri(url);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Invalid URI: '{url}'", ex);
+                }
+            }
+            set
+            {
+                Url = value.ToString();
+            }
+        }
+
+        /// <summary>
+        ///     The request url as it is in the HTTP header
+        /// </summary>
+        public string Url
+        {
+            get
+            {
+                string url = RequestUriString8.GetString();
+                if (getUriScheme(RequestUriString8).Length == 0)
+                {
+                    string? hostAndPath = Host ?? Authority.GetString();
 
                     if (url.StartsWith("/"))
                     {
@@ -82,40 +89,31 @@ namespace Titanium.Web.Proxy.Http
                     url = string.Concat(IsHttps ? "https://" : "http://", hostAndPath);
                 }
 
-                try
-                {
-                    return new Uri(url);
-                }
-                catch (Exception ex)
-                {
-                    throw new Exception($"Invalid URI: '{url}'", ex);
-                }
+                return url;
+            }
+            set
+            {
+                RequestUriString = value;
             }
         }
 
         /// <summary>
-        ///     The request url as it is in the HTTP header
+        ///     The request uri as it is in the HTTP header
         /// </summary>
-        public string Url
+        public string RequestUriString
         {
-            get => UrlData.GetString();
+            get => RequestUriString8.GetString();
             set
             {
-                UrlData = value.GetByteString();
+                RequestUriString8 = (ByteString)value;
 
-                if (Host != null)
+                var scheme = getUriScheme(RequestUriString8);
+                if (scheme.Length > 0 && Host != null)
                 {
                     var uri = new Uri(value);
                     Host = uri.Authority;
                 }
             }
-        }
-
-        [Obsolete("This property is obsolete. Use Url property instead")]
-        public string RequestUriString
-        {
-            get => Url;
-            set => Url = value;
         }
 
         /// <summary>
@@ -219,7 +217,7 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 var headerBuilder = new HeaderBuilder();
-                headerBuilder.WriteRequestLine(Method, Url, HttpVersion);
+                headerBuilder.WriteRequestLine(Method, RequestUriString, HttpVersion);
                 headerBuilder.WriteHeaders(Headers);
                 return headerBuilder.GetString(HttpHeader.Encoding);
             }
@@ -256,7 +254,7 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal static void ParseRequestLine(string httpCmd, out string httpMethod, out string httpUrl,
+        internal static void ParseRequestLine(string httpCmd, out string method, out ByteString requestUri,
             out Version version)
         {
             int firstSpace = httpCmd.IndexOf(' ');
@@ -271,21 +269,21 @@ namespace Titanium.Web.Proxy.Http
             // break up the line into three components (method, remote URL & Http Version)
 
             // Find the request Verb
-            httpMethod = httpCmd.Substring(0, firstSpace);
-            if (!isAllUpper(httpMethod))
+            method = httpCmd.Substring(0, firstSpace);
+            if (!isAllUpper(method))
             {
-                httpMethod = httpMethod.ToUpper();
+                method = method.ToUpper();
             }
 
             version = HttpHeader.Version11;
 
             if (firstSpace == lastSpace)
             {
-                httpUrl = httpCmd.AsSpan(firstSpace + 1).ToString();
+                requestUri = (ByteString)httpCmd.AsSpan(firstSpace + 1).ToString();
             }
             else
             {
-                httpUrl = httpCmd.AsSpan(firstSpace + 1, lastSpace - firstSpace - 1).ToString();
+                requestUri = (ByteString)httpCmd.AsSpan(firstSpace + 1, lastSpace - firstSpace - 1).ToString();
 
                 // parse the HTTP version
                 var httpVersion = httpCmd.AsSpan(lastSpace + 1);

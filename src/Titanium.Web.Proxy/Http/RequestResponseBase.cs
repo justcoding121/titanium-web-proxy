@@ -196,7 +196,7 @@ namespace Titanium.Web.Proxy.Http
         ///     Use the encoding specified to decode the byte[] data to string
         /// </summary>
         [Browsable(false)]
-        public string BodyString => bodyString ?? (bodyString = Encoding.GetString(Body));
+        public string BodyString => bodyString ??= Encoding.GetString(Body);
 
         /// <summary>
         ///     Was the body read by user?
@@ -210,6 +210,8 @@ namespace Titanium.Web.Proxy.Http
         internal bool Locked { get; set; }
 
         internal bool BodyAvailable => BodyInternal != null;
+        
+        internal bool IsBodySent { get; set; }
 
         internal abstract void EnsureBodyAvailable(bool throwWhenNotReadYet = true);
 

@@ -7,7 +7,7 @@ namespace Titanium.Web.Proxy.Http
 {
     internal static class HeaderParser
     {
-        internal static async Task ReadHeaders(ILineStream reader, HeaderCollection headerCollection,
+        internal static async ValueTask ReadHeaders(ILineStream reader, HeaderCollection headerCollection,
             CancellationToken cancellationToken)
         {
             string? tmpLine;
@@ -23,18 +23,6 @@ namespace Titanium.Web.Proxy.Http
                 string headerValue = tmpLine.AsSpan(colonIndex + 1).TrimStart().ToString();
                 headerCollection.AddHeader(headerName, headerValue);
             }
-        }
-
-        /// <summary>
-        ///     Increase size of buffer and copy existing content to new buffer
-        /// </summary>
-        /// <param name="buffer"></param>
-        /// <param name="size"></param>
-        private static void resizeBuffer(ref byte[] buffer, long size)
-        {
-            var newBuffer = new byte[size];
-            Buffer.BlockCopy(buffer, 0, newBuffer, 0, buffer.Length);
-            buffer = newBuffer;
         }
     }
 }

@@ -41,11 +41,21 @@ namespace Titanium.Web.Proxy.Http
             WriteLine();
         }
 
-        public void WriteHeaders(HeaderCollection headers)
+        public void WriteHeaders(HeaderCollection headers, bool sendProxyAuthorization = true,
+            string? upstreamProxyUserName = null, string? upstreamProxyPassword = null)
         {
+            if (upstreamProxyUserName != null && upstreamProxyPassword != null)
+            {
+                WriteHeader(HttpHeader.ProxyConnectionKeepAlive);
+                WriteHeader(HttpHeader.GetProxyAuthorizationHeader(upstreamProxyUserName, upstreamProxyPassword));
+            }
+
             foreach (var header in headers)
             {
-                WriteHeader(header);
+                if (sendProxyAuthorization || !KnownHeaders.ProxyAuthorization.Equals(header.Name))
+                {
+                    WriteHeader(header);
+                }
             }
 
             WriteLine();

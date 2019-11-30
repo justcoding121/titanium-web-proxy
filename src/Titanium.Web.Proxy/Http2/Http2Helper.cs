@@ -264,8 +264,8 @@ namespace Titanium.Web.Proxy.Http2
                             request.HttpVersion = HttpVersion.Version20;
                             request.Method = method.GetString();
                             request.IsHttps = headerListener.Scheme == ProxyServer.UriSchemeHttps;
-                            request.Authority = headerListener.Authority.GetString();
-                            request.OriginalUrlData = path;
+                            request.Authority = headerListener.Authority;
+                            request.RequestUriString8 = path;
 
                             //request.RequestUri = headerListener.GetUri();
                         }
@@ -475,7 +475,7 @@ namespace Titanium.Web.Proxy.Http2
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderMethod, request.Method.GetByteString());
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderAuhtority, uri.Authority.GetByteString());
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme, uri.Scheme.GetByteString());
-                encoder.EncodeHeader(writer, StaticTable.KnownHeaderPath, request.Url.GetByteString(), false,
+                encoder.EncodeHeader(writer, StaticTable.KnownHeaderPath, request.RequestUriString8, false,
                     HpackUtil.IndexType.None, false);
             }
             else

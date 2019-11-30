@@ -4,12 +4,10 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
@@ -64,11 +62,6 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Occurs when multipart request part sent.
         /// </summary>
         public event EventHandler<MultipartRequestPartSentEventArgs>? MultipartRequestPartSent;
-
-        private HttpStream getStream(bool isRequest)
-        {
-            return isRequest ? (HttpStream)ClientStream : HttpClient.Connection.Stream;
-        }
 
         /// <summary>
         /// Read request body content as bytes[] for current session
@@ -194,15 +187,15 @@ namespace Titanium.Web.Proxy.EventArguments
         private async Task<byte[]> readBodyAsync(bool isRequest, CancellationToken cancellationToken)
         {
             using var bodyStream = new MemoryStream();
-            using var http = new HttpStream(bodyStream, BufferPool);
+            using var writer = new HttpStream(bodyStream, BufferPool);
 
             if (isRequest)
             {
-                await CopyRequestBodyAsync(http, TransformationMode.Uncompress, cancellationToken);
+                await CopyRequestBodyAsync(writer, TransformationMode.Uncompress, cancellationToken);
             }
             else
             {
-                await CopyResponseBodyAsync(http, TransformationMode.Uncompress, cancellationToken);
+                await copyResponseBodyAsync(writer, TransformationMode.Uncompress, cancellationToken);
             }
 
             return bodyStream.ToArray();
@@ -223,9 +216,9 @@ namespace Titanium.Web.Proxy.EventArguments
                 return;
             }
 
-            using var bodyStream = new MemoryStream();
-            using var http = new HttpStream(bodyStream, BufferPool);
-            await copyBodyAsync(isRequest, true, http, TransformationMode.None, null, cancellationToken);
+            var reader = isRequest ? (HttpStream)ClientStream : HttpClient.Connection.Stream;
+
+            await reader.CopyBodyAsync(requestResponse, true, new NullWriter(), TransformationMode.None, null, cancellationToken);
         }
 
         /// <summary>
@@ -235,13 +228,13 @@ namespace Titanium.Web.Proxy.EventArguments
         internal async Task CopyRequestBodyAsync(IHttpStreamWriter writer, TransformationMode transformation, CancellationToken cancellationToken)
         {
             var request = HttpClient.Request;
+            var reader = ClientStream;
 
             long contentLength = request.ContentLength;
 
             // send the request body bytes to server
             if (contentLength > 0 && hasMulipartEventSubscribers && request.IsMultipartFormData)
             {
-                var reader = getStream(true);
                 var boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
 
                 using (var copyStream = new CopyStream(reader, writer, BufferPool))
@@ -267,54 +260,13 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             else
             {
-                await copyBodyAsync(true, false, writer, transformation, OnDataSent, cancellationToken);
+                await reader.CopyBodyAsync(request, false, writer, transformation, OnDataSent, cancellationToken);
             }
         }
 
-        internal async Task CopyResponseBodyAsync(IHttpStreamWriter writer, TransformationMode transformation, CancellationToken cancellationToken)
+        private async Task copyResponseBodyAsync(IHttpStreamWriter writer, TransformationMode transformation, CancellationToken cancellationToken)
         {
-            await copyBodyAsync(false, false, writer, transformation, OnDataReceived, cancellationToken);
-        }
-
-        private async Task copyBodyAsync(bool isRequest, bool useOriginalHeaderValues, IHttpStreamWriter writer, TransformationMode transformation, Action<byte[], int, int>? onCopy, CancellationToken cancellationToken)
-        {
-            var stream = getStream(isRequest);
-
-            var requestResponse = isRequest ? (RequestResponseBase)HttpClient.Request : HttpClient.Response;
-
-            bool isChunked = useOriginalHeaderValues? requestResponse.OriginalIsChunked : requestResponse.IsChunked;
-            long contentLength = useOriginalHeaderValues ? requestResponse.OriginalContentLength : requestResponse.ContentLength;
-
-            if (transformation == TransformationMode.None)
-            {
-                await writer.CopyBodyAsync(stream, isChunked, contentLength, onCopy, cancellationToken);
-                return;
-            }
-
-            LimitedStream limitedStream;
-            Stream? decompressStream = null;
-
-            string? contentEncoding = useOriginalHeaderValues ? requestResponse.OriginalContentEncoding : requestResponse.ContentEncoding;
-
-            Stream s = limitedStream = new LimitedStream(stream, BufferPool, isChunked, contentLength);
-
-            if (transformation == TransformationMode.Uncompress && contentEncoding != null)
-            {
-                s = decompressStream = DecompressionFactory.Create(CompressionUtil.CompressionNameToEnum(contentEncoding), s);
-            }
-
-            try
-            {
-                var http = new HttpStream(s, BufferPool, true);
-                await writer.CopyBodyAsync(http, false, -1, onCopy, cancellationToken);
-            }
-            finally
-            {
-                decompressStream?.Dispose();
-
-                await limitedStream.Finish();
-                limitedStream.Dispose();
-            }
+            await HttpClient.Connection.Stream.CopyBodyAsync(HttpClient.Response, false, writer, transformation, OnDataReceived, cancellationToken);
         }
 
         /// <summary>
@@ -638,7 +590,6 @@ namespace Titanium.Web.Proxy.EventArguments
                 HttpClient.Response = response;
                 HttpClient.Response.Locked = true;
             }
-
         }
 
         /// <summary>

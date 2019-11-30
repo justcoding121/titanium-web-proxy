@@ -100,12 +100,10 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onDataSend"></param>
         /// <param name="onDataReceive"></param>
         /// <param name="cancellationTokenSource"></param>
-        /// <param name="exceptionFunc"></param>
         /// <returns></returns>
         private static async Task sendRawTap(Stream clientStream, Stream serverStream, IBufferPool bufferPool,
             Action<byte[], int, int>? onDataSend, Action<byte[], int, int>? onDataReceive,
-            CancellationTokenSource cancellationTokenSource,
-            ExceptionHandler exceptionFunc)
+            CancellationTokenSource cancellationTokenSource)
         {
             // Now async relay all server=>client & client=>server data
             var sendRelay =
@@ -139,8 +137,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             // todo: fix APM mode
             return sendRawTap(clientStream, serverStream, bufferPool, onDataSend, onDataReceive,
-                cancellationTokenSource,
-                exceptionFunc);
+                cancellationTokenSource);
         }
     }
 }
