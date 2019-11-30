@@ -151,7 +151,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             return Task.FromResult(false);
         }
 
-        // intecept & cancel redirect or update requests
+        // intercept & cancel redirect or update requests
         private async Task onRequest(object sender, SessionEventArgs e)
         {
             await writeToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
