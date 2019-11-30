@@ -5,6 +5,8 @@ namespace Titanium.Web.Proxy
 {
     public class WebSocketFrame
     {
+        public bool IsFinal { get; internal set; }
+        
         public WebsocketOpCode OpCode { get; internal set; }
 
         public ReadOnlyMemory<byte> Data { get; internal set; }
