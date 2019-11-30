@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy
@@ -60,25 +61,51 @@ namespace Titanium.Web.Proxy
                     }
                 }
 
-                uint mask = 0;
-                if (masked)
+                if (size < 0)
                 {
-                    //mask = (uint)(((long)data1[idx++] << 24) + (data1[idx++] << 16) + (data1[idx++] << 8) + data1[idx++]);
-                    mask = (uint)(data1[idx++] + (data1[idx++] << 8) + (data1[idx++] << 16) + ((long)data1[idx++] << 24));
+                    ;
+                }
+
+                if (data1.Length < idx + size)
+                {
+                    break;
                 }
 
                 if (masked)
                 {
-                    uint m = mask;
-                    for (int i = 0; i < size; i++)
+                    //mask = (uint)(((long)data1[idx++] << 24) + (data1[idx++] << 16) + (data1[idx++] << 8) + data1[idx++]);
+                    //mask = (uint)(data1[idx++] + (data1[idx++] << 8) + (data1[idx++] << 16) + ((long)data1[idx++] << 24));
+                    var uData = MemoryMarshal.Cast<byte, uint>(data1.Slice(idx, (int)size + 4));
+                    idx += 4;
+
+                    uint mask = uData[0];
+                    long size1 = size;
+                    if (size > 4)
                     {
-                        data[i + idx] = (byte)(data1[i + idx] ^ (byte)mask);
+                        uData = uData.Slice(1);
+                        for (int i = 0; i < uData.Length; i++)
+                        {
+                            uData[i] = uData[i] ^ mask;
+                        }
 
-                        m >>= 8;
-
-                        if (m == 0)
-                            m = mask;
+                        size1 -= uData.Length * 4;
                     }
+
+                    if (size1 > 0)
+                    {
+                        int pos = (int)(idx + size - size1);
+                        data1[pos] ^= (byte)mask;
+
+                        if (size1 > 1)
+                        {
+                            data1[pos + 1] ^= (byte)(mask >> 8);
+                        }
+
+                        if (size1 > 2)
+                        {
+                            data1[pos + 2] ^= (byte)(mask >> 16);
+                        }
+;                    }
                 }
 
                 var frameData = buffer.Slice(idx, (int)size);

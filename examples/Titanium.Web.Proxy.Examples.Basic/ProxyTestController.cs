@@ -152,9 +152,21 @@ namespace Titanium.Web.Proxy.Examples.Basic
             }
         }
 
+        private void WebSocket_DataSent(object sender, DataEventArgs e)
+        {
+            var args = (SessionEventArgs)sender;
+            WebSocketDataSentReceived(args, e, true);
+        }
+
         private void WebSocket_DataReceived(object sender, DataEventArgs e)
         {
             var args = (SessionEventArgs)sender;
+            WebSocketDataSentReceived(args, e, false);
+        }
+
+        private void WebSocketDataSentReceived(SessionEventArgs args, DataEventArgs e, bool sent)
+        {
+            var color = sent ? ConsoleColor.Green : ConsoleColor.Blue;
 
             foreach (var frame in args.WebSocketDecoder.Decode(e.Buffer, e.Offset, e.Count))
             {
@@ -162,12 +174,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 {
                     var data = frame.Data.ToArray();
                     string str = string.Join(",", data.ToArray().Select(x => x.ToString("X2")));
-                    writeToConsole(str, ConsoleColor.Blue).Wait();
+                    writeToConsole(str, color).Wait();
                 }
 
                 if (frame.OpCode == WebsocketOpCode.Text)
                 {
-                    writeToConsole(frame.GetText(), ConsoleColor.Blue).Wait();
+                    writeToConsole(frame.GetText(), color).Wait();
                 }
             }
         }
@@ -233,6 +245,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Websocket)
             {
+                e.DataSent += WebSocket_DataSent;
                 e.DataReceived += WebSocket_DataReceived;
             }
 
