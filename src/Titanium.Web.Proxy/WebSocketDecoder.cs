@@ -38,6 +38,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 var opCode = (WebsocketOpCode)(data1[0] & 0xf);
+                bool isFinal = (data1[0] & 0x80) != 0;
                 byte b = data1[1];
                 long size = b & 0x7f;
 
@@ -59,11 +60,6 @@ namespace Titanium.Web.Proxy
                                ((long)data1[6] << 24) + (data1[7] << 16) + (data1[8] << 8) + data1[9];
                         idx = 10;
                     }
-                }
-
-                if (size < 0)
-                {
-                    ;
                 }
 
                 if (data1.Length < idx + size)
@@ -109,7 +105,7 @@ namespace Titanium.Web.Proxy
                 }
 
                 var frameData = buffer.Slice(idx, (int)size);
-                var frame = new WebSocketFrame { Data = frameData, OpCode = opCode };
+                var frame = new WebSocketFrame { IsFinal = isFinal, Data = frameData, OpCode = opCode };
                 yield return frame;
 
                 buffer = buffer.Slice((int)(idx + size));
