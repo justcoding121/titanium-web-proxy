@@ -40,7 +40,7 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        internal string? Authority { get; set; }
+        internal ByteString Authority { get; set; }
 
         /// <summary>
         ///     Request HTTP Uri.
@@ -75,7 +75,7 @@ namespace Titanium.Web.Proxy.Http
                 string url = RequestUriString8.GetString();
                 if (getUriScheme(RequestUriString8).Length == 0)
                 {
-                    string? hostAndPath = Host ?? Authority;
+                    string? hostAndPath = Host ?? Authority.GetString();
 
                     if (url.StartsWith("/"))
                     {

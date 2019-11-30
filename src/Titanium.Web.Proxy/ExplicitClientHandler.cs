@@ -58,7 +58,7 @@ namespace Titanium.Web.Proxy
                         return;
                     }
 
-                    var connectRequest = new ConnectRequest(requestLine.RequestUri.GetString())
+                    var connectRequest = new ConnectRequest(requestLine.RequestUri)
                     {
                         RequestUriString8 = requestLine.RequestUri,
                         HttpVersion = requestLine.Version
@@ -269,7 +269,12 @@ namespace Titanium.Web.Proxy
                                     try
                                     {
                                         // clientStream.Available should be at most BufferSize because it is using the same buffer size
-                                        await clientStream.ReadAsync(data, 0, available, cancellationToken);
+                                        int read = await clientStream.ReadAsync(data, 0, available, cancellationToken);
+                                        if (read != available)
+                                        {
+                                            throw new Exception("Internal error.");
+                                        }
+
                                         await connection.Stream.WriteAsync(data, 0, available, true, cancellationToken);
                                     }
                                     finally
