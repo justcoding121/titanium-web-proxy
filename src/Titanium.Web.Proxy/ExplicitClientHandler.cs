@@ -284,11 +284,6 @@ namespace Titanium.Web.Proxy
                                 }
 
                                 var serverHelloInfo = await SslTools.PeekServerHello(connection.Stream, BufferPool, cancellationToken);
-                                if (serverHelloInfo == null)
-                                {
-                                    ;
-                                }
-
                                 ((ConnectResponse)connectArgs.HttpClient.Response).ServerHelloInfo = serverHelloInfo;
                             }
 
