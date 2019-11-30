@@ -47,9 +47,15 @@ namespace Titanium.Web.Proxy
             try
             {
                 TunnelConnectSessionEventArgs? connectArgs = null;
-                
+
+                var method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
+                if (clientStream.IsClosed)
+                {
+                    return;
+                }
+
                 // Client wants to create a secure tcp tunnel (probably its a HTTPS or Websocket request)
-                if (await HttpHelper.IsConnectMethod(clientStream, BufferPool, cancellationToken) == 1)
+                if (method == KnownMethod.Connect)
                 {
                     // read the first line HTTP command
                     var requestLine = await clientStream.ReadRequestLine(cancellationToken);
@@ -75,6 +81,7 @@ namespace Titanium.Web.Proxy
 
                     // filter out excluded host names
                     bool decryptSsl = endPoint.DecryptSsl && connectArgs.DecryptSsl;
+                    bool sendRawData = !decryptSsl;
 
                     if (connectArgs.DenyConnect)
                     {
@@ -113,6 +120,10 @@ namespace Titanium.Web.Proxy
                     await clientStream.WriteResponseAsync(response, cancellationToken);
 
                     var clientHelloInfo = await SslTools.PeekClientHello(clientStream, BufferPool, cancellationToken);
+                    if (clientStream.IsClosed)
+                    {
+                        return;
+                    }
 
                     bool isClientHello = clientHelloInfo != null;
                     if (clientHelloInfo != null)
@@ -224,15 +235,25 @@ namespace Titanium.Web.Proxy
                                 $"Couldn't authenticate host '{connectHostname}' with certificate '{certName}'.", e, connectArgs);
                         }
 
-                        if (await HttpHelper.IsConnectMethod(clientStream, BufferPool, cancellationToken) == -1)
+                        method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
+                        if (clientStream.IsClosed)
                         {
-                            decryptSsl = false;
+                            return;
                         }
 
-                        if (!decryptSsl)
+                        if (method == KnownMethod.Invalid)
                         {
+                            sendRawData = true;
                             await tcpConnectionFactory.Release(prefetchConnectionTask, true);
                             prefetchConnectionTask = null;
+                        }
+                    }
+                    else if (clientHelloInfo == null)
+                    {
+                        method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
+                        if (clientStream.IsClosed)
+                        {
+                            return;
                         }
                     }
 
@@ -241,14 +262,14 @@ namespace Titanium.Web.Proxy
                         throw new Exception("Session was terminated by user.");
                     }
 
-                    // Hostname is excluded or it is not an HTTPS connect
-                    if (!decryptSsl || !isClientHello)
+                    if (method == KnownMethod.Invalid)
                     {
-                        if (!isClientHello)
-                        {
-                            connectRequest.TunnelType = TunnelType.Websocket;
-                        }
+                        sendRawData = true;
+                    }
 
+                    // Hostname is excluded or it is not an HTTPS connect
+                    if (sendRawData)
+                    {
                         // create new connection to server.
                         // If we detected that client tunnel CONNECTs without SSL by checking for empty client hello then 
                         // this connection should not be HTTPS.
@@ -302,7 +323,7 @@ namespace Titanium.Web.Proxy
                     }
                 }
 
-                if (connectArgs != null && await HttpHelper.IsPriMethod(clientStream, BufferPool, cancellationToken) == 1)
+                if (connectArgs != null && method == KnownMethod.Pri)
                 {
                     // todo
                     string? httpCmd = await clientStream.ReadLineAsync(cancellationToken);
