@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Text;
+using Titanium.Web.Proxy.Extensions;
 
 namespace Titanium.Web.Proxy.Models
 {
@@ -28,9 +29,29 @@ namespace Titanium.Web.Proxy.Models
             return Data.Span.SequenceEqual(other.Data.Span);
         }
 
+        public int IndexOf(byte value)
+        {
+            return Span.IndexOf(value);
+        }
+
+        public ByteString Slice(int start)
+        {
+            return Data.Slice(start);
+        }
+
+        public ByteString Slice(int start, int length)
+        {
+            return Data.Slice(start, length);
+        }
+
         public override int GetHashCode()
         {
             return Data.GetHashCode();
+        }
+
+        public override string ToString()
+        {
+            return this.GetString();
         }
 
         public static explicit operator ByteString(string str) => new ByteString(Encoding.ASCII.GetBytes(str));

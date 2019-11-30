@@ -180,10 +180,34 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
             session.CustomUpStreamProxyUsed = customUpStreamProxy;
 
-            var uri = session.HttpClient.Request.RequestUri;
+            var request = session.HttpClient.Request;
+            string host;
+            int port;
+            if (request.Authority.Length > 0)
+            {
+                var authority = request.Authority;
+                int idx = authority.IndexOf((byte)':');
+                if (idx == -1)
+                {
+                    host = authority.GetString();
+                    port = 80;
+                }
+                else
+                {
+                    host = authority.Slice(0, idx).GetString();
+                    port = int.Parse(authority.Slice(idx + 1).GetString());
+                }
+            }
+            else
+            {
+                var uri = request.RequestUri;
+                host = uri.Host;
+                port = uri.Port;
+            }
+
             return await GetServerConnection(
-                uri.Host,
-                uri.Port,
+                host,
+                port,
                 session.HttpClient.Request.HttpVersion,
                 isHttps, applicationProtocols, isConnect,
                 server, session, session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
@@ -426,11 +450,11 @@ retry:
 
                 if (externalProxy != null && (isConnect || isHttps))
                 {
-                    string authority = $"{remoteHostName}:{remotePort}";
+                    var authority = $"{remoteHostName}:{remotePort}".GetByteString();
                     var connectRequest = new ConnectRequest(authority)
                     {
                         IsHttps = isHttps,
-                        RequestUriString8 = HttpHeader.Encoding.GetBytes(authority),
+                        RequestUriString8 = authority,
                         HttpVersion = httpVersion
                     };
 
