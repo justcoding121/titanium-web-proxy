@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             proxyServer = new ProxyServer();
 
-            proxyServer.EnableHttp2 = true;
+            //proxyServer.EnableHttp2 = true;
 
             // generate root certificate without storing it in file system
             //proxyServer.CertificateManager.CreateRootCertificate(false);

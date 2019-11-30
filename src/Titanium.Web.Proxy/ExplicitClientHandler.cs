@@ -141,26 +141,29 @@ namespace Titanium.Web.Proxy
 
                         bool http2Supported = false;
 
-                        var alpn = clientHelloInfo.GetAlpn();
-                        if (alpn != null && alpn.Contains(SslApplicationProtocol.Http2))
+                        if (EnableHttp2)
                         {
-                            // test server HTTP/2 support
-                            try
+                            var alpn = clientHelloInfo.GetAlpn();
+                            if (alpn != null && alpn.Contains(SslApplicationProtocol.Http2))
                             {
-                                // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
-                                var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs,
-                                    true, SslExtensions.Http2ProtocolAsList,
-                                    true, cancellationToken);
+                                // test server HTTP/2 support
+                                try
+                                {
+                                    // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
+                                    var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs,
+                                        true, SslExtensions.Http2ProtocolAsList,
+                                        true, cancellationToken);
 
-                                http2Supported = connection.NegotiatedApplicationProtocol ==
-                                                 SslApplicationProtocol.Http2;
-                                
-                                // release connection back to pool instead of closing when connection pool is enabled.
-                                await tcpConnectionFactory.Release(connection, true);
-                            }
-                            catch (Exception)
-                            {
-                                // ignore
+                                    http2Supported = connection.NegotiatedApplicationProtocol ==
+                                                     SslApplicationProtocol.Http2;
+
+                                    // release connection back to pool instead of closing when connection pool is enabled.
+                                    await tcpConnectionFactory.Release(connection, true);
+                                }
+                                catch (Exception)
+                                {
+                                    // ignore
+                                }
                             }
                         }
 
@@ -274,7 +277,7 @@ namespace Titanium.Web.Proxy
                         // If we detected that client tunnel CONNECTs without SSL by checking for empty client hello then 
                         // this connection should not be HTTPS.
                         var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs,
-                                                        true, SslExtensions.Http2ProtocolAsList,
+                                                        true, null,
                                                         true, cancellationToken);
 
                         try

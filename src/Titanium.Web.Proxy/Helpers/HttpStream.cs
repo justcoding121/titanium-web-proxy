@@ -33,7 +33,8 @@ namespace Titanium.Web.Proxy.Helpers
 
         private bool disposed;
 
-        private bool closed;
+        private bool closedWrite;
+        private bool closedRead;
 
         private readonly IBufferPool bufferPool;
 
@@ -43,7 +44,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         private Stream baseStream { get; }
 
-        public bool IsClosed => closed;
+        public bool IsClosed => closedRead;
 
         static HttpStream()
         {
@@ -89,7 +90,21 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         public override void Flush()
         {
-            baseStream.Flush();
+            if (closedWrite)
+            {
+                return;
+            }
+
+            try
+            {
+                baseStream.Flush();
+            }
+            catch
+            {
+                closedWrite = true;
+                if (!swallowException)
+                    throw;
+            }
         }
 
         /// <summary>
@@ -153,7 +168,22 @@ namespace Titanium.Web.Proxy.Helpers
         public override void Write(byte[] buffer, int offset, int count)
         {
             OnDataWrite(buffer, offset, count);
-            baseStream.Write(buffer, offset, count);
+
+            if (closedWrite)
+            {
+                return;
+            }
+
+            try
+            {
+                baseStream.Write(buffer, offset, count);
+            }
+            catch
+            {
+                closedWrite = true;
+                if (!swallowException)
+                    throw;
+            }
         }
 
         /// <summary>
@@ -184,9 +214,23 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns>
         /// A task that represents the asynchronous flush operation.
         /// </returns>
-        public override Task FlushAsync(CancellationToken cancellationToken)
+        public override async Task FlushAsync(CancellationToken cancellationToken)
         {
-            return baseStream.FlushAsync(cancellationToken);
+            if (closedWrite)
+            {
+                return;
+            }
+
+            try
+            {
+                await baseStream.FlushAsync(cancellationToken);
+            }
+            catch
+            {
+                closedWrite = true;
+                if (!swallowException)
+                    throw;
+            }
         }
 
         /// <summary>
@@ -393,7 +437,22 @@ namespace Titanium.Web.Proxy.Helpers
         public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             OnDataWrite(buffer, offset, count);
-            await baseStream.WriteAsync(buffer, offset, count, cancellationToken);
+
+            if (closedWrite)
+            {
+                return;
+            }
+
+            try
+            {
+                await baseStream.WriteAsync(buffer, offset, count, cancellationToken);
+            }
+            catch
+            {
+                closedWrite = true;
+                if (!swallowException)
+                    throw;
+            }
         }
 
         /// <summary>
@@ -402,12 +461,23 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="value">The byte to write to the stream.</param>
         public override void WriteByte(byte value)
         {
+            if (closedWrite)
+            {
+                return;
+            }
+
             var buffer = bufferPool.GetBuffer();
             try
             {
                 buffer[0] = value;
                 OnDataWrite(buffer, 0, 1);
                 baseStream.Write(buffer, 0, 1);
+            }
+            catch
+            {
+                closedWrite = true;
+                if (!swallowException)
+                    throw;
             }
             finally
             {
@@ -434,7 +504,8 @@ namespace Titanium.Web.Proxy.Helpers
             if (!disposed)
             {
                 disposed = true;
-                closed = true;
+                closedRead = true;
+                closedWrite = true;
                 if (!leaveOpen)
                 {
                     baseStream.Dispose();
@@ -511,7 +582,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         public bool FillBuffer()
         {
-            if (closed)
+            if (closedRead)
             {
                 throw new Exception("Stream is already closed");
             }
@@ -536,11 +607,17 @@ namespace Titanium.Web.Proxy.Helpers
                     bufferLength += readBytes;
                 }
             }
+            catch
+            {
+                if (!swallowException)
+                    throw;
+            }
             finally
             {
                 if (!result)
                 {
-                    closed = true;
+                    closedRead = true;
+                    closedWrite = true;
                 }
             }
 
@@ -555,7 +632,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <returns></returns>
         public async ValueTask<bool> FillBufferAsync(CancellationToken cancellationToken = default)
         {
-            if (closed)
+            if (closedRead)
             {
                 throw new Exception("Stream is already closed");
             }
@@ -595,7 +672,8 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 if (!result)
                 {
-                    closed = true;
+                    closedRead = true;
+                    closedWrite = true;
                 }
             }
 
@@ -766,6 +844,11 @@ namespace Titanium.Web.Proxy.Helpers
 
         private async ValueTask writeAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken)
         {
+            if (closedWrite)
+            {
+                return;
+            }
+
             int newLineChars = addNewLine ? newLine.Length : 0;
             int charCount = value.Length;
             if (charCount < bufferPool.BufferSize - newLineChars)
@@ -782,6 +865,12 @@ namespace Titanium.Web.Proxy.Helpers
 
                     await baseStream.WriteAsync(buffer, 0, idx, cancellationToken);
                 }
+                catch
+                {
+                    closedWrite = true;
+                    if (!swallowException)
+                        throw;
+                }
                 finally
                 {
                     bufferPool.ReturnBuffer(buffer);
@@ -797,7 +886,16 @@ namespace Titanium.Web.Proxy.Helpers
                     idx += newLineChars;
                 }
 
-                await baseStream.WriteAsync(buffer, 0, idx, cancellationToken);
+                try
+                {
+                    await baseStream.WriteAsync(buffer, 0, idx, cancellationToken);
+                }
+                catch
+                {
+                    closedWrite = true;
+                    if (!swallowException)
+                        throw;
+                }
             }
         }
 
@@ -826,20 +924,48 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="cancellationToken">The cancellation token.</param>
         internal async ValueTask WriteAsync(byte[] data, bool flush = false, CancellationToken cancellationToken = default)
         {
-            await baseStream.WriteAsync(data, 0, data.Length, cancellationToken);
-            if (flush)
+            if (closedWrite)
             {
-                await baseStream.FlushAsync(cancellationToken);
+                return;
+            }
+
+            try
+            {
+                await baseStream.WriteAsync(data, 0, data.Length, cancellationToken);
+                if (flush)
+                {
+                    await baseStream.FlushAsync(cancellationToken);
+                }
+            }
+            catch
+            {
+                closedWrite = true;
+                if (!swallowException)
+                    throw;
             }
         }
 
         internal async Task WriteAsync(byte[] data, int offset, int count, bool flush,
             CancellationToken cancellationToken = default)
         {
-            await baseStream.WriteAsync(data, offset, count, cancellationToken);
-            if (flush)
+            if (closedWrite)
             {
-                await baseStream.FlushAsync(cancellationToken);
+                return;
+            }
+
+            try
+            {
+                await baseStream.WriteAsync(data, offset, count, cancellationToken);
+                if (flush)
+                {
+                    await baseStream.FlushAsync(cancellationToken);
+                }
+            }
+            catch
+            {
+                closedWrite = true;
+                if (!swallowException)
+                    throw;
             }
         }
 
@@ -1056,9 +1182,23 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="buffer">The buffer to write data from.</param>
         /// <param name="cancellationToken">The token to monitor for cancellation requests. The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
         /// <returns>A task that represents the asynchronous write operation.</returns>
-        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            return baseStream.WriteAsync(buffer, cancellationToken);
+            if (closedWrite)
+            {
+                return;
+            }
+
+            try
+            {
+                await baseStream.WriteAsync(buffer, cancellationToken);
+            }
+            catch
+            {
+                closedWrite = true;
+                if (!swallowException)
+                    throw;
+            }
         }
 #else
         /// <summary>
@@ -1067,11 +1207,19 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="buffer">The buffer to write data from.</param>
         /// <param name="cancellationToken">The token to monitor for cancellation requests. The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
         /// <returns>A task that represents the asynchronous write operation.</returns>
-        public Task WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+        public async Task WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
         {
             var buf = ArrayPool<byte>.Shared.Rent(buffer.Length);
             buffer.CopyTo(buf);
-            return baseStream.WriteAsync(buf, 0, buf.Length, cancellationToken);
+            try
+            {
+                await baseStream.WriteAsync(buf, 0, buf.Length, cancellationToken);
+            }
+            catch
+            {
+                if (!swallowException)
+                    throw;
+            }
         }
 #endif
     }
