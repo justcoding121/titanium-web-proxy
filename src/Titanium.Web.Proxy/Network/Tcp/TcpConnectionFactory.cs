@@ -60,6 +60,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             cacheKeyBuilder.Append("-");
             cacheKeyBuilder.Append(remotePort);
             cacheKeyBuilder.Append("-");
+        
             // when creating Tcp client isConnect won't matter
             cacheKeyBuilder.Append(isHttps);
 
@@ -412,6 +413,7 @@ retry:
 
                             continue;
                         }
+
                         break;
                     }
                     catch (Exception e)

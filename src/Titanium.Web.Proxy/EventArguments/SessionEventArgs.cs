@@ -26,6 +26,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private bool reRequest;
 
+        private WebSocketDecoder webSocketDecoder;
+
         /// <summary>
         ///     Is this session a HTTP/2 promise?
         /// </summary>
@@ -57,6 +59,8 @@ namespace Titanium.Web.Proxy.EventArguments
                 reRequest = value;
             }
         }
+
+        public WebSocketDecoder WebSocketDecoder => webSocketDecoder ??=  new WebSocketDecoder(BufferPool);
 
         /// <summary>
         /// Occurs when multipart request part sent.

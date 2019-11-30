@@ -650,7 +650,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                     if (bufferDataLength == buffer.Length)
                     {
-                        resizeBuffer(ref buffer, bufferDataLength * 2);
+                        Array.Resize(ref buffer, bufferDataLength * 2);
                     }
                 }
             }
@@ -676,18 +676,6 @@ namespace Titanium.Web.Proxy.Helpers
             while (!string.IsNullOrEmpty(await ReadLineAsync(cancellationToken)))
             {
             }
-        }
-
-        /// <summary>
-        /// Increase size of buffer and copy existing content to new buffer
-        /// </summary>
-        /// <param name="buffer"></param>
-        /// <param name="size"></param>
-        private static void resizeBuffer(ref byte[] buffer, long size)
-        {
-            var newBuffer = new byte[size];
-            Buffer.BlockCopy(buffer, 0, newBuffer, 0, buffer.Length);
-            buffer = newBuffer;
         }
 
         /// <summary>        
