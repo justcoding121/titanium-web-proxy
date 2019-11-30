@@ -6,11 +6,12 @@ namespace Titanium.Web.Proxy.EventArguments
     /// <summary>
     ///     This is used in transparent endpoint before authenticating client.
     /// </summary>
-    public class BeforeSslAuthenticateEventArgs : EventArgs
+    public class BeforeSslAuthenticateEventArgs : ProxyEventArgsBase
     {
         internal readonly CancellationTokenSource TaskCancellationSource;
 
-        internal BeforeSslAuthenticateEventArgs(CancellationTokenSource taskCancellationSource, string sniHostName)
+        internal BeforeSslAuthenticateEventArgs(RequestStateBase state ,CancellationTokenSource taskCancellationSource, string sniHostName)
+        :base(state)
         {
             TaskCancellationSource = taskCancellationSource;
             SniHostName = sniHostName;

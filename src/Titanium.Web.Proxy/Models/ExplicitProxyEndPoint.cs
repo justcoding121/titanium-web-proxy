@@ -42,7 +42,7 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         public event AsyncEventHandler<TunnelConnectSessionEventArgs>? BeforeTunnelConnectResponse;
 
-        internal async Task InvokeBeforeTunnelConnectRequest(ProxyServer proxyServer,
+        internal async Task InvokeBeforeTunnelConnectRequest(ProxyServerBase proxyServer,
             TunnelConnectSessionEventArgs connectArgs, ExceptionHandler exceptionFunc)
         {
             if (BeforeTunnelConnectRequest != null)
@@ -51,7 +51,7 @@ namespace Titanium.Web.Proxy.Models
             }
         }
 
-        internal async Task InvokeBeforeTunnelConnectResponse(ProxyServer proxyServer,
+        internal async Task InvokeBeforeTunnelConnectResponse(ProxyServerBase proxyServer,
             TunnelConnectSessionEventArgs connectArgs, ExceptionHandler exceptionFunc, bool isClientHello = false)
         {
             if (BeforeTunnelConnectResponse != null)

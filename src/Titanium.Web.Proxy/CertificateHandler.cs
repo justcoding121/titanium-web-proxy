@@ -6,7 +6,22 @@ using Titanium.Web.Proxy.Extensions;
 
 namespace Titanium.Web.Proxy
 {
-    public partial class ProxyServer
+    public partial class RequestStateBase
+    {
+        internal bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain,
+            SslPolicyErrors sslPolicyErrors)
+        {
+            return Server.ValidateServerCertificate(this, sender, certificate, chain, sslPolicyErrors);
+        }
+        internal X509Certificate? SelectClientCertificate(object sender, string targetHost,
+    X509CertificateCollection localCertificates,
+    X509Certificate remoteCertificate, string[] acceptableIssuers)
+        {
+            return Server.SelectClientCertificate(this, sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers);
+        }
+
+    }
+    public partial class ProxyServerBase
     {
         /// <summary>
         ///     Call back to override server certificate validation
@@ -16,16 +31,16 @@ namespace Titanium.Web.Proxy
         /// <param name="chain">The certificate chain.</param>
         /// <param name="sslPolicyErrors">Ssl policy errors</param>
         /// <returns>Return true if valid certificate.</returns>
-        internal bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain,
+        internal bool ValidateServerCertificate(RequestStateBase state, object sender, X509Certificate certificate, X509Chain chain,
             SslPolicyErrors sslPolicyErrors)
         {
             // if user callback is registered then do it
             if (ServerCertificateValidationCallback != null)
             {
-                var args = new CertificateValidationEventArgs(certificate, chain, sslPolicyErrors);
+                var args = new CertificateValidationEventArgs(state, certificate, chain, sslPolicyErrors);
 
                 // why is the sender null?
-                ServerCertificateValidationCallback.InvokeAsync(this, args, ExceptionFunc).Wait();
+                ServerCertificateValidationCallback.InvokeAsync(this, args, state.OnError).Wait();
                 return args.IsValid;
             }
 
@@ -48,7 +63,7 @@ namespace Titanium.Web.Proxy
         /// <param name="remoteCertificate">The remote certificate of server.</param>
         /// <param name="acceptableIssuers">The acceptable issues for client certificate as listed by server.</param>
         /// <returns></returns>
-        internal X509Certificate? SelectClientCertificate(object sender, string targetHost,
+        internal X509Certificate? SelectClientCertificate(RequestStateBase state, object sender, string targetHost,
             X509CertificateCollection localCertificates,
             X509Certificate remoteCertificate, string[] acceptableIssuers)
         {
@@ -75,7 +90,7 @@ namespace Titanium.Web.Proxy
             // If user call back is registered
             if (ClientCertificateSelectionCallback != null)
             {
-                var args = new CertificateSelectionEventArgs
+                var args = new CertificateSelectionEventArgs(state)
                 {
                     TargetHost = targetHost,
                     LocalCertificates = localCertificates,

@@ -16,14 +16,19 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpClientConnection : IDisposable
     {
-        internal TcpClientConnection(ProxyServer proxyServer, TcpClient tcpClient)
+        public static implicit operator TcpClientConnection(RequestStateBase state)
+        {
+            return state.ClientConnection;
+        }
+
+        internal TcpClientConnection(ProxyServerBase proxyServer, TcpClient tcpClient)
         {
             this.tcpClient = tcpClient;
             this.proxyServer = proxyServer;
             this.proxyServer.UpdateClientConnectionCount(true);
         }
 
-        private ProxyServer proxyServer { get; }
+        private ProxyServerBase proxyServer { get; }
 
         public Guid Id { get; } = Guid.NewGuid();
 

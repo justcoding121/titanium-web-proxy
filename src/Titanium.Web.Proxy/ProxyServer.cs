@@ -19,13 +19,112 @@ using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy
 {
+    public class RequestState : RequestState<RequestState>
+    {
+
+    }
+    public class ProxyServer : RequestState.ProxyServer
+    {
+
+    }
+    public abstract partial class RequestStateBase
+    {
+        public abstract ProxyServerBase Server { get; }
+        internal abstract TcpClientConnection ClientConnection { get; }
+
+        public virtual async Task OnErrorAsync(Exception e)
+        {
+            Server.ExceptionFunc?.Invoke(e);
+        }
+        public virtual void OnError(Exception e)
+        {
+            Server.ExceptionFunc?.Invoke(e);
+        }
+
+    }
+    public class RequestState<TRequestState> : RequestStateBase, IDisposable
+       where TRequestState : RequestState<TRequestState>, new()
+    {
+        ProxyServer server;
+        TcpClientConnection clientConnection;
+        public override ProxyServerBase Server => server;
+        internal override TcpClientConnection ClientConnection => clientConnection;
+       
+        #region IDisposable Support
+        private bool disposedValue = false; // To detect redundant calls
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    ClientConnection?.Dispose();
+                    // dispose managed state (managed objects).
+                }
+
+                // free unmanaged resources (unmanaged objects) and override a finalizer below.
+                // set large fields to null.
+
+                disposedValue = true;
+            }
+        }
+
+        // override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
+        // ~RequestState()
+        // {
+        //   // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+        //   Dispose(false);
+        // }
+
+        // This code added to correctly implement the disposable pattern.
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+            Dispose(true);
+            // uncomment the following line if the finalizer is overridden above.
+            // GC.SuppressFinalize(this);
+        }
+        #endregion
+        public class ProxyServer : ProxyServerBase
+        {
+            protected override async Task handleClient(TcpClient tcpClient, ProxyEndPoint endPoint)
+            {
+                tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
+                tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
+
+                tcpClient.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
+
+                await InvokeConnectionCreateEvent(tcpClient, true);
+                using (var requestState = new TRequestState())
+                {
+                    var clientConnection = new TcpClientConnection(this, tcpClient);
+                    requestState.server = this;
+                    requestState.clientConnection = clientConnection;
+
+                    if (endPoint is TransparentProxyEndPoint tep)
+                    {
+                        await handleClient(tep, requestState);
+                    }
+                    else
+                    {
+                        await handleClient((ExplicitProxyEndPoint)endPoint, requestState);
+                    }
+                }
+            }
+        }
+    }
     /// <inheritdoc />
     /// <summary>
     ///     This class is the backbone of proxy. One can create as many instances as needed.
     ///     However care should be taken to avoid using the same listening ports across multiple instances.
     /// </summary>
-    public partial class ProxyServer : IDisposable
+    public abstract partial class ProxyServerBase : IDisposable
     {
+        public static implicit operator ProxyServerBase(RequestStateBase state)
+        {
+            return state.Server;
+        }
         /// <summary>
         ///     HTTP &amp; HTTPS scheme shorthands.
         /// </summary>
@@ -75,7 +174,7 @@ namespace Titanium.Web.Proxy
         ///     Should we attempt to trust certificates with elevated permissions by
         ///     prompting for UAC if required?
         /// </param>
-        public ProxyServer(bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
+        public ProxyServerBase(bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
             bool trustRootCertificateAsAdmin = false) : this(null, null, userTrustRootCertificate,
             machineTrustRootCertificate, trustRootCertificateAsAdmin)
         {
@@ -95,7 +194,7 @@ namespace Titanium.Web.Proxy
         ///     Should we attempt to trust certificates with elevated permissions by
         ///     prompting for UAC if required?
         /// </param>
-        public ProxyServer(string? rootCertificateName, string? rootCertificateIssuerName,
+        public ProxyServerBase(string? rootCertificateName, string? rootCertificateIssuerName,
             bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
             bool trustRootCertificateAsAdmin = false)
         {
@@ -114,7 +213,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     An factory that creates tcp connection to server.
         /// </summary>
-        private TcpConnectionFactory tcpConnectionFactory { get; }
+        internal TcpConnectionFactory tcpConnectionFactory { get; }
 
         /// <summary>
         ///     Manage system proxy settings.
@@ -301,6 +400,17 @@ namespace Titanium.Web.Proxy
                 CertificateManager.ExceptionFunc = value;
             }
         }
+        /// <summary>
+        /// Handle exception.
+        /// </summary>
+        /// <param name="clientStream">The client stream.</param>
+        /// <param name="exception">The exception.</param>
+        private void onException(HttpClientStream clientStream, Exception exception)
+        {
+            ExceptionFunc(exception);
+        }
+
+
 
         /// <summary>
         ///     A callback to authenticate proxy clients via basic authentication.
@@ -788,37 +898,7 @@ namespace Titanium.Web.Proxy
         /// <param name="tcpClient">The client.</param>
         /// <param name="endPoint">The proxy endpoint.</param>
         /// <returns>The task.</returns>
-        private async Task handleClient(TcpClient tcpClient, ProxyEndPoint endPoint)
-        {
-            tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
-            tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
-
-            tcpClient.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
-
-            await InvokeConnectionCreateEvent(tcpClient, true);
-
-            using (var clientConnection = new TcpClientConnection(this, tcpClient))
-            {
-                if (endPoint is TransparentProxyEndPoint tep)
-                {
-                    await handleClient(tep, clientConnection);
-                }
-                else
-                {
-                    await handleClient((ExplicitProxyEndPoint)endPoint, clientConnection);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Handle exception.
-        /// </summary>
-        /// <param name="clientStream">The client stream.</param>
-        /// <param name="exception">The exception.</param>
-        private void onException(HttpClientStream clientStream, Exception exception)
-        {
-            ExceptionFunc(exception);
-        }
+        protected abstract Task handleClient(TcpClient tcpClient, ProxyEndPoint endPoint);
 
         /// <summary>
         ///     Quit listening on the given end point.

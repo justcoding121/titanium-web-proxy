@@ -140,11 +140,11 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             ProxyProtocolType? protocolType = null;
-            if (protocolTypeStr.Equals(Proxy.ProxyServer.UriSchemeHttp, StringComparison.InvariantCultureIgnoreCase))
+            if (protocolTypeStr.Equals(Proxy.ProxyServerBase.UriSchemeHttp, StringComparison.InvariantCultureIgnoreCase))
             {
                 protocolType = ProxyProtocolType.Http;
             }
-            else if (protocolTypeStr.Equals(Proxy.ProxyServer.UriSchemeHttps,
+            else if (protocolTypeStr.Equals(Proxy.ProxyServerBase.UriSchemeHttps,
                 StringComparison.InvariantCultureIgnoreCase))
             {
                 protocolType = ProxyProtocolType.Https;

@@ -263,7 +263,7 @@ namespace Titanium.Web.Proxy.Http2
 
                             request.HttpVersion = HttpVersion.Version20;
                             request.Method = method.GetString();
-                            request.IsHttps = headerListener.Scheme == ProxyServer.UriSchemeHttps;
+                            request.IsHttps = headerListener.Scheme == ProxyServerBase.UriSchemeHttps;
                             request.Authority = headerListener.Authority;
                             request.RequestUriString8 = path;
 
@@ -592,14 +592,14 @@ namespace Titanium.Web.Proxy.Http2
             {
                 get
                 {
-                    if (scheme.Equals(ProxyServer.UriSchemeHttp8))
+                    if (scheme.Equals(ProxyServerBase.UriSchemeHttp8))
                     {
-                        return ProxyServer.UriSchemeHttp;
+                        return ProxyServerBase.UriSchemeHttp;
                     }
 
-                    if (scheme.Equals(ProxyServer.UriSchemeHttps8))
+                    if (scheme.Equals(ProxyServerBase.UriSchemeHttps8))
                     {
-                        return ProxyServer.UriSchemeHttps;
+                        return ProxyServerBase.UriSchemeHttps;
                     }
 
                     return string.Empty;

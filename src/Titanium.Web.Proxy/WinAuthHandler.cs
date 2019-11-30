@@ -11,7 +11,7 @@ using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy
 {
-    public partial class ProxyServer
+    public partial class ProxyServerBase
     {
         /// <summary>
         ///     possible header names.

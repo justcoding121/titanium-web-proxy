@@ -36,7 +36,7 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         public event AsyncEventHandler<BeforeSslAuthenticateEventArgs>? BeforeSslAuthenticate;
 
-        internal async Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
+        internal async Task InvokeBeforeSslAuthenticate(ProxyServerBase proxyServer,
             BeforeSslAuthenticateEventArgs connectArgs, ExceptionHandler exceptionFunc)
         {
             if (BeforeSslAuthenticate != null)

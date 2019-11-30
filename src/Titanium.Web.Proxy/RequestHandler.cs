@@ -21,7 +21,7 @@ namespace Titanium.Web.Proxy
     /// <summary>
     ///     Handle the request
     /// </summary>
-    public partial class ProxyServer
+    public partial class ProxyServerBase
     {
         /// <summary>
         ///     This is the core request handler method for a particular connection from client.
@@ -34,10 +34,11 @@ namespace Titanium.Web.Proxy
         /// <param name="cancellationTokenSource">The cancellation token source for this async task.</param>
         /// <param name="connectArgs">The Connect request if this is a HTTPS request from explicit endpoint.</param>
         /// <param name="prefetchConnectionTask">Prefetched server connection for current client using Connect/SNI headers.</param>
-        private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, TcpClientConnection clientConnection,
+        private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, RequestStateBase state,
             HttpClientStream clientStream, CancellationTokenSource cancellationTokenSource, TunnelConnectSessionEventArgs? connectArgs = null,
             Task<TcpServerConnection>? prefetchConnectionTask = null)
         {
+            var clientConnection = state.ClientConnection;
             var connectRequest = connectArgs?.HttpClient.ConnectRequest;
 
             var prefetchTask = prefetchConnectionTask;
@@ -64,7 +65,7 @@ namespace Titanium.Web.Proxy
                         return;
                     }
 
-                    var args = new SessionEventArgs(this, endPoint, clientConnection, clientStream, connectRequest, cancellationTokenSource)
+                    var args = new SessionEventArgs(state, endPoint, clientConnection, clientStream, connectRequest, cancellationTokenSource)
                     {
                         UserData = connectArgs?.UserData
                     };
@@ -266,7 +267,7 @@ namespace Titanium.Web.Proxy
 
             // a connection generator task with captured parameters via closure.
             Func<Task<TcpServerConnection>> generator = () =>
-                tcpConnectionFactory.GetServerConnection(this,
+                tcpConnectionFactory.GetServerConnection(args.State,
                     args,
                     false,
                     sslApplicationProtocol,

@@ -10,7 +10,7 @@ using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy
 {
-    public partial class ProxyServer
+    public partial class ProxyServerBase
     {
         /// <summary>
         ///     Callback to authorize clients of this proxy instance.

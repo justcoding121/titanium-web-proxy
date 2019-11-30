@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.EventArguments
@@ -6,9 +6,10 @@ namespace Titanium.Web.Proxy.EventArguments
     /// <summary>
     ///     Class that wraps the multipart sent request arguments.
     /// </summary>
-    public class MultipartRequestPartSentEventArgs : EventArgs
+    public class MultipartRequestPartSentEventArgs : ProxyEventArgsBase
     {
-        internal MultipartRequestPartSentEventArgs(string boundary, HeaderCollection headers)
+        internal MultipartRequestPartSentEventArgs(RequestStateBase state, string boundary, HeaderCollection headers)
+            :base(state)
         {
             Boundary = boundary;
             Headers = headers;

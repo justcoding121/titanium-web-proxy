@@ -11,14 +11,14 @@ namespace Titanium.Web.Proxy
     /// <summary>
     ///     Handle the response from server.
     /// </summary>
-    public partial class ProxyServer
+    public partial class ProxyServerBase
     {
         /// <summary>
         ///     Called asynchronously when a request was successful and we received the response.
         /// </summary>
         /// <param name="args">The session event arguments.</param>
         /// <returns> The task.</returns>
-        private async Task handleHttpSessionResponse(SessionEventArgs args)
+        protected async Task handleHttpSessionResponse(SessionEventArgs args)
         {
             var cancellationToken = args.CancellationTokenSource.Token;
 
@@ -132,7 +132,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="args"></param>
         /// <returns></returns>
-        private async Task onBeforeResponse(SessionEventArgs args)
+        protected async Task onBeforeResponse(SessionEventArgs args)
         {
             if (BeforeResponse != null)
             {
@@ -145,7 +145,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="args"></param>
         /// <returns></returns>
-        private async Task onAfterResponse(SessionEventArgs args)
+        protected async Task onAfterResponse(SessionEventArgs args)
         {
             if (AfterResponse != null)
             {

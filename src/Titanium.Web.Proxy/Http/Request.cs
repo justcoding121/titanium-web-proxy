@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy.Http
                 var scheme = getUriScheme(value);
                 if (scheme.Length > 0)
                 {
-                    IsHttps = scheme.Equals(ProxyServer.UriSchemeHttps8);
+                    IsHttps = scheme.Equals(ProxyServerBase.UriSchemeHttps8);
                 }
             }
         }

@@ -10,7 +10,7 @@ using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy
 {
-    public partial class ProxyServer
+    public partial class ProxyServerBase
     {
 
         /// <summary>

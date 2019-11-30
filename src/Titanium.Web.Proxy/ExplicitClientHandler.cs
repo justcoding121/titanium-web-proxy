@@ -22,8 +22,8 @@ using SslExtensions = Titanium.Web.Proxy.Extensions.SslExtensions;
 
 namespace Titanium.Web.Proxy
 {
-    public partial class ProxyServer
-    {
+    public partial class ProxyServerBase
+    { 
         /// <summary>
         ///     This is called when client is aware of proxy
         ///     So for HTTPS requests client would send CONNECT header to negotiate a secure tcp tunnel via proxy
@@ -31,8 +31,9 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint">The explicit endpoint.</param>
         /// <param name="clientConnection">The client connection.</param>
         /// <returns>The task.</returns>
-        private async Task handleClient(ExplicitProxyEndPoint endPoint, TcpClientConnection clientConnection)
+        internal async Task handleClient(ExplicitProxyEndPoint endPoint, RequestStateBase state)
         {
+            TcpClientConnection clientConnection = state;
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
 
@@ -66,7 +67,7 @@ namespace Titanium.Web.Proxy
 
                     await HeaderParser.ReadHeaders(clientStream, connectRequest.Headers, cancellationToken);
 
-                    connectArgs = new TunnelConnectSessionEventArgs(this, endPoint, connectRequest,
+                    connectArgs = new TunnelConnectSessionEventArgs(state, endPoint, connectRequest,
                         clientConnection, clientStream, cancellationTokenSource);
                     clientStream.DataRead += (o, args) => connectArgs.OnDataSent(args.Buffer, args.Offset, args.Count);
                     clientStream.DataWrite += (o, args) => connectArgs.OnDataReceived(args.Buffer, args.Offset, args.Count);
@@ -137,7 +138,7 @@ namespace Titanium.Web.Proxy
                             try
                             {
                                 // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
-                                var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs,
+                                var connection = await tcpConnectionFactory.GetServerConnection(state, connectArgs,
                                     true, SslExtensions.Http2ProtocolAsList,
                                     true, cancellationToken);
 
@@ -167,7 +168,7 @@ namespace Titanium.Web.Proxy
                             {
                                 // don't pass cancellation token here
                                 // it could cause floating server connections when client exits
-                                prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(this, connectArgs,
+                                prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(state, connectArgs,
                                                         true, null, false,
                                                         CancellationToken.None);
                             }
@@ -252,7 +253,7 @@ namespace Titanium.Web.Proxy
                         // create new connection to server.
                         // If we detected that client tunnel CONNECTs without SSL by checking for empty client hello then 
                         // this connection should not be HTTPS.
-                        var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs,
+                        var connection = await tcpConnectionFactory.GetServerConnection(state, connectArgs,
                                                         true, SslExtensions.Http2ProtocolAsList,
                                                         true, cancellationToken);
 
@@ -329,7 +330,7 @@ namespace Titanium.Web.Proxy
                             throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
                         }
 
-                        var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs,
+                        var connection = await tcpConnectionFactory.GetServerConnection(state, connectArgs,
                                                         true, SslExtensions.Http2ProtocolAsList,
                                                         true, cancellationToken);
                         try
@@ -338,7 +339,7 @@ namespace Titanium.Web.Proxy
                             var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
                             await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
                             await Http2Helper.SendHttp2(clientStream, connection.Stream,
-                                () => new SessionEventArgs(this, endPoint, clientConnection, clientStream, connectArgs?.HttpClient.ConnectRequest, cancellationTokenSource)
+                                () => new SessionEventArgs(state, endPoint, clientConnection, clientStream, connectArgs?.HttpClient.ConnectRequest, cancellationTokenSource)
                                 {
                                     UserData = connectArgs?.UserData
                                 },
@@ -357,7 +358,7 @@ namespace Titanium.Web.Proxy
                 calledRequestHandler = true;
 
                 // Now create the request
-                await handleHttpSessionRequest(endPoint, clientConnection, clientStream, cancellationTokenSource, connectArgs, prefetchConnectionTask);
+                await handleHttpSessionRequest(endPoint, state, clientStream, cancellationTokenSource, connectArgs, prefetchConnectionTask);
             }
             catch (ProxyException e)
             {

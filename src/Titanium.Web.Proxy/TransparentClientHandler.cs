@@ -19,7 +19,7 @@ using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy
 {
-    public partial class ProxyServer
+    public partial class ProxyServerBase
     {
         /// <summary>
         ///     This is called when this proxy acts as a reverse proxy (like a real http server).
@@ -28,8 +28,9 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint">The transparent endpoint.</param>
         /// <param name="clientConnection">The client connection.</param>
         /// <returns></returns>
-        private async Task handleClient(TransparentProxyEndPoint endPoint, TcpClientConnection clientConnection)
+        internal virtual async Task handleClient(TransparentProxyEndPoint endPoint, RequestStateBase state)
         {
+            var clientConnection = state.ClientConnection;
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
 
@@ -47,7 +48,7 @@ namespace Titanium.Web.Proxy
                 {
                     httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
 
-                    var args = new BeforeSslAuthenticateEventArgs(cancellationTokenSource, httpsHostName);
+                    var args = new BeforeSslAuthenticateEventArgs(state,cancellationTokenSource, httpsHostName);
 
                     await endPoint.InvokeBeforeSslAuthenticate(this, args, ExceptionFunc);
 
@@ -80,18 +81,18 @@ namespace Titanium.Web.Proxy
                         catch (Exception e)
                         {
                             var certName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
-                            var session = new SessionEventArgs(this, endPoint, clientConnection, clientStream, null,
+                            var session = new SessionEventArgs(state, endPoint, clientConnection, clientStream, null,
                                 cancellationTokenSource);
                             throw new ProxyConnectException(
                                 $"Couldn't authenticate host '{httpsHostName}' with certificate '{certName}'.", e, session);
                         }
-                      
+
                     }
                     else
                     {
                         var connection = await tcpConnectionFactory.GetServerConnection(httpsHostName, endPoint.Port,
                                     HttpHeader.VersionUnknown, false, null,
-                                    true, this, null, UpStreamEndPoint,
+                                    true, state, null, UpStreamEndPoint,
                                     UpStreamHttpsProxy, true, cancellationToken);
 
                         try
@@ -131,7 +132,7 @@ namespace Titanium.Web.Proxy
 
                 // HTTPS server created - we can now decrypt the client's traffic
                 // Now create the request
-                await handleHttpSessionRequest(endPoint, clientConnection, clientStream, cancellationTokenSource);
+                await handleHttpSessionRequest(endPoint, state, clientStream, cancellationTokenSource);
             }
             catch (ProxyException e)
             {

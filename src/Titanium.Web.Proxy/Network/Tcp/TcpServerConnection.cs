@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
     {
         public Guid Id { get; } = Guid.NewGuid();
 
-        internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient, HttpServerStream stream,
+        internal TcpServerConnection(ProxyServerBase proxyServer, TcpClient tcpClient, HttpServerStream stream,
             string hostName, int port, bool isHttps, SslApplicationProtocol negotiatedApplicationProtocol,
             Version version, IExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string cacheKey)
         {
@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             CacheKey = cacheKey;
         }
 
-        private ProxyServer proxyServer { get; }
+        private ProxyServerBase proxyServer { get; }
 
         internal bool IsClosed => Stream.IsClosed;
 

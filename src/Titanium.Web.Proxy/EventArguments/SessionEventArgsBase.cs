@@ -12,13 +12,22 @@ using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
+    public abstract class ProxyEventArgsBase : EventArgs
+    {
+        public readonly RequestStateBase State;
+        public ProxyEventArgsBase(RequestStateBase state)
+        {
+            this.State = state;
+        }
+
+    }
     /// <summary>
     ///     Holds info related to a single proxy session (single request/response sequence).
     ///     A proxy session is bounded to a single connection from client.
     ///     A proxy session ends when client terminates connection to proxy
     ///     or when server terminates connection from proxy.
     /// </summary>
-    public abstract class SessionEventArgsBase : EventArgs, IDisposable
+    public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     {
         private static bool isWindowsAuthenticationSupported => RunTime.IsWindows;
 
@@ -49,9 +58,11 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
         /// </summary>
-        private protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
+        private protected SessionEventArgsBase(RequestStateBase state, ProxyEndPoint endPoint,
             TcpClientConnection clientConnection, HttpClientStream clientStream, ConnectRequest? connectRequest, Request request, CancellationTokenSource cancellationTokenSource)
+        :base(state)
         {
+            var server = state.Server;
             BufferPool = server.BufferPool;
             ExceptionFunc = server.ExceptionFunc;
             TimeLine["Session Created"] = DateTime.Now;
