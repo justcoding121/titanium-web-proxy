@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Examples.Basic
 {

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Globalization;
-using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Extensions
 {

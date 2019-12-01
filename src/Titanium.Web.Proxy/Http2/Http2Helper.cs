@@ -3,7 +3,6 @@ using Titanium.Web.Proxy.Extensions;
 #if NETSTANDARD2_1
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
