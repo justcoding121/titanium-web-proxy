@@ -151,7 +151,7 @@ namespace Titanium.Web.Proxy
                                 try
                                 {
                                     // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
-                                    var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs,
+                                    var connection = await tcpConnectionFactory.GetServerConnection(state, connectArgs,
                                         true, SslExtensions.Http2ProtocolAsList,
                                         true, cancellationToken);
 
