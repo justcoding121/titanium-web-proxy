@@ -36,7 +36,7 @@ function Install-DocFx()
 {
 	if(!(Test-Path $env:ChocolateyInstall\lib\docfx\tools*)) 
 	{ 
-		choco install docfx --version 2.40.1
+		choco install docfx --version 2.47
 	}
 	$env:Path += ";$env:ChocolateyInstall\lib\docfx\tools"
 }
