@@ -2,33 +2,33 @@
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
-internal class NullWriter : IHttpStreamWriter
+namespace Titanium.Web.Proxy.Helpers
 {
-    public static NullWriter Instance { get; } = new NullWriter();
-
-    public void Write(byte[] buffer, int offset, int count)
+    internal class NullWriter : IHttpStreamWriter
     {
-    }
+        public static NullWriter Instance { get; } = new NullWriter();
 
+        public void Write(byte[] buffer, int offset, int count)
+        {
+        }
+
+        public Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
 #if NET45
-    public async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-    {
-    }
-
+        return Net45Compatibility.CompletedTask;
 #else
-    public Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
+            return Task.CompletedTask;
 #endif
+        }
 
-    public ValueTask WriteLineAsync(CancellationToken cancellationToken = default)
-    {
-        throw new System.NotImplementedException();
-    }
+        public ValueTask WriteLineAsync(CancellationToken cancellationToken = default)
+        {
+            throw new System.NotImplementedException();
+        }
 
-    public ValueTask WriteLineAsync(string value, CancellationToken cancellationToken = default)
-    {
-        throw new System.NotImplementedException();
+        public ValueTask WriteLineAsync(string value, CancellationToken cancellationToken = default)
+        {
+            throw new System.NotImplementedException();
+        }
     }
 }
