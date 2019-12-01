@@ -1,18 +1,23 @@
-using System;
-using Titanium.Web.Proxy.Http;
+﻿using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
     /// <summary>
     ///     Class that wraps the multipart sent request arguments.
     /// </summary>
-    public class MultipartRequestPartSentEventArgs : EventArgs
+    public class MultipartRequestPartSentEventArgs : ProxyEventArgsBase
     {
-        internal MultipartRequestPartSentEventArgs(string boundary, HeaderCollection headers)
+        internal MultipartRequestPartSentEventArgs(SessionEventArgs session, string boundary, HeaderCollection headers) : base(session.ClientConnection)
         {
+            Session = session;
             Boundary = boundary;
             Headers = headers;
         }
+
+        /// <value>
+        ///     The session arguments.
+        /// </value>
+        public SessionEventArgs Session { get; }
 
         /// <summary>
         ///     Boundary.

@@ -41,13 +41,11 @@ namespace Titanium.Web.Proxy
             {
                 var clientHelloInfo = await SslTools.PeekClientHello(clientStream, BufferPool, cancellationToken);
 
-                string? httpsHostName = null;
-
                 if (clientHelloInfo != null)
                 {
-                    httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
+                    var httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
 
-                    var args = new BeforeSslAuthenticateEventArgs(cancellationTokenSource, httpsHostName);
+                    var args = new BeforeSslAuthenticateEventArgs(clientConnection, cancellationTokenSource, httpsHostName);
 
                     await endPoint.InvokeBeforeSslAuthenticate(this, args, ExceptionFunc);
 

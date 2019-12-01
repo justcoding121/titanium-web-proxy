@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private bool reRequest;
 
-        private WebSocketDecoder? webSocketDecoder;
+        private WebSocketDecoder webSocketDecoder;
 
         /// <summary>
         ///     Is this session a HTTP/2 promise?
@@ -127,7 +127,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             try
             {
-                MultipartRequestPartSent?.Invoke(this, new MultipartRequestPartSentEventArgs(boundary.ToString(), headers));
+                MultipartRequestPartSent?.Invoke(this, new MultipartRequestPartSentEventArgs(this, boundary.ToString(), headers));
             }
             catch (Exception ex)
             {

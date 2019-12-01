@@ -18,7 +18,7 @@ namespace Titanium.Web.Proxy.EventArguments
     ///     A proxy session ends when client terminates connection to proxy
     ///     or when server terminates connection from proxy.
     /// </summary>
-    public abstract class SessionEventArgsBase : EventArgs, IDisposable
+    public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     {
         private static bool isWindowsAuthenticationSupported => RunTime.IsWindows;
 
@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy.EventArguments
         ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
         /// </summary>
         private protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
-            HttpClientStream clientStream, ConnectRequest? connectRequest, Request request, CancellationTokenSource cancellationTokenSource)
+            HttpClientStream clientStream, ConnectRequest? connectRequest, Request request, CancellationTokenSource cancellationTokenSource) : base(clientStream.Connection)
         {
             BufferPool = server.BufferPool;
             ExceptionFunc = server.ExceptionFunc;

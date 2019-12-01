@@ -8,9 +8,9 @@ namespace Titanium.Web.Proxy.EventArguments
     ///     An argument passed on to the user for validating the server certificate
     ///     during SSL authentication.
     /// </summary>
-    public class CertificateValidationEventArgs : EventArgs
+    public class CertificateValidationEventArgs : ProxyEventArgsBase
     {
-        public CertificateValidationEventArgs(SessionEventArgsBase session, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        public CertificateValidationEventArgs(SessionEventArgsBase session, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) : base(session.ClientConnection)
         {
             Session = session;
             Certificate = certificate;

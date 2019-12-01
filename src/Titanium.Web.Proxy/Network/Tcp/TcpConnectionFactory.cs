@@ -445,7 +445,7 @@ retry:
                     sessionArgs.TimeLine["Connection Established"] = DateTime.Now;
                 }
 
-                await proxyServer.InvokeConnectionCreateEvent(tcpClient, false);
+                await proxyServer.InvokeServerConnectionCreateEvent(tcpClient);
 
                 stream = new HttpServerStream(tcpClient.GetStream(), proxyServer.BufferPool);
 

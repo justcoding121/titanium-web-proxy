@@ -795,7 +795,7 @@ namespace Titanium.Web.Proxy
 
             tcpClient.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
 
-            await InvokeConnectionCreateEvent(tcpClient, true);
+            await InvokeClientConnectionCreateEvent(tcpClient);
 
             using (var clientConnection = new TcpClientConnection(this, tcpClient))
             {
@@ -866,21 +866,28 @@ namespace Titanium.Web.Proxy
         }
 
         /// <summary>
-        ///     Invoke client/server tcp connection events if subscribed by API user.
+        ///     Invoke client tcp connection events if subscribed by API user.
         /// </summary>
         /// <param name="client">The TcpClient object.</param>
-        /// <param name="isClientConnection">Is this a client connection created event? If not then we would assume that its a server connection create event.</param>
         /// <returns></returns>
-        internal async Task InvokeConnectionCreateEvent(TcpClient client, bool isClientConnection)
+        internal async Task InvokeClientConnectionCreateEvent(TcpClient client)
         {
             // client connection created
-            if (isClientConnection && OnClientConnectionCreate != null)
+            if (OnClientConnectionCreate != null)
             {
                 await OnClientConnectionCreate.InvokeAsync(this, client, ExceptionFunc);
             }
+        }
 
+        /// <summary>
+        ///     Invoke server tcp connection events if subscribed by API user.
+        /// </summary>
+        /// <param name="client">The TcpClient object.</param>
+        /// <returns></returns>
+        internal async Task InvokeServerConnectionCreateEvent(TcpClient client)
+        {
             // server connection created
-            if (!isClientConnection && OnServerConnectionCreate != null)
+            if (OnServerConnectionCreate != null)
             {
                 await OnServerConnectionCreate.InvokeAsync(this, client, ExceptionFunc);
             }

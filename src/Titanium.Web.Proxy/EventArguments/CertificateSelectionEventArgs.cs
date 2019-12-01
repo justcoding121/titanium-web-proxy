@@ -6,10 +6,10 @@ namespace Titanium.Web.Proxy.EventArguments
     /// <summary>
     ///     An argument passed on to user for client certificate selection during mutual SSL authentication.
     /// </summary>
-    public class CertificateSelectionEventArgs : EventArgs
+    public class CertificateSelectionEventArgs : ProxyEventArgsBase
     {
         public CertificateSelectionEventArgs(SessionEventArgsBase session, string targetHost,
-            X509CertificateCollection localCertificates, X509Certificate remoteCertificate, string[] acceptableIssuers)
+            X509CertificateCollection localCertificates, X509Certificate remoteCertificate, string[] acceptableIssuers) : base(session.ClientConnection)
         {
             Session = session;
             TargetHost = targetHost;

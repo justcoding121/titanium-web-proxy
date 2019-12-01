@@ -1,16 +1,17 @@
 ﻿using System;
 using System.Threading;
+using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy.EventArguments
 {
     /// <summary>
     ///     This is used in transparent endpoint before authenticating client.
     /// </summary>
-    public class BeforeSslAuthenticateEventArgs : EventArgs
+    public class BeforeSslAuthenticateEventArgs : ProxyEventArgsBase
     {
         internal readonly CancellationTokenSource TaskCancellationSource;
 
-        internal BeforeSslAuthenticateEventArgs(CancellationTokenSource taskCancellationSource, string sniHostName)
+        internal BeforeSslAuthenticateEventArgs(TcpClientConnection clientConnection, CancellationTokenSource taskCancellationSource, string sniHostName) : base(clientConnection)
         {
             TaskCancellationSource = taskCancellationSource;
             SniHostName = sniHostName;
