@@ -211,12 +211,7 @@ namespace Titanium.Web.Proxy.Helpers
                 if (protocolType.HasValue)
                 {
                     var endPointParts = tmp.Substring(equalsIndex + 1).Split(':');
-                    return new HttpSystemProxyValue
-                    {
-                        HostName = endPointParts[0],
-                        Port = int.Parse(endPointParts[1]),
-                        ProtocolType = protocolType.Value
-                    };
+                    return new HttpSystemProxyValue(endPointParts[0], int.Parse(endPointParts[1]), protocolType.Value);
                 }
             }
 

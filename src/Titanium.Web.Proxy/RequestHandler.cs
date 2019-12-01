@@ -29,13 +29,12 @@ namespace Titanium.Web.Proxy
         ///     client/server abruptly terminates connection or by normal HTTP termination.
         /// </summary>
         /// <param name="endPoint">The proxy endpoint.</param>
-        /// <param name="clientConnection">The client connection.</param>
         /// <param name="clientStream">The client stream.</param>
         /// <param name="cancellationTokenSource">The cancellation token source for this async task.</param>
         /// <param name="connectArgs">The Connect request if this is a HTTPS request from explicit endpoint.</param>
         /// <param name="prefetchConnectionTask">Prefetched server connection for current client using Connect/SNI headers.</param>
-        private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, TcpClientConnection clientConnection,
-            HttpClientStream clientStream, CancellationTokenSource cancellationTokenSource, TunnelConnectSessionEventArgs? connectArgs = null,
+        private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, HttpClientStream clientStream, 
+            CancellationTokenSource cancellationTokenSource, TunnelConnectSessionEventArgs? connectArgs = null,
             Task<TcpServerConnection>? prefetchConnectionTask = null)
         {
             var connectRequest = connectArgs?.HttpClient.ConnectRequest;
@@ -64,7 +63,7 @@ namespace Titanium.Web.Proxy
                         return;
                     }
 
-                    var args = new SessionEventArgs(this, endPoint, clientConnection, clientStream, connectRequest, cancellationTokenSource)
+                    var args = new SessionEventArgs(this, endPoint, clientStream, connectRequest, cancellationTokenSource)
                     {
                         UserData = connectArgs?.UserData
                     };
@@ -163,7 +162,7 @@ namespace Titanium.Web.Proxy
                             // or when prefetch task has a unexpectedly different connection.
                             if (connection != null
                                 && (await tcpConnectionFactory.GetConnectionCacheKey(this, args,
-                                    clientConnection.NegotiatedApplicationProtocol)
+                                    clientStream.Connection.NegotiatedApplicationProtocol)
                                                 != connection.CacheKey))
                             {
                                 await tcpConnectionFactory.Release(connection);
@@ -171,7 +170,7 @@ namespace Titanium.Web.Proxy
                             }
 
                             var result = await handleHttpSessionRequest(args, connection,
-                                  clientConnection.NegotiatedApplicationProtocol,
+                                clientStream.Connection.NegotiatedApplicationProtocol,
                                   cancellationToken, cancellationTokenSource);
 
                             // update connection to latest used

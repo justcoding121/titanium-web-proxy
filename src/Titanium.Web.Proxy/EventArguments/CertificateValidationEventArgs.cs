@@ -10,12 +10,18 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public class CertificateValidationEventArgs : EventArgs
     {
-        public CertificateValidationEventArgs(X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        public CertificateValidationEventArgs(SessionEventArgsBase session, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
+            Session = session;
             Certificate = certificate;
             Chain = chain;
             SslPolicyErrors = sslPolicyErrors;
         }
+
+        /// <value>
+        ///     The session.
+        /// </value>
+        public SessionEventArgsBase Session { get; }
 
         /// <summary>
         ///     Server certificate.

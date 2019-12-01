@@ -6,7 +6,7 @@ namespace Titanium.Web.Proxy.Helpers
     internal partial class NativeMethods
     {
         // Keeps it from getting garbage collected
-        internal static ConsoleEventDelegate Handler;
+        internal static ConsoleEventDelegate? Handler;
 
         [DllImport("wininet.dll")]
         internal static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer,

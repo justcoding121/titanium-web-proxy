@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private bool reRequest;
 
-        private WebSocketDecoder webSocketDecoder;
+        private WebSocketDecoder? webSocketDecoder;
 
         /// <summary>
         ///     Is this session a HTTP/2 promise?
@@ -36,8 +36,8 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Constructor to initialize the proxy
         /// </summary>
-        internal SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint, TcpClientConnection clientConnection, HttpClientStream clientStream, ConnectRequest? connectRequest, CancellationTokenSource cancellationTokenSource)
-            : base(server, endPoint, clientConnection, clientStream, connectRequest, new Request(), cancellationTokenSource)
+        internal SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint, HttpClientStream clientStream, ConnectRequest? connectRequest, CancellationTokenSource cancellationTokenSource)
+            : base(server, endPoint, clientStream, connectRequest, new Request(), cancellationTokenSource)
         {
         }
 

@@ -705,7 +705,7 @@ namespace Titanium.Web.Proxy
                 throw new ArgumentNullException(nameof(endPoint));
             }
 
-            if (ProxyEndPoints.Contains(endPoint) == false)
+            if (!ProxyEndPoints.Contains(endPoint))
             {
                 throw new Exception("Cannot set endPoints not added to proxy as system proxy");
             }
@@ -739,7 +739,7 @@ namespace Titanium.Web.Proxy
             try
             {
                 // based on end point type call appropriate request handlers
-                tcpClient = endPoint.Listener.EndAcceptTcpClient(asyn);
+                tcpClient = endPoint.Listener!.EndAcceptTcpClient(asyn);
                 tcpClient.NoDelay = NoDelay;
             }
             catch (ObjectDisposedException)
@@ -763,7 +763,7 @@ namespace Titanium.Web.Proxy
             }
 
             // Get the listener that handles the client request.
-            endPoint.Listener.BeginAcceptTcpClient(onAcceptConnection, endPoint);
+            endPoint.Listener!.BeginAcceptTcpClient(onAcceptConnection, endPoint);
         }
 
 
@@ -825,7 +825,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private void quitListen(ProxyEndPoint endPoint)
         {
-            endPoint.Listener.Stop();
+            endPoint.Listener!.Stop();
             endPoint.Listener.Server.Dispose();
         }
 

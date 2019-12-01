@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Holds a reference to client
         /// </summary>
-        internal TcpClientConnection ClientConnection { get; }
+        internal TcpClientConnection ClientConnection => ClientStream.Connection;
 
         internal HttpClientStream ClientStream { get; }
 
@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy.EventArguments
         ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
         /// </summary>
         private protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
-            TcpClientConnection clientConnection, HttpClientStream clientStream, ConnectRequest? connectRequest, Request request, CancellationTokenSource cancellationTokenSource)
+            HttpClientStream clientStream, ConnectRequest? connectRequest, Request request, CancellationTokenSource cancellationTokenSource)
         {
             BufferPool = server.BufferPool;
             ExceptionFunc = server.ExceptionFunc;
@@ -58,9 +58,8 @@ namespace Titanium.Web.Proxy.EventArguments
 
             CancellationTokenSource = cancellationTokenSource;
 
-            ClientConnection = clientConnection;
             ClientStream = clientStream;
-            HttpClient = new HttpWebClient(connectRequest, request, new Lazy<int>(() => clientConnection.GetProcessId(endPoint)));
+            HttpClient = new HttpWebClient(connectRequest, request, new Lazy<int>(() => clientStream.Connection.GetProcessId(endPoint)));
             LocalEndPoint = endPoint;
             EnableWinAuth = server.EnableWinAuth && isWindowsAuthenticationSupported;
         }

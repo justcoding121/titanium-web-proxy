@@ -129,13 +129,21 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private async Task<IExternalProxy> onGetCustomUpStreamProxyFunc(SessionEventArgsBase arg)
         {
             // this is just to show the functionality, provided values are junk
-            return new ExternalProxy() { BypassLocalhost = false, HostName = "127.0.0.9", Port = 9090, Password = "fake", UserName = "fake", UseDefaultCredentials = false };
+            return new ExternalProxy
+            {
+                BypassLocalhost = false, HostName = "127.0.0.9", Port = 9090, Password = "fake", UserName = "fake",
+                UseDefaultCredentials = false
+            };
         }
 
         private async Task<IExternalProxy> onCustomUpStreamProxyFailureFunc(SessionEventArgsBase arg)
         {
             // this is just to show the functionality, provided values are junk
-            return new ExternalProxy() { BypassLocalhost = false, HostName = "127.0.0.10", Port = 9191, Password = "fake2", UserName = "fake2", UseDefaultCredentials = false };
+            return new ExternalProxy
+            {
+                BypassLocalhost = false, HostName = "127.0.0.10", Port = 9191, Password = "fake2", UserName = "fake2",
+                UseDefaultCredentials = false
+            };
         }
 
         private async Task onBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
