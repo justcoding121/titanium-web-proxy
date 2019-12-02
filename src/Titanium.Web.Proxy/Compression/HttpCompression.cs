@@ -1,4 +1,4 @@
-﻿using System.IO.Compression;
+﻿using System;
 
 namespace Titanium.Web.Proxy.Compression
 {

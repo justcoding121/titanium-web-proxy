@@ -1,7 +1,4 @@
-﻿
-
-using Titanium.Web.Proxy.Extensions;
-#if NETSTANDARD2_1
+﻿#if NETSTANDARD2_1
 /*
  * Copyright 2014 Twitter, Inc
  * This file is a derivative work modified by Ringo Leese
@@ -20,7 +17,6 @@ using Titanium.Web.Proxy.Extensions;
  */
 using System;
 using System.IO;
-using System.Text;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http2.Hpack

@@ -1,8 +1,6 @@
 ﻿// http://pinvoke.net/default.aspx/secur32/InitializeSecurityContext.html
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Titanium.Web.Proxy.Http;

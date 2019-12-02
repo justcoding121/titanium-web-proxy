@@ -2,7 +2,6 @@
 using System.Net;
 using System.Text;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Models

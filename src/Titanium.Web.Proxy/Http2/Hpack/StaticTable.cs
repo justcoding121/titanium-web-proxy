@@ -17,8 +17,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http2.Hpack

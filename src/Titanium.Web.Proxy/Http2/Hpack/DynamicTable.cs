@@ -141,7 +141,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             }
 
             Size -= removed.Size;
-            headerFields[tail++] = null;
+            headerFields[tail++] = null!;
             if (tail == headerFields.Length)
             {
                 tail = 0;
@@ -157,7 +157,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         {
             while (tail != head)
             {
-                headerFields[tail++] = null;
+                headerFields[tail++] = null!;
                 if (tail == headerFields.Length)
                 {
                     tail = 0;

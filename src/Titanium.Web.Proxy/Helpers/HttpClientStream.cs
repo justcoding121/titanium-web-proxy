@@ -3,15 +3,19 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.Helpers
 {
     internal sealed class HttpClientStream : HttpStream
     {
-        internal HttpClientStream(Stream stream, IBufferPool bufferPool) 
+        public TcpClientConnection Connection { get; }
+
+        internal HttpClientStream(TcpClientConnection connection, Stream stream, IBufferPool bufferPool) 
             : base(stream, bufferPool)
         {
+            Connection = connection;
         }
 
         /// <summary>
