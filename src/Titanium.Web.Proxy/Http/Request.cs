@@ -110,6 +110,7 @@ namespace Titanium.Web.Proxy.Http
                 {
                     var uri = new Uri(value);
                     Host = uri.Authority;
+                    Authority = ByteString.Empty;
                 }
             }
         }
