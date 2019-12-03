@@ -9,11 +9,18 @@ namespace Titanium.Web.Proxy.Helpers
 {
     internal class HttpSystemProxyValue
     {
-        internal string HostName { get; set; }
+        internal string HostName { get; }
 
-        internal int Port { get; set; }
+        internal int Port { get; }
 
-        internal ProxyProtocolType ProtocolType { get; set; }
+        internal ProxyProtocolType ProtocolType { get; }
+
+        public HttpSystemProxyValue(string hostName, int port, ProxyProtocolType protocolType)
+        {
+            HostName = hostName;
+            Port = port;
+            ProtocolType = protocolType;
+        }
 
         public override string ToString()
         {
@@ -56,7 +63,7 @@ namespace Titanium.Web.Proxy.Helpers
             AppDomain.CurrentDomain.ProcessExit += (o, args) => RestoreOriginalSettings();
             if (Environment.UserInteractive && NativeMethods.GetConsoleWindow() != IntPtr.Zero)
             {
-                NativeMethods.Handler = eventType =>
+                var handler = new NativeMethods.ConsoleEventDelegate(eventType =>
                 {
                     if (eventType != 2)
                     {
@@ -65,10 +72,11 @@ namespace Titanium.Web.Proxy.Helpers
 
                     RestoreOriginalSettings();
                     return false;
-                };
+                });
+                NativeMethods.Handler = handler;
 
                 // On Console exit make sure we also exit the proxy
-                NativeMethods.SetConsoleCtrlHandler(NativeMethods.Handler, true);
+                NativeMethods.SetConsoleCtrlHandler(handler, true);
             }
         }
 
@@ -95,22 +103,12 @@ namespace Titanium.Web.Proxy.Helpers
                 existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);
                 if ((protocolType & ProxyProtocolType.Http) != 0)
                 {
-                    existingSystemProxyValues.Add(new HttpSystemProxyValue
-                    {
-                        HostName = hostname,
-                        ProtocolType = ProxyProtocolType.Http,
-                        Port = port
-                    });
+                    existingSystemProxyValues.Add(new HttpSystemProxyValue(hostname, port, ProxyProtocolType.Http));
                 }
 
                 if ((protocolType & ProxyProtocolType.Https) != 0)
                 {
-                    existingSystemProxyValues.Add(new HttpSystemProxyValue
-                    {
-                        HostName = hostname,
-                        ProtocolType = ProxyProtocolType.Https,
-                        Port = port
-                    });
+                    existingSystemProxyValues.Add(new HttpSystemProxyValue(hostname, port, ProxyProtocolType.Https));
                 }
 
                 reg.DeleteValue(regAutoConfigUrl, false);

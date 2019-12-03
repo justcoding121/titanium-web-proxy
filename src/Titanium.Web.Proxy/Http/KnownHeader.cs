@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.Http
             return String.AsSpan().EqualsIgnoreCase(value);
         }
 
-        internal bool Equals(string value)
+        internal bool Equals(string? value)
         {
             return String.EqualsIgnoreCase(value);
         }

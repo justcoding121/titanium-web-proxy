@@ -5,7 +5,6 @@ using System.Threading;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Network;
@@ -18,7 +17,7 @@ namespace Titanium.Web.Proxy.EventArguments
     ///     A proxy session ends when client terminates connection to proxy
     ///     or when server terminates connection from proxy.
     /// </summary>
-    public abstract class SessionEventArgsBase : EventArgs, IDisposable
+    public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     {
         private static bool isWindowsAuthenticationSupported => RunTime.IsWindows;
 
@@ -29,7 +28,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Holds a reference to client
         /// </summary>
-        internal TcpClientConnection ClientConnection { get; }
+        internal TcpClientConnection ClientConnection => ClientStream.Connection;
 
         internal HttpClientStream ClientStream { get; }
 
@@ -50,7 +49,7 @@ namespace Titanium.Web.Proxy.EventArguments
         ///     Initializes a new instance of the <see cref="SessionEventArgsBase" /> class.
         /// </summary>
         private protected SessionEventArgsBase(ProxyServer server, ProxyEndPoint endPoint,
-            TcpClientConnection clientConnection, HttpClientStream clientStream, ConnectRequest? connectRequest, Request request, CancellationTokenSource cancellationTokenSource)
+            HttpClientStream clientStream, ConnectRequest? connectRequest, Request request, CancellationTokenSource cancellationTokenSource) : base(clientStream.Connection)
         {
             BufferPool = server.BufferPool;
             ExceptionFunc = server.ExceptionFunc;
@@ -58,9 +57,8 @@ namespace Titanium.Web.Proxy.EventArguments
 
             CancellationTokenSource = cancellationTokenSource;
 
-            ClientConnection = clientConnection;
             ClientStream = clientStream;
-            HttpClient = new HttpWebClient(connectRequest, request, new Lazy<int>(() => clientConnection.GetProcessId(endPoint)));
+            HttpClient = new HttpWebClient(connectRequest, request, new Lazy<int>(() => clientStream.Connection.GetProcessId(endPoint)));
             LocalEndPoint = endPoint;
             EnableWinAuth = server.EnableWinAuth && isWindowsAuthenticationSupported;
         }

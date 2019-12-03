@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.IO.Compression;
-using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Compression
 {

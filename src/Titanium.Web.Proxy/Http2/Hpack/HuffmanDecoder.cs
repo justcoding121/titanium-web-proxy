@@ -17,7 +17,6 @@
 
 using System;
 using System.IO;
-using System.Text;
 
 namespace Titanium.Web.Proxy.Http2.Hpack
 {

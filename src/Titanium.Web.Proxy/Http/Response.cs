@@ -1,8 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
-using System.Text;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http

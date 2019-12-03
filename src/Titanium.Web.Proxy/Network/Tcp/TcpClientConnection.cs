@@ -16,6 +16,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
     /// </summary>
     internal class TcpClientConnection : IDisposable
     {
+        public object ClientUserData { get; set; }
+
         internal TcpClientConnection(ProxyServer proxyServer, TcpClient tcpClient)
         {
             this.tcpClient = tcpClient;

@@ -1,7 +1,6 @@
 ﻿using System.IO;
 using System.Text;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Shared;
 
 namespace Titanium.Web.Proxy.IntegrationTests.Helpers
 {

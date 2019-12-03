@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http
