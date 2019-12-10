@@ -673,11 +673,6 @@ namespace Titanium.Web.Proxy.Helpers
                     bufferLength += readBytes;
                 }
             }
-            catch (ObjectDisposedException)
-            {
-                if (!isNetworkStream)
-                    throw;
-            }
             catch
             {
                 if (!isNetworkStream)
