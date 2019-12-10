@@ -272,7 +272,7 @@ namespace Titanium.Web.Proxy
                     cancellationToken);
 
             // for connection pool, retry fails until cache is exhausted.   
-            return await retryPolicy<ServerConnectionException>().ExecuteAsync(async (connection) =>
+            return await retryPolicy<ServerConnectionException>().ExecuteAsync(async connection =>
             {
                 // set the connection and send request headers
                 args.HttpClient.SetConnection(connection);

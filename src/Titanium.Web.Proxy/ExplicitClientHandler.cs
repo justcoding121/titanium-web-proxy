@@ -33,13 +33,11 @@ namespace Titanium.Web.Proxy
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
 
-            var clientStream = new HttpClientStream(clientConnection, clientConnection.GetStream(), BufferPool);
+            var clientStream = new HttpClientStream(clientConnection, clientConnection.GetStream(), BufferPool, cancellationToken);
 
             Task<TcpServerConnection>? prefetchConnectionTask = null;
             bool closeServerConnection = false;
             bool calledRequestHandler = false;
-
-            SslStream? sslStream = null;
 
             try
             {
@@ -191,6 +189,7 @@ namespace Titanium.Web.Proxy
                         }
 
                         X509Certificate2? certificate = null;
+                        SslStream? sslStream = null;
                         try
                         {
                             sslStream = new SslStream(clientStream, false);
@@ -221,7 +220,7 @@ namespace Titanium.Web.Proxy
 #endif
 
                             // HTTPS server created - we can now decrypt the client's traffic
-                            clientStream = new HttpClientStream(clientStream.Connection, sslStream, BufferPool);
+                            clientStream = new HttpClientStream(clientStream.Connection, sslStream, BufferPool, cancellationToken);
                             sslStream = null; // clientStream was created, no need to keep SSL stream reference
 
                             clientStream.DataRead += (o, args) => connectArgs.OnDecryptedDataSent(args.Buffer, args.Offset, args.Count);
@@ -229,6 +228,8 @@ namespace Titanium.Web.Proxy
                         }
                         catch (Exception e)
                         {
+                            sslStream?.Dispose();
+
                             var certName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
                             throw new ProxyConnectException(
                                 $"Couldn't authenticate host '{connectHostname}' with certificate '{certName}'.", e, connectArgs);
@@ -401,12 +402,16 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
+                if (!cancellationTokenSource.IsCancellationRequested)
+                {
+                    cancellationTokenSource.Cancel();
+                }
+
                 if (!calledRequestHandler)
                 {
                     await tcpConnectionFactory.Release(prefetchConnectionTask, closeServerConnection);
                 }
 
-                sslStream?.Dispose();
                 clientStream.Dispose();
             }
         }

@@ -445,7 +445,7 @@ retry:
 
                 await proxyServer.InvokeServerConnectionCreateEvent(tcpClient);
 
-                stream = new HttpServerStream(tcpClient.GetStream(), proxyServer.BufferPool);
+                stream = new HttpServerStream(tcpClient.GetStream(), proxyServer.BufferPool, cancellationToken);
 
                 if (externalProxy != null && (isConnect || isHttps))
                 {
@@ -487,7 +487,7 @@ retry:
                         (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
                             proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost, localCertificates,
                                 remoteCertificate, acceptableIssuers));
-                    stream = new HttpServerStream(sslStream, proxyServer.BufferPool);
+                    stream = new HttpServerStream(sslStream, proxyServer.BufferPool, cancellationToken);
 
                     var options = new SslClientAuthenticationOptions
                     {
