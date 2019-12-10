@@ -36,6 +36,8 @@ namespace Titanium.Web.Proxy.Http
         /// </summary>
         public string StatusDescription { get; set; } = string.Empty;
 
+        internal string RequestMethod { get; set; }
+
         /// <summary>
         ///     Has response body?
         /// </summary>
@@ -43,6 +45,11 @@ namespace Titanium.Web.Proxy.Http
         {
             get
             {
+                if (RequestMethod == "HEAD")
+                {
+                    return false;
+                }
+
                 long contentLength = ContentLength;
 
                 // If content length is set to 0 the response has no body

@@ -166,6 +166,8 @@ namespace Titanium.Web.Proxy.Http
                 return;
             }
 
+            Response.RequestMethod = Request.Method;
+
             var httpStatus = await Connection.Stream.ReadResponseStatus(cancellationToken);
             Response.HttpVersion = httpStatus.Version;
             Response.StatusCode = httpStatus.StatusCode;
