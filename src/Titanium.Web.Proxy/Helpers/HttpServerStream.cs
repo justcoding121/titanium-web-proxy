@@ -10,8 +10,8 @@ namespace Titanium.Web.Proxy.Helpers
 {
     internal sealed class HttpServerStream : HttpStream
     {
-        internal HttpServerStream(Stream stream, IBufferPool bufferPool)
-            : base(stream, bufferPool)
+        internal HttpServerStream(Stream stream, IBufferPool bufferPool, CancellationToken cancellationToken)
+            : base(stream, bufferPool, cancellationToken)
         {
         }
 

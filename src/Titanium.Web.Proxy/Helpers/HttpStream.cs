@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
@@ -19,7 +20,7 @@ namespace Titanium.Web.Proxy.Helpers
 {
     internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekStream
     {
-        private readonly bool swallowException;
+        private readonly bool isNetworkStream;
         private readonly bool leaveOpen;
         private readonly byte[] streamBuffer;
 
@@ -37,6 +38,7 @@ namespace Titanium.Web.Proxy.Helpers
         private bool closedRead;
 
         private readonly IBufferPool bufferPool;
+        private readonly CancellationToken cancellationToken;
 
         public event EventHandler<DataEventArgs>? DataRead;
 
@@ -71,18 +73,20 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="baseStream">The base stream.</param>
         /// <param name="bufferPool">Bufferpool.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
         /// <param name="leaveOpen"><see langword="true" /> to leave the stream open after disposing the <see cref="T:CustomBufferedStream" /> object; otherwise, <see langword="false" />.</param>
-        internal HttpStream(Stream baseStream, IBufferPool bufferPool, bool leaveOpen = false)
+        internal HttpStream(Stream baseStream, IBufferPool bufferPool, CancellationToken cancellationToken, bool leaveOpen = false)
         {
             if (baseStream is NetworkStream)
             {
-                swallowException = true;
+                isNetworkStream = true;
             }
 
             this.baseStream = baseStream;
             this.leaveOpen = leaveOpen;
             streamBuffer = bufferPool.GetBuffer();
             this.bufferPool = bufferPool;
+            this.cancellationToken = cancellationToken;
         }
 
         /// <summary>
@@ -102,7 +106,7 @@ namespace Titanium.Web.Proxy.Helpers
             catch
             {
                 closedWrite = true;
-                if (!swallowException)
+                if (!isNetworkStream)
                     throw;
             }
         }
@@ -181,7 +185,7 @@ namespace Titanium.Web.Proxy.Helpers
             catch
             {
                 closedWrite = true;
-                if (!swallowException)
+                if (!isNetworkStream)
                     throw;
             }
         }
@@ -228,7 +232,7 @@ namespace Titanium.Web.Proxy.Helpers
             catch
             {
                 closedWrite = true;
-                if (!swallowException)
+                if (!isNetworkStream)
                     throw;
             }
         }
@@ -450,7 +454,7 @@ namespace Titanium.Web.Proxy.Helpers
             catch
             {
                 closedWrite = true;
-                if (!swallowException)
+                if (!isNetworkStream)
                     throw;
             }
         }
@@ -476,7 +480,7 @@ namespace Titanium.Web.Proxy.Helpers
             catch
             {
                 closedWrite = true;
-                if (!swallowException)
+                if (!isNetworkStream)
                     throw;
             }
             finally
@@ -609,7 +613,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
             catch
             {
-                if (!swallowException)
+                if (!isNetworkStream)
                     throw;
             }
             finally
@@ -655,7 +659,13 @@ namespace Titanium.Web.Proxy.Helpers
             bool result = false;
             try
             {
-                int readBytes = await baseStream.ReadAsync(streamBuffer, bufferLength, bytesToRead, cancellationToken);
+                var readTask = baseStream.ReadAsync(streamBuffer, bufferLength, bytesToRead, cancellationToken);
+                if (isNetworkStream)
+                {
+                    readTask = readTask.WithCancellation(cancellationToken);
+                }
+
+                int readBytes = await readTask;
                 result = readBytes > 0;
                 if (result)
                 {
@@ -663,9 +673,14 @@ namespace Titanium.Web.Proxy.Helpers
                     bufferLength += readBytes;
                 }
             }
+            catch (ObjectDisposedException)
+            {
+                if (!isNetworkStream)
+                    throw;
+            }
             catch
             {
-                if (!swallowException)
+                if (!isNetworkStream)
                     throw;
             }
             finally
@@ -771,14 +786,18 @@ namespace Titanium.Web.Proxy.Helpers
                 return base.BeginRead(buffer, offset, count, callback, state);
             }
 
-            var vAsyncResult = this.ReadAsync(buffer, offset, count);
+            var vAsyncResult = this.ReadAsync(buffer, offset, count, cancellationToken);
+            if (isNetworkStream)
+            {
+                vAsyncResult = vAsyncResult.WithCancellation(cancellationToken);
+            }
 
             vAsyncResult.ContinueWith(pAsyncResult =>
             {
                 // use TaskExtended to pass State as AsyncObject
                 // callback will call EndRead (otherwise, it will block)
                 callback?.Invoke(new TaskResult<int>(pAsyncResult, state));
-            });
+            }, cancellationToken);
 
             return vAsyncResult;
         }
@@ -811,12 +830,12 @@ namespace Titanium.Web.Proxy.Helpers
                 return base.BeginWrite(buffer, offset, count, callback, state);
             }
 
-            var vAsyncResult = this.WriteAsync(buffer, offset, count);
+            var vAsyncResult = this.WriteAsync(buffer, offset, count, cancellationToken);
 
             vAsyncResult.ContinueWith(pAsyncResult =>
             {
                 callback?.Invoke(new TaskResult(pAsyncResult, state));
-            });
+            }, cancellationToken);
 
             return vAsyncResult;
         }
@@ -868,7 +887,7 @@ namespace Titanium.Web.Proxy.Helpers
                 catch
                 {
                     closedWrite = true;
-                    if (!swallowException)
+                    if (!isNetworkStream)
                         throw;
                 }
                 finally
@@ -893,7 +912,7 @@ namespace Titanium.Web.Proxy.Helpers
                 catch
                 {
                     closedWrite = true;
-                    if (!swallowException)
+                    if (!isNetworkStream)
                         throw;
                 }
             }
@@ -940,7 +959,7 @@ namespace Titanium.Web.Proxy.Helpers
             catch
             {
                 closedWrite = true;
-                if (!swallowException)
+                if (!isNetworkStream)
                     throw;
             }
         }
@@ -964,7 +983,7 @@ namespace Titanium.Web.Proxy.Helpers
             catch
             {
                 closedWrite = true;
-                if (!swallowException)
+                if (!isNetworkStream)
                     throw;
             }
         }
@@ -1011,7 +1030,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             try
             {
-                var http = new HttpStream(s, bufferPool, true);
+                var http = new HttpStream(s, bufferPool, cancellationToken, true);
                 await http.CopyBodyAsync(writer, false, -1, onCopy, cancellationToken);
             }
             finally
@@ -1196,7 +1215,7 @@ namespace Titanium.Web.Proxy.Helpers
             catch
             {
                 closedWrite = true;
-                if (!swallowException)
+                if (!isNetworkStream)
                     throw;
             }
         }
@@ -1217,7 +1236,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
             catch
             {
-                if (!swallowException)
+                if (!isNetworkStream)
                     throw;
             }
         }
