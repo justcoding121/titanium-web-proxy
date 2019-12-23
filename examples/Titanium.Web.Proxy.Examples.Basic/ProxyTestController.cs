@@ -207,6 +207,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             e.GetState().PipelineInfo.AppendLine(nameof(onRequest) + ":" + e.HttpClient.Request.RequestUri);
 
+            if (e.HttpClient.Request.Url.Contains("yahoo.com"))
+            {
+                e.CustomUpStreamProxy = new ExternalProxy("localhost", 8888);
+            }
+
             await writeToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
             await writeToConsole(e.HttpClient.Request.Url);
 

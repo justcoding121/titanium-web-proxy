@@ -115,6 +115,14 @@ namespace Titanium.Web.Proxy.EventArguments
         public HttpWebClient WebSession => HttpClient;
 
         /// <summary>
+        ///     Gets or sets the custom up stream proxy.
+        /// </summary>
+        /// <value>
+        ///     The custom up stream proxy.
+        /// </value>
+        public IExternalProxy? CustomUpStreamProxy { get; set; }
+
+        /// <summary>
         ///     Are we using a custom upstream HTTP(S) proxy?
         /// </summary>
         public IExternalProxy? CustomUpStreamProxyUsed { get; internal set; }

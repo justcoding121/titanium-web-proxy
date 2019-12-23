@@ -70,6 +70,39 @@ namespace Titanium.Web.Proxy.Models
         public int Port { get; set; }
 
         /// <summary>
+        ///     Initializes a new instance of the <see cref="ExternalProxy"/> class.
+        /// </summary>
+        public ExternalProxy()
+        {
+        }
+
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="ExternalProxy"/> class.
+        /// </summary>
+        /// <param name="hostName">Name of the host.</param>
+        /// <param name="port">The port.</param>
+        public ExternalProxy(string hostName, int port)
+        {
+            HostName = hostName; 
+            Port = port;
+        }
+
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="ExternalProxy"/> class.
+        /// </summary>
+        /// <param name="hostName">Name of the host.</param>
+        /// <param name="port">The port.</param>
+        /// <param name="userName">Name of the user.</param>
+        /// <param name="password">The password.</param>
+        public ExternalProxy(string hostName, int port, string userName, string password)
+        {
+            HostName = hostName;
+            Port = port;
+            UserName = userName;
+            Password = password;
+        }
+
+        /// <summary>
         ///     returns data in Hostname:port format.
         /// </summary>
         /// <returns></returns>
@@ -77,6 +110,5 @@ namespace Titanium.Web.Proxy.Models
         {
             return $"{HostName}:{Port}";
         }
-
     }
 }
