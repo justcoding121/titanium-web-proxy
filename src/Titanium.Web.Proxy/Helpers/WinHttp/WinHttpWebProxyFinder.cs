@@ -114,11 +114,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                 }
 
                 // TODO: Apply authorization
-                var systemProxy = new ExternalProxy
-                {
-                    HostName = proxyStr,
-                    Port = port
-                };
+                var systemProxy = new ExternalProxy(proxyStr, port);
 
                 return systemProxy;
             }
@@ -134,12 +130,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                 HttpSystemProxyValue? value = null;
                 if (ProxyInfo?.Proxies?.TryGetValue(protocolType.Value, out value) == true)
                 {
-                    var systemProxy = new ExternalProxy
-                    {
-                        HostName = value!.HostName,
-                        Port = value.Port
-                    };
-
+                    var systemProxy = new ExternalProxy(value!.HostName, value.Port);
                     return systemProxy;
                 }
             }

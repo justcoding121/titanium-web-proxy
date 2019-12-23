@@ -175,7 +175,7 @@ namespace Titanium.Web.Proxy
             // Add custom div to body to clarify that the proxy (not the client browser) failed authentication
             string authErrorMessage =
                 "<div class=\"inserted-by-proxy\"><h2>NTLM authentication through Titanium.Web.Proxy (" +
-                args.ClientConnection.LocalEndPoint +
+                args.ClientLocalEndPoint +
                 ") failed. Please check credentials.</h2></div>";
             string originalErrorMessage =
                 "<div class=\"inserted-by-proxy\"><h3>Response from remote web server below.</h3></div><br/>";

@@ -22,17 +22,8 @@ namespace Titanium.Web.Proxy.IntegrationTests.Setup
 
             if (upStreamProxy != null)
             {
-                ProxyServer.UpStreamHttpProxy = new ExternalProxy
-                {
-                    HostName = "localhost",
-                    Port = upStreamProxy.ProxyEndPoints[0].Port
-                };
-
-                ProxyServer.UpStreamHttpsProxy = new ExternalProxy
-                {
-                    HostName = "localhost",
-                    Port = upStreamProxy.ProxyEndPoints[0].Port
-                };
+                ProxyServer.UpStreamHttpProxy = new ExternalProxy("localhost", upStreamProxy.ProxyEndPoints[0].Port);
+                ProxyServer.UpStreamHttpsProxy = new ExternalProxy("localhost", upStreamProxy.ProxyEndPoints[0].Port);
             }
 
             ProxyServer.Start();

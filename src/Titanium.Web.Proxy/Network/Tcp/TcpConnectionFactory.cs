@@ -114,10 +114,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
             }
 
-            IExternalProxy? customUpStreamProxy = null;
+            IExternalProxy? customUpStreamProxy = session.CustomUpStreamProxy;
 
             bool isHttps = session.IsHttps;
-            if (server.GetCustomUpStreamProxyFunc != null)
+            if (customUpStreamProxy == null && server.GetCustomUpStreamProxyFunc != null)
             {
                 customUpStreamProxy = await server.GetCustomUpStreamProxyFunc(session);
             }
@@ -169,10 +169,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal async Task<TcpServerConnection> GetServerConnection(ProxyServer proxyServer, SessionEventArgsBase session, bool isConnect,
             List<SslApplicationProtocol>? applicationProtocols, bool noCache, CancellationToken cancellationToken)
         {
-            IExternalProxy? customUpStreamProxy = null;
+            IExternalProxy? customUpStreamProxy = session.CustomUpStreamProxy;
 
             bool isHttps = session.IsHttps;
-            if (proxyServer.GetCustomUpStreamProxyFunc != null)
+            if (customUpStreamProxy == null && proxyServer.GetCustomUpStreamProxyFunc != null)
             {
                 customUpStreamProxy = await proxyServer.GetCustomUpStreamProxyFunc(session);
             }
