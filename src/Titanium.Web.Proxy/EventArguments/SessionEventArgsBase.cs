@@ -94,9 +94,14 @@ namespace Titanium.Web.Proxy.EventArguments
         public bool IsHttps => HttpClient.Request.IsHttps;
 
         /// <summary>
-        ///     Client End Point.
+        ///     Client Local End Point.
         /// </summary>
-        public IPEndPoint ClientEndPoint => (IPEndPoint)ClientConnection.RemoteEndPoint;
+        public IPEndPoint ClientLocalEndPoint => (IPEndPoint)ClientConnection.LocalEndPoint;
+
+        /// <summary>
+        ///     Client Remote End Point.
+        /// </summary>
+        public IPEndPoint ClientRemoteEndPoint => (IPEndPoint)ClientConnection.RemoteEndPoint;
 
         /// <summary>
         ///    The web client used to communicate with server for this session.

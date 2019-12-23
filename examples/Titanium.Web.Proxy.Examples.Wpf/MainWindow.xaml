@@ -31,7 +31,7 @@
                     <GridViewColumn Header="Process" DisplayMemberBinding="{Binding Process}" />
                     <GridViewColumn Header="SentBytes" DisplayMemberBinding="{Binding SentDataCount}" />
                     <GridViewColumn Header="ReceivedBytes" DisplayMemberBinding="{Binding ReceivedDataCount}" />
-                    <GridViewColumn Header="ClientEndPoint" DisplayMemberBinding="{Binding ClientEndPoint}" />
+                    <GridViewColumn Header="ClientRemoteEndPoint" DisplayMemberBinding="{Binding ClientRemoteEndPoint}" />
                     <GridViewColumn Header="ClientConnectionId" DisplayMemberBinding="{Binding ClientConnectionId}" />
                     <GridViewColumn Header="ServerConnectionId" DisplayMemberBinding="{Binding ServerConnectionId}" />
                 </GridView>

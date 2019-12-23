@@ -229,7 +229,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 ClientConnectionId = e.ClientConnectionId,
                 ServerConnectionId = e.ServerConnectionId,
                 HttpClient = e.HttpClient,
-                ClientEndPoint = e.ClientEndPoint,
+                ClientRemoteEndPoint = e.ClientRemoteEndPoint,
+                ClientLocalEndPoint = e.ClientLocalEndPoint,
                 IsTunnelConnect = isTunnelConnect
             };
 

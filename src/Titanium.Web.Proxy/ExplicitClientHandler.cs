@@ -37,7 +37,6 @@ namespace Titanium.Web.Proxy
 
             Task<TcpServerConnection>? prefetchConnectionTask = null;
             bool closeServerConnection = false;
-            bool calledRequestHandler = false;
 
             try
             {
@@ -375,10 +374,11 @@ namespace Titanium.Web.Proxy
                     }
                 }
 
-                calledRequestHandler = true;
+                var prefetchTask = prefetchConnectionTask;
+                prefetchConnectionTask = null;
 
                 // Now create the request
-                await handleHttpSessionRequest(endPoint, clientStream, cancellationTokenSource, connectArgs, prefetchConnectionTask);
+                await handleHttpSessionRequest(endPoint, clientStream, cancellationTokenSource, connectArgs, prefetchTask);
             }
             catch (ProxyException e)
             {
@@ -407,10 +407,7 @@ namespace Titanium.Web.Proxy
                     cancellationTokenSource.Cancel();
                 }
 
-                if (!calledRequestHandler)
-                {
-                    await tcpConnectionFactory.Release(prefetchConnectionTask, closeServerConnection);
-                }
+                await tcpConnectionFactory.Release(prefetchConnectionTask, closeServerConnection);
 
                 clientStream.Dispose();
             }
