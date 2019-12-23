@@ -8,6 +8,10 @@ namespace Titanium.Web.Proxy.Helpers
     {
         public static NullWriter Instance { get; } = new NullWriter();
 
+        private NullWriter()
+        {
+        }
+
         public void Write(byte[] buffer, int offset, int count)
         {
         }

@@ -38,7 +38,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         public HttpWebClient HttpClient { get; set; }
 
-        public IPEndPoint ClientEndPoint { get; set; }
+        public IPEndPoint ClientLocalEndPoint { get; set; }
+
+        public IPEndPoint ClientRemoteEndPoint { get; set; }
 
         public bool IsTunnelConnect { get; set; }
 

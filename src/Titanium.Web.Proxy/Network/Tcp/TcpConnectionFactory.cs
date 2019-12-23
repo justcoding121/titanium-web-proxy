@@ -580,20 +580,22 @@ retry:
 
         internal async Task Release(Task<TcpServerConnection>? connectionCreateTask, bool closeServerConnection)
         {
-            if (connectionCreateTask != null)
+            if (connectionCreateTask == null)
             {
-                TcpServerConnection? connection = null;
-                try
+                return;
+            }
+
+            TcpServerConnection? connection = null;
+            try
+            {
+                connection = await connectionCreateTask;
+            }
+            catch { }
+            finally
+            {
+                if (connection != null)
                 {
-                    connection = await connectionCreateTask;
-                }
-                catch { }
-                finally
-                {
-                    if (connection != null)
-                    {
-                        await Release(connection, closeServerConnection);
-                    }
+                    await Release(connection, closeServerConnection);
                 }
             }
         }
