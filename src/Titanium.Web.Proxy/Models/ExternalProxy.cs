@@ -25,6 +25,8 @@ namespace Titanium.Web.Proxy.Models
         /// </summary>
         public bool BypassLocalhost { get; set; }
 
+        public ExternalProxyType ProxyType { get; set; }
+
         /// <summary>
         ///     Username.
         /// </summary>
@@ -110,5 +112,17 @@ namespace Titanium.Web.Proxy.Models
         {
             return $"{HostName}:{Port}";
         }
+    }
+
+    public enum ExternalProxyType
+    {        
+        /// <summary>A HTTP/HTTPS proxy server.</summary>
+        Http,
+
+        /// <summary>A SOCKS4[A] proxy server.</summary>
+        Socks4,
+
+        /// <summary>A SOCKS5 proxy server.</summary>
+        Socks5
     }
 }

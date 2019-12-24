@@ -12,6 +12,8 @@
         /// </summary>
         bool BypassLocalhost { get; set; }
 
+        ExternalProxyType ProxyType { get; set; }
+
         /// <summary>
         ///     Username.
         /// </summary>

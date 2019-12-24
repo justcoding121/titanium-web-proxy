@@ -2,6 +2,7 @@
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy.Http
@@ -103,9 +104,13 @@ namespace Titanium.Web.Proxy.Http
         {
             var upstreamProxy = Connection.UpStreamProxy;
 
-            bool useUpstreamProxy = upstreamProxy != null && Connection.IsHttps == false;
+            bool useUpstreamProxy = upstreamProxy != null && upstreamProxy.ProxyType == ExternalProxyType.Http &&
+                                    !Connection.IsHttps;
 
             var serverStream = Connection.Stream;
+
+            string? upstreamProxyUserName = null;
+            string? upstreamProxyPassword = null;
 
             string url;
             if (!useUpstreamProxy || isTransparent)
@@ -115,19 +120,13 @@ namespace Titanium.Web.Proxy.Http
             else
             {
                 url = Request.RequestUri.ToString();
-            }
 
-            string? upstreamProxyUserName = null;
-            string? upstreamProxyPassword = null;
-
-            // Send Authentication to Upstream proxy if needed
-            if (!isTransparent && upstreamProxy != null
-                               && Connection.IsHttps == false
-                               && !string.IsNullOrEmpty(upstreamProxy.UserName)
-                               && upstreamProxy.Password != null)
-            {
-                upstreamProxyUserName = upstreamProxy.UserName;
-                upstreamProxyPassword = upstreamProxy.Password;
+                // Send Authentication to Upstream proxy if needed
+                if (!string.IsNullOrEmpty(upstreamProxy!.UserName) && upstreamProxy.Password != null)
+                {
+                    upstreamProxyUserName = upstreamProxy.UserName;
+                    upstreamProxyPassword = upstreamProxy.Password;
+                }
             }
 
             // prepare the request & headers
