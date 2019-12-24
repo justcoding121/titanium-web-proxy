@@ -395,55 +395,9 @@ retry:
                             tcpServerSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                         }
 
-                        Task connectTask;
-                        if (socks)
-                        {
-                            var clientSocket = (ProxySocket.ProxySocket)tcpServerSocket;
-
-                            IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback requestCallback,
-                                object state)
-                            {
-                                return clientSocket.BeginConnect(address, port, requestCallback, state);
-                            }
-
-                            void EndConnect(IAsyncResult asyncResult)
-                            {
-                                var s = clientSocket;
-                                if (s == null)
-                                {
-                                    // Dispose nulls out the client socket field.
-                                    throw new ObjectDisposedException(GetType().Name);
-                                }
-
-                                s.EndConnect(asyncResult);
-                            }
-
-                            connectTask = Task.Factory.FromAsync(BeginConnect, EndConnect, ipAddress, port, state: this);
-                        }
-                        else
-                        {
-                            var clientSocket = tcpServerSocket;
-
-                            IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback requestCallback,
-                                object state)
-                            {
-                                return clientSocket.BeginConnect(address, port, requestCallback, state);
-                            }
-
-                            void EndConnect(IAsyncResult asyncResult)
-                            {
-                                var s = clientSocket;
-                                if (s == null)
-                                {
-                                    // Dispose nulls out the client socket field.
-                                    throw new ObjectDisposedException(GetType().Name);
-                                }
-
-                                s.EndConnect(asyncResult);
-                            }
-
-                            connectTask = Task.Factory.FromAsync(BeginConnect, EndConnect, ipAddress, port, state: this);
-                        }
+                        var connectTask = socks 
+                            ? ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)tcpServerSocket, ipAddress, port) 
+                            : SocketConnectionTaskFactory.CreateTask(tcpServerSocket, ipAddress, port);
 
                         await Task.WhenAny(connectTask, Task.Delay(proxyServer.ConnectTimeOutSeconds * 1000, cancellationToken));
                         if (!connectTask.IsCompleted || !tcpServerSocket.Connected)
@@ -765,6 +719,44 @@ retry:
                 {
                     connection?.Dispose();
                 }
+            }
+        }
+
+        static class SocketConnectionTaskFactory
+        {
+            static IAsyncResult beginConnect(IPAddress address, int port, AsyncCallback requestCallback,
+                object state)
+            {
+                return ((Socket)state).BeginConnect(address, port, requestCallback, state);
+            }
+
+            static void endConnect(IAsyncResult asyncResult)
+            {
+                ((Socket)asyncResult.AsyncState).EndConnect(asyncResult);
+            }
+            
+            public static Task CreateTask(Socket socket, IPAddress ipAddress, int port)
+            {
+                return Task.Factory.FromAsync(beginConnect, endConnect, ipAddress, port, state: socket);
+            }
+        }
+
+        static class ProxySocketConnectionTaskFactory
+        {
+            static IAsyncResult beginConnect(IPAddress address, int port, AsyncCallback requestCallback,
+                object state)
+            {
+                return ((ProxySocket.ProxySocket)state).BeginConnect(address, port, requestCallback, state);
+            }
+
+            static void endConnect(IAsyncResult asyncResult)
+            {
+                ((ProxySocket.ProxySocket)asyncResult.AsyncState).EndConnect(asyncResult);
+            }
+
+            public static Task CreateTask(ProxySocket.ProxySocket socket, IPAddress ipAddress, int port)
+            {
+                return Task.Factory.FromAsync(beginConnect, endConnect, ipAddress, port, state: socket);
             }
         }
     }

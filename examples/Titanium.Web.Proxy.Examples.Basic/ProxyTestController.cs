@@ -91,7 +91,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             //proxyServer.AddEndPoint(transparentEndPoint);
             //proxyServer.UpStreamHttpProxy = new ExternalProxy("localhost", 8888);
-            //proxyServer.UpStreamHttpsProxy = new ExternalProxy("localhost", 8888( });
+            //proxyServer.UpStreamHttpsProxy = new ExternalProxy("localhost", 8888);
 
             // SOCKS proxy
             //proxyServer.UpStreamHttpProxy = new ExternalProxy("46.63.0.17", 4145) { ProxyType = ExternalProxyType.Socks4 };
