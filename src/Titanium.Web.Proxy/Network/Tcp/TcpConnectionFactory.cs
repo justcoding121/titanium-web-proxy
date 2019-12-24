@@ -114,10 +114,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
             }
 
-            IExternalProxy? customUpStreamProxy = null;
+            IExternalProxy? customUpStreamProxy = session.CustomUpStreamProxy;
 
             bool isHttps = session.IsHttps;
-            if (server.GetCustomUpStreamProxyFunc != null)
+            if (customUpStreamProxy == null && server.GetCustomUpStreamProxyFunc != null)
             {
                 customUpStreamProxy = await server.GetCustomUpStreamProxyFunc(session);
             }
@@ -169,10 +169,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal async Task<TcpServerConnection> GetServerConnection(ProxyServer proxyServer, SessionEventArgsBase session, bool isConnect,
             List<SslApplicationProtocol>? applicationProtocols, bool noCache, CancellationToken cancellationToken)
         {
-            IExternalProxy? customUpStreamProxy = null;
+            IExternalProxy? customUpStreamProxy = session.CustomUpStreamProxy;
 
             bool isHttps = session.IsHttps;
-            if (proxyServer.GetCustomUpStreamProxyFunc != null)
+            if (customUpStreamProxy == null && proxyServer.GetCustomUpStreamProxyFunc != null)
             {
                 customUpStreamProxy = await proxyServer.GetCustomUpStreamProxyFunc(session);
             }
@@ -445,7 +445,7 @@ retry:
 
                 await proxyServer.InvokeServerConnectionCreateEvent(tcpClient);
 
-                stream = new HttpServerStream(tcpClient.GetStream(), proxyServer.BufferPool);
+                stream = new HttpServerStream(tcpClient.GetStream(), proxyServer.BufferPool, cancellationToken);
 
                 if (externalProxy != null && (isConnect || isHttps))
                 {
@@ -487,7 +487,7 @@ retry:
                         (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
                             proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost, localCertificates,
                                 remoteCertificate, acceptableIssuers));
-                    stream = new HttpServerStream(sslStream, proxyServer.BufferPool);
+                    stream = new HttpServerStream(sslStream, proxyServer.BufferPool, cancellationToken);
 
                     var options = new SslClientAuthenticationOptions
                     {
@@ -580,20 +580,22 @@ retry:
 
         internal async Task Release(Task<TcpServerConnection>? connectionCreateTask, bool closeServerConnection)
         {
-            if (connectionCreateTask != null)
+            if (connectionCreateTask == null)
             {
-                TcpServerConnection? connection = null;
-                try
+                return;
+            }
+
+            TcpServerConnection? connection = null;
+            try
+            {
+                connection = await connectionCreateTask;
+            }
+            catch { }
+            finally
+            {
+                if (connection != null)
                 {
-                    connection = await connectionCreateTask;
-                }
-                catch { }
-                finally
-                {
-                    if (connection != null)
-                    {
-                        await Release(connection, closeServerConnection);
-                    }
+                    await Release(connection, closeServerConnection);
                 }
             }
         }

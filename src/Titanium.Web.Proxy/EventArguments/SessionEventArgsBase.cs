@@ -59,7 +59,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             ClientStream = clientStream;
             HttpClient = new HttpWebClient(connectRequest, request, new Lazy<int>(() => clientStream.Connection.GetProcessId(endPoint)));
-            LocalEndPoint = endPoint;
+            ProxyEndPoint = endPoint;
             EnableWinAuth = server.EnableWinAuth && isWindowsAuthenticationSupported;
         }
 
@@ -94,9 +94,17 @@ namespace Titanium.Web.Proxy.EventArguments
         public bool IsHttps => HttpClient.Request.IsHttps;
 
         /// <summary>
-        ///     Client End Point.
+        ///     Client Local End Point.
         /// </summary>
-        public IPEndPoint ClientEndPoint => (IPEndPoint)ClientConnection.RemoteEndPoint;
+        public IPEndPoint ClientLocalEndPoint => (IPEndPoint)ClientConnection.LocalEndPoint;
+
+        /// <summary>
+        ///     Client Remote End Point.
+        /// </summary>
+        public IPEndPoint ClientRemoteEndPoint => (IPEndPoint)ClientConnection.RemoteEndPoint;
+
+        [Obsolete("Use ClientRemoteEndPoint instead.")]
+        public IPEndPoint ClientEndPoint => ClientRemoteEndPoint;
 
         /// <summary>
         ///    The web client used to communicate with server for this session.
@@ -107,6 +115,14 @@ namespace Titanium.Web.Proxy.EventArguments
         public HttpWebClient WebSession => HttpClient;
 
         /// <summary>
+        ///     Gets or sets the custom up stream proxy.
+        /// </summary>
+        /// <value>
+        ///     The custom up stream proxy.
+        /// </value>
+        public IExternalProxy? CustomUpStreamProxy { get; set; }
+
+        /// <summary>
         ///     Are we using a custom upstream HTTP(S) proxy?
         /// </summary>
         public IExternalProxy? CustomUpStreamProxyUsed { get; internal set; }
@@ -114,12 +130,15 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         ///     Local endpoint via which we make the request.
         /// </summary>
-        public ProxyEndPoint LocalEndPoint { get; }
+        public ProxyEndPoint ProxyEndPoint { get; }
+
+        [Obsolete("Use ProxyEndPoint instead.")]
+        public ProxyEndPoint LocalEndPoint => ProxyEndPoint;
 
         /// <summary>
         ///     Is this a transparent endpoint?
         /// </summary>
-        public bool IsTransparent => LocalEndPoint is TransparentProxyEndPoint;
+        public bool IsTransparent => ProxyEndPoint is TransparentProxyEndPoint;
 
         /// <summary>
         ///     The last exception that happened.

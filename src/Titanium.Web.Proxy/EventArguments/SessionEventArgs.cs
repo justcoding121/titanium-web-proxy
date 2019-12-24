@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private bool reRequest;
 
-        private WebSocketDecoder webSocketDecoder;
+        private WebSocketDecoder? webSocketDecoder;
 
         /// <summary>
         ///     Is this session a HTTP/2 promise?
@@ -190,7 +190,7 @@ namespace Titanium.Web.Proxy.EventArguments
         private async Task<byte[]> readBodyAsync(bool isRequest, CancellationToken cancellationToken)
         {
             using var bodyStream = new MemoryStream();
-            using var writer = new HttpStream(bodyStream, BufferPool);
+            using var writer = new HttpStream(bodyStream, BufferPool, cancellationToken);
 
             if (isRequest)
             {
@@ -221,7 +221,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             var reader = isRequest ? (HttpStream)ClientStream : HttpClient.Connection.Stream;
 
-            await reader.CopyBodyAsync(requestResponse, true, new NullWriter(), TransformationMode.None, null, cancellationToken);
+            await reader.CopyBodyAsync(requestResponse, true, NullWriter.Instance, TransformationMode.None, null, cancellationToken);
         }
 
         /// <summary>

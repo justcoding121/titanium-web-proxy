@@ -30,9 +30,7 @@ namespace Titanium.Web.Proxy
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
 
-            var clientStream = new HttpClientStream(clientConnection, clientConnection.GetStream(), BufferPool);
-
-            SslStream? sslStream = null;
+            var clientStream = new HttpClientStream(clientConnection, clientConnection.GetStream(), BufferPool, cancellationToken);
 
             try
             {
@@ -57,6 +55,7 @@ namespace Titanium.Web.Proxy
 
                         // do client authentication using certificate
                         X509Certificate2? certificate = null;
+                        SslStream? sslStream = null;
                         try
                         {
                             sslStream = new SslStream(clientStream, false);
@@ -69,17 +68,18 @@ namespace Titanium.Web.Proxy
                             await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
 
                             // HTTPS server created - we can now decrypt the client's traffic
-                            clientStream = new HttpClientStream(clientStream.Connection, sslStream, BufferPool);
+                            clientStream = new HttpClientStream(clientStream.Connection, sslStream, BufferPool, cancellationToken);
                             sslStream = null; // clientStream was created, no need to keep SSL stream reference
                         }
                         catch (Exception e)
                         {
+                            sslStream?.Dispose();
+
                             var certName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
                             var session = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
                             throw new ProxyConnectException(
                                 $"Couldn't authenticate host '{httpsHostName}' with certificate '{certName}'.", e, session);
                         }
-                      
                     }
                     else
                     {
@@ -146,7 +146,6 @@ namespace Titanium.Web.Proxy
             }
             finally
             {
-                sslStream?.Dispose();
                 clientStream.Dispose();
             }
         }

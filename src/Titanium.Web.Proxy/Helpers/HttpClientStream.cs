@@ -12,8 +12,8 @@ namespace Titanium.Web.Proxy.Helpers
     {
         public TcpClientConnection Connection { get; }
 
-        internal HttpClientStream(TcpClientConnection connection, Stream stream, IBufferPool bufferPool) 
-            : base(stream, bufferPool)
+        internal HttpClientStream(TcpClientConnection connection, Stream stream, IBufferPool bufferPool, CancellationToken cancellationToken) 
+            : base(stream, bufferPool, cancellationToken)
         {
             Connection = connection;
         }
