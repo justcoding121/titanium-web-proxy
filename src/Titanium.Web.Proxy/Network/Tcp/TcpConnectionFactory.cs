@@ -15,6 +15,7 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.ProxySocket;
 
 namespace Titanium.Web.Proxy.Network.Tcp
 {
@@ -85,6 +86,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 cacheKeyBuilder.Append(externalProxy.HostName);
                 cacheKeyBuilder.Append("-");
                 cacheKeyBuilder.Append(externalProxy.Port);
+                cacheKeyBuilder.Append("-");
+                cacheKeyBuilder.Append(externalProxy.ProxyType);
 
                 if (externalProxy.UseDefaultCredentials)
                 {
@@ -114,7 +117,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
             }
 
-            IExternalProxy? customUpStreamProxy = session.CustomUpStreamProxy;
+            var customUpStreamProxy = session.CustomUpStreamProxy;
 
             bool isHttps = session.IsHttps;
             if (customUpStreamProxy == null && server.GetCustomUpStreamProxyFunc != null)
@@ -125,12 +128,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
             session.CustomUpStreamProxyUsed = customUpStreamProxy;
 
             var uri = session.HttpClient.Request.RequestUri;
-            return GetConnectionCacheKey(
-                uri.Host,
-                uri.Port,
-                isHttps, applicationProtocols,
-                session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
-                customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy));
+            var upStreamEndPoint = session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint;
+            var upStreamProxy = customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
+            return GetConnectionCacheKey(uri.Host, uri.Port, isHttps, applicationProtocols, upStreamEndPoint,
+                upStreamProxy);
         }
 
 
@@ -169,7 +170,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal async Task<TcpServerConnection> GetServerConnection(ProxyServer proxyServer, SessionEventArgsBase session, bool isConnect,
             List<SslApplicationProtocol>? applicationProtocols, bool noCache, CancellationToken cancellationToken)
         {
-            IExternalProxy? customUpStreamProxy = session.CustomUpStreamProxy;
+            var customUpStreamProxy = session.CustomUpStreamProxy;
 
             bool isHttps = session.IsHttps;
             if (customUpStreamProxy == null && proxyServer.GetCustomUpStreamProxyFunc != null)
@@ -204,13 +205,10 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 port = uri.Port;
             }
 
-            return await GetServerConnection(
-                proxyServer, host, port,
-                session.HttpClient.Request.HttpVersion,
-                isHttps, applicationProtocols, isConnect,
-                session, session.HttpClient.UpStreamEndPoint ?? proxyServer.UpStreamEndPoint,
-                customUpStreamProxy ?? (isHttps ? proxyServer.UpStreamHttpsProxy : proxyServer.UpStreamHttpProxy),
-                noCache, cancellationToken);
+            var upStreamEndPoint = session.HttpClient.UpStreamEndPoint ?? proxyServer.UpStreamEndPoint;
+            var upStreamProxy = customUpStreamProxy ?? (isHttps ? proxyServer.UpStreamHttpsProxy : proxyServer.UpStreamHttpProxy);
+            return await GetServerConnection(proxyServer, host, port, session.HttpClient.Request.HttpVersion, isHttps,
+                applicationProtocols, isConnect, session, upStreamEndPoint, upStreamProxy, noCache, cancellationToken);
         }
 
         /// <summary>
@@ -249,7 +247,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                         if (existingConnections.TryDequeue(out var recentConnection))
                         {
                             if (recentConnection.LastAccess > cutOff
-                                && recentConnection.TcpClient.IsGoodConnection())
+                                && recentConnection.TcpSocket.IsGoodConnection())
                             {
                                 return recentConnection;
                             }
@@ -323,7 +321,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 externalProxy = null;
             }
 
-            TcpClient? tcpClient = null;
+            Socket? tcpServerSocket = null;
             HttpServerStream? stream = null;
 
             SslApplicationProtocol negotiatedApplicationProtocol = default;
@@ -334,8 +332,15 @@ namespace Titanium.Web.Proxy.Network.Tcp
 retry:
             try
             {
-                string hostname = externalProxy != null ? externalProxy.HostName : remoteHostName;
-                int port = externalProxy?.Port ?? remotePort;
+                bool socks = externalProxy != null && externalProxy.ProxyType != ExternalProxyType.Http;
+                string hostname = remoteHostName;
+                int port = remotePort;
+
+                if (externalProxy != null && externalProxy.ProxyType == ExternalProxyType.Http)
+                {
+                    hostname = externalProxy.HostName;
+                    port = externalProxy.Port;
+                }
 
                 var ipAddresses = await Dns.GetHostAddressesAsync(hostname);
                 if (ipAddresses == null || ipAddresses.Length == 0)
@@ -356,28 +361,92 @@ retry:
                     try
                     {
                         var ipAddress = ipAddresses[i];
-                        if (upStreamEndPoint == null)
+                        var addressFamily = upStreamEndPoint?.AddressFamily ?? ipAddress.AddressFamily;
+
+                        if (socks)
                         {
-                            tcpClient = new TcpClient(ipAddress.AddressFamily);
+                            var proxySocket = new ProxySocket.ProxySocket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
+                            proxySocket.ProxyType = externalProxy!.ProxyType == ExternalProxyType.Socks4
+                                ? ProxyTypes.Socks4
+                                : ProxyTypes.Socks5;
+
+                            var proxyIpAddresses = await Dns.GetHostAddressesAsync(externalProxy.HostName);
+                            proxySocket.ProxyEndPoint = new IPEndPoint(proxyIpAddresses[0], externalProxy.Port);
+                            if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
+                            {
+                                proxySocket.ProxyUser = externalProxy.UserName;
+                                proxySocket.ProxyPass = externalProxy.Password;
+                            }
+                            
+                            tcpServerSocket = proxySocket;
                         }
                         else
                         {
-                            tcpClient = new TcpClient(upStreamEndPoint);
+                            tcpServerSocket = new Socket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
                         }
 
-                        tcpClient.NoDelay = proxyServer.NoDelay;
-                        tcpClient.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
-                        tcpClient.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
-                        tcpClient.LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds);
+                        tcpServerSocket.NoDelay = proxyServer.NoDelay;
+                        tcpServerSocket.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                        tcpServerSocket.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                        tcpServerSocket.LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds);
 
                         if (proxyServer.ReuseSocket && RunTime.IsSocketReuseAvailable)
                         {
-                            tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                            tcpServerSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                         }
 
-                        var connectTask = tcpClient.ConnectAsync(ipAddress, port);
-                        await Task.WhenAny(connectTask, Task.Delay(proxyServer.ConnectTimeOutSeconds * 1000));
-                        if (!connectTask.IsCompleted || !tcpClient.Connected)
+                        Task connectTask;
+                        if (socks)
+                        {
+                            var clientSocket = (ProxySocket.ProxySocket)tcpServerSocket;
+
+                            IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback requestCallback,
+                                object state)
+                            {
+                                return clientSocket.BeginConnect(address, port, requestCallback, state);
+                            }
+
+                            void EndConnect(IAsyncResult asyncResult)
+                            {
+                                var s = clientSocket;
+                                if (s == null)
+                                {
+                                    // Dispose nulls out the client socket field.
+                                    throw new ObjectDisposedException(GetType().Name);
+                                }
+
+                                s.EndConnect(asyncResult);
+                            }
+
+                            connectTask = Task.Factory.FromAsync(BeginConnect, EndConnect, ipAddress, port, state: this);
+                        }
+                        else
+                        {
+                            var clientSocket = tcpServerSocket;
+
+                            IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback requestCallback,
+                                object state)
+                            {
+                                return clientSocket.BeginConnect(address, port, requestCallback, state);
+                            }
+
+                            void EndConnect(IAsyncResult asyncResult)
+                            {
+                                var s = clientSocket;
+                                if (s == null)
+                                {
+                                    // Dispose nulls out the client socket field.
+                                    throw new ObjectDisposedException(GetType().Name);
+                                }
+
+                                s.EndConnect(asyncResult);
+                            }
+
+                            connectTask = Task.Factory.FromAsync(BeginConnect, EndConnect, ipAddress, port, state: this);
+                        }
+
+                        await Task.WhenAny(connectTask, Task.Delay(proxyServer.ConnectTimeOutSeconds * 1000, cancellationToken));
+                        if (!connectTask.IsCompleted || !tcpServerSocket.Connected)
                         {
                             // here we can just do some cleanup and let the loop continue since
                             // we will either get a connection or wind up with a null tcpClient
@@ -393,11 +462,11 @@ retry:
                             try
                             {
 #if NET45
-                                tcpClient?.Close();
+                                tcpServerSocket?.Close();
 #else
-                                tcpClient?.Dispose();
+                                tcpServerSocket?.Dispose();
 #endif
-                                tcpClient = null;
+                                tcpServerSocket = null;
                             }
                             catch
                             {
@@ -414,15 +483,15 @@ retry:
                         // dispose the current TcpClient and try the next address
                         lastException = e;
 #if NET45
-                        tcpClient?.Close();
+                        tcpServerSocket?.Close();
 #else
-                        tcpClient?.Dispose();
+                        tcpServerSocket?.Dispose();
 #endif
-                        tcpClient = null;
+                        tcpServerSocket = null;
                     }
                 }
 
-                if (tcpClient == null)
+                if (tcpServerSocket == null)
                 {
                     if (sessionArgs != null && proxyServer.CustomUpStreamProxyFailureFunc != null)
                     {
@@ -443,11 +512,11 @@ retry:
                     sessionArgs.TimeLine["Connection Established"] = DateTime.Now;
                 }
 
-                await proxyServer.InvokeServerConnectionCreateEvent(tcpClient);
+                await proxyServer.InvokeServerConnectionCreateEvent(tcpServerSocket);
 
-                stream = new HttpServerStream(tcpClient.GetStream(), proxyServer.BufferPool, cancellationToken);
+                stream = new HttpServerStream(new NetworkStream(tcpServerSocket, true), proxyServer.BufferPool, cancellationToken);
 
-                if (externalProxy != null && (isConnect || isHttps))
+                if ((externalProxy != null && externalProxy.ProxyType == ExternalProxyType.Http) && (isConnect || isHttps))
                 {
                     var authority = $"{remoteHostName}:{remotePort}".GetByteString();
                     var connectRequest = new ConnectRequest(authority)
@@ -511,7 +580,7 @@ retry:
             catch (IOException ex) when (ex.HResult == unchecked((int)0x80131620) && retry && enabledSslProtocols >= SslProtocols.Tls11)
             {
                 stream?.Dispose();
-                tcpClient?.Close();
+                tcpServerSocket?.Close();
 
                 enabledSslProtocols = SslProtocols.Tls;
                 retry = false;
@@ -520,11 +589,11 @@ retry:
             catch (Exception)
             {
                 stream?.Dispose();
-                tcpClient?.Close();
+                tcpServerSocket?.Close();
                 throw;
             }
 
-            return new TcpServerConnection(proxyServer, tcpClient, stream, remoteHostName, remotePort, isHttps,
+            return new TcpServerConnection(proxyServer, tcpServerSocket, stream, remoteHostName, remotePort, isHttps,
                 negotiatedApplicationProtocol, httpVersion, externalProxy, upStreamEndPoint, cacheKey);
         }
 
