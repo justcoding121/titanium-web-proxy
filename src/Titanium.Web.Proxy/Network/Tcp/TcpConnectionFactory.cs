@@ -395,41 +395,40 @@ retry:
                             tcpServerSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                         }
 
-                        ((ProxySocket.ProxySocket)tcpServerSocket).Connect(ipAddress, port);
-//                        var connectTask = socks 
-//                            ? ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)tcpServerSocket, ipAddress, port) 
-//                            : SocketConnectionTaskFactory.CreateTask(tcpServerSocket, ipAddress, port);
+                        var connectTask = socks
+                            ? ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)tcpServerSocket, ipAddress, port)
+                            : SocketConnectionTaskFactory.CreateTask(tcpServerSocket, ipAddress, port);
 
-//                        await Task.WhenAny(connectTask, Task.Delay(proxyServer.ConnectTimeOutSeconds * 1000, cancellationToken));
-//                        if (!connectTask.IsCompleted || !tcpServerSocket.Connected)
-//                        {
-//                            // here we can just do some cleanup and let the loop continue since
-//                            // we will either get a connection or wind up with a null tcpClient
-//                            // which will throw
-//                            try
-//                            {
-//                                connectTask.Dispose();
-//                            }
-//                            catch
-//                            {
-//                                // ignore
-//                            }
-//                            try
-//                            {
-//#if NET45
-//                                tcpServerSocket?.Close();
-//#else
-//                                tcpServerSocket?.Dispose();
-//#endif
-//                                tcpServerSocket = null;
-//                            }
-//                            catch
-//                            {
-//                                // ignore
-//                            }
+                        await Task.WhenAny(connectTask, Task.Delay(proxyServer.ConnectTimeOutSeconds * 1000, cancellationToken));
+                        if (!connectTask.IsCompleted || !tcpServerSocket.Connected)
+                        {
+                            // here we can just do some cleanup and let the loop continue since
+                            // we will either get a connection or wind up with a null tcpClient
+                            // which will throw
+                            try
+                            {
+                                connectTask.Dispose();
+                            }
+                            catch
+                            {
+                                // ignore
+                            }
+                            try
+                            {
+#if NET45
+                                tcpServerSocket?.Close();
+#else
+                                tcpServerSocket?.Dispose();
+#endif
+                                tcpServerSocket = null;
+                            }
+                            catch
+                            {
+                                // ignore
+                            }
 
-//                            continue;
-//                        }
+                            continue;
+                        }
 
                         break;
                     }
