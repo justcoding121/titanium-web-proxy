@@ -81,6 +81,15 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             //    Password = "Titanium",
             //};
 
+            //var socksEndPoint = new SocksProxyEndPoint(IPAddress.Any, 1080, true)
+            //{
+            //    // Generic Certificate hostname to use
+            //    // When SNI is disabled by client
+            //    //GenericCertificateName = "google.com"
+            //};
+
+            //proxyServer.AddEndPoint(socksEndPoint);
+
             proxyServer.BeforeRequest += ProxyServer_BeforeRequest;
             proxyServer.BeforeResponse += ProxyServer_BeforeResponse;
             proxyServer.AfterResponse += ProxyServer_AfterResponse;

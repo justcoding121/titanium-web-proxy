@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.Models
     ///     Useful when requests are redirected to this proxy end point through port forwarding via router.
     /// </summary>
     [DebuggerDisplay("Transparent: {IpAddress}:{Port}")]
-    public class TransparentProxyEndPoint : ProxyEndPoint
+    public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint
     {
         /// <summary>
         ///     Initialize a new instance.
@@ -29,14 +29,14 @@ namespace Titanium.Web.Proxy.Models
         ///     Name of the Certificate need to be sent (same as the hostname we want to proxy).
         ///     This is valid only when UseServerNameIndication is set to false.
         /// </summary>
-        public string GenericCertificateName { get; set; }
+        public override string GenericCertificateName { get; set; }
 
         /// <summary>
         ///     Before Ssl authentication this event is fired.
         /// </summary>
         public event AsyncEventHandler<BeforeSslAuthenticateEventArgs>? BeforeSslAuthenticate;
 
-        internal async Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
+        internal override async Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
             BeforeSslAuthenticateEventArgs connectArgs, ExceptionHandler exceptionFunc)
         {
             if (BeforeSslAuthenticate != null)

@@ -90,8 +90,21 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //};
 
             //proxyServer.AddEndPoint(transparentEndPoint);
-            //proxyServer.UpStreamHttpProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
-            //proxyServer.UpStreamHttpsProxy = new ExternalProxy() { HostName = "localhost", Port = 8888 };
+            //proxyServer.UpStreamHttpProxy = new ExternalProxy("localhost", 8888);
+            //proxyServer.UpStreamHttpsProxy = new ExternalProxy("localhost", 8888);
+
+            // SOCKS proxy
+            //proxyServer.UpStreamHttpProxy = new ExternalProxy("46.63.0.17", 4145) { ProxyType = ExternalProxyType.Socks4 };
+            //proxyServer.UpStreamHttpsProxy = new ExternalProxy("46.63.0.17", 4145) { ProxyType = ExternalProxyType.Socks4 };
+
+            //var socksEndPoint = new SocksProxyEndPoint(IPAddress.Any, 1080, true)
+            //{
+            //    // Generic Certificate hostname to use
+            //    // When SNI is disabled by client
+            //    GenericCertificateName = "google.com"
+            //};
+
+            //proxyServer.AddEndPoint(socksEndPoint);
 
             foreach (var endPoint in proxyServer.ProxyEndPoints)
             {

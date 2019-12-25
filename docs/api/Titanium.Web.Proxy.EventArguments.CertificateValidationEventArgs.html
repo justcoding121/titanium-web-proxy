@@ -10,7 +10,7 @@
     <meta name="viewport" content="width=device-width">
     <meta name="title" content="Class CertificateValidationEventArgs
    | Titanium Web Proxy ">
-    <meta name="generator" content="docfx 2.40.1.0">
+    <meta name="generator" content="docfx 2.47.0.0">
     
     <link rel="shortcut icon" href="../favicon.ico">
     <link rel="stylesheet" href="../styles/docfx.vendor.css">
@@ -90,42 +90,63 @@ during SSL authentication.</p>
   <div class="inheritance">
     <h5>Inheritance</h5>
     <div class="level0"><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object">Object</a></div>
-    <div class="level1"><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.eventargs">EventArgs</a></div>
-    <div class="level2"><span class="xref">CertificateValidationEventArgs</span></div>
-  </div>
-  <div class="inheritedMembers">
-    <h5>Inherited Members</h5>
-    <div>
-      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.eventargs.empty">EventArgs.Empty</a>
-    </div>
-    <div>
-      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.equals#System_Object_Equals_System_Object_">Object.Equals(Object)</a>
-    </div>
-    <div>
-      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.equals#System_Object_Equals_System_Object_System_Object_">Object.Equals(Object, Object)</a>
-    </div>
-    <div>
-      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.gethashcode#System_Object_GetHashCode">Object.GetHashCode()</a>
-    </div>
-    <div>
-      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.gettype#System_Object_GetType">Object.GetType()</a>
-    </div>
-    <div>
-      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.memberwiseclone#System_Object_MemberwiseClone">Object.MemberwiseClone()</a>
-    </div>
-    <div>
-      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.referenceequals#System_Object_ReferenceEquals_System_Object_System_Object_">Object.ReferenceEquals(Object, Object)</a>
-    </div>
-    <div>
-      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.tostring#System_Object_ToString">Object.ToString()</a>
-    </div>
+    <div class="level1"><span class="xref">CertificateValidationEventArgs</span></div>
   </div>
   <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.Web.Proxy.EventArguments.html">Titanium.Web.Proxy.EventArguments</a></h6>
   <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
   <h5 id="Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_syntax">Syntax</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public class CertificateValidationEventArgs : EventArgs</code></pre>
+    <pre><code class="lang-csharp hljs">public class CertificateValidationEventArgs : ProxyEventArgsBase</code></pre>
   </div>
+  <h3 id="constructors">Constructors
+  </h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/master/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs__ctor_Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_System_Security_Cryptography_X509Certificates_X509Certificate_System_Security_Cryptography_X509Certificates_X509Chain_System_Net_Security_SslPolicyErrors_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.%23ctor(Titanium.Web.Proxy.EventArguments.SessionEventArgsBase%2CSystem.Security.Cryptography.X509Certificates.X509Certificate%2CSystem.Security.Cryptography.X509Certificates.X509Chain%2CSystem.Net.Security.SslPolicyErrors)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/EventArguments/CertificateValidationEventArgs.cs/#L13">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs__ctor_" data-uid="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.#ctor*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs__ctor_Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_System_Security_Cryptography_X509Certificates_X509Certificate_System_Security_Cryptography_X509Certificates_X509Chain_System_Net_Security_SslPolicyErrors_" data-uid="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.#ctor(Titanium.Web.Proxy.EventArguments.SessionEventArgsBase,System.Security.Cryptography.X509Certificates.X509Certificate,System.Security.Cryptography.X509Certificates.X509Chain,System.Net.Security.SslPolicyErrors)">CertificateValidationEventArgs(SessionEventArgsBase, X509Certificate, X509Chain, SslPolicyErrors)</h4>
+  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public CertificateValidationEventArgs(SessionEventArgsBase session, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a></td>
+        <td><span class="parametername">session</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.x509certificate">X509Certificate</a></td>
+        <td><span class="parametername">certificate</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.x509chain">X509Chain</a></td>
+        <td><span class="parametername">chain</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.net.security.sslpolicyerrors">SslPolicyErrors</a></td>
+        <td><span class="parametername">sslPolicyErrors</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
   <h3 id="properties">Properties
   </h3>
   <span class="small pull-right mobile-hide">
@@ -133,7 +154,7 @@ during SSL authentication.</p>
     <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/master/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_Certificate.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.Certificate%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/EventArguments/CertificateValidationEventArgs.cs/#L16">View Source</a>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/EventArguments/CertificateValidationEventArgs.cs/#L29">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_Certificate_" data-uid="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.Certificate*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_Certificate" data-uid="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.Certificate">Certificate</h4>
@@ -164,7 +185,7 @@ during SSL authentication.</p>
     <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/master/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_Chain.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.Chain%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/EventArguments/CertificateValidationEventArgs.cs/#L21">View Source</a>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/EventArguments/CertificateValidationEventArgs.cs/#L34">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_Chain_" data-uid="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.Chain*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_Chain" data-uid="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.Chain">Chain</h4>
@@ -195,7 +216,7 @@ during SSL authentication.</p>
     <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/master/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_IsValid.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.IsValid%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/EventArguments/CertificateValidationEventArgs.cs/#L31">View Source</a>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/EventArguments/CertificateValidationEventArgs.cs/#L44">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_IsValid_" data-uid="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.IsValid*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_IsValid" data-uid="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.IsValid">IsValid</h4>
@@ -223,10 +244,41 @@ during SSL authentication.</p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/master/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_Session.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.Session%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/EventArguments/CertificateValidationEventArgs.cs/#L24">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_Session_" data-uid="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.Session*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_Session" data-uid="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.Session">Session</h4>
+  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="decalaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public SessionEventArgsBase Session { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-striped table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a></td>
+        <td><p>The session.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/master/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_SslPolicyErrors.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.SslPolicyErrors%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/EventArguments/CertificateValidationEventArgs.cs/#L26">View Source</a>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/EventArguments/CertificateValidationEventArgs.cs/#L39">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_SslPolicyErrors_" data-uid="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.SslPolicyErrors*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_CertificateValidationEventArgs_SslPolicyErrors" data-uid="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.SslPolicyErrors">SslPolicyErrors</h4>

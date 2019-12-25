@@ -5,7 +5,6 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
@@ -18,9 +17,9 @@ namespace Titanium.Web.Proxy.Network.Tcp
     {
         public object ClientUserData { get; set; }
 
-        internal TcpClientConnection(ProxyServer proxyServer, TcpClient tcpClient)
+        internal TcpClientConnection(ProxyServer proxyServer, Socket tcpClientSocket)
         {
-            this.tcpClient = tcpClient;
+            this.tcpClientSocket = tcpClientSocket;
             this.proxyServer = proxyServer;
             this.proxyServer.UpdateClientConnectionCount(true);
         }
@@ -29,21 +28,21 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         public Guid Id { get; } = Guid.NewGuid();
 
-        public EndPoint LocalEndPoint => tcpClient.Client.LocalEndPoint;
+        public EndPoint LocalEndPoint => tcpClientSocket.LocalEndPoint;
 
-        public EndPoint RemoteEndPoint => tcpClient.Client.RemoteEndPoint;
+        public EndPoint RemoteEndPoint => tcpClientSocket.RemoteEndPoint;
 
         internal SslProtocols SslProtocol { get; set; }
 
         internal SslApplicationProtocol NegotiatedApplicationProtocol { get; set; }
 
-        private readonly TcpClient tcpClient;
+        private readonly Socket tcpClientSocket;
 
         private int? processId;
 
         public Stream GetStream()
         {
-            return tcpClient.GetStream();
+            return new NetworkStream(tcpClientSocket, true);
         }
 
         public int GetProcessId(ProxyEndPoint endPoint)
@@ -86,7 +85,15 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 // This way we can push tcp Time_Wait to client side when possible.
                 await Task.Delay(1000);
                 proxyServer.UpdateClientConnectionCount(false);
-                tcpClient.CloseSocket();
+                
+                try
+                {
+                    tcpClientSocket.Close();
+                }
+                catch
+                {
+                    // ignore
+                }
             });
         }
     }

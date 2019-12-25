@@ -359,12 +359,12 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Customize TcpClient used for client connection upon create.
         /// </summary>
-        public event AsyncEventHandler<TcpClient>? OnClientConnectionCreate;
+        public event AsyncEventHandler<Socket>? OnClientConnectionCreate;
 
         /// <summary>
         ///     Customize TcpClient used for server connection upon create.
         /// </summary>
-        public event AsyncEventHandler<TcpClient>? OnServerConnectionCreate;
+        public event AsyncEventHandler<Socket>? OnServerConnectionCreate;
 
         /// <summary>
         /// Customize the minimum ThreadPool size (increase it on a server)
@@ -733,12 +733,12 @@ namespace Titanium.Web.Proxy
         {
             var endPoint = (ProxyEndPoint)asyn.AsyncState;
 
-            TcpClient? tcpClient = null;
+            Socket? tcpClient = null;
 
             try
             {
                 // based on end point type call appropriate request handlers
-                tcpClient = endPoint.Listener!.EndAcceptTcpClient(asyn);
+                tcpClient = endPoint.Listener!.EndAcceptSocket(asyn);
                 tcpClient.NoDelay = NoDelay;
             }
             catch (ObjectDisposedException)
@@ -784,27 +784,31 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Handle the client.
         /// </summary>
-        /// <param name="tcpClient">The client.</param>
+        /// <param name="tcpClientSocket">The client socket.</param>
         /// <param name="endPoint">The proxy endpoint.</param>
         /// <returns>The task.</returns>
-        private async Task handleClient(TcpClient tcpClient, ProxyEndPoint endPoint)
+        private async Task handleClient(Socket tcpClientSocket, ProxyEndPoint endPoint)
         {
-            tcpClient.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
-            tcpClient.SendTimeout = ConnectionTimeOutSeconds * 1000;
+            tcpClientSocket.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
+            tcpClientSocket.SendTimeout = ConnectionTimeOutSeconds * 1000;
 
-            tcpClient.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
+            tcpClientSocket.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
 
-            await InvokeClientConnectionCreateEvent(tcpClient);
+            await InvokeClientConnectionCreateEvent(tcpClientSocket);
 
-            using (var clientConnection = new TcpClientConnection(this, tcpClient))
+            using (var clientConnection = new TcpClientConnection(this, tcpClientSocket))
             {
-                if (endPoint is TransparentProxyEndPoint tep)
+                if (endPoint is ExplicitProxyEndPoint eep)
+                {
+                    await handleClient(eep, clientConnection);
+                }
+                else if (endPoint is TransparentProxyEndPoint tep)
                 {
                     await handleClient(tep, clientConnection);
                 }
-                else
+                else if (endPoint is SocksProxyEndPoint sep)
                 {
-                    await handleClient((ExplicitProxyEndPoint)endPoint, clientConnection);
+                    await handleClient(sep, clientConnection);
                 }
             }
         }
@@ -867,28 +871,28 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Invoke client tcp connection events if subscribed by API user.
         /// </summary>
-        /// <param name="client">The TcpClient object.</param>
+        /// <param name="clientSocket">The TcpClient object.</param>
         /// <returns></returns>
-        internal async Task InvokeClientConnectionCreateEvent(TcpClient client)
+        internal async Task InvokeClientConnectionCreateEvent(Socket clientSocket)
         {
             // client connection created
             if (OnClientConnectionCreate != null)
             {
-                await OnClientConnectionCreate.InvokeAsync(this, client, ExceptionFunc);
+                await OnClientConnectionCreate.InvokeAsync(this, clientSocket, ExceptionFunc);
             }
         }
 
         /// <summary>
         ///     Invoke server tcp connection events if subscribed by API user.
         /// </summary>
-        /// <param name="client">The TcpClient object.</param>
+        /// <param name="serverSocket">The Socket object.</param>
         /// <returns></returns>
-        internal async Task InvokeServerConnectionCreateEvent(TcpClient client)
+        internal async Task InvokeServerConnectionCreateEvent(Socket serverSocket)
         {
             // server connection created
             if (OnServerConnectionCreate != null)
             {
-                await OnServerConnectionCreate.InvokeAsync(this, client, ExceptionFunc);
+                await OnServerConnectionCreate.InvokeAsync(this, serverSocket, ExceptionFunc);
             }
         }
 

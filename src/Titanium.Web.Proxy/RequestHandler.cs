@@ -32,9 +32,10 @@ namespace Titanium.Web.Proxy
         /// <param name="cancellationTokenSource">The cancellation token source for this async task.</param>
         /// <param name="connectArgs">The Connect request if this is a HTTPS request from explicit endpoint.</param>
         /// <param name="prefetchConnectionTask">Prefetched server connection for current client using Connect/SNI headers.</param>
+        /// <param name="isHttps">Is HTTPS</param>
         private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, HttpClientStream clientStream, 
             CancellationTokenSource cancellationTokenSource, TunnelConnectSessionEventArgs? connectArgs = null,
-            Task<TcpServerConnection>? prefetchConnectionTask = null)
+            Task<TcpServerConnection>? prefetchConnectionTask = null, bool isHttps = false)
         {
             var connectRequest = connectArgs?.HttpClient.ConnectRequest;
 
@@ -66,6 +67,8 @@ namespace Titanium.Web.Proxy
                     {
                         UserData = connectArgs?.UserData
                     };
+
+                    args.HttpClient.Request.IsHttps = isHttps;
 
                     try
                     {
@@ -217,7 +220,6 @@ namespace Titanium.Web.Proxy
                                 await tcpConnectionFactory.Release(connection);
                                 connection = null;
                             }
-
                         }
                         catch (Exception e) when (!(e is ProxyHttpException))
                         {

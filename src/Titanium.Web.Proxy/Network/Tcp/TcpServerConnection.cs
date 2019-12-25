@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
@@ -16,11 +15,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
     {
         public Guid Id { get; } = Guid.NewGuid();
 
-        internal TcpServerConnection(ProxyServer proxyServer, TcpClient tcpClient, HttpServerStream stream,
+        internal TcpServerConnection(ProxyServer proxyServer, Socket tcpSocket, HttpServerStream stream,
             string hostName, int port, bool isHttps, SslApplicationProtocol negotiatedApplicationProtocol,
             Version version, IExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string cacheKey)
         {
-            TcpClient = tcpClient;
+            TcpSocket = tcpSocket;
             LastAccess = DateTime.Now;
             this.proxyServer = proxyServer;
             this.proxyServer.UpdateServerConnectionCount(true);
@@ -63,7 +62,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <summary>
         /// The TcpClient.
         /// </summary>
-        internal TcpClient TcpClient { get; }
+        internal Socket TcpSocket { get; }
 
         /// <summary>
         ///     Used to write lines to server
@@ -98,7 +97,15 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 await Task.Delay(1000);
                 proxyServer.UpdateServerConnectionCount(false);
                 Stream.Dispose();
-                TcpClient.CloseSocket();
+                
+                try
+                {
+                    TcpSocket.Close();
+                }
+                catch
+                {
+                    // ignore
+                }
             });
 
         }
