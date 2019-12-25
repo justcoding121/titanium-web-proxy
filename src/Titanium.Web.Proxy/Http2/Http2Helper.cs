@@ -1,6 +1,4 @@
-﻿
-using Titanium.Web.Proxy.Extensions;
-#if NETSTANDARD2_1
+﻿#if NETSTANDARD2_1
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -12,6 +10,7 @@ using System.Threading.Tasks;
 using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
 using Titanium.Web.Proxy.Models;

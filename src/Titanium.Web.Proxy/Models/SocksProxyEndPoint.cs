@@ -10,8 +10,8 @@ namespace Titanium.Web.Proxy.Models
     ///     A proxy end point client is not aware of.
     ///     Useful when requests are redirected to this proxy end point through port forwarding via router.
     /// </summary>
-    [DebuggerDisplay("Transparent: {IpAddress}:{Port}")]
-    public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint
+    [DebuggerDisplay("SOCKS: {IpAddress}:{Port}")]
+    public class SocksProxyEndPoint : TransparentBaseProxyEndPoint
     {
         /// <summary>
         ///     Initialize a new instance.
@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.Models
         /// <param name="ipAddress">Listening Ip address.</param>
         /// <param name="port">Listening port.</param>
         /// <param name="decryptSsl">Should we decrypt ssl?</param>
-        public TransparentProxyEndPoint(IPAddress ipAddress, int port, bool decryptSsl = true) : base(ipAddress, port,
+        public SocksProxyEndPoint(IPAddress ipAddress, int port, bool decryptSsl = true) : base(ipAddress, port,
             decryptSsl)
         {
             GenericCertificateName = "localhost";

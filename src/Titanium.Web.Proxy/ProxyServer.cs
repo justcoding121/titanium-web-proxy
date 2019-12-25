@@ -798,13 +798,17 @@ namespace Titanium.Web.Proxy
 
             using (var clientConnection = new TcpClientConnection(this, tcpClientSocket))
             {
-                if (endPoint is TransparentProxyEndPoint tep)
+                if (endPoint is ExplicitProxyEndPoint eep)
+                {
+                    await handleClient(eep, clientConnection);
+                }
+                else if (endPoint is TransparentProxyEndPoint tep)
                 {
                     await handleClient(tep, clientConnection);
                 }
-                else
+                else if (endPoint is SocksProxyEndPoint sep)
                 {
-                    await handleClient((ExplicitProxyEndPoint)endPoint, clientConnection);
+                    await handleClient(sep, clientConnection);
                 }
             }
         }
