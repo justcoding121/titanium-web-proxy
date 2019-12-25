@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 

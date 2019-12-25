@@ -97,6 +97,15 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.UpStreamHttpProxy = new ExternalProxy("46.63.0.17", 4145) { ProxyType = ExternalProxyType.Socks4 };
             //proxyServer.UpStreamHttpsProxy = new ExternalProxy("46.63.0.17", 4145) { ProxyType = ExternalProxyType.Socks4 };
 
+            //var socksEndPoint = new SocksProxyEndPoint(IPAddress.Any, 1080, true)
+            //{
+            //    // Generic Certificate hostname to use
+            //    // When SNI is disabled by client
+            //    GenericCertificateName = "google.com"
+            //};
+
+            //proxyServer.AddEndPoint(socksEndPoint);
+
             foreach (var endPoint in proxyServer.ProxyEndPoints)
             {
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name,

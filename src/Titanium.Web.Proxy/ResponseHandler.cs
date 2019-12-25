@@ -122,7 +122,6 @@ namespace Titanium.Web.Proxy
                 }
             }
 
-
             args.TimeLine["Response Sent"] = DateTime.Now;
         }
 

@@ -144,16 +144,8 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <exception cref="ArgumentNullException">The specified value is null.</exception>
         protected Socket Server
         {
-            get
-            {
-                return _server;
-            }
-            set
-            {
-                if (value == null)
-                    throw new ArgumentNullException();
-                _server = value;
-            }
+            get => _server;
+            set => _server = value ?? throw new ArgumentNullException();
         }
 
         /// <summary>
@@ -163,16 +155,8 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <exception cref="ArgumentNullException">The specified value is null.</exception>
         protected string Username
         {
-            get
-            {
-                return _username;
-            }
-            set
-            {
-                if (value == null)
-                    throw new ArgumentNullException();
-                _username = value;
-            }
+            get => _username;
+            set => _username = value ?? throw new ArgumentNullException();
         }
 
         /// <summary>
@@ -181,47 +165,21 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <value>An IAsyncProxyResult object that is the return value of the BeginConnect call.</value>
         protected IAsyncProxyResult AsyncResult
         {
-            get
-            {
-                return _asyncResult;
-            }
-            set
-            {
-                _asyncResult = value;
-            }
+            get => _asyncResult;
+            set => _asyncResult = value;
         }
 
         /// <summary>
         /// Gets or sets a byte buffer.
         /// </summary>
         /// <value>An array of bytes.</value>
-        protected byte[] Buffer
-        {
-            get
-            {
-                return _buffer;
-            }
-            set
-            {
-                _buffer = value;
-            }
-        }
+        protected byte[] Buffer { get; set; }
 
         /// <summary>
         /// Gets or sets the number of bytes that have been received from the remote proxy server.
         /// </summary>
         /// <value>An integer that holds the number of bytes that have been received from the remote proxy server.</value>
-        protected int Received
-        {
-            get
-            {
-                return _received;
-            }
-            set
-            {
-                _received = value;
-            }
-        }
+        protected int Received { get; set; }
 
         // private variables
         /// <summary>Holds the value of the Server property.</summary>
@@ -232,12 +190,6 @@ namespace Titanium.Web.Proxy.ProxySocket
 
         /// <summary>Holds the value of the AsyncResult property.</summary>
         private IAsyncProxyResult _asyncResult;
-
-        /// <summary>Holds the value of the Buffer property.</summary>
-        private byte[] _buffer;
-
-        /// <summary>Holds the value of the Received property.</summary>
-        private int _received;
 
         /// <summary>Holds the address of the method to call when the SOCKS protocol has been completed.</summary>
         protected HandShakeComplete ProtocolComplete;
