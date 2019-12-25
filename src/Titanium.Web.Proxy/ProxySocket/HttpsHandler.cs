@@ -73,7 +73,7 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <returns>An array of bytes that has to be sent when the user wants to connect to a specific IPEndPoint.</returns>
         private byte[] GetConnectBytes(string host, int port)
         {
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
             sb.AppendLine(string.Format("CONNECT {0}:{1} HTTP/1.1", host, port));
             sb.AppendLine(string.Format("Host: {0}:{1}", host, port));
             if (!string.IsNullOrEmpty(Username))
@@ -92,12 +92,14 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// Verifies that proxy server successfully connected to requested host
         /// </summary>
         /// <param name="buffer">Input data array</param>
-        private void VerifyConnectHeader(byte[] buffer)
+        /// <param name="length">The data count in the buffer</param>
+        private void VerifyConnectHeader(byte[] buffer, int length)
         {
-            string header = Encoding.ASCII.GetString(buffer);
+            string header = Encoding.ASCII.GetString(buffer, 0, length);
             if ((!header.StartsWith("HTTP/1.1 ", StringComparison.OrdinalIgnoreCase) &&
                  !header.StartsWith("HTTP/1.0 ", StringComparison.OrdinalIgnoreCase)) || !header.EndsWith(" "))
                 throw new ProtocolViolationException();
+
             string code = header.Substring(9, 3);
             if (code != "200")
                 throw new ProxyException("Invalid HTTP status. Code: " + code);
@@ -134,20 +136,21 @@ namespace Titanium.Web.Proxy.ProxySocket
         {
             if (host == null)
                 throw new ArgumentNullException();
+            
             if (port <= 0 || port > 65535 || host.Length > 255)
                 throw new ArgumentException();
+            
             byte[] buffer = GetConnectBytes(host, port);
             if (Server.Send(buffer, 0, buffer.Length, SocketFlags.None) < buffer.Length)
             {
                 throw new SocketException(10054);
             }
 
-            buffer = ReadBytes(13);
-            VerifyConnectHeader(buffer);
+            ReadBytes(buffer, 13); // buffer is always longer than 13 bytes. Check the code in GetConnectBytes
+            VerifyConnectHeader(buffer, 13);
 
             // Read bytes 1 by 1 until we reach "\r\n\r\n"
             int receivedNewlineChars = 0;
-            buffer = new byte[1];
             while (receivedNewlineChars < 4)
             {
                 int recv = Server.Receive(buffer, 0, 1, SocketFlags.None);
@@ -209,7 +212,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             }
             catch (Exception e)
             {
-                ProtocolComplete(e);
+                OnProtocolComplete(e);
                 return;
             }
 
@@ -220,7 +223,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             }
             catch (Exception e)
             {
-                ProtocolComplete(e);
+                OnProtocolComplete(e);
             }
         }
 
@@ -239,7 +242,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             }
             catch (Exception e)
             {
-                ProtocolComplete(e);
+                OnProtocolComplete(e);
             }
         }
 
@@ -255,7 +258,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             }
             catch (Exception e)
             {
-                ProtocolComplete(e);
+                OnProtocolComplete(e);
                 return;
             }
 
@@ -268,13 +271,13 @@ namespace Titanium.Web.Proxy.ProxySocket
                 }
                 else
                 {
-                    VerifyConnectHeader(Buffer);
+                    VerifyConnectHeader(Buffer, 13);
                     ReadUntilHeadersEnd(true);
                 }
             }
             catch (Exception e)
             {
-                ProtocolComplete(e);
+                OnProtocolComplete(e);
             }
         }
 
@@ -303,7 +306,7 @@ namespace Titanium.Web.Proxy.ProxySocket
 
             if (_receivedNewlineChars == 4)
             {
-                ProtocolComplete(null);
+                OnProtocolComplete(null);
             }
             else
             {
@@ -327,8 +330,14 @@ namespace Titanium.Web.Proxy.ProxySocket
             }
             catch (Exception e)
             {
-                ProtocolComplete(e);
+                OnProtocolComplete(e);
             }
+        }
+
+        protected override void OnProtocolComplete(Exception? exception)
+        {
+            // do not return the base Buffer
+            ProtocolComplete(exception);
         }
 
         /// <summary>

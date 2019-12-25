@@ -29,6 +29,7 @@
 */
 
 using System;
+using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 
@@ -69,19 +70,6 @@ namespace Titanium.Web.Proxy.ProxySocket
         }
 
         /// <summary>
-        /// Converts a port number to an array of bytes.
-        /// </summary>
-        /// <param name="port">The port to convert.</param>
-        /// <returns>An array of two bytes that represents the specified port.</returns>
-        protected byte[] PortToBytes(int port)
-        {
-            byte[] ret = new byte[2];
-            ret[0] = (byte)(port / 256);
-            ret[1] = (byte)(port % 256);
-            return ret;
-        }
-
-        /// <summary>
         /// Converts an IP address to an array of bytes.
         /// </summary>
         /// <param name="address">The IP address to convert.</param>
@@ -99,16 +87,17 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <summary>
         /// Reads a specified number of bytes from the Server socket.
         /// </summary>
+        /// <param name="buffer">The result buffer.</param>
         /// <param name="count">The number of bytes to return.</param>
         /// <returns>An array of bytes.</returns>
         /// <exception cref="ArgumentException">The number of bytes to read is invalid.</exception>
         /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
         /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-        protected byte[] ReadBytes(int count)
+        protected void ReadBytes(byte[] buffer, int count)
         {
             if (count <= 0)
                 throw new ArgumentException();
-            byte[] buffer = new byte[count];
+
             int received = 0;
             while (received != count)
             {
@@ -120,8 +109,6 @@ namespace Titanium.Web.Proxy.ProxySocket
 
                 received += recv;
             }
-
-            return buffer;
         }
 
         /// <summary>
@@ -134,6 +121,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             int recv = Server.EndReceive(ar);
             if (recv <= 0)
                 throw new SocketException(10054);
+            
             Received += recv;
         }
 
@@ -147,6 +135,16 @@ namespace Titanium.Web.Proxy.ProxySocket
         {
             if (Server.EndSend(ar) < expectedLength)
                 throw new SocketException(10054);
+        }
+
+        protected virtual void OnProtocolComplete(Exception? exception)
+        {
+            if (Buffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(Buffer);
+            }
+
+            ProtocolComplete(exception);
         }
 
         /// <summary>

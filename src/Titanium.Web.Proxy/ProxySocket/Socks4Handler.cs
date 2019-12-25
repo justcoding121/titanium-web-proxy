@@ -169,14 +169,17 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
         private void Negotiate(byte[] connect, int length)
         {
-            if (connect.Length < 2)
-                throw new ArgumentException();
+            if (connect == null)
+                throw new ArgumentNullException(nameof(connect));
 
-            if (Server.Send(connect, 0, length, SocketFlags.None) < connect.Length)
+            if (length < 2)
+                throw new ArgumentException(nameof(length));
+
+            if (Server.Send(connect, 0, length, SocketFlags.None) < length)
                 throw new SocketException(10054);
 
-            byte[] buffer = ReadBytes(8);
-            if (buffer[1] != 90)
+            ReadBytes(connect, 8);
+            if (connect[1] != 90)
             {
                 Server.Close();
                 throw new ProxyException("Negotiation failed.");
@@ -266,8 +269,9 @@ namespace Titanium.Web.Proxy.ProxySocket
 
             try
             {
+                BufferCount = 8;
                 Received = 0;
-                Server.BeginReceive(Buffer, 0, 8, SocketFlags.None, OnReceive, Server);
+                Server.BeginReceive(Buffer, 0, BufferCount, SocketFlags.None, OnReceive, Server);
             }
             catch (Exception e)
             {
@@ -296,7 +300,7 @@ namespace Titanium.Web.Proxy.ProxySocket
                 }
                 else
                 {
-                    Server.BeginReceive(Buffer, Received, Buffer.Length - Received, SocketFlags.None, OnReceive,
+                    Server.BeginReceive(Buffer, Received, BufferCount - Received, SocketFlags.None, OnReceive,
                         Server);
                 }
             }
@@ -304,12 +308,6 @@ namespace Titanium.Web.Proxy.ProxySocket
             {
                 OnProtocolComplete(e);
             }
-        }
-
-        private void OnProtocolComplete(Exception? exception)
-        {
-            ArrayPool<byte>.Shared.Return(Buffer);
-            ProtocolComplete(exception);
         }
     }
 }
