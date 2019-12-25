@@ -262,7 +262,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     if (method == KnownMethod.Invalid)
-                    {
+                        {
                         sendRawData = true;
                     }
 
