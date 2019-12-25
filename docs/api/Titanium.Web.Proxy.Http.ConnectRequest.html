@@ -10,7 +10,7 @@
     <meta name="viewport" content="width=device-width">
     <meta name="title" content="Class ConnectRequest
    | Titanium Web Proxy ">
-    <meta name="generator" content="docfx 2.40.1.0">
+    <meta name="generator" content="docfx 2.47.0.0">
     
     <link rel="shortcut icon" href="../favicon.ico">
     <link rel="stylesheet" href="../styles/docfx.vendor.css">
@@ -99,13 +99,13 @@
       <a class="xref" href="Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_Method">Request.Method</a>
     </div>
     <div>
-      <a class="xref" href="Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_RequestUri">Request.RequestUri</a>
-    </div>
-    <div>
       <a class="xref" href="Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_IsHttps">Request.IsHttps</a>
     </div>
     <div>
-      <a class="xref" href="Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_OriginalUrl">Request.OriginalUrl</a>
+      <a class="xref" href="Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_RequestUri">Request.RequestUri</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_Url">Request.Url</a>
     </div>
     <div>
       <a class="xref" href="Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_RequestUriString">Request.RequestUriString</a>
@@ -121,9 +121,6 @@
     </div>
     <div>
       <a class="xref" href="Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_IsMultipartFormData">Request.IsMultipartFormData</a>
-    </div>
-    <div>
-      <a class="xref" href="Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_Url">Request.Url</a>
     </div>
     <div>
       <a class="xref" href="Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_UpgradeToWebSocket">Request.UpgradeToWebSocket</a>
@@ -183,6 +180,9 @@
       <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.equals#System_Object_Equals_System_Object_System_Object_">Object.Equals(Object, Object)</a>
     </div>
     <div>
+      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.referenceequals#System_Object_ReferenceEquals_System_Object_System_Object_">Object.ReferenceEquals(Object, Object)</a>
+    </div>
+    <div>
       <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.gethashcode#System_Object_GetHashCode">Object.GetHashCode()</a>
     </div>
     <div>
@@ -191,32 +191,12 @@
     <div>
       <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.memberwiseclone#System_Object_MemberwiseClone">Object.MemberwiseClone()</a>
     </div>
-    <div>
-      <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.object.referenceequals#System_Object_ReferenceEquals_System_Object_System_Object_">Object.ReferenceEquals(Object, Object)</a>
-    </div>
   </div>
   <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.Web.Proxy.Http.html">Titanium.Web.Proxy.Http</a></h6>
   <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
   <h5 id="Titanium_Web_Proxy_Http_ConnectRequest_syntax">Syntax</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public class ConnectRequest : Request</code></pre>
-  </div>
-  <h3 id="constructors">Constructors
-  </h3>
-  <span class="small pull-right mobile-hide">
-    <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/master/apiSpec/new?filename=Titanium_Web_Proxy_Http_ConnectRequest__ctor.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.ConnectRequest.%23ctor%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
-  </span>
-  <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/Http/ConnectRequest.cs/#L10">View Source</a>
-  </span>
-  <a id="Titanium_Web_Proxy_Http_ConnectRequest__ctor_" data-uid="Titanium.Web.Proxy.Http.ConnectRequest.#ctor*"></a>
-  <h4 id="Titanium_Web_Proxy_Http_ConnectRequest__ctor" data-uid="Titanium.Web.Proxy.Http.ConnectRequest.#ctor">ConnectRequest()</h4>
-  <div class="markdown level1 summary"></div>
-  <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
-  <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public ConnectRequest()</code></pre>
   </div>
   <h3 id="properties">Properties
   </h3>
@@ -225,7 +205,7 @@
     <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/master/apiSpec/new?filename=Titanium_Web_Proxy_Http_ConnectRequest_ClientHelloInfo.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.ConnectRequest.ClientHelloInfo%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/Http/ConnectRequest.cs/#L17">View Source</a>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/Http/ConnectRequest.cs/#L20">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_ConnectRequest_ClientHelloInfo_" data-uid="Titanium.Web.Proxy.Http.ConnectRequest.ClientHelloInfo*"></a>
   <h4 id="Titanium_Web_Proxy_Http_ConnectRequest_ClientHelloInfo" data-uid="Titanium.Web.Proxy.Http.ConnectRequest.ClientHelloInfo">ClientHelloInfo</h4>
@@ -233,7 +213,7 @@
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public ClientHelloInfo ClientHelloInfo { get; set; }</code></pre>
+    <pre><code class="lang-csharp hljs">public ClientHelloInfo? ClientHelloInfo { get; set; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -245,7 +225,7 @@
     </thead>
     <tbody>
       <tr>
-        <td><span class="xref">ClientHelloInfo</span></td>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.nullable-1">Nullable</a>&lt;<span class="xref">ClientHelloInfo</span>&gt;</td>
         <td></td>
       </tr>
     </tbody>
@@ -255,7 +235,7 @@
     <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/master/apiSpec/new?filename=Titanium_Web_Proxy_Http_ConnectRequest_TunnelType.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.ConnectRequest.TunnelType%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/Http/ConnectRequest.cs/#L15">View Source</a>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/Http/ConnectRequest.cs/#L18">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_ConnectRequest_TunnelType_" data-uid="Titanium.Web.Proxy.Http.ConnectRequest.TunnelType*"></a>
   <h4 id="Titanium_Web_Proxy_Http_ConnectRequest_TunnelType" data-uid="Titanium.Web.Proxy.Http.ConnectRequest.TunnelType">TunnelType</h4>
@@ -291,7 +271,7 @@
                     <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/master/apiSpec/new?filename=Titanium_Web_Proxy_Http_ConnectRequest.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.ConnectRequest%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Improve this Doc</a>
                   </li>
                   <li>
-                    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/Http/ConnectRequest.cs/#L8" class="contribution-link">View Source</a>
+                    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/master/src/Titanium.Web.Proxy/Http/ConnectRequest.cs/#L10" class="contribution-link">View Source</a>
                   </li>
                 </ul>
               </div>

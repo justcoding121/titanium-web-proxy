@@ -395,8 +395,8 @@ retry:
                             tcpServerSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                         }
 
-                        var connectTask = socks 
-                            ? ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)tcpServerSocket, ipAddress, port) 
+                        var connectTask = socks
+                            ? ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)tcpServerSocket, ipAddress, port)
                             : SocketConnectionTaskFactory.CreateTask(tcpServerSocket, ipAddress, port);
 
                         await Task.WhenAny(connectTask, Task.Delay(proxyServer.ConnectTimeOutSeconds * 1000, cancellationToken));

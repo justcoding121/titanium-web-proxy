@@ -74,61 +74,28 @@ namespace Titanium.Web.Proxy.ProxySocket.Authentication
         /// <value>The socket connection with the proxy server.</value>
         protected Socket Server
         {
-            get
-            {
-                return _server;
-            }
-            set
-            {
-                if (value == null)
-                    throw new ArgumentNullException();
-                _server = value;
-            }
+            get => _server;
+            set => _server = value ?? throw new ArgumentNullException();
         }
 
         /// <summary>
         /// Gets or sets a byt array that can be used to store data.
         /// </summary>
         /// <value>A byte array to store data.</value>
-        protected byte[] Buffer
-        {
-            get
-            {
-                return _buffer;
-            }
-            set
-            {
-                _buffer = value;
-            }
-        }
+        protected byte[] Buffer { get; set; }
 
         /// <summary>
         /// Gets or sets the number of bytes that have been received from the remote proxy server.
         /// </summary>
         /// <value>An integer that holds the number of bytes that have been received from the remote proxy server.</value>
-        protected int Received
-        {
-            get
-            {
-                return _received;
-            }
-            set
-            {
-                _received = value;
-            }
-        }
+        protected int Received { get; set; }
 
         // private variables
-        /// <summary>Holds the value of the Buffer property.</summary>
-        private byte[] _buffer;
 
         /// <summary>Holds the value of the Server property.</summary>
         private Socket _server;
 
         /// <summary>Holds the address of the method to call when the proxy has authenticated the client.</summary>
         protected HandShakeComplete CallBack;
-
-        /// <summary>Holds the value of the Received property.</summary>
-        private int _received;
     }
 }

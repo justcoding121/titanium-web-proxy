@@ -29,6 +29,7 @@
 */
 
 using System;
+using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 
@@ -37,7 +38,7 @@ namespace Titanium.Web.Proxy.ProxySocket
     /// <summary>
     /// References the callback method to be called when the protocol negotiation is completed.
     /// </summary>
-    internal delegate void HandShakeComplete(Exception error);
+    internal delegate void HandShakeComplete(Exception? error);
 
     /// <summary>
     /// Implements a specific version of the SOCKS protocol. This is an abstract class; it must be inherited.
@@ -60,13 +61,12 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// Converts a port number to an array of bytes.
         /// </summary>
         /// <param name="port">The port to convert.</param>
+        /// <param name="buffer">The buffer which contains the result data.</param>
         /// <returns>An array of two bytes that represents the specified port.</returns>
-        protected byte[] PortToBytes(int port)
+        protected void PortToBytes(int port, Span<byte> buffer)
         {
-            byte[] ret = new byte[2];
-            ret[0] = (byte)(port / 256);
-            ret[1] = (byte)(port % 256);
-            return ret;
+            buffer[0] = (byte)(port / 256);
+            buffer[1] = (byte)(port % 256);
         }
 
         /// <summary>
@@ -87,16 +87,17 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <summary>
         /// Reads a specified number of bytes from the Server socket.
         /// </summary>
+        /// <param name="buffer">The result buffer.</param>
         /// <param name="count">The number of bytes to return.</param>
         /// <returns>An array of bytes.</returns>
         /// <exception cref="ArgumentException">The number of bytes to read is invalid.</exception>
         /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
         /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-        protected byte[] ReadBytes(int count)
+        protected void ReadBytes(byte[] buffer, int count)
         {
             if (count <= 0)
                 throw new ArgumentException();
-            byte[] buffer = new byte[count];
+
             int received = 0;
             while (received != count)
             {
@@ -108,8 +109,6 @@ namespace Titanium.Web.Proxy.ProxySocket
 
                 received += recv;
             }
-
-            return buffer;
         }
 
         /// <summary>
@@ -122,6 +121,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             int recv = Server.EndReceive(ar);
             if (recv <= 0)
                 throw new SocketException(10054);
+            
             Received += recv;
         }
 
@@ -135,6 +135,16 @@ namespace Titanium.Web.Proxy.ProxySocket
         {
             if (Server.EndSend(ar) < expectedLength)
                 throw new SocketException(10054);
+        }
+
+        protected virtual void OnProtocolComplete(Exception? exception)
+        {
+            if (Buffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(Buffer);
+            }
+
+            ProtocolComplete(exception);
         }
 
         /// <summary>
@@ -163,17 +173,18 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// Gets or sets the return value of the BeginConnect call.
         /// </summary>
         /// <value>An IAsyncProxyResult object that is the return value of the BeginConnect call.</value>
-        protected IAsyncProxyResult AsyncResult
-        {
-            get => _asyncResult;
-            set => _asyncResult = value;
-        }
+        protected IAsyncProxyResult AsyncResult { get; set; }
 
         /// <summary>
         /// Gets or sets a byte buffer.
         /// </summary>
         /// <value>An array of bytes.</value>
         protected byte[] Buffer { get; set; }
+
+        /// <summary>
+        /// Gets or sets actual data count in the buffer.
+        /// </summary>
+        protected int BufferCount { get; set; }
 
         /// <summary>
         /// Gets or sets the number of bytes that have been received from the remote proxy server.
@@ -186,10 +197,7 @@ namespace Titanium.Web.Proxy.ProxySocket
         private Socket _server;
 
         /// <summary>Holds the value of the Username property.</summary>
-        private string _username;
-
-        /// <summary>Holds the value of the AsyncResult property.</summary>
-        private IAsyncProxyResult _asyncResult;
+        private string _username = string.Empty;
 
         /// <summary>Holds the address of the method to call when the SOCKS protocol has been completed.</summary>
         protected HandShakeComplete ProtocolComplete;
@@ -213,9 +221,10 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <param name="remoteEP">An IPEndPoint that represents the remote device. </param>
         /// <param name="callback">The method to call when the connection has been established.</param>
         /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
+        /// <param name="state">The state.</param>
         /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
         public abstract IAsyncProxyResult BeginNegotiate(IPEndPoint remoteEP, HandShakeComplete callback,
-            IPEndPoint proxyEndPoint);
+            IPEndPoint proxyEndPoint, object state);
 
         /// <summary>
         /// Starts negotiating asynchronously with a SOCKS proxy server.
@@ -224,8 +233,9 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <param name="port">The remote port to connect to.</param>
         /// <param name="callback">The method to call when the connection has been established.</param>
         /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
+        /// <param name="state">The state.</param>
         /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
         public abstract IAsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
-            IPEndPoint proxyEndPoint);
+            IPEndPoint proxyEndPoint, object state);
     }
 }
