@@ -31,6 +31,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.AccessControl;
 
 // Implements a number of classes to allow Sockets to connect trough a firewall.
 namespace Titanium.Web.Proxy.ProxySocket
@@ -191,34 +192,35 @@ namespace Titanium.Web.Proxy.ProxySocket
         {
             if (remoteEP == null)
                 throw new ArgumentNullException();
-            if (this.ProtocolType != ProtocolType.Tcp || ProxyType == ProxyTypes.None || ProxyEndPoint == null)
+
+            if (ProtocolType != ProtocolType.Tcp || ProxyType == ProxyTypes.None || ProxyEndPoint == null)
             {
                 return base.BeginConnect(remoteEP, callback, state);
             }
-            else
-            {
-                CallBack = callback;
-                if (ProxyType == ProxyTypes.Https)
-                {
-                    AsyncResult = (new HttpsHandler(this, ProxyUser, ProxyPass)).BeginNegotiate((IPEndPoint)remoteEP,
-                        new HandShakeComplete(this.OnHandShakeComplete), ProxyEndPoint);
-                    return AsyncResult;
-                }
-                else if (ProxyType == ProxyTypes.Socks4)
-                {
-                    AsyncResult = (new Socks4Handler(this, ProxyUser)).BeginNegotiate((IPEndPoint)remoteEP,
-                        new HandShakeComplete(this.OnHandShakeComplete), ProxyEndPoint);
-                    return AsyncResult;
-                }
-                else if (ProxyType == ProxyTypes.Socks5)
-                {
-                    AsyncResult = (new Socks5Handler(this, ProxyUser, ProxyPass)).BeginNegotiate((IPEndPoint)remoteEP,
-                        new HandShakeComplete(this.OnHandShakeComplete), ProxyEndPoint);
-                    return AsyncResult;
-                }
 
-                return null;
+            CallBack = callback;
+            if (ProxyType == ProxyTypes.Https)
+            {
+                AsyncResult = new HttpsHandler(this, ProxyUser, ProxyPass).BeginNegotiate((IPEndPoint)remoteEP,
+                    OnHandShakeComplete, ProxyEndPoint, state);
+                return AsyncResult;
             }
+
+            if (ProxyType == ProxyTypes.Socks4)
+            {
+                AsyncResult = new Socks4Handler(this, ProxyUser).BeginNegotiate((IPEndPoint)remoteEP,
+                    OnHandShakeComplete, ProxyEndPoint, state);
+                return AsyncResult;
+            }
+
+            if (ProxyType == ProxyTypes.Socks5)
+            {
+                AsyncResult = new Socks5Handler(this, ProxyUser, ProxyPass).BeginNegotiate((IPEndPoint)remoteEP,
+                    OnHandShakeComplete, ProxyEndPoint, state);
+                return AsyncResult;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -243,7 +245,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             if (this.ProtocolType != ProtocolType.Tcp || ProxyType == ProxyTypes.None || ProxyEndPoint == null)
             {
                 RemotePort = port;
-                AsyncResult = BeginDns(host, new HandShakeComplete(this.OnHandShakeComplete));
+                AsyncResult = BeginDns(host, this.OnHandShakeComplete, state);
                 return AsyncResult;
             }
             else
@@ -251,19 +253,21 @@ namespace Titanium.Web.Proxy.ProxySocket
                 if (ProxyType == ProxyTypes.Https)
                 {
                     AsyncResult = (new HttpsHandler(this, ProxyUser, ProxyPass)).BeginNegotiate(host, port,
-                        new HandShakeComplete(this.OnHandShakeComplete), ProxyEndPoint);
+                        this.OnHandShakeComplete, ProxyEndPoint, state);
                     return AsyncResult;
                 }
-                else if (ProxyType == ProxyTypes.Socks4)
+
+                if (ProxyType == ProxyTypes.Socks4)
                 {
                     AsyncResult = (new Socks4Handler(this, ProxyUser)).BeginNegotiate(host, port,
-                        new HandShakeComplete(this.OnHandShakeComplete), ProxyEndPoint);
+                        this.OnHandShakeComplete, ProxyEndPoint, state);
                     return AsyncResult;
                 }
-                else if (ProxyType == ProxyTypes.Socks5)
+
+                if (ProxyType == ProxyTypes.Socks5)
                 {
                     AsyncResult = (new Socks5Handler(this, ProxyUser, ProxyPass)).BeginNegotiate(host, port,
-                        new HandShakeComplete(this.OnHandShakeComplete), ProxyEndPoint);
+                        this.OnHandShakeComplete, ProxyEndPoint, state);
                     return AsyncResult;
                 }
 
@@ -304,14 +308,15 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// </summary>
         /// <param name="host">The host to resolve.</param>
         /// <param name="callback">The method to call when the hostname has been resolved.</param>
+        /// <param name="state">The state.</param>
         /// <returns>An IAsyncResult instance that references the asynchronous request.</returns>
         /// <exception cref="SocketException">There was an error while trying to resolve the host.</exception>
-        internal IAsyncProxyResult BeginDns(string host, HandShakeComplete callback)
+        internal IAsyncProxyResult BeginDns(string host, HandShakeComplete callback, object state)
         {
             try
             {
-                Dns.BeginGetHostEntry(host, new AsyncCallback(this.OnResolved), this);
-                return new IAsyncProxyResult();
+                Dns.BeginGetHostEntry(host, this.OnResolved, this);
+                return new IAsyncProxyResult(state);
             }
             catch
             {
@@ -328,7 +333,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             try
             {
                 IPHostEntry dns = Dns.EndGetHostEntry(asyncResult);
-                base.BeginConnect(new IPEndPoint(dns.AddressList[0], RemotePort), new AsyncCallback(this.OnConnect),
+                base.BeginConnect(new IPEndPoint(dns.AddressList[0], RemotePort), this.OnConnect,
                     State);
             }
             catch (Exception e)
@@ -358,47 +363,27 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// Called when the Socket has finished talking to the proxy server and is ready to relay data.
         /// </summary>
         /// <param name="error">The error to throw when the EndConnect method is called.</param>
-        private void OnHandShakeComplete(Exception error)
+        private void OnHandShakeComplete(Exception? error)
         {
             if (error != null)
                 this.Close();
+
             ToThrow = error;
+            CallBack?.Invoke(AsyncResult);
             AsyncResult.Reset();
-            if (CallBack != null)
-                CallBack(AsyncResult);
         }
 
         /// <summary>
         /// Gets or sets the EndPoint of the proxy server.
         /// </summary>
         /// <value>An IPEndPoint object that holds the IP address and the port of the proxy server.</value>
-        public IPEndPoint ProxyEndPoint
-        {
-            get
-            {
-                return _proxyEndPoint;
-            }
-            set
-            {
-                _proxyEndPoint = value;
-            }
-        }
+        public IPEndPoint ProxyEndPoint { get; set; }
 
         /// <summary>
         /// Gets or sets the type of proxy server to use.
         /// </summary>
         /// <value>One of the ProxyTypes values.</value>
-        public ProxyTypes ProxyType
-        {
-            get
-            {
-                return _proxyType;
-            }
-            set
-            {
-                _proxyType = value;
-            }
-        }
+        public ProxyTypes ProxyType { get; set; } = ProxyTypes.None;
 
         /// <summary>
         /// Gets or sets a user-defined object.
@@ -421,16 +406,10 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// </summary>
         /// <value>A string that holds the username that's used when authenticating with the proxy.</value>
         /// <exception cref="ArgumentNullException">The specified value is null.</exception>
-        public string? ProxyUser
+        public string ProxyUser
         {
-            get
-            {
-                return _proxyUser;
-            }
-            set
-            {
-                _proxyUser = value ?? throw new ArgumentNullException();
-            }
+            get => _proxyUser;
+            set => _proxyUser = value ?? throw new ArgumentNullException();
         }
 
         /// <summary>
@@ -438,92 +417,41 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// </summary>
         /// <value>A string that holds the password that's used when authenticating with the proxy.</value>
         /// <exception cref="ArgumentNullException">The specified value is null.</exception>
-        public string? ProxyPass
+        public string ProxyPass
         {
-            get
-            {
-                return _proxyPass;
-            }
-            set
-            {
-                _proxyPass = value ?? throw new ArgumentNullException();
-            }
+            get => _proxyPass;
+            set => _proxyPass = value ?? throw new ArgumentNullException();
         }
 
         /// <summary>
         /// Gets or sets the asynchronous result object.
         /// </summary>
         /// <value>An instance of the IAsyncProxyResult class.</value>
-        private IAsyncProxyResult AsyncResult
-        {
-            get
-            {
-                return _asyncResult;
-            }
-            set
-            {
-                _asyncResult = value;
-            }
-        }
+        private IAsyncProxyResult AsyncResult { get; set; }
 
         /// <summary>
         /// Gets or sets the exception to throw when the EndConnect method is called.
         /// </summary>
         /// <value>An instance of the Exception class (or subclasses of Exception).</value>
-        private Exception ToThrow
-        {
-            get
-            {
-                return _toThrow;
-            }
-            set
-            {
-                _toThrow = value;
-            }
-        }
+        private Exception? ToThrow { get; set; }
 
         /// <summary>
         /// Gets or sets the remote port the user wants to connect to.
         /// </summary>
         /// <value>An integer that specifies the port the user wants to connect to.</value>
-        private int RemotePort
-        {
-            get
-            {
-                return _remotePort;
-            }
-            set
-            {
-                _remotePort = value;
-            }
-        }
+        private int RemotePort { get; set; }
 
         // private variables
         /// <summary>Holds the value of the State property.</summary>
         private object _state;
 
-        /// <summary>Holds the value of the ProxyEndPoint property.</summary>
-        private IPEndPoint _proxyEndPoint;
-
-        /// <summary>Holds the value of the ProxyType property.</summary>
-        private ProxyTypes _proxyType = ProxyTypes.None;
-
         /// <summary>Holds the value of the ProxyUser property.</summary>
-        private string? _proxyUser;
+        private string _proxyUser = string.Empty;
 
         /// <summary>Holds the value of the ProxyPass property.</summary>
-        private string? _proxyPass;
+        private string _proxyPass = string.Empty;
 
         /// <summary>Holds a pointer to the method that should be called when the Socket is connected to the remote device.</summary>
         private AsyncCallback CallBack;
-
-        /// <summary>Holds the value of the AsyncResult property.</summary>
-        private IAsyncProxyResult _asyncResult;
-
-        /// <summary>Holds the value of the ToThrow property.</summary>
-        private Exception _toThrow;
-
-        /// <summary>Holds the value of the RemotePort property.</summary>
-        private int _remotePort;
     }
 }

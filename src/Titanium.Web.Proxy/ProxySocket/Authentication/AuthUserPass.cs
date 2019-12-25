@@ -110,7 +110,7 @@ namespace Titanium.Web.Proxy.ProxySocket.Authentication
         {
             CallBack = callback;
             Server.BeginSend(GetAuthenticationBytes(), 0, GetAuthenticationLength(), SocketFlags.None,
-                new AsyncCallback(this.OnSent), Server);
+                this.OnSent, Server);
             return;
         }
 
@@ -125,7 +125,7 @@ namespace Titanium.Web.Proxy.ProxySocket.Authentication
                 if (Server.EndSend(ar) < GetAuthenticationLength())
                     throw new SocketException(10054);
                 Buffer = new byte[2];
-                Server.BeginReceive(Buffer, 0, 2, SocketFlags.None, new AsyncCallback(this.OnReceive), Server);
+                Server.BeginReceive(Buffer, 0, 2, SocketFlags.None, this.OnReceive, Server);
             }
             catch (Exception e)
             {
@@ -152,7 +152,7 @@ namespace Titanium.Web.Proxy.ProxySocket.Authentication
                         throw new ProxyException("Username/password combination not accepted.");
                 else
                     Server.BeginReceive(Buffer, Received, Buffer.Length - Received, SocketFlags.None,
-                        new AsyncCallback(this.OnReceive), Server);
+                        this.OnReceive, Server);
             }
             catch (Exception e)
             {

@@ -220,14 +220,15 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <param name="port">The port to connect to.</param>
         /// <param name="callback">The method to call when the negotiation is complete.</param>
         /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
+        /// <param name="state">The state.</param>
         /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
         public override IAsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
-            IPEndPoint proxyEndPoint)
+            IPEndPoint proxyEndPoint, object state)
         {
             ProtocolComplete = callback;
             HandShake = GetHostPortBytes(host, port);
-            Server.BeginConnect(proxyEndPoint, new AsyncCallback(this.OnConnect), Server);
-            AsyncResult = new IAsyncProxyResult();
+            Server.BeginConnect(proxyEndPoint, this.OnConnect, Server);
+            AsyncResult = new IAsyncProxyResult(state);
             return AsyncResult;
         }
 
@@ -237,14 +238,15 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <param name="remoteEP">An IPEndPoint that represents the remote device.</param>
         /// <param name="callback">The method to call when the negotiation is complete.</param>
         /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
+        /// <param name="state">The state.</param>
         /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
         public override IAsyncProxyResult BeginNegotiate(IPEndPoint remoteEP, HandShakeComplete callback,
-            IPEndPoint proxyEndPoint)
+            IPEndPoint proxyEndPoint, object state)
         {
             ProtocolComplete = callback;
             HandShake = GetEndPointBytes(remoteEP);
-            Server.BeginConnect(proxyEndPoint, new AsyncCallback(this.OnConnect), Server);
-            AsyncResult = new IAsyncProxyResult();
+            Server.BeginConnect(proxyEndPoint, this.OnConnect, Server);
+            AsyncResult = new IAsyncProxyResult(state);
             return AsyncResult;
         }
 
@@ -266,7 +268,7 @@ namespace Titanium.Web.Proxy.ProxySocket
 
             try
             {
-                Server.BeginSend(new byte[] { 5, 2, 0, 2 }, 0, 4, SocketFlags.None, new AsyncCallback(this.OnAuthSent),
+                Server.BeginSend(new byte[] { 5, 2, 0, 2 }, 0, 4, SocketFlags.None, this.OnAuthSent,
                     Server);
             }
             catch (Exception e)
@@ -295,7 +297,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             {
                 Buffer = new byte[1024];
                 Received = 0;
-                Server.BeginReceive(Buffer, 0, Buffer.Length, SocketFlags.None, new AsyncCallback(this.OnAuthReceive),
+                Server.BeginReceive(Buffer, 0, Buffer.Length, SocketFlags.None, this.OnAuthReceive,
                     Server);
             }
             catch (Exception e)
@@ -325,7 +327,7 @@ namespace Titanium.Web.Proxy.ProxySocket
                 if (Received < 2)
                 {
                     Server.BeginReceive(Buffer, Received, Buffer.Length - Received, SocketFlags.None,
-                        new AsyncCallback(this.OnAuthReceive), Server);
+                        this.OnAuthReceive, Server);
                 }
                 else
                 {
@@ -343,7 +345,7 @@ namespace Titanium.Web.Proxy.ProxySocket
                             return;
                     }
 
-                    authenticate.BeginAuthenticate(new HandShakeComplete(this.OnAuthenticated));
+                    authenticate.BeginAuthenticate(this.OnAuthenticated);
                 }
             }
             catch (Exception e)
@@ -366,7 +368,7 @@ namespace Titanium.Web.Proxy.ProxySocket
 
             try
             {
-                Server.BeginSend(HandShake, 0, HandShake.Length, SocketFlags.None, new AsyncCallback(this.OnSent),
+                Server.BeginSend(HandShake, 0, HandShake.Length, SocketFlags.None, this.OnSent,
                     Server);
             }
             catch (Exception ex)
@@ -395,7 +397,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             {
                 Buffer = new byte[5];
                 Received = 0;
-                Server.BeginReceive(Buffer, 0, Buffer.Length, SocketFlags.None, new AsyncCallback(this.OnReceive),
+                Server.BeginReceive(Buffer, 0, Buffer.Length, SocketFlags.None, this.OnReceive,
                     Server);
             }
             catch (Exception e)
@@ -426,7 +428,7 @@ namespace Titanium.Web.Proxy.ProxySocket
                     ProcessReply(Buffer);
                 else
                     Server.BeginReceive(Buffer, Received, Buffer.Length - Received, SocketFlags.None,
-                        new AsyncCallback(this.OnReceive), Server);
+                        this.OnReceive, Server);
             }
             catch (Exception e)
             {
@@ -457,7 +459,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             }
 
             Received = 0;
-            Server.BeginReceive(Buffer, 0, Buffer.Length, SocketFlags.None, new AsyncCallback(this.OnReadLast), Server);
+            Server.BeginReceive(Buffer, 0, Buffer.Length, SocketFlags.None, this.OnReadLast, Server);
         }
 
         /// <summary>
@@ -482,7 +484,7 @@ namespace Titanium.Web.Proxy.ProxySocket
                     ProtocolComplete(null);
                 else
                     Server.BeginReceive(Buffer, Received, Buffer.Length - Received, SocketFlags.None,
-                        new AsyncCallback(this.OnReadLast), Server);
+                        this.OnReadLast, Server);
             }
             catch (Exception e)
             {
