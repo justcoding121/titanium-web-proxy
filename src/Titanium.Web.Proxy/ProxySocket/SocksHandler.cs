@@ -197,7 +197,7 @@ namespace Titanium.Web.Proxy.ProxySocket
         private Socket _server;
 
         /// <summary>Holds the value of the Username property.</summary>
-        private string _username;
+        private string _username = string.Empty;
 
         /// <summary>Holds the address of the method to call when the SOCKS protocol has been completed.</summary>
         protected HandShakeComplete ProtocolComplete;

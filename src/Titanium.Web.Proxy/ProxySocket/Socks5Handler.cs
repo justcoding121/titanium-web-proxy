@@ -177,7 +177,7 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <exception cref="ProtocolViolationException">The proxy server uses an invalid protocol.</exception>
         public override void Negotiate(string host, int port)
         {
-            var buffer = ArrayPool<byte>.Shared.Rent(1024);
+            var buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 10 + host.Length + Username.Length + Password.Length));
             try
             {
                 Authenticate(buffer);
@@ -202,7 +202,7 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <exception cref="ProtocolViolationException">The proxy server uses an invalid protocol.</exception>
         public override void Negotiate(IPEndPoint remoteEP)
         {
-            var buffer = ArrayPool<byte>.Shared.Rent(1024);
+            var buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 13 + Username.Length + Password.Length));
             try
             {
                 Authenticate(buffer);
@@ -270,7 +270,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             IPEndPoint proxyEndPoint, object state)
         {
             ProtocolComplete = callback;
-            Buffer = ArrayPool<byte>.Shared.Rent(1024);
+            Buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 10 + host.Length + Username.Length + Password.Length));
 
             // first {ConnectOffset} bytes are reserved for authentication 
             _handShakeLength = GetHostPortBytes(host, port, Buffer.AsMemory(ConnectOffset));
@@ -291,7 +291,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             IPEndPoint proxyEndPoint, object state)
         {
             ProtocolComplete = callback;
-            Buffer = ArrayPool<byte>.Shared.Rent(1024);
+            Buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 13 + Username.Length + Password.Length));
 
             // first {ConnectOffset} bytes are reserved for authentication 
             _handShakeLength = GetEndPointBytes(remoteEP, Buffer.AsMemory(ConnectOffset));
@@ -565,6 +565,6 @@ namespace Titanium.Web.Proxy.ProxySocket
 
         // private variables
         /// <summary>Holds the value of the Password property.</summary>
-        private string _password;
+        private string _password = string.Empty;
     }
 }

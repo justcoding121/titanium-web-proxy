@@ -30,6 +30,7 @@
 
 using System;
 using System.Buffers;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -68,8 +69,7 @@ namespace Titanium.Web.Proxy.ProxySocket
                 throw new ArgumentException(nameof(port));
 
             int length = 10 + Username.Length + host.Length;
-            if (buffer.Length < length)
-                throw new ArgumentException(nameof(buffer));
+            Debug.Assert(buffer.Length >= length);
 
             var connect = buffer.Span;
             connect[0] = 4;
@@ -80,8 +80,8 @@ namespace Titanium.Web.Proxy.ProxySocket
             var userNameArray = Encoding.ASCII.GetBytes(Username);
             userNameArray.CopyTo(connect.Slice(8));
             connect[8 + Username.Length] = 0;
-            Encoding.ASCII.GetBytes(host).CopyTo(connect.Slice(9 + userNameArray.Length));
-            connect[9 + Username.Length + host.Length] = 0;
+            Encoding.ASCII.GetBytes(host).CopyTo(connect.Slice(9 + Username.Length));
+            connect[length - 1] = 0;
             return length;
         }
 
@@ -98,8 +98,7 @@ namespace Titanium.Web.Proxy.ProxySocket
                 throw new ArgumentNullException(nameof(remoteEP));
 
             int length = 9 + Username.Length;
-            if (buffer.Length < length)
-                throw new ArgumentException(nameof(buffer));
+            Debug.Assert(buffer.Length >= length);
 
             var connect = buffer.Span;
             connect[0] = 4;
@@ -107,7 +106,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             PortToBytes(remoteEP.Port, connect.Slice(2));
             remoteEP.Address.GetAddressBytes().CopyTo(connect.Slice(4));
             Encoding.ASCII.GetBytes(Username).CopyTo(connect.Slice(8));
-            connect[8 + Username.Length] = 0;
+            connect[length - 1] = 0;
             return length;
         }
 
@@ -123,7 +122,7 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
         public override void Negotiate(string host, int port)
         {
-            var buffer = ArrayPool<byte>.Shared.Rent(1024);
+            var buffer = ArrayPool<byte>.Shared.Rent(10 + Username.Length + host.Length);
             try
             {
                 int length = GetHostPortBytes(host, port, buffer);
@@ -145,7 +144,7 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
         public override void Negotiate(IPEndPoint remoteEP)
         {
-            var buffer = ArrayPool<byte>.Shared.Rent(1024);
+            var buffer = ArrayPool<byte>.Shared.Rent(9 + Username.Length);
             try
             {
                 int length = GetEndPointBytes(remoteEP, buffer);
@@ -199,7 +198,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             IPEndPoint proxyEndPoint, object state)
         {
             ProtocolComplete = callback;
-            Buffer = ArrayPool<byte>.Shared.Rent(1024);
+            Buffer = ArrayPool<byte>.Shared.Rent(10 + Username.Length + host.Length);
             BufferCount = GetHostPortBytes(host, port, Buffer);
             Server.BeginConnect(proxyEndPoint, OnConnect, Server);
             AsyncResult = new IAsyncProxyResult(state);
@@ -218,7 +217,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             IPEndPoint proxyEndPoint, object state)
         {
             ProtocolComplete = callback;
-            Buffer = ArrayPool<byte>.Shared.Rent(1024);
+            Buffer = ArrayPool<byte>.Shared.Rent(9 + Username.Length);
             BufferCount = GetEndPointBytes(remoteEP, Buffer);
             Server.BeginConnect(proxyEndPoint, OnConnect, Server);
             AsyncResult = new IAsyncProxyResult(state);

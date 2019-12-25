@@ -74,16 +74,8 @@ namespace Titanium.Web.Proxy.ProxySocket.Authentication
         /// <value>The socket connection with the proxy server.</value>
         protected Socket Server
         {
-            get
-            {
-                return _server;
-            }
-            set
-            {
-                if (value == null)
-                    throw new ArgumentNullException();
-                _server = value;
-            }
+            get => _server;
+            set => _server = value ?? throw new ArgumentNullException();
         }
 
         /// <summary>
