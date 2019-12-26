@@ -21,7 +21,7 @@ namespace WindowsServiceExample
         {
             // we do all this in here so we can reload settings with a simple restart
 
-            _proxyServerInstance = new ProxyServer();
+            _proxyServerInstance = new ProxyServer(false);
 
             if (Properties.Settings.Default.ListeningPort <= 0 ||
                 Properties.Settings.Default.ListeningPort > 65535)
