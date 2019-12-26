@@ -66,7 +66,7 @@ environment:
   github_access_token:
     secure: mZLeq0GTB9kb5b6+HnVpJB6hhiYMJIQ2+Zf/DwZ/LEIyxJaYB1nx36aGHXE9q1cN
   github_email:
-    secure: wvYod3JLufbIBkavRXlCP724wJkhqR2RRuLLaPnqfps=
+    secure: iBJZGqxyiHVNeYI0uIW+MdGd3I3pg8brJtETNRkKe/A=
   nuget_access_token:
     secure: ZbRmjOcp+TDllRV1wxqLZjdRV7hld388rXlWVJuGGiQleomP9Ku+Nsy3a75E7/9k
 deploy:
