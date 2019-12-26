@@ -241,7 +241,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 if (cache.TryGetValue(cacheKey, out var existingConnections))
                 {
                     // +3 seconds for potential delay after getting connection
-                    var cutOff = DateTime.Now.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
+                    var cutOff = DateTime.UtcNow.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
                     while (existingConnections.Count > 0)
                     {
                         if (existingConnections.TryDequeue(out var recentConnection))
@@ -350,7 +350,7 @@ retry:
 
                 if (sessionArgs != null)
                 {
-                    sessionArgs.TimeLine["Dns Resolved"] = DateTime.Now;
+                    sessionArgs.TimeLine["Dns Resolved"] = DateTime.UtcNow;
                 }
 
                 Array.Sort(ipAddresses, (x, y) => x.AddressFamily.CompareTo(y.AddressFamily));
@@ -458,7 +458,7 @@ retry:
                         if (newUpstreamProxy != null)
                         {
                             sessionArgs.CustomUpStreamProxyUsed = newUpstreamProxy;
-                            sessionArgs.TimeLine["Retrying Upstream Proxy Connection"] = DateTime.Now;
+                            sessionArgs.TimeLine["Retrying Upstream Proxy Connection"] = DateTime.UtcNow;
                             return await createServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol, applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey, cancellationToken);
                         }
                     }
@@ -468,7 +468,7 @@ retry:
 
                 if (sessionArgs != null)
                 {
-                    sessionArgs.TimeLine["Connection Established"] = DateTime.Now;
+                    sessionArgs.TimeLine["Connection Established"] = DateTime.UtcNow;
                 }
 
                 await proxyServer.InvokeServerConnectionCreateEvent(tcpServerSocket);
@@ -532,7 +532,7 @@ retry:
 
                     if (sessionArgs != null)
                     {
-                        sessionArgs.TimeLine["HTTPS Established"] = DateTime.Now;
+                        sessionArgs.TimeLine["HTTPS Established"] = DateTime.UtcNow;
                     }
                 }
             }
@@ -570,7 +570,7 @@ retry:
                 return;
             }
 
-            connection.LastAccess = DateTime.Now;
+            connection.LastAccess = DateTime.UtcNow;
 
             try
             {
@@ -634,7 +634,7 @@ retry:
             {
                 try
                 {
-                    var cutOff = DateTime.Now.AddSeconds(-Server.ConnectionTimeOutSeconds);
+                    var cutOff = DateTime.UtcNow.AddSeconds(-Server.ConnectionTimeOutSeconds);
                     foreach (var item in cache)
                     {
                         var queue = item.Value;

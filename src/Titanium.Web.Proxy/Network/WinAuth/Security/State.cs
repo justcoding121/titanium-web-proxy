@@ -43,7 +43,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             Credentials = new Common.SecurityHandle(0);
             Context = new Common.SecurityHandle(0);
 
-            LastSeen = DateTime.Now;
+            LastSeen = DateTime.UtcNow;
             AuthState = WinAuthState.UNAUTHORIZED;
         }
 
@@ -56,7 +56,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
         internal void UpdatePresence()
         {
-            LastSeen = DateTime.Now;
+            LastSeen = DateTime.UtcNow;
         }
     }
 }

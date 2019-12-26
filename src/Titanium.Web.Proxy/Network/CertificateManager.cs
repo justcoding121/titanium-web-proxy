@@ -459,7 +459,7 @@ namespace Titanium.Web.Proxy.Network
             // check in cache first
             if (cachedCertificates.TryGetValue(certificateName, out var cached))
             {
-                cached.LastAccess = DateTime.Now;
+                cached.LastAccess = DateTime.UtcNow;
                 return cached.Certificate;
             }
 
@@ -498,7 +498,7 @@ namespace Titanium.Web.Proxy.Network
             var cancellationToken = clearCertificatesTokenSource.Token;
             while (!cancellationToken.IsCancellationRequested)
             {
-                var cutOff = DateTime.Now.AddMinutes(-CertificateCacheTimeOutMinutes);
+                var cutOff = DateTime.UtcNow.AddMinutes(-CertificateCacheTimeOutMinutes);
 
                 var outdated = cachedCertificates.Where(x => x.Value.LastAccess < cutOff).ToList();
 
