@@ -90,7 +90,7 @@ namespace Titanium.Web.Proxy
                             request.Method = requestLine.Method;
                             request.HttpVersion = requestLine.Version;
 
-                            if (!args.IsTransparent)
+                            if (!args.IsTransparent && !args.IsSocks)
                             {
                                 // proxy authorization check
                                 if (connectRequest == null && await checkAuthorization(args) == false)

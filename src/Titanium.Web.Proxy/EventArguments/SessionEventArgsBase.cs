@@ -141,6 +141,11 @@ namespace Titanium.Web.Proxy.EventArguments
         public bool IsTransparent => ProxyEndPoint is TransparentProxyEndPoint;
 
         /// <summary>
+        ///     Is this a SOCKS endpoint?
+        /// </summary>
+        public bool IsSocks => ProxyEndPoint is SocksProxyEndPoint;
+
+        /// <summary>
         ///     The last exception that happened.
         /// </summary>
         public Exception? Exception { get; internal set; }

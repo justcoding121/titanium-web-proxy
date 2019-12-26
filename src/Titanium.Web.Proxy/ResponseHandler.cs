@@ -99,7 +99,7 @@ namespace Titanium.Web.Proxy
 
             response.Locked = true;
 
-            if (!args.IsTransparent)
+            if (!args.IsTransparent && !args.IsSocks)
             {
                 response.Headers.FixProxyHeaders();
             }
