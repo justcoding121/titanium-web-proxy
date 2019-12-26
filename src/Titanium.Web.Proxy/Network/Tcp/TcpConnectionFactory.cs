@@ -385,6 +385,11 @@ retry:
                             tcpServerSocket = new Socket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
                         }
 
+                        if (upStreamEndPoint != null)
+                        {
+                            tcpServerSocket.Bind(upStreamEndPoint);
+                        }
+
                         tcpServerSocket.NoDelay = proxyServer.NoDelay;
                         tcpServerSocket.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
                         tcpServerSocket.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
