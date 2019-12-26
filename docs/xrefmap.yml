@@ -732,6 +732,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsHttps
   nameWithType: SessionEventArgsBase.IsHttps
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsSocks
+  name: IsSocks
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsSocks
+  commentId: P:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsSocks
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsSocks
+  nameWithType: SessionEventArgsBase.IsSocks
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsSocks*
+  name: IsSocks
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsSocks_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsSocks
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsSocks
+  nameWithType: SessionEventArgsBase.IsSocks
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsTransparent
   name: IsTransparent
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_IsTransparent
