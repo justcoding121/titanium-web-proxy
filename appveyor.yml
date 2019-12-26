@@ -45,7 +45,7 @@ test_script:
 skip_tags: true
 
 skip_commits:
-  author: buildbot121
+  author: buildbot171
   files:
     - docs/*
     - .vscode/*
@@ -64,7 +64,7 @@ artifacts:
 
 environment:
   github_access_token:
-    secure: BGdKiI7FwHGkFt+/OmgZDkE1hzLqLrTxcc9c+joVqGyO4LvesHb1sR6hzisVwVPm
+    secure: mZLeq0GTB9kb5b6+HnVpJB6hhiYMJIQ2+Zf/DwZ/LEIyxJaYB1nx36aGHXE9q1cN
   github_email:
     secure: wvYod3JLufbIBkavRXlCP724wJkhqR2RRuLLaPnqfps=
   nuget_access_token:
