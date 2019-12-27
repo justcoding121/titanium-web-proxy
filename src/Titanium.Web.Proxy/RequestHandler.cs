@@ -68,7 +68,10 @@ namespace Titanium.Web.Proxy
                         UserData = connectArgs?.UserData
                     };
 
-                    args.HttpClient.Request.IsHttps = isHttps;
+                    if (isHttps)
+                    {
+                        args.HttpClient.Request.IsHttps = true;
+                    }
 
                     try
                     {
@@ -358,7 +361,7 @@ namespace Titanium.Web.Proxy
                     .Where(x => ProxyConstants.ProxySupportedCompressions.Contains(x)));
 
                 // uncompressed is always supported by proxy
-                supportedAcceptEncoding.Add("identity");
+                //supportedAcceptEncoding.Add("identity");
 
                 requestHeaders.SetOrAddHeaderValue(KnownHeaders.AcceptEncoding,
                     string.Join(", ", supportedAcceptEncoding));
