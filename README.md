@@ -15,6 +15,7 @@ Kindly report only issues/bugs here. For programming help or questions use [Stac
 * View/modify/redirect/block requests and responses
 * Supports mutual SSL authentication, proxy authentication & automatic upstream proxy detection
 * Kerberos/NTLM authentication over HTTP protocols for windows domain
+* SOCKS4/5 Proxy support
 
 ### Installation
 Install by [nuget](https://www.nuget.org/packages/Titanium.Web.Proxy)
@@ -29,21 +30,21 @@ For stable releases on [stable branch](https://github.com/justcoding121/Titanium
 
 Supports
 
- * .Net Standard 2.0 or above
- * .Net Framework 4.6.1 or above
+ * .NET Standard 2.0 or above
+ * .NET Framework 4.5 or above
  
 ### Development environment
 
 #### Windows
-* Visual Studio Code as IDE for .NET core
-* Visual Studio 2017/2019 as IDE for .NET framework/.NET core
+* Visual Studio Code as IDE for .NET Core
+* Visual Studio 2019 as IDE for .NET Framework/.NET Core
 
 #### Mac OS
-* Visual Studio Code as IDE for .NET core
-* Visual Studio 2017 as IDE for Mono
+* Visual Studio Code as IDE for .NET Core
+* Visual Studio 2019 as IDE for Mono
 
 #### Linux
-* Visual Studio Code as IDE for .NET core
+* Visual Studio Code as IDE for .NET Core
 * Mono develop as IDE for Mono
 
 ### Usage
@@ -191,7 +192,7 @@ public async Task OnResponse(object sender, SessionEventArgs e)
     {
         if (e.HttpClient.Response.ResponseStatusCode == "200")
         {
-            if (e.HttpClient.Response.ContentType!=null && e.HttpClient.Response.ContentType.Trim().ToLower().Contains("text/html"))
+            if (e.HttpClient.Response.ContentType != null && e.HttpClient.Response.ContentType.Trim().ToLower().Contains("text/html"))
             {
                 byte[] bodyBytes = await e.GetResponseBody();
                 await e.SetResponseBody(bodyBytes);
@@ -202,7 +203,7 @@ public async Task OnResponse(object sender, SessionEventArgs e)
         }
     }
     
-    if (e.UserData!=null)
+    if (e.UserData != null)
     {
         // access request from UserData property where we stored it in RequestHandler
         var request = (Request)e.UserData;
@@ -216,14 +217,14 @@ public Task OnCertificateValidation(object sender, CertificateValidationEventArg
     if (e.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
         e.IsValid = true;
 
-    return Task.FromResult(0);
+    return Task.CompletedTask;
 }
 
 // Allows overriding default client certificate selection logic during mutual authentication
 public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs e)
 {
     // set e.clientCertificate to override
-    return Task.FromResult(0);
+    return Task.CompletedTask;
 }
 ```
 ###  Note to contributors

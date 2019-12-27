@@ -44,6 +44,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
             };
             proxyServer.ForwardToUpstreamGateway = true;
             proxyServer.CertificateManager.SaveFakeCertificates = true;
+            //proxyServer.ProxyBasicAuthenticateFunc = async (args, userName, password) =>
+            //{
+            //    return true;
+            //};
 
             // this is just to show the functionality, provided implementations use junk value
             //proxyServer.GetCustomUpStreamProxyFunc = onGetCustomUpStreamProxyFunc;
@@ -94,8 +98,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.UpStreamHttpsProxy = new ExternalProxy("localhost", 8888);
 
             // SOCKS proxy
-            //proxyServer.UpStreamHttpProxy = new ExternalProxy("46.63.0.17", 4145) { ProxyType = ExternalProxyType.Socks4 };
-            //proxyServer.UpStreamHttpsProxy = new ExternalProxy("46.63.0.17", 4145) { ProxyType = ExternalProxyType.Socks4 };
+            //proxyServer.UpStreamHttpProxy = new ExternalProxy("127.0.0.1", 1080)
+            //    { ProxyType = ExternalProxyType.Socks5, UserName = "User1", Password = "Pass" };
+            //proxyServer.UpStreamHttpsProxy = new ExternalProxy("127.0.0.1", 1080)
+            //    { ProxyType = ExternalProxyType.Socks5, UserName = "User1", Password = "Pass" };
+
 
             //var socksEndPoint = new SocksProxyEndPoint(IPAddress.Any, 1080, true)
             //{
@@ -167,6 +174,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
             e.GetState().PipelineInfo.AppendLine(nameof(onBeforeTunnelConnectRequest) + ":" + hostname);
             await writeToConsole("Tunnel to: " + hostname);
 
+            var clientLocalIp = e.ClientLocalEndPoint.Address;
+            if (!clientLocalIp.Equals(IPAddress.Loopback) && !clientLocalIp.Equals(IPAddress.IPv6Loopback))
+            {
+                e.HttpClient.UpStreamEndPoint = new IPEndPoint(clientLocalIp, 0);
+            }
+
             if (hostname.Contains("dropbox.com"))
             {
                 // Exclude Https addresses you don't want to proxy
@@ -212,7 +225,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             e.GetState().PipelineInfo.AppendLine(nameof(onBeforeTunnelConnectResponse) + ":" + e.HttpClient.Request.RequestUri);
 
-            return Task.FromResult(false);
+            return Task.CompletedTask;
         }
 
         // intercept & cancel redirect or update requests
@@ -356,7 +369,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 e.IsValid = true;
             }
 
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -370,7 +383,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             // set e.clientCertificate to override
 
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         private async Task writeToConsole(string message, ConsoleColor? consoleColor = null)

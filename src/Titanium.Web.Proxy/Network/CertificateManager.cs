@@ -24,6 +24,8 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         BouncyCastle = 0,
 
+        BouncyCastleFast = 2,
+        
         /// <summary>
         ///     Uses Windows Certification Generation API and only valid in Windows OS.
         ///     Observed to be faster than BouncyCastle.
@@ -68,9 +70,19 @@ namespace Titanium.Web.Proxy.Network
             {
                 if (certEngineValue == null)
                 {
-                    certEngineValue = engine == CertificateEngine.BouncyCastle
-                        ? (ICertificateMaker)new BCCertificateMaker(ExceptionFunc)
-                        : new WinCertificateMaker(ExceptionFunc);
+                    switch (engine)
+                    {
+                        case CertificateEngine.BouncyCastle:
+                            certEngineValue = new BCCertificateMaker(ExceptionFunc);
+                            break;
+                        case CertificateEngine.BouncyCastleFast:
+                            certEngineValue = new BCCertificateMakerFast(ExceptionFunc);
+                            break;
+                        case CertificateEngine.DefaultWindows:
+                        default:
+                            certEngineValue = new WinCertificateMaker(ExceptionFunc);
+                            break;
+                    }
                 }
 
                 return certEngineValue;
@@ -459,7 +471,7 @@ namespace Titanium.Web.Proxy.Network
             // check in cache first
             if (cachedCertificates.TryGetValue(certificateName, out var cached))
             {
-                cached.LastAccess = DateTime.Now;
+                cached.LastAccess = DateTime.UtcNow;
                 return cached.Certificate;
             }
 
@@ -498,7 +510,7 @@ namespace Titanium.Web.Proxy.Network
             var cancellationToken = clearCertificatesTokenSource.Token;
             while (!cancellationToken.IsCancellationRequested)
             {
-                var cutOff = DateTime.Now.AddMinutes(-CertificateCacheTimeOutMinutes);
+                var cutOff = DateTime.UtcNow.AddMinutes(-CertificateCacheTimeOutMinutes);
 
                 var outdated = cachedCertificates.Where(x => x.Value.LastAccess < cutOff).ToList();
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
@@ -48,13 +49,76 @@ namespace Titanium.Web.Proxy
                 }
                 else if (buffer[0] == 5)
                 {
-                    if (buffer[1] == 0 || buffer[2] != 0)
+                    int authenticationMethodCount = buffer[1];
+                    if (read < authenticationMethodCount + 2)
                     {
                         return;
                     }
 
-                    buffer[1] = 0;
+                    int acceptedMethod = 255;
+                    for (int i = 0; i < authenticationMethodCount; i++)
+                    {
+                        int method = buffer[i + 2];
+                        if (method == 0 && ProxyBasicAuthenticateFunc == null)
+                        {
+                            acceptedMethod = 0;
+                            break;
+                        }
+
+                        if (method == 2)
+                        {
+                            acceptedMethod = 2;
+                            break;
+                        }
+                    }
+
+                    buffer[1] = (byte)acceptedMethod;
                     await stream.WriteAsync(buffer, 0, 2, cancellationToken);
+
+                    if (acceptedMethod == 255)
+                    {
+                        // no acceptable method
+                        return;
+                    }
+
+                    if (acceptedMethod == 2)
+                    {
+                        read = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+                        if (read < 3 || buffer[0] != 1)
+                        {
+                            // authentication version should be 1
+                            return;
+                        }
+
+                        int userNameLength = buffer[1];
+                        if (read < 3 + userNameLength)
+                        {
+                            return;
+                        }
+
+                        string userName = Encoding.ASCII.GetString(buffer, 2, userNameLength);
+
+                        int passwordLength = buffer[2 + userNameLength];
+                        if (read < 3 + userNameLength + passwordLength)
+                        {
+                            return;
+                        }
+
+                        string password = Encoding.ASCII.GetString(buffer, 3 + userNameLength, passwordLength);
+                        bool success = true;
+                        if (ProxySchemeAuthenticateFunc != null)
+                        {
+                            success = await ProxyBasicAuthenticateFunc.Invoke(null, userName, password);
+                        }
+
+                        buffer[1] = success ? (byte)0 : (byte)1;
+                        await stream.WriteAsync(buffer, 0, 2, cancellationToken);
+                        if (!success)
+                        {
+                            return;
+                        }
+                    }
+
                     read = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
                     if (read < 10 || buffer[1] != 1)
                     {

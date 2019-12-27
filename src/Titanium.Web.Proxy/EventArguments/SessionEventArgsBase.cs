@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             BufferPool = server.BufferPool;
             ExceptionFunc = server.ExceptionFunc;
-            TimeLine["Session Created"] = DateTime.Now;
+            TimeLine["Session Created"] = DateTime.UtcNow;
 
             CancellationTokenSource = cancellationTokenSource;
 
@@ -139,6 +139,11 @@ namespace Titanium.Web.Proxy.EventArguments
         ///     Is this a transparent endpoint?
         /// </summary>
         public bool IsTransparent => ProxyEndPoint is TransparentProxyEndPoint;
+
+        /// <summary>
+        ///     Is this a SOCKS endpoint?
+        /// </summary>
+        public bool IsSocks => ProxyEndPoint is SocksProxyEndPoint;
 
         /// <summary>
         ///     The last exception that happened.

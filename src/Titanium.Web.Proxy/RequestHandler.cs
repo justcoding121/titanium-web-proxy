@@ -90,7 +90,7 @@ namespace Titanium.Web.Proxy
                             request.Method = requestLine.Method;
                             request.HttpVersion = requestLine.Version;
 
-                            if (!args.IsTransparent)
+                            if (!args.IsTransparent && !args.IsSocks)
                             {
                                 // proxy authorization check
                                 if (connectRequest == null && await checkAuthorization(args) == false)
@@ -279,7 +279,7 @@ namespace Titanium.Web.Proxy
                 // set the connection and send request headers
                 args.HttpClient.SetConnection(connection);
 
-                args.TimeLine["Connection Ready"] = DateTime.Now;
+                args.TimeLine["Connection Ready"] = DateTime.UtcNow;
 
                 if (args.HttpClient.Request.UpgradeToWebSocket)
                 {
@@ -335,7 +335,7 @@ namespace Titanium.Web.Proxy
                 }
             }
 
-            args.TimeLine["Request Sent"] = DateTime.Now;
+            args.TimeLine["Request Sent"] = DateTime.UtcNow;
 
             // parse and send response
             await handleHttpSessionResponse(args);
@@ -374,7 +374,7 @@ namespace Titanium.Web.Proxy
         /// <returns></returns>
         private async Task onBeforeRequest(SessionEventArgs args)
         {
-            args.TimeLine["Request Received"] = DateTime.Now;
+            args.TimeLine["Request Received"] = DateTime.UtcNow;
 
             if (BeforeRequest != null)
             {
