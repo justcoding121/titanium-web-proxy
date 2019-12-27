@@ -372,7 +372,7 @@ namespace Titanium.Web.Proxy
                     .Where(x => ProxyConstants.ProxySupportedCompressions.Contains(x)));
 
                 // uncompressed is always supported by proxy
-                //supportedAcceptEncoding.Add("identity");
+                supportedAcceptEncoding.Add("identity");
 
                 requestHeaders.SetOrAddHeaderValue(KnownHeaders.AcceptEncoding,
                     string.Join(", ", supportedAcceptEncoding));
