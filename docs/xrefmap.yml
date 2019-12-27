@@ -2913,6 +2913,12 @@ references:
   commentId: F:Titanium.Web.Proxy.Network.CertificateEngine.BouncyCastle
   fullName: Titanium.Web.Proxy.Network.CertificateEngine.BouncyCastle
   nameWithType: CertificateEngine.BouncyCastle
+- uid: Titanium.Web.Proxy.Network.CertificateEngine.BouncyCastleFast
+  name: BouncyCastleFast
+  href: api/Titanium.Web.Proxy.Network.CertificateEngine.html#Titanium_Web_Proxy_Network_CertificateEngine_BouncyCastleFast
+  commentId: F:Titanium.Web.Proxy.Network.CertificateEngine.BouncyCastleFast
+  fullName: Titanium.Web.Proxy.Network.CertificateEngine.BouncyCastleFast
+  nameWithType: CertificateEngine.BouncyCastleFast
 - uid: Titanium.Web.Proxy.Network.CertificateEngine.DefaultWindows
   name: DefaultWindows
   href: api/Titanium.Web.Proxy.Network.CertificateEngine.html#Titanium_Web_Proxy_Network_CertificateEngine_DefaultWindows
