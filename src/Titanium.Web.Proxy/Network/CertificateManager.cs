@@ -24,6 +24,8 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         BouncyCastle = 0,
 
+        BouncyCastleFast = 2,
+        
         /// <summary>
         ///     Uses Windows Certification Generation API and only valid in Windows OS.
         ///     Observed to be faster than BouncyCastle.
@@ -68,9 +70,19 @@ namespace Titanium.Web.Proxy.Network
             {
                 if (certEngineValue == null)
                 {
-                    certEngineValue = engine == CertificateEngine.BouncyCastle
-                        ? (ICertificateMaker)new BCCertificateMaker(ExceptionFunc)
-                        : new WinCertificateMaker(ExceptionFunc);
+                    switch (engine)
+                    {
+                        case CertificateEngine.BouncyCastle:
+                            certEngineValue = new BCCertificateMaker(ExceptionFunc);
+                            break;
+                        case CertificateEngine.BouncyCastleFast:
+                            certEngineValue = new BCCertificateMakerFast(ExceptionFunc);
+                            break;
+                        case CertificateEngine.DefaultWindows:
+                        default:
+                            certEngineValue = new WinCertificateMaker(ExceptionFunc);
+                            break;
+                    }
                 }
 
                 return certEngineValue;
