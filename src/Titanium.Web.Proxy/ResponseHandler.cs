@@ -32,7 +32,7 @@ namespace Titanium.Web.Proxy
                 await args.HttpClient.ReceiveResponse(cancellationToken);
             }
 
-            args.TimeLine["Response Received"] = DateTime.Now;
+            args.TimeLine["Response Received"] = DateTime.UtcNow;
 
             var response = args.HttpClient.Response;
             args.ReRequest = false;
@@ -122,7 +122,7 @@ namespace Titanium.Web.Proxy
                 }
             }
 
-            args.TimeLine["Response Sent"] = DateTime.Now;
+            args.TimeLine["Response Sent"] = DateTime.UtcNow;
         }
 
         /// <summary>

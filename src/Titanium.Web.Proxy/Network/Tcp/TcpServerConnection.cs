@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             Version version, IExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string cacheKey)
         {
             TcpSocket = tcpSocket;
-            LastAccess = DateTime.Now;
+            LastAccess = DateTime.UtcNow;
             this.proxyServer = proxyServer;
             this.proxyServer.UpdateServerConnectionCount(true);
             Stream = stream;

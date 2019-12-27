@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             BufferPool = server.BufferPool;
             ExceptionFunc = server.ExceptionFunc;
-            TimeLine["Session Created"] = DateTime.Now;
+            TimeLine["Session Created"] = DateTime.UtcNow;
 
             CancellationTokenSource = cancellationTokenSource;
 

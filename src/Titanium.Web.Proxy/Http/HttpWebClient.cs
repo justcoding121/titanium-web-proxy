@@ -92,7 +92,7 @@ namespace Titanium.Web.Proxy.Http
         /// <param name="serverConnection">Instance of <see cref="TcpServerConnection" /></param>
         internal void SetConnection(TcpServerConnection serverConnection)
         {
-            serverConnection.LastAccess = DateTime.Now;
+            serverConnection.LastAccess = DateTime.UtcNow;
             connection = serverConnection;
         }
 
