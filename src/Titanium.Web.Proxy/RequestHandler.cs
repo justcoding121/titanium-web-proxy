@@ -164,7 +164,7 @@ namespace Titanium.Web.Proxy
                             if (connection != null)
                             {
                                 var socket = connection.TcpSocket;
-                                bool part1 = socket.Poll(1000, SelectMode.SelectRead); 
+                                bool part1 = socket.Poll(1000, SelectMode.SelectRead);
                                 bool part2 = socket.Available == 0;
                                 if (part1 & part2)
                                 {
