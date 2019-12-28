@@ -164,11 +164,12 @@ namespace Titanium.Web.Proxy
                             if (connection != null)
                             {
                                 var socket = connection.TcpSocket;
-                                bool part1 = socket.Poll(1000, SelectMode.SelectRead);
+                                bool part1 = socket.Poll(1000, SelectMode.SelectRead); 
                                 bool part2 = socket.Available == 0;
                                 if (part1 & part2)
                                 {
                                     //connection is closed
+                                    await tcpConnectionFactory.Release(connection, true);
                                     connection = null;
                                 }
                             }
@@ -297,7 +298,11 @@ namespace Titanium.Web.Proxy
 
                 if (args.HttpClient.Request.UpgradeToWebSocket)
                 {
-                    args.HttpClient.ConnectRequest!.TunnelType = TunnelType.Websocket;
+                    // connectRequest can be null for SOCKS connection
+                    if (args.HttpClient.ConnectRequest != null)
+                    {
+                        args.HttpClient.ConnectRequest!.TunnelType = TunnelType.Websocket;
+                    }
 
                     // if upgrading to websocket then relay the request without reading the contents
                     await handleWebSocketUpgrade(args, args.ClientStream, connection, cancellationTokenSource, cancellationToken);

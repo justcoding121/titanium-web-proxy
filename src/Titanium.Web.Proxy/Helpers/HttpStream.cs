@@ -1096,7 +1096,12 @@ namespace Titanium.Web.Proxy.Helpers
         {
             while (true)
             {
-                string chunkHead = (await ReadLineAsync(cancellationToken))!;
+                string? chunkHead = await ReadLineAsync(cancellationToken);
+                if (chunkHead == null)
+                {
+                    return;
+                }
+
                 int idx = chunkHead.IndexOf(";");
                 if (idx >= 0)
                 {
