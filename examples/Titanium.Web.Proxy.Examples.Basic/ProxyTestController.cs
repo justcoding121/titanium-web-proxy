@@ -42,6 +42,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
                     await writeToConsole(exception.Message, ConsoleColor.Red);
                 }
             };
+
+            proxyServer.TcpTimeWaitSeconds = 10;
+            proxyServer.ConnectionTimeOutSeconds = 15;
+            proxyServer.ReuseSocket = false;
+            proxyServer.EnableConnectionPool = false;
             proxyServer.ForwardToUpstreamGateway = true;
             proxyServer.CertificateManager.SaveFakeCertificates = true;
             //proxyServer.ProxyBasicAuthenticateFunc = async (args, userName, password) =>

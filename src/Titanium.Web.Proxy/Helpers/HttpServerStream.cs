@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Helpers
                 {
                     // is this really possible?
                     httpStatus = await ReadLineAsync(cancellationToken) ??
-                                 throw new ServerConnectionException("Server connection was closed.");
+                                 throw new ServerConnectionException("Server connection was closed. Response status is empty.");
                 }
 
                 Response.ParseResponseLine(httpStatus, out var version, out int statusCode, out string description);
@@ -47,7 +47,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
             catch (Exception e) when (!(e is ServerConnectionException))
             {
-                throw new ServerConnectionException("Server connection was closed.");
+                throw new ServerConnectionException("Server connection was closed. Exception while reading the response status.", e);
             }
         }
     }

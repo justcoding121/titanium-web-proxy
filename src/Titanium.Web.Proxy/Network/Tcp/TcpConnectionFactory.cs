@@ -302,6 +302,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
             }
 
+            if (isHttps && sslProtocol == SslProtocols.None)
+            {
+                sslProtocol = proxyServer.SupportedSslProtocols;
+            }
+
             bool useUpstreamProxy1 = false;
 
             // check if external proxy is set for HTTP/HTTPS
