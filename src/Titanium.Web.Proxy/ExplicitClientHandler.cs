@@ -103,7 +103,7 @@ namespace Titanium.Web.Proxy
                     }
 
                     // write back successful CONNECT response
-                    var response = ConnectResponse.CreateSuccessfulConnectResponse(requestLine.Version);
+                    var response = ConnectResponse.CreateSuccessfulConnectResponse(connectRequest.HttpVersion);
 
                     // Set ContentLength explicitly to properly handle HTTP 1.0
                     response.ContentLength = 0;
