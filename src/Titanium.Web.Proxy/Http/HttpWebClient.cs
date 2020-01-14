@@ -2,6 +2,7 @@
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 
@@ -113,9 +114,20 @@ namespace Titanium.Web.Proxy.Http
             string? upstreamProxyPassword = null;
 
             string url;
-            if (!useUpstreamProxy || isTransparent)
+            if (isTransparent)
             {
                 url = Request.RequestUriString;
+            }
+            else if (!useUpstreamProxy)
+            {
+                if (UriExtensions.GetScheme(Request.RequestUriString8).Length == 0)
+                {
+                    url = Request.RequestUriString;
+                }
+                else
+                {
+                    url = Request.RequestUri.GetOriginalPathAndQuery();
+                }
             }
             else
             {
@@ -129,6 +141,11 @@ namespace Titanium.Web.Proxy.Http
                 }
             }
 
+            if (url == string.Empty)
+            {
+                url = "/";
+            }
+            
             // prepare the request & headers
             var headerBuilder = new HeaderBuilder();
             headerBuilder.WriteRequestLine(Request.Method, url, Request.HttpVersion);
