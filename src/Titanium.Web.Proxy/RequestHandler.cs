@@ -68,9 +68,10 @@ namespace Titanium.Web.Proxy
                         UserData = connectArgs?.UserData
                     };
 
+                    var request = args.HttpClient.Request;
                     if (isHttps)
                     {
-                        args.HttpClient.Request.IsHttps = true;
+                        request.IsHttps = true;
                     }
 
                     try
@@ -81,7 +82,6 @@ namespace Titanium.Web.Proxy
                             await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,
                                 cancellationToken);
 
-                            var request = args.HttpClient.Request;
                             if (connectRequest != null)
                             {
                                 request.IsHttps = connectRequest.IsHttps;
@@ -92,6 +92,12 @@ namespace Titanium.Web.Proxy
 
                             request.Method = requestLine.Method;
                             request.HttpVersion = requestLine.Version;
+
+                            // we need this to syphon out data from connection if API user changes them.
+                            request.SetOriginalHeaders();
+
+                            // If user requested interception do it
+                            await onBeforeRequest(args);
 
                             if (!args.IsTransparent && !args.IsSocks)
                             {
@@ -116,12 +122,6 @@ namespace Titanium.Web.Proxy
                             {
                                 await args.GetRequestBody(cancellationToken);
                             }
-
-                            // we need this to syphon out data from connection if API user changes them.
-                            request.SetOriginalHeaders();
-
-                            // If user requested interception do it
-                            await onBeforeRequest(args);
 
                             var response = args.HttpClient.Response;
 

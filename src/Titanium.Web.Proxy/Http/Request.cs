@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.Http
             set
             {
                 requestUriString8 = value;
-                var scheme = getUriScheme(value);
+                var scheme = UriExtensions.GetScheme(value);
                 if (scheme.Length > 0)
                 {
                     IsHttps = scheme.Equals(ProxyServer.UriSchemeHttps8);
@@ -71,7 +71,7 @@ namespace Titanium.Web.Proxy.Http
             get
             {
                 string url = RequestUriString8.GetString();
-                if (getUriScheme(RequestUriString8).Length == 0)
+                if (UriExtensions.GetScheme(RequestUriString8).Length == 0)
                 {
                     string? hostAndPath = Host ?? Authority.GetString();
 
@@ -105,7 +105,7 @@ namespace Titanium.Web.Proxy.Http
             {
                 RequestUriString8 = (ByteString)value;
 
-                var scheme = getUriScheme(RequestUriString8);
+                var scheme = UriExtensions.GetScheme(RequestUriString8);
                 if (scheme.Length > 0 && Host != null)
                 {
                     var uri = new Uri(value);
@@ -306,48 +306,6 @@ namespace Titanium.Web.Proxy.Http
             }
 
             return true;
-        }
-
-        private ByteString getUriScheme(ByteString str)
-        {
-            if (str.Length < 3)
-            {
-                return ByteString.Empty;
-            }
-
-            // regex: "^[a-z]*://"
-            int i;
-            
-            for (i = 0; i < str.Length - 3; i++)
-            {
-                byte ch = str[i];
-                if (ch == ':')
-                {
-                    break;
-                }
-
-                if (ch < 'A' || ch > 'z' || (ch > 'Z' && ch < 'a')) // ASCII letter
-                {
-                    return ByteString.Empty;
-                }
-            }
-
-            if (str[i++] != ':')
-            {
-                return ByteString.Empty;
-            }
-
-            if (str[i++] != '/')
-            {
-                return ByteString.Empty;
-            }
-
-            if (str[i] != '/')
-            {
-                return ByteString.Empty;
-            }
-
-            return new ByteString(str.Data.Slice(0, i - 2));
         }
     }
 }

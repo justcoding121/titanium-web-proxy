@@ -439,7 +439,7 @@ namespace Titanium.Web.Proxy
             if (systemProxySettingsManager == null)
             {
                 throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
-                            Please manually confugure you operating system to use this proxy's port and address.");
+                            Please manually configure you operating system to use this proxy's port and address.");
             }
 
             validateEndPointAsSystemProxy(endPoint);
