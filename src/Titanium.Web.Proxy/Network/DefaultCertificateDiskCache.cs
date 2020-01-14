@@ -30,14 +30,14 @@ namespace Titanium.Web.Proxy.Network
         /// <inheritdoc />
         public X509Certificate2? LoadCertificate(string subjectName, X509KeyStorageFlags storageFlags)
         {
-            string path = Path.Combine(getCertificatePath(), subjectName + defaultCertificateFileExtension);
-            return loadCertificate(path, string.Empty, storageFlags);
+            string filePath = Path.Combine(getCertificatePath(false), subjectName + defaultCertificateFileExtension);
+            return loadCertificate(filePath, string.Empty, storageFlags);
         }
 
         /// <inheritdoc />
         public void SaveCertificate(string subjectName, X509Certificate2 certificate)
         {
-            string filePath = Path.Combine(getCertificatePath(), subjectName + defaultCertificateFileExtension);
+            string filePath = Path.Combine(getCertificatePath(true), subjectName + defaultCertificateFileExtension);
             byte[] exported = certificate.Export(X509ContentType.Pkcs12);
             File.WriteAllBytes(filePath, exported);
         }
@@ -46,9 +46,13 @@ namespace Titanium.Web.Proxy.Network
         {
             try
             {
-                Directory.Delete(getCertificatePath(), true);
+                string path = getCertificatePath(false);
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, true);
+                }
             }
-            catch (DirectoryNotFoundException)
+            catch (Exception)
             {
                 // do nothing
             }
@@ -89,14 +93,14 @@ namespace Titanium.Web.Proxy.Network
                 string.IsNullOrEmpty(pathOrName) ? defaultRootCertificateFileName : pathOrName);
         }
 
-        private string getCertificatePath()
+        private string getCertificatePath(bool create)
         {
             if (certificatePath == null)
             {
                 string path = getRootCertificateDirectory();
 
                 string certPath = Path.Combine(path, defaultCertificateDirectoryName);
-                if (!Directory.Exists(certPath))
+                if (create && !Directory.Exists(certPath))
                 {
                     Directory.CreateDirectory(certPath);
                 }
