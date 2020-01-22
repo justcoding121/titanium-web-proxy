@@ -345,9 +345,9 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         ///     Opens the registry key with the internet settings
         /// </summary>
-        private static RegistryKey openInternetSettingsKey()
+        private static RegistryKey? openInternetSettingsKey()
         {
-            return Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true);
+            return Registry.CurrentUser?.OpenSubKey(regKeyInternetSettings, true);
         }
     }
 }

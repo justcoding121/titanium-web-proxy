@@ -173,6 +173,12 @@ namespace Titanium.Web.Proxy.StreamExtended.Models
             { 0x00C4, "TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256" },
             { 0x00C5, "TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA256" },
             { 0x00FF, "TLS_EMPTY_RENEGOTIATION_INFO_SCSV" },
+            // RFC 8446
+            { 0x1301, "TLS_AES_128_GCM_SHA256" },
+            { 0x1302, "TLS_AES_256_GCM_SHA384" },
+            { 0x1303, "TLS_CHACHA20_POLY1305_SHA256" },
+            { 0x1304, "TLS_AES_128_CCM_SHA256" },
+            { 0x1305, "TLS_AES_128_CCM_8_SHA256" },
             { 0x5600, "TLS_FALLBACK_SCSV" },
             // RFC 4492
             { 0xC001, "TLS_ECDH_ECDSA_WITH_NULL_SHA" },
@@ -353,6 +359,15 @@ namespace Titanium.Web.Proxy.StreamExtended.Models
             { 0xC0AD, "TLS_ECDHE_ECDSA_WITH_AES_256_CCM" },
             { 0xC0AE, "TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8" },
             { 0xC0AF, "TLS_ECDHE_ECDSA_WITH_AES_256_CCM_8" },
+            { 0xC0B0, "TLS_ECCPWD_WITH_AES_128_GCM_SHA256" },
+            { 0xC0B1, "TLS_ECCPWD_WITH_AES_256_GCM_SHA384" },
+            { 0xC0B2, "TLS_ECCPWD_WITH_AES_128_CCM_SHA256" },
+            { 0xC0B3, "TLS_ECCPWD_WITH_AES_256_CCM_SHA384" },
+            { 0xC0B4, "TLS_SHA256_SHA256" },
+            { 0xC0B5, "TLS_SHA384_SHA384" },
+            { 0xC100, "TLS_GOSTR341112_256_WITH_KUZNYECHIK_CTR_OMAC" },
+            { 0xC101, "TLS_GOSTR341112_256_WITH_MAGMA_CTR_OMAC" },
+            { 0xC102, "TLS_GOSTR341112_256_WITH_28147_CNT_IMIT" },
             // old numbers used in the beginning http://tools.ietf.org/html/draft-agl-tls-chacha20poly1305
             { 0xCC13, "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256" },
             { 0xCC14, "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256" },
@@ -365,6 +380,11 @@ namespace Titanium.Web.Proxy.StreamExtended.Models
             { 0xCCAC, "TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256" },
             { 0xCCAD, "TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256" },
             { 0xCCAE, "TLS_RSA_PSK_WITH_CHACHA20_POLY1305_SHA256" },
+            // RFC 8442
+            { 0xD001, "TLS_ECDHE_PSK_WITH_AES_128_GCM_SHA256" },
+            { 0xD002, "TLS_ECDHE_PSK_WITH_AES_256_GCM_SHA384" },
+            { 0xD003, "TLS_ECDHE_PSK_WITH_AES_128_CCM_8_SHA256" },
+            { 0xD005, "TLS_ECDHE_PSK_WITH_AES_128_CCM_SHA256" },
             // http://tools.ietf.org/html/draft-josefsson-salsa20-tls
             { 0xE410, "TLS_RSA_WITH_ESTREAM_SALSA20_SHA1" },
             { 0xE411, "TLS_RSA_WITH_SALSA20_SHA1" },
