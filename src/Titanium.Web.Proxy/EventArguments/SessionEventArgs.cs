@@ -59,7 +59,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
         }
 
-        public WebSocketDecoder WebSocketDecoder => webSocketDecoder ??=  new WebSocketDecoder(BufferPool);
+        public WebSocketDecoder WebSocketDecoder => webSocketDecoder ??= new WebSocketDecoder(BufferPool);
 
         /// <summary>
         /// Occurs when multipart request part sent.
@@ -588,7 +588,7 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 HttpClient.Request.Locked = true;
                 HttpClient.Request.CancelRequest = true;
-              
+
                 // set new response.
                 HttpClient.Response = response;
                 HttpClient.Response.Locked = true;

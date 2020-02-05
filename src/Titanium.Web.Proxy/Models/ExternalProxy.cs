@@ -85,7 +85,7 @@ namespace Titanium.Web.Proxy.Models
         /// <param name="port">The port.</param>
         public ExternalProxy(string hostName, int port)
         {
-            HostName = hostName; 
+            HostName = hostName;
             Port = port;
         }
 
@@ -115,7 +115,7 @@ namespace Titanium.Web.Proxy.Models
     }
 
     public enum ExternalProxyType
-    {        
+    {
         /// <summary>A HTTP/HTTPS proxy server.</summary>
         Http,
 

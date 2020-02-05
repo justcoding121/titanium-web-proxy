@@ -145,7 +145,7 @@ namespace Titanium.Web.Proxy.Http
             {
                 url = "/";
             }
-            
+
             // prepare the request & headers
             var headerBuilder = new HeaderBuilder();
             headerBuilder.WriteRequestLine(Request.Method, url, Request.HttpVersion);

@@ -90,7 +90,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             ReadBytes(buffer, 2);
             if (buffer[1] == 255)
                 throw new ProxyException("No authentication method accepted.");
-            
+
             AuthMethod authenticate;
             switch (buffer[1])
             {
@@ -120,7 +120,7 @@ namespace Titanium.Web.Proxy.ProxySocket
         {
             if (host == null)
                 throw new ArgumentNullException();
-            
+
             if (port <= 0 || port > 65535 || host.Length > 255)
                 throw new ArgumentException();
 
@@ -206,7 +206,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             try
             {
                 Authenticate(buffer);
-                
+
                 int length = GetEndPointBytes(remoteEP, buffer);
                 Negotiate(buffer, length);
             }

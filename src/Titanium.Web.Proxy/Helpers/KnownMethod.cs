@@ -43,7 +43,7 @@
         // RFC 4437: Web Distributed Authoring and Versioning (WebDAV): Redirect Reference Resources
         Mkredirectref,
         Updateredirectref,
-        
+
         // RFC 4791: Calendaring Extensions to WebDAV (CalDAV)
         Mkcalendar,
 

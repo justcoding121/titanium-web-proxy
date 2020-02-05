@@ -45,7 +45,7 @@ namespace Titanium.Web.Proxy.Network
 
                 }
                 catch (Exception ex)
-                {     
+                {
                     exception = ex;
                 }
 
@@ -59,7 +59,7 @@ namespace Titanium.Web.Proxy.Network
                 }
 
                 exception = null;
-                await disposeConnection();         
+                await disposeConnection();
             }
 
             return new RetryResult(currentConnection, exception, @continue);
@@ -80,9 +80,9 @@ namespace Titanium.Web.Proxy.Network
     internal class RetryResult
     {
         internal TcpServerConnection? LatestConnection { get; }
-        
+
         internal Exception? Exception { get; }
-        
+
         internal bool Continue { get; }
 
         internal RetryResult(TcpServerConnection? lastConnection, Exception? exception, bool @continue)

@@ -42,7 +42,7 @@ namespace Titanium.Web.Proxy
                 long size = b & 0x7f;
 
                 // todo: size > int.Max??
-                
+
                 bool masked = (b & 0x80) != 0;
 
                 int idx = 2;
@@ -100,7 +100,8 @@ namespace Titanium.Web.Proxy
                         {
                             data1[pos + 2] ^= (byte)(mask >> 16);
                         }
-;                    }
+;
+                    }
                 }
 
                 var frameData = buffer.Slice(idx, (int)size);

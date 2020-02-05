@@ -1,5 +1,4 @@
-﻿using System;
-using System.Threading;
+﻿using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
@@ -21,7 +20,7 @@ namespace Titanium.Web.Proxy
             await serverConnection.Stream.WriteRequestAsync(args.HttpClient.Request, cancellationToken);
 
             var httpStatus = await serverConnection.Stream.ReadResponseStatus(cancellationToken);
-            
+
             var response = args.HttpClient.Response;
             response.HttpVersion = httpStatus.Version;
             response.StatusCode = httpStatus.StatusCode;

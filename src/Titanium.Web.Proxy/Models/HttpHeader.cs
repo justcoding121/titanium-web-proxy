@@ -58,7 +58,7 @@ namespace Titanium.Web.Proxy.Models
 
             nameString = name.Trim();
             NameData = nameString.GetByteString();
-            
+
             valueString = value.Trim();
             ValueData = valueString.GetByteString();
         }

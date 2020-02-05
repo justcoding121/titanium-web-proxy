@@ -43,12 +43,12 @@ namespace Titanium.Web.Proxy.Http2
 
             // Now async relay all server=>client & client=>server data
             var sendRelay =
-                copyHttp2FrameAsync(clientStream, serverStream, clientSettings, serverSettings, 
-                    sessionFactory, sessions, onBeforeRequest, 
+                copyHttp2FrameAsync(clientStream, serverStream, clientSettings, serverSettings,
+                    sessionFactory, sessions, onBeforeRequest,
                     connectionId, true, cancellationTokenSource.Token, exceptionFunc);
             var receiveRelay =
-                copyHttp2FrameAsync(serverStream, clientStream, serverSettings, clientSettings, 
-                    sessionFactory, sessions, onBeforeResponse, 
+                copyHttp2FrameAsync(serverStream, clientStream, serverSettings, clientSettings,
+                    sessionFactory, sessions, onBeforeResponse,
                     connectionId, false, cancellationTokenSource.Token, exceptionFunc);
 
             await Task.WhenAny(sendRelay, receiveRelay);
@@ -59,7 +59,7 @@ namespace Titanium.Web.Proxy.Http2
 
         private static async Task copyHttp2FrameAsync(Stream input, Stream output,
             Http2Settings localSettings, Http2Settings remoteSettings,
-            Func<SessionEventArgs> sessionFactory, ConcurrentDictionary<int, SessionEventArgs>  sessions, 
+            Func<SessionEventArgs> sessionFactory, ConcurrentDictionary<int, SessionEventArgs> sessions,
             Func<SessionEventArgs, Task> onBeforeRequestResponse,
             Guid connectionId, bool isClient, CancellationToken cancellationToken,
             ExceptionHandler exceptionFunc)
@@ -81,7 +81,7 @@ namespace Titanium.Web.Proxy.Http2
                 int length = (frameHeaderBuffer[0] << 16) + (frameHeaderBuffer[1] << 8) + frameHeaderBuffer[2];
                 var type = (Http2FrameType)frameHeaderBuffer[3];
                 var flags = (Http2FrameFlag)frameHeaderBuffer[4];
-                int streamId = ((frameHeaderBuffer[5] & 0x7f) << 24) + (frameHeaderBuffer[6] << 16) + 
+                int streamId = ((frameHeaderBuffer[5] & 0x7f) << 24) + (frameHeaderBuffer[6] << 16) +
                                (frameHeaderBuffer[7] << 8) + frameHeaderBuffer[8];
 
                 frameHeader.Length = length;
@@ -129,7 +129,7 @@ namespace Titanium.Web.Proxy.Http2
                 //System.Diagnostics.Debug.WriteLine("CONN: " + connectionId + ", CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
                 if (type == Http2FrameType.Data && args != null)
                 {
-                    if (isClient) 
+                    if (isClient)
                         args.OnDataSent(buffer, 0, read);
                     else
                         args.OnDataReceived(buffer, 0, read);

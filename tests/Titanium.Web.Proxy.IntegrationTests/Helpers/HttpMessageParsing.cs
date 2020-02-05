@@ -27,7 +27,9 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 Request.ParseRequestLine(line, out var method, out var url, out var version);
                 var request = new Request
                 {
-                    Method = method, RequestUriString8 = url, HttpVersion = version
+                    Method = method,
+                    RequestUriString8 = url,
+                    HttpVersion = version
                 };
                 while (!string.IsNullOrEmpty(line = reader.ReadLine()))
                 {
@@ -72,7 +74,9 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 Response.ParseResponseLine(line, out var version, out var status, out var desc);
                 var response = new Response
                 {
-                    HttpVersion = version, StatusCode = status, StatusDescription = desc
+                    HttpVersion = version,
+                    StatusCode = status,
+                    StatusDescription = desc
                 };
 
                 while (!string.IsNullOrEmpty(line = reader.ReadLine()))
@@ -107,7 +111,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             }
 
             obj.Body = Encoding.ASCII.GetBytes(reader.ReadToEnd());
-                
+
             // done reading body
             return obj.ContentLength == obj.OriginalContentLength;
         }

@@ -1,5 +1,4 @@
-﻿using System;
-using System.Threading;
+﻿using System.Threading;
 using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.StreamExtended.Network
@@ -52,5 +51,5 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
             return buffer;
         }
-    }   
+    }
 }

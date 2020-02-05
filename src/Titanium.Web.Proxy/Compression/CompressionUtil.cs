@@ -1,5 +1,4 @@
-﻿using System;
-using Titanium.Web.Proxy.Http;
+﻿using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Compression
 {
