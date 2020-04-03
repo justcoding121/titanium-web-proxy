@@ -8,7 +8,7 @@ namespace Titanium.Web.Proxy
     {
         public static byte[] EmptyArray = new byte[0];
 
-        public static Task CompletedTask = new Task(() => { });
+        public static Task CompletedTask = Task.FromResult<object>(null);
     }
 }
 #endif
