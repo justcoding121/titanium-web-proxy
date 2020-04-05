@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             try
-            {              
+            {
                 // do reverse DNS lookup even if hostName is an IP address
                 var hostEntry = Dns.GetHostEntry(hostName);
                 // if DNS resolved hostname matches local DNS name,

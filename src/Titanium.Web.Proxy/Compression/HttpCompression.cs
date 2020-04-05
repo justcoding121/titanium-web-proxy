@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Titanium.Web.Proxy.Compression
+﻿namespace Titanium.Web.Proxy.Compression
 {
     internal enum HttpCompression
     {

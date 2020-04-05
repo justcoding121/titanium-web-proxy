@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Reflection;
-using System.Text;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Text;
 
 namespace Titanium.Web.Proxy.Helpers
 {
@@ -63,7 +63,7 @@ namespace Titanium.Web.Proxy.Helpers
         public static bool IsUwpOnWindows => IsWindows && UwpHelper.IsRunningAsUwp();
 
         public static bool IsMac => isRunningOnMac;
-        
+
         /// <summary>
         /// Is socket reuse available to use?
         /// </summary>

@@ -103,7 +103,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             if (headerField != null)
             {
                 int index = getIndex(headerField.Index) + StaticTable.Length;
-                
+
                 // Section 6.1. Indexed Header Field Representation
                 encodeInteger(output, 0x80, 7, index);
             }

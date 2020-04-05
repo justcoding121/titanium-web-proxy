@@ -105,8 +105,8 @@ namespace Titanium.Web.Proxy.StreamExtended
                 }
             }
 
-            string compression = compressions.Length > CompressionMethod 
-                ? compressions[CompressionMethod] 
+            string compression = compressions.Length > CompressionMethod
+                ? compressions[CompressionMethod]
                 : $"unknown [0x{CompressionMethod:X2}]";
             sb.AppendLine($"Compression: {compression}");
 

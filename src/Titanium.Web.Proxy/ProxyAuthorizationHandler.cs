@@ -156,7 +156,7 @@ namespace Titanium.Web.Proxy
             response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, continuation);
 
             response.Headers.AddHeader(KnownHeaders.ProxyConnection, KnownHeaders.ConnectionKeepAlive);
-            
+
             response.Headers.FixProxyHeaders();
 
             return response;

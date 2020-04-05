@@ -1,5 +1,4 @@
-﻿using System;
-using Titanium.Web.Proxy.Models;
+﻿using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.StreamExtended;
 
 namespace Titanium.Web.Proxy.Http

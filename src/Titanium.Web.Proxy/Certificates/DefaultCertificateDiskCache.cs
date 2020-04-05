@@ -6,13 +6,12 @@ using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Network
 {
-    internal sealed class DefaultCertificateDiskCache : ICertificateCache
+    public sealed class DefaultCertificateDiskCache : ICertificateCache
     {
         private const string defaultCertificateDirectoryName = "crts";
         private const string defaultCertificateFileExtension = ".pfx";
         private const string defaultRootCertificateFileName = "rootCert" + defaultCertificateFileExtension;
         private string? rootCertificatePath;
-        private string? certificatePath;
 
         public X509Certificate2? LoadRootCertificate(string pathOrName, string password, X509KeyStorageFlags storageFlags)
         {
@@ -56,8 +55,6 @@ namespace Titanium.Web.Proxy.Network
             {
                 // do nothing
             }
-
-            certificatePath = null;
         }
 
         private X509Certificate2? loadCertificate(string path, string password, X509KeyStorageFlags storageFlags)
@@ -95,20 +92,15 @@ namespace Titanium.Web.Proxy.Network
 
         private string getCertificatePath(bool create)
         {
-            if (certificatePath == null)
+            string path = getRootCertificateDirectory();
+
+            string certPath = Path.Combine(path, defaultCertificateDirectoryName);
+            if (create && !Directory.Exists(certPath))
             {
-                string path = getRootCertificateDirectory();
-
-                string certPath = Path.Combine(path, defaultCertificateDirectoryName);
-                if (create && !Directory.Exists(certPath))
-                {
-                    Directory.CreateDirectory(certPath);
-                }
-
-                certificatePath = certPath;
+                Directory.CreateDirectory(certPath);
             }
 
-            return certificatePath;
+            return certPath;
         }
 
         private string getRootCertificateDirectory()

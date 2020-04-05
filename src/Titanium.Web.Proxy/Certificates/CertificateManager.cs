@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy.Network
         BouncyCastle = 0,
 
         BouncyCastleFast = 2,
-        
+
         /// <summary>
         ///     Uses Windows Certification Generation API and only valid in Windows OS.
         ///     Observed to be faster than BouncyCastle.

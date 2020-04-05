@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-using System;
 using System.Collections.Generic;
 using Titanium.Web.Proxy.Models;
 
@@ -32,7 +31,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         private static readonly Dictionary<ByteString, int> staticIndexByName;
 
         public static ByteString KnownHeaderAuhtority = (ByteString)":authority";
-        
+
         public static ByteString KnownHeaderMethod = (ByteString)":method";
 
         public static ByteString KnownHeaderPath = (ByteString)":path";
@@ -109,11 +108,11 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             create("WWW-Authenticate", string.Empty); // 61
         }
 
-    /// <summary>
-    /// The number of header fields in the static table.
-    /// </summary>
-    /// <value>The length.</value>
-    public static int Length => staticTable.Count;
+        /// <summary>
+        /// The number of header fields in the static table.
+        /// </summary>
+        /// <value>The length.</value>
+        public static int Length => staticTable.Count;
 
         /// <summary>
         /// Return the http header field at the given index value.
