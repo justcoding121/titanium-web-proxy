@@ -152,7 +152,7 @@ namespace Titanium.Web.Proxy.ProxySocket.Authentication
                 int recv = Server.EndReceive(ar);
                 if (recv <= 0)
                     throw new SocketException(10054);
-                
+
                 Received += recv;
                 if (Received == 2)
                     if (Buffer[1] == 0)

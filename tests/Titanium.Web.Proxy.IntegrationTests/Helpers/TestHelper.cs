@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             var handler = new HttpClientHandler
             {
                 Proxy = proxy,
-                UseProxy = true  
+                UseProxy = true
             };
 
             return new HttpClient(handler);

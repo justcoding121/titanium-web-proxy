@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                     out clientToken,
                     out NewContextAttributes,
                     out NewLifeTime);
-                
+
                 if (result != IntermediateResult)
                 {
                     return null;

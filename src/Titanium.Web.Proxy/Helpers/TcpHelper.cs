@@ -130,7 +130,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="cancellationTokenSource"></param>
         /// <param name="exceptionFunc"></param>
         /// <returns></returns>
-        internal static Task SendRaw(Stream clientStream, Stream serverStream, IBufferPool bufferPool, 
+        internal static Task SendRaw(Stream clientStream, Stream serverStream, IBufferPool bufferPool,
             Action<byte[], int, int>? onDataSend, Action<byte[], int, int>? onDataReceive,
             CancellationTokenSource cancellationTokenSource,
             ExceptionHandler exceptionFunc)

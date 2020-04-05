@@ -135,8 +135,8 @@ namespace Titanium.Web.Proxy.StreamExtended
             if (CompressionData != null && CompressionData.Length > 0)
             {
                 int compressionMethod = CompressionData[0];
-                string compression = compressions.Length > compressionMethod 
-                    ? compressions[compressionMethod] 
+                string compression = compressions.Length > compressionMethod
+                    ? compressions[compressionMethod]
                     : $"unknown [0x{compressionMethod:X2}]";
                 sb.AppendLine($"Compression: {compression}");
             }

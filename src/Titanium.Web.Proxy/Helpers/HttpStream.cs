@@ -1018,7 +1018,7 @@ namespace Titanium.Web.Proxy.Helpers
             string? contentEncoding = useOriginalHeaderValues ? requestResponse.OriginalContentEncoding : requestResponse.ContentEncoding;
 
             Stream s = limitedStream = new LimitedStream(this, bufferPool, isChunked, contentLength);
-            
+
             if (transformation == TransformationMode.Uncompress && contentEncoding != null)
             {
                 s = decompressStream = DecompressionFactory.Create(CompressionUtil.CompressionNameToEnum(contentEncoding), s);

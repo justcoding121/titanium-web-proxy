@@ -156,7 +156,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // this is just to show the functionality, provided values are junk
             return new ExternalProxy
             {
-                BypassLocalhost = false, HostName = "127.0.0.9", Port = 9090, Password = "fake", UserName = "fake",
+                BypassLocalhost = false,
+                HostName = "127.0.0.9",
+                Port = 9090,
+                Password = "fake",
+                UserName = "fake",
                 UseDefaultCredentials = false
             };
         }
@@ -168,7 +172,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // this is just to show the functionality, provided values are junk
             return new ExternalProxy
             {
-                BypassLocalhost = false, HostName = "127.0.0.10", Port = 9191, Password = "fake2", UserName = "fake2",
+                BypassLocalhost = false,
+                HostName = "127.0.0.10",
+                Port = 9191,
+                Password = "fake2",
+                UserName = "fake2",
                 UseDefaultCredentials = false
             };
         }

@@ -151,7 +151,7 @@ namespace Titanium.Web.Proxy.StreamExtended
 
                 Dictionary<string, SslExtension>? extensions = null;
 
-                if(extensionsStartPosition < recordLength + 5)
+                if (extensionsStartPosition < recordLength + 5)
                 {
                     extensions = await ReadExtensions(majorVersion, minorVersion, peekStream, cancellationToken);
                 }
@@ -291,7 +291,7 @@ namespace Titanium.Web.Proxy.StreamExtended
 
                 if (extensionsStartPosition < recordLength + 5)
                 {
-                   extensions = await ReadExtensions(majorVersion, minorVersion, peekStream, cancellationToken);
+                    extensions = await ReadExtensions(majorVersion, minorVersion, peekStream, cancellationToken);
                 }
 
                 var serverHelloInfo = new ServerHelloInfo(3, majorVersion, minorVersion, random, sessionId, cipherSuite, peekStream.Position)

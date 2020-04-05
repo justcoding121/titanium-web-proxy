@@ -12,7 +12,7 @@ namespace Titanium.Web.Proxy.Network
         {
             Certificate = certificate;
         }
-        
+
         internal X509Certificate2 Certificate { get; }
 
         /// <summary>
