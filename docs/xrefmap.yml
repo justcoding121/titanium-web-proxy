@@ -559,6 +559,32 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoder
   nameWithType: SessionEventArgs.WebSocketDecoder
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderReceive
+  name: WebSocketDecoderReceive
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoderReceive
+  commentId: P:Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderReceive
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderReceive
+  nameWithType: SessionEventArgs.WebSocketDecoderReceive
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderReceive*
+  name: WebSocketDecoderReceive
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoderReceive_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderReceive
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderReceive
+  nameWithType: SessionEventArgs.WebSocketDecoderReceive
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderSend
+  name: WebSocketDecoderSend
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoderSend
+  commentId: P:Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderSend
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderSend
+  nameWithType: SessionEventArgs.WebSocketDecoderSend
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderSend*
+  name: WebSocketDecoderSend
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoderSend_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderSend
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderSend
+  nameWithType: SessionEventArgs.WebSocketDecoderSend
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase
   name: SessionEventArgsBase
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html
