@@ -100,7 +100,6 @@ namespace Titanium.Web.Proxy
                         {
                             data1[pos + 2] ^= (byte)(mask >> 16);
                         }
-;
                     }
                 }
 
@@ -114,6 +113,19 @@ namespace Titanium.Web.Proxy
             if (!copied && buffer.Length > 0)
             {
                 copyToBuffer(buffer);
+            }
+
+            if (copied)
+            {
+                if (buffer.Length == 0)
+                {
+                    bufferLength = 0;
+                }
+                else
+                {
+                    buffer.CopyTo(this.buffer);
+                    bufferLength = buffer.Length;
+                }
             }
         }
 
