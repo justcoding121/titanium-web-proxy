@@ -25,7 +25,9 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         private bool reRequest;
 
-        private WebSocketDecoder? webSocketDecoder;
+        private WebSocketDecoder? webSocketDecoderSend;
+        
+        private WebSocketDecoder? webSocketDecoderReceive;
 
         /// <summary>
         ///     Is this session a HTTP/2 promise?
@@ -59,7 +61,12 @@ namespace Titanium.Web.Proxy.EventArguments
             }
         }
 
-        public WebSocketDecoder WebSocketDecoder => webSocketDecoder ??=  new WebSocketDecoder(BufferPool);
+        [Obsolete("Use [WebSocketDecoderReceive] instead")]
+        public WebSocketDecoder WebSocketDecoder => WebSocketDecoderReceive;
+
+        public WebSocketDecoder WebSocketDecoderSend => webSocketDecoderSend ??= new WebSocketDecoder(BufferPool);
+        
+        public WebSocketDecoder WebSocketDecoderReceive => webSocketDecoderReceive ??= new WebSocketDecoder(BufferPool);
 
         /// <summary>
         /// Occurs when multipart request part sent.
@@ -588,7 +595,7 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 HttpClient.Request.Locked = true;
                 HttpClient.Request.CancelRequest = true;
-              
+
                 // set new response.
                 HttpClient.Response = response;
                 HttpClient.Response.Locked = true;

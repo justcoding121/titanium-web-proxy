@@ -24,7 +24,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
     /// <summary>
     ///     Implements certificate generation operations.
     /// </summary>
-    internal class BCCertificateMaker : ICertificateMaker
+    internal class BCCertificateMakerFast : ICertificateMaker
     {
         private const int certificateValidDays = 1825;
         private const int certificateGraceDays = 366;
@@ -35,9 +35,12 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
         private readonly ExceptionHandler exceptionFunc;
 
-        internal BCCertificateMaker(ExceptionHandler exceptionFunc)
+        public AsymmetricCipherKeyPair KeyPair { get; set; }
+
+        internal BCCertificateMakerFast(ExceptionHandler exceptionFunc)
         {
             this.exceptionFunc = exceptionFunc;
+            KeyPair = GenerateKeyPair();
         }
 
         /// <summary>
@@ -58,7 +61,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="issuerName">Name of the issuer.</param>
         /// <param name="validFrom">The valid from.</param>
         /// <param name="validTo">The valid to.</param>
-        /// <param name="keyStrength">The key strength.</param>
+        /// <param name="subjectKeyPair">The key pair.</param>
         /// <param name="signatureAlgorithm">The signature algorithm.</param>
         /// <param name="issuerPrivateKey">The issuer private key.</param>
         /// <param name="hostName">The host name</param>
@@ -67,7 +70,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         private static X509Certificate2 generateCertificate(string? hostName,
             string subjectName,
             string issuerName, DateTime validFrom,
-            DateTime validTo, int keyStrength = 2048,
+            DateTime validTo, AsymmetricCipherKeyPair subjectKeyPair,
             string signatureAlgorithm = "SHA256WithRSA",
             AsymmetricKeyParameter? issuerPrivateKey = null)
         {
@@ -103,11 +106,6 @@ namespace Titanium.Web.Proxy.Network.Certificate
             }
 
             // Subject Public Key
-            var keyGenerationParameters = new KeyGenerationParameters(secureRandom, keyStrength);
-            var keyPairGenerator = new RsaKeyPairGenerator();
-            keyPairGenerator.Init(keyGenerationParameters);
-            var subjectKeyPair = keyPairGenerator.GenerateKeyPair();
-
             certificateGenerator.SetPublicKey(subjectKeyPair.Public);
 
             // Set certificate intended purposes to only Server Authentication
@@ -157,12 +155,23 @@ namespace Titanium.Web.Proxy.Network.Certificate
             return x509Certificate;
         }
 
+        public AsymmetricCipherKeyPair GenerateKeyPair(int keyStrength = 2048)
+        {
+            var randomGenerator = new CryptoApiRandomGenerator();
+            var secureRandom = new SecureRandom(randomGenerator);
+
+            var keyGenerationParameters = new KeyGenerationParameters(secureRandom, keyStrength);
+            var keyPairGenerator = new RsaKeyPairGenerator();
+            keyPairGenerator.Init(keyGenerationParameters);
+            return keyPairGenerator.GenerateKeyPair();
+        }
+
         private static X509Certificate2 withPrivateKey(X509Certificate certificate, AsymmetricKeyParameter privateKey)
         {
             const string password = "password";
             Pkcs12Store store;
 
-            if(RunTime.IsRunningOnMono)
+            if (RunTime.IsRunningOnMono)
             {
                 var builder = new Pkcs12StoreBuilder();
                 builder.SetUseDerEncoding(true);
@@ -172,7 +181,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             {
                 store = new Pkcs12Store();
             }
-            
+
             var entry = new X509CertificateEntry(certificate);
             store.SetCertificateEntry(certificate.SubjectDN.ToString(), entry);
 
@@ -203,11 +212,11 @@ namespace Titanium.Web.Proxy.Network.Certificate
         {
             if (signingCertificate == null)
             {
-                return generateCertificate(null, subjectName, subjectName, validFrom, validTo);
+                return generateCertificate(null, subjectName, subjectName, validFrom, validTo, KeyPair);
             }
 
             var kp = DotNetUtilities.GetKeyPair(signingCertificate.PrivateKey);
-            return generateCertificate(hostName, subjectName, signingCertificate.Subject, validFrom, validTo,
+            return generateCertificate(hostName, subjectName, signingCertificate.Subject, validFrom, validTo, KeyPair,
                 issuerPrivateKey: kp.Private);
         }
 

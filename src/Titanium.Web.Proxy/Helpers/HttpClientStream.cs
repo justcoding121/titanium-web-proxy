@@ -1,5 +1,4 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Http;
@@ -12,7 +11,7 @@ namespace Titanium.Web.Proxy.Helpers
     {
         public TcpClientConnection Connection { get; }
 
-        internal HttpClientStream(TcpClientConnection connection, Stream stream, IBufferPool bufferPool, CancellationToken cancellationToken) 
+        internal HttpClientStream(TcpClientConnection connection, Stream stream, IBufferPool bufferPool, CancellationToken cancellationToken)
             : base(stream, bufferPool, cancellationToken)
         {
             Connection = connection;
@@ -27,10 +26,10 @@ namespace Titanium.Web.Proxy.Helpers
         internal async ValueTask WriteResponseAsync(Response response, CancellationToken cancellationToken = default)
         {
             var headerBuilder = new HeaderBuilder();
-            
+
             // Write back response status to client
             headerBuilder.WriteResponseLine(response.HttpVersion, response.StatusCode, response.StatusDescription);
-            
+
             await WriteAsync(response, headerBuilder, cancellationToken);
         }
 

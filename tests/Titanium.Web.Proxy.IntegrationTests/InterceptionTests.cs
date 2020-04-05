@@ -72,7 +72,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
 
             var client = testSuite.GetClient(proxy);
 
-            var response = await client.PostAsync(new Uri(server.ListeningHttpUrl), 
+            var response = await client.PostAsync(new Uri(server.ListeningHttpUrl),
                                         new StringContent("hello server. I am a client."));
 
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);

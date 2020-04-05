@@ -97,7 +97,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 await Task.Delay(1000);
                 proxyServer.UpdateServerConnectionCount(false);
                 Stream.Dispose();
-                
+
                 try
                 {
                     TcpSocket.Close();

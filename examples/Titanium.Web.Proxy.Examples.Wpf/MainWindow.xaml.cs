@@ -104,7 +104,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 Dispatcher.Invoke(() => { ServerConnectionCount = proxyServer.ServerConnectionCount; });
             };
             proxyServer.Start();
-            
+
             proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
 
             InitializeComponent();
@@ -279,7 +279,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                     li.SentDataCount += args.Count;
 
                     //if (tunnelType == TunnelType.Http2)
-                    AppendTransferLog( session.GetHashCode() + (isTunnelConnect ? "_tunnel" : "") + "_sent",
+                    AppendTransferLog(session.GetHashCode() + (isTunnelConnect ? "_tunnel" : "") + "_sent",
                         args.Buffer, args.Offset, args.Count);
                 }
             };

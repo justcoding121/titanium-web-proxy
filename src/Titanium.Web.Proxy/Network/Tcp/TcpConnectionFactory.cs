@@ -59,7 +59,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             cacheKeyBuilder.Append("-");
             cacheKeyBuilder.Append(remotePort);
             cacheKeyBuilder.Append("-");
-        
+
             // when creating Tcp client isConnect won't matter
             cacheKeyBuilder.Append(isHttps);
 
@@ -382,7 +382,7 @@ retry:
                                 proxySocket.ProxyUser = externalProxy.UserName;
                                 proxySocket.ProxyPass = externalProxy.Password;
                             }
-                            
+
                             tcpServerSocket = proxySocket;
                         }
                         else
@@ -744,7 +744,7 @@ retry:
             {
                 ((Socket)asyncResult.AsyncState).EndConnect(asyncResult);
             }
-            
+
             public static Task CreateTask(Socket socket, IPAddress ipAddress, int port)
             {
                 return Task.Factory.FromAsync(beginConnect, endConnect, ipAddress, port, state: socket);

@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
         internal LimitedStream(IHttpStreamReader baseStream, IBufferPool bufferPool, bool isChunked,
             long contentLength)
-        {  
+        {
             this.baseReader = baseStream;
             this.bufferPool = bufferPool;
             this.isChunked = isChunked;

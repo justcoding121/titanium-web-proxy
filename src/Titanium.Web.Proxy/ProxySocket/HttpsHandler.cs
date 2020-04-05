@@ -136,10 +136,10 @@ namespace Titanium.Web.Proxy.ProxySocket
         {
             if (host == null)
                 throw new ArgumentNullException();
-            
+
             if (port <= 0 || port > 65535 || host.Length > 255)
                 throw new ArgumentException();
-            
+
             byte[] buffer = GetConnectBytes(host, port);
             if (Server.Send(buffer, 0, buffer.Length, SocketFlags.None) < buffer.Length)
             {

@@ -33,7 +33,7 @@ namespace Titanium.Web.Proxy
         /// <param name="connectArgs">The Connect request if this is a HTTPS request from explicit endpoint.</param>
         /// <param name="prefetchConnectionTask">Prefetched server connection for current client using Connect/SNI headers.</param>
         /// <param name="isHttps">Is HTTPS</param>
-        private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, HttpClientStream clientStream, 
+        private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, HttpClientStream clientStream,
             CancellationTokenSource cancellationTokenSource, TunnelConnectSessionEventArgs? connectArgs = null,
             Task<TcpServerConnection>? prefetchConnectionTask = null, bool isHttps = false)
         {
@@ -50,7 +50,7 @@ namespace Titanium.Web.Proxy
                 // Loop through each subsequent request on this particular client connection
                 // (assuming HTTP connection is kept alive by client)
                 while (true)
-                {   
+                {
                     if (clientStream.IsClosed)
                     {
                         return;
@@ -152,7 +152,7 @@ namespace Titanium.Web.Proxy
                                 }
                                 catch (SocketException e)
                                 {
-                                    if(e.SocketErrorCode != SocketError.HostNotFound)
+                                    if (e.SocketErrorCode != SocketError.HostNotFound)
                                     {
                                         throw;
                                     }
@@ -336,7 +336,7 @@ namespace Titanium.Web.Proxy
                 headerBuilder.WriteResponseLine(response.HttpVersion, response.StatusCode, response.StatusDescription);
                 headerBuilder.WriteHeaders(response.Headers);
                 await writer.WriteHeadersAsync(headerBuilder, cancellationToken);
-                
+
                 await args.ClearResponse(cancellationToken);
             }
 

@@ -1,5 +1,4 @@
-﻿using System;
-using Titanium.Web.Proxy.Network.Tcp;
+﻿using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy.EventArguments
 {

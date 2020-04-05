@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -1017,7 +1018,7 @@ namespace Titanium.Web.Proxy.Helpers
             string? contentEncoding = useOriginalHeaderValues ? requestResponse.OriginalContentEncoding : requestResponse.ContentEncoding;
 
             Stream s = limitedStream = new LimitedStream(this, bufferPool, isChunked, contentLength);
-            
+
             if (transformation == TransformationMode.Uncompress && contentEncoding != null)
             {
                 s = decompressStream = DecompressionFactory.Create(CompressionUtil.CompressionNameToEnum(contentEncoding), s);
@@ -1102,13 +1103,16 @@ namespace Titanium.Web.Proxy.Helpers
                     return;
                 }
 
-                int idx = chunkHead.IndexOf(";");
+                int idx = chunkHead.IndexOf(";", StringComparison.Ordinal);
                 if (idx >= 0)
                 {
                     chunkHead = chunkHead.Substring(0, idx);
                 }
 
-                int chunkSize = int.Parse(chunkHead, NumberStyles.HexNumber);
+                if (!int.TryParse(chunkHead, NumberStyles.HexNumber, null, out int chunkSize))
+                {
+                    throw new ProxyHttpException($"Invalid chunk length: '{chunkHead}'", null, null);
+                }
 
                 await writer.WriteLineAsync(chunkHead, cancellationToken);
 
