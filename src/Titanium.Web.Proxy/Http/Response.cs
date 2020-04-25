@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 
@@ -116,6 +117,11 @@ namespace Titanium.Web.Proxy.Http
             if (BodyInternal != null)
             {
                 return;
+            }
+
+            if (!HasBody)
+            {
+                throw new BodyNotFoundException("Response don't have a body.");
             }
 
             if (!IsBodyRead && throwWhenNotReadYet)
