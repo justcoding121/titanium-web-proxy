@@ -469,7 +469,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="html">HTML content to sent.</param>
         /// <param name="headers">HTTP response headers.</param>
         /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
-        public void Ok(string html, IDictionary<string, HttpHeader>? headers = null,
+        public void Ok(string html, IDictionary<string, HttpHeader>? headers,
             bool closeServerConnection = false)
         {
             Ok(html, headers?.Values, closeServerConnection);
@@ -504,7 +504,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="result">The html content bytes.</param>
         /// <param name="headers">The HTTP headers.</param>
         /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
-        public void Ok(byte[] result, IDictionary<string, HttpHeader>? headers = null,
+        public void Ok(byte[] result, IDictionary<string, HttpHeader>? headers,
             bool closeServerConnection = false)
         {
             Ok(result, headers?.Values, closeServerConnection);
@@ -538,7 +538,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="headers">The HTTP headers.</param>
         /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
         public void GenericResponse(string html, HttpStatusCode status,
-            IDictionary<string, HttpHeader>? headers = null, bool closeServerConnection = false)
+            IDictionary<string, HttpHeader>? headers, bool closeServerConnection = false)
         {
             GenericResponse(html, status, headers?.Values, closeServerConnection);
         }
