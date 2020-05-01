@@ -315,24 +315,42 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Dispose
   nameWithType: SessionEventArgs.Dispose
-- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
-  name: GenericResponse(Byte[], HttpStatusCode, Dictionary<String, HttpHeader>, Boolean)
-  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_
-  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
-  name.vb: GenericResponse(Byte(), HttpStatusCode, Dictionary(Of String, HttpHeader), Boolean)
-  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[], System.Net.HttpStatusCode, System.Collections.Generic.Dictionary<System.String, Titanium.Web.Proxy.Models.HttpHeader>, System.Boolean)
-  fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte(), System.Net.HttpStatusCode, System.Collections.Generic.Dictionary(Of System.String, Titanium.Web.Proxy.Models.HttpHeader), System.Boolean)
-  nameWithType: SessionEventArgs.GenericResponse(Byte[], HttpStatusCode, Dictionary<String, HttpHeader>, Boolean)
-  nameWithType.vb: SessionEventArgs.GenericResponse(Byte(), HttpStatusCode, Dictionary(Of String, HttpHeader), Boolean)
-- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
-  name: GenericResponse(String, HttpStatusCode, Dictionary<String, HttpHeader>, Boolean)
-  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_
-  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
-  name.vb: GenericResponse(String, HttpStatusCode, Dictionary(Of String, HttpHeader), Boolean)
-  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String, System.Net.HttpStatusCode, System.Collections.Generic.Dictionary<System.String, Titanium.Web.Proxy.Models.HttpHeader>, System.Boolean)
-  fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String, System.Net.HttpStatusCode, System.Collections.Generic.Dictionary(Of System.String, Titanium.Web.Proxy.Models.HttpHeader), System.Boolean)
-  nameWithType: SessionEventArgs.GenericResponse(String, HttpStatusCode, Dictionary<String, HttpHeader>, Boolean)
-  nameWithType.vb: SessionEventArgs.GenericResponse(String, HttpStatusCode, Dictionary(Of String, HttpHeader), Boolean)
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name: GenericResponse(Byte[], HttpStatusCode, IDictionary<String, HttpHeader>, Boolean)
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_
+  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name.vb: GenericResponse(Byte(), HttpStatusCode, IDictionary(Of String, HttpHeader), Boolean)
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[], System.Net.HttpStatusCode, System.Collections.Generic.IDictionary<System.String, Titanium.Web.Proxy.Models.HttpHeader>, System.Boolean)
+  fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte(), System.Net.HttpStatusCode, System.Collections.Generic.IDictionary(Of System.String, Titanium.Web.Proxy.Models.HttpHeader), System.Boolean)
+  nameWithType: SessionEventArgs.GenericResponse(Byte[], HttpStatusCode, IDictionary<String, HttpHeader>, Boolean)
+  nameWithType.vb: SessionEventArgs.GenericResponse(Byte(), HttpStatusCode, IDictionary(Of String, HttpHeader), Boolean)
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name: GenericResponse(Byte[], HttpStatusCode, IEnumerable<HttpHeader>, Boolean)
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_
+  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name.vb: GenericResponse(Byte(), HttpStatusCode, IEnumerable(Of HttpHeader), Boolean)
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[], System.Net.HttpStatusCode, System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Models.HttpHeader>, System.Boolean)
+  fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte(), System.Net.HttpStatusCode, System.Collections.Generic.IEnumerable(Of Titanium.Web.Proxy.Models.HttpHeader), System.Boolean)
+  nameWithType: SessionEventArgs.GenericResponse(Byte[], HttpStatusCode, IEnumerable<HttpHeader>, Boolean)
+  nameWithType.vb: SessionEventArgs.GenericResponse(Byte(), HttpStatusCode, IEnumerable(Of HttpHeader), Boolean)
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name: GenericResponse(String, HttpStatusCode, IDictionary<String, HttpHeader>, Boolean)
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_
+  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name.vb: GenericResponse(String, HttpStatusCode, IDictionary(Of String, HttpHeader), Boolean)
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String, System.Net.HttpStatusCode, System.Collections.Generic.IDictionary<System.String, Titanium.Web.Proxy.Models.HttpHeader>, System.Boolean)
+  fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String, System.Net.HttpStatusCode, System.Collections.Generic.IDictionary(Of System.String, Titanium.Web.Proxy.Models.HttpHeader), System.Boolean)
+  nameWithType: SessionEventArgs.GenericResponse(String, HttpStatusCode, IDictionary<String, HttpHeader>, Boolean)
+  nameWithType.vb: SessionEventArgs.GenericResponse(String, HttpStatusCode, IDictionary(Of String, HttpHeader), Boolean)
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name: GenericResponse(String, HttpStatusCode, IEnumerable<HttpHeader>, Boolean)
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_
+  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name.vb: GenericResponse(String, HttpStatusCode, IEnumerable(Of HttpHeader), Boolean)
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String, System.Net.HttpStatusCode, System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Models.HttpHeader>, System.Boolean)
+  fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String, System.Net.HttpStatusCode, System.Collections.Generic.IEnumerable(Of Titanium.Web.Proxy.Models.HttpHeader), System.Boolean)
+  nameWithType: SessionEventArgs.GenericResponse(String, HttpStatusCode, IEnumerable<HttpHeader>, Boolean)
+  nameWithType.vb: SessionEventArgs.GenericResponse(String, HttpStatusCode, IEnumerable(Of HttpHeader), Boolean)
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse*
   name: GenericResponse
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_
@@ -411,24 +429,42 @@ references:
   commentId: E:Titanium.Web.Proxy.EventArguments.SessionEventArgs.MultipartRequestPartSent
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.MultipartRequestPartSent
   nameWithType: SessionEventArgs.MultipartRequestPartSent
-- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
-  name: Ok(Byte[], Dictionary<String, HttpHeader>, Boolean)
-  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_
-  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
-  name.vb: Ok(Byte(), Dictionary(Of String, HttpHeader), Boolean)
-  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[], System.Collections.Generic.Dictionary<System.String, Titanium.Web.Proxy.Models.HttpHeader>, System.Boolean)
-  fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte(), System.Collections.Generic.Dictionary(Of System.String, Titanium.Web.Proxy.Models.HttpHeader), System.Boolean)
-  nameWithType: SessionEventArgs.Ok(Byte[], Dictionary<String, HttpHeader>, Boolean)
-  nameWithType.vb: SessionEventArgs.Ok(Byte(), Dictionary(Of String, HttpHeader), Boolean)
-- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
-  name: Ok(String, Dictionary<String, HttpHeader>, Boolean)
-  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_Dictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_
-  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.Dictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
-  name.vb: Ok(String, Dictionary(Of String, HttpHeader), Boolean)
-  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String, System.Collections.Generic.Dictionary<System.String, Titanium.Web.Proxy.Models.HttpHeader>, System.Boolean)
-  fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String, System.Collections.Generic.Dictionary(Of System.String, Titanium.Web.Proxy.Models.HttpHeader), System.Boolean)
-  nameWithType: SessionEventArgs.Ok(String, Dictionary<String, HttpHeader>, Boolean)
-  nameWithType.vb: SessionEventArgs.Ok(String, Dictionary(Of String, HttpHeader), Boolean)
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name: Ok(Byte[], IDictionary<String, HttpHeader>, Boolean)
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_
+  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name.vb: Ok(Byte(), IDictionary(Of String, HttpHeader), Boolean)
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[], System.Collections.Generic.IDictionary<System.String, Titanium.Web.Proxy.Models.HttpHeader>, System.Boolean)
+  fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte(), System.Collections.Generic.IDictionary(Of System.String, Titanium.Web.Proxy.Models.HttpHeader), System.Boolean)
+  nameWithType: SessionEventArgs.Ok(Byte[], IDictionary<String, HttpHeader>, Boolean)
+  nameWithType.vb: SessionEventArgs.Ok(Byte(), IDictionary(Of String, HttpHeader), Boolean)
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name: Ok(Byte[], IEnumerable<HttpHeader>, Boolean)
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_
+  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name.vb: Ok(Byte(), IEnumerable(Of HttpHeader), Boolean)
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[], System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Models.HttpHeader>, System.Boolean)
+  fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte(), System.Collections.Generic.IEnumerable(Of Titanium.Web.Proxy.Models.HttpHeader), System.Boolean)
+  nameWithType: SessionEventArgs.Ok(Byte[], IEnumerable<HttpHeader>, Boolean)
+  nameWithType.vb: SessionEventArgs.Ok(Byte(), IEnumerable(Of HttpHeader), Boolean)
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name: Ok(String, IDictionary<String, HttpHeader>, Boolean)
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_
+  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name.vb: Ok(String, IDictionary(Of String, HttpHeader), Boolean)
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String, System.Collections.Generic.IDictionary<System.String, Titanium.Web.Proxy.Models.HttpHeader>, System.Boolean)
+  fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String, System.Collections.Generic.IDictionary(Of System.String, Titanium.Web.Proxy.Models.HttpHeader), System.Boolean)
+  nameWithType: SessionEventArgs.Ok(String, IDictionary<String, HttpHeader>, Boolean)
+  nameWithType.vb: SessionEventArgs.Ok(String, IDictionary(Of String, HttpHeader), Boolean)
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name: Ok(String, IEnumerable<HttpHeader>, Boolean)
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_
+  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)
+  name.vb: Ok(String, IEnumerable(Of HttpHeader), Boolean)
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String, System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Models.HttpHeader>, System.Boolean)
+  fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String, System.Collections.Generic.IEnumerable(Of Titanium.Web.Proxy.Models.HttpHeader), System.Boolean)
+  nameWithType: SessionEventArgs.Ok(String, IEnumerable<HttpHeader>, Boolean)
+  nameWithType.vb: SessionEventArgs.Ok(String, IEnumerable(Of HttpHeader), Boolean)
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok*
   name: Ok
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_
