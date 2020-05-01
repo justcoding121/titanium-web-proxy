@@ -160,16 +160,15 @@ namespace Titanium.Web.Proxy.Http
         public void AddHeader(HttpHeader newHeader)
         {
             // if header exist in non-unique header collection add it there
-            if (nonUniqueHeaders.ContainsKey(newHeader.Name))
+            if (nonUniqueHeaders.TryGetValue(newHeader.Name, out var list))
             {
-                nonUniqueHeaders[newHeader.Name].Add(newHeader);
+                list.Add(newHeader);
                 return;
             }
 
             // if header is already in unique header collection then move both to non-unique collection
-            if (headers.ContainsKey(newHeader.Name))
+            if (headers.TryGetValue(newHeader.Name, out var existing))
             {
-                var existing = headers[newHeader.Name];
                 headers.Remove(newHeader.Name);
 
                 nonUniqueHeaders.Add(newHeader.Name, new List<HttpHeader>
@@ -189,7 +188,7 @@ namespace Titanium.Web.Proxy.Http
         ///     Adds the given header objects to Request
         /// </summary>
         /// <param name="newHeaders"></param>
-        public void AddHeaders(IEnumerable<HttpHeader> newHeaders)
+        public void AddHeaders(IEnumerable<HttpHeader>? newHeaders)
         {
             if (newHeaders == null)
             {

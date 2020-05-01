@@ -469,7 +469,20 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="html">HTML content to sent.</param>
         /// <param name="headers">HTTP response headers.</param>
         /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
-        public void Ok(string html, Dictionary<string, HttpHeader>? headers = null,
+        public void Ok(string html, IDictionary<string, HttpHeader>? headers = null,
+            bool closeServerConnection = false)
+        {
+            Ok(html, headers?.Values, closeServerConnection);
+        }
+
+        /// <summary>
+        /// Before request is made to server respond with the specified HTML string to client
+        /// and ignore the request. 
+        /// </summary>
+        /// <param name="html">HTML content to sent.</param>
+        /// <param name="headers">HTTP response headers.</param>
+        /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
+        public void Ok(string html, IEnumerable<HttpHeader>? headers = null,
             bool closeServerConnection = false)
         {
             var response = new OkResponse();
@@ -491,7 +504,20 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="result">The html content bytes.</param>
         /// <param name="headers">The HTTP headers.</param>
         /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
-        public void Ok(byte[] result, Dictionary<string, HttpHeader>? headers = null,
+        public void Ok(byte[] result, IDictionary<string, HttpHeader>? headers = null,
+            bool closeServerConnection = false)
+        {
+            Ok(result, headers?.Values, closeServerConnection);
+        }
+
+        /// <summary>
+        /// Before request is made to server respond with the specified byte[] to client
+        /// and ignore the request. 
+        /// </summary>
+        /// <param name="result">The html content bytes.</param>
+        /// <param name="headers">The HTTP headers.</param>
+        /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
+        public void Ok(byte[] result, IEnumerable<HttpHeader>? headers = null,
             bool closeServerConnection = false)
         {
             var response = new OkResponse();
@@ -512,7 +538,22 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="headers">The HTTP headers.</param>
         /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
         public void GenericResponse(string html, HttpStatusCode status,
-            Dictionary<string, HttpHeader>? headers = null, bool closeServerConnection = false)
+            IDictionary<string, HttpHeader>? headers = null, bool closeServerConnection = false)
+        {
+            GenericResponse(html, status, headers?.Values, closeServerConnection);
+        }
+
+        /// <summary>
+        /// Before request is made to server 
+        /// respond with the specified HTML string and the specified status to client.
+        /// And then ignore the request. 
+        /// </summary>
+        /// <param name="html">The html content.</param>
+        /// <param name="status">The HTTP status code.</param>
+        /// <param name="headers">The HTTP headers.</param>
+        /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
+        public void GenericResponse(string html, HttpStatusCode status,
+            IEnumerable<HttpHeader>? headers = null, bool closeServerConnection = false)
         {
             var response = new GenericResponse(status);
             response.HttpVersion = HttpClient.Request.HttpVersion;
@@ -531,7 +572,21 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <param name="headers">The HTTP headers.</param>
         /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
         public void GenericResponse(byte[] result, HttpStatusCode status,
-            Dictionary<string, HttpHeader> headers, bool closeServerConnection = false)
+            IDictionary<string, HttpHeader> headers, bool closeServerConnection = false)
+        {
+            GenericResponse(result, status, headers?.Values, closeServerConnection);
+        }
+
+        /// <summary>
+        /// Before request is made to server respond with the specified byte[],
+        /// the specified status  to client. And then ignore the request.
+        /// </summary>
+        /// <param name="result">The bytes to sent.</param>
+        /// <param name="status">The HTTP status code.</param>
+        /// <param name="headers">The HTTP headers.</param>
+        /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
+        public void GenericResponse(byte[] result, HttpStatusCode status,
+            IEnumerable<HttpHeader>? headers, bool closeServerConnection = false)
         {
             var response = new GenericResponse(status);
             response.HttpVersion = HttpClient.Request.HttpVersion;
