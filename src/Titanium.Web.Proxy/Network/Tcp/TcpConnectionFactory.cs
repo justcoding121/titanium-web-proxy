@@ -546,7 +546,32 @@ retry:
                 stream?.Dispose();
                 tcpServerSocket?.Close();
 
-                enabledSslProtocols = SslProtocols.Tls;
+                // Specifying Tls11 and/or Tls12 will disable the usage of Ssl3, even if it has been included.
+                // https://docs.microsoft.com/en-us/dotnet/api/system.servicemodel.tcptransportsecurity.sslprotocols?view=dotnet-plat-ext-3.1
+                enabledSslProtocols = proxyServer.SupportedSslProtocols & (SslProtocols)0xff;
+
+                if (enabledSslProtocols == SslProtocols.None)
+                {
+                    throw;
+                }
+
+                retry = false;
+                goto retry;
+            }
+            catch (AuthenticationException ex) when (ex.HResult == unchecked((int)0x80131501) && retry && enabledSslProtocols >= SslProtocols.Tls11)
+            {
+                stream?.Dispose();
+                tcpServerSocket?.Close();
+
+                // Specifying Tls11 and/or Tls12 will disable the usage of Ssl3, even if it has been included.
+                // https://docs.microsoft.com/en-us/dotnet/api/system.servicemodel.tcptransportsecurity.sslprotocols?view=dotnet-plat-ext-3.1
+                enabledSslProtocols = proxyServer.SupportedSslProtocols & (SslProtocols)0xff;
+
+                if (enabledSslProtocols == SslProtocols.None)
+                {
+                    throw;
+                }
+
                 retry = false;
                 goto retry;
             }
