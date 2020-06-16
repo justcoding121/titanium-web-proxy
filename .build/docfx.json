@@ -3,7 +3,7 @@
     {
       "src": [
         {
-	 "files": [ "Titanium.Web.Proxy.sln"],
+	 "files": [ "Titanium.Web.Proxy.Docs.sln"],
          "src": "../src/"
         }
       ],
