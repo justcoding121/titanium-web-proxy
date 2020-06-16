@@ -10,7 +10,7 @@
     <meta name="viewport" content="width=device-width">
     <meta name="title" content="Class ProxyServer
    | Titanium Web Proxy ">
-    <meta name="generator" content="docfx 2.47.0.0">
+    <meta name="generator" content="docfx 2.55.0.0">
     
     <link rel="shortcut icon" href="../favicon.ico">
     <link rel="stylesheet" href="../styles/docfx.vendor.css">
@@ -267,7 +267,7 @@ Buffer size should be at least 10 bytes.</p>
     </thead>
     <tbody>
       <tr>
-        <td><span class="xref">IBufferPool</span></td>
+        <td><a class="xref" href="Titanium.Web.Proxy.StreamExtended.BufferPool.IBufferPool.html">IBufferPool</a></td>
         <td></td>
       </tr>
     </tbody>
@@ -298,7 +298,7 @@ Buffer size should be at least 10 bytes.</p>
     </thead>
     <tbody>
       <tr>
-        <td><span class="xref">CertificateManager</span></td>
+        <td><a class="xref" href="Titanium.Web.Proxy.Network.CertificateManager.html">CertificateManager</a></td>
         <td></td>
       </tr>
     </tbody>
@@ -446,7 +446,7 @@ User should return the ExternalProxy object with valid credentials or null.</p>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public Func&lt;SessionEventArgsBase, Task&lt;IExternalProxy?&gt;&gt; CustomUpStreamProxyFailureFunc { get; set; }</code></pre>
+    <pre><code class="lang-csharp hljs">public Func&lt;SessionEventArgsBase, Task&lt;IExternalProxy&gt;&gt; CustomUpStreamProxyFailureFunc { get; set; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -458,7 +458,7 @@ User should return the ExternalProxy object with valid credentials or null.</p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-2">Func</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.nullable-1">Nullable</a>&lt;<span class="xref">IExternalProxy</span>&gt;&gt;&gt;</td>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-2">Func</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="Titanium.Web.Proxy.Models.IExternalProxy.html">IExternalProxy</a>&gt;&gt;</td>
         <td></td>
       </tr>
     </tbody>
@@ -713,7 +713,7 @@ User should return the ExternalProxy object with valid credentials.</p>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public Func&lt;SessionEventArgsBase, Task&lt;IExternalProxy?&gt;&gt; GetCustomUpStreamProxyFunc { get; set; }</code></pre>
+    <pre><code class="lang-csharp hljs">public Func&lt;SessionEventArgsBase, Task&lt;IExternalProxy&gt;&gt; GetCustomUpStreamProxyFunc { get; set; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -725,7 +725,7 @@ User should return the ExternalProxy object with valid credentials.</p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-2">Func</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.nullable-1">Nullable</a>&lt;<span class="xref">IExternalProxy</span>&gt;&gt;&gt;</td>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.func-2">Func</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="Titanium.Web.Proxy.Models.IExternalProxy.html">IExternalProxy</a>&gt;&gt;</td>
         <td></td>
       </tr>
     </tbody>
@@ -1189,7 +1189,7 @@ Defaults via any IP addresses of this machine.</p>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public IExternalProxy? UpStreamHttpProxy { get; set; }</code></pre>
+    <pre><code class="lang-csharp hljs">public IExternalProxy UpStreamHttpProxy { get; set; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -1201,7 +1201,7 @@ Defaults via any IP addresses of this machine.</p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.nullable-1">Nullable</a>&lt;<span class="xref">IExternalProxy</span>&gt;</td>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.IExternalProxy.html">IExternalProxy</a></td>
         <td></td>
       </tr>
     </tbody>
@@ -1220,7 +1220,7 @@ Defaults via any IP addresses of this machine.</p>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public IExternalProxy? UpStreamHttpsProxy { get; set; }</code></pre>
+    <pre><code class="lang-csharp hljs">public IExternalProxy UpStreamHttpsProxy { get; set; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -1232,7 +1232,7 @@ Defaults via any IP addresses of this machine.</p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.nullable-1">Nullable</a>&lt;<span class="xref">IExternalProxy</span>&gt;</td>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.IExternalProxy.html">IExternalProxy</a></td>
         <td></td>
       </tr>
     </tbody>

@@ -447,7 +447,11 @@ $(function () {
         var val = this.value;
         //Save filter string to local session storage
         if (typeof(Storage) !== "undefined") {
-          sessionStorage.filterString = val;
+          try {
+            sessionStorage.filterString = val;
+            }
+          catch(e)
+            {}
         }
         if (val === '') {
           // Clear 'filtered' class
@@ -456,6 +460,16 @@ $(function () {
           return;
         }
         tocFilterClearButton.fadeIn();
+
+        // set all parent nodes status
+        $('#toc li>a').filter(function (i, e) {
+          return $(e).siblings().length > 0
+        }).each(function (i, anchor) {
+          var parent = $(anchor).parent();
+          parent.addClass(hide);
+          parent.removeClass(show);
+          parent.removeClass(filtered);
+        })
         
         // Get leaf nodes
         $('#toc li>a').filter(function (i, e) {
@@ -504,14 +518,22 @@ $(function () {
         tocFilterInput.val("");
         tocFilterInput.trigger('input');
         if (typeof(Storage) !== "undefined") {
-          sessionStorage.filterString = "";
+          try {
+            sessionStorage.filterString = "";
+            }
+          catch(e)
+            {}
         }
       });
 
       //Set toc filter from local session storage on page load
       if (typeof(Storage) !== "undefined") {
-        tocFilterInput.val(sessionStorage.filterString);
-        tocFilterInput.trigger('input');
+        try {
+          tocFilterInput.val(sessionStorage.filterString);
+          tocFilterInput.trigger('input');
+          }
+        catch(e)
+          {}
       }
     }
 
@@ -1162,7 +1184,7 @@ $(function () {
 
     $(window).on('hashchange', scrollToCurrent);
 
-    $(window).load(function () {
+    $(window).on('load', function () {
         // scroll to the anchor if present, offset by the header
         scrollToCurrent();
     });
