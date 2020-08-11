@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
     /// </summary>
     internal class BCCertificateMaker : ICertificateMaker
     {
-        private const int certificateValidDays = 1825;
+        private readonly int certificateValidDays;
         private const int certificateGraceDays = 366;
 
         // The FriendlyName value cannot be set on Unix.
@@ -35,9 +35,10 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
         private readonly ExceptionHandler exceptionFunc;
 
-        internal BCCertificateMaker(ExceptionHandler exceptionFunc)
+        internal BCCertificateMaker(ExceptionHandler exceptionFunc, int certificateValidDays)
         {
-            this.exceptionFunc = exceptionFunc;
+            this.certificateValidDays = certificateValidDays;
+            this.exceptionFunc = exceptionFunc;  
         }
 
         /// <summary>

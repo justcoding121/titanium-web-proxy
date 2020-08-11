@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
     /// </summary>
     internal class BCCertificateMakerFast : ICertificateMaker
     {
-        private const int certificateValidDays = 1825;
+        private int certificateValidDays;
         private const int certificateGraceDays = 366;
 
         // The FriendlyName value cannot be set on Unix.
@@ -37,8 +37,9 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
         public AsymmetricCipherKeyPair KeyPair { get; set; }
 
-        internal BCCertificateMakerFast(ExceptionHandler exceptionFunc)
+        internal BCCertificateMakerFast(ExceptionHandler exceptionFunc, int certificateValidDays)
         {
+            this.certificateValidDays = certificateValidDays;
             this.exceptionFunc = exceptionFunc;
             KeyPair = GenerateKeyPair();
         }

@@ -73,14 +73,14 @@ namespace Titanium.Web.Proxy.Network
                     switch (engine)
                     {
                         case CertificateEngine.BouncyCastle:
-                            certEngineValue = new BCCertificateMaker(ExceptionFunc);
+                            certEngineValue = new BCCertificateMaker(ExceptionFunc, CertificateValidDays);
                             break;
                         case CertificateEngine.BouncyCastleFast:
-                            certEngineValue = new BCCertificateMakerFast(ExceptionFunc);
+                            certEngineValue = new BCCertificateMakerFast(ExceptionFunc, CertificateValidDays);
                             break;
                         case CertificateEngine.DefaultWindows:
                         default:
-                            certEngineValue = new WinCertificateMaker(ExceptionFunc);
+                            certEngineValue = new WinCertificateMaker(ExceptionFunc, CertificateValidDays);
                             break;
                     }
                 }
@@ -203,6 +203,12 @@ namespace Titanium.Web.Proxy.Network
         ///     </para>
         /// </summary>
         public string PfxFilePath { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Number of Days generated HTTPS certificates are valid for.
+        /// Maximum allowed on iOS 13 is 825 days and it is the default.
+        /// </summary>
+        public int CertificateValidDays { get; set; } = 825;
 
         /// <summary>
         ///     Name of the root certificate issuer.

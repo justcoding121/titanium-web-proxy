@@ -13,6 +13,9 @@ namespace Titanium.Web.Proxy.Network.Certificate
     /// </summary>
     internal class WinCertificateMaker : ICertificateMaker
     {
+        // Validity Days for Root Certificates Generated.
+        private int certificateValidDays;
+
         private readonly ExceptionHandler exceptionFunc;
 
         private readonly string sProviderName = "Microsoft Enhanced Cryptographic Provider v1.0";
@@ -49,8 +52,9 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <summary>
         ///     Constructor.
         /// </summary>
-        internal WinCertificateMaker(ExceptionHandler exceptionFunc)
+        internal WinCertificateMaker(ExceptionHandler exceptionFunc, int certificateValidDays)
         {
+            this.certificateValidDays = certificateValidDays;
             this.exceptionFunc = exceptionFunc;
 
             typeX500DN = Type.GetTypeFromProgID("X509Enrollment.CX500DistinguishedName", true);
@@ -99,16 +103,13 @@ namespace Titanium.Web.Proxy.Network.Certificate
             // Grace Days
             const int graceDays = -366;
 
-            // ValiDays
-            const int validDays = 1825;
-
             // KeyLength
             const int keyLength = 2048;
 
             var now = DateTime.UtcNow;
             var graceTime = now.AddDays(graceDays);
             var certificate = makeCertificate(sSubjectCN, fullSubject, keyLength, hashAlgo, graceTime,
-                now.AddDays(validDays), signingCertificate);
+                now.AddDays(certificateValidDays), signingCertificate);
             return certificate;
         }
 
