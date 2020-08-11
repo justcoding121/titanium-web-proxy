@@ -3311,6 +3311,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.CertificateStorage
   nameWithType: CertificateManager.CertificateStorage
+- uid: Titanium.Web.Proxy.Network.CertificateManager.CertificateValidDays
+  name: CertificateValidDays
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_CertificateValidDays
+  commentId: P:Titanium.Web.Proxy.Network.CertificateManager.CertificateValidDays
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.CertificateValidDays
+  nameWithType: CertificateManager.CertificateValidDays
+- uid: Titanium.Web.Proxy.Network.CertificateManager.CertificateValidDays*
+  name: CertificateValidDays
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_CertificateValidDays_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.CertificateValidDays
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.CertificateValidDays
+  nameWithType: CertificateManager.CertificateValidDays
 - uid: Titanium.Web.Proxy.Network.CertificateManager.ClearRootCertificate
   name: ClearRootCertificate()
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ClearRootCertificate
