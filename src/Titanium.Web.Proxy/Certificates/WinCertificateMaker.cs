@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -222,9 +223,18 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 var extNames = Activator.CreateInstance(typeExtNames);
                 var altDnsNames = Activator.CreateInstance(typeCAlternativeName);
 
-                typeValue = new object[] { 3, subject };
-                typeCAlternativeName.InvokeMember("InitializeFromString", BindingFlags.InvokeMethod, null, altDnsNames,
-                    typeValue);
+                IPAddress ip;
+                if (IPAddress.TryParse(subject, out ip))
+                {
+                    String ipBase64 = Convert.ToBase64String(ip.GetAddressBytes());
+                    typeValue = new object[] { AlternativeNameType.XCN_CERT_ALT_NAME_IP_ADDRESS, EncodingType.XCN_CRYPT_STRING_BASE64, ipBase64 };
+                    typeCAlternativeName.InvokeMember("InitializeFromRawData", BindingFlags.InvokeMethod, null, altDnsNames, typeValue);
+                }
+                else
+                {
+                    typeValue = new object[] { 3, subject };//3==DNS, 8==IP ADDR
+                    typeCAlternativeName.InvokeMember("InitializeFromString", BindingFlags.InvokeMethod, null, altDnsNames, typeValue);
+                }
 
                 typeValue = new[] { altDnsNames };
                 typeAltNamesCollection.InvokeMember("Add", BindingFlags.InvokeMethod, null, altNameCollection,
@@ -298,5 +308,45 @@ namespace Titanium.Web.Proxy.Network.Certificate
             return new X509Certificate2(Convert.FromBase64String(empty), string.Empty, X509KeyStorageFlags.Exportable);
         }
 
+    }
+
+    public enum EncodingType
+    {
+        XCN_CRYPT_STRING_ANY = 7,
+        XCN_CRYPT_STRING_BASE64 = 1,
+        XCN_CRYPT_STRING_BASE64_ANY = 6,
+        XCN_CRYPT_STRING_BASE64HEADER = 0,
+        XCN_CRYPT_STRING_BASE64REQUESTHEADER = 3,
+        XCN_CRYPT_STRING_BASE64URI = 13,
+        XCN_CRYPT_STRING_BASE64X509CRLHEADER = 9,
+        XCN_CRYPT_STRING_BINARY = 2,
+        XCN_CRYPT_STRING_CHAIN = 0x100,
+        XCN_CRYPT_STRING_ENCODEMASK = 0xff,
+        XCN_CRYPT_STRING_HASHDATA = 0x10000000,
+        XCN_CRYPT_STRING_HEX = 4,
+        XCN_CRYPT_STRING_HEX_ANY = 8,
+        XCN_CRYPT_STRING_HEXADDR = 10,
+        XCN_CRYPT_STRING_HEXASCII = 5,
+        XCN_CRYPT_STRING_HEXASCIIADDR = 11,
+        XCN_CRYPT_STRING_HEXRAW = 12,
+        XCN_CRYPT_STRING_NOCR = -2147483648,
+        XCN_CRYPT_STRING_NOCRLF = 0x40000000,
+        XCN_CRYPT_STRING_PERCENTESCAPE = 0x8000000,
+        XCN_CRYPT_STRING_STRICT = 0x20000000,
+        XCN_CRYPT_STRING_TEXT = 0x200
+    }
+
+    public enum AlternativeNameType
+    {
+        XCN_CERT_ALT_NAME_DIRECTORY_NAME = 5,
+        XCN_CERT_ALT_NAME_DNS_NAME = 3,
+        XCN_CERT_ALT_NAME_GUID = 10,
+        XCN_CERT_ALT_NAME_IP_ADDRESS = 8,
+        XCN_CERT_ALT_NAME_OTHER_NAME = 1,
+        XCN_CERT_ALT_NAME_REGISTERED_ID = 9,
+        XCN_CERT_ALT_NAME_RFC822_NAME = 2,
+        XCN_CERT_ALT_NAME_UNKNOWN = 0,
+        XCN_CERT_ALT_NAME_URL = 7,
+        XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME = 11
     }
 }
