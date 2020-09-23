@@ -2669,6 +2669,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.ExternalProxy.Port
   nameWithType: ExternalProxy.Port
+- uid: Titanium.Web.Proxy.Models.ExternalProxy.ProxyDnsRequests
+  name: ProxyDnsRequests
+  href: api/Titanium.Web.Proxy.Models.ExternalProxy.html#Titanium_Web_Proxy_Models_ExternalProxy_ProxyDnsRequests
+  commentId: P:Titanium.Web.Proxy.Models.ExternalProxy.ProxyDnsRequests
+  fullName: Titanium.Web.Proxy.Models.ExternalProxy.ProxyDnsRequests
+  nameWithType: ExternalProxy.ProxyDnsRequests
+- uid: Titanium.Web.Proxy.Models.ExternalProxy.ProxyDnsRequests*
+  name: ProxyDnsRequests
+  href: api/Titanium.Web.Proxy.Models.ExternalProxy.html#Titanium_Web_Proxy_Models_ExternalProxy_ProxyDnsRequests_
+  commentId: Overload:Titanium.Web.Proxy.Models.ExternalProxy.ProxyDnsRequests
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.ExternalProxy.ProxyDnsRequests
+  nameWithType: ExternalProxy.ProxyDnsRequests
 - uid: Titanium.Web.Proxy.Models.ExternalProxy.ProxyType
   name: ProxyType
   href: api/Titanium.Web.Proxy.Models.ExternalProxy.html#Titanium_Web_Proxy_Models_ExternalProxy_ProxyType
@@ -2893,6 +2906,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.IExternalProxy.Port
   nameWithType: IExternalProxy.Port
+- uid: Titanium.Web.Proxy.Models.IExternalProxy.ProxyDnsRequests
+  name: ProxyDnsRequests
+  href: api/Titanium.Web.Proxy.Models.IExternalProxy.html#Titanium_Web_Proxy_Models_IExternalProxy_ProxyDnsRequests
+  commentId: P:Titanium.Web.Proxy.Models.IExternalProxy.ProxyDnsRequests
+  fullName: Titanium.Web.Proxy.Models.IExternalProxy.ProxyDnsRequests
+  nameWithType: IExternalProxy.ProxyDnsRequests
+- uid: Titanium.Web.Proxy.Models.IExternalProxy.ProxyDnsRequests*
+  name: ProxyDnsRequests
+  href: api/Titanium.Web.Proxy.Models.IExternalProxy.html#Titanium_Web_Proxy_Models_IExternalProxy_ProxyDnsRequests_
+  commentId: Overload:Titanium.Web.Proxy.Models.IExternalProxy.ProxyDnsRequests
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.IExternalProxy.ProxyDnsRequests
+  nameWithType: IExternalProxy.ProxyDnsRequests
 - uid: Titanium.Web.Proxy.Models.IExternalProxy.ProxyType
   name: ProxyType
   href: api/Titanium.Web.Proxy.Models.IExternalProxy.html#Titanium_Web_Proxy_Models_IExternalProxy_ProxyType
