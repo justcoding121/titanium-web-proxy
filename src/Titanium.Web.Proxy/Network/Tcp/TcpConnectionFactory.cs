@@ -375,7 +375,7 @@ retry:
                                 ? ProxyTypes.Socks4
                                 : ProxyTypes.Socks5;
 
-                            proxySocket.ProxyEndPoint = new IPEndPoint(ipAddresses[0], port);
+                            proxySocket.ProxyEndPoint = new IPEndPoint(ipAddress, port);
                             if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
                             {
                                 proxySocket.ProxyUser = externalProxy.UserName;
