@@ -27,6 +27,8 @@ namespace Titanium.Web.Proxy.Models
 
         public ExternalProxyType ProxyType { get; set; }
 
+        public bool ProxyDnsRequests { get; set; }
+
         /// <summary>
         ///     Username.
         /// </summary>

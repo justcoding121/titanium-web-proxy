@@ -288,7 +288,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         {
             // deny connection to proxy end points to avoid infinite connection loop.
             if (Server.ProxyEndPoints.Any(x => x.Port == remotePort)
-                    && NetworkHelper.IsLocalIpAddress(remoteHostName))
+                && NetworkHelper.IsLocalIpAddress(remoteHostName))
             {
                 throw new Exception($"A client is making HTTP request to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
             }
@@ -334,14 +334,14 @@ namespace Titanium.Web.Proxy.Network.Tcp
             bool retry = true;
             var enabledSslProtocols = sslProtocol;
 
-retry:
+            retry:
             try
             {
                 bool socks = externalProxy != null && externalProxy.ProxyType != ExternalProxyType.Http;
                 string hostname = remoteHostName;
                 int port = remotePort;
 
-                if (externalProxy != null && externalProxy.ProxyType == ExternalProxyType.Http)
+                if (externalProxy != null)
                 {
                     hostname = externalProxy.HostName;
                     port = externalProxy.Port;
@@ -375,8 +375,7 @@ retry:
                                 ? ProxyTypes.Socks4
                                 : ProxyTypes.Socks5;
 
-                            var proxyIpAddresses = await Dns.GetHostAddressesAsync(externalProxy.HostName);
-                            proxySocket.ProxyEndPoint = new IPEndPoint(proxyIpAddresses[0], externalProxy.Port);
+                            proxySocket.ProxyEndPoint = new IPEndPoint(ipAddresses[0], port);
                             if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
                             {
                                 proxySocket.ProxyUser = externalProxy.UserName;
@@ -405,9 +404,31 @@ retry:
                             tcpServerSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                         }
 
-                        var connectTask = socks
-                            ? ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)tcpServerSocket, ipAddress, port)
-                            : SocketConnectionTaskFactory.CreateTask(tcpServerSocket, ipAddress, port);
+                        Task connectTask;
+                            
+                        if (socks)
+                        {
+                            if (externalProxy!.ProxyDnsRequests)
+                            {
+                                connectTask = ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)tcpServerSocket, remoteHostName, remotePort);
+                            }
+                            else
+                            {
+                                // todo: resolve only once when the SOCKS proxy has multiple addresses (and the first address fails)
+                                var remoteIpAddresses = await Dns.GetHostAddressesAsync(remoteHostName);
+                                if (remoteIpAddresses == null || remoteIpAddresses.Length == 0)
+                                {
+                                    throw new Exception($"Could not resolve the SOCKS remote hostname {remoteHostName}");
+                                }
+
+                                // todo: use the 2nd, 3rd... remote addresses when first fails
+                                connectTask = ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)tcpServerSocket, remoteIpAddresses[0], remotePort);
+                            }
+                        }
+                        else
+                        {
+                            connectTask = SocketConnectionTaskFactory.CreateTask(tcpServerSocket, ipAddress, port);
+                        }
 
                         await Task.WhenAny(connectTask, Task.Delay(proxyServer.ConnectTimeOutSeconds * 1000, cancellationToken));
                         if (!connectTask.IsCompleted || !tcpServerSocket.Connected)
@@ -423,6 +444,7 @@ retry:
                             {
                                 // ignore
                             }
+
                             try
                             {
 #if NET45
@@ -741,6 +763,7 @@ retry:
                         }
                     }
                 }
+
                 cache.Clear();
             }
             finally
@@ -784,6 +807,12 @@ retry:
                 return ((ProxySocket.ProxySocket)state).BeginConnect(address, port, requestCallback, state);
             }
 
+            static IAsyncResult beginConnect(string hostName, int port, AsyncCallback requestCallback,
+                object state)
+            {
+                return ((ProxySocket.ProxySocket)state).BeginConnect(hostName, port, requestCallback, state);
+            }
+
             static void endConnect(IAsyncResult asyncResult)
             {
                 ((ProxySocket.ProxySocket)asyncResult.AsyncState).EndConnect(asyncResult);
@@ -792,6 +821,11 @@ retry:
             public static Task CreateTask(ProxySocket.ProxySocket socket, IPAddress ipAddress, int port)
             {
                 return Task.Factory.FromAsync(beginConnect, endConnect, ipAddress, port, state: socket);
+            }
+
+            public static Task CreateTask(ProxySocket.ProxySocket socket, string hostName, int port)
+            {
+                return Task.Factory.FromAsync(beginConnect, endConnect, hostName, port, state: socket);
             }
         }
     }

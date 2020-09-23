@@ -14,6 +14,8 @@
 
         ExternalProxyType ProxyType { get; set; }
 
+        bool ProxyDnsRequests { get; set; }
+
         /// <summary>
         ///     Username.
         /// </summary>
