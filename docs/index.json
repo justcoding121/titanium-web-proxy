@@ -274,6 +274,21 @@
     "title": "Class TransparentProxyEndPoint | Titanium Web Proxy",
     "keywords": "Class TransparentProxyEndPoint A proxy end point client is not aware of. Useful when requests are redirected to this proxy end point through port forwarding via router. Inheritance Object ProxyEndPoint TransparentBaseProxyEndPoint TransparentProxyEndPoint Inherited Members ProxyEndPoint.IpAddress ProxyEndPoint.Port ProxyEndPoint.DecryptSsl ProxyEndPoint.GenericCertificate Object.ToString() Object.Equals(Object) Object.Equals(Object, Object) Object.ReferenceEquals(Object, Object) Object.GetHashCode() Object.GetType() Object.MemberwiseClone() Namespace : Titanium.Web.Proxy.Models Assembly : Titanium.Web.Proxy.dll Syntax public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint Constructors | Improve this Doc View Source TransparentProxyEndPoint(IPAddress, Int32, Boolean) Initialize a new instance. Declaration public TransparentProxyEndPoint(IPAddress ipAddress, int port, bool decryptSsl = true) Parameters Type Name Description IPAddress ipAddress Listening Ip address. Int32 port Listening port. Boolean decryptSsl Should we decrypt ssl? Properties | Improve this Doc View Source GenericCertificateName Name of the Certificate need to be sent (same as the hostname we want to proxy). This is valid only when UseServerNameIndication is set to false. Declaration public override string GenericCertificateName { get; set; } Property Value Type Description String Overrides TransparentBaseProxyEndPoint.GenericCertificateName Events | Improve this Doc View Source BeforeSslAuthenticate Before Ssl authentication this event is fired. Declaration public event AsyncEventHandler<BeforeSslAuthenticateEventArgs> BeforeSslAuthenticate Event Type Type Description AsyncEventHandler < BeforeSslAuthenticateEventArgs >"
   },
+  "api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html": {
+    "href": "api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html",
+    "title": "Enum AlternativeNameType | Titanium Web Proxy",
+    "keywords": "Enum AlternativeNameType Namespace : Titanium.Web.Proxy.Network.Certificate Assembly : Titanium.Web.Proxy.dll Syntax public enum AlternativeNameType Fields Name Description XCN_CERT_ALT_NAME_DIRECTORY_NAME XCN_CERT_ALT_NAME_DNS_NAME XCN_CERT_ALT_NAME_GUID XCN_CERT_ALT_NAME_IP_ADDRESS XCN_CERT_ALT_NAME_OTHER_NAME XCN_CERT_ALT_NAME_REGISTERED_ID XCN_CERT_ALT_NAME_RFC822_NAME XCN_CERT_ALT_NAME_UNKNOWN XCN_CERT_ALT_NAME_URL XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME"
+  },
+  "api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html": {
+    "href": "api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html",
+    "title": "Enum EncodingType | Titanium Web Proxy",
+    "keywords": "Enum EncodingType Namespace : Titanium.Web.Proxy.Network.Certificate Assembly : Titanium.Web.Proxy.dll Syntax public enum EncodingType Fields Name Description XCN_CRYPT_STRING_ANY XCN_CRYPT_STRING_BASE64 XCN_CRYPT_STRING_BASE64_ANY XCN_CRYPT_STRING_BASE64HEADER XCN_CRYPT_STRING_BASE64REQUESTHEADER XCN_CRYPT_STRING_BASE64URI XCN_CRYPT_STRING_BASE64X509CRLHEADER XCN_CRYPT_STRING_BINARY XCN_CRYPT_STRING_CHAIN XCN_CRYPT_STRING_ENCODEMASK XCN_CRYPT_STRING_HASHDATA XCN_CRYPT_STRING_HEX XCN_CRYPT_STRING_HEX_ANY XCN_CRYPT_STRING_HEXADDR XCN_CRYPT_STRING_HEXASCII XCN_CRYPT_STRING_HEXASCIIADDR XCN_CRYPT_STRING_HEXRAW XCN_CRYPT_STRING_NOCR XCN_CRYPT_STRING_NOCRLF XCN_CRYPT_STRING_PERCENTESCAPE XCN_CRYPT_STRING_STRICT XCN_CRYPT_STRING_TEXT"
+  },
+  "api/Titanium.Web.Proxy.Network.Certificate.html": {
+    "href": "api/Titanium.Web.Proxy.Network.Certificate.html",
+    "title": "Namespace Titanium.Web.Proxy.Network.Certificate | Titanium Web Proxy",
+    "keywords": "Namespace Titanium.Web.Proxy.Network.Certificate Enums AlternativeNameType EncodingType"
+  },
   "api/Titanium.Web.Proxy.Network.CertificateEngine.html": {
     "href": "api/Titanium.Web.Proxy.Network.CertificateEngine.html",
     "title": "Enum CertificateEngine | Titanium Web Proxy",
