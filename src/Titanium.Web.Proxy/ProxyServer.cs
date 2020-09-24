@@ -182,9 +182,9 @@ namespace Titanium.Web.Proxy
         ///     corresponding server connection process using CONNECT hostname or SNI hostname on a separate task so that after parsing client request
         ///     we will have the server connection immediately ready or in the process of getting ready.
         ///     If a server connection is available in cache then this prefetch task will immediately return with the available connection from cache.
-        ///     Defaults to true.
+        ///     Defaults to false.
         /// </summary>
-        public bool EnableTcpServerConnectionPrefetch { get; set; } = true;
+        public bool EnableTcpServerConnectionPrefetch { get; set; } = false;
 
         /// <summary>
         /// Gets or sets a Boolean value that specifies whether server and client stream Sockets are using the Nagle algorithm.
