@@ -102,6 +102,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 {
                     nameType = GeneralName.IPAddress;
                 }
+
                 var subjectAlternativeNames = new Asn1Encodable[] { new GeneralName(nameType, hostName) };
 
                 var subjectAlternativeNamesExtension = new DerSequence(subjectAlternativeNames);
