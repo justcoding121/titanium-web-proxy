@@ -582,7 +582,7 @@ When enabled, as soon as we receive a client connection we concurrently initiate
 corresponding server connection process using CONNECT hostname or SNI hostname on a separate task so that after parsing client request
 we will have the server connection immediately ready or in the process of getting ready.
 If a server connection is available in cache then this prefetch task will immediately return with the available connection from cache.
-Defaults to true.</p>
+Defaults to false.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
