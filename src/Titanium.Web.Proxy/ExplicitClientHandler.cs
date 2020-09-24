@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy
 
             var clientStream = new HttpClientStream(clientConnection, clientConnection.GetStream(), BufferPool, cancellationToken);
 
-            Task<TcpServerConnection>? prefetchConnectionTask = null;
+            Task<TcpServerConnection?>? prefetchConnectionTask = null;
             bool closeServerConnection = false;
 
             try
@@ -145,13 +145,16 @@ namespace Titanium.Web.Proxy
                                     // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
                                     var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs,
                                         true, SslExtensions.Http2ProtocolAsList,
-                                        true, cancellationToken);
+                                        true, true, cancellationToken);
 
-                                    http2Supported = connection.NegotiatedApplicationProtocol ==
-                                                     SslApplicationProtocol.Http2;
+                                    if (connection != null)
+                                    {
+                                        http2Supported = connection.NegotiatedApplicationProtocol ==
+                                                         SslApplicationProtocol.Http2;
 
-                                    // release connection back to pool instead of closing when connection pool is enabled.
-                                    await tcpConnectionFactory.Release(connection, true);
+                                        // release connection back to pool instead of closing when connection pool is enabled.
+                                        await tcpConnectionFactory.Release(connection, true);
+                                    }
                                 }
                                 catch (Exception)
                                 {
@@ -162,22 +165,11 @@ namespace Titanium.Web.Proxy
 
                         if (EnableTcpServerConnectionPrefetch)
                         {
-                            IPAddress[]? ipAddresses = null;
-                            try
-                            {
-                                // make sure the host can be resolved before creating the prefetch task
-                                ipAddresses = await Dns.GetHostAddressesAsync(connectArgs.HttpClient.Request.RequestUri.Host);
-                            }
-                            catch (SocketException) { }
-
-                            if (ipAddresses != null && ipAddresses.Length > 0)
-                            {
-                                // don't pass cancellation token here
-                                // it could cause floating server connections when client exits
-                                prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(this, connectArgs,
-                                                        true, null, false,
-                                                        CancellationToken.None);
-                            }
+                            // don't pass cancellation token here
+                            // it could cause floating server connections when client exits
+                            prefetchConnectionTask = tcpConnectionFactory.GetServerConnection(this, connectArgs,
+                                                    true, null, false, true,
+                                                    CancellationToken.None);
                         }
 
                         string connectHostname = requestLine.RequestUri.GetString();
@@ -272,9 +264,9 @@ namespace Titanium.Web.Proxy
                         // create new connection to server.
                         // If we detected that client tunnel CONNECTs without SSL by checking for empty client hello then 
                         // this connection should not be HTTPS.
-                        var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs,
+                        var connection = (await tcpConnectionFactory.GetServerConnection(this, connectArgs,
                                                         true, null,
-                                                        true, cancellationToken);
+                                                        true, false, cancellationToken))!;
 
                         try
                         {
@@ -349,9 +341,9 @@ namespace Titanium.Web.Proxy
                             throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
                         }
 
-                        var connection = await tcpConnectionFactory.GetServerConnection(this, connectArgs,
+                        var connection = (await tcpConnectionFactory.GetServerConnection(this, connectArgs,
                                                         true, SslExtensions.Http2ProtocolAsList,
-                                                        true, cancellationToken);
+                                                        true, false, cancellationToken))!;
                         try
                         {
 #if NETSTANDARD2_1
