@@ -411,7 +411,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             consoleMessageQueue.Enqueue(new Tuple<ConsoleColor?, string>(consoleColor, message));
         }
 
-        private void listenToConsole()
+        private async Task listenToConsole()
         {
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -432,6 +432,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
                         Console.WriteLine(message);
                     }
                 }
+
+                //reduce CPU usage
+                await Task.Delay(10);
             }
         }
 
