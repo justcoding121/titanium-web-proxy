@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Examples.Basic.Helpers;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -13,14 +15,19 @@ using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Examples.Basic
 {
-    public class ProxyTestController
+    public class ProxyTestController : IDisposable
     {
         private readonly SemaphoreSlim @lock = new SemaphoreSlim(1);
         private readonly ProxyServer proxyServer;
         private ExplicitProxyEndPoint explicitEndPoint;
-
+        private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+        private CancellationToken cancellationToken => cancellationTokenSource.Token;
+        private ConcurrentQueue<Tuple<ConsoleColor?, string>> consoleMessageQueue;
         public ProxyTestController()
         {
+            consoleMessageQueue = new ConcurrentQueue<Tuple<ConsoleColor?, string>>();
+            Task.Run(()=> listenToConsole());
+
             proxyServer = new ProxyServer();
 
             //proxyServer.EnableHttp2 = true;
@@ -35,11 +42,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
             {
                 if (exception is ProxyHttpException phex)
                 {
-                    await writeToConsole(exception.Message + ": " + phex.InnerException?.Message, ConsoleColor.Red);
+                    writeToConsole(exception.Message + ": " + phex.InnerException?.Message, ConsoleColor.Red);
                 }
                 else
                 {
-                    await writeToConsole(exception.Message, ConsoleColor.Red);
+                    writeToConsole(exception.Message, ConsoleColor.Red);
                 }
             };
 
@@ -185,7 +192,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             string hostname = e.HttpClient.Request.RequestUri.Host;
             e.GetState().PipelineInfo.AppendLine(nameof(onBeforeTunnelConnectRequest) + ":" + hostname);
-            await writeToConsole("Tunnel to: " + hostname);
+            writeToConsole("Tunnel to: " + hostname);
 
             var clientLocalIp = e.ClientLocalEndPoint.Address;
             if (!clientLocalIp.Equals(IPAddress.Loopback) && !clientLocalIp.Equals(IPAddress.IPv6Loopback))
@@ -224,12 +231,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 {
                     var data = frame.Data.ToArray();
                     string str = string.Join(",", data.ToArray().Select(x => x.ToString("X2")));
-                    writeToConsole(str, color).Wait();
+                    writeToConsole(str, color);
                 }
 
                 if (frame.OpCode == WebsocketOpCode.Text)
                 {
-                    writeToConsole(frame.GetText(), color).Wait();
+                    writeToConsole(frame.GetText(), color);
                 }
             }
         }
@@ -257,8 +264,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 e.CustomUpStreamProxy = new ExternalProxy("localhost", 8888);
             }
 
-            await writeToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
-            await writeToConsole(e.HttpClient.Request.Url);
+            writeToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
+            writeToConsole(e.HttpClient.Request.Url);
 
             // store it in the UserData property
             // It can be a simple integer, Guid, or any type
@@ -301,10 +308,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
             e.GetState().PipelineInfo.AppendLine(nameof(multipartRequestPartSent));
 
             var session = (SessionEventArgs)sender;
-            await writeToConsole("Multipart form data headers:");
+            writeToConsole("Multipart form data headers:");
             foreach (var header in e.Headers)
             {
-                await writeToConsole(header.ToString());
+                writeToConsole(header.ToString());
             }
         }
 
@@ -318,7 +325,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 e.DataReceived += WebSocket_DataReceived;
             }
 
-            await writeToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
+            writeToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
             string ext = System.IO.Path.GetExtension(e.HttpClient.Request.RequestUri.AbsolutePath);
 
@@ -364,7 +371,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task onAfterResponse(object sender, SessionEventArgs e)
         {
-            await writeToConsole($"Pipelineinfo: {e.GetState().PipelineInfo}", ConsoleColor.Yellow);
+            writeToConsole($"Pipelineinfo: {e.GetState().PipelineInfo}", ConsoleColor.Yellow);
         }
 
         /// <summary>
@@ -399,23 +406,39 @@ namespace Titanium.Web.Proxy.Examples.Basic
             return Task.CompletedTask;
         }
 
-        private async Task writeToConsole(string message, ConsoleColor? consoleColor = null)
+        private void writeToConsole(string message, ConsoleColor? consoleColor = null)
         {
-            await @lock.WaitAsync();
+            consoleMessageQueue.Enqueue(new Tuple<ConsoleColor?, string>(consoleColor, message));
+        }
 
-            if (consoleColor.HasValue)
+        private void listenToConsole()
+        {
+            while (!cancellationToken.IsCancellationRequested)
             {
-                ConsoleColor existing = Console.ForegroundColor;
-                Console.ForegroundColor = consoleColor.Value;
-                Console.WriteLine(message);
-                Console.ForegroundColor = existing;
-            }
-            else
-            {
-                Console.WriteLine(message);
-            }
+                if (consoleMessageQueue.TryDequeue(out var item))
+                {
+                    var consoleColor = item.Item1;
+                    var message = item.Item2;
 
-            @lock.Release();
+                    if (consoleColor.HasValue)
+                    {
+                        ConsoleColor existing = Console.ForegroundColor;
+                        Console.ForegroundColor = consoleColor.Value;
+                        Console.WriteLine(message);
+                        Console.ForegroundColor = existing;
+                    }
+                    else
+                    {
+                        Console.WriteLine(message);
+                    }
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            cancellationTokenSource.Dispose();
+            proxyServer.Dispose();
         }
 
         ///// <summary>
