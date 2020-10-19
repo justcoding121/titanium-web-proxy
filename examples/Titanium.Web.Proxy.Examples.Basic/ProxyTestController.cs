@@ -17,15 +17,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
 {
     public class ProxyTestController : IDisposable
     {
-        private readonly SemaphoreSlim @lock = new SemaphoreSlim(1);
         private readonly ProxyServer proxyServer;
         private ExplicitProxyEndPoint explicitEndPoint;
+
         private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         private CancellationToken cancellationToken => cancellationTokenSource.Token;
-        private ConcurrentQueue<Tuple<ConsoleColor?, string>> consoleMessageQueue;
+        private ConcurrentQueue<Tuple<ConsoleColor?, string>> consoleMessageQueue
+            = new ConcurrentQueue<Tuple<ConsoleColor?, string>>();
+
         public ProxyTestController()
         {
-            consoleMessageQueue = new ConcurrentQueue<Tuple<ConsoleColor?, string>>();
             Task.Run(()=> listenToConsole());
 
             proxyServer = new ProxyServer();
@@ -415,7 +416,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                if (consoleMessageQueue.TryDequeue(out var item))
+                while (consoleMessageQueue.TryDequeue(out var item))
                 {
                     var consoleColor = item.Item1;
                     var message = item.Item2;
@@ -434,7 +435,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 }
 
                 //reduce CPU usage
-                await Task.Delay(10);
+                await Task.Delay(50);
             }
         }
 
