@@ -355,19 +355,19 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             ////if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
             //if (e.HttpClient.Request.Method == "GET" || e.HttpClient.Request.Method == "POST")
-            //{ 
+            //{
             //    if (e.HttpClient.Response.StatusCode == (int)HttpStatusCode.OK)
             //    {
             //        if (e.HttpClient.Response.ContentType != null && e.HttpClient.Response.ContentType.Trim().ToLower().Contains("text/html"))
             //        {
             //            var bodyBytes = await e.GetResponseBody();
-            //            await e.SetResponseBody(bodyBytes);
+            //            e.SetResponseBody(bodyBytes);
 
             //            string body = await e.GetResponseBodyAsString();
-            //            await e.SetResponseBodyString(body);
+            //            e.SetResponseBodyString(body);
             //        }
             //    }
-            //} 
+            //}
         }
 
         private async Task onAfterResponse(object sender, SessionEventArgs e)
