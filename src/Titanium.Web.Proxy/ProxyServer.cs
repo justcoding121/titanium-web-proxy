@@ -685,7 +685,7 @@ namespace Titanium.Web.Proxy
                 endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
 
                 // accept clients asynchronously
-                endPoint.Listener.BeginAcceptTcpClient(onAcceptConnection, endPoint);
+                endPoint.Listener.BeginAcceptSocket(onAcceptConnection, endPoint);
             }
             catch (SocketException ex)
             {
@@ -766,7 +766,7 @@ namespace Titanium.Web.Proxy
             }
 
             // Get the listener that handles the client request.
-            endPoint.Listener!.BeginAcceptTcpClient(onAcceptConnection, endPoint);
+            endPoint.Listener!.BeginAcceptSocket(onAcceptConnection, endPoint);
         }
 
 

@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Helpers
     {
         private static readonly Lazy<bool> isRunningOnMono = new Lazy<bool>(() => Type.GetType("Mono.Runtime") != null);
 
-#if NET45
+#if NET45 || NET461
         /// <summary>
         /// cache for Windows platform check
         /// </summary>
