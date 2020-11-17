@@ -72,10 +72,10 @@ Task Build -depends Restore-Packages{
     exec { . $MSBuild $SolutionFile /t:Build /v:normal /p:Configuration=$Configuration /p:Platform="Any CPU" /t:restore }
 }
 
-#publish API documentation changes for GitHub pages under master\docs directory
+#publish API documentation changes for GitHub pages under develop\docs directory
 Task Document -depends Build {
 
-	if($Branch -eq "master")
+	if($Branch -eq "develop")
 	{
 		
 		#use docfx to generate API documentation from source metadata
@@ -102,7 +102,7 @@ Task Document -depends Build {
 		New-Item -ItemType Directory -Force -Path $TEMP_REPO_DIR
 
 		#clone
-		git clone https://github.com/$GitHubUserName/$GitHubProjectName.git --branch master $TEMP_REPO_DIR
+		git clone https://github.com/$GitHubUserName/$GitHubProjectName.git --branch develop $TEMP_REPO_DIR
 
 		If(test-path "$TEMP_REPO_DIR\docs")
 		{
@@ -116,14 +116,14 @@ Task Document -depends Build {
 		#copy docs to clone directory\docs 
 		Copy-Item -Path "$RepoRoot\docs\*" -Destination "$TEMP_REPO_DIR\docs" -Recurse -Force
 
-		#push changes to master
+		#push changes to develop
 		git config --global credential.helper store
 		Add-Content "$HOME\.git-credentials" "https://$($env:github_access_token):x-oauth-basic@github.com`n"
 		git config --global user.email $env:github_email
 		git config --global user.name "buildbot171"
 		git add . -A
 		git commit -m "API documentation update by build server"
-		git push origin master
+		git push origin develop
 
 		#move cd back to current location
 		cd $Here	

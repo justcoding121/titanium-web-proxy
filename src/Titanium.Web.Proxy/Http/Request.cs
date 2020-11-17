@@ -59,7 +59,7 @@ namespace Titanium.Web.Proxy.Http
             }
             set
             {
-                Url = value.ToString();
+                Url = value.OriginalString;
             }
         }
 
