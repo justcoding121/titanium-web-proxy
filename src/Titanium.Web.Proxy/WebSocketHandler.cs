@@ -29,10 +29,7 @@ namespace Titanium.Web.Proxy
             await HeaderParser.ReadHeaders(serverConnection.Stream, response.Headers,
                 cancellationToken);
 
-            if (!args.IsTransparent)
-            {
-                await clientStream.WriteResponseAsync(response, cancellationToken);
-            }
+            await clientStream.WriteResponseAsync(response, cancellationToken);
 
             // If user requested call back then do it
             if (!args.HttpClient.Response.Locked)

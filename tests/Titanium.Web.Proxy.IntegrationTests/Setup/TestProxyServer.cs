@@ -7,13 +7,16 @@ namespace Titanium.Web.Proxy.IntegrationTests.Setup
 {
     public class TestProxyServer : IDisposable
     {
-        public ProxyServer ProxyServer { get; private set; }
+        public ProxyServer ProxyServer { get; }
+
         public int ListeningPort => ProxyServer.ProxyEndPoints[0].Port;
+        
         public CertificateManager CertificateManager => ProxyServer.CertificateManager;
 
         public TestProxyServer(bool isReverseProxy, ProxyServer upStreamProxy = null)
         {
             ProxyServer = new ProxyServer();
+
             var explicitEndPoint = isReverseProxy ?
                 (ProxyEndPoint)new TransparentProxyEndPoint(IPAddress.Any, 0, true) :
                 new ExplicitProxyEndPoint(IPAddress.Any, 0, true);

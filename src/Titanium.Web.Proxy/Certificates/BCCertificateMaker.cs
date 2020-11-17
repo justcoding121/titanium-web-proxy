@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Pkcs;
@@ -26,7 +27,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
     /// </summary>
     internal class BCCertificateMaker : ICertificateMaker
     {
-        private const int certificateValidDays = 1825;
+        private readonly int certificateValidDays;
         private const int certificateGraceDays = 366;
 
         // The FriendlyName value cannot be set on Unix.
@@ -35,9 +36,10 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
         private readonly ExceptionHandler exceptionFunc;
 
-        internal BCCertificateMaker(ExceptionHandler exceptionFunc)
+        internal BCCertificateMaker(ExceptionHandler exceptionFunc, int certificateValidDays)
         {
-            this.exceptionFunc = exceptionFunc;
+            this.certificateValidDays = certificateValidDays;
+            this.exceptionFunc = exceptionFunc;  
         }
 
         /// <summary>
@@ -95,7 +97,13 @@ namespace Titanium.Web.Proxy.Network.Certificate
             if (hostName != null)
             {
                 // add subject alternative names
-                var subjectAlternativeNames = new Asn1Encodable[] { new GeneralName(GeneralName.DnsName, hostName) };
+                var nameType = GeneralName.DnsName;
+                if (IPAddress.TryParse(hostName, out _))
+                {
+                    nameType = GeneralName.IPAddress;
+                }
+
+                var subjectAlternativeNames = new Asn1Encodable[] { new GeneralName(nameType, hostName) };
 
                 var subjectAlternativeNamesExtension = new DerSequence(subjectAlternativeNames);
                 certificateGenerator.AddExtension(X509Extensions.SubjectAlternativeName.Id, false,

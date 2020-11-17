@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Helpers
     {
         private static readonly Lazy<bool> isRunningOnMono = new Lazy<bool>(() => Type.GetType("Mono.Runtime") != null);
 
-#if NET45
+#if NET45 || NET461
         /// <summary>
         /// cache for Windows platform check
         /// </summary>
@@ -88,7 +88,7 @@ namespace Titanium.Web.Proxy.Helpers
                 }
 
                 // get the currently running framework name and version (EX: .NETFramework,Version=v4.5.1) (Ex: .NETCoreApp,Version=v2.0)
-                string ver = Assembly.GetEntryAssembly()?.GetCustomAttribute<TargetFrameworkAttribute>()?.FrameworkName;
+                string? ver = Assembly.GetEntryAssembly()?.GetCustomAttribute<TargetFrameworkAttribute>()?.FrameworkName;
 
                 if (ver == null)
                     return false; // play it safe if we can not figure out what the framework is

@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy
         /// <param name="isHttps">Is HTTPS</param>
         private async Task handleHttpSessionRequest(ProxyEndPoint endPoint, HttpClientStream clientStream,
             CancellationTokenSource cancellationTokenSource, TunnelConnectSessionEventArgs? connectArgs = null,
-            Task<TcpServerConnection>? prefetchConnectionTask = null, bool isHttps = false)
+            Task<TcpServerConnection?>? prefetchConnectionTask = null, bool isHttps = false)
         {
             var connectRequest = connectArgs?.HttpClient.ConnectRequest;
 

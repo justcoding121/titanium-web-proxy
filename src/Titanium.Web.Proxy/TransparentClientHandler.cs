@@ -71,7 +71,7 @@ namespace Titanium.Web.Proxy
                                                     await CertificateManager.CreateServerCertificate(certName);
 
                             // Successfully managed to authenticate the client using the certificate
-                            await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls, false);
+                            await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls12, false);
 
                             // HTTPS server created - we can now decrypt the client's traffic
                             clientStream = new HttpClientStream(clientStream.Connection, sslStream, BufferPool, cancellationToken);
@@ -91,10 +91,10 @@ namespace Titanium.Web.Proxy
                     else
                     {
                         var sessionArgs = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
-                        var connection = await tcpConnectionFactory.GetServerConnection(this, httpsHostName, port,
+                        var connection = (await tcpConnectionFactory.GetServerConnection(this, httpsHostName, port,
                                     HttpHeader.VersionUnknown, false, null,
                                     true, sessionArgs, UpStreamEndPoint,
-                                    UpStreamHttpsProxy, true, cancellationToken);
+                                    UpStreamHttpsProxy, true, false, cancellationToken))!;
 
                         try
                         {

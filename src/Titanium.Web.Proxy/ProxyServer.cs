@@ -167,8 +167,12 @@ namespace Titanium.Web.Proxy
         public bool Enable100ContinueBehaviour { get; set; }
 
         /// <summary>
-        ///     Should we enable experimental server connection pool?
-        ///     Defaults to true.
+        ///     Should we enable server connection pool. Defaults to true.
+        ///     When you enable connection pooling, instead of creating a new TCP connection to server for each client TCP connection, 
+        ///     we check if a server connection is available in our cached pool. If it is available in our pool, 
+        ///     created from earlier requests to the same server, we will reuse those idle connections. 
+        ///     There is also a ConnectionTimeOutSeconds parameter, which determine the eviction time for inactive server connections. 
+        ///     This will help to reduce TCP connection establishment cost, both the wall clock time and CPU cycles. 
         /// </summary>
         public bool EnableConnectionPool { get; set; } = true;
 
@@ -681,7 +685,7 @@ namespace Titanium.Web.Proxy
                 endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
 
                 // accept clients asynchronously
-                endPoint.Listener.BeginAcceptTcpClient(onAcceptConnection, endPoint);
+                endPoint.Listener.BeginAcceptSocket(onAcceptConnection, endPoint);
             }
             catch (SocketException ex)
             {
@@ -762,7 +766,7 @@ namespace Titanium.Web.Proxy
             }
 
             // Get the listener that handles the client request.
-            endPoint.Listener!.BeginAcceptTcpClient(onAcceptConnection, endPoint);
+            endPoint.Listener!.BeginAcceptSocket(onAcceptConnection, endPoint);
         }
 
 
