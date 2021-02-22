@@ -32,6 +32,22 @@ Supports
 
  * .NET Standard 2.0 or above
  * .NET Framework 4.5 or above
+
+###  Note to contributors
+
+#### Road map
+
+* Fix [outstanding bugs](https://github.com/justcoding121/Titanium-Web-Proxy/issues?q=is%3Aopen+is%3Aissue+label%3Abug)
+* Support reading request and response body as stream [#823](https://github.com/justcoding121/Titanium-Web-Proxy/issues/823)
+* Use Dispose(false) pattern to reduce possibility of memory leaks [#740](https://github.com/justcoding121/Titanium-Web-Proxy/issues/740) 
+* Stop throwing new exceptions [#634](https://github.com/justcoding121/Titanium-Web-Proxy/issues/634)
+* Support HTTP 2.0 
+
+#### Collaborators
+
+The owner of this project, [justcoding121](https://github.com/justcoding121), is considered to be inactive from this project due to his busy work schedule. However, we have a collaborator listed below who time and again shows up to maintain this project. Please create pull requests prioritizing bug fixes for the attention of collaborators.
+
+* [honfika](https://github.com/honfika)
  
 ### Development environment
 
@@ -227,17 +243,6 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
     return Task.CompletedTask;
 }
 ```
-###  Note to contributors
-
-#### Road map
-
-* Support HTTP 2.0 
-
-#### Collaborators
-
-The owner of this project, [justcoding121](https://github.com/justcoding121), is considered to be inactive from this project due to his busy work schedule. However, we have a collaborator listed below who time and again shows up to maintain this project. Please create pull requests prioritizing bug fixes for the attention of collaborators.
-
-* [honfika](https://github.com/honfika)
 
 **Console example application screenshot**
 
