@@ -11,10 +11,10 @@ Report bugs or raise issues here. For programming help use [StackOverflow](http:
 
 ### Features
 
-* Multi-threaded fully asynchronous proxy employing server connection pooling, certificate cache, and buffer pooling
-* View/modify/redirect/block requests and responses
+* Multithreaded and asynchronous proxy employing server connection pooling, certificate cache, and buffer pooling
+* View, modify, redirect and block requests or responses
 * Supports mutual SSL authentication, proxy authentication & automatic upstream proxy detection
-* Kerberos/NTLM authentication over HTTP protocols for windows domain
+* Supports kerberos, NTLM authentication over HTTP protocols on windows domain controlled networks
 * SOCKS4/5 Proxy support
 
 ### Installation
@@ -236,7 +236,6 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
 #### Collaborators
 
 * [honfika](https://github.com/honfika)
-
 
 **Console example application screenshot**
 
