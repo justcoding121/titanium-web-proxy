@@ -150,11 +150,11 @@ public async Task OnRequest(object sender, SessionEventArgs e)
     {
         // Get/Set request body bytes
         byte[] bodyBytes = await e.GetRequestBody();
-        await e.SetRequestBody(bodyBytes);
+        e.SetRequestBody(bodyBytes);
 
         // Get/Set request body as string
         string bodyString = await e.GetRequestBodyAsString();
-        await e.SetRequestBodyString(bodyString);
+        e.SetRequestBodyString(bodyString);
     
         // store request 
         // so that you can find it from response handler 
@@ -195,10 +195,10 @@ public async Task OnResponse(object sender, SessionEventArgs e)
             if (e.HttpClient.Response.ContentType != null && e.HttpClient.Response.ContentType.Trim().ToLower().Contains("text/html"))
             {
                 byte[] bodyBytes = await e.GetResponseBody();
-                await e.SetResponseBody(bodyBytes);
+                e.SetResponseBody(bodyBytes);
 
                 string body = await e.GetResponseBodyAsString();
-                await e.SetResponseBodyString(body);
+                e.SetResponseBodyString(body);
             }
         }
     }
