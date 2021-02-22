@@ -235,7 +235,7 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
 
 #### Collaborators
 
-The owner of this project, [justcoding121](https://github.com/justcoding121), is considered inactive from this project due to his busy work schedule. However, we have a collaborator listed below who time and again shows up to maintain this project. Please create pull requests prioritizing bug fixes for the attention of collaborators.
+The owner of this project, [justcoding121](https://github.com/justcoding121), is considered to be inactive from this project due to his busy work schedule. However, we have a collaborator listed below who time and again shows up to maintain this project. Please create pull requests prioritizing bug fixes for the attention of collaborators.
 
 * [honfika](https://github.com/honfika)
 
