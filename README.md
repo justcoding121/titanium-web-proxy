@@ -235,6 +235,8 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
 
 #### Collaborators
 
+The owner of this project [justcoding121](https://github.com/justcoding121) is currently inactive from this project due to his busy work schedule. However, we have a collabaorator listed below who time and again shows up to maintain this project. Please create any bug fixes by PR for him to review.
+
 * [honfika](https://github.com/honfika)
 
 **Console example application screenshot**
