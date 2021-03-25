@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy.Helpers
             return localhostEntry.AddressList.Contains(address);
         }
 
-        internal static bool IsLocalIpAddress(string hostName)
+        internal static bool IsLocalIpAddress(string hostName, bool proxyDnsRequests = false)
         {
             if (IPAddress.TryParse(hostName, out var ipAddress)
                 && IsLocalIpAddress(ipAddress))
@@ -52,20 +52,23 @@ namespace Titanium.Web.Proxy.Helpers
                 return true;
             }
 
-            try
+            if (!proxyDnsRequests)
             {
-                // do reverse DNS lookup even if hostName is an IP address
-                var hostEntry = Dns.GetHostEntry(hostName);
-                // if DNS resolved hostname matches local DNS name,
-                // or if host IP address list contains any local IP address
-                if (hostEntry.HostName.Equals(localhostEntry.HostName, StringComparison.OrdinalIgnoreCase)
-                    || hostEntry.AddressList.Any(hostIP => localhostEntry.AddressList.Contains(hostIP)))
+                try
                 {
-                    return true;
+                    // do reverse DNS lookup even if hostName is an IP address
+                    var hostEntry = Dns.GetHostEntry(hostName);
+                    // if DNS resolved hostname matches local DNS name,
+                    // or if host IP address list contains any local IP address
+                    if (hostEntry.HostName.Equals(localhostEntry.HostName, StringComparison.OrdinalIgnoreCase)
+                        || hostEntry.AddressList.Any(hostIP => localhostEntry.AddressList.Contains(hostIP)))
+                    {
+                        return true;
+                    }
                 }
-            }
-            catch (SocketException)
-            {
+                catch (SocketException)
+                {
+                }
             }
 
             return false;

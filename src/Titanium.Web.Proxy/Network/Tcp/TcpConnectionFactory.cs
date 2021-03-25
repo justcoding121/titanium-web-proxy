@@ -318,7 +318,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 useUpstreamProxy1 = true;
 
                 // check if we need to ByPass
-                if (externalProxy.BypassLocalhost && NetworkHelper.IsLocalIpAddress(remoteHostName))
+                if (externalProxy.BypassLocalhost && NetworkHelper.IsLocalIpAddress(remoteHostName, externalProxy.ProxyDnsRequests))
                 {
                     useUpstreamProxy1 = false;
                 }
