@@ -446,28 +446,33 @@ namespace Titanium.Web.Proxy.Network
                     {
                         certificate = makeCertificate(certificateName, false);
 
-                        try
+                        //Don't need to wait for save to complete
+                        _ = Task.Run(() =>
                         {
-                            //acquire lock by subjectName
-                            //Async lock is not needed. Since this is a rare race-condition
-                            lock (saveCertificateLocks.GetOrAdd(subjectName, new object()))
+                            try
                             {
-                                try
+                                var lockKey = subjectName.ToLower();
+                                //acquire lock by subjectName
+                                //Async lock is not needed. Since this is a rare race-condition
+                                lock (saveCertificateLocks.GetOrAdd(lockKey, new object()))
                                 {
-                                    //no two tasks with same subject name should together enter here 
-                                    certificateCache.SaveCertificate(subjectName, certificate);
-                                }
-                                finally
-                                {
-                                    //save operation is complete. Free lock from memory.
-                                    saveCertificateLocks.TryRemove(subjectName, out var _);
+                                    try
+                                    {
+                                        //no two tasks with same subject name should together enter here 
+                                        certificateCache.SaveCertificate(subjectName, certificate);
+                                    }
+                                    finally
+                                    {
+                                        //save operation is complete. Free lock from memory.
+                                        saveCertificateLocks.TryRemove(lockKey, out var _);
+                                    }
                                 }
                             }
-                        }
-                        catch (Exception e)
-                        {
-                            ExceptionFunc(new Exception("Failed to save fake certificate.", e));
-                        }
+                            catch (Exception e)
+                            {
+                                ExceptionFunc(new Exception("Failed to save fake certificate.", e));
+                            }
+                        });
                     }
                 }
                 else
