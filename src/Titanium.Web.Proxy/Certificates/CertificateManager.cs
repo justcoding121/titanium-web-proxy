@@ -412,7 +412,7 @@ namespace Titanium.Web.Proxy.Network
             return certificate;
         }
 
-        private static ConcurrentDictionary<string, object> saveCertificateLocks 
+        private static ConcurrentDictionary<string, object> saveCertificateLocks
             = new ConcurrentDictionary<string, object>();
 
         /// <summary>
@@ -435,6 +435,12 @@ namespace Titanium.Web.Proxy.Network
                     try
                     {
                         certificate = certificateCache.LoadCertificate(subjectName, StorageFlag);
+
+                        if (certificate != null && certificate.NotAfter <= DateTime.Now)
+                        {
+                            ExceptionFunc(new Exception($"Cached certificate for {subjectName} has expired."));
+                            certificate = null;
+                        }
                     }
                     catch (Exception e)
                     {
@@ -599,14 +605,22 @@ namespace Titanium.Web.Proxy.Network
                         var rootCert = certificateCache.LoadRootCertificate(PfxFilePath, PfxPassword,
                             X509KeyStorageFlags.Exportable);
 
-                        if (rootCert != null)
+                        if (rootCert != null && rootCert.NotAfter <= DateTime.Now)
                         {
+                            ExceptionFunc(new Exception("Loaded root certificate has expired."));
                             return false;
                         }
+
+                        if (rootCert != null)
+                        {
+                            RootCertificate = rootCert;
+                            return true;
+                        }
                     }
-                    catch
+                    catch (Exception e)
                     {
                         // root cert cannot be loaded
+                        ExceptionFunc(new Exception("Root cert cannot be loaded.", e));
                     }
                 }
 
@@ -627,9 +641,9 @@ namespace Titanium.Web.Proxy.Network
                         {
                             certificateCache.Clear();
                         }
-                        catch
+                        catch(Exception e)
                         {
-                            // ignore
+                            ExceptionFunc(new Exception("An error happened when clearing certificate cache.", e));
                         }
 
                         certificateCache.SaveRootCertificate(PfxFilePath, PfxPassword, RootCertificate);
@@ -652,7 +666,15 @@ namespace Titanium.Web.Proxy.Network
         {
             try
             {
-                return certificateCache.LoadRootCertificate(PfxFilePath, PfxPassword, X509KeyStorageFlags.Exportable);
+                var rootCert = certificateCache.LoadRootCertificate(PfxFilePath, PfxPassword, X509KeyStorageFlags.Exportable);
+
+                if (rootCert != null && rootCert.NotAfter <= DateTime.Now)
+                {
+                    ExceptionFunc(new ArgumentException("Loaded root certificate has expired."));
+                    return null;
+                }
+
+                return rootCert;
             }
             catch (Exception e)
             {

@@ -37,8 +37,6 @@ namespace Titanium.Web.Proxy.Network
         public void SaveCertificate(string subjectName, X509Certificate2 certificate)
         {
             string filePath = Path.Combine(getCertificatePath(true), subjectName + defaultCertificateFileExtension);
-            if (File.Exists(filePath))
-                return;
             byte[] exported = certificate.Export(X509ContentType.Pkcs12);
             File.WriteAllBytes(filePath, exported);
         }
