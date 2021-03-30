@@ -412,6 +412,9 @@ namespace Titanium.Web.Proxy.Network
             return certificate;
         }
 
+        private static ConcurrentDictionary<string, object> saveCertificateLocks 
+            = new ConcurrentDictionary<string, object>();
+
         /// <summary>
         ///     Create an SSL certificate
         /// </summary>
@@ -445,7 +448,21 @@ namespace Titanium.Web.Proxy.Network
 
                         try
                         {
-                            certificateCache.SaveCertificate(subjectName, certificate);
+                            //acquire lock by subjectName
+                            //Async lock is not needed. Since this is a rare race-condition
+                            lock (saveCertificateLocks.GetOrAdd(subjectName, new object()))
+                            {
+                                try
+                                {
+                                    //no two tasks with same subject name should together enter here 
+                                    certificateCache.SaveCertificate(subjectName, certificate);
+                                }
+                                finally
+                                {
+                                    //save operation is complete. Free lock from memory.
+                                    saveCertificateLocks.TryRemove(subjectName, out var _);
+                                }
+                            }
                         }
                         catch (Exception e)
                         {
@@ -482,13 +499,17 @@ namespace Titanium.Web.Proxy.Network
             }
 
             // handle burst requests with same certificate name
-            // by checking for existing task for same certificate name
+            // by checking for existing task for same certificate name.
+            // If two or more requests hit this block at the same time, then multiple tasks will be created,
+            // which is okay. That certificate will be created twice or more. We don't anticipate many requests for same host at the same time.
+            // This saves us from another expensive lock. The goal here is to minimize creation of multiple tasks for same certification name.
+            // Goal is not to guarantee single certificate creation, which is not needed in our case.
             if (pendingCertificateCreationTasks.TryGetValue(certificateName, out var task))
             {
                 return await task;
             }
 
-            // run certificate creation task & add it to pending tasks
+            // run certificate creation task & add it to pending tasks         
             task = Task.Run(() =>
             {
                 var result = CreateCertificate(certificateName, false);

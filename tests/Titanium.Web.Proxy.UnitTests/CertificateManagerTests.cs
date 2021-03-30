@@ -76,5 +76,31 @@ namespace Titanium.Web.Proxy.UnitTests
             mgr.StopClearIdleCertificates();
 
         }
+
+        [TestMethod]
+        public async Task Create_Server_Certificate_Test()
+        {
+            var tasks = new List<Task>();
+
+            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => (e =>
+            {
+                Debug.WriteLine(e.ToString());
+                Debug.WriteLine(e.InnerException?.ToString());
+            })).Value)
+            { CertificateEngine = CertificateEngine.BouncyCastleFast };
+
+            mgr.SaveFakeCertificates = true;
+
+            for (int i = 0; i < 500; i++)
+            {
+                tasks.AddRange(hostNames.Select(host => Task.Run(() =>
+                {
+                    var certificate = mgr.CreateServerCertificate(host);
+                    Assert.IsNotNull(certificate);
+                })));
+            }
+
+            await Task.WhenAll(tasks.ToArray());
+        }
     }
 }
