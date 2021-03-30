@@ -50,12 +50,16 @@ namespace Titanium.Web.Proxy.Network
                             = new ConcurrentDictionary<string, CachedCertificate>();
 
         /// <summary>
-        /// A list of pending certificate creation tasks.
-        /// Useful to prevent multiple threads working on same certificate generation 
+        /// Used to prevent multiple threads working on same certificate generation 
         /// when burst certificate generation requests happen for same certificate.
         /// </summary>
-        private readonly ConcurrentDictionary<string, Task<X509Certificate2?>> pendingCertificateCreationTasks
-                            = new ConcurrentDictionary<string, Task<X509Certificate2?>>();
+        private readonly SemaphoreSlim pendingCertificateCreationTaskLock = new SemaphoreSlim(1);
+
+        /// <summary>
+        /// A list of pending certificate creation tasks.
+        /// </summary>
+        private readonly Dictionary<string, Task<X509Certificate2?>> pendingCertificateCreationTasks
+                            = new Dictionary<string, Task<X509Certificate2?>>();
 
         private readonly CancellationTokenSource clearCertificatesTokenSource
                             = new CancellationTokenSource();
@@ -509,33 +513,50 @@ namespace Titanium.Web.Proxy.Network
                 return cached.Certificate;
             }
 
-            // handle burst requests with same certificate name
-            // by checking for existing task for same certificate name.
-            // If two or more requests hit this block at the same time, then multiple tasks will be created,
-            // which is okay. That certificate will be created twice or more. We don't anticipate many requests for same host at the same time.
-            // This saves us from another expensive lock. The goal here is to minimize creation of multiple tasks for same certification name.
-            // Goal is not to guarantee single certificate creation, which is not needed in our case.
-            if (pendingCertificateCreationTasks.TryGetValue(certificateName, out var task))
-            {
-                return await task;
+            var createdTask = false;
+            Task<X509Certificate2?> createCertificateTask;
+            await pendingCertificateCreationTaskLock.WaitAsync();
+            try {
+                // handle burst requests with same certificate name
+                // by checking for existing task for same certificate name
+                if (!pendingCertificateCreationTasks.TryGetValue(certificateName, out createCertificateTask))
+                {
+                    createdTask = true;
+                    // run certificate creation task & add it to pending tasks
+                    createCertificateTask = Task.Run(() =>
+                    {
+                        var result = CreateCertificate(certificateName, false);
+                        if (result != null)
+                        {
+                            cachedCertificates.TryAdd(certificateName, new CachedCertificate(result));
+                        }
+
+                        return result;
+                    });
+                    pendingCertificateCreationTasks[certificateName] = createCertificateTask;
+                }
+            } finally {
+                pendingCertificateCreationTaskLock.Release();
             }
 
-            // run certificate creation task & add it to pending tasks         
-            task = Task.Run(() =>
-            {
-                var result = CreateCertificate(certificateName, false);
-                if (result != null)
-                {
-                    cachedCertificates.TryAdd(certificateName, new CachedCertificate(result));
+            // create certificate outside of lock to allow other threads a chance to see the pending task.
+            // precludes the possiblility of multiple threads simultaneously generating the same certificate,
+            // we tolerate the case of a duplicate sequential generation due to a race (should be rare)
+            // t1: await createCertificateTask
+            // t2: cachedCertificates.TryGetValue->false
+            // t1: pendingCertificateCreationTasks.Remove
+            // t2: pendingCertificateCreationTasks.TryGetValue->false
+            var certificate = await createCertificateTask;
+
+            if (createdTask) {
+                // cleanup pending task
+                await pendingCertificateCreationTaskLock.WaitAsync();
+                try {
+                    pendingCertificateCreationTasks.Remove(certificateName);
+                } finally {
+                    pendingCertificateCreationTaskLock.Release();
                 }
-
-                return result;
-            });
-            pendingCertificateCreationTasks.TryAdd(certificateName, task);
-
-            // cleanup pending tasks & return result
-            var certificate = await task;
-            pendingCertificateCreationTasks.TryRemove(certificateName, out task);
+            }
 
             return certificate;
         }
