@@ -550,13 +550,6 @@ namespace Titanium.Web.Proxy.Network
                 pendingCertificateCreationTaskLock.Release();
             }
 
-            // create certificate outside of lock to allow other threads a chance to see the pending task.
-            // precludes the possiblility of multiple threads simultaneously generating the same certificate,
-            // we tolerate the case of a duplicate sequential generation due to a race (should be rare)
-            // t1: await createCertificateTask
-            // t2: cachedCertificates.TryGetValue->false
-            // t1: pendingCertificateCreationTasks.Remove
-            // t2: pendingCertificateCreationTasks.TryGetValue->false
             var certificate = await createCertificateTask;
 
             if (createdTask)
