@@ -50,12 +50,16 @@ namespace Titanium.Web.Proxy.Network
                             = new ConcurrentDictionary<string, CachedCertificate>();
 
         /// <summary>
-        /// A list of pending certificate creation tasks.
-        /// Useful to prevent multiple threads working on same certificate generation 
+        /// Used to prevent multiple threads working on same certificate generation 
         /// when burst certificate generation requests happen for same certificate.
         /// </summary>
-        private readonly ConcurrentDictionary<string, Task<X509Certificate2?>> pendingCertificateCreationTasks
-                            = new ConcurrentDictionary<string, Task<X509Certificate2?>>();
+        private readonly SemaphoreSlim pendingCertificateCreationTaskLock = new SemaphoreSlim(1);
+
+        /// <summary>
+        /// A list of pending certificate creation tasks.
+        /// </summary>
+        private readonly Dictionary<string, Task<X509Certificate2?>> pendingCertificateCreationTasks
+                            = new Dictionary<string, Task<X509Certificate2?>>();
 
         private readonly CancellationTokenSource clearCertificatesTokenSource
                             = new CancellationTokenSource();
@@ -412,7 +416,7 @@ namespace Titanium.Web.Proxy.Network
             return certificate;
         }
 
-        private static ConcurrentDictionary<string, object> saveCertificateLocks 
+        private static ConcurrentDictionary<string, object> saveCertificateLocks
             = new ConcurrentDictionary<string, object>();
 
         /// <summary>
@@ -435,6 +439,12 @@ namespace Titanium.Web.Proxy.Network
                     try
                     {
                         certificate = certificateCache.LoadCertificate(subjectName, StorageFlag);
+
+                        if (certificate != null && certificate.NotAfter <= DateTime.Now)
+                        {
+                            ExceptionFunc(new Exception($"Cached certificate for {subjectName} has expired."));
+                            certificate = null;
+                        }
                     }
                     catch (Exception e)
                     {
@@ -446,28 +456,33 @@ namespace Titanium.Web.Proxy.Network
                     {
                         certificate = makeCertificate(certificateName, false);
 
-                        try
+                        //Don't need to wait for save to complete
+                        _ = Task.Run(() =>
                         {
-                            //acquire lock by subjectName
-                            //Async lock is not needed. Since this is a rare race-condition
-                            lock (saveCertificateLocks.GetOrAdd(subjectName, new object()))
+                            try
                             {
-                                try
+                                var lockKey = subjectName.ToLower();
+                                //acquire lock by subjectName
+                                //Async lock is not needed. Since this is a rare race-condition
+                                lock (saveCertificateLocks.GetOrAdd(lockKey, new object()))
                                 {
-                                    //no two tasks with same subject name should together enter here 
-                                    certificateCache.SaveCertificate(subjectName, certificate);
-                                }
-                                finally
-                                {
-                                    //save operation is complete. Free lock from memory.
-                                    saveCertificateLocks.TryRemove(subjectName, out var _);
+                                    try
+                                    {
+                                        //no two tasks with same subject name should together enter here 
+                                        certificateCache.SaveCertificate(subjectName, certificate);
+                                    }
+                                    finally
+                                    {
+                                        //save operation is complete. Free lock from memory.
+                                        saveCertificateLocks.TryRemove(lockKey, out var _);
+                                    }
                                 }
                             }
-                        }
-                        catch (Exception e)
-                        {
-                            ExceptionFunc(new Exception("Failed to save fake certificate.", e));
-                        }
+                            catch (Exception e)
+                            {
+                                ExceptionFunc(new Exception("Failed to save fake certificate.", e));
+                            }
+                        });
                     }
                 }
                 else
@@ -498,33 +513,58 @@ namespace Titanium.Web.Proxy.Network
                 return cached.Certificate;
             }
 
-            // handle burst requests with same certificate name
-            // by checking for existing task for same certificate name.
-            // If two or more requests hit this block at the same time, then multiple tasks will be created,
-            // which is okay. That certificate will be created twice or more. We don't anticipate many requests for same host at the same time.
-            // This saves us from another expensive lock. The goal here is to minimize creation of multiple tasks for same certification name.
-            // Goal is not to guarantee single certificate creation, which is not needed in our case.
-            if (pendingCertificateCreationTasks.TryGetValue(certificateName, out var task))
+            var createdTask = false;
+            Task<X509Certificate2?> createCertificateTask;
+            await pendingCertificateCreationTaskLock.WaitAsync();
+            try
             {
-                return await task;
-            }
-
-            // run certificate creation task & add it to pending tasks         
-            task = Task.Run(() =>
-            {
-                var result = CreateCertificate(certificateName, false);
-                if (result != null)
+                // check in cache first
+                if (cachedCertificates.TryGetValue(certificateName, out cached))
                 {
-                    cachedCertificates.TryAdd(certificateName, new CachedCertificate(result));
+                    cached.LastAccess = DateTime.UtcNow;
+                    return cached.Certificate;
                 }
 
-                return result;
-            });
-            pendingCertificateCreationTasks.TryAdd(certificateName, task);
+                // handle burst requests with same certificate name
+                // by checking for existing task for same certificate name
+                if (!pendingCertificateCreationTasks.TryGetValue(certificateName, out createCertificateTask))
+                {
+                    // run certificate creation task & add it to pending tasks
+                    createCertificateTask = Task.Run(() =>
+                    {
+                        var result = CreateCertificate(certificateName, false);
+                        if (result != null)
+                        {
+                            cachedCertificates.TryAdd(certificateName, new CachedCertificate(result));
+                        }
 
-            // cleanup pending tasks & return result
-            var certificate = await task;
-            pendingCertificateCreationTasks.TryRemove(certificateName, out task);
+                        return result;
+                    });
+
+                    pendingCertificateCreationTasks[certificateName] = createCertificateTask;
+                    createdTask = true;
+                }
+            }
+            finally
+            {
+                pendingCertificateCreationTaskLock.Release();
+            }
+
+            var certificate = await createCertificateTask;
+
+            if (createdTask)
+            {
+                // cleanup pending task
+                await pendingCertificateCreationTaskLock.WaitAsync();
+                try
+                {
+                    pendingCertificateCreationTasks.Remove(certificateName);
+                }
+                finally
+                {
+                    pendingCertificateCreationTaskLock.Release();
+                }
+            }
 
             return certificate;
         }
@@ -594,14 +634,22 @@ namespace Titanium.Web.Proxy.Network
                         var rootCert = certificateCache.LoadRootCertificate(PfxFilePath, PfxPassword,
                             X509KeyStorageFlags.Exportable);
 
-                        if (rootCert != null)
+                        if (rootCert != null && rootCert.NotAfter <= DateTime.Now)
                         {
+                            ExceptionFunc(new Exception("Loaded root certificate has expired."));
                             return false;
                         }
+
+                        if (rootCert != null)
+                        {
+                            RootCertificate = rootCert;
+                            return true;
+                        }
                     }
-                    catch
+                    catch (Exception e)
                     {
                         // root cert cannot be loaded
+                        ExceptionFunc(new Exception("Root cert cannot be loaded.", e));
                     }
                 }
 
@@ -622,9 +670,9 @@ namespace Titanium.Web.Proxy.Network
                         {
                             certificateCache.Clear();
                         }
-                        catch
+                        catch (Exception e)
                         {
-                            // ignore
+                            ExceptionFunc(new Exception("An error happened when clearing certificate cache.", e));
                         }
 
                         certificateCache.SaveRootCertificate(PfxFilePath, PfxPassword, RootCertificate);
@@ -647,7 +695,15 @@ namespace Titanium.Web.Proxy.Network
         {
             try
             {
-                return certificateCache.LoadRootCertificate(PfxFilePath, PfxPassword, X509KeyStorageFlags.Exportable);
+                var rootCert = certificateCache.LoadRootCertificate(PfxFilePath, PfxPassword, X509KeyStorageFlags.Exportable);
+
+                if (rootCert != null && rootCert.NotAfter <= DateTime.Now)
+                {
+                    ExceptionFunc(new ArgumentException("Loaded root certificate has expired."));
+                    return null;
+                }
+
+                return rootCert;
             }
             catch (Exception e)
             {
