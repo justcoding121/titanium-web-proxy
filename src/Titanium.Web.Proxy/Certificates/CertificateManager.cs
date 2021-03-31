@@ -516,12 +516,19 @@ namespace Titanium.Web.Proxy.Network
             var createdTask = false;
             Task<X509Certificate2?> createCertificateTask;
             await pendingCertificateCreationTaskLock.WaitAsync();
-            try {
+            try
+            {
+                // check in cache first
+                if (cachedCertificates.TryGetValue(certificateName, out cached))
+                {
+                    cached.LastAccess = DateTime.UtcNow;
+                    return cached.Certificate;
+                }
+
                 // handle burst requests with same certificate name
                 // by checking for existing task for same certificate name
                 if (!pendingCertificateCreationTasks.TryGetValue(certificateName, out createCertificateTask))
                 {
-                    createdTask = true;
                     // run certificate creation task & add it to pending tasks
                     createCertificateTask = Task.Run(() =>
                     {
@@ -533,9 +540,13 @@ namespace Titanium.Web.Proxy.Network
 
                         return result;
                     });
+
                     pendingCertificateCreationTasks[certificateName] = createCertificateTask;
+                    createdTask = true;
                 }
-            } finally {
+            }
+            finally
+            {
                 pendingCertificateCreationTaskLock.Release();
             }
 
@@ -548,12 +559,16 @@ namespace Titanium.Web.Proxy.Network
             // t2: pendingCertificateCreationTasks.TryGetValue->false
             var certificate = await createCertificateTask;
 
-            if (createdTask) {
+            if (createdTask)
+            {
                 // cleanup pending task
                 await pendingCertificateCreationTaskLock.WaitAsync();
-                try {
+                try
+                {
                     pendingCertificateCreationTasks.Remove(certificateName);
-                } finally {
+                }
+                finally
+                {
                     pendingCertificateCreationTaskLock.Release();
                 }
             }
@@ -662,7 +677,7 @@ namespace Titanium.Web.Proxy.Network
                         {
                             certificateCache.Clear();
                         }
-                        catch(Exception e)
+                        catch (Exception e)
                         {
                             ExceptionFunc(new Exception("An error happened when clearing certificate cache.", e));
                         }
