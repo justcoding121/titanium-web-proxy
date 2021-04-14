@@ -665,13 +665,23 @@ namespace Titanium.Web.Proxy.EventArguments
             HttpClient.CloseServerConnection = true;
         }
 
-        /// <summary>
-        /// Implement any cleanup here
-        /// </summary>
-        public override void Dispose()
+        private bool disposed = false;
+        protected override void Dispose(bool disposing)
         {
+            if (disposed)
+            {
+                return;
+            }
+
             MultipartRequestPartSent = null;
-            base.Dispose();
+            disposed = true;
+
+            base.Dispose(disposing);
+        }
+
+        ~SessionEventArgs()
+        {
+            Dispose(false);
         }
     }
 }

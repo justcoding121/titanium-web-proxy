@@ -908,11 +908,17 @@ namespace Titanium.Web.Proxy
             return new RetryPolicy<T>(retries, tcpConnectionFactory);
         }
 
-        /// <summary>
-        ///     Dispose the Proxy instance.
-        /// </summary>
-        public void Dispose()
+        private bool disposed = false;
+
+        protected virtual void Dispose(bool disposing)
         {
+            if (disposed)
+            {
+                return;
+            }
+
+            disposed = true;
+
             if (ProxyRunning)
             {
                 Stop();
@@ -920,6 +926,17 @@ namespace Titanium.Web.Proxy
 
             CertificateManager?.Dispose();
             BufferPool?.Dispose();
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~ProxyServer()
+        {
+            Dispose(false);
         }
     }
 }

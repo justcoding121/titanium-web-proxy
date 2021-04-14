@@ -84,11 +84,15 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// </summary>
         internal bool IsWinAuthenticated { get; set; }
 
-        /// <summary>
-        ///     Dispose.
-        /// </summary>
-        public void Dispose()
+        private bool disposed = false;
+
+        protected virtual void Dispose(bool disposing)
         {
+            if (disposed)
+            {
+                return;
+            }
+
             Task.Run(async () =>
             {
                 // delay calling tcp connection close()
@@ -108,6 +112,18 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
             });
 
+            disposed = true;
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~TcpServerConnection()
+        {
+            Dispose(false);
         }
     }
 }

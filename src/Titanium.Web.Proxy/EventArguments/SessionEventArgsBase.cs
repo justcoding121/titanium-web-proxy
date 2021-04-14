@@ -150,18 +150,39 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public Exception? Exception { get; internal set; }
 
-        /// <summary>
-        ///     Implements cleanup here.
-        /// </summary>
-        public virtual void Dispose()
-        {
-            CustomUpStreamProxyUsed = null;
+        private bool disposed = false;
 
-            DataSent = null;
-            DataReceived = null;
-            Exception = null;
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            disposed = true;
+
+            if (disposing)
+            {
+                CustomUpStreamProxyUsed = null;
+
+                DataSent = null;
+                DataReceived = null;
+                Exception = null;
+            }
 
             HttpClient.FinishSession();
+
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~SessionEventArgsBase()
+        {
+            Dispose(false);
         }
 
         /// <summary>

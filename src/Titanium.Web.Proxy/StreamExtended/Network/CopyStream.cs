@@ -22,8 +22,6 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         private readonly byte[] buffer;
 
-        private bool disposed;
-
         public bool DataAvailable => reader.DataAvailable;
 
         public long ReadBytes { get; private set; }
@@ -65,13 +63,28 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
             return HttpStream.ReadLineInternalAsync(this, bufferPool, cancellationToken);
         }
 
+        private bool disposed = false;
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            disposed = true;
+            bufferPool.ReturnBuffer(buffer);
+        }
+
         public void Dispose()
         {
-            if (!disposed)
-            {
-                disposed = true;
-                bufferPool.ReturnBuffer(buffer);
-            }
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~CopyStream()
+        {
+            Dispose(false);
         }
     }
 }

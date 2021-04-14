@@ -39,7 +39,6 @@ Supports
 
 * Fix [outstanding bugs](https://github.com/justcoding121/Titanium-Web-Proxy/issues?q=is%3Aopen+is%3Aissue+label%3Abug)
 * Support reading request and response body as stream [#823](https://github.com/justcoding121/Titanium-Web-Proxy/issues/823)
-* Use Dispose(false) pattern to reduce possibility of memory leaks [#740](https://github.com/justcoding121/Titanium-Web-Proxy/issues/740) 
 * Stop throwing new exceptions [#634](https://github.com/justcoding121/Titanium-Web-Proxy/issues/634)
 * Support HTTP 2.0 
 
