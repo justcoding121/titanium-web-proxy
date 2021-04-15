@@ -73,8 +73,8 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             }
             finally
             {
-                clientToken.Dispose();
-                serverToken.Dispose();
+                disposeToken(clientToken);
+                disposeToken(serverToken);
             }
 
             return token;
@@ -125,11 +125,52 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             }
             finally
             {
-                clientToken.Dispose();
-                serverToken.Dispose();
+                disposeToken(clientToken);
+                disposeToken(serverToken);
             }
 
             return token;
+        }
+
+        private static void disposeToken(SecurityBufferDesciption clientToken)
+        {
+            if (clientToken.pBuffers != IntPtr.Zero)
+            {
+                if (clientToken.cBuffers == 1)
+                {
+                    var thisSecBuffer = (SecurityBuffer)Marshal.PtrToStructure(clientToken.pBuffers, typeof(SecurityBuffer));
+                   disposeSecBuffer(thisSecBuffer);
+                }
+                else
+                {
+                    for (int index = 0; index < clientToken.cBuffers; index++)
+                    {
+                        // The bits were written out the following order:
+                        // int cbBuffer;
+                        // int BufferType;
+                        // pvBuffer;
+                        // What we need to do here is to grab a hold of the pvBuffer allocate by the individual
+                        // SecBuffer and release it...
+                        int currentOffset = index * Marshal.SizeOf(typeof(Buffer));
+                        var secBufferpvBuffer = Marshal.ReadIntPtr(clientToken.pBuffers,
+                            currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
+                        Marshal.FreeHGlobal(secBufferpvBuffer);
+                    }
+                }
+
+                Marshal.FreeHGlobal(clientToken.pBuffers);
+                clientToken.pBuffers = IntPtr.Zero;
+            }
+
+        }
+
+        private static void disposeSecBuffer(SecurityBuffer thisSecBuffer)
+        {
+            if (thisSecBuffer.pvBuffer != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(thisSecBuffer.pvBuffer);
+                thisSecBuffer.pvBuffer = IntPtr.Zero;
+            }
         }
 
         /// <summary>

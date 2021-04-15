@@ -758,8 +758,15 @@ retry:
             }
         }
 
-        public void Dispose()
+        private bool disposed = false;
+
+        protected virtual void Dispose(bool disposing)
         {
+            if (disposed)
+            {
+                return;
+            }
+
             runCleanUpTask = false;
 
             try
@@ -791,6 +798,19 @@ retry:
                     connection?.Dispose();
                 }
             }
+
+            disposed = true;
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~TcpConnectionFactory()
+        {
+            Dispose(false);
         }
 
         static class SocketConnectionTaskFactory

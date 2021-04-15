@@ -284,14 +284,6 @@ namespace Titanium.Web.Proxy.Network
         public X509KeyStorageFlags StorageFlag { get; set; } = X509KeyStorageFlags.Exportable;
 
         /// <summary>
-        ///     Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
-        /// </summary>
-        public void Dispose()
-        {
-            clearCertificatesTokenSource.Dispose();
-        }
-
-        /// <summary>
         ///     For CertificateEngine.DefaultWindows to work we need to also check in personal store
         /// </summary>
         /// <param name="storeLocation"></param>
@@ -999,6 +991,30 @@ namespace Titanium.Web.Proxy.Network
             certificateCache.Clear();
             cachedCertificates.Clear();
             rootCertificate = null;
+        }
+
+        private bool disposed = false;
+
+        void dispose(bool disposing)
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            clearCertificatesTokenSource.Dispose();
+            disposed = true;
+        }
+
+        public void Dispose()
+        {
+            dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~CertificateManager()
+        {
+            dispose(false);
         }
     }
 }
