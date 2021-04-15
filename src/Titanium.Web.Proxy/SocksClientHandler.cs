@@ -106,7 +106,7 @@ namespace Titanium.Web.Proxy
 
                         string password = Encoding.ASCII.GetString(buffer, 3 + userNameLength, passwordLength);
                         bool success = true;
-                        if (ProxySchemeAuthenticateFunc != null)
+                        if (ProxyBasicAuthenticateFunc != null)
                         {
                             success = await ProxyBasicAuthenticateFunc.Invoke(null, userName, password);
                         }
