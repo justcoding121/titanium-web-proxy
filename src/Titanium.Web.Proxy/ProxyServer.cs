@@ -350,11 +350,23 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public event AsyncEventHandler<SessionEventArgs>? BeforeRequest;
 
+#if DEBUG
+        /// <summary>
+        ///     Intercept request body send event to server. 
+        /// </summary>
+        public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnRequestBodyWrite;
+#endif
         /// <summary>
         ///     Intercept response event from server.
         /// </summary>
         public event AsyncEventHandler<SessionEventArgs>? BeforeResponse;
 
+#if DEBUG
+        /// <summary>
+        ///     Intercept request body send event to client. 
+        /// </summary>
+        public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnResponseBodyWrite;
+#endif
         /// <summary>
         ///     Intercept after response event from server.
         /// </summary>
