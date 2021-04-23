@@ -10,7 +10,7 @@ namespace Titanium.Web.Proxy.EventArguments
     {
         internal readonly CancellationTokenSource TaskCancellationSource;
 
-        internal BeforeSslAuthenticateEventArgs(TcpClientConnection clientConnection, CancellationTokenSource taskCancellationSource, string sniHostName) : base(clientConnection)
+        internal BeforeSslAuthenticateEventArgs(ProxyServer server, TcpClientConnection clientConnection, CancellationTokenSource taskCancellationSource, string sniHostName) : base(server, clientConnection)
         {
             TaskCancellationSource = taskCancellationSource;
             SniHostName = sniHostName;

@@ -33,7 +33,7 @@ namespace Titanium.Web.Proxy
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
 
-            var clientStream = new HttpClientStream(clientConnection, clientConnection.GetStream(), BufferPool, cancellationToken);
+            var clientStream = new HttpClientStream(this, clientConnection, clientConnection.GetStream(), BufferPool, cancellationToken);
 
             Task<TcpServerConnection?>? prefetchConnectionTask = null;
             bool closeServerConnection = false;
@@ -211,7 +211,7 @@ namespace Titanium.Web.Proxy
 #endif
 
                             // HTTPS server created - we can now decrypt the client's traffic
-                            clientStream = new HttpClientStream(clientStream.Connection, sslStream, BufferPool, cancellationToken);
+                            clientStream = new HttpClientStream(this, clientStream.Connection, sslStream, BufferPool, cancellationToken);
                             sslStream = null; // clientStream was created, no need to keep SSL stream reference
 
                             clientStream.DataRead += (o, args) => connectArgs.OnDecryptedDataSent(args.Buffer, args.Offset, args.Count);

@@ -4,7 +4,7 @@ namespace Titanium.Web.Proxy.EventArguments
 {
     public class EmptyProxyEventArgs : ProxyEventArgsBase
     {
-        internal EmptyProxyEventArgs(TcpClientConnection clientConnection) : base(clientConnection)
+        internal EmptyProxyEventArgs(ProxyServer server, TcpClientConnection clientConnection) : base(server, clientConnection)
         {
         }
     }

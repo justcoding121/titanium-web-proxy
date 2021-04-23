@@ -68,7 +68,7 @@ namespace Titanium.Web.Proxy.Helpers
         }
 
         private static readonly byte[] newLine = ProxyConstants.NewLineBytes;
-
+        private readonly ProxyServer server;
         /// <summary>
         /// Initializes a new instance of the <see cref="HttpStream"/> class.
         /// </summary>
@@ -76,8 +76,10 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="bufferPool">Bufferpool.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <param name="leaveOpen"><see langword="true" /> to leave the stream open after disposing the <see cref="T:CustomBufferedStream" /> object; otherwise, <see langword="false" />.</param>
-        internal HttpStream(Stream baseStream, IBufferPool bufferPool, CancellationToken cancellationToken, bool leaveOpen = false)
+        internal HttpStream(ProxyServer server, Stream baseStream, IBufferPool bufferPool, CancellationToken cancellationToken, bool leaveOpen = false)
         {
+            this.server = server;
+
             if (baseStream is NetworkStream)
             {
                 isNetworkStream = true;
@@ -1026,7 +1028,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             try
             {
-                var http = new HttpStream(s, bufferPool, cancellationToken, true);
+                var http = new HttpStream(server, s, bufferPool, cancellationToken, true);
                 await http.CopyBodyAsync(writer, false, -1, onCopy, cancellationToken);
             }
             finally

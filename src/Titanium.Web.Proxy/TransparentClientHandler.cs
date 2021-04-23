@@ -36,7 +36,7 @@ namespace Titanium.Web.Proxy
             int port, CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
         {
             bool isHttps = false;
-            var clientStream = new HttpClientStream(clientConnection, clientConnection.GetStream(), BufferPool, cancellationToken);
+            var clientStream = new HttpClientStream(this, clientConnection, clientConnection.GetStream(), BufferPool, cancellationToken);
 
             try
             {
@@ -46,7 +46,7 @@ namespace Titanium.Web.Proxy
                 {
                     var httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
 
-                    var args = new BeforeSslAuthenticateEventArgs(clientConnection, cancellationTokenSource, httpsHostName);
+                    var args = new BeforeSslAuthenticateEventArgs(this, clientConnection, cancellationTokenSource, httpsHostName);
 
                     await endPoint.InvokeBeforeSslAuthenticate(this, args, ExceptionFunc);
 
@@ -74,7 +74,7 @@ namespace Titanium.Web.Proxy
                             await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls12, false);
 
                             // HTTPS server created - we can now decrypt the client's traffic
-                            clientStream = new HttpClientStream(clientStream.Connection, sslStream, BufferPool, cancellationToken);
+                            clientStream = new HttpClientStream(this, clientStream.Connection, sslStream, BufferPool, cancellationToken);
                             sslStream = null; // clientStream was created, no need to keep SSL stream reference
                             isHttps = true;
                         }

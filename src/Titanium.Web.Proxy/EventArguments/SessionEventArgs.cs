@@ -197,7 +197,7 @@ namespace Titanium.Web.Proxy.EventArguments
         private async Task<byte[]> readBodyAsync(bool isRequest, CancellationToken cancellationToken)
         {
             using var bodyStream = new MemoryStream();
-            using var writer = new HttpStream(bodyStream, BufferPool, cancellationToken);
+            using var writer = new HttpStream(Server, bodyStream, BufferPool, cancellationToken);
 
             if (isRequest)
             {
