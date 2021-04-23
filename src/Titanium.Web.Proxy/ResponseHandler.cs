@@ -118,7 +118,7 @@ namespace Titanium.Web.Proxy
                     // Copy body if exists
                     var serverStream = args.HttpClient.Connection.Stream;
                     await serverStream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
-                        args.OnDataReceived, cancellationToken);
+                        false, args, cancellationToken);
                 }
             }
 
