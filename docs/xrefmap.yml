@@ -5105,6 +5105,19 @@ references:
   commentId: T:Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter
   fullName: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter
   nameWithType: IHttpStreamWriter
+- uid: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream
+  name: IsNetworkStream
+  href: api/Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.html#Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamWriter_IsNetworkStream
+  commentId: P:Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream
+  fullName: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream
+  nameWithType: IHttpStreamWriter.IsNetworkStream
+- uid: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream*
+  name: IsNetworkStream
+  href: api/Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.html#Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamWriter_IsNetworkStream_
+  commentId: Overload:Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream
+  nameWithType: IHttpStreamWriter.IsNetworkStream
 - uid: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.Write(System.Byte[],System.Int32,System.Int32)
   name: Write(Byte[], Int32, Int32)
   href: api/Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.html#Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamWriter_Write_System_Byte___System_Int32_System_Int32_
