@@ -41,6 +41,8 @@ namespace Titanium.Web.Proxy.Helpers
         private readonly IBufferPool bufferPool;
         private readonly CancellationToken cancellationToken;
 
+        public bool IsNetworkStream => isNetworkStream;
+
         public event EventHandler<DataEventArgs>? DataRead;
 
         public event EventHandler<DataEventArgs>? DataWrite;
@@ -1056,8 +1058,11 @@ namespace Titanium.Web.Proxy.Helpers
         {
 
 #if DEBUG
-            if ((isRequest && args.HttpClient.Request.OriginalHasBody && !args.HttpClient.Request.IsBodyRead && server.ShouldCallBeforeRequestBodyWrite())
-                || (!isRequest && args.HttpClient.Response.OriginalHasBody && !args.HttpClient.Response.IsBodyRead && server.ShouldCallBeforeResponseBodyWrite()))
+            var isResponse = !isRequest;
+
+            if (isNetworkStream && writer.IsNetworkStream &&
+                (isRequest && args.HttpClient.Request.OriginalHasBody && !args.HttpClient.Request.IsBodyRead && server.ShouldCallBeforeRequestBodyWrite()) ||
+                (isResponse && args.HttpClient.Response.OriginalHasBody && !args.HttpClient.Response.IsBodyRead && server.ShouldCallBeforeResponseBodyWrite()))
             {
                 return handleBodyWrite(writer, isChunked, contentLength, isRequest, args, cancellationToken);
             }
@@ -1083,6 +1088,10 @@ namespace Titanium.Web.Proxy.Helpers
         {
             var originalContentLength = isRequest ? args.HttpClient.Request.OriginalContentLength : args.HttpClient.Response.OriginalContentLength;
             var originalIsChunked = isRequest ? args.HttpClient.Request.OriginalIsChunked : args.HttpClient.Response.OriginalIsChunked;
+
+            //TODO
+            //create a new decompression stream to wrap this source HttpStream based on original content encoding if needed.
+            //create a new compression stream to wrap target writer stream based on content encoding if needed.
 
             //1. Begin while(true) loop
             //2. Parse chunk if chunked, and read bytes from original stream. Max length of bytes read will be equal to bufferPool.BufferSize.
