@@ -1054,6 +1054,14 @@ namespace Titanium.Web.Proxy.Helpers
             bool isRequest,
             SessionEventArgs args, CancellationToken cancellationToken)
         {
+
+#if DEBUG
+            if ((isRequest && args.HttpClient.Request.OriginalHasBody && !args.HttpClient.Request.IsBodyRead && server.ShouldCallBeforeRequestBodyWrite())
+                || (!isRequest && args.HttpClient.Response.OriginalHasBody && !args.HttpClient.Response.IsBodyRead && server.ShouldCallBeforeResponseBodyWrite()))
+            {
+                return handleBodyWrite(writer, isChunked, contentLength, isRequest, args, cancellationToken);
+            }
+#endif
             // For chunked request we need to read data as they arrive, until we reach a chunk end symbol
             if (isChunked)
             {
@@ -1068,6 +1076,20 @@ namespace Titanium.Web.Proxy.Helpers
 
             // If not chunked then its easy just read the amount of bytes mentioned in content length header
             return copyBytesToStream(writer, contentLength, isRequest, args, cancellationToken);
+        }
+
+        private Task handleBodyWrite(IHttpStreamWriter writer, bool isChunked, long contentLength,
+            bool isRequest, SessionEventArgs args, CancellationToken cancellationToken)
+        {
+            var originalContentLength = isRequest ? args.HttpClient.Request.OriginalContentLength : args.HttpClient.Response.OriginalContentLength;
+            var originalIsChunked = isRequest ? args.HttpClient.Request.OriginalIsChunked : args.HttpClient.Response.OriginalIsChunked;
+
+            //1. Read bytes from original stream (max length of bytes will be equal to bufferPool.BufferSize).
+            //2. Call BeforeBodyWrite event handler with BeforeBodyWriteEventArgs.BodyBytes set to the bytes read from original stream.
+            //3. Write BeforeBodyWriteEventArgs.BodyBytes to the target stream when BeforeBodyWriteEventArgs.BodyBytes is not null or empty.
+            //4. Exit when 'long contentLength' parameter number of bytes are written to target stream (when not chunked) or
+            //when BeforeBodyWriteEventArgs.IsLastChunk is true after callback (when chunked).
+            throw new NotImplementedException();
         }
 
         /// <summary>

@@ -10,12 +10,12 @@ namespace Titanium.Web.Proxy.EventArguments
 
     public class BeforeBodyWriteEventArgs : ProxyEventArgsBase
     {
-        internal BeforeBodyWriteEventArgs(SessionEventArgs session, byte[] bodyBytes, bool isChunked, bool isFinalChunk) : base(session.Server, session.ClientConnection)
+        internal BeforeBodyWriteEventArgs(SessionEventArgs session, byte[] bodyBytes, bool isChunked, bool isLastChunk) : base(session.Server, session.ClientConnection)
         {
             Session = session;
             BodyBytes = bodyBytes;
             IsChunked = isChunked;
-            IsFinalChunk = isFinalChunk;
+            IsLastChunk = isLastChunk;
         }
 
 
@@ -34,7 +34,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Indicates if this is the last chunk from client or server stream, when request is chunked.
         /// Override this property to true if there are more bytes to write.
         /// </summary>
-        public bool IsFinalChunk { get; set; }
+        public bool IsLastChunk { get; set; }
 
         /// <summary>
         /// The bytes about to be written. If IsChunked is true, this will be a chunk of the bytes to be written.
