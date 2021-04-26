@@ -1085,12 +1085,12 @@ namespace Titanium.Web.Proxy.Helpers
             var originalIsChunked = isRequest ? args.HttpClient.Request.OriginalIsChunked : args.HttpClient.Response.OriginalIsChunked;
 
             //1. Begin while(true) loop
-            //2. Read bytes from original stream (max length of bytes will be equal to bufferPool.BufferSize).
-            //3. Call BeforeBodyWrite event handler with BeforeBodyWriteEventArgs.BodyBytes set to the bytes read from original stream.
+            //2. Parse chunk if chunked, and read bytes from original stream. Max length of bytes read will be equal to bufferPool.BufferSize.
+            //3. Call BeforeBodyWrite event handler with BeforeBodyWriteEventArgs.BodyBytes set to the bytes read from original stream (pass null if original stream reached its end).
             //4. Write BeforeBodyWriteEventArgs.BodyBytes to the target stream when BeforeBodyWriteEventArgs.BodyBytes is not null or empty.
             //5. Stop writing to target stream when 'long contentLength' parameter number of bytes are written (when not chunked) or
             //when BeforeBodyWriteEventArgs.IsLastChunk is true after callback (when chunked).
-            //6. Exit loop when original stream is completely siphoned out and when writing in step 5 has stopped.
+            //6. Exit loop when original stream reaches its end AND when writing in step 5 has stopped.
             throw new NotImplementedException();
         }
 
