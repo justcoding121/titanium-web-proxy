@@ -1090,7 +1090,7 @@ namespace Titanium.Web.Proxy.Helpers
             //4. Write BeforeBodyWriteEventArgs.BodyBytes to the target stream when BeforeBodyWriteEventArgs.BodyBytes is not null or empty.
             //5. Stop writing to target stream when 'long contentLength' parameter number of bytes are written (when not chunked) or
             //when BeforeBodyWriteEventArgs.IsLastChunk is true after callback (when chunked).
-            //6. Exit loop when original stream is completely siphoned out.
+            //6. Exit loop when original stream is completely siphoned out and when writing in step 5 has stopped.
             throw new NotImplementedException();
         }
 
