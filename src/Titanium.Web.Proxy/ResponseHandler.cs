@@ -150,7 +150,7 @@ namespace Titanium.Web.Proxy
                 await AfterResponse.InvokeAsync(this, args, ExceptionFunc);
             }
         }
-
+#if DEBUG
         internal bool ShouldCallBeforeResponseBodyWrite()
         {
             if (OnResponseBodyWrite != null)
@@ -168,5 +168,6 @@ namespace Titanium.Web.Proxy
                 await OnResponseBodyWrite.InvokeAsync(this, args, ExceptionFunc);
             }
         }
+#endif
     }
 }
