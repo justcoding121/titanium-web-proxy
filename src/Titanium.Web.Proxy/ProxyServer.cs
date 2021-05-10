@@ -777,8 +777,19 @@ namespace Titanium.Web.Proxy
                 });
             }
 
-            // Get the listener that handles the client request.
-            endPoint.Listener!.BeginAcceptSocket(onAcceptConnection, endPoint);
+            try
+            {
+                // based on end point type call appropriate request handlers
+                // Get the listener that handles the client request.
+                endPoint.Listener!.BeginAcceptSocket(onAcceptConnection, endPoint);
+            }
+            catch (Exception ex) when (ex is ObjectDisposedException || ex is InvalidOperationException)
+            {
+                // The listener was Stop()'d, disposing the underlying socket and
+                // triggering the completion of the callback. We're already exiting,
+                // so just return.
+                return;
+            }
         }
 
 
