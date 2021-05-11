@@ -110,18 +110,18 @@
   </h3>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_CopyBodyAsync_Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamWriter_System_Boolean_System_Int64_System_Action_System_Byte___System_Int32_System_Int32__System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter%2CSystem.Boolean%2CSystem.Int64%2CSystem.Action%7BSystem.Byte%5B%5D%2CSystem.Int32%2CSystem.Int32%7D%2CSystem.Threading.CancellationToken)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_CopyBodyAsync_Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamWriter_System_Boolean_System_Int64_System_Boolean_Titanium_Web_Proxy_EventArguments_SessionEventArgs_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter%2CSystem.Boolean%2CSystem.Int64%2CSystem.Boolean%2CTitanium.Web.Proxy.EventArguments.SessionEventArgs%2CSystem.Threading.CancellationToken)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/develop/src/Titanium.Web.Proxy/StreamExtended/Network/IHttpStreamReader.cs/#L13">View Source</a>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/develop/src/Titanium.Web.Proxy/StreamExtended/Network/IHttpStreamReader.cs/#L14">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_CopyBodyAsync_" data-uid="Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync*"></a>
-  <h4 id="Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_CopyBodyAsync_Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamWriter_System_Boolean_System_Int64_System_Action_System_Byte___System_Int32_System_Int32__System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter,System.Boolean,System.Int64,System.Action{System.Byte[],System.Int32,System.Int32},System.Threading.CancellationToken)">CopyBodyAsync(IHttpStreamWriter, Boolean, Int64, Action&lt;Byte[], Int32, Int32&gt;, CancellationToken)</h4>
+  <h4 id="Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_CopyBodyAsync_Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamWriter_System_Boolean_System_Int64_System_Boolean_Titanium_Web_Proxy_EventArguments_SessionEventArgs_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter,System.Boolean,System.Int64,System.Boolean,Titanium.Web.Proxy.EventArguments.SessionEventArgs,System.Threading.CancellationToken)">CopyBodyAsync(IHttpStreamWriter, Boolean, Int64, Boolean, SessionEventArgs, CancellationToken)</h4>
   <div class="markdown level1 summary"></div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">Task CopyBodyAsync(IHttpStreamWriter writer, bool isChunked, long contentLength, Action&lt;byte[], int, int&gt; onCopy, CancellationToken cancellationToken)</code></pre>
+    <pre><code class="lang-csharp hljs">Task CopyBodyAsync(IHttpStreamWriter writer, bool isChunked, long contentLength, bool isRequest, SessionEventArgs args, CancellationToken cancellationToken)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -149,8 +149,13 @@
         <td></td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.action-3">Action</a>&lt;<a class="xref" href="https://docs.microsoft.com/dotnet/api/system.byte">Byte</a>[], <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a>, <a class="xref" href="https://docs.microsoft.com/dotnet/api/system.int32">Int32</a>&gt;</td>
-        <td><span class="parametername">onCopy</span></td>
+        <td><a class="xref" href="https://docs.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><span class="parametername">isRequest</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html">SessionEventArgs</a></td>
+        <td><span class="parametername">args</span></td>
         <td></td>
       </tr>
       <tr>
@@ -180,7 +185,7 @@
     <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_Read_System_Byte___System_Int32_System_Int32_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.Read(System.Byte%5B%5D%2CSystem.Int32%2CSystem.Int32)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/develop/src/Titanium.Web.Proxy/StreamExtended/Network/IHttpStreamReader.cs/#L9">View Source</a>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/develop/src/Titanium.Web.Proxy/StreamExtended/Network/IHttpStreamReader.cs/#L10">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_Read_" data-uid="Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.Read*"></a>
   <h4 id="Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_Read_System_Byte___System_Int32_System_Int32_" data-uid="Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.Read(System.Byte[],System.Int32,System.Int32)">Read(Byte[], Int32, Int32)</h4>
@@ -237,7 +242,7 @@
     <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_ReadAsync_System_Byte___System_Int32_System_Int32_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.ReadAsync(System.Byte%5B%5D%2CSystem.Int32%2CSystem.Int32%2CSystem.Threading.CancellationToken)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/develop/src/Titanium.Web.Proxy/StreamExtended/Network/IHttpStreamReader.cs/#L11">View Source</a>
+    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/develop/src/Titanium.Web.Proxy/StreamExtended/Network/IHttpStreamReader.cs/#L12">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_ReadAsync_" data-uid="Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.ReadAsync*"></a>
   <h4 id="Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_ReadAsync_System_Byte___System_Int32_System_Int32_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.ReadAsync(System.Byte[],System.Int32,System.Int32,System.Threading.CancellationToken)">ReadAsync(Byte[], Int32, Int32, CancellationToken)</h4>
@@ -305,7 +310,7 @@
                     <a href="https://github.com/justcoding121/Titanium-Web-Proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Improve this Doc</a>
                   </li>
                   <li>
-                    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/develop/src/Titanium.Web.Proxy/StreamExtended/Network/IHttpStreamReader.cs/#L7" class="contribution-link">View Source</a>
+                    <a href="https://github.com/justcoding121/Titanium-Web-Proxy/blob/develop/src/Titanium.Web.Proxy/StreamExtended/Network/IHttpStreamReader.cs/#L8" class="contribution-link">View Source</a>
                   </li>
                 </ul>
               </div>

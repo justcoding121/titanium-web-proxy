@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.EventArguments;
 
 namespace Titanium.Web.Proxy.StreamExtended.Network
 {
@@ -11,6 +12,6 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
         Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken);
 
         Task CopyBodyAsync(IHttpStreamWriter writer, bool isChunked, long contentLength,
-            Action<byte[], int, int>? onCopy, CancellationToken cancellationToken);
+           bool isRequest, SessionEventArgs args, CancellationToken cancellationToken);
     }
 }

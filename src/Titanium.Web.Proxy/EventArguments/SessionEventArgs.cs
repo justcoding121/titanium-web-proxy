@@ -197,7 +197,7 @@ namespace Titanium.Web.Proxy.EventArguments
         private async Task<byte[]> readBodyAsync(bool isRequest, CancellationToken cancellationToken)
         {
             using var bodyStream = new MemoryStream();
-            using var writer = new HttpStream(bodyStream, BufferPool, cancellationToken);
+            using var writer = new HttpStream(Server, bodyStream, BufferPool, cancellationToken);
 
             if (isRequest)
             {
@@ -228,7 +228,7 @@ namespace Titanium.Web.Proxy.EventArguments
 
             var reader = isRequest ? (HttpStream)ClientStream : HttpClient.Connection.Stream;
 
-            await reader.CopyBodyAsync(requestResponse, true, NullWriter.Instance, TransformationMode.None, null, cancellationToken);
+            await reader.CopyBodyAsync(requestResponse, true, NullWriter.Instance, TransformationMode.None, isRequest, this, cancellationToken);
         }
 
         /// <summary>
@@ -270,13 +270,13 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             else
             {
-                await reader.CopyBodyAsync(request, false, writer, transformation, OnDataSent, cancellationToken);
+                await reader.CopyBodyAsync(request, false, writer, transformation, true, this, cancellationToken);
             }
         }
 
         private async Task copyResponseBodyAsync(IHttpStreamWriter writer, TransformationMode transformation, CancellationToken cancellationToken)
         {
-            await HttpClient.Connection.Stream.CopyBodyAsync(HttpClient.Response, false, writer, transformation, OnDataReceived, cancellationToken);
+            await HttpClient.Connection.Stream.CopyBodyAsync(HttpClient.Response, false, writer, transformation, false, this, cancellationToken);
         }
 
         /// <summary>

@@ -5054,15 +5054,12 @@ references:
   commentId: T:Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader
   fullName: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader
   nameWithType: IHttpStreamReader
-- uid: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter,System.Boolean,System.Int64,System.Action{System.Byte[],System.Int32,System.Int32},System.Threading.CancellationToken)
-  name: CopyBodyAsync(IHttpStreamWriter, Boolean, Int64, Action<Byte[], Int32, Int32>, CancellationToken)
-  href: api/Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.html#Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_CopyBodyAsync_Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamWriter_System_Boolean_System_Int64_System_Action_System_Byte___System_Int32_System_Int32__System_Threading_CancellationToken_
-  commentId: M:Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter,System.Boolean,System.Int64,System.Action{System.Byte[],System.Int32,System.Int32},System.Threading.CancellationToken)
-  name.vb: CopyBodyAsync(IHttpStreamWriter, Boolean, Int64, Action(Of Byte(), Int32, Int32), CancellationToken)
-  fullName: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter, System.Boolean, System.Int64, System.Action<System.Byte[], System.Int32, System.Int32>, System.Threading.CancellationToken)
-  fullName.vb: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter, System.Boolean, System.Int64, System.Action(Of System.Byte(), System.Int32, System.Int32), System.Threading.CancellationToken)
-  nameWithType: IHttpStreamReader.CopyBodyAsync(IHttpStreamWriter, Boolean, Int64, Action<Byte[], Int32, Int32>, CancellationToken)
-  nameWithType.vb: IHttpStreamReader.CopyBodyAsync(IHttpStreamWriter, Boolean, Int64, Action(Of Byte(), Int32, Int32), CancellationToken)
+- uid: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter,System.Boolean,System.Int64,System.Boolean,Titanium.Web.Proxy.EventArguments.SessionEventArgs,System.Threading.CancellationToken)
+  name: CopyBodyAsync(IHttpStreamWriter, Boolean, Int64, Boolean, SessionEventArgs, CancellationToken)
+  href: api/Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.html#Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_CopyBodyAsync_Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamWriter_System_Boolean_System_Int64_System_Boolean_Titanium_Web_Proxy_EventArguments_SessionEventArgs_System_Threading_CancellationToken_
+  commentId: M:Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter,System.Boolean,System.Int64,System.Boolean,Titanium.Web.Proxy.EventArguments.SessionEventArgs,System.Threading.CancellationToken)
+  fullName: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter, System.Boolean, System.Int64, System.Boolean, Titanium.Web.Proxy.EventArguments.SessionEventArgs, System.Threading.CancellationToken)
+  nameWithType: IHttpStreamReader.CopyBodyAsync(IHttpStreamWriter, Boolean, Int64, Boolean, SessionEventArgs, CancellationToken)
 - uid: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync*
   name: CopyBodyAsync
   href: api/Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.html#Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamReader_CopyBodyAsync_
@@ -5108,6 +5105,19 @@ references:
   commentId: T:Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter
   fullName: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter
   nameWithType: IHttpStreamWriter
+- uid: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream
+  name: IsNetworkStream
+  href: api/Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.html#Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamWriter_IsNetworkStream
+  commentId: P:Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream
+  fullName: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream
+  nameWithType: IHttpStreamWriter.IsNetworkStream
+- uid: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream*
+  name: IsNetworkStream
+  href: api/Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.html#Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamWriter_IsNetworkStream_
+  commentId: Overload:Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream
+  nameWithType: IHttpStreamWriter.IsNetworkStream
 - uid: Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.Write(System.Byte[],System.Int32,System.Int32)
   name: Write(Byte[], Int32, Int32)
   href: api/Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.html#Titanium_Web_Proxy_StreamExtended_Network_IHttpStreamWriter_Write_System_Byte___System_Int32_System_Int32_

@@ -10,16 +10,17 @@ namespace Titanium.Web.Proxy.EventArguments
     public abstract class ProxyEventArgsBase : EventArgs
     {
         private readonly TcpClientConnection clientConnection;
-
+        internal readonly ProxyServer Server;
         public object ClientUserData
         {
             get => clientConnection.ClientUserData;
             set => clientConnection.ClientUserData = value;
         }
 
-        internal ProxyEventArgsBase(TcpClientConnection clientConnection)
+        internal ProxyEventArgsBase(ProxyServer server, TcpClientConnection clientConnection)
         {
             this.clientConnection = clientConnection;
+            this.Server = server;
         }
     }
 }

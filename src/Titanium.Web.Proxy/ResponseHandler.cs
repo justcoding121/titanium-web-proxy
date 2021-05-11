@@ -118,7 +118,7 @@ namespace Titanium.Web.Proxy
                     // Copy body if exists
                     var serverStream = args.HttpClient.Connection.Stream;
                     await serverStream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
-                        args.OnDataReceived, cancellationToken);
+                        false, args, cancellationToken);
                 }
             }
 
@@ -150,5 +150,24 @@ namespace Titanium.Web.Proxy
                 await AfterResponse.InvokeAsync(this, args, ExceptionFunc);
             }
         }
+#if DEBUG
+        internal bool ShouldCallBeforeResponseBodyWrite()
+        {
+            if (OnResponseBodyWrite != null)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        internal async Task OnBeforeResponseBodyWrite(BeforeBodyWriteEventArgs args)
+        {
+            if (OnResponseBodyWrite != null)
+            {
+                await OnResponseBodyWrite.InvokeAsync(this, args, ExceptionFunc);
+            }
+        }
+#endif
     }
 }
