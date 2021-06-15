@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public ProxyTestController()
         {
-            Task.Run(()=> listenToConsole());
+            Task.Run(() => listenToConsole());
 
             proxyServer = new ProxyServer();
 
@@ -97,13 +97,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.Start();
 
             // Transparent endpoint is useful for reverse proxy (client is not aware of the existence of proxy)
-            // A transparent endpoint usually requires a network router port forwarding HTTP(S) packets or DNS
-            // to send data to this endPoint
+            // A transparent endpoint usually requires a network router port forwarding HTTP(S) packets
+            // or by DNS to send data to this endPoint.
             //var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 443, true)
-            //{ 
+            //{
             //    // Generic Certificate hostname to use
             //    // When SNI is disabled by client
-            //    GenericCertificateName = "google.com"
+            //    GenericCertificateName = "localhost"
             //};
 
             //proxyServer.AddEndPoint(transparentEndPoint);
