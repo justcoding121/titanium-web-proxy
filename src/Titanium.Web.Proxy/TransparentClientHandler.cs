@@ -91,7 +91,7 @@ namespace Titanium.Web.Proxy
                     else
                     {
                         var sessionArgs = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
-                        var connection = (await tcpConnectionFactory.GetServerConnection(this, httpsHostName, port,
+                        var connection = (await tcpConnectionFactory.GetServerConnection(this, args.ForwardHttpsHostName, args.ForwardHttpsPort,
                                     HttpHeader.VersionUnknown, false, null,
                                     true, sessionArgs, UpStreamEndPoint,
                                     UpStreamHttpsProxy, true, false, cancellationToken))!;
