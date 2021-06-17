@@ -8,11 +8,11 @@ namespace Titanium.Web.Proxy.IntegrationTests
     {
         private TestServer server;
 
-        public TestSuite()
+        public TestSuite(bool requireMutualTls = false)
         {
             var dummyProxy = new ProxyServer();
             var serverCertificate = dummyProxy.CertificateManager.CreateServerCertificate("localhost").Result;
-            server = new TestServer(serverCertificate);
+            server = new TestServer(serverCertificate, requireMutualTls);
         }
 
         public TestServer GetServer()

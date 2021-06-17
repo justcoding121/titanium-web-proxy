@@ -56,13 +56,6 @@ namespace Titanium.Web.Proxy
         {
             X509Certificate? clientCertificate = null;
 
-            //TODO: Can we use client certificate from client socket's Sslstream.RemoteCertificate?
-            //Because only the client can provide the correct certificate.
-            //Proxy has no idea about client certificate when its running on a remote machine.
-            //That would mean we need to delay AuthenticateAsServer call with client until we reach this method
-            //and decide right here if we should set SslServerAuthenticationOptions.ClientCertificateRequired = true for clientStream.AuthenticateAsServer call.
-            //Sounds like a very complicated change, but technically possible.
-
             //fallback to the first client certificate from proxy machine certificate store
             if (acceptableIssuers != null && acceptableIssuers.Length > 0 && localCertificates != null &&
                 localCertificates.Count > 0)
@@ -92,7 +85,7 @@ namespace Titanium.Web.Proxy
                     ClientCertificate = clientCertificate
                 };
 
-                // why is the sender null?
+               
                 ClientCertificateSelectionCallback.InvokeAsync(this, args, ExceptionFunc).Wait();
                 return args.ClientCertificate;
             }
