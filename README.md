@@ -72,7 +72,7 @@ Setup HTTP proxy:
 var proxyServer = new ProxyServer();
 
 // locally trust root certificate used by this proxy 
-proxyServer.CertificateManager.TrustRootCertificate = true;
+proxyServer.CertificateManager.TrustRootCertificate(true);
 
 // optionally set the Certificate Engine
 // Under Mono only BouncyCastle will be supported
