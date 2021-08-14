@@ -94,7 +94,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             var proxies2 = new List<ProxyServer>();
 
             //create a level 2 upstream proxy farm 
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < 5; i++)
             {
                 var proxy = testSuite.GetProxy();
                 proxy.ProxyBasicAuthenticateFunc += (_, _, _) =>
@@ -108,7 +108,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             var proxies1 = new List<ProxyServer>();
 
             //create a level 1 upstream proxy farm
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < 5; i++)
             {
                 var proxy1 = testSuite.GetProxy();
                 var proxy2 = proxies2[rnd.Next() % proxies2.Count];
@@ -154,7 +154,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
                  {
                      var proxy = proxies1[rnd.Next() % proxies1.Count];
                      using var client = testSuite.GetClient(proxy);
-
+                     client.Timeout = TimeSpan.FromMinutes(10);
                      var response = await client.PostAsync(new Uri(server.ListeningHttpsUrl),
                                                  new StringContent("hello server. I am a client."));
 
