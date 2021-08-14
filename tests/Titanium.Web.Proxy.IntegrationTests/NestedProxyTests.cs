@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.IntegrationTests
 {
@@ -73,5 +76,98 @@ namespace Titanium.Web.Proxy.IntegrationTests
             Assert.AreEqual("I am server. I received your greetings.", body);
         }
 
+        //Try reproduce bug reported so that we can fix it.
+        //https://github.com/justcoding121/titanium-web-proxy/issues/826
+        [TestMethod]
+        public async Task Nested_Proxy_Farm_Should_Not_Hang()
+        {
+            var rnd = new Random();
+
+            var testSuite = new TestSuite();
+
+            var server = testSuite.GetServer();
+            server.HandleRequest((context) =>
+            {
+                return context.Response.WriteAsync("I am server. I received your greetings.");
+            });
+
+            var proxies2 = new List<ProxyServer>();
+
+            //create a level 2 upstream proxy farm 
+            for (int i = 0; i < 10; i++)
+            {
+                var proxy = testSuite.GetProxy();
+                proxy.ProxyBasicAuthenticateFunc += (_, _, _) =>
+                {
+                    return Task.FromResult(true);
+                };
+
+                proxies2.Add(proxy);
+            }
+
+            var proxies1 = new List<ProxyServer>();
+
+            //create a level 1 upstream proxy farm
+            for (int i = 0; i < 10; i++)
+            {
+                var proxy1 = testSuite.GetProxy();
+                var proxy2 = proxies2[rnd.Next() % proxies2.Count];
+
+                var explicitEndpoint = proxy1.ProxyEndPoints.OfType<ExplicitProxyEndPoint>().First();
+                explicitEndpoint.BeforeTunnelConnectRequest += (_, e) =>
+                {
+                    e.CustomUpStreamProxy = new ExternalProxy()
+                    {
+                        HostName = "localhost",
+                        Port = proxy2.ProxyEndPoints[0].Port,
+                        ProxyType = ExternalProxyType.Http,
+                        UserName = "test_user",
+                        Password = "test_password"
+                    };
+
+                    return Task.CompletedTask;
+                };
+
+                proxy1.BeforeRequest += (_, e) =>
+                {
+                    e.CustomUpStreamProxy = new ExternalProxy()
+                    {
+                        HostName = "localhost",
+                        Port = proxy2.ProxyEndPoints[0].Port,
+                        ProxyType = ExternalProxyType.Http,
+                        UserName = "test_user",
+                        Password = "test_password"
+                    };
+
+                    return Task.CompletedTask;
+                };
+
+                proxies1.Add(proxy1);
+            }
+
+            var tasks = new List<Task>();
+
+            //send multiple concurrent requests from client => proxy farm 1 => proxy farm 2 => server
+            for (int j = 0; j < 1000; j++)
+            {
+                var task = Task.Run(async () =>
+                 {
+                     var proxy = proxies1[rnd.Next() % proxies1.Count];
+                     using var client = testSuite.GetClient(proxy);
+
+                     var response = await client.PostAsync(new Uri(server.ListeningHttpsUrl),
+                                                 new StringContent("hello server. I am a client."));
+
+                     Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+                     var body = await response.Content.ReadAsStringAsync();
+
+                     Assert.AreEqual("I am server. I received your greetings.", body);
+                 });
+
+                tasks.Add(task);
+            }
+
+            await Task.WhenAll(tasks);
+        }
     }
 }
