@@ -121,9 +121,9 @@ namespace Titanium.Web.Proxy
         private SystemProxyManager? systemProxySettingsManager { get; }
 
         /// <summary>
-        ///     Number of exception retries when connection pool is enabled.
+        ///     Number of times to retry upon network failures when connection pool is enabled.
         /// </summary>
-        private int retries => EnableConnectionPool ? MaxCachedConnections : 0;
+        public int NetworkFailureRetryAttempts { get; set; } = 0;
 
         /// <summary>
         ///     Is the proxy currently running?
@@ -928,7 +928,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         private RetryPolicy<T> retryPolicy<T>() where T : Exception
         {
-            return new RetryPolicy<T>(retries, tcpConnectionFactory);
+            return new RetryPolicy<T>(NetworkFailureRetryAttempts, tcpConnectionFactory);
         }
 
         private bool disposed = false;

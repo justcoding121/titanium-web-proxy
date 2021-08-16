@@ -176,7 +176,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
         }
 
 
-        //Try reproduce bug reported so that we can fix it.
+        //Reproduce bug reported so that we can fix it.
         //https://github.com/justcoding121/titanium-web-proxy/issues/826
         [TestMethod]
         [Timeout(2 * 60 * 1000)]
