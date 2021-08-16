@@ -520,15 +520,17 @@ retry:
 
                 if (externalProxy != null && externalProxy.ProxyType == ExternalProxyType.Http && (isConnect || isHttps))
                 {
-                    var authority = $"{remoteHostName}:{remotePort}".GetByteString();
-                    var connectRequest = new ConnectRequest(authority)
+                    var authority = $"{remoteHostName}:{remotePort}";
+                    var authorityBytes = authority.GetByteString();
+                    var connectRequest = new ConnectRequest(authorityBytes)
                     {
                         IsHttps = isHttps,
-                        RequestUriString8 = authority,
+                        RequestUriString8 = authorityBytes,
                         HttpVersion = httpVersion
                     };
 
                     connectRequest.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionKeepAlive);
+                    connectRequest.Headers.AddHeader(KnownHeaders.Host, authority);
 
                     if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
                     {
