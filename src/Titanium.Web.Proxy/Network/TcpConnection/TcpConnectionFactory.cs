@@ -290,7 +290,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             bool prefetch, CancellationToken cancellationToken)
         {
             // deny connection to proxy end points to avoid infinite connection loop.
-            if (Server.ProxyEndPoints.Any(x => x.Port == remotePort) 
+            if (Server.ProxyEndPoints.Any(x => x.Port == remotePort)
                 && NetworkHelper.IsLocalIpAddress(remoteHostName))
             {
                 throw new Exception($"A client is making HTTP request to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
@@ -413,7 +413,7 @@ retry:
                         }
 
                         Task connectTask;
-                            
+
                         if (socks)
                         {
                             if (externalProxy!.ProxyDnsRequests)
@@ -629,6 +629,16 @@ retry:
         /// <param name="close">Should we just close the connection instead of reusing?</param>
         internal async Task Release(TcpServerConnection connection, bool close = false)
         {
+            if (connection == null)
+            {
+                return;
+            }
+
+            if (disposalBag.Any(x => x == connection))
+            {
+                return;
+            }
+
             if (close || connection.IsWinAuthenticated || !Server.EnableConnectionPool || connection.IsClosed)
             {
                 disposalBag.Add(connection);
@@ -651,6 +661,11 @@ retry:
                             {
                                 disposalBag.Add(staleConnection);
                             }
+                        }
+
+                        if (existingConnections.Any(x => x == connection))
+                        {
+                            break;
                         }
 
                         existingConnections.Enqueue(connection);
