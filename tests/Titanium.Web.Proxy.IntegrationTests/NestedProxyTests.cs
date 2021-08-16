@@ -94,7 +94,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             var proxies2 = new List<ProxyServer>();
 
             //create a level 2 upstream proxy farm that forwards to server
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 10; i++)
             {
                 var proxy2 = testSuite.GetProxy();
                 proxy2.ProxyBasicAuthenticateFunc += (_, _, _) =>
@@ -111,7 +111,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             for (int i = 0; i < 10; i++)
             {
                 var proxy1 = testSuite.GetProxy();
-                proxy1.EnableConnectionPool = false;
+                //proxy1.EnableConnectionPool = false;
                 var proxy2 = proxies2[rnd.Next() % proxies2.Count];
 
                 var explicitEndpoint = proxy1.ProxyEndPoints.OfType<ExplicitProxyEndPoint>().First();
@@ -149,12 +149,14 @@ namespace Titanium.Web.Proxy.IntegrationTests
             var tasks = new List<Task>();
 
             //send multiple concurrent requests from client => proxy farm 1 => proxy farm 2 => server
-            for (int j = 0; j < 1000; j++)
+            for (int j = 0; j < 10_000; j++)
             {
                 var task = Task.Run(async () =>
                  {
                      var proxy = proxies1[rnd.Next() % proxies1.Count];
                      using var client = testSuite.GetClient(proxy);
+
+                     //if we increase the time out; tests will keep hanging until the timeout ends.
                      client.Timeout = TimeSpan.FromSeconds(30);
                      var response = await client.PostAsync(new Uri(server.ListeningHttpsUrl),
                                                  new StringContent("hello server. I am a client."));
