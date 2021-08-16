@@ -4,12 +4,18 @@ using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Authentication.Certificate;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Titanium.Web.Proxy.IntegrationTests.Setup
 {
@@ -24,42 +30,57 @@ namespace Titanium.Web.Proxy.IntegrationTests.Setup
         public int HttpsListeningPort { get; private set; }
         public int TcpListeningPort { get; private set; }
 
-        private IWebHost host;
-        public TestServer(X509Certificate2 serverCertificate)
+        private readonly IHost host;
+        public TestServer(X509Certificate2 serverCertificate, bool requireMutualTls)
         {
-            var startUp = new Startup(() => requestHandler);
-
-            host = WebHost.CreateDefaultBuilder()
-                         .ConfigureServices(s =>
+            host = Host.CreateDefaultBuilder()
+                         .ConfigureLogging(logging =>
                          {
-                             s.AddSingleton<IStartup>(startUp);
+                             logging.ClearProviders();
+                             logging.AddDebug();
+                             logging.SetMinimumLevel(LogLevel.Trace);
                          })
-                          .UseKestrel(options =>
-                          {
-                              options.Listen(IPAddress.Loopback, 0);
-                              options.Listen(IPAddress.Loopback, 0, listenOptions =>
-                              {
-                                  listenOptions.UseHttps(serverCertificate);
-                              });
-                              options.Listen(IPAddress.Loopback, 0, listenOptions =>
-                              {
-                                  listenOptions.Run(context =>
-                                  {
-                                      if (tcpRequestHandler == null)
-                                      {
-                                          throw new Exception("Test server not configured to handle tcp request.");
-                                      }
+                         .ConfigureWebHostDefaults(webBuilder =>
+                         {
+                             webBuilder.UseStartup(x => new Startup(() => requestHandler));
+                             webBuilder.ConfigureKestrel(options =>
+                             {
+                                 options.Listen(IPAddress.Loopback, 0);
+                                 if (requireMutualTls)
+                                 {
+                                     options.ConfigureHttpsDefaults(options =>
+                                     {
+                                         options.ClientCertificateValidation = (certificate, chain, errors) =>
+                                         {
+                                             return true;
+                                         };
+                                         options.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
+                                     });
+                                 }
+                                 options.Listen(IPAddress.Loopback, 0, listenOptions =>
+                                 {
+                                     listenOptions.UseHttps(serverCertificate);
+                                 });
+                                 options.Listen(IPAddress.Loopback, 0, listenOptions =>
+                                 {
+                                     listenOptions.Run(context =>
+                                     {
+                                         if (tcpRequestHandler == null)
+                                         {
+                                             throw new Exception("Test server not configured to handle tcp request.");
+                                         }
 
-                                      return tcpRequestHandler(context);
-                                  });
-                              });
-                          })
+                                         return tcpRequestHandler(context);
+                                     });
+                                 });
+                             });
+                         })
                         .Build();
 
             host.Start();
 
-            var addresses = host.ServerFeatures
-                        .Get<IServerAddressesFeature>()
+            var addresses = host.Services.GetRequiredService<IServer>()
+                         .Features.Get<IServerAddressesFeature>()
                         .Addresses.ToArray();
 
             HttpListeningPort = new Uri(addresses[0]).Port;
@@ -86,7 +107,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Setup
             host.Dispose();
         }
 
-        private class Startup : IStartup
+        private class Startup
         {
             Func<Func<HttpContext, Task>> requestHandler;
             public Startup(Func<Func<HttpContext, Task>> requestHandler)
@@ -108,9 +129,9 @@ namespace Titanium.Web.Proxy.IntegrationTests.Setup
 
             }
 
-            public IServiceProvider ConfigureServices(IServiceCollection services)
+            public void ConfigureServices(IServiceCollection services)
             {
-                return services.BuildServiceProvider();
+
             }
         }
     }
