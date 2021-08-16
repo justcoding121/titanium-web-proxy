@@ -242,19 +242,22 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 if (cache.TryGetValue(cacheKey, out var existingConnections))
                 {
-                    // +3 seconds for potential delay after getting connection
-                    var cutOff = DateTime.UtcNow.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
-                    while (existingConnections.Count > 0)
+                    lock (existingConnections)
                     {
-                        if (existingConnections.TryDequeue(out var recentConnection))
+                        // +3 seconds for potential delay after getting connection
+                        var cutOff = DateTime.UtcNow.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
+                        while (existingConnections.Count > 0)
                         {
-                            if (recentConnection.LastAccess > cutOff
-                                && recentConnection.TcpSocket.IsGoodConnection())
+                            if (existingConnections.TryDequeue(out var recentConnection))
                             {
-                                return recentConnection;
-                            }
+                                if (recentConnection.LastAccess > cutOff
+                                    && recentConnection.TcpSocket.IsGoodConnection())
+                                {
+                                    return recentConnection;
+                                }
 
-                            disposalBag.Add(recentConnection);
+                                disposalBag.Add(recentConnection);
+                            }
                         }
                     }
                 }
