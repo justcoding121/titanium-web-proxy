@@ -202,7 +202,6 @@ namespace Titanium.Web.Proxy.IntegrationTests
                 {
                     return Task.FromResult(true);
                 };
-
                 proxies2.Add(proxy2);
             }
 
@@ -212,9 +211,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
             for (int i = 0; i < 10; i++)
             {
                 var proxy1 = testSuite.GetProxy();
-                //proxy1.EnableConnectionPool = false;
                 var proxy2 = proxies2[rnd.Next() % proxies2.Count];
-
                 var explicitEndpoint = proxy1.ProxyEndPoints.OfType<ExplicitProxyEndPoint>().First();
                 explicitEndpoint.BeforeTunnelConnectRequest += (_, e) =>
                 {

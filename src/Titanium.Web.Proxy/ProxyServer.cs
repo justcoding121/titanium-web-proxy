@@ -123,7 +123,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Number of times to retry upon network failures when connection pool is enabled.
         /// </summary>
-        public int NetworkFailureRetryAttempts { get; set; } = 0;
+        public int NetworkFailureRetryAttempts { get; set; } = 1;
 
         /// <summary>
         ///     Is the proxy currently running?
@@ -208,9 +208,9 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Maximum number of concurrent connections per remote host in cache.
         ///     Only valid when connection pooling is enabled.
-        ///     Default value is 2.
+        ///     Default value is 4.
         /// </summary>
-        public int MaxCachedConnections { get; set; } = 2;
+        public int MaxCachedConnections { get; set; } = 4;
 
         /// <summary>
         ///     Number of seconds to linger when Tcp connection is in TIME_WAIT state.
