@@ -30,25 +30,19 @@ namespace Titanium.Web.Proxy.Helpers
 
         internal async ValueTask<ResponseStatusInfo> ReadResponseStatus(CancellationToken cancellationToken = default)
         {
-            try
-            {
-                string httpStatus = await ReadLineAsync(cancellationToken) ??
-                                    throw new ServerConnectionException("Server connection was closed.");
+            string httpStatus = await ReadLineAsync(cancellationToken) ??
+                                throw new IOException("Invalid http status code.");
 
-                if (httpStatus == string.Empty)
-                {
-                    // is this really possible?
-                    httpStatus = await ReadLineAsync(cancellationToken) ??
-                                 throw new ServerConnectionException("Server connection was closed. Response status is empty.");
-                }
-
-                Response.ParseResponseLine(httpStatus, out var version, out int statusCode, out string description);
-                return new ResponseStatusInfo { Version = version, StatusCode = statusCode, Description = description };
-            }
-            catch (Exception e) when (!(e is ServerConnectionException))
+            if (httpStatus == string.Empty)
             {
-                throw new ServerConnectionException("Server connection was closed. Exception while reading the response status.", e);
+                // is this really possible?
+                httpStatus = await ReadLineAsync(cancellationToken) ??
+                             throw new IOException("Response status is empty.");
             }
+
+            Response.ParseResponseLine(httpStatus, out var version, out int statusCode, out string description);
+            return new ResponseStatusInfo { Version = version, StatusCode = statusCode, Description = description };
+
         }
     }
 }

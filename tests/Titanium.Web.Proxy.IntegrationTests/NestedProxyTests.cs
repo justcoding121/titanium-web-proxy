@@ -195,14 +195,13 @@ namespace Titanium.Web.Proxy.IntegrationTests
             var proxies2 = new List<ProxyServer>();
 
             //create a level 2 upstream proxy farm that forwards to server
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < 10; i++)
             {
                 var proxy2 = testSuite.GetProxy();
                 proxy2.ProxyBasicAuthenticateFunc += (_, _, _) =>
                 {
                     return Task.FromResult(true);
                 };
-                proxy2.MaxCachedConnections = 100;
                 proxies2.Add(proxy2);
             }
 
@@ -213,7 +212,6 @@ namespace Titanium.Web.Proxy.IntegrationTests
             {
                 var proxy1 = testSuite.GetProxy();
                 var proxy2 = proxies2[rnd.Next() % proxies2.Count];
-                proxy1.MaxCachedConnections = 100;
                 var explicitEndpoint = proxy1.ProxyEndPoints.OfType<ExplicitProxyEndPoint>().First();
                 explicitEndpoint.BeforeTunnelConnectRequest += (_, e) =>
                 {

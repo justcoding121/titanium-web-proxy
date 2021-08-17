@@ -932,7 +932,21 @@ namespace Titanium.Web.Proxy.Helpers
         internal async Task WriteHeadersAsync(HeaderBuilder headerBuilder, CancellationToken cancellationToken = default)
         {
             var buffer = headerBuilder.GetBuffer();
-            await WriteAsync(buffer.Array, buffer.Offset, buffer.Count, true, cancellationToken);
+
+            try
+            {
+                await WriteAsync(buffer.Array, buffer.Offset, buffer.Count, true, cancellationToken);
+            }
+            catch (IOException e)
+            {
+                //throw this as ServerConnectionException so that RetryPolicy can retry with a new server connection.
+                if (this is HttpServerStream)
+                {
+                    throw new RetryableServerConnectionException("Server connection was closed. Exception while sending request line and headers.", e);
+                }
+
+                throw;
+            }
         }
 
         /// <summary>
@@ -1226,7 +1240,6 @@ namespace Titanium.Web.Proxy.Helpers
         protected async ValueTask WriteAsync(RequestResponseBase requestResponse, HeaderBuilder headerBuilder, CancellationToken cancellationToken = default)
         {
             var body = requestResponse.CompressBodyAndUpdateContentLength();
-
             headerBuilder.WriteHeaders(requestResponse.Headers);
             await WriteHeadersAsync(headerBuilder, cancellationToken);
 

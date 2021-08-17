@@ -35,14 +35,12 @@ namespace Titanium.Web.Proxy.Network
 
             while (true)
             {
+                // setup connection
+                currentConnection ??= await generator();
+
                 try
                 {
-                    // setup connection
-                    currentConnection ??= await generator();
-
-                    // try
                     @continue = await action(currentConnection);
-
                 }
                 catch (Exception ex)
                 {

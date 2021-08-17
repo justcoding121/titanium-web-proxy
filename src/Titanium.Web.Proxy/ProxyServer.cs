@@ -123,7 +123,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Number of times to retry upon network failures when connection pool is enabled.
         /// </summary>
-        public int NetworkFailureRetryAttempts { get; set; } = 0;
+        public int NetworkFailureRetryAttempts { get; set; } = 1;
 
         /// <summary>
         ///     Is the proxy currently running?
