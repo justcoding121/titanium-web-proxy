@@ -8,6 +8,8 @@ namespace Titanium.Web.Proxy.Helpers
     {
         public static NullWriter Instance { get; } = new NullWriter();
 
+        public bool IsNetworkStream => false;
+
         private NullWriter()
         {
         }

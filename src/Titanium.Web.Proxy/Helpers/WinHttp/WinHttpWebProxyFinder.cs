@@ -48,11 +48,6 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
 
         private WebProxy? proxy { get; set; }
 
-        public void Dispose()
-        {
-            dispose(true);
-        }
-
         public bool GetAutoProxies(Uri destination, out IList<string>? proxyList)
         {
             proxyList = null;
@@ -189,16 +184,6 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
         {
             state = AutoWebProxyState.Uninitialized;
             autoDetectFailed = false;
-        }
-
-        private void dispose(bool disposing)
-        {
-            if (!disposing || session == null || session.IsInvalid)
-            {
-                return;
-            }
-
-            session.Close();
         }
 
         private int getAutoProxies(Uri destination, Uri? scriptLocation, out string? proxyListString)
@@ -351,6 +336,36 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             CompilationFailure,
             UnrecognizedScheme,
             Completed
+        }
+
+        private bool disposed = false;
+
+        void dispose(bool disposing)
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            disposed = true;
+
+            if (session == null || session.IsInvalid)
+            {
+                return;
+            }
+
+            session.Close();
+        }
+
+        public void Dispose()
+        {
+            dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~WinHttpWebProxyFinder()
+        {
+            dispose(false);
         }
     }
 }

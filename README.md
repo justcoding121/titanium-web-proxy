@@ -6,15 +6,15 @@ A lightweight HTTP(S) proxy server written in C#.
 
 Report bugs or raise issues here. For programming help use [StackOverflow](http://stackoverflow.com/questions/tagged/titanium-web-proxy) with the tag Titanium-Web-Proxy.
 
-* [API Documentation](https://justcoding121.github.io/Titanium-Web-Proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html)
+* [API Documentation](https://justcoding121.github.io/titanium-web-proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html)
 * [Wiki & Contribution guidelines](https://github.com/justcoding121/Titanium-Web-Proxy/wiki)
 
 ### Features
 
-* Multi-threaded fully asynchronous proxy employing server connection pooling, certificate cache, and buffer pooling
-* View/modify/redirect/block requests and responses
+* Multithreaded and asynchronous proxy employing server connection pooling, certificate cache, and buffer pooling
+* View, modify, redirect and block requests or responses
 * Supports mutual SSL authentication, proxy authentication & automatic upstream proxy detection
-* Kerberos/NTLM authentication over HTTP protocols for windows domain
+* Supports kerberos, NTLM authentication over HTTP protocols on windows domain controlled networks
 * SOCKS4/5 Proxy support
 
 ### Installation
@@ -32,6 +32,21 @@ Supports
 
  * .NET Standard 2.0 or above
  * .NET Framework 4.5 or above
+
+###  Note to contributors
+
+#### Road map
+
+* Fix [outstanding bugs](https://github.com/justcoding121/Titanium-Web-Proxy/issues?q=is%3Aopen+is%3Aissue+label%3Abug)
+* Support reading request and response body as stream [#823](https://github.com/justcoding121/Titanium-Web-Proxy/issues/823)
+* Stop throwing new exceptions [#634](https://github.com/justcoding121/Titanium-Web-Proxy/issues/634)
+* Support HTTP 2.0 
+
+#### Collaborators
+
+The owner of this project, [justcoding121](https://github.com/justcoding121), is considered to be inactive from this project due to his busy work schedule. However, we have a collaborator listed below who time and again shows up to maintain this project. Please create pull requests prioritizing bug fixes for the attention of collaborators.
+
+* [honfika](https://github.com/honfika)
  
 ### Development environment
 
@@ -57,7 +72,7 @@ Setup HTTP proxy:
 var proxyServer = new ProxyServer();
 
 // locally trust root certificate used by this proxy 
-proxyServer.CertificateManager.TrustRootCertificate = true;
+proxyServer.CertificateManager.TrustRootCertificate(true);
 
 // optionally set the Certificate Engine
 // Under Mono only BouncyCastle will be supported
@@ -150,11 +165,11 @@ public async Task OnRequest(object sender, SessionEventArgs e)
     {
         // Get/Set request body bytes
         byte[] bodyBytes = await e.GetRequestBody();
-        await e.SetRequestBody(bodyBytes);
+        e.SetRequestBody(bodyBytes);
 
         // Get/Set request body as string
         string bodyString = await e.GetRequestBodyAsString();
-        await e.SetRequestBodyString(bodyString);
+        e.SetRequestBodyString(bodyString);
     
         // store request 
         // so that you can find it from response handler 
@@ -195,10 +210,10 @@ public async Task OnResponse(object sender, SessionEventArgs e)
             if (e.HttpClient.Response.ContentType != null && e.HttpClient.Response.ContentType.Trim().ToLower().Contains("text/html"))
             {
                 byte[] bodyBytes = await e.GetResponseBody();
-                await e.SetResponseBody(bodyBytes);
+                e.SetResponseBody(bodyBytes);
 
                 string body = await e.GetResponseBodyAsString();
-                await e.SetResponseBodyString(body);
+                e.SetResponseBodyString(body);
             }
         }
     }
@@ -227,16 +242,6 @@ public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs 
     return Task.CompletedTask;
 }
 ```
-###  Note to contributors
-
-#### Road map
-
-* Support HTTP 2.0 
-
-#### Collaborators
-
-* [honfika](https://github.com/honfika)
-
 
 **Console example application screenshot**
 

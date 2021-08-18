@@ -3,12 +3,12 @@
 namespace Titanium.Web.Proxy.Exceptions
 {
     /// <summary>
-    /// The server connection was closed upon first read with the new connection from pool.
+    /// The server connection was closed upon first write with the new connection from pool.
     /// Should retry the request with a new connection.
     /// </summary>
-    public class ServerConnectionException : ProxyException
+    public class RetryableServerConnectionException : ProxyException
     {
-        internal ServerConnectionException(string message) : base(message)
+        internal RetryableServerConnectionException(string message) : base(message)
         {
         }
 
@@ -17,9 +17,8 @@ namespace Titanium.Web.Proxy.Exceptions
         /// </summary>
         /// <param name="message"></param>
         /// <param name="e"></param>
-        internal ServerConnectionException(string message, Exception e) : base(message, e)
+        internal RetryableServerConnectionException(string message, Exception e) : base(message, e)
         {
         }
-
     }
 }

@@ -129,7 +129,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        internal struct SecurityBuffer : IDisposable
+        internal struct SecurityBuffer 
         {
             internal int cbBuffer;
             internal int cbBufferType;
@@ -158,18 +158,10 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                 Marshal.Copy(secBufferBytes, 0, pvBuffer, cbBuffer);
             }
 
-            public void Dispose()
-            {
-                if (pvBuffer != IntPtr.Zero)
-                {
-                    Marshal.FreeHGlobal(pvBuffer);
-                    pvBuffer = IntPtr.Zero;
-                }
-            }
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        internal struct SecurityBufferDesciption : IDisposable
+        internal struct SecurityBufferDesciption 
         {
             internal int ulVersion;
             internal int cBuffers;
@@ -193,36 +185,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                 Marshal.StructureToPtr(thisSecBuffer, pBuffers, false);
             }
 
-            public void Dispose()
-            {
-                if (pBuffers != IntPtr.Zero)
-                {
-                    if (cBuffers == 1)
-                    {
-                        var thisSecBuffer = (SecurityBuffer)Marshal.PtrToStructure(pBuffers, typeof(SecurityBuffer));
-                        thisSecBuffer.Dispose();
-                    }
-                    else
-                    {
-                        for (int index = 0; index < cBuffers; index++)
-                        {
-                            // The bits were written out the following order:
-                            // int cbBuffer;
-                            // int BufferType;
-                            // pvBuffer;
-                            // What we need to do here is to grab a hold of the pvBuffer allocate by the individual
-                            // SecBuffer and release it...
-                            int currentOffset = index * Marshal.SizeOf(typeof(Buffer));
-                            var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers,
-                                currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
-                            Marshal.FreeHGlobal(secBufferpvBuffer);
-                        }
-                    }
-
-                    Marshal.FreeHGlobal(pBuffers);
-                    pBuffers = IntPtr.Zero;
-                }
-            }
+      
 
             internal byte[]? GetBytes()
             {

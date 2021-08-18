@@ -8,6 +8,8 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     /// </summary>
     public interface IHttpStreamWriter
     {
+        bool IsNetworkStream { get; }
+
         void Write(byte[] buffer, int offset, int count);
 
         Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken);

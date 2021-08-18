@@ -46,6 +46,7 @@ namespace Titanium.Web.Proxy.StreamExtended.BufferPool
 
         public void Dispose()
         {
+            //Nothing to dispose. But need for the interface
         }
     }
 }

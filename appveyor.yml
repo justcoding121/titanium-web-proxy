@@ -68,7 +68,7 @@ environment:
   github_email:
     secure: iBJZGqxyiHVNeYI0uIW+MdGd3I3pg8brJtETNRkKe/A=
   nuget_access_token:
-    secure: 65rklofkoUWJzPPja621kXlxrruHemmbREnIX7QgXK0cydW412yYMZJQsN42Js27
+    secure: OO7/GRKfrScfh1Z92UxFEuBuXUM0WlPv2RMzCL6WnYAMByhiyWC2e1ezy34r/Lc6
 deploy:
 - provider: GitHub
   auth_token: $(github_access_token)

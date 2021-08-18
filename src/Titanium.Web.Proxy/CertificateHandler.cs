@@ -56,6 +56,7 @@ namespace Titanium.Web.Proxy
         {
             X509Certificate? clientCertificate = null;
 
+            //fallback to the first client certificate from proxy machine certificate store
             if (acceptableIssuers != null && acceptableIssuers.Length > 0 && localCertificates != null &&
                 localCertificates.Count > 0)
             {
@@ -69,7 +70,9 @@ namespace Titanium.Web.Proxy
                 }
             }
 
-            if (localCertificates != null && localCertificates.Count > 0)
+            //fallback to the first client certificate from proxy machine certificate store
+            if (clientCertificate == null
+                && localCertificates != null && localCertificates.Count > 0)
             {
                 clientCertificate = localCertificates[0];
             }
@@ -82,7 +85,7 @@ namespace Titanium.Web.Proxy
                     ClientCertificate = clientCertificate
                 };
 
-                // why is the sender null?
+               
                 ClientCertificateSelectionCallback.InvokeAsync(this, args, ExceptionFunc).Wait();
                 return args.ClientCertificate;
             }

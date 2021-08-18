@@ -242,19 +242,22 @@ namespace Titanium.Web.Proxy.Network.Tcp
             {
                 if (cache.TryGetValue(cacheKey, out var existingConnections))
                 {
-                    // +3 seconds for potential delay after getting connection
-                    var cutOff = DateTime.UtcNow.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
-                    while (existingConnections.Count > 0)
+                    lock (existingConnections)
                     {
-                        if (existingConnections.TryDequeue(out var recentConnection))
+                        // +3 seconds for potential delay after getting connection
+                        var cutOff = DateTime.UtcNow.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
+                        while (existingConnections.Count > 0)
                         {
-                            if (recentConnection.LastAccess > cutOff
-                                && recentConnection.TcpSocket.IsGoodConnection())
+                            if (existingConnections.TryDequeue(out var recentConnection))
                             {
-                                return recentConnection;
-                            }
+                                if (recentConnection.LastAccess > cutOff
+                                    && recentConnection.TcpSocket.IsGoodConnection())
+                                {
+                                    return recentConnection;
+                                }
 
-                            disposalBag.Add(recentConnection);
+                                disposalBag.Add(recentConnection);
+                            }
                         }
                     }
                 }
@@ -290,7 +293,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             bool prefetch, CancellationToken cancellationToken)
         {
             // deny connection to proxy end points to avoid infinite connection loop.
-            if (Server.ProxyEndPoints.Any(x => x.Port == remotePort) 
+            if (Server.ProxyEndPoints.Any(x => x.Port == remotePort)
                 && NetworkHelper.IsLocalIpAddress(remoteHostName))
             {
                 throw new Exception($"A client is making HTTP request to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
@@ -318,7 +321,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 useUpstreamProxy1 = true;
 
                 // check if we need to ByPass
-                if (externalProxy.BypassLocalhost && NetworkHelper.IsLocalIpAddress(remoteHostName))
+                if (externalProxy.BypassLocalhost && NetworkHelper.IsLocalIpAddress(remoteHostName, externalProxy.ProxyDnsRequests))
                 {
                     useUpstreamProxy1 = false;
                 }
@@ -413,7 +416,7 @@ retry:
                         }
 
                         Task connectTask;
-                            
+
                         if (socks)
                         {
                             if (externalProxy!.ProxyDnsRequests)
@@ -513,19 +516,21 @@ retry:
 
                 await proxyServer.InvokeServerConnectionCreateEvent(tcpServerSocket);
 
-                stream = new HttpServerStream(new NetworkStream(tcpServerSocket, true), proxyServer.BufferPool, cancellationToken);
+                stream = new HttpServerStream(proxyServer, new NetworkStream(tcpServerSocket, true), proxyServer.BufferPool, cancellationToken);
 
                 if (externalProxy != null && externalProxy.ProxyType == ExternalProxyType.Http && (isConnect || isHttps))
                 {
-                    var authority = $"{remoteHostName}:{remotePort}".GetByteString();
-                    var connectRequest = new ConnectRequest(authority)
+                    var authority = $"{remoteHostName}:{remotePort}";
+                    var authorityBytes = authority.GetByteString();
+                    var connectRequest = new ConnectRequest(authorityBytes)
                     {
                         IsHttps = isHttps,
-                        RequestUriString8 = authority,
+                        RequestUriString8 = authorityBytes,
                         HttpVersion = httpVersion
                     };
 
                     connectRequest.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionKeepAlive);
+                    connectRequest.Headers.AddHeader(KnownHeaders.Host, authority);
 
                     if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
                     {
@@ -555,7 +560,7 @@ retry:
                         (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
                             proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost, localCertificates,
                                 remoteCertificate, acceptableIssuers));
-                    stream = new HttpServerStream(sslStream, proxyServer.BufferPool, cancellationToken);
+                    stream = new HttpServerStream(proxyServer, sslStream, proxyServer.BufferPool, cancellationToken);
 
                     var options = new SslClientAuthenticationOptions
                     {
@@ -629,6 +634,16 @@ retry:
         /// <param name="close">Should we just close the connection instead of reusing?</param>
         internal async Task Release(TcpServerConnection connection, bool close = false)
         {
+            if (connection == null)
+            {
+                return;
+            }
+
+            if (disposalBag.Any(x => x == connection))
+            {
+                return;
+            }
+
             if (close || connection.IsWinAuthenticated || !Server.EnableConnectionPool || connection.IsClosed)
             {
                 disposalBag.Add(connection);
@@ -651,6 +666,11 @@ retry:
                             {
                                 disposalBag.Add(staleConnection);
                             }
+                        }
+
+                        if (existingConnections.Any(x => x == connection))
+                        {
+                            break;
                         }
 
                         existingConnections.Enqueue(connection);
@@ -758,8 +778,15 @@ retry:
             }
         }
 
-        public void Dispose()
+        private bool disposed = false;
+
+        protected virtual void Dispose(bool disposing)
         {
+            if (disposed)
+            {
+                return;
+            }
+
             runCleanUpTask = false;
 
             try
@@ -791,6 +818,19 @@ retry:
                     connection?.Dispose();
                 }
             }
+
+            disposed = true;
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~TcpConnectionFactory()
+        {
+            Dispose(false);
         }
 
         static class SocketConnectionTaskFactory

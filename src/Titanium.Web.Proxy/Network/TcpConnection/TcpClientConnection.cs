@@ -73,11 +73,15 @@ namespace Titanium.Web.Proxy.Network.Tcp
             throw new PlatformNotSupportedException();
         }
 
-        /// <summary>
-        ///     Dispose.
-        /// </summary>
-        public void Dispose()
+        private bool disposed = false;
+
+        protected virtual void Dispose(bool disposing)
         {
+            if (disposed)
+            {
+                return;
+            }
+
             Task.Run(async () =>
             {
                 // delay calling tcp connection close()
@@ -95,6 +99,19 @@ namespace Titanium.Web.Proxy.Network.Tcp
                     // ignore
                 }
             });
+
+            disposed = true;
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~TcpClientConnection()
+        {
+            Dispose(false);
         }
     }
 }
