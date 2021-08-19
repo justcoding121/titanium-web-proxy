@@ -586,7 +586,11 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Start this proxy server instance.
         /// </summary>
-        public void Start()
+        /// <param name="changeSystemProxySettings"> 
+        ///     Whether or not clear any system proxy settings which is pointing to our own endpoint (causing a cycle).
+        ///     E.g due to ungracious proxy shutdown before.
+        /// </param>
+        public void Start(bool changeSystemProxySettings = true)
         {
             if (ProxyRunning)
             {
@@ -600,9 +604,7 @@ namespace Titanium.Web.Proxy
                 CertificateManager.EnsureRootCertificate();
             }
 
-            // clear any system proxy settings which is pointing to our own endpoint (causing a cycle)
-            // due to ungracious proxy shutdown before or something else
-            if (systemProxySettingsManager != null && RunTime.IsWindows && !RunTime.IsUwpOnWindows)
+            if (changeSystemProxySettings && systemProxySettingsManager != null && RunTime.IsWindows && !RunTime.IsUwpOnWindows)
             {
                 var proxyInfo = systemProxySettingsManager.GetProxyInfoFromRegistry();
                 if (proxyInfo?.Proxies != null)
