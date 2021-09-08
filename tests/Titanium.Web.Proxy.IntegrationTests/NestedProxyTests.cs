@@ -114,10 +114,9 @@ namespace Titanium.Web.Proxy.IntegrationTests
                 proxy1.EnableConnectionPool = false;
                 var proxy2 = proxies2[rnd.Next() % proxies2.Count];
 
-                var explicitEndpoint = proxy1.ProxyEndPoints.OfType<ExplicitProxyEndPoint>().First();
-                explicitEndpoint.BeforeTunnelConnectRequest += (_, e) =>
+                proxy1.GetCustomUpStreamProxyFunc += async (_) =>
                 {
-                    e.CustomUpStreamProxy = new ExternalProxy()
+                    var proxy = new ExternalProxy()
                     {
                         HostName = "localhost",
                         Port = proxy2.ProxyEndPoints[0].Port,
@@ -126,21 +125,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
                         Password = "test_password"
                     };
 
-                    return Task.CompletedTask;
-                };
-
-                proxy1.BeforeRequest += (_, e) =>
-                {
-                    e.CustomUpStreamProxy = new ExternalProxy()
-                    {
-                        HostName = "localhost",
-                        Port = proxy2.ProxyEndPoints[0].Port,
-                        ProxyType = ExternalProxyType.Http,
-                        UserName = "test_user",
-                        Password = "test_password"
-                    };
-
-                    return Task.CompletedTask;
+                    return await Task.FromResult(proxy);
                 };
 
                 proxies1.Add(proxy1);
@@ -164,7 +149,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
                                                     new StringContent("hello server. I am a client."));
 
                     }
-                    //if error is thrown because of server overloading its okay.
+                    //if error is thrown because of server getting overloaded its okay.
                     //But client.PostAsync should'nt hang in all cases.
                     catch { }
                 });
@@ -212,10 +197,10 @@ namespace Titanium.Web.Proxy.IntegrationTests
             {
                 var proxy1 = testSuite.GetProxy();
                 var proxy2 = proxies2[rnd.Next() % proxies2.Count];
-                var explicitEndpoint = proxy1.ProxyEndPoints.OfType<ExplicitProxyEndPoint>().First();
-                explicitEndpoint.BeforeTunnelConnectRequest += (_, e) =>
+
+                proxy1.GetCustomUpStreamProxyFunc += async (_) =>
                 {
-                    e.CustomUpStreamProxy = new ExternalProxy()
+                    var proxy = new ExternalProxy()
                     {
                         HostName = "localhost",
                         Port = proxy2.ProxyEndPoints[0].Port,
@@ -224,21 +209,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
                         Password = "test_password"
                     };
 
-                    return Task.CompletedTask;
-                };
-
-                proxy1.BeforeRequest += (_, e) =>
-                {
-                    e.CustomUpStreamProxy = new ExternalProxy()
-                    {
-                        HostName = "localhost",
-                        Port = proxy2.ProxyEndPoints[0].Port,
-                        ProxyType = ExternalProxyType.Http,
-                        UserName = "test_user",
-                        Password = "test_password"
-                    };
-
-                    return Task.CompletedTask;
+                    return await Task.FromResult(proxy);
                 };
 
                 proxies1.Add(proxy1);
@@ -261,7 +232,7 @@ namespace Titanium.Web.Proxy.IntegrationTests
                          await client.PostAsync(new Uri(server.ListeningHttpsUrl),
                                                      new StringContent("hello server. I am a client."));
                      }
-                     //if error is thrown because of server overloading its okay.
+                     //if error is thrown because of server getting overloaded its okay.
                      //But client.PostAsync should'nt hang in all cases.
                      catch { }
                  });
