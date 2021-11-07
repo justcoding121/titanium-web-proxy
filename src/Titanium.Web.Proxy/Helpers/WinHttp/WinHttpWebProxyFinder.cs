@@ -153,7 +153,6 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal);
         }
 
-
         private ProxyInfo getProxyInfo()
         {
             var proxyConfig = new NativeMethods.WinHttp.WINHTTP_CURRENT_USER_IE_PROXY_CONFIG();
