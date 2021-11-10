@@ -606,7 +606,7 @@ namespace Titanium.Web.Proxy.EventArguments
             var response = new RedirectResponse();
             response.HttpVersion = HttpClient.Request.HttpVersion;
             response.Headers.AddHeader(KnownHeaders.Location, url);
-#if NET45
+#if NET451
             response.Body = Net45Compatibility.EmptyArray;
 #else
             response.Body = Array.Empty<byte>();
