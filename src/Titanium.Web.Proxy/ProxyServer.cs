@@ -137,6 +137,11 @@ namespace Titanium.Web.Proxy
         public bool ForwardToUpstreamGateway { get; set; }
 
         /// <summary>
+        /// If set, the upstream proxy will be detected by a script that will be loaded from the provided Uri
+        /// </summary>
+        public Uri UpstreamProxyConfigurationScript { get; set; }
+
+        /// <summary>
         ///     Enable disable Windows Authentication (NTLM/Kerberos).
         ///     Note: NTLM/Kerberos will always send local credentials of current user
         ///     running the proxy process. This is because a man
@@ -628,9 +633,17 @@ namespace Titanium.Web.Proxy
 
             if (ForwardToUpstreamGateway && GetCustomUpStreamProxyFunc == null && systemProxySettingsManager != null)
             {
-                // Use WinHttp to handle PAC/WAPD scripts.
                 systemProxyResolver = new WinHttpWebProxyFinder();
-                systemProxyResolver.LoadFromIE();
+                if (UpstreamProxyConfigurationScript != null)
+                {
+                    //Use the provided proxy configuration script
+                    systemProxyResolver.UsePacFile(UpstreamProxyConfigurationScript);
+                }
+                else
+                {
+                    // Use WinHttp to handle PAC/WAPD scripts.
+                    systemProxyResolver.LoadFromIE();
+                }
 
                 GetCustomUpStreamProxyFunc = getSystemUpStreamProxy;
             }

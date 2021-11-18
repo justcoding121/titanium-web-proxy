@@ -94,7 +94,7 @@ namespace Titanium.Web.Proxy.Http
 
         public ArraySegment<byte> GetBuffer()
         {
-#if NET45
+#if NET451
             return new ArraySegment<byte>(stream.ToArray());
 #else
             stream.TryGetBuffer(out var buffer);
@@ -104,7 +104,7 @@ namespace Titanium.Web.Proxy.Http
 
         public string GetString(Encoding encoding)
         {
-#if NET45
+#if NET451
             return encoding.GetString(stream.ToArray());
 #else
             stream.TryGetBuffer(out var buffer);

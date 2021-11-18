@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         public Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-#if NET45
+#if NET451
             return Net45Compatibility.CompletedTask;
 #else
             return Task.CompletedTask;
