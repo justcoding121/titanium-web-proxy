@@ -93,7 +93,7 @@ var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true)
 };
 
 // Fired when a CONNECT request is received
-explicitEndPoint.BeforeTunnelConnect += OnBeforeTunnelConnect;
+explicitEndPoint.BeforeTunnelConnectRequest += OnBeforeTunnelConnectRequest;
 
 // An explicit endpoint is where the client knows about the existence of a proxy
 // So client sends request in a proxy friendly manner
@@ -127,7 +127,7 @@ proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
 Console.Read();
 
 // Unsubscribe & Quit
-explicitEndPoint.BeforeTunnelConnect -= OnBeforeTunnelConnect;
+explicitEndPoint.BeforeTunnelConnectRequest -= OnBeforeTunnelConnectRequest;
 proxyServer.BeforeRequest -= OnRequest;
 proxyServer.BeforeResponse -= OnResponse;
 proxyServer.ServerCertificateValidationCallback -= OnCertificateValidation;
@@ -158,7 +158,7 @@ public async Task OnRequest(object sender, SessionEventArgs e)
     Console.WriteLine(e.HttpClient.Request.Url);
 
     // read request headers
-    var requestHeaders = e.HttpClient.Request.RequestHeaders;
+    var requestHeaders = e.HttpClient.Request.Headers;
 
     var method = e.HttpClient.Request.Method.ToUpper();
     if ((method == "POST" || method == "PUT" || method == "PATCH"))
@@ -200,12 +200,12 @@ public async Task OnRequest(object sender, SessionEventArgs e)
 public async Task OnResponse(object sender, SessionEventArgs e)
 {
     // read response headers
-    var responseHeaders = e.HttpClient.Response.ResponseHeaders;
+    var responseHeaders = e.HttpClient.Response.Headers;
 
     //if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
     if (e.HttpClient.Request.Method == "GET" || e.HttpClient.Request.Method == "POST")
     {
-        if (e.HttpClient.Response.ResponseStatusCode == "200")
+        if (e.HttpClient.Response.StatusCode == 200)
         {
             if (e.HttpClient.Response.ContentType != null && e.HttpClient.Response.ContentType.Trim().ToLower().Contains("text/html"))
             {
