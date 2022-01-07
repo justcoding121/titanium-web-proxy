@@ -406,6 +406,19 @@ namespace Titanium.Web.Proxy
             }
         }
 
+        /// <summary>
+        ///     Invoke before request handler if it is set.
+        /// </summary>
+        /// <param name="request">The COONECT request.</param>
+        /// <returns></returns>
+        internal async Task onBeforeUpStreamConnectRequest(ConnectRequest request)
+        {
+            if (BeforeUpStreamConnectRequest != null)
+            {
+                await BeforeUpStreamConnectRequest.InvokeAsync(this, request, ExceptionFunc);
+            }
+        }
+
 #if DEBUG
         internal bool ShouldCallBeforeRequestBodyWrite()
         {
