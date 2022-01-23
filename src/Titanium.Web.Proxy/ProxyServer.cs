@@ -11,6 +11,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -386,6 +387,11 @@ namespace Titanium.Web.Proxy
         ///     Customize TcpClient used for server connection upon create.
         /// </summary>
         public event AsyncEventHandler<Socket>? OnServerConnectionCreate;
+
+        /// <summary>
+        ///     Intercept connect request sent to upstream proxy.
+        /// </summary>
+        public event AsyncEventHandler<ConnectRequest>? BeforeUpStreamConnectRequest;
 
         /// <summary>
         /// Customize the minimum ThreadPool size (increase it on a server)
