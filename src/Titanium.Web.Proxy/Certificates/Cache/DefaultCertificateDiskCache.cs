@@ -129,11 +129,13 @@ namespace Titanium.Web.Proxy.Network
                         assemblyLocation = Assembly.GetEntryAssembly().Location;
                     }
 
+#if NETSTANDARD2_1
                     // single-file app returns string.Empty location
                     if (assemblyLocation == string.Empty)
                     {
                         assemblyLocation = AppContext.BaseDirectory;
                     }
+#endif
 
                     string path = Path.GetDirectoryName(assemblyLocation);
 
