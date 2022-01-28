@@ -29,7 +29,7 @@ if($Branch -eq "beta" ) { $Version = "$Version-beta" }
 
 $NuGet = Join-Path $RepoRoot ".nuget\nuget.exe"
 
-$MSBuild = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\msbuild.exe"
+$MSBuild = "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\msbuild.exe"
 $MSBuild -replace ' ', '` '
 
 FormatTaskName (("-"*25) + "[{0}]" + ("-"*25))
