@@ -51,15 +51,15 @@ The owner of this project, [justcoding121](https://github.com/justcoding121), is
 ### Development environment
 
 #### Windows
-* Visual Studio Code as IDE for .NET Core
-* Visual Studio 2022 as IDE for .NET Framework/.NET Core
+* Visual Studio Code as IDE for .NET
+* Visual Studio 2022 as IDE for .NET Framework/.NET
 
 #### Mac OS
-* Visual Studio Code as IDE for .NET Core
+* Visual Studio Code as IDE for .NET
 * Visual Studio 2022 as IDE for Mono
 
 #### Linux
-* Visual Studio Code as IDE for .NET Core
+* Visual Studio Code as IDE for .NET
 * Mono develop as IDE for Mono
 
 ### Usage
