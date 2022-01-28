@@ -52,11 +52,11 @@ The owner of this project, [justcoding121](https://github.com/justcoding121), is
 
 #### Windows
 * Visual Studio Code as IDE for .NET Core
-* Visual Studio 2019 as IDE for .NET Framework/.NET Core
+* Visual Studio 2022 as IDE for .NET Framework/.NET Core
 
 #### Mac OS
 * Visual Studio Code as IDE for .NET Core
-* Visual Studio 2019 as IDE for Mono
+* Visual Studio 2022 as IDE for Mono
 
 #### Linux
 * Visual Studio Code as IDE for .NET Core

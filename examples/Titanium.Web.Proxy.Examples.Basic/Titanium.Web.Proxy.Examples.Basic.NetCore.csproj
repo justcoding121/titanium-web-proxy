@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>net50</TargetFrameworks>
+    <TargetFrameworks>net60</TargetFrameworks>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <LangVersion>7.1</LangVersion>
   </PropertyGroup>
