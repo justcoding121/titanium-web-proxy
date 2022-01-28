@@ -394,6 +394,7 @@ namespace Titanium.Web.Proxy.Http2
                     }
 
                     rr.IsBodyRead = true;
+                    rr.IsBodyReceived = true;
 
                     var tcs = rr.ReadHttp2BodyTaskCompletionSource;
                     rr.ReadHttp2BodyTaskCompletionSource = null;
