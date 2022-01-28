@@ -538,6 +538,8 @@ retry:
                         connectRequest.Headers.AddHeader(HttpHeader.GetProxyAuthorizationHeader(externalProxy.UserName, externalProxy.Password));
                     }
 
+                    await proxyServer.onBeforeUpStreamConnectRequest(connectRequest);
+
                     await stream.WriteRequestAsync(connectRequest, cancellationToken);
 
                     var httpStatus = await stream.ReadResponseStatus(cancellationToken);

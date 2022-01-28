@@ -120,6 +120,8 @@ namespace Titanium.Web.Proxy
                     await serverStream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
                         false, args, cancellationToken);
                 }
+
+                response.IsBodyReceived = true;
             }
 
             args.TimeLine["Response Sent"] = DateTime.UtcNow;

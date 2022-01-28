@@ -85,6 +85,11 @@ namespace Titanium.Web.Proxy.EventArguments
             // If not already read (not cached yet)
             if (!request.IsBodyRead)
             {
+                if (request.IsBodyReceived)
+                {
+                    throw new Exception("Request body was already received.");
+                }
+
                 if (request.HttpVersion == HttpHeader.Version20)
                 {
                     // do not send to the remote endpoint
@@ -103,6 +108,7 @@ namespace Titanium.Web.Proxy.EventArguments
                     // Now set the flag to true
                     // So that next time we can deliver body from cache
                     request.IsBodyRead = true;
+                    request.IsBodyReceived = true;
                 }
                 else
                 {
@@ -115,6 +121,7 @@ namespace Titanium.Web.Proxy.EventArguments
                     // Now set the flag to true
                     // So that next time we can deliver body from cache
                     request.IsBodyRead = true;
+                    request.IsBodyReceived = true;
                 }
             }
         }
@@ -160,6 +167,11 @@ namespace Titanium.Web.Proxy.EventArguments
             // If not already read (not cached yet)
             if (!response.IsBodyRead)
             {
+                if (response.IsBodyReceived)
+                {
+                    throw new Exception("Response body was already received.");
+                }
+
                 if (response.HttpVersion == HttpHeader.Version20)
                 {
                     // do not send to the remote endpoint
@@ -178,6 +190,7 @@ namespace Titanium.Web.Proxy.EventArguments
                     // Now set the flag to true
                     // So that next time we can deliver body from cache
                     response.IsBodyRead = true;
+                    response.IsBodyReceived = true;
                 }
                 else
                 {
@@ -190,6 +203,7 @@ namespace Titanium.Web.Proxy.EventArguments
                     // Now set the flag to true
                     // So that next time we can deliver body from cache
                     response.IsBodyRead = true;
+                    response.IsBodyReceived = true;
                 }
             }
         }
@@ -221,7 +235,7 @@ namespace Titanium.Web.Proxy.EventArguments
         internal async Task SyphonOutBodyAsync(bool isRequest, CancellationToken cancellationToken)
         {
             var requestResponse = isRequest ? (RequestResponseBase)HttpClient.Request : HttpClient.Response;
-            if (requestResponse.IsBodyRead || !requestResponse.OriginalHasBody)
+            if (requestResponse.IsBodyReceived || !requestResponse.OriginalHasBody)
             {
                 return;
             }
@@ -229,6 +243,7 @@ namespace Titanium.Web.Proxy.EventArguments
             var reader = isRequest ? (HttpStream)ClientStream : HttpClient.Connection.Stream;
 
             await reader.CopyBodyAsync(requestResponse, true, NullWriter.Instance, TransformationMode.None, isRequest, this, cancellationToken);
+            requestResponse.IsBodyReceived = true;
         }
 
         /// <summary>
@@ -272,11 +287,15 @@ namespace Titanium.Web.Proxy.EventArguments
             {
                 await reader.CopyBodyAsync(request, false, writer, transformation, true, this, cancellationToken);
             }
+
+            request.IsBodyReceived = true;
         }
 
         private async Task copyResponseBodyAsync(IHttpStreamWriter writer, TransformationMode transformation, CancellationToken cancellationToken)
         {
-            await HttpClient.Connection.Stream.CopyBodyAsync(HttpClient.Response, false, writer, transformation, false, this, cancellationToken);
+            var response = HttpClient.Response;
+            await HttpClient.Connection.Stream.CopyBodyAsync(response, false, writer, transformation, false, this, cancellationToken);
+            response.IsBodyReceived = true;
         }
 
         /// <summary>
