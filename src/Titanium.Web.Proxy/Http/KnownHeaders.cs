@@ -11,6 +11,7 @@
         public static KnownHeader ConnectionKeepAlive = "keep-alive";
 
         public static KnownHeader ContentLength = "Content-Length";
+        public static KnownHeader ContentLengthHttp2 = "content-length";
 
         public static KnownHeader ContentType = "Content-Type";
         public static KnownHeader ContentTypeCharset = "charset";

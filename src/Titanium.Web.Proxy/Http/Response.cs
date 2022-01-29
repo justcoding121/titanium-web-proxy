@@ -66,6 +66,11 @@ namespace Titanium.Web.Proxy.Http
                     return true;
                 }
 
+                if (ContentLength == -1 && HttpVersion == HttpHeader.Version20)
+                {
+                    return true;
+                } 
+
                 // has response if connection:keep-alive header exist and when version is http/1.0
                 // Because in Http 1.0 server can return a response without content-length (expectation being client would read until end of stream)
                 if (KeepAlive && HttpVersion == HttpHeader.Version10)
