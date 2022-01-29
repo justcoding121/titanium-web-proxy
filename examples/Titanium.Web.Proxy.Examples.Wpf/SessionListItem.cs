@@ -146,7 +146,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var response = HttpClient.Response;
             int statusCode = response?.StatusCode ?? 0;
             StatusCode = statusCode == 0 ? "-" : statusCode.ToString();
-            Protocol = request.RequestUri.Scheme;
+            Protocol = request.HttpVersion.Major == 2 ? "http2" : request.RequestUri.Scheme;
             ClientConnectionId = args.ClientConnectionId;
             ServerConnectionId = args.ServerConnectionId;
 
