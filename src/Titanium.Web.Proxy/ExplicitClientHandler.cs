@@ -38,10 +38,10 @@ namespace Titanium.Web.Proxy
             Task<TcpServerConnection?>? prefetchConnectionTask = null;
             bool closeServerConnection = false;
 
+            TunnelConnectSessionEventArgs? connectArgs = null;
+
             try
             {
-                TunnelConnectSessionEventArgs? connectArgs = null;
-
                 var method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
                 if (clientStream.IsClosed)
                 {
@@ -402,6 +402,7 @@ namespace Titanium.Web.Proxy
                 await tcpConnectionFactory.Release(prefetchConnectionTask, closeServerConnection);
 
                 clientStream.Dispose();
+                connectArgs?.Dispose();
             }
         }
     }

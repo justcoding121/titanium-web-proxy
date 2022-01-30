@@ -88,6 +88,11 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         ~CopyStream()
         {
+#if DEBUG
+            // Finalizer should not be called
+            System.Diagnostics.Debugger.Break();
+#endif
+
             Dispose(false);
         }
     }
