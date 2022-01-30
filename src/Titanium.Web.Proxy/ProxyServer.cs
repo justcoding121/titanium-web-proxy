@@ -968,8 +968,11 @@ namespace Titanium.Web.Proxy
                 Stop();
             }
 
-            CertificateManager?.Dispose();
-            BufferPool?.Dispose();
+            if (disposing)
+            {
+                CertificateManager?.Dispose();
+                BufferPool?.Dispose();
+            }
         }
 
         public void Dispose()

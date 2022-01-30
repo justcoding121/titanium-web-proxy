@@ -159,19 +159,18 @@ namespace Titanium.Web.Proxy.EventArguments
                 return;
             }
 
-            disposed = true;
-
             if (disposing)
             {
                 CustomUpStreamProxyUsed = null;
 
-                DataSent = null;
-                DataReceived = null;
-                Exception = null;
+                HttpClient.FinishSession();
             }
 
-            HttpClient.FinishSession();
+            DataSent = null;
+            DataReceived = null;
+            Exception = null;
 
+            disposed = true;
         }
 
         public void Dispose()

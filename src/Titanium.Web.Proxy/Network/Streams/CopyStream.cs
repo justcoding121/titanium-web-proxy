@@ -72,8 +72,12 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
                 return;
             }
 
+            if (disposing)
+            {
+                bufferPool.ReturnBuffer(buffer);
+            }
+
             disposed = true;
-            bufferPool.ReturnBuffer(buffer);
         }
 
         public void Dispose()

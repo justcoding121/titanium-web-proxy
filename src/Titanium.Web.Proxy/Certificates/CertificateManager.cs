@@ -1002,7 +1002,11 @@ namespace Titanium.Web.Proxy.Network
                 return;
             }
 
-            clearCertificatesTokenSource.Dispose();
+            if (disposing)
+            {
+                clearCertificatesTokenSource.Dispose();
+            }
+
             disposed = true;
         }
 

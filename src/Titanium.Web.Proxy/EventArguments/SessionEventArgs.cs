@@ -685,6 +685,7 @@ namespace Titanium.Web.Proxy.EventArguments
         }
 
         private bool disposed = false;
+        
         protected override void Dispose(bool disposing)
         {
             if (disposed)
