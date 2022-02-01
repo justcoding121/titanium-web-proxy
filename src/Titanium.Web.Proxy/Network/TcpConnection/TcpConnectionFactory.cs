@@ -707,7 +707,7 @@ retry:
             }
             catch
             {
-                ;
+                // ignore
             }
             finally
             {
