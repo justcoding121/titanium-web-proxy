@@ -34,9 +34,9 @@ namespace Titanium.Web.Proxy.Network.Certificate
         // Set this flag to true when exception detected to avoid further exceptions
         private static bool doNotSetFriendlyName;
 
-        private readonly ExceptionHandler exceptionFunc;
+        private readonly ExceptionHandler? exceptionFunc;
 
-        internal BCCertificateMaker(ExceptionHandler exceptionFunc, int certificateValidDays)
+        internal BCCertificateMaker(ExceptionHandler? exceptionFunc, int certificateValidDays)
         {
             this.certificateValidDays = certificateValidDays;
             this.exceptionFunc = exceptionFunc;  

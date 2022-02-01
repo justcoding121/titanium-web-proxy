@@ -72,7 +72,7 @@ namespace Titanium.Web.Proxy
             }
             catch (Exception e)
             {
-                ExceptionFunc(new ProxyAuthorizationException("Error whilst authorizing request", session, e,
+                onException(null, new ProxyAuthorizationException("Error whilst authorizing request", session, e,
                     httpHeaders));
 
                 // Return not authorized

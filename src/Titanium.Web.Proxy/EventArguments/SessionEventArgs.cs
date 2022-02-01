@@ -144,7 +144,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                ExceptionFunc(new Exception("Exception thrown in user event", ex));
+                OnException(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -684,7 +684,8 @@ namespace Titanium.Web.Proxy.EventArguments
             HttpClient.CloseServerConnection = true;
         }
 
-        private bool disposed = false;
+        private bool disposed;
+        
         protected override void Dispose(bool disposing)
         {
             if (disposed)
@@ -700,6 +701,11 @@ namespace Titanium.Web.Proxy.EventArguments
 
         ~SessionEventArgs()
         {
+#if DEBUG
+            // Finalizer should not be called
+            System.Diagnostics.Debugger.Break();
+#endif
+
             Dispose(false);
         }
     }

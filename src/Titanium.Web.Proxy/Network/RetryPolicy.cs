@@ -49,29 +49,19 @@ namespace Titanium.Web.Proxy.Network
 
                 attempts--;
 
-                if (attempts < 0
-                    || exception == null
-                    || !(exception is T))
+                if (attempts < 0 || exception == null || !(exception is T))
                 {
                     break;
                 }
 
                 exception = null;
-                await disposeConnection();
-            }
-
-            return new RetryResult(currentConnection, exception, @continue);
-        }
-
-        // before retry clear connection
-        private async Task disposeConnection()
-        {
-            if (currentConnection != null)
-            {
-                // close connection on error
+                
+                // before retry clear connection
                 await tcpConnectionFactory.Release(currentConnection, true);
                 currentConnection = null;
             }
+
+            return new RetryResult(currentConnection, exception, @continue);
         }
     }
 

@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy.EventArguments
         public Guid ServerConnectionId => HttpClient.HasConnection ? ServerConnection.Id : Guid.Empty;
 
         protected readonly IBufferPool BufferPool;
-        protected readonly ExceptionHandler ExceptionFunc;
+        protected readonly ExceptionHandler? ExceptionFunc;
         private bool enableWinAuth;
 
         /// <summary>
@@ -150,6 +150,11 @@ namespace Titanium.Web.Proxy.EventArguments
         /// </summary>
         public Exception? Exception { get; internal set; }
 
+        protected void OnException(Exception exception)
+        {
+            ExceptionFunc?.Invoke(exception);
+        }
+
         private bool disposed = false;
 
         protected virtual void Dispose(bool disposing)
@@ -159,19 +164,18 @@ namespace Titanium.Web.Proxy.EventArguments
                 return;
             }
 
-            disposed = true;
-
             if (disposing)
             {
                 CustomUpStreamProxyUsed = null;
 
-                DataSent = null;
-                DataReceived = null;
-                Exception = null;
+                HttpClient.FinishSession();
             }
 
-            HttpClient.FinishSession();
+            DataSent = null;
+            DataReceived = null;
+            Exception = null;
 
+            disposed = true;
         }
 
         public void Dispose()
@@ -182,6 +186,11 @@ namespace Titanium.Web.Proxy.EventArguments
 
         ~SessionEventArgsBase()
         {
+#if DEBUG
+            // Finalizer should not be called
+            System.Diagnostics.Debugger.Break();
+#endif
+
             Dispose(false);
         }
 
@@ -203,7 +212,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                ExceptionFunc(new Exception("Exception thrown in user event", ex));
+                OnException(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -215,7 +224,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                ExceptionFunc(new Exception("Exception thrown in user event", ex));
+                OnException(new Exception("Exception thrown in user event", ex));
             }
         }
 

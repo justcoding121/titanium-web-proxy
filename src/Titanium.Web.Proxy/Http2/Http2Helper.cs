@@ -34,7 +34,7 @@ namespace Titanium.Web.Proxy.Http2
             Func<SessionEventArgs> sessionFactory,
             Func<SessionEventArgs, Task> onBeforeRequest, Func<SessionEventArgs, Task> onBeforeResponse,
             CancellationTokenSource cancellationTokenSource, Guid connectionId,
-            ExceptionHandler exceptionFunc)
+            ExceptionHandler? exceptionFunc)
         {
             var clientSettings = new Http2Settings();
             var serverSettings = new Http2Settings();
@@ -62,7 +62,7 @@ namespace Titanium.Web.Proxy.Http2
             Func<SessionEventArgs> sessionFactory, ConcurrentDictionary<int, SessionEventArgs> sessions,
             Func<SessionEventArgs, Task> onBeforeRequestResponse,
             Guid connectionId, bool isClient, CancellationToken cancellationToken,
-            ExceptionHandler exceptionFunc)
+            ExceptionHandler? exceptionFunc)
         {
             int headerTableSize = 0;
             Decoder? decoder = null;
@@ -281,7 +281,7 @@ namespace Titanium.Web.Proxy.Http2
                     }
                     catch (Exception ex)
                     {
-                        exceptionFunc(new ProxyHttpException("Failed to decode HTTP/2 headers", ex, args));
+                        exceptionFunc?.Invoke(new ProxyHttpException("Failed to decode HTTP/2 headers", ex, args));
                     }
 
                     if (!endHeaders)
@@ -351,7 +351,7 @@ namespace Titanium.Web.Proxy.Http2
                     if (streamId == 0)
                     {
                         // connection error
-                        exceptionFunc(new ProxyHttpException("HTTP/2 connection error. Error code: " + errorCode, null, args));
+                        exceptionFunc?.Invoke(new ProxyHttpException("HTTP/2 connection error. Error code: " + errorCode, null, args));
                         return;
                     }
                     else
@@ -361,7 +361,7 @@ namespace Titanium.Web.Proxy.Http2
 
                         if (errorCode != 8 /*cancel*/)
                         {
-                            exceptionFunc(new ProxyHttpException("HTTP/2 stream error. Error code: " + errorCode, null, args));
+                            exceptionFunc?.Invoke(new ProxyHttpException("HTTP/2 stream error. Error code: " + errorCode, null, args));
                         }
                     }
                 }

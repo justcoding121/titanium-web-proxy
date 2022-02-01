@@ -349,14 +349,12 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
 
         private bool disposed = false;
 
-        void dispose(bool disposing)
+        public void Dispose()
         {
             if (disposed)
             {
                 return;
             }
-
-            disposed = true;
 
             if (session == null || session.IsInvalid)
             {
@@ -364,17 +362,8 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             }
 
             session.Close();
-        }
 
-        public void Dispose()
-        {
-            dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        ~WinHttpWebProxyFinder()
-        {
-            dispose(false);
+            disposed = true;
         }
     }
 }

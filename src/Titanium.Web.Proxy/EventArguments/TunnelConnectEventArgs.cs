@@ -60,7 +60,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                ExceptionFunc(new Exception("Exception thrown in user event", ex));
+                OnException(new Exception("Exception thrown in user event", ex));
             }
         }
 
@@ -72,8 +72,18 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                ExceptionFunc(new Exception("Exception thrown in user event", ex));
+                OnException(new Exception("Exception thrown in user event", ex));
             }
+        }
+
+        ~TunnelConnectSessionEventArgs()
+        {
+#if DEBUG
+            // Finalizer should not be called
+            System.Diagnostics.Debugger.Break();
+#endif
+
+            Dispose(false);
         }
     }
 }

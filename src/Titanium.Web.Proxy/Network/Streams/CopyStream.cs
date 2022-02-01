@@ -72,8 +72,12 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
                 return;
             }
 
+            if (disposing)
+            {
+                bufferPool.ReturnBuffer(buffer);
+            }
+
             disposed = true;
-            bufferPool.ReturnBuffer(buffer);
         }
 
         public void Dispose()
@@ -84,6 +88,11 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
 
         ~CopyStream()
         {
+#if DEBUG
+            // Finalizer should not be called
+            System.Diagnostics.Debugger.Break();
+#endif
+
             Dispose(false);
         }
     }

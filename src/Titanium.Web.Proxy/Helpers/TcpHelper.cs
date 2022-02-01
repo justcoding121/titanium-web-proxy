@@ -133,7 +133,7 @@ namespace Titanium.Web.Proxy.Helpers
         internal static Task SendRaw(Stream clientStream, Stream serverStream, IBufferPool bufferPool,
             Action<byte[], int, int>? onDataSend, Action<byte[], int, int>? onDataReceive,
             CancellationTokenSource cancellationTokenSource,
-            ExceptionHandler exceptionFunc)
+            ExceptionHandler? exceptionFunc)
         {
             // todo: fix APM mode
             return sendRawTap(clientStream, serverStream, bufferPool, onDataSend, onDataReceive,

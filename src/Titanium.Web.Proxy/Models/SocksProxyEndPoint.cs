@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy.Models
         public event AsyncEventHandler<BeforeSslAuthenticateEventArgs>? BeforeSslAuthenticate;
 
         internal override async Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
-            BeforeSslAuthenticateEventArgs connectArgs, ExceptionHandler exceptionFunc)
+            BeforeSslAuthenticateEventArgs connectArgs, ExceptionHandler? exceptionFunc)
         {
             if (BeforeSslAuthenticate != null)
             {

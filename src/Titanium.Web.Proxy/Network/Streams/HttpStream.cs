@@ -515,12 +515,16 @@ namespace Titanium.Web.Proxy.Helpers
                 disposed = true;
                 closedRead = true;
                 closedWrite = true;
-                if (!leaveOpen)
-                {
-                    baseStream.Dispose();
-                }
 
-                bufferPool.ReturnBuffer(streamBuffer);
+                if (disposing)
+                {
+                    if (!leaveOpen)
+                    {
+                        baseStream.Dispose();
+                    }
+
+                    bufferPool.ReturnBuffer(streamBuffer);
+                }
             }
         }
 
@@ -758,17 +762,6 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             return encoding.GetString(buffer, 0, bufferDataLength);
-        }
-
-        /// <summary>
-        /// Read until the last new line, ignores the result
-        /// </summary>
-        /// <returns></returns>
-        public async Task ReadAndIgnoreAllLinesAsync(CancellationToken cancellationToken = default)
-        {
-            while (!string.IsNullOrEmpty(await ReadLineAsync(cancellationToken)))
-            {
-            }
         }
 
         /// <summary>        
