@@ -18,6 +18,6 @@ namespace Titanium.Web.Proxy.Models
         }
 
         internal abstract Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
-            BeforeSslAuthenticateEventArgs connectArgs, ExceptionHandler exceptionFunc);
+            BeforeSslAuthenticateEventArgs connectArgs, ExceptionHandler? exceptionFunc);
     }
 }

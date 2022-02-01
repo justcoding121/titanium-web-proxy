@@ -35,12 +35,6 @@ namespace Titanium.Web.Proxy
         internal static ByteString UriSchemeHttp8 = (ByteString)UriSchemeHttp;
         internal static ByteString UriSchemeHttps8 = (ByteString)UriSchemeHttps;
 
-
-        /// <summary>
-        ///     A default exception log func.
-        /// </summary>
-        private readonly ExceptionHandler defaultExceptionFunc = e => { };
-
         /// <summary>
         ///     Backing field for exposed public property.
         /// </summary>
@@ -301,9 +295,9 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Callback for error events in this proxy instance.
         /// </summary>
-        public ExceptionHandler ExceptionFunc
+        public ExceptionHandler? ExceptionFunc
         {
-            get => exceptionFunc ?? defaultExceptionFunc;
+            get => exceptionFunc;
             set
             {
                 exceptionFunc = value;
@@ -866,9 +860,9 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="clientStream">The client stream.</param>
         /// <param name="exception">The exception.</param>
-        private void onException(HttpClientStream clientStream, Exception exception)
+        private void onException(HttpClientStream? clientStream, Exception exception)
         {
-            ExceptionFunc(exception);
+            ExceptionFunc?.Invoke(exception);
         }
 
         /// <summary>
@@ -895,7 +889,14 @@ namespace Titanium.Web.Proxy
                 Interlocked.Decrement(ref clientConnectionCount);
             }
 
-            ClientConnectionCountChanged?.Invoke(this, EventArgs.Empty);
+            try
+            {
+                ClientConnectionCountChanged?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                onException(null, ex);
+            }
         }
 
         /// <summary>
@@ -913,7 +914,14 @@ namespace Titanium.Web.Proxy
                 Interlocked.Decrement(ref serverConnectionCount);
             }
 
-            ServerConnectionCountChanged?.Invoke(this, EventArgs.Empty);
+            try
+            {
+                ServerConnectionCountChanged?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                onException(null, ex);
+            }
         }
 
         /// <summary>
@@ -965,7 +973,14 @@ namespace Titanium.Web.Proxy
 
             if (ProxyRunning)
             {
-                Stop();
+                try
+                {
+                    Stop();
+                }
+                catch
+                {
+                    // ignore
+                }
             }
 
             if (disposing)

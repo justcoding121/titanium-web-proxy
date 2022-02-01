@@ -90,13 +90,16 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 await Task.Delay(1000);
                 proxyServer.UpdateClientConnectionCount(false);
 
-                try
+                if (disposing)
                 {
-                    tcpClientSocket.Close();
-                }
-                catch
-                {
-                    // ignore
+                    try
+                    {
+                        tcpClientSocket.Close();
+                    }
+                    catch
+                    {
+                        // ignore
+                    }
                 }
             });
 
@@ -111,6 +114,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         ~TcpClientConnection()
         {
+#if DEBUG
+            // Finalizer should not be called
+            System.Diagnostics.Debugger.Break();
+#endif
+
             Dispose(false);
         }
     }

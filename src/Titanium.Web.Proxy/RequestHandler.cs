@@ -190,8 +190,15 @@ namespace Titanium.Web.Proxy
                                 clientStream.Connection.NegotiatedApplicationProtocol,
                                   cancellationToken, cancellationTokenSource);
 
+                            var newConnection = result.LatestConnection;
+                            if (connection != newConnection && connection != null)
+                            {
+                                await tcpConnectionFactory.Release(connection);
+                            }
+
                             // update connection to latest used
                             connection = result.LatestConnection;
+
                             closeServerConnection = !result.Continue;
 
                             // throw if exception happened

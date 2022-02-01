@@ -99,16 +99,21 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 // so that server have enough time to call close first.
                 // This way we can push tcp Time_Wait to server side when possible.
                 await Task.Delay(1000);
-                proxyServer.UpdateServerConnectionCount(false);
-                Stream.Dispose();
 
-                try
+                proxyServer.UpdateServerConnectionCount(false);
+
+                if (disposing)
                 {
-                    TcpSocket.Close();
-                }
-                catch
-                {
-                    // ignore
+                    Stream.Dispose();
+
+                    try
+                    {
+                        TcpSocket.Close();
+                    }
+                    catch
+                    {
+                        // ignore
+                    }
                 }
             });
 
@@ -123,6 +128,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
 
         ~TcpServerConnection()
         {
+#if DEBUG
+            // Finalizer should not be called
+            System.Diagnostics.Debugger.Break();
+#endif
+
             Dispose(false);
         }
     }

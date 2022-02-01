@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         // Validity Days for Root Certificates Generated.
         private int certificateValidDays;
 
-        private readonly ExceptionHandler exceptionFunc;
+        private readonly ExceptionHandler? exceptionFunc;
 
         private readonly string sProviderName = "Microsoft Enhanced Cryptographic Provider v1.0";
 
@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <summary>
         ///     Constructor.
         /// </summary>
-        internal WinCertificateMaker(ExceptionHandler exceptionFunc, int certificateValidDays)
+        internal WinCertificateMaker(ExceptionHandler? exceptionFunc, int certificateValidDays)
         {
             this.certificateValidDays = certificateValidDays;
             this.exceptionFunc = exceptionFunc;

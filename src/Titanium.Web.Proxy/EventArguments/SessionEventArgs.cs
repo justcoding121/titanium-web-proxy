@@ -144,7 +144,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             catch (Exception ex)
             {
-                ExceptionFunc(new Exception("Exception thrown in user event", ex));
+                OnException(new Exception("Exception thrown in user event", ex));
             }
         }
 

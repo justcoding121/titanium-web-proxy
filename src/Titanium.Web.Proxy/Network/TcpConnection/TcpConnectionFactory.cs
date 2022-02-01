@@ -543,14 +543,14 @@ retry:
                     await stream.WriteRequestAsync(connectRequest, cancellationToken);
 
                     var httpStatus = await stream.ReadResponseStatus(cancellationToken);
+                    var headers = new HeaderCollection();
+                    await HeaderParser.ReadHeaders(stream, headers, cancellationToken);
 
                     if (httpStatus.StatusCode != 200 && !httpStatus.Description.EqualsIgnoreCase("OK")
                                                      && !httpStatus.Description.EqualsIgnoreCase("Connection Established"))
                     {
                         throw new Exception("Upstream proxy failed to create a secure tunnel");
                     }
-
-                    await stream.ReadAndIgnoreAllLinesAsync(cancellationToken);
                 }
 
                 if (isHttps)
@@ -634,7 +634,7 @@ retry:
         /// </summary>
         /// <param name="connection">The Tcp server connection to return.</param>
         /// <param name="close">Should we just close the connection instead of reusing?</param>
-        internal async Task Release(TcpServerConnection connection, bool close = false)
+        internal async Task Release(TcpServerConnection? connection, bool close = false)
         {
             if (connection == null)
             {
@@ -705,7 +705,10 @@ retry:
             {
                 connection = await connectionCreateTask;
             }
-            catch { }
+            catch
+            {
+                ;
+            }
             finally
             {
                 if (connection != null)
@@ -769,18 +772,17 @@ retry:
                 }
                 catch (Exception e)
                 {
-                    Server.ExceptionFunc(new Exception("An error occurred when disposing server connections.", e));
+                    Server.ExceptionFunc?.Invoke(new Exception("An error occurred when disposing server connections.", e));
                 }
                 finally
                 {
                     // cleanup every 3 seconds by default
                     await Task.Delay(1000 * 3);
                 }
-
             }
         }
 
-        private bool disposed = false;
+        private bool disposed;
 
         protected virtual void Dispose(bool disposing)
         {
@@ -791,33 +793,36 @@ retry:
 
             runCleanUpTask = false;
 
-            try
+            if (disposing)
             {
-                @lock.Wait();
-
-                foreach (var queue in cache.Select(x => x.Value).ToList())
+                try
                 {
-                    while (!queue.IsEmpty)
+                    @lock.Wait();
+
+                    foreach (var queue in cache.Select(x => x.Value).ToList())
                     {
-                        if (queue.TryDequeue(out var connection))
+                        while (!queue.IsEmpty)
                         {
-                            disposalBag.Add(connection);
+                            if (queue.TryDequeue(out var connection))
+                            {
+                                disposalBag.Add(connection);
+                            }
                         }
                     }
+
+                    cache.Clear();
+                }
+                finally
+                {
+                    @lock.Release();
                 }
 
-                cache.Clear();
-            }
-            finally
-            {
-                @lock.Release();
-            }
-
-            while (!disposalBag.IsEmpty)
-            {
-                if (disposalBag.TryTake(out var connection))
+                while (!disposalBag.IsEmpty)
                 {
-                    connection?.Dispose();
+                    if (disposalBag.TryTake(out var connection))
+                    {
+                        connection?.Dispose();
+                    }
                 }
             }
 
