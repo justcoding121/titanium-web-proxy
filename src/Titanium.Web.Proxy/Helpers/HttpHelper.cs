@@ -150,6 +150,14 @@ namespace Titanium.Web.Proxy.Helpers
 
             if (hostname.Split(ProxyConstants.DotSplit).Length > 2)
             {
+                // issue #769
+                // do not create wildcard if second level domain like: .ac.id, .co.id
+                string[] prefix = hostname.Split('.');
+                if (prefix[1].Length <= 3)
+                {
+                    return hostname;
+                }
+                
                 int idx = hostname.IndexOf(ProxyConstants.DotSplit);
 
                 // issue #352
