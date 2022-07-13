@@ -148,16 +148,17 @@ namespace Titanium.Web.Proxy.Helpers
                 return hostname;
             }
 
-            if (hostname.Split(ProxyConstants.DotSplit).Length > 2)
+            var split = hostname.Split(ProxyConstants.DotSplit);
+
+            if (split.Length > 2)
             {
                 // issue #769
-                // do not create wildcard if second level domain like: .ac.id, .co.id
-                string[] prefix = hostname.Split(ProxyConstants.DotSplit);
-                if (prefix[1].Length <= 3)
+                // do not create wildcard if second level domain like: pay.vn.ua
+                if (split.Length == 3 && split[1].Length <= 3)
                 {
                     return hostname;
                 }
-                
+
                 int idx = hostname.IndexOf(ProxyConstants.DotSplit);
 
                 // issue #352
