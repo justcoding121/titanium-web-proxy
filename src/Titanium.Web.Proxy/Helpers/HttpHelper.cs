@@ -154,7 +154,7 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 // issue #769
                 // do not create wildcard if second level domain like: pay.vn.ua
-                if (split.Length == 3 && split[1].Length <= 3)
+                if (split[0] != "www" && split[1].Length <=3)
                 {
                     return hostname;
                 }
