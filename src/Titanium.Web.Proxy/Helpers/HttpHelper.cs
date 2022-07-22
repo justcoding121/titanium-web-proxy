@@ -137,13 +137,18 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="hostname"></param>
         /// <returns></returns>
-        internal static string GetWildCardDomainName(string hostname)
+        internal static string GetWildCardDomainName(string hostname, bool disableWildCardCertificates)
         {
             // only for subdomains we need wild card
             // example www.google.com or gstatic.google.com
             // but NOT for google.com or IP address
 
             if (IPAddress.TryParse(hostname, out _))
+            {
+                return hostname;
+            }
+
+            if (disableWildCardCertificates)
             {
                 return hostname;
             }

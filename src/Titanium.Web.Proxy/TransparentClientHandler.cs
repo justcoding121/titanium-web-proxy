@@ -66,7 +66,7 @@ namespace Titanium.Web.Proxy
                         {
                             sslStream = new SslStream(clientStream, false);
 
-                            string certName = HttpHelper.GetWildCardDomainName(httpsHostName);
+                            string certName = HttpHelper.GetWildCardDomainName(httpsHostName, CertificateManager.DisableWildCardCertificates);
                             certificate = endPoint.GenericCertificate ??
                                                     await CertificateManager.CreateServerCertificate(certName);
 

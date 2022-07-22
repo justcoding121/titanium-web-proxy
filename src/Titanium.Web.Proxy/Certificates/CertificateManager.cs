@@ -284,6 +284,11 @@ namespace Titanium.Web.Proxy.Network
         public X509KeyStorageFlags StorageFlag { get; set; } = X509KeyStorageFlags.Exportable;
 
         /// <summary>
+        /// Disable wild card certificates. Disabled by default.
+        /// </summary>
+        public bool DisableWildCardCertificates { get; set; } = false;
+
+        /// <summary>
         ///     For CertificateEngine.DefaultWindows to work we need to also check in personal store
         /// </summary>
         /// <param name="storeLocation"></param>
