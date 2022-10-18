@@ -2,7 +2,7 @@
 
 A lightweight HTTP(S) proxy server written in C#.
 
-<a href="https://ci.appveyor.com/project/justcoding121/titanium-web-proxy">![Build Status](https://ci.appveyor.com/api/projects/status/p5vvtbpx9yp250ol?svg=true)</a> [![Join the chat at https://gitter.im/Titanium-Web-Proxy/Lobby](https://badges.gitter.im/Titanium-Web-Proxy/Lobby.svg)](https://gitter.im/Titanium-Web-Proxy/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![.NET Core](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml/badge.svg?branch=develop)](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml) [![Join the chat at https://gitter.im/Titanium-Web-Proxy/Lobby](https://badges.gitter.im/Titanium-Web-Proxy/Lobby.svg)](https://gitter.im/Titanium-Web-Proxy/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 Report bugs or raise issues here. For programming help use [StackOverflow](http://stackoverflow.com/questions/tagged/titanium-web-proxy) with the tag Titanium-Web-Proxy.
 

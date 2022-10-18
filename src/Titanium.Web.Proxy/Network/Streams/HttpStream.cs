@@ -1071,7 +1071,7 @@ namespace Titanium.Web.Proxy.Helpers
                 (isRequest && args.HttpClient.Request.OriginalHasBody && !args.HttpClient.Request.IsBodyRead && server.ShouldCallBeforeRequestBodyWrite()) ||
                 (isResponse && args.HttpClient.Response.OriginalHasBody && !args.HttpClient.Response.IsBodyRead && server.ShouldCallBeforeResponseBodyWrite()))
             {
-                return handleBodyWrite(writer, isChunked, contentLength, isRequest, args, cancellationToken);
+                return HandleBodyWrite(writer, isChunked, contentLength, isRequest, args, cancellationToken);
             }
 #endif
             // For chunked request we need to read data as they arrive, until we reach a chunk end symbol

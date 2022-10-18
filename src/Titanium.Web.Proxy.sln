@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29102.190
+# Visual Studio Version 17
+VisualStudioVersion = 17.1.32228.430
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Examples", "Examples", "{B6DBABDC-C985-4872-9C38-B4E5079CBC4B}"
 EndProject
@@ -14,9 +14,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentat
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{AC9AE37A-3059-4FDB-9A5C-363AD86F2EEF}"
 	ProjectSection(SolutionItems) = preProject
-		..\.build\build.ps1 = ..\.build\build.ps1
-		..\.build\docfx.json = ..\.build\docfx.json
-		..\.build\setup.ps1 = ..\.build\setup.ps1
+		..\.github\docfx.json = ..\.github\docfx.json
+		..\.github\workflows\dotnetcore.yml = ..\.github\workflows\dotnetcore.yml
+		..\.github\install-unit-test-certificate.ps1 = ..\.github\install-unit-test-certificate.ps1
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{BC1E0789-D348-49CF-8B67-5E99D50EDF64}"

@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\..\.build\lib\rootCert.pfx" Link="rootCert.pfx">
+    <None Include="..\..\.github\lib\rootCert.pfx" Link="rootCert.pfx">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
