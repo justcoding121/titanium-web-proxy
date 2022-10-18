@@ -136,7 +136,7 @@
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_DecryptSsl.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.DecryptSsl%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/BeforeSslAuthenticateEventArgs.cs/#L31">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/BeforeSslAuthenticateEventArgs.cs/#L32">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_DecryptSsl_" data-uid="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.DecryptSsl*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_DecryptSsl" data-uid="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.DecryptSsl">DecryptSsl</h4>
@@ -169,7 +169,7 @@ If false we relay the connection to the hostname mentioned in SniHostname.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_ForwardHttpsHostName.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsHostName%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/BeforeSslAuthenticateEventArgs.cs/#L41">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/BeforeSslAuthenticateEventArgs.cs/#L42">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_ForwardHttpsHostName_" data-uid="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsHostName*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_ForwardHttpsHostName" data-uid="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsHostName">ForwardHttpsHostName</h4>
@@ -177,7 +177,7 @@ If false we relay the connection to the hostname mentioned in SniHostname.</p>
 By default its the SNI hostname indicated in SSL handshake, when SNI is available.
 When SNI is not available, it will use the GenericCertificateName of TransparentEndPoint.
 This property is used only when DecryptSsl or when BeforeSslAuthenticateEventArgs.DecryptSsl is false.
-When DecryptSsl is true, we need to explicitly set the Forwarded host and port by setting 
+When DecryptSsl is true, we need to explicitly set the Forwarded host and port by setting
 e.HttpClient.Request.Url inside BeforeRequest event handler.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
@@ -205,14 +205,14 @@ e.HttpClient.Request.Url inside BeforeRequest event handler.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_ForwardHttpsPort.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsPort%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/BeforeSslAuthenticateEventArgs.cs/#L50">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/BeforeSslAuthenticateEventArgs.cs/#L51">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_ForwardHttpsPort_" data-uid="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsPort*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_ForwardHttpsPort" data-uid="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsPort">ForwardHttpsPort</h4>
   <div class="markdown level1 summary"><p>We need to know the server port we are forwarding the request to.
-By default its the standard https port, 443. 
+By default its the standard https port, 443.
 This property is used only when DecryptSsl or when BeforeSslAuthenticateEventArgs.DecryptSsl is false.
-When DecryptSsl is true, we need to explicitly set the Forwarded host and port by setting 
+When DecryptSsl is true, we need to explicitly set the Forwarded host and port by setting
 e.HttpClient.Request.Url inside BeforeRequest event handler.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
@@ -240,11 +240,11 @@ e.HttpClient.Request.Url inside BeforeRequest event handler.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_SniHostName.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.SniHostName%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/BeforeSslAuthenticateEventArgs.cs/#L24">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/BeforeSslAuthenticateEventArgs.cs/#L25">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_SniHostName_" data-uid="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.SniHostName*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_SniHostName" data-uid="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.SniHostName">SniHostName</h4>
-  <div class="markdown level1 summary"><p>The server name indication hostname if available. 
+  <div class="markdown level1 summary"><p>The server name indication hostname if available.
 Otherwise the GenericCertificateName property of TransparentEndPoint.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
@@ -274,7 +274,7 @@ Otherwise the GenericCertificateName property of TransparentEndPoint.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_TerminateSession.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.TerminateSession%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/BeforeSslAuthenticateEventArgs.cs/#L55">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/BeforeSslAuthenticateEventArgs.cs/#L56">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_TerminateSession_" data-uid="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.TerminateSession*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_TerminateSession" data-uid="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.TerminateSession">TerminateSession()</h4>
