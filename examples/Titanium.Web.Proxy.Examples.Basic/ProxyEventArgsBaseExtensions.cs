@@ -6,10 +6,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
     {
         public static SampleClientState GetState(this ProxyEventArgsBase args)
         {
-            if (args.ClientUserData == null)
-            {
-                args.ClientUserData = new SampleClientState();
-            }
+            if (args.ClientUserData == null) args.ClientUserData = new SampleClientState();
 
             return (SampleClientState)args.ClientUserData;
         }

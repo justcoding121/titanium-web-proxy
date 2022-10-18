@@ -1,9 +1,9 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.UnitTests
@@ -20,24 +20,22 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => (e =>
+            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => e =>
             {
                 Debug.WriteLine(e.ToString());
                 Debug.WriteLine(e.InnerException?.ToString());
-            })).Value)
+            }).Value)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
             mgr.ClearIdleCertificates();
-            for (int i = 0; i < 5; i++)
-            {
+            for (var i = 0; i < 5; i++)
                 tasks.AddRange(hostNames.Select(host => Task.Run(() =>
                 {
                     // get the connection
                     var certificate = mgr.CreateCertificate(host, false);
                     Assert.IsNotNull(certificate);
                 })));
-            }
 
             await Task.WhenAll(tasks.ToArray());
 
@@ -50,31 +48,28 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => (e =>
-            {
-                Debug.WriteLine(e.ToString());
-                Debug.WriteLine(e.InnerException?.ToString());
-            })).Value)
-            { CertificateEngine = CertificateEngine.DefaultWindows };
+            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => e =>
+                {
+                    Debug.WriteLine(e.ToString());
+                    Debug.WriteLine(e.InnerException?.ToString());
+                }).Value)
+                { CertificateEngine = CertificateEngine.DefaultWindows };
 
             mgr.CreateRootCertificate();
             mgr.TrustRootCertificate(true);
             mgr.ClearIdleCertificates();
 
-            for (int i = 0; i < 5; i++)
-            {
+            for (var i = 0; i < 5; i++)
                 tasks.AddRange(hostNames.Select(host => Task.Run(() =>
                 {
                     // get the connection
                     var certificate = mgr.CreateCertificate(host, false);
                     Assert.IsNotNull(certificate);
                 })));
-            }
 
             await Task.WhenAll(tasks.ToArray());
             mgr.RemoveTrustedRootCertificate(true);
             mgr.StopClearIdleCertificates();
-
         }
 
         [TestMethod]
@@ -82,23 +77,21 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => (e =>
-            {
-                Debug.WriteLine(e.ToString());
-                Debug.WriteLine(e.InnerException?.ToString());
-            })).Value)
-            { CertificateEngine = CertificateEngine.BouncyCastleFast };
+            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => e =>
+                {
+                    Debug.WriteLine(e.ToString());
+                    Debug.WriteLine(e.InnerException?.ToString());
+                }).Value)
+                { CertificateEngine = CertificateEngine.BouncyCastleFast };
 
             mgr.SaveFakeCertificates = true;
 
-            for (int i = 0; i < 500; i++)
-            {
+            for (var i = 0; i < 500; i++)
                 tasks.AddRange(hostNames.Select(host => Task.Run(() =>
                 {
                     var certificate = mgr.CreateServerCertificate(host);
                     Assert.IsNotNull(certificate);
                 })));
-            }
 
             await Task.WhenAll(tasks.ToArray());
         }

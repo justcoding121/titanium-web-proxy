@@ -1,6 +1,6 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
+﻿using System;
 using System.Net;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.UnitTests

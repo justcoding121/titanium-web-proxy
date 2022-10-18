@@ -10,7 +10,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public void Test_Acquire_Client_Token()
         {
-            string token = WinAuthHandler.GetInitialAuthToken("mylocalserver.com", "NTLM", new InternalDataStore());
+            var token = WinAuthHandler.GetInitialAuthToken("mylocalserver.com", "NTLM", new InternalDataStore());
             Assert.IsTrue(token.Length > 1);
         }
     }

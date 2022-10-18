@@ -1,19 +1,18 @@
 ﻿using System;
 
-namespace Titanium.Web.Proxy.StreamExtended.BufferPool
+namespace Titanium.Web.Proxy.StreamExtended.BufferPool;
+
+/// <summary>
+///     Use this interface to implement custom buffer pool.
+///     To use the default buffer pool implementation use DefaultBufferPool class.
+/// </summary>
+public interface IBufferPool : IDisposable
 {
-    /// <summary>
-    ///     Use this interface to implement custom buffer pool.
-    ///     To use the default buffer pool implementation use DefaultBufferPool class.
-    /// </summary>
-    public interface IBufferPool : IDisposable
-    {
-        int BufferSize { get; }
+    int BufferSize { get; }
 
-        byte[] GetBuffer();
+    byte[] GetBuffer();
 
-        byte[] GetBuffer(int bufferSize);
+    byte[] GetBuffer(int bufferSize);
 
-        void ReturnBuffer(byte[] buffer);
-    }
+    void ReturnBuffer(byte[] buffer);
 }

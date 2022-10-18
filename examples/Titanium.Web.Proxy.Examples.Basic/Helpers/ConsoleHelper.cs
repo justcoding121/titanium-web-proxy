@@ -28,21 +28,17 @@ namespace Titanium.Web.Proxy.Examples.Basic.Helpers
             var consoleHandle = GetStdHandle(StdInputHandle);
 
             // get current console mode
-            if (!GetConsoleMode(consoleHandle, out uint consoleMode))
-            {
+            if (!GetConsoleMode(consoleHandle, out var consoleMode))
                 // ERROR: Unable to get console mode.
                 return false;
-            }
 
             // Clear the quick edit bit in the mode flags
             consoleMode &= ~EnableQuickEdit;
 
             // set the new mode
             if (!SetConsoleMode(consoleHandle, consoleMode))
-            {
                 // ERROR: Unable to set console mode
                 return false;
-            }
 
             return true;
         }

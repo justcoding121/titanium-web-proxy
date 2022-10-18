@@ -184,7 +184,8 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (type == Http2FrameType.PushPromise)
                     {
-                        int promisedStreamId = (buffer[offset++] << 24) + (buffer[offset++] << 16) + (buffer[offset++] << 8) + buffer[offset++];
+                        int promisedStreamId =
+ (buffer[offset++] << 24) + (buffer[offset++] << 16) + (buffer[offset++] << 8) + buffer[offset++];
                         if (!sessions.TryGetValue(streamId, out args))
                         {
                             args = sessionFactory();
@@ -332,7 +333,8 @@ namespace Titanium.Web.Proxy.Http2
                     while (pos < length)
                     {
                         int identifier = (buffer[pos++] << 8) + buffer[pos++];
-                        int value = (buffer[pos++] << 24) + (buffer[pos++] << 16) + (buffer[pos++] << 8) + buffer[pos++];
+                        int value =
+ (buffer[pos++] << 24) + (buffer[pos++] << 16) + (buffer[pos++] << 8) + buffer[pos++];
                         if (identifier == 1 /*SETTINGS_HEADER_TABLE_SIZE*/)
                         {
                             //System.Diagnostics.Debug.WriteLine("HEADER SIZE CONN: " + connectionId + ", CLIENT: " + isClient + ", value: " + value);

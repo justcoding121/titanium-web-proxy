@@ -11,17 +11,13 @@ namespace Titanium.Web.Proxy.Compression
     {
         internal static Stream Create(HttpCompression type, Stream stream, bool leaveOpen = true)
         {
-            switch (type)
+            return type switch
             {
-                case HttpCompression.Gzip:
-                    return new GZipStream(stream, CompressionMode.Compress, leaveOpen);
-                case HttpCompression.Deflate:
-                    return new DeflateStream(stream, CompressionMode.Compress, leaveOpen);
-                case HttpCompression.Brotli:
-                    return new BrotliSharpLib.BrotliStream(stream, CompressionMode.Compress, leaveOpen);
-                default:
-                    throw new Exception($"Unsupported compression mode: {type}");
-            }
+                HttpCompression.Gzip => new GZipStream(stream, CompressionMode.Compress, leaveOpen),
+                HttpCompression.Deflate => new DeflateStream(stream, CompressionMode.Compress, leaveOpen),
+                HttpCompression.Brotli => new BrotliSharpLib.BrotliStream(stream, CompressionMode.Compress, leaveOpen),
+                _ => throw new Exception($"Unsupported compression mode: {type}")
+            };
         }
     }
 }

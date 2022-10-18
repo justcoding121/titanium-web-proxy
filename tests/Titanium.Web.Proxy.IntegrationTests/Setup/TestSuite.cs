@@ -2,52 +2,51 @@
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
 
-namespace Titanium.Web.Proxy.IntegrationTests
+namespace Titanium.Web.Proxy.IntegrationTests;
+
+public class TestSuite
 {
-    public class TestSuite
+    private readonly TestServer server;
+
+    public TestSuite(bool requireMutualTls = false)
     {
-        private TestServer server;
+        var dummyProxy = new ProxyServer();
+        var serverCertificate = dummyProxy.CertificateManager.CreateServerCertificate("localhost").Result;
+        server = new TestServer(serverCertificate, requireMutualTls);
+    }
 
-        public TestSuite(bool requireMutualTls = false)
+    public TestServer GetServer()
+    {
+        return server;
+    }
+
+    public ProxyServer GetProxy(ProxyServer upStreamProxy = null)
+    {
+        if (upStreamProxy != null)
         {
-            var dummyProxy = new ProxyServer();
-            var serverCertificate = dummyProxy.CertificateManager.CreateServerCertificate("localhost").Result;
-            server = new TestServer(serverCertificate, requireMutualTls);
+            return new TestProxyServer(false, upStreamProxy).ProxyServer;
         }
 
-        public TestServer GetServer()
+        return new TestProxyServer(false).ProxyServer;
+    }
+
+    public ProxyServer GetReverseProxy(ProxyServer upStreamProxy = null)
+    {
+        if (upStreamProxy != null)
         {
-            return server;
+            return new TestProxyServer(true, upStreamProxy).ProxyServer;
         }
 
-        public ProxyServer GetProxy(ProxyServer upStreamProxy = null)
-        {
-            if (upStreamProxy != null)
-            {
-                return new TestProxyServer(false, upStreamProxy).ProxyServer;
-            }
+        return new TestProxyServer(true).ProxyServer;
+    }
 
-            return new TestProxyServer(false).ProxyServer;
-        }
+    public HttpClient GetClient(ProxyServer proxyServer, bool enableBasicProxyAuthorization = false)
+    {
+        return TestHelper.GetHttpClient(proxyServer.ProxyEndPoints[0].Port, enableBasicProxyAuthorization);
+    }
 
-        public ProxyServer GetReverseProxy(ProxyServer upStreamProxy = null)
-        {
-            if (upStreamProxy != null)
-            {
-                return new TestProxyServer(true, upStreamProxy).ProxyServer;
-            }
-
-            return new TestProxyServer(true).ProxyServer;
-        }
-
-        public HttpClient GetClient(ProxyServer proxyServer, bool enableBasicProxyAuthorization = false)
-        {
-            return TestHelper.GetHttpClient(proxyServer.ProxyEndPoints[0].Port, enableBasicProxyAuthorization);
-        }
-
-        public HttpClient GetReverseProxyClient()
-        {
-            return TestHelper.GetHttpClient();
-        }
+    public HttpClient GetReverseProxyClient()
+    {
+        return TestHelper.GetHttpClient();
     }
 }

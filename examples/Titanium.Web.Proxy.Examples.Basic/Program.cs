@@ -10,12 +10,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public static void Main(string[] args)
         {
-
             if (RunTime.IsWindows)
-            {
                 // fix console hang due to QuickEdit mode
                 ConsoleHelper.DisableQuickEditMode();
-            }
 
             // Start proxy controller
             controller.StartProxy();

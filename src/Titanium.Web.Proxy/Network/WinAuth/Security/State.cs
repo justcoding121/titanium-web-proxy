@@ -1,62 +1,61 @@
 ﻿using System;
 
-namespace Titanium.Web.Proxy.Network.WinAuth.Security
+namespace Titanium.Web.Proxy.Network.WinAuth.Security;
+
+/// <summary>
+///     Status of authenticated session
+/// </summary>
+internal class State
 {
     /// <summary>
-    ///     Status of authenticated session
+    ///     States during Windows Authentication
     /// </summary>
-    internal class State
+    public enum WinAuthState
     {
-        /// <summary>
-        ///     States during Windows Authentication
-        /// </summary>
-        public enum WinAuthState
-        {
-            Unauthorized,
-            InitialToken,
-            FinalToken,
-            Authorized
-        }
+        Unauthorized,
+        InitialToken,
+        FinalToken,
+        Authorized
+    }
 
-        /// <summary>
-        ///     Current state of the authentication process
-        /// </summary>
-        internal WinAuthState AuthState;
+    /// <summary>
+    ///     Current state of the authentication process
+    /// </summary>
+    internal WinAuthState AuthState;
 
-        /// <summary>
-        ///     Context will be used to validate HTLM hashes
-        /// </summary>
-        internal Common.SecurityHandle Context;
+    /// <summary>
+    ///     Context will be used to validate HTLM hashes
+    /// </summary>
+    internal Common.SecurityHandle Context;
 
-        /// <summary>
-        ///     Credentials used to validate NTLM hashes
-        /// </summary>
-        internal Common.SecurityHandle Credentials;
+    /// <summary>
+    ///     Credentials used to validate NTLM hashes
+    /// </summary>
+    internal Common.SecurityHandle Credentials;
 
-        /// <summary>
-        ///     Timestamp needed to calculate validity of the authenticated session
-        /// </summary>
-        internal DateTime LastSeen;
+    /// <summary>
+    ///     Timestamp needed to calculate validity of the authenticated session
+    /// </summary>
+    internal DateTime LastSeen;
 
-        internal State()
-        {
-            Credentials = new Common.SecurityHandle(0);
-            Context = new Common.SecurityHandle(0);
+    internal State()
+    {
+        Credentials = new Common.SecurityHandle(0);
+        Context = new Common.SecurityHandle(0);
 
-            LastSeen = DateTime.UtcNow;
-            AuthState = WinAuthState.Unauthorized;
-        }
+        LastSeen = DateTime.UtcNow;
+        AuthState = WinAuthState.Unauthorized;
+    }
 
-        internal void ResetHandles()
-        {
-            Credentials.Reset();
-            Context.Reset();
-            AuthState = WinAuthState.Unauthorized;
-        }
+    internal void ResetHandles()
+    {
+        Credentials.Reset();
+        Context.Reset();
+        AuthState = WinAuthState.Unauthorized;
+    }
 
-        internal void UpdatePresence()
-        {
-            LastSeen = DateTime.UtcNow;
-        }
+    internal void UpdatePresence()
+    {
+        LastSeen = DateTime.UtcNow;
     }
 }

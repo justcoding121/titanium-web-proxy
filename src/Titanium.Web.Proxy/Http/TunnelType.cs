@@ -1,10 +1,9 @@
-﻿namespace Titanium.Web.Proxy.Http
+﻿namespace Titanium.Web.Proxy.Http;
+
+public enum TunnelType
 {
-    public enum TunnelType
-    {
-        Unknown,
-        Https,
-        Websocket,
-        Http2,
-    }
+    Unknown,
+    Https,
+    Websocket,
+    Http2
 }

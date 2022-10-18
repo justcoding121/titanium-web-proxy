@@ -1,10 +1,9 @@
 ﻿#if NET451
-using System;
 using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy
 {
-    class Net45Compatibility
+    internal class Net45Compatibility
     {
         public static byte[] EmptyArray = new byte[0];
 

@@ -1,16 +1,15 @@
-﻿namespace Titanium.Web.Proxy.Exceptions
+﻿namespace Titanium.Web.Proxy.Exceptions;
+
+/// <summary>
+///     An exception thrown when body is unexpectedly empty.
+/// </summary>
+public class BodyNotFoundException : ProxyException
 {
     /// <summary>
-    ///     An exception thrown when body is unexpectedly empty.
+    ///     Constructor.
     /// </summary>
-    public class BodyNotFoundException : ProxyException
+    /// <param name="message"></param>
+    internal BodyNotFoundException(string message) : base(message)
     {
-        /// <summary>
-        ///     Constructor.
-        /// </summary>
-        /// <param name="message"></param>
-        internal BodyNotFoundException(string message) : base(message)
-        {
-        }
     }
 }

@@ -7,89 +7,94 @@ using Microsoft.AspNetCore.Connections;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 
-namespace Titanium.Web.Proxy.IntegrationTests.Helpers
+namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
+
+internal class HttpContinueServer
 {
-    class HttpContinueServer
+    private static readonly Encoding _msgEncoding = HttpHelper.GetEncodingFromContentType(null);
+    public HttpStatusCode ExpectationResponse;
+    public string ResponseBody;
+
+    public async Task HandleRequest(ConnectionContext context)
     {
-        public HttpStatusCode ExpectationResponse;
-        public string ResponseBody;
+        var request = await ReadHeaders(context.Transport.Input);
 
-        private static Encoding _msgEncoding = HttpHelper.GetEncodingFromContentType(null);
-
-        public async Task HandleRequest(ConnectionContext context)
+        if (request.ExpectContinue)
         {
-            var request = await ReadHeaders(context.Transport.Input);
-
-            if (request.ExpectContinue)
+            var respondContinue = new Response
             {
-                var respondContinue = new Response
-                {
-                    HttpVersion = request.HttpVersion,
-                    StatusCode = (int)ExpectationResponse,
-                    StatusDescription = ExpectationResponse.ToString()
-                };
-                await context.Transport.Output.WriteAsync(_msgEncoding.GetBytes(respondContinue.HeaderText));
-
-                if (ExpectationResponse != HttpStatusCode.Continue)
-                    return;
-            }
-
-            request = await ReadBody(request, context.Transport.Input);
-
-            var responseMsg = _msgEncoding.GetBytes(ResponseBody);
-            var respondOk = new Response(responseMsg)
-            {
-                HttpVersion = new Version(1, 1),
-                StatusCode = (int)HttpStatusCode.OK,
-                StatusDescription = HttpStatusCode.OK.ToString()
+                HttpVersion = request.HttpVersion,
+                StatusCode = (int)ExpectationResponse,
+                StatusDescription = ExpectationResponse.ToString()
             };
-            await context.Transport.Output.WriteAsync(_msgEncoding.GetBytes(respondOk.HeaderText));
-            await context.Transport.Output.WriteAsync(responseMsg);
-            context.Transport.Output.Complete();
+            await context.Transport.Output.WriteAsync(_msgEncoding.GetBytes(respondContinue.HeaderText));
+
+            if (ExpectationResponse != HttpStatusCode.Continue)
+            {
+                return;
+            }
         }
 
-        private async Task<Request> ReadHeaders(PipeReader input)
+        request = await ReadBody(request, context.Transport.Input);
+
+        var responseMsg = _msgEncoding.GetBytes(ResponseBody);
+        var respondOk = new Response(responseMsg)
         {
-            Request request = null;
-            try
-            {
-                var requestMsg = string.Empty;
-                while ((request = HttpMessageParsing.ParseRequest(requestMsg, false)) == null)
-                {
-                    var result = await input.ReadAsync();
-                    foreach (var seg in result.Buffer)
-                        requestMsg += _msgEncoding.GetString(seg.Span);
-                    input.AdvanceTo(result.Buffer.End);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"{ex.GetType()}: {ex.Message}");
-            }
+            HttpVersion = new Version(1, 1),
+            StatusCode = (int)HttpStatusCode.OK,
+            StatusDescription = HttpStatusCode.OK.ToString()
+        };
+        await context.Transport.Output.WriteAsync(_msgEncoding.GetBytes(respondOk.HeaderText));
+        await context.Transport.Output.WriteAsync(responseMsg);
+        context.Transport.Output.Complete();
+    }
 
-            return request;
-        }
-
-        private async Task<Request> ReadBody(Request request, PipeReader input)
+    private async Task<Request> ReadHeaders(PipeReader input)
+    {
+        Request request = null;
+        try
         {
-            var msg = request.HeaderText;
-            try
+            var requestMsg = string.Empty;
+            while ((request = HttpMessageParsing.ParseRequest(requestMsg, false)) == null)
             {
-
-                while ((request = HttpMessageParsing.ParseRequest(msg, true)) == null)
+                var result = await input.ReadAsync();
+                foreach (var seg in result.Buffer)
                 {
-                    var result = await input.ReadAsync();
-                    foreach (var seg in result.Buffer)
-                        msg += _msgEncoding.GetString(seg.Span);
-                    input.AdvanceTo(result.Buffer.End);
+                    requestMsg += _msgEncoding.GetString(seg.Span);
                 }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"{ex.GetType()}: {ex.Message}");
-            }
 
-            return request;
+                input.AdvanceTo(result.Buffer.End);
+            }
         }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"{ex.GetType()}: {ex.Message}");
+        }
+
+        return request;
+    }
+
+    private async Task<Request> ReadBody(Request request, PipeReader input)
+    {
+        var msg = request.HeaderText;
+        try
+        {
+            while ((request = HttpMessageParsing.ParseRequest(msg, true)) == null)
+            {
+                var result = await input.ReadAsync();
+                foreach (var seg in result.Buffer)
+                {
+                    msg += _msgEncoding.GetString(seg.Span);
+                }
+
+                input.AdvanceTo(result.Buffer.End);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"{ex.GetType()}: {ex.Message}");
+        }
+
+        return request;
     }
 }

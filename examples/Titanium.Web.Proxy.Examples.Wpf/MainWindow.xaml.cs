@@ -70,7 +70,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             ////note : load now (if existed)
             //proxyServer.CertificateManager.LoadRootCertificate(@"C:\NameFolder\rootCert.pfx", "PfxPassword");
 
-            var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000, true);
+            var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000);
 
             proxyServer.AddEndPoint(explicitEndPoint);
             //proxyServer.UpStreamHttpProxy = new ExternalProxy
@@ -110,7 +110,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             InitializeComponent();
         }
 
-        public ObservableCollectionEx<SessionListItem> Sessions { get; } = new ObservableCollectionEx<SessionListItem>();
+        public ObservableCollectionEx<SessionListItem> Sessions { get; } =
+            new ObservableCollectionEx<SessionListItem>();
 
         public SessionListItem SelectedSession
         {
@@ -139,11 +140,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private async Task ProxyServer_BeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
-            string hostname = e.HttpClient.Request.RequestUri.Host;
-            if (hostname.EndsWith("webex.com"))
-            {
-                e.DecryptSsl = false;
-            }
+            var hostname = e.HttpClient.Request.RequestUri.Host;
+            if (hostname.EndsWith("webex.com")) e.DecryptSsl = false;
 
             await Dispatcher.InvokeAsync(() => { AddSession(e); });
         }
@@ -152,10 +150,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             await Dispatcher.InvokeAsync(() =>
             {
-                if (sessionDictionary.TryGetValue(e.HttpClient, out var item))
-                {
-                    item.Update(e);
-                }
+                if (sessionDictionary.TryGetValue(e.HttpClient, out var item)) item.Update(e);
             });
         }
 
@@ -171,10 +166,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 e.HttpClient.Request.KeepBody = true;
                 await e.GetRequestBody();
 
-                if (item == SelectedSession)
-                {
-                    await Dispatcher.InvokeAsync(SelectedSessionChanged);
-                }
+                if (item == SelectedSession) await Dispatcher.InvokeAsync(SelectedSessionChanged);
             }
         }
 
@@ -183,10 +175,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() =>
             {
-                if (sessionDictionary.TryGetValue(e.HttpClient, out item))
-                {
-                    item.Update(e);
-                }
+                if (sessionDictionary.TryGetValue(e.HttpClient, out item)) item.Update(e);
             });
 
             //e.HttpClient.Response.Headers.AddHeader("X-Titanium-Header", "HTTP/2 works");
@@ -194,29 +183,21 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             //e.SetResponseBody(Encoding.ASCII.GetBytes("TITANIUMMMM!!!!"));
 
             if (item != null)
-            {
                 if (e.HttpClient.Response.HasBody)
                 {
                     e.HttpClient.Response.KeepBody = true;
                     await e.GetResponseBody();
 
                     await Dispatcher.InvokeAsync(() => { item.Update(e); });
-                    if (item == SelectedSession)
-                    {
-                        await Dispatcher.InvokeAsync(SelectedSessionChanged);
-                    }
+                    if (item == SelectedSession) await Dispatcher.InvokeAsync(SelectedSessionChanged);
                 }
-            }
         }
 
         private async Task ProxyServer_AfterResponse(object sender, SessionEventArgs e)
         {
             await Dispatcher.InvokeAsync(() =>
             {
-                if (sessionDictionary.TryGetValue(e.HttpClient, out var item))
-                {
-                    item.Exception = e.Exception;
-                }
+                if (sessionDictionary.TryGetValue(e.HttpClient, out var item)) item.Exception = e.Exception;
             });
         }
 
@@ -231,7 +212,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private SessionListItem CreateSessionListItem(SessionEventArgsBase e)
         {
             lastSessionNumber++;
-            bool isTunnelConnect = e is TunnelConnectSessionEventArgs;
+            var isTunnelConnect = e is TunnelConnectSessionEventArgs;
             var item = new SessionListItem
             {
                 Number = lastSessionNumber,
@@ -251,10 +232,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 {
                     var connectRequest = session.HttpClient.ConnectRequest;
                     var tunnelType = connectRequest?.TunnelType ?? TunnelType.Unknown;
-                    if (tunnelType != TunnelType.Unknown)
-                    {
-                        li.Protocol = TunnelTypeToString(tunnelType);
-                    }
+                    if (tunnelType != TunnelType.Unknown) li.Protocol = TunnelTypeToString(tunnelType);
 
                     li.ReceivedDataCount += args.Count;
 
@@ -271,10 +249,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 {
                     var connectRequest = session.HttpClient.ConnectRequest;
                     var tunnelType = connectRequest?.TunnelType ?? TunnelType.Unknown;
-                    if (tunnelType != TunnelType.Unknown)
-                    {
-                        li.Protocol = TunnelTypeToString(tunnelType);
-                    }
+                    if (tunnelType != TunnelType.Unknown) li.Protocol = TunnelTypeToString(tunnelType);
 
                     li.SentDataCount += args.Count;
 
@@ -336,15 +311,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             if (e.Key == Key.Delete)
             {
-                bool isSelected = false;
+                var isSelected = false;
                 var selectedItems = ((ListView)sender).SelectedItems;
                 Sessions.SuppressNotification = true;
                 foreach (var item in selectedItems.Cast<SessionListItem>().ToArray())
                 {
-                    if (item == SelectedSession)
-                    {
-                        isSelected = true;
-                    }
+                    if (item == SelectedSession) isSelected = true;
 
                     Sessions.Remove(item);
                     sessionDictionary.Remove(item.HttpClient);
@@ -352,10 +324,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
                 Sessions.SuppressNotification = false;
 
-                if (isSelected)
-                {
-                    SelectedSession = null;
-                }
+                if (isSelected) SelectedSession = null;
             }
         }
 
@@ -375,11 +344,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var request = session.Request;
             var fullData = (request.IsBodyRead ? request.Body : null) ?? Array.Empty<byte>();
             var data = fullData;
-            bool truncated = data.Length > truncateLimit;
-            if (truncated)
-            {
-                data = data.Take(truncateLimit).ToArray();
-            }
+            var truncated = data.Length > truncateLimit;
+            if (truncated) data = data.Take(truncateLimit).ToArray();
 
             //string hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
             var sb = new StringBuilder();
@@ -399,10 +365,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             fullData = (response.IsBodyRead ? response.Body : null) ?? Array.Empty<byte>();
             data = fullData;
             truncated = data.Length > truncateLimit;
-            if (truncated)
-            {
-                data = data.Take(truncateLimit).ToArray();
-            }
+            if (truncated) data = data.Take(truncateLimit).ToArray();
 
             //hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
             sb = new StringBuilder();
@@ -426,13 +389,11 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             try
             {
                 if (fullData.Length > 0)
-                {
                     using (var stream = new MemoryStream(fullData))
                     {
                         ImageResponse.Source =
                             BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
                     }
-                }
             }
             catch
             {
@@ -444,14 +405,10 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             var button = (ToggleButton)sender;
             if (button.IsChecked == true)
-            {
                 proxyServer.SetAsSystemProxy((ExplicitProxyEndPoint)proxyServer.ProxyEndPoints[0],
                     ProxyProtocolType.AllHttp);
-            }
             else
-            {
                 proxyServer.RestoreOriginalProxySettings();
-            }
         }
     }
 }

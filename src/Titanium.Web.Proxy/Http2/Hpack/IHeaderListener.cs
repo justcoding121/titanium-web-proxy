@@ -17,17 +17,16 @@
 
 using Titanium.Web.Proxy.Models;
 
-namespace Titanium.Web.Proxy.Http2.Hpack
+namespace Titanium.Web.Proxy.Http2.Hpack;
+
+internal interface IHeaderListener
 {
-    internal interface IHeaderListener
-    {
-        /// <summary>
-        /// EmitHeader is called by the decoder during header field emission.
-        /// The name and value byte arrays must not be modified.
-        /// </summary>
-        /// <param name="name">Name.</param>
-        /// <param name="value">Value.</param>
-        /// <param name="sensitive">If set to <c>true</c> sensitive.</param>
-        void AddHeader(ByteString name, ByteString value, bool sensitive);
-    }
+    /// <summary>
+    ///     EmitHeader is called by the decoder during header field emission.
+    ///     The name and value byte arrays must not be modified.
+    /// </summary>
+    /// <param name="name">Name.</param>
+    /// <param name="value">Value.</param>
+    /// <param name="sensitive">If set to <c>true</c> sensitive.</param>
+    void AddHeader(ByteString name, ByteString value, bool sensitive);
 }

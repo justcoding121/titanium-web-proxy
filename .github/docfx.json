@@ -3,8 +3,8 @@
     {
       "src": [
         {
-	 "files": [ "Titanium.Web.Proxy.Docs.sln"],
-         "src": "../src/"
+          "files": ["Titanium.Web.Proxy.Docs.sln"],
+          "src": "../src/"
         }
       ],
       "dest": "obj/api"
@@ -13,17 +13,17 @@
   "build": {
     "content": [
       {
-        "files": [ "**/*.yml" ],
+        "files": ["**/*.yml"],
         "src": "obj/api",
         "dest": "api"
       },
       {
-         "files": [ "*.md" ]
+        "files": ["*.md"]
       }
     ],
     "resource": [
       {
-        "files": [ ""]
+        "files": [""]
       }
     ],
     "overwrite": "specs/*.md",
@@ -32,6 +32,6 @@
       "_enableSearch": true
     },
     "dest": "../docs",
-    "xrefService": [ "https://xref.docs.microsoft.com/query?uid={uid}" ]
+    "xrefService": ["https://xref.docs.microsoft.com/query?uid={uid}"]
   }
 }

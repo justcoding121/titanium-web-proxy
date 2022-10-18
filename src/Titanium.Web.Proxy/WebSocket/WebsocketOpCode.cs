@@ -1,12 +1,11 @@
-﻿namespace Titanium.Web.Proxy
+﻿namespace Titanium.Web.Proxy;
+
+public enum WebsocketOpCode : byte
 {
-    public enum WebsocketOpCode : byte
-    {
-        Continuation,
-        Text,
-        Binary,
-        ConnectionClose = 8,
-        Ping,
-        Pong,
-    }
+    Continuation,
+    Text,
+    Binary,
+    ConnectionClose = 8,
+    Ping,
+    Pong
 }

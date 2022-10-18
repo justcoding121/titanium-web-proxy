@@ -1,27 +1,26 @@
 ﻿using System.Net;
 
-namespace Titanium.Web.Proxy.Http.Responses
+namespace Titanium.Web.Proxy.Http.Responses;
+
+/// <summary>
+///     The http 200 Ok response.
+/// </summary>
+public sealed class OkResponse : Response
 {
     /// <summary>
-    ///     The http 200 Ok response.
+    ///     Constructor.
     /// </summary>
-    public sealed class OkResponse : Response
+    public OkResponse()
     {
-        /// <summary>
-        ///     Constructor.
-        /// </summary>
-        public OkResponse()
-        {
-            StatusCode = (int)HttpStatusCode.OK;
-            StatusDescription = "OK";
-        }
+        StatusCode = (int)HttpStatusCode.OK;
+        StatusDescription = "OK";
+    }
 
-        /// <summary>
-        ///     Constructor.
-        /// </summary>
-        public OkResponse(byte[] body) : this()
-        {
-            Body = body;
-        }
+    /// <summary>
+    ///     Constructor.
+    /// </summary>
+    public OkResponse(byte[] body) : this()
+    {
+        Body = body;
     }
 }

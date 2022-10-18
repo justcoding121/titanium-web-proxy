@@ -12,18 +12,16 @@ namespace Titanium.Web.Proxy.Extensions
     internal static class SslExtensions
     {
         internal static readonly List<SslApplicationProtocol> Http11ProtocolAsList =
-            new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 };
+            new() { SslApplicationProtocol.Http11 };
 
         internal static readonly List<SslApplicationProtocol> Http2ProtocolAsList =
-            new List<SslApplicationProtocol> { SslApplicationProtocol.Http2 };
+            new() { SslApplicationProtocol.Http2 };
 
         internal static string? GetServerName(this ClientHelloInfo clientHelloInfo)
         {
             if (clientHelloInfo.Extensions != null &&
                 clientHelloInfo.Extensions.TryGetValue("server_name", out var serverNameExtension))
-            {
                 return serverNameExtension.Data;
-            }
 
             return null;
         }

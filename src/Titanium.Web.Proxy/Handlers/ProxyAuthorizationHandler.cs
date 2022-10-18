@@ -7,159 +7,145 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
-namespace Titanium.Web.Proxy
+namespace Titanium.Web.Proxy;
+
+public partial class ProxyServer
 {
-    public partial class ProxyServer
+    /// <summary>
+    ///     Callback to authorize clients of this proxy instance.
+    /// </summary>
+    /// <param name="session">The session event arguments.</param>
+    /// <returns>True if authorized.</returns>
+    private async Task<bool> CheckAuthorization(SessionEventArgsBase session)
     {
-        /// <summary>
-        ///     Callback to authorize clients of this proxy instance.
-        /// </summary>
-        /// <param name="session">The session event arguments.</param>
-        /// <returns>True if authorized.</returns>
-        private async Task<bool> CheckAuthorization(SessionEventArgsBase session)
+        // If we are not authorizing clients return true
+        if (ProxyBasicAuthenticateFunc == null && ProxySchemeAuthenticateFunc == null) return true;
+
+        var httpHeaders = session.HttpClient.Request.Headers;
+
+        try
         {
-            // If we are not authorizing clients return true
-            if (ProxyBasicAuthenticateFunc == null && ProxySchemeAuthenticateFunc == null)
+            var headerObj = httpHeaders.GetFirstHeader(KnownHeaders.ProxyAuthorization);
+            if (headerObj == null)
             {
-                return true;
-            }
-
-            var httpHeaders = session.HttpClient.Request.Headers;
-
-            try
-            {
-                var headerObj = httpHeaders.GetFirstHeader(KnownHeaders.ProxyAuthorization);
-                if (headerObj == null)
-                {
-                    session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Required");
-                    return false;
-                }
-
-                string header = headerObj.Value;
-                int firstSpace = header.IndexOf(' ');
-
-                // header value should contain exactly 1 space
-                if (firstSpace == -1 || header.IndexOf(' ', firstSpace + 1) != -1)
-                {
-                    // Return not authorized
-                    session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
-                    return false;
-                }
-
-                var authenticationType = header.AsMemory(0, firstSpace);
-                var credentials = header.AsMemory(firstSpace + 1);
-
-                if (ProxyBasicAuthenticateFunc != null)
-                {
-                    return await AuthenticateUserBasic(session, authenticationType, credentials, ProxyBasicAuthenticateFunc);
-                }
-
-                if (ProxySchemeAuthenticateFunc != null)
-                {
-                    var result = await ProxySchemeAuthenticateFunc(session, authenticationType.ToString(), credentials.ToString());
-
-                    if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
-                    {
-                        session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid", result.Continuation);
-
-                        return false;
-                    }
-
-                    return result.Result == ProxyAuthenticationResult.Success;
-                }
-
+                session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Required");
                 return false;
             }
-            catch (Exception e)
-            {
-                OnException(null, new ProxyAuthorizationException("Error whilst authorizing request", session, e,
-                    httpHeaders));
 
-                // Return not authorized
-                session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
-                return false;
-            }
-        }
+            var header = headerObj.Value;
+            var firstSpace = header.IndexOf(' ');
 
-        private async Task<bool> AuthenticateUserBasic(SessionEventArgsBase session,
-            ReadOnlyMemory<char> authenticationType, ReadOnlyMemory<char> credentials,
-            Func<SessionEventArgsBase, string, string, Task<bool>> proxyBasicAuthenticateFunc)
-        {
-            if (!KnownHeaders.ProxyAuthorizationBasic.Equals(authenticationType.Span))
+            // header value should contain exactly 1 space
+            if (firstSpace == -1 || header.IndexOf(' ', firstSpace + 1) != -1)
             {
                 // Return not authorized
                 session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
                 return false;
             }
 
-            string decoded = Encoding.UTF8.GetString(Convert.FromBase64String(credentials.ToString()));
-            int colonIndex = decoded.IndexOf(':');
-            if (colonIndex == -1)
-            {
-                // Return not authorized
-                session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
-                return false;
-            }
-
-            string username = decoded.Substring(0, colonIndex);
-            string password = decoded.Substring(colonIndex + 1);
-            bool authenticated = await proxyBasicAuthenticateFunc(session, username, password);
-            if (!authenticated)
-            {
-                session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
-            }
-
-            return authenticated;
-        }
-
-        /// <summary>
-        ///     Create an authentication required response.
-        /// </summary>
-        /// <param name="description">Response description.</param>
-        /// <param name="continuation">The continuation.</param>
-        /// <returns></returns>
-        private Response CreateAuthentication407Response(string description, string? continuation = null)
-        {
-            var response = new Response
-            {
-                HttpVersion = HttpHeader.Version11,
-                StatusCode = (int)HttpStatusCode.ProxyAuthenticationRequired,
-                StatusDescription = description
-            };
-
-            if (!string.IsNullOrWhiteSpace(continuation))
-            {
-                return CreateContinuationResponse(response, continuation!);
-            }
+            var authenticationType = header.AsMemory(0, firstSpace);
+            var credentials = header.AsMemory(firstSpace + 1);
 
             if (ProxyBasicAuthenticateFunc != null)
-            {
-                response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, $"Basic realm=\"{ProxyAuthenticationRealm}\"");
-            }
+                return await AuthenticateUserBasic(session, authenticationType, credentials,
+                    ProxyBasicAuthenticateFunc);
 
             if (ProxySchemeAuthenticateFunc != null)
             {
-                foreach (var scheme in ProxyAuthenticationSchemes)
+                var result =
+                    await ProxySchemeAuthenticateFunc(session, authenticationType.ToString(), credentials.ToString());
+
+                if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
                 {
-                    response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, scheme);
+                    session.HttpClient.Response =
+                        CreateAuthentication407Response("Proxy Authentication Invalid", result.Continuation);
+
+                    return false;
                 }
+
+                return result.Result == ProxyAuthenticationResult.Success;
             }
 
-            response.Headers.AddHeader(KnownHeaders.ProxyConnection, KnownHeaders.ProxyConnectionClose);
-
-            response.Headers.FixProxyHeaders();
-            return response;
+            return false;
         }
-
-        private Response CreateContinuationResponse(Response response, string continuation)
+        catch (Exception e)
         {
-            response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, continuation);
+            OnException(null, new ProxyAuthorizationException("Error whilst authorizing request", session, e,
+                httpHeaders));
 
-            response.Headers.AddHeader(KnownHeaders.ProxyConnection, KnownHeaders.ConnectionKeepAlive);
-
-            response.Headers.FixProxyHeaders();
-
-            return response;
+            // Return not authorized
+            session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+            return false;
         }
+    }
+
+    private async Task<bool> AuthenticateUserBasic(SessionEventArgsBase session,
+        ReadOnlyMemory<char> authenticationType, ReadOnlyMemory<char> credentials,
+        Func<SessionEventArgsBase, string, string, Task<bool>> proxyBasicAuthenticateFunc)
+    {
+        if (!KnownHeaders.ProxyAuthorizationBasic.Equals(authenticationType.Span))
+        {
+            // Return not authorized
+            session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+            return false;
+        }
+
+        var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(credentials.ToString()));
+        var colonIndex = decoded.IndexOf(':');
+        if (colonIndex == -1)
+        {
+            // Return not authorized
+            session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+            return false;
+        }
+
+        var username = decoded.Substring(0, colonIndex);
+        var password = decoded.Substring(colonIndex + 1);
+        var authenticated = await proxyBasicAuthenticateFunc(session, username, password);
+        if (!authenticated)
+            session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+
+        return authenticated;
+    }
+
+    /// <summary>
+    ///     Create an authentication required response.
+    /// </summary>
+    /// <param name="description">Response description.</param>
+    /// <param name="continuation">The continuation.</param>
+    /// <returns></returns>
+    private Response CreateAuthentication407Response(string description, string? continuation = null)
+    {
+        var response = new Response
+        {
+            HttpVersion = HttpHeader.Version11,
+            StatusCode = (int)HttpStatusCode.ProxyAuthenticationRequired,
+            StatusDescription = description
+        };
+
+        if (!string.IsNullOrWhiteSpace(continuation)) return CreateContinuationResponse(response, continuation!);
+
+        if (ProxyBasicAuthenticateFunc != null)
+            response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, $"Basic realm=\"{ProxyAuthenticationRealm}\"");
+
+        if (ProxySchemeAuthenticateFunc != null)
+            foreach (var scheme in ProxyAuthenticationSchemes)
+                response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, scheme);
+
+        response.Headers.AddHeader(KnownHeaders.ProxyConnection, KnownHeaders.ProxyConnectionClose);
+
+        response.Headers.FixProxyHeaders();
+        return response;
+    }
+
+    private Response CreateContinuationResponse(Response response, string continuation)
+    {
+        response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, continuation);
+
+        response.Headers.AddHeader(KnownHeaders.ProxyConnection, KnownHeaders.ConnectionKeepAlive);
+
+        response.Headers.FixProxyHeaders();
+
+        return response;
     }
 }

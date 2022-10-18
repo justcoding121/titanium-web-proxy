@@ -11,16 +11,16 @@ namespace Titanium.Web.Proxy.Examples.Wpf
     public class SessionListItem : INotifyPropertyChanged
     {
         private long? bodySize;
+        private Guid clientConnectionId;
         private Exception exception;
         private string host;
         private int processId;
         private string protocol;
         private long receivedDataCount;
         private long sentDataCount;
+        private Guid serverConnectionId;
         private string statusCode;
         private string url;
-        private Guid clientConnectionId;
-        private Guid serverConnectionId;
 
         public int Number { get; set; }
 
@@ -79,10 +79,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             get => processId;
             set
             {
-                if (SetField(ref processId, value))
-                {
-                    OnPropertyChanged(nameof(Process));
-                }
+                if (SetField(ref processId, value)) OnPropertyChanged(nameof(Process));
             }
         }
 
@@ -144,7 +141,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         {
             var request = HttpClient.Request;
             var response = HttpClient.Response;
-            int statusCode = response?.StatusCode ?? 0;
+            var statusCode = response?.StatusCode ?? 0;
             StatusCode = statusCode == 0 ? "-" : statusCode.ToString();
             Protocol = request.HttpVersion.Major == 2 ? "http2" : request.RequestUri.Scheme;
             ClientConnectionId = args.ClientConnectionId;
@@ -167,13 +164,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 if (response != null)
                 {
                     if (response.ContentLength != -1)
-                    {
                         responseSize = response.ContentLength;
-                    }
-                    else if (response.IsBodyRead && response.Body != null)
-                    {
-                        responseSize = response.Body.Length;
-                    }
+                    else if (response.IsBodyRead && response.Body != null) responseSize = response.Body.Length;
                 }
 
                 BodySize = responseSize;

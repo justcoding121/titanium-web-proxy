@@ -35,536 +35,539 @@ using System.Net.Sockets;
 using System.Text;
 using Titanium.Web.Proxy.ProxySocket.Authentication;
 
-namespace Titanium.Web.Proxy.ProxySocket
+namespace Titanium.Web.Proxy.ProxySocket;
+
+/// <summary>
+///     Implements the SOCKS5 protocol.
+/// </summary>
+internal sealed class Socks5Handler : SocksHandler
 {
+    private const int ConnectOffset = 4;
+
     /// <summary>
-    /// Implements the SOCKS5 protocol.
+    ///     The length of the connect request.
     /// </summary>
-    internal sealed class Socks5Handler : SocksHandler
+    private int handShakeLength;
+
+    // private variables
+    /// <summary>Holds the value of the Password property.</summary>
+    private string password = string.Empty;
+
+    /// <summary>
+    ///     Initializes a new Socks5Handler instance.
+    /// </summary>
+    /// <param name="server">The socket connection with the proxy server.</param>
+    /// <exception cref="ArgumentNullException"><c>server</c>  is null.</exception>
+    public Socks5Handler(Socket server) : this(server, "")
     {
-        private const int ConnectOffset = 4;
+    }
 
-        /// <summary>
-        /// Initializes a new Socks5Handler instance.
-        /// </summary>
-        /// <param name="server">The socket connection with the proxy server.</param>
-        /// <exception cref="ArgumentNullException"><c>server</c>  is null.</exception>
-        public Socks5Handler(Socket server) : this(server, "") { }
+    /// <summary>
+    ///     Initializes a new Socks5Handler instance.
+    /// </summary>
+    /// <param name="server">The socket connection with the proxy server.</param>
+    /// <param name="user">The username to use.</param>
+    /// <exception cref="ArgumentNullException"><c>server</c> -or- <c>user</c> is null.</exception>
+    public Socks5Handler(Socket server, string user) : this(server, user, "")
+    {
+    }
 
-        /// <summary>
-        /// Initializes a new Socks5Handler instance.
-        /// </summary>
-        /// <param name="server">The socket connection with the proxy server.</param>
-        /// <param name="user">The username to use.</param>
-        /// <exception cref="ArgumentNullException"><c>server</c> -or- <c>user</c> is null.</exception>
-        public Socks5Handler(Socket server, string user) : this(server, user, "") { }
+    /// <summary>
+    ///     Initializes a new Socks5Handler instance.
+    /// </summary>
+    /// <param name="server">The socket connection with the proxy server.</param>
+    /// <param name="user">The username to use.</param>
+    /// <param name="pass">The password to use.</param>
+    /// <exception cref="ArgumentNullException"><c>server</c> -or- <c>user</c> -or- <c>pass</c> is null.</exception>
+    public Socks5Handler(Socket server, string user, string pass) : base(server, user)
+    {
+        Password = pass;
+    }
 
-        /// <summary>
-        /// Initializes a new Socks5Handler instance.
-        /// </summary>
-        /// <param name="server">The socket connection with the proxy server.</param>
-        /// <param name="user">The username to use.</param>
-        /// <param name="pass">The password to use.</param>
-        /// <exception cref="ArgumentNullException"><c>server</c> -or- <c>user</c> -or- <c>pass</c> is null.</exception>
-        public Socks5Handler(Socket server, string user, string pass) : base(server, user)
+    /// <summary>
+    ///     Gets or sets the password to use when authenticating with the SOCKS5 server.
+    /// </summary>
+    /// <value>The password to use when authenticating with the SOCKS5 server.</value>
+    private string Password
+    {
+        get => password;
+        set => password = value ?? throw new ArgumentNullException();
+    }
+
+    /// <summary>
+    ///     Starts the synchronous authentication process.
+    /// </summary>
+    /// <exception cref="ProxyException">Authentication with the proxy server failed.</exception>
+    /// <exception cref="ProtocolViolationException">The proxy server uses an invalid protocol.</exception>
+    /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
+    /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
+    private void Authenticate(byte[] buffer)
+    {
+        buffer[0] = 5;
+        buffer[1] = 2;
+        buffer[2] = 0;
+        buffer[3] = 2;
+        if (Server.Send(buffer, 0, 4, SocketFlags.None) < 4)
+            throw new SocketException(10054);
+
+        ReadBytes(buffer, 2);
+        if (buffer[1] == 255)
+            throw new ProxyException("No authentication method accepted.");
+
+        AuthMethod authenticate;
+        switch (buffer[1])
         {
-            Password = pass;
+            case 0:
+                authenticate = new AuthNone(Server);
+                break;
+            case 2:
+                authenticate = new AuthUserPass(Server, Username, Password);
+                break;
+            default:
+                throw new ProtocolViolationException();
         }
 
-        /// <summary>
-        /// Starts the synchronous authentication process.
-        /// </summary>
-        /// <exception cref="ProxyException">Authentication with the proxy server failed.</exception>
-        /// <exception cref="ProtocolViolationException">The proxy server uses an invalid protocol.</exception>
-        /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
-        /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-        private void Authenticate(byte[] buffer)
+        authenticate.Authenticate();
+    }
+
+    /// <summary>
+    ///     Creates an array of bytes that has to be sent when the user wants to connect to a specific host/port combination.
+    /// </summary>
+    /// <param name="host">The host to connect to.</param>
+    /// <param name="port">The port to connect to.</param>
+    /// <param name="buffer">The buffer which contains the result data.</param>
+    /// <returns>An array of bytes that has to be sent when the user wants to connect to a specific host/port combination.</returns>
+    /// <exception cref="ArgumentNullException"><c>host</c> is null.</exception>
+    /// <exception cref="ArgumentException"><c>port</c> or <c>host</c> is invalid.</exception>
+    private int GetHostPortBytes(string host, int port, Memory<byte> buffer)
+    {
+        if (host == null)
+            throw new ArgumentNullException();
+
+        if (port <= 0 || port > 65535 || host.Length > 255)
+            throw new ArgumentException();
+
+        var length = 7 + host.Length;
+        if (buffer.Length < length)
+            throw new ArgumentException(nameof(buffer));
+
+        var connect = buffer.Span;
+        connect[0] = 5;
+        connect[1] = 1;
+        connect[2] = 0; // reserved
+        connect[3] = 3;
+        connect[4] = (byte)host.Length;
+        Encoding.ASCII.GetBytes(host).CopyTo(connect.Slice(5));
+        PortToBytes(port, connect.Slice(host.Length + 5));
+        return length;
+    }
+
+    /// <summary>
+    ///     Creates an array of bytes that has to be sent when the user wants to connect to a specific IPEndPoint.
+    /// </summary>
+    /// <param name="remoteEp">The IPEndPoint to connect to.</param>
+    /// <param name="buffer">The buffer which contains the result data.</param>
+    /// <returns>An array of bytes that has to be sent when the user wants to connect to a specific IPEndPoint.</returns>
+    /// <exception cref="ArgumentNullException"><c>remoteEP</c> is null.</exception>
+    private int GetEndPointBytes(IPEndPoint remoteEp, Memory<byte> buffer)
+    {
+        if (remoteEp == null)
+            throw new ArgumentNullException();
+
+        if (buffer.Length < 10)
+            throw new ArgumentException(nameof(buffer));
+
+        var connect = buffer.Span;
+        connect[0] = 5;
+        connect[1] = 1;
+        connect[2] = 0; // reserved
+        connect[3] = 1;
+        remoteEp.Address.GetAddressBytes().CopyTo(connect.Slice(4));
+        PortToBytes(remoteEp.Port, connect.Slice(8));
+        return 10;
+    }
+
+    /// <summary>
+    ///     Starts negotiating with the SOCKS server.
+    /// </summary>
+    /// <param name="host">The host to connect to.</param>
+    /// <param name="port">The port to connect to.</param>
+    /// <exception cref="ArgumentNullException"><c>host</c> is null.</exception>
+    /// <exception cref="ArgumentException"><c>port</c> is invalid.</exception>
+    /// <exception cref="ProxyException">The proxy rejected the request.</exception>
+    /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
+    /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
+    /// <exception cref="ProtocolViolationException">The proxy server uses an invalid protocol.</exception>
+    public override void Negotiate(string host, int port)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 10 + host.Length + Username.Length + Password.Length));
+        try
         {
-            buffer[0] = 5;
-            buffer[1] = 2;
-            buffer[2] = 0;
-            buffer[3] = 2;
-            if (Server.Send(buffer, 0, 4, SocketFlags.None) < 4)
-                throw new SocketException(10054);
+            Authenticate(buffer);
 
-            ReadBytes(buffer, 2);
-            if (buffer[1] == 255)
-                throw new ProxyException("No authentication method accepted.");
+            var length = GetHostPortBytes(host, port, buffer);
+            Negotiate(buffer, length);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
 
-            AuthMethod authenticate;
-            switch (buffer[1])
-            {
-                case 0:
-                    authenticate = new AuthNone(Server);
-                    break;
-                case 2:
-                    authenticate = new AuthUserPass(Server, Username, Password);
-                    break;
-                default:
-                    throw new ProtocolViolationException();
-            }
+    /// <summary>
+    ///     Starts negotiating with the SOCKS server.
+    /// </summary>
+    /// <param name="remoteEp">The IPEndPoint to connect to.</param>
+    /// <exception cref="ArgumentNullException"><c>remoteEP</c> is null.</exception>
+    /// <exception cref="ProxyException">The proxy rejected the request.</exception>
+    /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
+    /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
+    /// <exception cref="ProtocolViolationException">The proxy server uses an invalid protocol.</exception>
+    public override void Negotiate(IPEndPoint remoteEp)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 13 + Username.Length + Password.Length));
+        try
+        {
+            Authenticate(buffer);
 
-            authenticate.Authenticate();
+            var length = GetEndPointBytes(remoteEp, buffer);
+            Negotiate(buffer, length);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>
+    ///     Starts negotiating with the SOCKS server.
+    /// </summary>
+    /// <param name="buffer">The bytes to send when trying to authenticate.</param>
+    /// <param name="length">The byte count to send when trying to authenticate.</param>
+    /// <exception cref="ArgumentNullException"><c>connect</c> is null.</exception>
+    /// <exception cref="ArgumentException"><c>connect</c> is too small.</exception>
+    /// <exception cref="ProxyException">The proxy rejected the request.</exception>
+    /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
+    /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
+    /// <exception cref="ProtocolViolationException">The proxy server uses an invalid protocol.</exception>
+    private void Negotiate(byte[] buffer, int length)
+    {
+        if (Server.Send(buffer, 0, length, SocketFlags.None) < length)
+            throw new SocketException(10054);
+
+        ReadBytes(buffer, 4);
+        if (buffer[1] != 0)
+        {
+            Server.Close();
+            throw new ProxyException(buffer[1]);
         }
 
-        /// <summary>
-        /// Creates an array of bytes that has to be sent when the user wants to connect to a specific host/port combination.
-        /// </summary>
-        /// <param name="host">The host to connect to.</param>
-        /// <param name="port">The port to connect to.</param>
-        /// <param name="buffer">The buffer which contains the result data.</param>
-        /// <returns>An array of bytes that has to be sent when the user wants to connect to a specific host/port combination.</returns>
-        /// <exception cref="ArgumentNullException"><c>host</c> is null.</exception>
-        /// <exception cref="ArgumentException"><c>port</c> or <c>host</c> is invalid.</exception>
-        private int GetHostPortBytes(string host, int port, Memory<byte> buffer)
+        switch (buffer[3])
         {
-            if (host == null)
-                throw new ArgumentNullException();
-
-            if (port <= 0 || port > 65535 || host.Length > 255)
-                throw new ArgumentException();
-
-            int length = 7 + host.Length;
-            if (buffer.Length < length)
-                throw new ArgumentException(nameof(buffer));
-
-            var connect = buffer.Span;
-            connect[0] = 5;
-            connect[1] = 1;
-            connect[2] = 0; // reserved
-            connect[3] = 3;
-            connect[4] = (byte)host.Length;
-            Encoding.ASCII.GetBytes(host).CopyTo(connect.Slice(5));
-            PortToBytes(port, connect.Slice(host.Length + 5));
-            return length;
-        }
-
-        /// <summary>
-        /// Creates an array of bytes that has to be sent when the user wants to connect to a specific IPEndPoint.
-        /// </summary>
-        /// <param name="remoteEp">The IPEndPoint to connect to.</param>
-        /// <param name="buffer">The buffer which contains the result data.</param>
-        /// <returns>An array of bytes that has to be sent when the user wants to connect to a specific IPEndPoint.</returns>
-        /// <exception cref="ArgumentNullException"><c>remoteEP</c> is null.</exception>
-        private int GetEndPointBytes(IPEndPoint remoteEp, Memory<byte> buffer)
-        {
-            if (remoteEp == null)
-                throw new ArgumentNullException();
-
-            if (buffer.Length < 10)
-                throw new ArgumentException(nameof(buffer));
-
-            var connect = buffer.Span;
-            connect[0] = 5;
-            connect[1] = 1;
-            connect[2] = 0; // reserved
-            connect[3] = 1;
-            remoteEp.Address.GetAddressBytes().CopyTo(connect.Slice(4));
-            PortToBytes(remoteEp.Port, connect.Slice(8));
-            return 10;
-        }
-
-        /// <summary>
-        /// Starts negotiating with the SOCKS server.
-        /// </summary>
-        /// <param name="host">The host to connect to.</param>
-        /// <param name="port">The port to connect to.</param>
-        /// <exception cref="ArgumentNullException"><c>host</c> is null.</exception>
-        /// <exception cref="ArgumentException"><c>port</c> is invalid.</exception>
-        /// <exception cref="ProxyException">The proxy rejected the request.</exception>
-        /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
-        /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-        /// <exception cref="ProtocolViolationException">The proxy server uses an invalid protocol.</exception>
-        public override void Negotiate(string host, int port)
-        {
-            var buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 10 + host.Length + Username.Length + Password.Length));
-            try
-            {
-                Authenticate(buffer);
-
-                int length = GetHostPortBytes(host, port, buffer);
-                Negotiate(buffer, length);
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(buffer);
-            }
-        }
-
-        /// <summary>
-        /// Starts negotiating with the SOCKS server.
-        /// </summary>
-        /// <param name="remoteEp">The IPEndPoint to connect to.</param>
-        /// <exception cref="ArgumentNullException"><c>remoteEP</c> is null.</exception>
-        /// <exception cref="ProxyException">The proxy rejected the request.</exception>
-        /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
-        /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-        /// <exception cref="ProtocolViolationException">The proxy server uses an invalid protocol.</exception>
-        public override void Negotiate(IPEndPoint remoteEp)
-        {
-            var buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 13 + Username.Length + Password.Length));
-            try
-            {
-                Authenticate(buffer);
-
-                int length = GetEndPointBytes(remoteEp, buffer);
-                Negotiate(buffer, length);
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(buffer);
-            }
-        }
-
-        /// <summary>
-        /// Starts negotiating with the SOCKS server.
-        /// </summary>
-        /// <param name="buffer">The bytes to send when trying to authenticate.</param>
-        /// <param name="length">The byte count to send when trying to authenticate.</param>
-        /// <exception cref="ArgumentNullException"><c>connect</c> is null.</exception>
-        /// <exception cref="ArgumentException"><c>connect</c> is too small.</exception>
-        /// <exception cref="ProxyException">The proxy rejected the request.</exception>
-        /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
-        /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-        /// <exception cref="ProtocolViolationException">The proxy server uses an invalid protocol.</exception>
-        private void Negotiate(byte[] buffer, int length)
-        {
-            if (Server.Send(buffer, 0, length, SocketFlags.None) < length)
-                throw new SocketException(10054);
-
-            ReadBytes(buffer, 4);
-            if (buffer[1] != 0)
-            {
+            case 1:
+                ReadBytes(buffer, 6); // IPv4 address with port
+                break;
+            case 3:
+                ReadBytes(buffer, 1); // domain name length
+                ReadBytes(buffer, buffer[0] + 2); // domain name with port
+                break;
+            case 4:
+                ReadBytes(buffer, 18); //IPv6 address with port
+                break;
+            default:
                 Server.Close();
-                throw new ProxyException(buffer[1]);
-            }
+                throw new ProtocolViolationException();
+        }
+    }
 
-            switch (buffer[3])
-            {
-                case 1:
-                    ReadBytes(buffer, 6); // IPv4 address with port
-                    break;
-                case 3:
-                    ReadBytes(buffer, 1); // domain name length
-                    ReadBytes(buffer, buffer[0] + 2); // domain name with port
-                    break;
-                case 4:
-                    ReadBytes(buffer, 18); //IPv6 address with port
-                    break;
-                default:
-                    Server.Close();
-                    throw new ProtocolViolationException();
-            }
+    /// <summary>
+    ///     Starts negotiating asynchronously with the SOCKS server.
+    /// </summary>
+    /// <param name="host">The host to connect to.</param>
+    /// <param name="port">The port to connect to.</param>
+    /// <param name="callback">The method to call when the negotiation is complete.</param>
+    /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
+    /// <param name="state">The state.</param>
+    /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
+    public override AsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
+        IPEndPoint proxyEndPoint, object state)
+    {
+        ProtocolComplete = callback;
+        Buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 10 + host.Length + Username.Length + Password.Length));
+
+        // first {ConnectOffset} bytes are reserved for authentication 
+        handShakeLength = GetHostPortBytes(host, port, Buffer.AsMemory(ConnectOffset));
+        Server.BeginConnect(proxyEndPoint, OnConnect, Server);
+        AsyncResult = new AsyncProxyResult(state);
+        return AsyncResult;
+    }
+
+    /// <summary>
+    ///     Starts negotiating asynchronously with the SOCKS server.
+    /// </summary>
+    /// <param name="remoteEp">An IPEndPoint that represents the remote device.</param>
+    /// <param name="callback">The method to call when the negotiation is complete.</param>
+    /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
+    /// <param name="state">The state.</param>
+    /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
+    public override AsyncProxyResult BeginNegotiate(IPEndPoint remoteEp, HandShakeComplete callback,
+        IPEndPoint proxyEndPoint, object state)
+    {
+        ProtocolComplete = callback;
+        Buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 13 + Username.Length + Password.Length));
+
+        // first {ConnectOffset} bytes are reserved for authentication 
+        handShakeLength = GetEndPointBytes(remoteEp, Buffer.AsMemory(ConnectOffset));
+        Server.BeginConnect(proxyEndPoint, OnConnect, Server);
+        AsyncResult = new AsyncProxyResult(state);
+        return AsyncResult;
+    }
+
+    /// <summary>
+    ///     Called when the socket is connected to the remote server.
+    /// </summary>
+    /// <param name="ar">Stores state information for this asynchronous operation as well as any user-defined data.</param>
+    private void OnConnect(IAsyncResult ar)
+    {
+        try
+        {
+            Server.EndConnect(ar);
+        }
+        catch (Exception e)
+        {
+            OnProtocolComplete(e);
+            return;
         }
 
-        /// <summary>
-        /// Starts negotiating asynchronously with the SOCKS server. 
-        /// </summary>
-        /// <param name="host">The host to connect to.</param>
-        /// <param name="port">The port to connect to.</param>
-        /// <param name="callback">The method to call when the negotiation is complete.</param>
-        /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
-        /// <param name="state">The state.</param>
-        /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
-        public override AsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
-            IPEndPoint proxyEndPoint, object state)
+        try
         {
-            ProtocolComplete = callback;
-            Buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 10 + host.Length + Username.Length + Password.Length));
+            Buffer[0] = 5;
+            Buffer[1] = 2;
+            Buffer[2] = 0;
+            Buffer[3] = 2;
+            Server.BeginSend(Buffer, 0, 4, SocketFlags.None, OnAuthSent,
+                Server);
+        }
+        catch (Exception e)
+        {
+            OnProtocolComplete(e);
+        }
+    }
 
-            // first {ConnectOffset} bytes are reserved for authentication 
-            handShakeLength = GetHostPortBytes(host, port, Buffer.AsMemory(ConnectOffset));
-            Server.BeginConnect(proxyEndPoint, this.OnConnect, Server);
-            AsyncResult = new AsyncProxyResult(state);
-            return AsyncResult;
+    /// <summary>
+    ///     Called when the authentication bytes have been sent.
+    /// </summary>
+    /// <param name="ar">Stores state information for this asynchronous operation as well as any user-defined data.</param>
+    private void OnAuthSent(IAsyncResult ar)
+    {
+        try
+        {
+            HandleEndSend(ar, 4);
+        }
+        catch (Exception e)
+        {
+            OnProtocolComplete(e);
+            return;
         }
 
-        /// <summary>
-        /// Starts negotiating asynchronously with the SOCKS server. 
-        /// </summary>
-        /// <param name="remoteEp">An IPEndPoint that represents the remote device.</param>
-        /// <param name="callback">The method to call when the negotiation is complete.</param>
-        /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
-        /// <param name="state">The state.</param>
-        /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
-        public override AsyncProxyResult BeginNegotiate(IPEndPoint remoteEp, HandShakeComplete callback,
-            IPEndPoint proxyEndPoint, object state)
+        try
         {
-            ProtocolComplete = callback;
-            Buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 13 + Username.Length + Password.Length));
-
-            // first {ConnectOffset} bytes are reserved for authentication 
-            handShakeLength = GetEndPointBytes(remoteEp, Buffer.AsMemory(ConnectOffset));
-            Server.BeginConnect(proxyEndPoint, this.OnConnect, Server);
-            AsyncResult = new AsyncProxyResult(state);
-            return AsyncResult;
-        }
-
-        /// <summary>
-        /// Called when the socket is connected to the remote server.
-        /// </summary>
-        /// <param name="ar">Stores state information for this asynchronous operation as well as any user-defined data.</param>
-        private void OnConnect(IAsyncResult ar)
-        {
-            try
-            {
-                Server.EndConnect(ar);
-            }
-            catch (Exception e)
-            {
-                OnProtocolComplete(e);
-                return;
-            }
-
-            try
-            {
-                Buffer[0] = 5;
-                Buffer[1] = 2;
-                Buffer[2] = 0;
-                Buffer[3] = 2;
-                Server.BeginSend(Buffer, 0, 4, SocketFlags.None, this.OnAuthSent,
-                    Server);
-            }
-            catch (Exception e)
-            {
-                OnProtocolComplete(e);
-            }
-        }
-
-        /// <summary>
-        /// Called when the authentication bytes have been sent.
-        /// </summary>
-        /// <param name="ar">Stores state information for this asynchronous operation as well as any user-defined data.</param>
-        private void OnAuthSent(IAsyncResult ar)
-        {
-            try
-            {
-                HandleEndSend(ar, 4);
-            }
-            catch (Exception e)
-            {
-                OnProtocolComplete(e);
-                return;
-            }
-
-            try
-            {
-                BufferCount = 2;
-                Received = 0;
-                Server.BeginReceive(Buffer, 0, BufferCount, SocketFlags.None, this.OnAuthReceive,
-                    Server);
-            }
-            catch (Exception e)
-            {
-                OnProtocolComplete(e);
-            }
-        }
-
-        /// <summary>
-        /// Called when an authentication reply has been received.
-        /// </summary>
-        /// <param name="ar">Stores state information for this asynchronous operation as well as any user-defined data.</param>
-        private void OnAuthReceive(IAsyncResult ar)
-        {
-            try
-            {
-                HandleEndReceive(ar);
-            }
-            catch (Exception e)
-            {
-                OnProtocolComplete(e);
-                return;
-            }
-
-            try
-            {
-                if (Received < BufferCount)
-                {
-                    Server.BeginReceive(Buffer, Received, BufferCount - Received, SocketFlags.None,
-                        this.OnAuthReceive, Server);
-                }
-                else
-                {
-                    AuthMethod authenticate;
-                    switch (Buffer[1])
-                    {
-                        case 0:
-                            authenticate = new AuthNone(Server);
-                            break;
-                        case 2:
-                            authenticate = new AuthUserPass(Server, Username, Password);
-                            break;
-                        default:
-                            OnProtocolComplete(new SocketException());
-                            return;
-                    }
-
-                    authenticate.BeginAuthenticate(this.OnAuthenticated);
-                }
-            }
-            catch (Exception e)
-            {
-                OnProtocolComplete(e);
-            }
-        }
-
-        /// <summary>
-        /// Called when the socket has been successfully authenticated with the server.
-        /// </summary>
-        /// <param name="e">The exception that has occurred while authenticating, or <em>null</em> if no error occurred.</param>
-        private void OnAuthenticated(Exception e)
-        {
-            if (e != null)
-            {
-                OnProtocolComplete(e);
-                return;
-            }
-
-            try
-            {
-                Server.BeginSend(Buffer, ConnectOffset, handShakeLength, SocketFlags.None, this.OnSent,
-                    Server);
-            }
-            catch (Exception ex)
-            {
-                OnProtocolComplete(ex);
-            }
-        }
-
-        /// <summary>
-        /// Called when the connection request has been sent.
-        /// </summary>
-        /// <param name="ar">Stores state information for this asynchronous operation as well as any user-defined data.</param>
-        private void OnSent(IAsyncResult ar)
-        {
-            try
-            {
-                HandleEndSend(ar, BufferCount - ConnectOffset);
-            }
-            catch (Exception e)
-            {
-                OnProtocolComplete(e);
-                return;
-            }
-
-            try
-            {
-                BufferCount = 5;
-                Received = 0;
-                Server.BeginReceive(Buffer, 0, BufferCount, SocketFlags.None, this.OnReceive,
-                    Server);
-            }
-            catch (Exception e)
-            {
-                OnProtocolComplete(e);
-            }
-        }
-
-        /// <summary>
-        /// Called when a connection reply has been received.
-        /// </summary>
-        /// <param name="ar">Stores state information for this asynchronous operation as well as any user-defined data.</param>
-        private void OnReceive(IAsyncResult ar)
-        {
-            try
-            {
-                HandleEndReceive(ar);
-            }
-            catch (Exception e)
-            {
-                OnProtocolComplete(e);
-                return;
-            }
-
-            try
-            {
-                if (Received == BufferCount)
-                    ProcessReply(Buffer);
-                else
-                    Server.BeginReceive(Buffer, Received, BufferCount - Received, SocketFlags.None,
-                        this.OnReceive, Server);
-            }
-            catch (Exception e)
-            {
-                OnProtocolComplete(e);
-            }
-        }
-
-        /// <summary>
-        /// Processes the received reply.
-        /// </summary>
-        /// <param name="buffer">The received reply</param>
-        /// <exception cref="ProtocolViolationException">The received reply is invalid.</exception>
-        private void ProcessReply(byte[] buffer)
-        {
-            int lengthToRead;
-            switch (buffer[3])
-            {
-                case 1:
-                    lengthToRead = 5; //IPv4 address with port - 1 byte
-                    break;
-                case 3:
-                    lengthToRead = buffer[4] + 2; //domain name with port
-                    break;
-                case 4:
-                    lengthToRead = 17; //IPv6 address with port - 1 byte
-                    break;
-                default:
-                    throw new ProtocolViolationException();
-            }
-
+            BufferCount = 2;
             Received = 0;
-            BufferCount = lengthToRead;
-            Server.BeginReceive(Buffer, 0, BufferCount, SocketFlags.None, this.OnReadLast, Server);
+            Server.BeginReceive(Buffer, 0, BufferCount, SocketFlags.None, OnAuthReceive,
+                Server);
         }
-
-        /// <summary>
-        /// Called when the last bytes are read from the socket.
-        /// </summary>
-        /// <param name="ar">Stores state information for this asynchronous operation as well as any user-defined data.</param>
-        private void OnReadLast(IAsyncResult ar)
+        catch (Exception e)
         {
-            try
-            {
-                HandleEndReceive(ar);
-            }
-            catch (Exception e)
-            {
-                OnProtocolComplete(e);
-                return;
-            }
-
-            try
-            {
-                if (Received == BufferCount)
-                    OnProtocolComplete(null);
-                else
-                    Server.BeginReceive(Buffer, Received, BufferCount - Received, SocketFlags.None,
-                        this.OnReadLast, Server);
-            }
-            catch (Exception e)
-            {
-                OnProtocolComplete(e);
-            }
+            OnProtocolComplete(e);
         }
+    }
 
-        /// <summary>
-        /// The length of the connect request.
-        /// </summary>
-        private int handShakeLength;
-
-        /// <summary>
-        /// Gets or sets the password to use when authenticating with the SOCKS5 server.
-        /// </summary>
-        /// <value>The password to use when authenticating with the SOCKS5 server.</value>
-        private string Password
+    /// <summary>
+    ///     Called when an authentication reply has been received.
+    /// </summary>
+    /// <param name="ar">Stores state information for this asynchronous operation as well as any user-defined data.</param>
+    private void OnAuthReceive(IAsyncResult ar)
+    {
+        try
         {
-            get => password;
-            set => password = value ?? throw new ArgumentNullException();
+            HandleEndReceive(ar);
+        }
+        catch (Exception e)
+        {
+            OnProtocolComplete(e);
+            return;
         }
 
-        // private variables
-        /// <summary>Holds the value of the Password property.</summary>
-        private string password = string.Empty;
+        try
+        {
+            if (Received < BufferCount)
+            {
+                Server.BeginReceive(Buffer, Received, BufferCount - Received, SocketFlags.None,
+                    OnAuthReceive, Server);
+            }
+            else
+            {
+                AuthMethod authenticate;
+                switch (Buffer[1])
+                {
+                    case 0:
+                        authenticate = new AuthNone(Server);
+                        break;
+                    case 2:
+                        authenticate = new AuthUserPass(Server, Username, Password);
+                        break;
+                    default:
+                        OnProtocolComplete(new SocketException());
+                        return;
+                }
+
+                authenticate.BeginAuthenticate(OnAuthenticated);
+            }
+        }
+        catch (Exception e)
+        {
+            OnProtocolComplete(e);
+        }
+    }
+
+    /// <summary>
+    ///     Called when the socket has been successfully authenticated with the server.
+    /// </summary>
+    /// <param name="e">The exception that has occurred while authenticating, or <em>null</em> if no error occurred.</param>
+    private void OnAuthenticated(Exception e)
+    {
+        if (e != null)
+        {
+            OnProtocolComplete(e);
+            return;
+        }
+
+        try
+        {
+            Server.BeginSend(Buffer, ConnectOffset, handShakeLength, SocketFlags.None, OnSent,
+                Server);
+        }
+        catch (Exception ex)
+        {
+            OnProtocolComplete(ex);
+        }
+    }
+
+    /// <summary>
+    ///     Called when the connection request has been sent.
+    /// </summary>
+    /// <param name="ar">Stores state information for this asynchronous operation as well as any user-defined data.</param>
+    private void OnSent(IAsyncResult ar)
+    {
+        try
+        {
+            HandleEndSend(ar, BufferCount - ConnectOffset);
+        }
+        catch (Exception e)
+        {
+            OnProtocolComplete(e);
+            return;
+        }
+
+        try
+        {
+            BufferCount = 5;
+            Received = 0;
+            Server.BeginReceive(Buffer, 0, BufferCount, SocketFlags.None, OnReceive,
+                Server);
+        }
+        catch (Exception e)
+        {
+            OnProtocolComplete(e);
+        }
+    }
+
+    /// <summary>
+    ///     Called when a connection reply has been received.
+    /// </summary>
+    /// <param name="ar">Stores state information for this asynchronous operation as well as any user-defined data.</param>
+    private void OnReceive(IAsyncResult ar)
+    {
+        try
+        {
+            HandleEndReceive(ar);
+        }
+        catch (Exception e)
+        {
+            OnProtocolComplete(e);
+            return;
+        }
+
+        try
+        {
+            if (Received == BufferCount)
+                ProcessReply(Buffer);
+            else
+                Server.BeginReceive(Buffer, Received, BufferCount - Received, SocketFlags.None,
+                    OnReceive, Server);
+        }
+        catch (Exception e)
+        {
+            OnProtocolComplete(e);
+        }
+    }
+
+    /// <summary>
+    ///     Processes the received reply.
+    /// </summary>
+    /// <param name="buffer">The received reply</param>
+    /// <exception cref="ProtocolViolationException">The received reply is invalid.</exception>
+    private void ProcessReply(byte[] buffer)
+    {
+        int lengthToRead;
+        switch (buffer[3])
+        {
+            case 1:
+                lengthToRead = 5; //IPv4 address with port - 1 byte
+                break;
+            case 3:
+                lengthToRead = buffer[4] + 2; //domain name with port
+                break;
+            case 4:
+                lengthToRead = 17; //IPv6 address with port - 1 byte
+                break;
+            default:
+                throw new ProtocolViolationException();
+        }
+
+        Received = 0;
+        BufferCount = lengthToRead;
+        Server.BeginReceive(Buffer, 0, BufferCount, SocketFlags.None, OnReadLast, Server);
+    }
+
+    /// <summary>
+    ///     Called when the last bytes are read from the socket.
+    /// </summary>
+    /// <param name="ar">Stores state information for this asynchronous operation as well as any user-defined data.</param>
+    private void OnReadLast(IAsyncResult ar)
+    {
+        try
+        {
+            HandleEndReceive(ar);
+        }
+        catch (Exception e)
+        {
+            OnProtocolComplete(e);
+            return;
+        }
+
+        try
+        {
+            if (Received == BufferCount)
+                OnProtocolComplete(null);
+            else
+                Server.BeginReceive(Buffer, Received, BufferCount - Received, SocketFlags.None,
+                    OnReadLast, Server);
+        }
+        catch (Exception e)
+        {
+            OnProtocolComplete(e);
+        }
     }
 }

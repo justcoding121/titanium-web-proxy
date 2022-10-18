@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Examples.Basic.Helpers;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -18,12 +18,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
     public class ProxyTestController : IDisposable
     {
         private readonly ProxyServer proxyServer;
-        private ExplicitProxyEndPoint explicitEndPoint;
 
-        private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
-        private CancellationToken CancellationToken => cancellationTokenSource.Token;
-        private ConcurrentQueue<Tuple<ConsoleColor?, string>> consoleMessageQueue
+        private readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+
+        private readonly ConcurrentQueue<Tuple<ConsoleColor?, string>> consoleMessageQueue
             = new ConcurrentQueue<Tuple<ConsoleColor?, string>>();
+
+        private ExplicitProxyEndPoint explicitEndPoint;
 
         public ProxyTestController()
         {
@@ -42,13 +43,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.ExceptionFunc = async exception =>
             {
                 if (exception is ProxyHttpException phex)
-                {
                     WriteToConsole(exception.Message + ": " + phex.InnerException?.Message, ConsoleColor.Red);
-                }
                 else
-                {
                     WriteToConsole(exception.Message, ConsoleColor.Red);
-                }
             };
 
             proxyServer.TcpTimeWaitSeconds = 10;
@@ -72,6 +69,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             // optionally set the Root Certificate
             //proxyServer.CertificateManager.RootCertificate = new X509Certificate2("myCert.pfx", string.Empty, X509KeyStorageFlags.Exportable);
+        }
+
+        private CancellationToken CancellationToken => cancellationTokenSource.Token;
+
+        public void Dispose()
+        {
+            cancellationTokenSource.Dispose();
+            proxyServer.Dispose();
         }
 
         public void StartProxy()
@@ -127,18 +132,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.AddEndPoint(socksEndPoint);
 
             foreach (var endPoint in proxyServer.ProxyEndPoints)
-            {
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name,
                     endPoint.IpAddress, endPoint.Port);
-            }
 
             // Only explicit proxies can be set as system proxy!
             //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
             //proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
-            if (RunTime.IsWindows)
-            {
-                proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
-            }
+            if (RunTime.IsWindows) proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
         }
 
         public void Stop()
@@ -191,23 +191,19 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
-            string hostname = e.HttpClient.Request.RequestUri.Host;
+            var hostname = e.HttpClient.Request.RequestUri.Host;
             e.GetState().PipelineInfo.AppendLine(nameof(OnBeforeTunnelConnectRequest) + ":" + hostname);
             WriteToConsole("Tunnel to: " + hostname);
 
             var clientLocalIp = e.ClientLocalEndPoint.Address;
             if (!clientLocalIp.Equals(IPAddress.Loopback) && !clientLocalIp.Equals(IPAddress.IPv6Loopback))
-            {
                 e.HttpClient.UpStreamEndPoint = new IPEndPoint(clientLocalIp, 0);
-            }
 
             if (hostname.Contains("dropbox.com"))
-            {
                 // Exclude Https addresses you don't want to proxy
                 // Useful for clients that use certificate pinning
                 // for example dropbox.com
                 e.DecryptSsl = false;
-            }
         }
 
         private void WebSocket_DataSent(object sender, DataEventArgs e)
@@ -231,20 +227,18 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 if (frame.OpCode == WebsocketOpCode.Binary)
                 {
                     var data = frame.Data.ToArray();
-                    string str = string.Join(",", data.ToArray().Select(x => x.ToString("X2")));
+                    var str = string.Join(",", data.ToArray().Select(x => x.ToString("X2")));
                     WriteToConsole(str, color);
                 }
 
-                if (frame.OpCode == WebsocketOpCode.Text)
-                {
-                    WriteToConsole(frame.GetText(), color);
-                }
+                if (frame.OpCode == WebsocketOpCode.Text) WriteToConsole(frame.GetText(), color);
             }
         }
 
         private Task OnBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
         {
-            e.GetState().PipelineInfo.AppendLine(nameof(OnBeforeTunnelConnectResponse) + ":" + e.HttpClient.Request.RequestUri);
+            e.GetState().PipelineInfo
+                .AppendLine(nameof(OnBeforeTunnelConnectResponse) + ":" + e.HttpClient.Request.RequestUri);
 
             return Task.CompletedTask;
         }
@@ -256,14 +250,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             var clientLocalIp = e.ClientLocalEndPoint.Address;
             if (!clientLocalIp.Equals(IPAddress.Loopback) && !clientLocalIp.Equals(IPAddress.IPv6Loopback))
-            {
                 e.HttpClient.UpStreamEndPoint = new IPEndPoint(clientLocalIp, 0);
-            }
 
             if (e.HttpClient.Request.Url.Contains("yahoo.com"))
-            {
                 e.CustomUpStreamProxy = new ExternalProxy("localhost", 8888);
-            }
 
             WriteToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
             WriteToConsole(e.HttpClient.Request.Url);
@@ -310,10 +300,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             var session = (SessionEventArgs)sender;
             WriteToConsole("Multipart form data headers:");
-            foreach (var header in e.Headers)
-            {
-                WriteToConsole(header.ToString());
-            }
+            foreach (var header in e.Headers) WriteToConsole(header.ToString());
         }
 
         private async Task OnResponse(object sender, SessionEventArgs e)
@@ -328,7 +315,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             WriteToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
 
-            string ext = System.IO.Path.GetExtension(e.HttpClient.Request.RequestUri.AbsolutePath);
+            var ext = Path.GetExtension(e.HttpClient.Request.RequestUri.AbsolutePath);
 
             // access user data set in request to do something with it
             //var userData = e.HttpClient.UserData as CustomUserData;
@@ -385,10 +372,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             e.GetState().PipelineInfo.AppendLine(nameof(OnCertificateValidation));
 
             // set IsValid to true/false based on Certificate Errors
-            if (e.SslPolicyErrors == SslPolicyErrors.None)
-            {
-                e.IsValid = true;
-            }
+            if (e.SslPolicyErrors == SslPolicyErrors.None) e.IsValid = true;
 
             return Task.CompletedTask;
         }
@@ -423,7 +407,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
                     if (consoleColor.HasValue)
                     {
-                        ConsoleColor existing = Console.ForegroundColor;
+                        var existing = Console.ForegroundColor;
                         Console.ForegroundColor = consoleColor.Value;
                         Console.WriteLine(message);
                         Console.ForegroundColor = existing;
@@ -437,12 +421,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 //reduce CPU usage
                 await Task.Delay(50);
             }
-        }
-
-        public void Dispose()
-        {
-            cancellationTokenSource.Dispose();
-            proxyServer.Dispose();
         }
 
         ///// <summary>
