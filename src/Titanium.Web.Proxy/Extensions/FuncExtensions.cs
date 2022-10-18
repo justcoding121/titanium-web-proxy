@@ -13,11 +13,11 @@ namespace Titanium.Web.Proxy.Extensions
 
             foreach (var @delegate in invocationList)
             {
-                await internalInvokeAsync((AsyncEventHandler<T>)@delegate, sender, args, exceptionFunc);
+                await InternalInvokeAsync((AsyncEventHandler<T>)@delegate, sender, args, exceptionFunc);
             }
         }
 
-        private static async Task internalInvokeAsync<T>(AsyncEventHandler<T> callback, object sender, T args,
+        private static async Task InternalInvokeAsync<T>(AsyncEventHandler<T> callback, object sender, T args,
             ExceptionHandler? exceptionFunc)
         {
             try

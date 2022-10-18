@@ -39,7 +39,7 @@ namespace Titanium.Web.Proxy.Helpers
                     }
                     else
                     {
-                        overrides2.Add(bypassStringEscape(overrideHost));
+                        overrides2.Add(BypassStringEscape(overrideHost));
                     }
                 }
 
@@ -70,7 +70,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         internal string[]? BypassList { get; }
 
-        private static string bypassStringEscape(string rawString)
+        private static string BypassStringEscape(string rawString)
         {
             var match =
                 new Regex("^(?<scheme>.*://)?(?<host>[^:]*)(?<port>:[0-9]{1,5})?$",
@@ -91,9 +91,9 @@ namespace Titanium.Web.Proxy.Helpers
                 empty2 = string.Empty;
             }
 
-            string str1 = convertRegexReservedChars(empty1);
-            string str2 = convertRegexReservedChars(rawString1);
-            string str3 = convertRegexReservedChars(empty2);
+            string str1 = ConvertRegexReservedChars(empty1);
+            string str2 = ConvertRegexReservedChars(rawString1);
+            string str3 = ConvertRegexReservedChars(empty2);
             if (str1 == string.Empty)
             {
                 str1 = "(?:.*://)?";
@@ -107,7 +107,7 @@ namespace Titanium.Web.Proxy.Helpers
             return "^" + str1 + str2 + str3 + "$";
         }
 
-        private static string convertRegexReservedChars(string rawString)
+        private static string ConvertRegexReservedChars(string rawString)
         {
             if (rawString.Length == 0)
             {
@@ -173,7 +173,7 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 foreach (string str in proxyValues)
                 {
-                    var proxyValue = parseProxyValue(str);
+                    var proxyValue = ParseProxyValue(str);
                     if (proxyValue != null)
                     {
                         result.Add(proxyValue);
@@ -183,7 +183,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
             else
             {
-                var parsedValue = parseProxyValue(proxyServerValues);
+                var parsedValue = ParseProxyValue(proxyServerValues);
                 if (parsedValue != null)
                 {
                     result.Add(parsedValue);
@@ -198,7 +198,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="value"></param>
         /// <returns></returns>
-        private static HttpSystemProxyValue? parseProxyValue(string value)
+        private static HttpSystemProxyValue? ParseProxyValue(string value)
         {
             string tmp = Regex.Replace(value, @"\s+", " ").Trim();
 

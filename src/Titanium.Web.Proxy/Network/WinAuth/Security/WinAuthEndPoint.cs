@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
     internal class WinAuthEndPoint
     {
-        private const string authStateKey = "AuthState";
+        private const string AuthStateKey = "AuthState";
 
         /// <summary>
         ///     Acquire the intial client token to send
@@ -67,14 +67,14 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                     return null;
                 }
 
-                state.AuthState = State.WinAuthState.INITIAL_TOKEN;
+                state.AuthState = State.WinAuthState.InitialToken;
                 token = clientToken.GetBytes();
-                data.Add(authStateKey, state);
+                data.Add(AuthStateKey, state);
             }
             finally
             {
-                disposeToken(clientToken);
-                disposeToken(serverToken);
+                DisposeToken(clientToken);
+                DisposeToken(serverToken);
             }
 
             return token;
@@ -98,7 +98,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
             try
             {
-                var state = data.GetAs<State>(authStateKey);
+                var state = data.GetAs<State>(AuthStateKey);
 
                 state.UpdatePresence();
 
@@ -120,26 +120,26 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
                     return null;
                 }
 
-                state.AuthState = State.WinAuthState.FINAL_TOKEN;
+                state.AuthState = State.WinAuthState.FinalToken;
                 token = clientToken.GetBytes();
             }
             finally
             {
-                disposeToken(clientToken);
-                disposeToken(serverToken);
+                DisposeToken(clientToken);
+                DisposeToken(serverToken);
             }
 
             return token;
         }
 
-        private static void disposeToken(SecurityBufferDesciption clientToken)
+        private static void DisposeToken(SecurityBufferDesciption clientToken)
         {
             if (clientToken.pBuffers != IntPtr.Zero)
             {
                 if (clientToken.cBuffers == 1)
                 {
                     var thisSecBuffer = (SecurityBuffer)Marshal.PtrToStructure(clientToken.pBuffers, typeof(SecurityBuffer));
-                   disposeSecBuffer(thisSecBuffer);
+                   DisposeSecBuffer(thisSecBuffer);
                 }
                 else
                 {
@@ -164,7 +164,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
         }
 
-        private static void disposeSecBuffer(SecurityBuffer thisSecBuffer)
+        private static void DisposeSecBuffer(SecurityBuffer thisSecBuffer)
         {
             if (thisSecBuffer.pvBuffer != IntPtr.Zero)
             {
@@ -182,20 +182,20 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         /// <returns></returns>
         internal static bool ValidateWinAuthState(InternalDataStore data, State.WinAuthState expectedAuthState)
         {
-            bool stateExists = data.TryGetValueAs(authStateKey, out State? state);
+            bool stateExists = data.TryGetValueAs(AuthStateKey, out State? state);
 
-            if (expectedAuthState == State.WinAuthState.UNAUTHORIZED)
+            if (expectedAuthState == State.WinAuthState.Unauthorized)
             {
                 return !stateExists ||
-                       state!.AuthState == State.WinAuthState.UNAUTHORIZED ||
-                       state.AuthState == State.WinAuthState.AUTHORIZED; // Server may require re-authentication on an open connection
+                       state!.AuthState == State.WinAuthState.Unauthorized ||
+                       state.AuthState == State.WinAuthState.Authorized; // Server may require re-authentication on an open connection
             }
 
-            if (expectedAuthState == State.WinAuthState.INITIAL_TOKEN)
+            if (expectedAuthState == State.WinAuthState.InitialToken)
             {
                 return stateExists &&
-                       (state!.AuthState == State.WinAuthState.INITIAL_TOKEN ||
-                        state.AuthState == State.WinAuthState.AUTHORIZED); // Server may require re-authentication on an open connection
+                       (state!.AuthState == State.WinAuthState.InitialToken ||
+                        state.AuthState == State.WinAuthState.Authorized); // Server may require re-authentication on an open connection
             }
 
             throw new Exception("Unsupported validation of WinAuthState");
@@ -207,9 +207,9 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         /// <param name="data"></param>
         internal static void AuthenticatedResponse(InternalDataStore data)
         {
-            if (data.TryGetValueAs(authStateKey, out State? state))
+            if (data.TryGetValueAs(AuthStateKey, out State? state))
             {
-                state!.AuthState = State.WinAuthState.AUTHORIZED;
+                state!.AuthState = State.WinAuthState.Authorized;
                 state.UpdatePresence();
             }
         }

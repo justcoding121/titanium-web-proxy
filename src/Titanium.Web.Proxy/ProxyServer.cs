@@ -95,10 +95,10 @@ namespace Titanium.Web.Proxy
         {
             BufferPool = new DefaultBufferPool();
             ProxyEndPoints = new List<ProxyEndPoint>();
-            tcpConnectionFactory = new TcpConnectionFactory(this);
+            TcpConnectionFactory = new TcpConnectionFactory(this);
             if (RunTime.IsWindows && !RunTime.IsUwpOnWindows)
             {
-                systemProxySettingsManager = new SystemProxyManager();
+                SystemProxySettingsManager = new SystemProxyManager();
             }
 
             CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName,
@@ -108,12 +108,12 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     An factory that creates tcp connection to server.
         /// </summary>
-        private TcpConnectionFactory tcpConnectionFactory { get; }
+        private TcpConnectionFactory TcpConnectionFactory { get; }
 
         /// <summary>
         ///     Manage system proxy settings.
         /// </summary>
-        private SystemProxyManager? systemProxySettingsManager { get; }
+        private SystemProxyManager? SystemProxySettingsManager { get; }
 
         /// <summary>
         ///     Number of times to retry upon network failures when connection pool is enabled.
@@ -408,7 +408,7 @@ namespace Titanium.Web.Proxy
 
             if (ProxyRunning)
             {
-                listen(endPoint);
+                Listen(endPoint);
             }
         }
 
@@ -428,7 +428,7 @@ namespace Titanium.Web.Proxy
 
             if (ProxyRunning)
             {
-                quitListen(endPoint);
+                QuitListen(endPoint);
             }
         }
 
@@ -457,13 +457,13 @@ namespace Titanium.Web.Proxy
         /// <param name="protocolType">The proxy protocol type.</param>
         public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType)
         {
-            if (systemProxySettingsManager == null)
+            if (SystemProxySettingsManager == null)
             {
                 throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually configure you operating system to use this proxy's port and address.");
             }
 
-            validateEndPointAsSystemProxy(endPoint);
+            ValidateEndPointAsSystemProxy(endPoint);
 
             bool isHttp = (protocolType & ProxyProtocolType.Http) > 0;
             bool isHttps = (protocolType & ProxyProtocolType.Https) > 0;
@@ -491,7 +491,7 @@ namespace Titanium.Web.Proxy
                 ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpsProxy = false);
             }
 
-            systemProxySettingsManager.SetProxy(
+            SystemProxySettingsManager.SetProxy(
                 Equals(endPoint.IpAddress, IPAddress.Any) |
                 Equals(endPoint.IpAddress, IPAddress.Loopback)
                     ? "localhost"
@@ -551,13 +551,13 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void RestoreOriginalProxySettings()
         {
-            if (systemProxySettingsManager == null)
+            if (SystemProxySettingsManager == null)
             {
                 throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually configure your operating system to use this proxy's port and address.");
             }
 
-            systemProxySettingsManager.RestoreOriginalSettings();
+            SystemProxySettingsManager.RestoreOriginalSettings();
         }
 
         /// <summary>
@@ -565,13 +565,13 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableSystemProxy(ProxyProtocolType protocolType)
         {
-            if (systemProxySettingsManager == null)
+            if (SystemProxySettingsManager == null)
             {
                 throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually configure your operating system to use this proxy's port and address.");
             }
 
-            systemProxySettingsManager.RemoveProxy(protocolType);
+            SystemProxySettingsManager.RemoveProxy(protocolType);
         }
 
         /// <summary>
@@ -579,13 +579,13 @@ namespace Titanium.Web.Proxy
         /// </summary>
         public void DisableAllSystemProxies()
         {
-            if (systemProxySettingsManager == null)
+            if (SystemProxySettingsManager == null)
             {
                 throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually confugure you operating system to use this proxy's port and address.");
             }
 
-            systemProxySettingsManager.DisableAllProxy();
+            SystemProxySettingsManager.DisableAllProxy();
         }
 
         /// <summary>
@@ -602,16 +602,16 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is already running.");
             }
 
-            setThreadPoolMinThread(ThreadPoolWorkerThread);
+            SetThreadPoolMinThread(ThreadPoolWorkerThread);
 
             if (ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.GenericCertificate == null))
             {
                 CertificateManager.EnsureRootCertificate();
             }
 
-            if (changeSystemProxySettings && systemProxySettingsManager != null && RunTime.IsWindows && !RunTime.IsUwpOnWindows)
+            if (changeSystemProxySettings && SystemProxySettingsManager != null && RunTime.IsWindows && !RunTime.IsUwpOnWindows)
             {
-                var proxyInfo = systemProxySettingsManager.GetProxyInfoFromRegistry();
+                var proxyInfo = SystemProxySettingsManager.GetProxyInfoFromRegistry();
                 if (proxyInfo?.Proxies != null)
                 {
                     var protocolToRemove = ProxyProtocolType.None;
@@ -626,12 +626,12 @@ namespace Titanium.Web.Proxy
 
                     if (protocolToRemove != ProxyProtocolType.None)
                     {
-                        systemProxySettingsManager.RemoveProxy(protocolToRemove, false);
+                        SystemProxySettingsManager.RemoveProxy(protocolToRemove, false);
                     }
                 }
             }
 
-            if (ForwardToUpstreamGateway && GetCustomUpStreamProxyFunc == null && systemProxySettingsManager != null)
+            if (ForwardToUpstreamGateway && GetCustomUpStreamProxyFunc == null && SystemProxySettingsManager != null)
             {
                 systemProxyResolver = new WinHttpWebProxyFinder();
                 if (UpstreamProxyConfigurationScript != null)
@@ -642,10 +642,10 @@ namespace Titanium.Web.Proxy
                 else
                 {
                     // Use WinHttp to handle PAC/WAPD scripts.
-                    systemProxyResolver.LoadFromIE();
+                    systemProxyResolver.LoadFromIe();
                 }
 
-                GetCustomUpStreamProxyFunc = getSystemUpStreamProxy;
+                GetCustomUpStreamProxyFunc = GetSystemUpStreamProxy;
             }
 
             ProxyRunning = true;
@@ -654,7 +654,7 @@ namespace Titanium.Web.Proxy
 
             foreach (var endPoint in ProxyEndPoints)
             {
-                listen(endPoint);
+                Listen(endPoint);
             }
         }
 
@@ -668,26 +668,26 @@ namespace Titanium.Web.Proxy
                 throw new Exception("Proxy is not running.");
             }
 
-            if (systemProxySettingsManager != null)
+            if (SystemProxySettingsManager != null)
             {
                 bool setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
                     .Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
 
                 if (setAsSystemProxy)
                 {
-                    systemProxySettingsManager.RestoreOriginalSettings();
+                    SystemProxySettingsManager.RestoreOriginalSettings();
                 }
             }
 
             foreach (var endPoint in ProxyEndPoints)
             {
-                quitListen(endPoint);
+                QuitListen(endPoint);
             }
 
             ProxyEndPoints.Clear();
 
             CertificateManager?.StopClearIdleCertificates();
-            tcpConnectionFactory.Dispose();
+            TcpConnectionFactory.Dispose();
 
             ProxyRunning = false;
         }
@@ -696,11 +696,11 @@ namespace Titanium.Web.Proxy
         ///     Listen on given end point of local machine.
         /// </summary>
         /// <param name="endPoint">The end point to listen.</param>
-        private void listen(ProxyEndPoint endPoint)
+        private void Listen(ProxyEndPoint endPoint)
         {
             endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
 
-            if (ReuseSocket && RunTime.IsSocketReuseAvailable)
+            if (ReuseSocket && RunTime.IsSocketReuseAvailable())
             {
                 endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             }
@@ -712,7 +712,7 @@ namespace Titanium.Web.Proxy
                 endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
 
                 // accept clients asynchronously
-                endPoint.Listener.BeginAcceptSocket(onAcceptConnection, endPoint);
+                endPoint.Listener.BeginAcceptSocket(OnAcceptConnection, endPoint);
             }
             catch (SocketException ex)
             {
@@ -728,7 +728,7 @@ namespace Titanium.Web.Proxy
         ///     Verify if its safe to set this end point as system proxy.
         /// </summary>
         /// <param name="endPoint">The end point to validate.</param>
-        private void validateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
+        private void ValidateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
         {
             if (endPoint == null)
             {
@@ -751,7 +751,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="sessionEventArgs">The session.</param>
         /// <returns>The external proxy as task result.</returns>
-        private Task<IExternalProxy?> getSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
+        private Task<IExternalProxy?> GetSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
         {
             var proxy = systemProxyResolver!.GetProxy(sessionEventArgs.HttpClient.Request.RequestUri);
             return Task.FromResult(proxy);
@@ -760,7 +760,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Act when a connection is received from client.
         /// </summary>
-        private void onAcceptConnection(IAsyncResult asyn)
+        private void OnAcceptConnection(IAsyncResult asyn)
         {
             var endPoint = (ProxyEndPoint)asyn.AsyncState;
 
@@ -788,7 +788,7 @@ namespace Titanium.Web.Proxy
             {
                 Task.Run(async () =>
                 {
-                    await handleClient(tcpClient, endPoint);
+                    await HandleClient(tcpClient, endPoint);
                 });
             }
 
@@ -796,7 +796,7 @@ namespace Titanium.Web.Proxy
             {
                 // based on end point type call appropriate request handlers
                 // Get the listener that handles the client request.
-                endPoint.Listener!.BeginAcceptSocket(onAcceptConnection, endPoint);
+                endPoint.Listener!.BeginAcceptSocket(OnAcceptConnection, endPoint);
             }
             catch (Exception ex) when (ex is ObjectDisposedException || ex is InvalidOperationException)
             {
@@ -812,7 +812,7 @@ namespace Titanium.Web.Proxy
         /// Change the ThreadPool.WorkerThread minThread 
         /// </summary>
         /// <param name="workerThreads">minimum Threads allocated in the ThreadPool</param>
-        private void setThreadPoolMinThread(int workerThreads)
+        private void SetThreadPoolMinThread(int workerThreads)
         {
             ThreadPool.GetMinThreads(out int minWorkerThreads, out int minCompletionPortThreads);
             ThreadPool.GetMaxThreads(out int maxWorkerThreads, out _);
@@ -829,7 +829,7 @@ namespace Titanium.Web.Proxy
         /// <param name="tcpClientSocket">The client socket.</param>
         /// <param name="endPoint">The proxy endpoint.</param>
         /// <returns>The task.</returns>
-        private async Task handleClient(Socket tcpClientSocket, ProxyEndPoint endPoint)
+        private async Task HandleClient(Socket tcpClientSocket, ProxyEndPoint endPoint)
         {
             tcpClientSocket.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
             tcpClientSocket.SendTimeout = ConnectionTimeOutSeconds * 1000;
@@ -842,15 +842,15 @@ namespace Titanium.Web.Proxy
             {
                 if (endPoint is ExplicitProxyEndPoint eep)
                 {
-                    await handleClient(eep, clientConnection);
+                    await HandleClient(eep, clientConnection);
                 }
                 else if (endPoint is TransparentProxyEndPoint tep)
                 {
-                    await handleClient(tep, clientConnection);
+                    await HandleClient(tep, clientConnection);
                 }
                 else if (endPoint is SocksProxyEndPoint sep)
                 {
-                    await handleClient(sep, clientConnection);
+                    await HandleClient(sep, clientConnection);
                 }
             }
         }
@@ -860,7 +860,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="clientStream">The client stream.</param>
         /// <param name="exception">The exception.</param>
-        private void onException(HttpClientStream? clientStream, Exception exception)
+        private void OnException(HttpClientStream? clientStream, Exception exception)
         {
             ExceptionFunc?.Invoke(exception);
         }
@@ -868,7 +868,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Quit listening on the given end point.
         /// </summary>
-        private void quitListen(ProxyEndPoint endPoint)
+        private void QuitListen(ProxyEndPoint endPoint)
         {
             endPoint.Listener!.Stop();
             endPoint.Listener.Server.Dispose();
@@ -895,7 +895,7 @@ namespace Titanium.Web.Proxy
             }
             catch (Exception ex)
             {
-                onException(null, ex);
+                OnException(null, ex);
             }
         }
 
@@ -920,7 +920,7 @@ namespace Titanium.Web.Proxy
             }
             catch (Exception ex)
             {
-                onException(null, ex);
+                OnException(null, ex);
             }
         }
 
@@ -955,9 +955,9 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Connection retry policy when using connection pool.
         /// </summary>
-        private RetryPolicy<T> retryPolicy<T>() where T : Exception
+        private RetryPolicy<T> RetryPolicy<T>() where T : Exception
         {
-            return new RetryPolicy<T>(NetworkFailureRetryAttempts, tcpConnectionFactory);
+            return new RetryPolicy<T>(NetworkFailureRetryAttempts, TcpConnectionFactory);
         }
 
         private bool disposed = false;

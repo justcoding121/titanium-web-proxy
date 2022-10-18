@@ -23,10 +23,10 @@ namespace Titanium.Web.Proxy.Http2.Hpack
 {
     internal class Encoder
     {
-        private const int bucketSize = 17;
+        private const int BucketSize = 17;
 
         // a linked hash map of header fields
-        private readonly HeaderEntry[] headerFields = new HeaderEntry[bucketSize];
+        private readonly HeaderEntry[] headerFields = new HeaderEntry[BucketSize];
         private readonly HeaderEntry head = new HeaderEntry(-1, ByteString.Empty, ByteString.Empty, int.MaxValue, null);
         private int size;
 
@@ -67,8 +67,8 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             // If the header value is sensitive then it must never be indexed
             if (sensitive)
             {
-                int nameIndex = getNameIndex(name);
-                encodeLiteral(output, name, value, HpackUtil.IndexType.Never, nameIndex);
+                int nameIndex = GetNameIndex(name);
+                EncodeLiteral(output, name, value, HpackUtil.IndexType.Never, nameIndex);
                 return;
             }
 
@@ -79,11 +79,11 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 if (staticTableIndex == -1)
                 {
                     int nameIndex = StaticTable.GetIndex(name);
-                    encodeLiteral(output, name, value, HpackUtil.IndexType.None, nameIndex);
+                    EncodeLiteral(output, name, value, HpackUtil.IndexType.None, nameIndex);
                 }
                 else
                 {
-                    encodeInteger(output, 0x80, 7, staticTableIndex);
+                    EncodeInteger(output, 0x80, 7, staticTableIndex);
                 }
 
                 return;
@@ -94,18 +94,18 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             // If the headerSize is greater than the max table size then it must be encoded literally
             if (headerSize > MaxHeaderTableSize)
             {
-                int nameIndex = getNameIndex(name);
-                encodeLiteral(output, name, value, HpackUtil.IndexType.None, nameIndex);
+                int nameIndex = GetNameIndex(name);
+                EncodeLiteral(output, name, value, HpackUtil.IndexType.None, nameIndex);
                 return;
             }
 
-            var headerField = getEntry(name, value);
+            var headerField = GetEntry(name, value);
             if (headerField != null)
             {
-                int index = getIndex(headerField.Index) + StaticTable.Length;
+                int index = GetIndex(headerField.Index) + StaticTable.Length;
 
                 // Section 6.1. Indexed Header Field Representation
-                encodeInteger(output, 0x80, 7, index);
+                EncodeInteger(output, 0x80, 7, index);
             }
             else
             {
@@ -113,15 +113,15 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 if (staticTableIndex != -1)
                 {
                     // Section 6.1. Indexed Header Field Representation
-                    encodeInteger(output, 0x80, 7, staticTableIndex);
+                    EncodeInteger(output, 0x80, 7, staticTableIndex);
                 }
                 else
                 {
-                    int nameIndex = useStaticName ? getNameIndex(name) : -1;
-                    ensureCapacity(headerSize);
+                    int nameIndex = useStaticName ? GetNameIndex(name) : -1;
+                    EnsureCapacity(headerSize);
 
-                    encodeLiteral(output, name, value, indexType, nameIndex);
-                    add(name, value);
+                    EncodeLiteral(output, name, value, indexType, nameIndex);
+                    Add(name, value);
                 }
             }
         }
@@ -144,8 +144,8 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             }
 
             MaxHeaderTableSize = maxHeaderTableSize;
-            ensureCapacity(0);
-            encodeInteger(output, 0x20, 5, maxHeaderTableSize);
+            EnsureCapacity(0);
+            EncodeInteger(output, 0x20, 5, maxHeaderTableSize);
         }
 
         /// <summary>
@@ -155,7 +155,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <param name="mask">Mask.</param>
         /// <param name="n">N.</param>
         /// <param name="i">The index.</param>
-        private static void encodeInteger(BinaryWriter output, int mask, int n, int i)
+        private static void EncodeInteger(BinaryWriter output, int mask, int n, int i)
         {
             if (n < 0 || n > 8)
             {
@@ -190,17 +190,17 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// </summary>
         /// <param name="output">Output.</param>
         /// <param name="stringData">String data.</param>
-        private void encodeStringLiteral(BinaryWriter output, ByteString stringData)
+        private void EncodeStringLiteral(BinaryWriter output, ByteString stringData)
         {
             int huffmanLength = HuffmanEncoder.Instance.GetEncodedLength(stringData);
             if (huffmanLength < stringData.Length)
             {
-                encodeInteger(output, 0x80, 7, huffmanLength);
+                EncodeInteger(output, 0x80, 7, huffmanLength);
                 HuffmanEncoder.Instance.Encode(output, stringData);
             }
             else
             {
-                encodeInteger(output, 0x00, 7, stringData.Length);
+                EncodeInteger(output, 0x00, 7, stringData.Length);
                 output.Write(stringData.Span);
             }
         }
@@ -213,7 +213,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <param name="value">Value.</param>
         /// <param name="indexType">Index type.</param>
         /// <param name="nameIndex">Name index.</param>
-        private void encodeLiteral(BinaryWriter output, ByteString name, ByteString value, HpackUtil.IndexType indexType,
+        private void EncodeLiteral(BinaryWriter output, ByteString name, ByteString value, HpackUtil.IndexType indexType,
             int nameIndex)
         {
             int mask;
@@ -239,21 +239,21 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                     throw new Exception("should not reach here");
             }
 
-            encodeInteger(output, mask, prefixBits, nameIndex == -1 ? 0 : nameIndex);
+            EncodeInteger(output, mask, prefixBits, nameIndex == -1 ? 0 : nameIndex);
             if (nameIndex == -1)
             {
-                encodeStringLiteral(output, name);
+                EncodeStringLiteral(output, name);
             }
 
-            encodeStringLiteral(output, value);
+            EncodeStringLiteral(output, value);
         }
 
-        private int getNameIndex(ByteString name)
+        private int GetNameIndex(ByteString name)
         {
             int index = StaticTable.GetIndex(name);
             if (index == -1)
             {
-                index = getIndex(name);
+                index = GetIndex(name);
                 if (index >= 0)
                 {
                     index += StaticTable.Length;
@@ -268,24 +268,24 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// Removes the oldest entry from the dynamic table until sufficient space is available.
         /// </summary>
         /// <param name="headerSize">Header size.</param>
-        private void ensureCapacity(int headerSize)
+        private void EnsureCapacity(int headerSize)
         {
             while (size + headerSize > MaxHeaderTableSize)
             {
-                int index = length();
+                int index = Length();
                 if (index == 0)
                 {
                     break;
                 }
 
-                remove();
+                Remove();
             }
         }
 
         /// <summary>
         /// Return the number of header fields in the dynamic table.
         /// </summary>
-        private int length()
+        private int Length()
         {
             return size == 0 ? 0 : head.After.Index - head.Before.Index + 1;
         }
@@ -297,15 +297,15 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <returns>The entry.</returns>
         /// <param name="name">Name.</param>
         /// <param name="value">Value.</param>
-        private HeaderEntry? getEntry(ByteString name, ByteString value)
+        private HeaderEntry? GetEntry(ByteString name, ByteString value)
         {
-            if (length() == 0 || name.Length == 0 || value.Length == 0)
+            if (Length() == 0 || name.Length == 0 || value.Length == 0)
             {
                 return null;
             }
 
-            int h = hash(name);
-            int i = index(h);
+            int h = Hash(name);
+            int i = Index(h);
             for (var e = headerFields[i]; e != null; e = e.Next)
             {
                 if (e.Hash == h && name.Equals(e.NameData) && Equals(value, e.ValueData))
@@ -323,15 +323,15 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// </summary>
         /// <returns>The index.</returns>
         /// <param name="name">Name.</param>
-        private int getIndex(ByteString name)
+        private int GetIndex(ByteString name)
         {
-            if (length() == 0 || name.Length == 0)
+            if (Length() == 0 || name.Length == 0)
             {
                 return -1;
             }
 
-            int h = hash(name);
-            int i = Encoder.index(h);
+            int h = Hash(name);
+            int i = Encoder.Index(h);
             int index = -1;
             for (HeaderEntry? e = headerFields[i]; e != null; e = e.Next)
             {
@@ -342,7 +342,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 }
             }
 
-            return getIndex(index);
+            return GetIndex(index);
         }
 
         /// <summary>
@@ -350,7 +350,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// </summary>
         /// <returns>The index.</returns>
         /// <param name="index">Index.</param>
-        private int getIndex(int index)
+        private int GetIndex(int index)
         {
             if (index == -1)
             {
@@ -369,25 +369,25 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// </summary>
         /// <param name="name">Name.</param>
         /// <param name="value">Value.</param>
-        private void add(ByteString name, ByteString value)
+        private void Add(ByteString name, ByteString value)
         {
             int headerSize = HttpHeader.SizeOf(name, value);
 
             // Clear the table if the header field size is larger than the capacity.
             if (headerSize > MaxHeaderTableSize)
             {
-                clear();
+                Clear();
                 return;
             }
 
             // Evict oldest entries until we have enough capacity.
             while (size + headerSize > MaxHeaderTableSize)
             {
-                remove();
+                Remove();
             }
 
-            int h = hash(name);
-            int i = index(h);
+            int h = Hash(name);
+            int i = Index(h);
             var old = headerFields[i];
             var e = new HeaderEntry(h, name, value, head.Before.Index - 1, old);
             headerFields[i] = e;
@@ -398,7 +398,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <summary>
         /// Remove and return the oldest header field from the dynamic table.
         /// </summary>
-        private HttpHeader? remove()
+        private HttpHeader? Remove()
         {
             if (size == 0)
             {
@@ -407,7 +407,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
 
             var eldest = head.After;
             int h = eldest.Hash;
-            int i = index(h);
+            int i = Index(h);
             var prev = headerFields[i];
             var e = prev;
             while (e != null)
@@ -439,7 +439,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <summary>
         /// Remove all entries from the dynamic table.
         /// </summary>
-        private void clear()
+        private void Clear()
         {
             for (int i = 0; i < headerFields.Length; i++)
             {
@@ -455,7 +455,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// </summary>
         /// <returns><c>true</c> if hash name; otherwise, <c>false</c>.</returns>
         /// <param name="name">Name.</param>
-        private static int hash(ByteString name)
+        private static int Hash(ByteString name)
         {
             int h = 0;
             for (int i = 0; i < name.Length; i++)
@@ -480,9 +480,9 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// Returns the index into the hash table for the hash code h.
         /// </summary>
         /// <param name="h">The height.</param>
-        private static int index(int h)
+        private static int Index(int h)
         {
-            return h % bucketSize;
+            return h % BucketSize;
         }
 
         /// <summary>

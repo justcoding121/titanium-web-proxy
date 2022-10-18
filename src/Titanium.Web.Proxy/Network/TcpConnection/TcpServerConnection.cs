@@ -21,8 +21,8 @@ namespace Titanium.Web.Proxy.Network.Tcp
         {
             TcpSocket = tcpSocket;
             LastAccess = DateTime.UtcNow;
-            this.proxyServer = proxyServer;
-            this.proxyServer.UpdateServerConnectionCount(true);
+            this.ProxyServer = proxyServer;
+            this.ProxyServer.UpdateServerConnectionCount(true);
             Stream = stream;
             HostName = hostName;
             Port = port;
@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
             CacheKey = cacheKey;
         }
 
-        private ProxyServer proxyServer { get; }
+        private ProxyServer ProxyServer { get; }
 
         internal bool IsClosed => Stream.IsClosed;
 
@@ -100,7 +100,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 // This way we can push tcp Time_Wait to server side when possible.
                 await Task.Delay(1000);
 
-                proxyServer.UpdateServerConnectionCount(false);
+                ProxyServer.UpdateServerConnectionCount(false);
 
                 if (disposing)
                 {

@@ -8,20 +8,20 @@ namespace Titanium.Web.Proxy.Network
 {
     public sealed class DefaultCertificateDiskCache : ICertificateCache
     {
-        private const string defaultCertificateDirectoryName = "crts";
-        private const string defaultCertificateFileExtension = ".pfx";
-        private const string defaultRootCertificateFileName = "rootCert" + defaultCertificateFileExtension;
+        private const string DefaultCertificateDirectoryName = "crts";
+        private const string DefaultCertificateFileExtension = ".pfx";
+        private const string DefaultRootCertificateFileName = "rootCert" + DefaultCertificateFileExtension;
         private string? rootCertificatePath;
 
         public X509Certificate2? LoadRootCertificate(string pathOrName, string password, X509KeyStorageFlags storageFlags)
         {
-            string path = getRootCertificatePath(pathOrName);
-            return loadCertificate(path, password, storageFlags);
+            string path = GetRootCertificatePath(pathOrName);
+            return LoadCertificate(path, password, storageFlags);
         }
 
         public void SaveRootCertificate(string pathOrName, string password, X509Certificate2 certificate)
         {
-            string path = getRootCertificatePath(pathOrName);
+            string path = GetRootCertificatePath(pathOrName);
             byte[] exported = certificate.Export(X509ContentType.Pkcs12, password);
             File.WriteAllBytes(path, exported);
         }
@@ -29,14 +29,14 @@ namespace Titanium.Web.Proxy.Network
         /// <inheritdoc />
         public X509Certificate2? LoadCertificate(string subjectName, X509KeyStorageFlags storageFlags)
         {
-            string filePath = Path.Combine(getCertificatePath(false), subjectName + defaultCertificateFileExtension);
-            return loadCertificate(filePath, string.Empty, storageFlags);
+            string filePath = Path.Combine(GetCertificatePath(false), subjectName + DefaultCertificateFileExtension);
+            return LoadCertificate(filePath, string.Empty, storageFlags);
         }
 
         /// <inheritdoc />
         public void SaveCertificate(string subjectName, X509Certificate2 certificate)
         {
-            string filePath = Path.Combine(getCertificatePath(true), subjectName + defaultCertificateFileExtension);
+            string filePath = Path.Combine(GetCertificatePath(true), subjectName + DefaultCertificateFileExtension);
             byte[] exported = certificate.Export(X509ContentType.Pkcs12);
             File.WriteAllBytes(filePath, exported);
         }
@@ -45,7 +45,7 @@ namespace Titanium.Web.Proxy.Network
         {
             try
             {
-                string path = getCertificatePath(false);
+                string path = GetCertificatePath(false);
                 if (Directory.Exists(path))
                 {
                     Directory.Delete(path, true);
@@ -57,7 +57,7 @@ namespace Titanium.Web.Proxy.Network
             }
         }
 
-        private X509Certificate2? loadCertificate(string path, string password, X509KeyStorageFlags storageFlags)
+        private X509Certificate2? LoadCertificate(string path, string password, X509KeyStorageFlags storageFlags)
         {
             byte[] exported;
 
@@ -79,22 +79,22 @@ namespace Titanium.Web.Proxy.Network
             return new X509Certificate2(exported, password, storageFlags);
         }
 
-        private string getRootCertificatePath(string pathOrName)
+        private string GetRootCertificatePath(string pathOrName)
         {
             if (Path.IsPathRooted(pathOrName))
             {
                 return pathOrName;
             }
 
-            return Path.Combine(getRootCertificateDirectory(),
-                string.IsNullOrEmpty(pathOrName) ? defaultRootCertificateFileName : pathOrName);
+            return Path.Combine(GetRootCertificateDirectory(),
+                string.IsNullOrEmpty(pathOrName) ? DefaultRootCertificateFileName : pathOrName);
         }
 
-        private string getCertificatePath(bool create)
+        private string GetCertificatePath(bool create)
         {
-            string path = getRootCertificateDirectory();
+            string path = GetRootCertificateDirectory();
 
-            string certPath = Path.Combine(path, defaultCertificateDirectoryName);
+            string certPath = Path.Combine(path, DefaultCertificateDirectoryName);
             if (create && !Directory.Exists(certPath))
             {
                 Directory.CreateDirectory(certPath);
@@ -103,7 +103,7 @@ namespace Titanium.Web.Proxy.Network
             return certPath;
         }
 
-        private string getRootCertificateDirectory()
+        private string GetRootCertificateDirectory()
         {
             if (rootCertificatePath == null)
             {

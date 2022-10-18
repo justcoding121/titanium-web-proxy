@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy.Helpers
                     // if DNS resolved hostname matches local DNS name,
                     // or if host IP address list contains any local IP address
                     if (hostEntry.HostName.Equals(localhostEntry.HostName, StringComparison.OrdinalIgnoreCase)
-                        || hostEntry.AddressList.Any(hostIP => localhostEntry.AddressList.Contains(hostIP)))
+                        || hostEntry.AddressList.Any(hostIp => localhostEntry.AddressList.Contains(hostIp)))
                     {
                         return true;
                     }

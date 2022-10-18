@@ -45,67 +45,67 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             const int entryCount = 61;
             staticTable = new List<HttpHeader>(entryCount);
             staticIndexByName = new Dictionary<ByteString, int>(entryCount);
-            create(KnownHeaderAuhtority, string.Empty); // 1
-            create(KnownHeaderMethod, "GET"); // 2
-            create(KnownHeaderMethod, "POST"); // 3
-            create(KnownHeaderPath, "/"); // 4
-            create(KnownHeaderPath, "/index.html"); // 5
-            create(KnownHeaderScheme, "http"); // 6
-            create(KnownHeaderScheme, "https"); // 7
-            create(KnownHeaderStatus, "200"); // 8
-            create(KnownHeaderStatus, "204"); // 9
-            create(KnownHeaderStatus, "206"); // 10
-            create(KnownHeaderStatus, "304"); // 11
-            create(KnownHeaderStatus, "400"); // 12
-            create(KnownHeaderStatus, "404"); // 13
-            create(KnownHeaderStatus, "500"); // 14
-            create("Accept-Charset", string.Empty); // 15
-            create("Accept-Encoding", "gzip, deflate"); // 16
-            create("Accept-Language", string.Empty); // 17
-            create("Accept-Ranges", string.Empty); // 18
-            create("Accept", string.Empty); // 19
-            create("Access-Control-Allow-Origin", string.Empty); // 20
-            create("Age", string.Empty); // 21
-            create("Allow", string.Empty); // 22
-            create("Authorization", string.Empty); // 23
-            create("Cache-Control", string.Empty); // 24
-            create("Content-Disposition", string.Empty); // 25
-            create("Content-Encoding", string.Empty); // 26
-            create("Content-Language", string.Empty); // 27
-            create("Content-Length", string.Empty); // 28
-            create("Content-Location", string.Empty); // 29
-            create("Content-Range", string.Empty); // 30
-            create("Content-Type", string.Empty); // 31
-            create("Cookie", string.Empty); // 32
-            create("Date", string.Empty); // 33
-            create("ETag", string.Empty); // 34
-            create("Expect", string.Empty); // 35
-            create("Expires", string.Empty); // 36
-            create("From", string.Empty); // 37
-            create("Host", string.Empty); // 38
-            create("If-Match", string.Empty); // 39
-            create("If-Modified-Since", string.Empty); // 40
-            create("If-None-Match", string.Empty); // 41
-            create("If-Range", string.Empty); // 42
-            create("If-Unmodified-Since", string.Empty); // 43
-            create("Last-Modified", string.Empty); // 44
-            create("Link", string.Empty); // 45
-            create("Location", string.Empty); // 46
-            create("Max-Forwards", string.Empty); // 47
-            create("Proxy-Authenticate", string.Empty); // 48
-            create("Proxy-Authorization", string.Empty); // 49
-            create("Range", string.Empty); // 50
-            create("Referer", string.Empty); // 51
-            create("Refresh", string.Empty); // 52
-            create("Retry-After", string.Empty); // 53
-            create("Server", string.Empty); // 54
-            create("Set-Cookie", string.Empty); // 55
-            create("Strict-Transport-Security", string.Empty); // 56
-            create("Transfer-Encoding", string.Empty); // 57
-            create("User-Agent", string.Empty); // 58
-            create("Vary", string.Empty); // 59
-            create("Via", string.Empty); // 60
-            create("WWW-Authenticate", string.Empty); // 61
+            Create(KnownHeaderAuhtority, string.Empty); // 1
+            Create(KnownHeaderMethod, "GET"); // 2
+            Create(KnownHeaderMethod, "POST"); // 3
+            Create(KnownHeaderPath, "/"); // 4
+            Create(KnownHeaderPath, "/index.html"); // 5
+            Create(KnownHeaderScheme, "http"); // 6
+            Create(KnownHeaderScheme, "https"); // 7
+            Create(KnownHeaderStatus, "200"); // 8
+            Create(KnownHeaderStatus, "204"); // 9
+            Create(KnownHeaderStatus, "206"); // 10
+            Create(KnownHeaderStatus, "304"); // 11
+            Create(KnownHeaderStatus, "400"); // 12
+            Create(KnownHeaderStatus, "404"); // 13
+            Create(KnownHeaderStatus, "500"); // 14
+            Create("Accept-Charset", string.Empty); // 15
+            Create("Accept-Encoding", "gzip, deflate"); // 16
+            Create("Accept-Language", string.Empty); // 17
+            Create("Accept-Ranges", string.Empty); // 18
+            Create("Accept", string.Empty); // 19
+            Create("Access-Control-Allow-Origin", string.Empty); // 20
+            Create("Age", string.Empty); // 21
+            Create("Allow", string.Empty); // 22
+            Create("Authorization", string.Empty); // 23
+            Create("Cache-Control", string.Empty); // 24
+            Create("Content-Disposition", string.Empty); // 25
+            Create("Content-Encoding", string.Empty); // 26
+            Create("Content-Language", string.Empty); // 27
+            Create("Content-Length", string.Empty); // 28
+            Create("Content-Location", string.Empty); // 29
+            Create("Content-Range", string.Empty); // 30
+            Create("Content-Type", string.Empty); // 31
+            Create("Cookie", string.Empty); // 32
+            Create("Date", string.Empty); // 33
+            Create("ETag", string.Empty); // 34
+            Create("Expect", string.Empty); // 35
+            Create("Expires", string.Empty); // 36
+            Create("From", string.Empty); // 37
+            Create("Host", string.Empty); // 38
+            Create("If-Match", string.Empty); // 39
+            Create("If-Modified-Since", string.Empty); // 40
+            Create("If-None-Match", string.Empty); // 41
+            Create("If-Range", string.Empty); // 42
+            Create("If-Unmodified-Since", string.Empty); // 43
+            Create("Last-Modified", string.Empty); // 44
+            Create("Link", string.Empty); // 45
+            Create("Location", string.Empty); // 46
+            Create("Max-Forwards", string.Empty); // 47
+            Create("Proxy-Authenticate", string.Empty); // 48
+            Create("Proxy-Authorization", string.Empty); // 49
+            Create("Range", string.Empty); // 50
+            Create("Referer", string.Empty); // 51
+            Create("Refresh", string.Empty); // 52
+            Create("Retry-After", string.Empty); // 53
+            Create("Server", string.Empty); // 54
+            Create("Set-Cookie", string.Empty); // 55
+            Create("Strict-Transport-Security", string.Empty); // 56
+            Create("Transfer-Encoding", string.Empty); // 57
+            Create("User-Agent", string.Empty); // 58
+            Create("Vary", string.Empty); // 59
+            Create("Via", string.Empty); // 60
+            Create("WWW-Authenticate", string.Empty); // 61
         }
 
         /// <summary>
@@ -175,12 +175,12 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             return -1;
         }
 
-        private static void create(string name, string value)
+        private static void Create(string name, string value)
         {
-            create((ByteString)name.ToLower(), value);
+            Create((ByteString)name.ToLower(), value);
         }
 
-        private static void create(ByteString name, string value)
+        private static void Create(ByteString name, string value)
         {
             staticTable.Add(new HttpHeader(name, (ByteString)value));
             staticIndexByName[name] = staticTable.Count;

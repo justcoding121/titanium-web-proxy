@@ -269,7 +269,7 @@ namespace Titanium.Web.Proxy.Http
 
             // Find the request Verb
             method = httpCmd.Substring(0, firstSpace);
-            if (!isAllUpper(method))
+            if (!IsAllUpper(method))
             {
                 method = method.ToUpper();
             }
@@ -294,7 +294,7 @@ namespace Titanium.Web.Proxy.Http
             }
         }
 
-        private static bool isAllUpper(string input)
+        private static bool IsAllUpper(string input)
         {
             for (int i = 0; i < input.Length; i++)
             {

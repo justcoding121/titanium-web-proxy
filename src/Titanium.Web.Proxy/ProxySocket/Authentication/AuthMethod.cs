@@ -74,8 +74,8 @@ namespace Titanium.Web.Proxy.ProxySocket.Authentication
         /// <value>The socket connection with the proxy server.</value>
         protected Socket Server
         {
-            get => _server;
-            set => _server = value ?? throw new ArgumentNullException();
+            get => server;
+            set => server = value ?? throw new ArgumentNullException();
         }
 
         /// <summary>
@@ -93,7 +93,7 @@ namespace Titanium.Web.Proxy.ProxySocket.Authentication
         // private variables
 
         /// <summary>Holds the value of the Server property.</summary>
-        private Socket _server;
+        private Socket server;
 
         /// <summary>Holds the address of the method to call when the proxy has authenticated the client.</summary>
         protected HandShakeComplete CallBack;

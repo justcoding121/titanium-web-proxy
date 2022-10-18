@@ -114,33 +114,33 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <exception cref="ProxyException">An error occurred while talking to the proxy server.</exception>
         public new void Connect(IPAddress address, int port)
         {
-            var remoteEP = new IPEndPoint(address, port);
-            Connect(remoteEP);
+            var remoteEp = new IPEndPoint(address, port);
+            Connect(remoteEp);
         }
 
         /// <summary>
         /// Establishes a connection to a remote device.
         /// </summary>
-        /// <param name="remoteEP">An EndPoint that represents the remote device.</param>
+        /// <param name="remoteEp">An EndPoint that represents the remote device.</param>
         /// <exception cref="ArgumentNullException">The remoteEP parameter is a null reference (Nothing in Visual Basic).</exception>
         /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
         /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
         /// <exception cref="ProxyException">An error occurred while talking to the proxy server.</exception>
-        public new void Connect(EndPoint remoteEP)
+        public new void Connect(EndPoint remoteEp)
         {
-            if (remoteEP == null)
+            if (remoteEp == null)
                 throw new ArgumentNullException("<remoteEP> cannot be null.");
             if (this.ProtocolType != ProtocolType.Tcp || ProxyType == ProxyTypes.None || ProxyEndPoint == null)
-                base.Connect(remoteEP);
+                base.Connect(remoteEp);
             else
             {
                 base.Connect(ProxyEndPoint);
                 if (ProxyType == ProxyTypes.Https)
-                    (new HttpsHandler(this, ProxyUser, ProxyPass)).Negotiate((IPEndPoint)remoteEP);
+                    (new HttpsHandler(this, ProxyUser, ProxyPass)).Negotiate((IPEndPoint)remoteEp);
                 else if (ProxyType == ProxyTypes.Socks4)
-                    (new Socks4Handler(this, ProxyUser)).Negotiate((IPEndPoint)remoteEP);
+                    (new Socks4Handler(this, ProxyUser)).Negotiate((IPEndPoint)remoteEp);
                 else if (ProxyType == ProxyTypes.Socks5)
-                    (new Socks5Handler(this, ProxyUser, ProxyPass)).Negotiate((IPEndPoint)remoteEP);
+                    (new Socks5Handler(this, ProxyUser, ProxyPass)).Negotiate((IPEndPoint)remoteEp);
             }
         }
 
@@ -190,48 +190,48 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
         public new IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback callback, object state)
         {
-            var remoteEP = new IPEndPoint(address, port);
-            return BeginConnect(remoteEP, callback, state);
+            var remoteEp = new IPEndPoint(address, port);
+            return BeginConnect(remoteEp, callback, state);
         }
 
         /// <summary>
         /// Begins an asynchronous request for a connection to a network device.
         /// </summary>
-        /// <param name="remoteEP">An EndPoint that represents the remote device.</param>
+        /// <param name="remoteEp">An EndPoint that represents the remote device.</param>
         /// <param name="callback">The AsyncCallback delegate.</param>
         /// <param name="state">An object that contains state information for this request.</param>
         /// <returns>An IAsyncResult that references the asynchronous connection.</returns>
         /// <exception cref="ArgumentNullException">The remoteEP parameter is a null reference (Nothing in Visual Basic).</exception>
         /// <exception cref="SocketException">An operating system error occurs while creating the Socket.</exception>
         /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-        public new IAsyncResult BeginConnect(EndPoint remoteEP, AsyncCallback callback, object state)
+        public new IAsyncResult BeginConnect(EndPoint remoteEp, AsyncCallback callback, object state)
         {
-            if (remoteEP == null)
+            if (remoteEp == null)
                 throw new ArgumentNullException();
 
             if (ProtocolType != ProtocolType.Tcp || ProxyType == ProxyTypes.None || ProxyEndPoint == null)
             {
-                return base.BeginConnect(remoteEP, callback, state);
+                return base.BeginConnect(remoteEp, callback, state);
             }
 
-            CallBack = callback;
+            callBack = callback;
             if (ProxyType == ProxyTypes.Https)
             {
-                AsyncResult = new HttpsHandler(this, ProxyUser, ProxyPass).BeginNegotiate((IPEndPoint)remoteEP,
+                AsyncResult = new HttpsHandler(this, ProxyUser, ProxyPass).BeginNegotiate((IPEndPoint)remoteEp,
                     OnHandShakeComplete, ProxyEndPoint, state);
                 return AsyncResult;
             }
 
             if (ProxyType == ProxyTypes.Socks4)
             {
-                AsyncResult = new Socks4Handler(this, ProxyUser).BeginNegotiate((IPEndPoint)remoteEP,
+                AsyncResult = new Socks4Handler(this, ProxyUser).BeginNegotiate((IPEndPoint)remoteEp,
                     OnHandShakeComplete, ProxyEndPoint, state);
                 return AsyncResult;
             }
 
             if (ProxyType == ProxyTypes.Socks5)
             {
-                AsyncResult = new Socks5Handler(this, ProxyUser, ProxyPass).BeginNegotiate((IPEndPoint)remoteEP,
+                AsyncResult = new Socks5Handler(this, ProxyUser, ProxyPass).BeginNegotiate((IPEndPoint)remoteEp,
                     OnHandShakeComplete, ProxyEndPoint, state);
                 return AsyncResult;
             }
@@ -257,7 +257,7 @@ namespace Titanium.Web.Proxy.ProxySocket
                 throw new ArgumentNullException();
             if (port <= 0 || port > 65535)
                 throw new ArgumentException();
-            CallBack = callback;
+            callBack = callback;
             if (this.ProtocolType != ProtocolType.Tcp || ProxyType == ProxyTypes.None || ProxyEndPoint == null)
             {
                 RemotePort = port;
@@ -304,7 +304,7 @@ namespace Titanium.Web.Proxy.ProxySocket
             if (asyncResult == null)
                 throw new ArgumentNullException();
             // In case we called Socket.BeginConnect() directly
-            if (!(asyncResult is IAsyncProxyResult))
+            if (!(asyncResult is AsyncProxyResult))
             {
                 base.EndConnect(asyncResult);
                 return;
@@ -325,12 +325,12 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <param name="state">The state.</param>
         /// <returns>An IAsyncResult instance that references the asynchronous request.</returns>
         /// <exception cref="SocketException">There was an error while trying to resolve the host.</exception>
-        internal IAsyncProxyResult BeginDns(string host, HandShakeComplete callback, object state)
+        internal AsyncProxyResult BeginDns(string host, HandShakeComplete callback, object state)
         {
             try
             {
                 Dns.BeginGetHostEntry(host, this.OnResolved, this);
-                return new IAsyncProxyResult(state);
+                return new AsyncProxyResult(state);
             }
             catch
             {
@@ -384,7 +384,7 @@ namespace Titanium.Web.Proxy.ProxySocket
 
             ToThrow = error;
             AsyncResult.Reset();
-            CallBack?.Invoke(AsyncResult);
+            callBack?.Invoke(AsyncResult);
         }
 
         /// <summary>
@@ -412,8 +412,8 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <exception cref="ArgumentNullException">The specified value is null.</exception>
         public string ProxyUser
         {
-            get => _proxyUser;
-            set => _proxyUser = value ?? throw new ArgumentNullException();
+            get => proxyUser;
+            set => proxyUser = value ?? throw new ArgumentNullException();
         }
 
         /// <summary>
@@ -423,15 +423,15 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <exception cref="ArgumentNullException">The specified value is null.</exception>
         public string ProxyPass
         {
-            get => _proxyPass;
-            set => _proxyPass = value ?? throw new ArgumentNullException();
+            get => proxyPass;
+            set => proxyPass = value ?? throw new ArgumentNullException();
         }
 
         /// <summary>
         /// Gets or sets the asynchronous result object.
         /// </summary>
         /// <value>An instance of the IAsyncProxyResult class.</value>
-        private IAsyncProxyResult AsyncResult { get; set; }
+        private AsyncProxyResult AsyncResult { get; set; }
 
         /// <summary>
         /// Gets or sets the exception to throw when the EndConnect method is called.
@@ -448,12 +448,12 @@ namespace Titanium.Web.Proxy.ProxySocket
         // private variables
 
         /// <summary>Holds the value of the ProxyUser property.</summary>
-        private string _proxyUser = string.Empty;
+        private string proxyUser = string.Empty;
 
         /// <summary>Holds the value of the ProxyPass property.</summary>
-        private string _proxyPass = string.Empty;
+        private string proxyPass = string.Empty;
 
         /// <summary>Holds a pointer to the method that should be called when the Socket is connected to the remote device.</summary>
-        private AsyncCallback CallBack;
+        private AsyncCallback callBack;
     }
 }

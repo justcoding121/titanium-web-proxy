@@ -32,7 +32,7 @@ namespace Titanium.Web.Proxy.Helpers
                             0) == 0)
                     {
                         int rowCount = *(int*)tcpTable;
-                        uint portInNetworkByteOrder = toNetworkByteOrder((uint)localPort);
+                        uint portInNetworkByteOrder = ToNetworkByteOrder((uint)localPort);
 
                         if (addressFamily == AddressFamily.InterNetwork)
                         {
@@ -83,7 +83,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         /// <param name="port"></param>
         /// <returns></returns>
-        private static uint toNetworkByteOrder(uint port)
+        private static uint ToNetworkByteOrder(uint port)
         {
             return ((port >> 8) & 0x00FF00FFu) | ((port << 8) & 0xFF00FF00u);
         }
@@ -101,7 +101,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onDataReceive"></param>
         /// <param name="cancellationTokenSource"></param>
         /// <returns></returns>
-        private static async Task sendRawTap(Stream clientStream, Stream serverStream, IBufferPool bufferPool,
+        private static async Task SendRawTap(Stream clientStream, Stream serverStream, IBufferPool bufferPool,
             Action<byte[], int, int>? onDataSend, Action<byte[], int, int>? onDataReceive,
             CancellationTokenSource cancellationTokenSource)
         {
@@ -136,7 +136,7 @@ namespace Titanium.Web.Proxy.Helpers
             ExceptionHandler? exceptionFunc)
         {
             // todo: fix APM mode
-            return sendRawTap(clientStream, serverStream, bufferPool, onDataSend, onDataReceive,
+            return SendRawTap(clientStream, serverStream, bufferPool, onDataSend, onDataReceive,
                 cancellationTokenSource);
         }
     }

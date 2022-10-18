@@ -20,11 +20,11 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal TcpClientConnection(ProxyServer proxyServer, Socket tcpClientSocket)
         {
             this.tcpClientSocket = tcpClientSocket;
-            this.proxyServer = proxyServer;
-            this.proxyServer.UpdateClientConnectionCount(true);
+            this.ProxyServer = proxyServer;
+            this.ProxyServer.UpdateClientConnectionCount(true);
         }
 
-        private ProxyServer proxyServer { get; }
+        private ProxyServer ProxyServer { get; }
 
         public Guid Id { get; } = Guid.NewGuid();
 
@@ -88,7 +88,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 // so that client have enough time to call close first.
                 // This way we can push tcp Time_Wait to client side when possible.
                 await Task.Delay(1000);
-                proxyServer.UpdateClientConnectionCount(false);
+                ProxyServer.UpdateClientConnectionCount(false);
 
                 if (disposing)
                 {

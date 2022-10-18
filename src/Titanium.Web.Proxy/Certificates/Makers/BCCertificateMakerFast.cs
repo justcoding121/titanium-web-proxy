@@ -25,20 +25,20 @@ namespace Titanium.Web.Proxy.Network.Certificate
     /// <summary>
     ///     Implements certificate generation operations.
     /// </summary>
-    internal class BCCertificateMakerFast : ICertificateMaker
+    internal class BcCertificateMakerFast : ICertificateMaker
     {
         private int certificateValidDays;
-        private const int certificateGraceDays = 366;
+        private const int CertificateGraceDays = 366;
 
         // The FriendlyName value cannot be set on Unix.
         // Set this flag to true when exception detected to avoid further exceptions
-        private static bool doNotSetFriendlyName;
+        private static bool _doNotSetFriendlyName;
 
         private readonly ExceptionHandler? exceptionFunc;
 
         public AsymmetricCipherKeyPair KeyPair { get; set; }
 
-        internal BCCertificateMakerFast(ExceptionHandler? exceptionFunc, int certificateValidDays)
+        internal BcCertificateMakerFast(ExceptionHandler? exceptionFunc, int certificateValidDays)
         {
             this.certificateValidDays = certificateValidDays;
             this.exceptionFunc = exceptionFunc;
@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <returns>X509Certificate2 instance.</returns>
         public X509Certificate2 MakeCertificate(string sSubjectCn, X509Certificate2? signingCert = null)
         {
-            return makeCertificateInternal(sSubjectCn, true, signingCert);
+            return MakeCertificateInternal(sSubjectCn, true, signingCert);
         }
 
         /// <summary>
@@ -69,7 +69,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="hostName">The host name</param>
         /// <returns>X509Certificate2 instance.</returns>
         /// <exception cref="PemException">Malformed sequence in RSA private key</exception>
-        private static X509Certificate2 generateCertificate(string? hostName,
+        private static X509Certificate2 GenerateCertificate(string? hostName,
             string subjectName,
             string issuerName, DateTime validFrom,
             DateTime validTo, AsymmetricCipherKeyPair subjectKeyPair,
@@ -146,17 +146,17 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 rsa.Exponent2, rsa.Coefficient);
 
             // Set private key onto certificate instance
-            var x509Certificate = withPrivateKey(certificate, rsaparams);
+            var x509Certificate = WithPrivateKey(certificate, rsaparams);
 
-            if (!doNotSetFriendlyName)
+            if (!_doNotSetFriendlyName)
             {
                 try
                 {
-                    x509Certificate.FriendlyName = ProxyConstants.CNRemoverRegex.Replace(subjectName, string.Empty);
+                    x509Certificate.FriendlyName = ProxyConstants.CnRemoverRegex.Replace(subjectName, string.Empty);
                 }
                 catch (PlatformNotSupportedException)
                 {
-                    doNotSetFriendlyName = true;
+                    _doNotSetFriendlyName = true;
                 }
             }
 
@@ -174,7 +174,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
             return keyPairGenerator.GenerateKeyPair();
         }
 
-        private static X509Certificate2 withPrivateKey(X509Certificate certificate, AsymmetricKeyParameter privateKey)
+        private static X509Certificate2 WithPrivateKey(X509Certificate certificate, AsymmetricKeyParameter privateKey)
         {
             const string password = "password";
             Pkcs12Store store;
@@ -215,16 +215,16 @@ namespace Titanium.Web.Proxy.Network.Certificate
         ///     You must specify a Signing Certificate if and only if you are not creating a
         ///     root.
         /// </exception>
-        private X509Certificate2 makeCertificateInternal(string hostName, string subjectName,
+        private X509Certificate2 MakeCertificateInternal(string hostName, string subjectName,
             DateTime validFrom, DateTime validTo, X509Certificate2? signingCertificate)
         {
             if (signingCertificate == null)
             {
-                return generateCertificate(null, subjectName, subjectName, validFrom, validTo, KeyPair);
+                return GenerateCertificate(null, subjectName, subjectName, validFrom, validTo, KeyPair);
             }
 
             var kp = DotNetUtilities.GetKeyPair(signingCertificate.PrivateKey);
-            return generateCertificate(hostName, subjectName, signingCertificate.Subject, validFrom, validTo, KeyPair,
+            return GenerateCertificate(hostName, subjectName, signingCertificate.Subject, validFrom, validTo, KeyPair,
                 issuerPrivateKey: kp.Private);
         }
 
@@ -235,11 +235,11 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <param name="switchToMtaIfNeeded">if set to <c>true</c> [switch to MTA if needed].</param>
         /// <param name="signingCert">The signing cert.</param>
         /// <returns>X509Certificate2.</returns>
-        private X509Certificate2 makeCertificateInternal(string subject,
+        private X509Certificate2 MakeCertificateInternal(string subject,
             bool switchToMtaIfNeeded, X509Certificate2? signingCert = null)
         {
-            return makeCertificateInternal(subject, $"CN={subject}",
-                DateTime.UtcNow.AddDays(-certificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays),
+            return MakeCertificateInternal(subject, $"CN={subject}",
+                DateTime.UtcNow.AddDays(-CertificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays),
                 signingCert);
         }
     }

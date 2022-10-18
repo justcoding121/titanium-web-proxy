@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy.Helpers
         private readonly bool leaveOpen;
         private readonly byte[] streamBuffer;
 
-        private static Encoding encoding => HttpHeader.Encoding;
+        private static Encoding Encoding => HttpHeader.Encoding;
 
         private static readonly bool networkStreamHack = true;
 
@@ -47,7 +47,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         public event EventHandler<DataEventArgs>? DataWrite;
 
-        private Stream baseStream { get; }
+        private Stream BaseStream { get; }
 
         public bool IsClosed => closedRead;
 
@@ -87,7 +87,7 @@ namespace Titanium.Web.Proxy.Helpers
                 isNetworkStream = true;
             }
 
-            this.baseStream = baseStream;
+            this.BaseStream = baseStream;
             this.leaveOpen = leaveOpen;
             streamBuffer = bufferPool.GetBuffer();
             this.bufferPool = bufferPool;
@@ -106,7 +106,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             try
             {
-                baseStream.Flush();
+                BaseStream.Flush();
             }
             catch
             {
@@ -128,7 +128,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             bufferLength = 0;
             bufferPos = 0;
-            return baseStream.Seek(offset, origin);
+            return BaseStream.Seek(offset, origin);
         }
 
         /// <summary>
@@ -137,7 +137,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="value">The desired length of the current stream in bytes.</param>
         public override void SetLength(long value)
         {
-            baseStream.SetLength(value);
+            BaseStream.SetLength(value);
         }
 
         /// <summary>
@@ -185,7 +185,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             try
             {
-                baseStream.Write(buffer, offset, count);
+                BaseStream.Write(buffer, offset, count);
             }
             catch
             {
@@ -232,7 +232,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             try
             {
-                await baseStream.FlushAsync(cancellationToken);
+                await BaseStream.FlushAsync(cancellationToken);
             }
             catch
             {
@@ -454,7 +454,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             try
             {
-                await baseStream.WriteAsync(buffer, offset, count, cancellationToken);
+                await BaseStream.WriteAsync(buffer, offset, count, cancellationToken);
             }
             catch
             {
@@ -480,7 +480,7 @@ namespace Titanium.Web.Proxy.Helpers
             {
                 buffer[0] = value;
                 OnDataWrite(buffer, 0, 1);
-                baseStream.Write(buffer, 0, 1);
+                BaseStream.Write(buffer, 0, 1);
             }
             catch
             {
@@ -520,7 +520,7 @@ namespace Titanium.Web.Proxy.Helpers
                 {
                     if (!leaveOpen)
                     {
-                        baseStream.Dispose();
+                        BaseStream.Dispose();
                     }
 
                     bufferPool.ReturnBuffer(streamBuffer);
@@ -531,27 +531,27 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         /// When overridden in a derived class, gets a value indicating whether the current stream supports reading.
         /// </summary>
-        public override bool CanRead => baseStream.CanRead;
+        public override bool CanRead => BaseStream.CanRead;
 
         /// <summary>
         /// When overridden in a derived class, gets a value indicating whether the current stream supports seeking.
         /// </summary>
-        public override bool CanSeek => baseStream.CanSeek;
+        public override bool CanSeek => BaseStream.CanSeek;
 
         /// <summary>
         /// When overridden in a derived class, gets a value indicating whether the current stream supports writing.
         /// </summary>
-        public override bool CanWrite => baseStream.CanWrite;
+        public override bool CanWrite => BaseStream.CanWrite;
 
         /// <summary>
         /// Gets a value that determines whether the current stream can time out.
         /// </summary>
-        public override bool CanTimeout => baseStream.CanTimeout;
+        public override bool CanTimeout => BaseStream.CanTimeout;
 
         /// <summary>
         /// When overridden in a derived class, gets the length in bytes of the stream.
         /// </summary>
-        public override long Length => baseStream.Length;
+        public override long Length => BaseStream.Length;
 
         /// <summary>
         /// Gets a value indicating whether data is available.
@@ -568,8 +568,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         public override long Position
         {
-            get => baseStream.Position;
-            set => baseStream.Position = value;
+            get => BaseStream.Position;
+            set => BaseStream.Position = value;
         }
 
         /// <summary>
@@ -577,8 +577,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         public override int ReadTimeout
         {
-            get => baseStream.ReadTimeout;
-            set => baseStream.ReadTimeout = value;
+            get => BaseStream.ReadTimeout;
+            set => BaseStream.ReadTimeout = value;
         }
 
         /// <summary>
@@ -586,8 +586,8 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         public override int WriteTimeout
         {
-            get => baseStream.WriteTimeout;
-            set => baseStream.WriteTimeout = value;
+            get => BaseStream.WriteTimeout;
+            set => BaseStream.WriteTimeout = value;
         }
 
         /// <summary>
@@ -612,7 +612,7 @@ namespace Titanium.Web.Proxy.Helpers
             bool result = false;
             try
             {
-                int readBytes = baseStream.Read(streamBuffer, bufferLength, streamBuffer.Length - bufferLength);
+                int readBytes = BaseStream.Read(streamBuffer, bufferLength, streamBuffer.Length - bufferLength);
                 result = readBytes > 0;
                 if (result)
                 {
@@ -668,7 +668,7 @@ namespace Titanium.Web.Proxy.Helpers
             bool result = false;
             try
             {
-                var readTask = baseStream.ReadAsync(streamBuffer, bufferLength, bytesToRead, cancellationToken);
+                var readTask = BaseStream.ReadAsync(streamBuffer, bufferLength, bytesToRead, cancellationToken);
                 if (isNetworkStream)
                 {
                     readTask = readTask.WithCancellation(cancellationToken);
@@ -734,10 +734,10 @@ namespace Titanium.Web.Proxy.Helpers
                     {
                         if (lastChar == '\r')
                         {
-                            return encoding.GetString(buffer, 0, bufferDataLength - 1);
+                            return Encoding.GetString(buffer, 0, bufferDataLength - 1);
                         }
 
-                        return encoding.GetString(buffer, 0, bufferDataLength);
+                        return Encoding.GetString(buffer, 0, bufferDataLength);
                     }
 
                     bufferDataLength++;
@@ -761,7 +761,7 @@ namespace Titanium.Web.Proxy.Helpers
                 return null;
             }
 
-            return encoding.GetString(buffer, 0, bufferDataLength);
+            return Encoding.GetString(buffer, 0, bufferDataLength);
         }
 
         /// <summary>        
@@ -854,7 +854,7 @@ namespace Titanium.Web.Proxy.Helpers
             return WriteAsync(newLine, cancellationToken: cancellationToken);
         }
 
-        private async ValueTask writeAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken)
+        private async ValueTask WriteAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken)
         {
             if (closedWrite)
             {
@@ -868,14 +868,14 @@ namespace Titanium.Web.Proxy.Helpers
                 var buffer = bufferPool.GetBuffer();
                 try
                 {
-                    int idx = encoding.GetBytes(value, 0, charCount, buffer, 0);
+                    int idx = Encoding.GetBytes(value, 0, charCount, buffer, 0);
                     if (newLineChars > 0)
                     {
                         Buffer.BlockCopy(newLine, 0, buffer, idx, newLineChars);
                         idx += newLineChars;
                     }
 
-                    await baseStream.WriteAsync(buffer, 0, idx, cancellationToken);
+                    await BaseStream.WriteAsync(buffer, 0, idx, cancellationToken);
                 }
                 catch
                 {
@@ -891,7 +891,7 @@ namespace Titanium.Web.Proxy.Helpers
             else
             {
                 var buffer = new byte[charCount + newLineChars + 1];
-                int idx = encoding.GetBytes(value, 0, charCount, buffer, 0);
+                int idx = Encoding.GetBytes(value, 0, charCount, buffer, 0);
                 if (newLineChars > 0)
                 {
                     Buffer.BlockCopy(newLine, 0, buffer, idx, newLineChars);
@@ -900,7 +900,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 try
                 {
-                    await baseStream.WriteAsync(buffer, 0, idx, cancellationToken);
+                    await BaseStream.WriteAsync(buffer, 0, idx, cancellationToken);
                 }
                 catch
                 {
@@ -913,7 +913,7 @@ namespace Titanium.Web.Proxy.Helpers
 
         public ValueTask WriteLineAsync(string value, CancellationToken cancellationToken = default)
         {
-            return writeAsyncInternal(value, true, cancellationToken);
+            return WriteAsyncInternal(value, true, cancellationToken);
         }
 
         /// <summary>
@@ -957,10 +957,10 @@ namespace Titanium.Web.Proxy.Helpers
 
             try
             {
-                await baseStream.WriteAsync(data, 0, data.Length, cancellationToken);
+                await BaseStream.WriteAsync(data, 0, data.Length, cancellationToken);
                 if (flush)
                 {
-                    await baseStream.FlushAsync(cancellationToken);
+                    await BaseStream.FlushAsync(cancellationToken);
                 }
             }
             catch
@@ -981,10 +981,10 @@ namespace Titanium.Web.Proxy.Helpers
 
             try
             {
-                await baseStream.WriteAsync(data, offset, count, cancellationToken);
+                await BaseStream.WriteAsync(data, offset, count, cancellationToken);
                 if (flush)
                 {
-                    await baseStream.FlushAsync(cancellationToken);
+                    await BaseStream.FlushAsync(cancellationToken);
                 }
             }
             catch
@@ -1006,7 +1006,7 @@ namespace Titanium.Web.Proxy.Helpers
         {
             if (isChunked)
             {
-                return writeBodyChunkedAsync(data, cancellationToken);
+                return WriteBodyChunkedAsync(data, cancellationToken);
             }
 
             return WriteAsync(data, cancellationToken: cancellationToken);
@@ -1077,7 +1077,7 @@ namespace Titanium.Web.Proxy.Helpers
             // For chunked request we need to read data as they arrive, until we reach a chunk end symbol
             if (isChunked)
             {
-                return copyBodyChunkedAsync(writer, isRequest, args, cancellationToken);
+                return CopyBodyChunkedAsync(writer, isRequest, args, cancellationToken);
             }
 
             // http 1.0 or the stream reader limits the stream
@@ -1087,10 +1087,10 @@ namespace Titanium.Web.Proxy.Helpers
             }
 
             // If not chunked then its easy just read the amount of bytes mentioned in content length header
-            return copyBytesToStream(writer, contentLength, isRequest, args, cancellationToken);
+            return CopyBytesToStream(writer, contentLength, isRequest, args, cancellationToken);
         }
 
-        private Task handleBodyWrite(IHttpStreamWriter writer, bool isChunked, long contentLength,
+        private Task HandleBodyWrite(IHttpStreamWriter writer, bool isChunked, long contentLength,
             bool isRequest, SessionEventArgs args, CancellationToken cancellationToken)
         {
             var originalContentLength = isRequest ? args.HttpClient.Request.OriginalContentLength : args.HttpClient.Response.OriginalContentLength;
@@ -1116,7 +1116,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="data"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async ValueTask writeBodyChunkedAsync(byte[] data, CancellationToken cancellationToken)
+        private async ValueTask WriteBodyChunkedAsync(byte[] data, CancellationToken cancellationToken)
         {
             var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
 
@@ -1136,7 +1136,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onCopy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task copyBodyChunkedAsync(IHttpStreamWriter writer, bool isRequest, SessionEventArgs args, CancellationToken cancellationToken)
+        private async Task CopyBodyChunkedAsync(IHttpStreamWriter writer, bool isRequest, SessionEventArgs args, CancellationToken cancellationToken)
         {
             while (true)
             {
@@ -1161,7 +1161,7 @@ namespace Titanium.Web.Proxy.Helpers
 
                 if (chunkSize != 0)
                 {
-                    await copyBytesToStream(writer, chunkSize, isRequest, args, cancellationToken);
+                    await CopyBytesToStream(writer, chunkSize, isRequest, args, cancellationToken);
                 }
 
                 await writer.WriteLineAsync(cancellationToken);
@@ -1184,7 +1184,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="onCopy"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        private async Task copyBytesToStream(IHttpStreamWriter writer, long count, bool isRequest, SessionEventArgs args,
+        private async Task CopyBytesToStream(IHttpStreamWriter writer, long count, bool isRequest, SessionEventArgs args,
             CancellationToken cancellationToken)
         {
             var buffer = bufferPool.GetBuffer();
@@ -1259,7 +1259,7 @@ namespace Titanium.Web.Proxy.Helpers
 
             try
             {
-                await baseStream.WriteAsync(buffer, cancellationToken);
+                await BaseStream.WriteAsync(buffer, cancellationToken);
             }
             catch
             {
@@ -1281,7 +1281,7 @@ namespace Titanium.Web.Proxy.Helpers
             buffer.CopyTo(buf);
             try
             {
-                await baseStream.WriteAsync(buf, 0, buf.Length, cancellationToken);
+                await BaseStream.WriteAsync(buf, 0, buf.Length, cancellationToken);
             }
             catch
             {

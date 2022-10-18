@@ -88,14 +88,14 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <summary>
         /// Creates an array of bytes that has to be sent when the user wants to connect to a specific IPEndPoint.
         /// </summary>
-        /// <param name="remoteEP">The IPEndPoint to connect to.</param>
+        /// <param name="remoteEp">The IPEndPoint to connect to.</param>
         /// <param name="buffer">The buffer which contains the result data.</param>
         /// <returns>An array of bytes that has to be sent when the user wants to connect to a specific IPEndPoint.</returns>
         /// <exception cref="ArgumentNullException"><c>remoteEP</c> is null.</exception>
-        private int GetEndPointBytes(IPEndPoint remoteEP, Memory<byte> buffer)
+        private int GetEndPointBytes(IPEndPoint remoteEp, Memory<byte> buffer)
         {
-            if (remoteEP == null)
-                throw new ArgumentNullException(nameof(remoteEP));
+            if (remoteEp == null)
+                throw new ArgumentNullException(nameof(remoteEp));
 
             int length = 9 + Username.Length;
             Debug.Assert(buffer.Length >= length);
@@ -103,8 +103,8 @@ namespace Titanium.Web.Proxy.ProxySocket
             var connect = buffer.Span;
             connect[0] = 4;
             connect[1] = 1;
-            PortToBytes(remoteEP.Port, connect.Slice(2));
-            remoteEP.Address.GetAddressBytes().CopyTo(connect.Slice(4));
+            PortToBytes(remoteEp.Port, connect.Slice(2));
+            remoteEp.Address.GetAddressBytes().CopyTo(connect.Slice(4));
             Encoding.ASCII.GetBytes(Username).CopyTo(connect.Slice(8));
             connect[length - 1] = 0;
             return length;
@@ -137,17 +137,17 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <summary>
         /// Starts negotiating with the SOCKS server.
         /// </summary>
-        /// <param name="remoteEP">The IPEndPoint to connect to.</param>
+        /// <param name="remoteEp">The IPEndPoint to connect to.</param>
         /// <exception cref="ArgumentNullException"><c>remoteEP</c> is null.</exception>
         /// <exception cref="ProxyException">The proxy rejected the request.</exception>
         /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
         /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-        public override void Negotiate(IPEndPoint remoteEP)
+        public override void Negotiate(IPEndPoint remoteEp)
         {
             var buffer = ArrayPool<byte>.Shared.Rent(9 + Username.Length);
             try
             {
-                int length = GetEndPointBytes(remoteEP, buffer);
+                int length = GetEndPointBytes(remoteEp, buffer);
                 Negotiate(buffer, length);
             }
             finally
@@ -194,33 +194,33 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
         /// <param name="state">The state.</param>
         /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
-        public override IAsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
+        public override AsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
             IPEndPoint proxyEndPoint, object state)
         {
             ProtocolComplete = callback;
             Buffer = ArrayPool<byte>.Shared.Rent(10 + Username.Length + host.Length);
             BufferCount = GetHostPortBytes(host, port, Buffer);
             Server.BeginConnect(proxyEndPoint, OnConnect, Server);
-            AsyncResult = new IAsyncProxyResult(state);
+            AsyncResult = new AsyncProxyResult(state);
             return AsyncResult;
         }
 
         /// <summary>
         /// Starts negotiating asynchronously with a SOCKS proxy server.
         /// </summary>
-        /// <param name="remoteEP">An IPEndPoint that represents the remote device.</param>
+        /// <param name="remoteEp">An IPEndPoint that represents the remote device.</param>
         /// <param name="callback">The method to call when the connection has been established.</param>
         /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
         /// <param name="state">The state.</param>
         /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
-        public override IAsyncProxyResult BeginNegotiate(IPEndPoint remoteEP, HandShakeComplete callback,
+        public override AsyncProxyResult BeginNegotiate(IPEndPoint remoteEp, HandShakeComplete callback,
             IPEndPoint proxyEndPoint, object state)
         {
             ProtocolComplete = callback;
             Buffer = ArrayPool<byte>.Shared.Rent(9 + Username.Length);
-            BufferCount = GetEndPointBytes(remoteEP, Buffer);
+            BufferCount = GetEndPointBytes(remoteEp, Buffer);
             Server.BeginConnect(proxyEndPoint, OnConnect, Server);
-            AsyncResult = new IAsyncProxyResult(state);
+            AsyncResult = new AsyncProxyResult(state);
             return AsyncResult;
         }
 

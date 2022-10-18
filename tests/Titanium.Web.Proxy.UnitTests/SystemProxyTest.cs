@@ -17,16 +17,16 @@ namespace Titanium.Web.Proxy.UnitTests
 
             try
             {
-                compareUrls();
+                CompareUrls();
 
                 proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.Http);
-                compareUrls();
+                CompareUrls();
 
                 proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.Https);
-                compareUrls();
+                CompareUrls();
 
                 proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.AllHttp);
-                compareUrls();
+                CompareUrls();
 
                 // for this test you need to add a proxy.pac file to a local webserver
                 //function FindProxyForURL(url, host)
@@ -43,25 +43,25 @@ namespace Titanium.Web.Proxy.UnitTests
                 //CompareUrls();
 
                 proxyManager.SetProxyOverride("<-loopback>");
-                compareUrls();
+                CompareUrls();
 
                 proxyManager.SetProxyOverride("<local>");
-                compareUrls();
+                CompareUrls();
 
                 proxyManager.SetProxyOverride("yahoo.com");
-                compareUrls();
+                CompareUrls();
 
                 proxyManager.SetProxyOverride("*.local");
-                compareUrls();
+                CompareUrls();
 
                 proxyManager.SetProxyOverride("http://*.local");
-                compareUrls();
+                CompareUrls();
 
                 proxyManager.SetProxyOverride("<-loopback>;*.local");
-                compareUrls();
+                CompareUrls();
 
                 proxyManager.SetProxyOverride("<-loopback>;*.local;<local>");
-                compareUrls();
+                CompareUrls();
             }
             finally
             {
@@ -69,12 +69,12 @@ namespace Titanium.Web.Proxy.UnitTests
             }
         }
 
-        private void compareUrls()
+        private void CompareUrls()
         {
             var webProxy = WebRequest.GetSystemWebProxy();
 
             var resolver = new WinHttpWebProxyFinder();
-            resolver.LoadFromIE();
+            resolver.LoadFromIe();
 
             CompareProxy(webProxy, resolver, "http://127.0.0.1");
             CompareProxy(webProxy, resolver, "https://127.0.0.1");

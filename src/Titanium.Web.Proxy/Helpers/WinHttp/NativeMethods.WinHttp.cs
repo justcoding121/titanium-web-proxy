@@ -10,7 +10,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
         {
             [DllImport("winhttp.dll", SetLastError = true)]
             internal static extern bool WinHttpGetIEProxyConfigForCurrentUser(
-                ref WINHTTP_CURRENT_USER_IE_PROXY_CONFIG proxyConfig);
+                ref WinhttpCurrentUserIeProxyConfig proxyConfig);
 
             [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
             internal static extern WinHttpHandle WinHttpOpen(string? userAgent, AccessType accessType, string? proxyName,
@@ -22,14 +22,14 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
 
             [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
             internal static extern bool WinHttpGetProxyForUrl(WinHttpHandle session, string url,
-                [In] ref WINHTTP_AUTOPROXY_OPTIONS autoProxyOptions,
-                out WINHTTP_PROXY_INFO proxyInfo);
+                [In] ref WinhttpAutoproxyOptions autoProxyOptions,
+                out WinhttpProxyInfo proxyInfo);
 
             [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
             internal static extern bool WinHttpCloseHandle(IntPtr httpSession);
 
             [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-            internal struct WINHTTP_CURRENT_USER_IE_PROXY_CONFIG
+            internal struct WinhttpCurrentUserIeProxyConfig
             {
                 public bool AutoDetect;
                 public IntPtr AutoConfigUrl;
@@ -62,7 +62,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             }
 
             [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-            internal struct WINHTTP_AUTOPROXY_OPTIONS
+            internal struct WinhttpAutoproxyOptions
             {
                 public AutoProxyFlags Flags;
                 public AutoDetectType AutoDetectFlags;
@@ -73,7 +73,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             }
 
             [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-            internal struct WINHTTP_PROXY_INFO
+            internal struct WinhttpProxyInfo
             {
                 public AccessType AccessType;
                 public IntPtr Proxy;
@@ -100,9 +100,9 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                 ConnectionError = 12030,
                 ResendRequest = 12032,
                 SecureCertDateInvalid = 12037,
-                SecureCertCNInvalid = 12038,
+                SecureCertCnInvalid = 12038,
                 AuthCertNeeded = 12044,
-                SecureInvalidCA = 12045,
+                SecureInvalidCa = 12045,
                 SecureCertRevFailed = 12057,
                 CannotCallBeforeOpen = 12100,
                 CannotCallBeforeSend = 12101,

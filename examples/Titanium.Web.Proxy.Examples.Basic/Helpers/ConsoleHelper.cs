@@ -9,10 +9,10 @@ namespace Titanium.Web.Proxy.Examples.Basic.Helpers
     /// </summary>
     internal static class ConsoleHelper
     {
-        private const uint ENABLE_QUICK_EDIT = 0x0040;
+        private const uint EnableQuickEdit = 0x0040;
 
         // STD_INPUT_HANDLE (DWORD): -10 is the standard input device.
-        private const int STD_INPUT_HANDLE = -10;
+        private const int StdInputHandle = -10;
 
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern IntPtr GetStdHandle(int nStdHandle);
@@ -25,7 +25,7 @@ namespace Titanium.Web.Proxy.Examples.Basic.Helpers
 
         internal static bool DisableQuickEditMode()
         {
-            var consoleHandle = GetStdHandle(STD_INPUT_HANDLE);
+            var consoleHandle = GetStdHandle(StdInputHandle);
 
             // get current console mode
             if (!GetConsoleMode(consoleHandle, out uint consoleMode))
@@ -35,7 +35,7 @@ namespace Titanium.Web.Proxy.Examples.Basic.Helpers
             }
 
             // Clear the quick edit bit in the mode flags
-            consoleMode &= ~ENABLE_QUICK_EDIT;
+            consoleMode &= ~EnableQuickEdit;
 
             // set the new mode
             if (!SetConsoleMode(consoleHandle, consoleMode))

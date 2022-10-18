@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy
         /// <summary>
         ///     Handle upgrade to websocket
         /// </summary>
-        private async Task handleWebSocketUpgrade(SessionEventArgs args,
+        private async Task HandleWebSocketUpgrade(SessionEventArgs args,
             HttpClientStream clientStream, TcpServerConnection serverConnection,
             CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
         {
@@ -34,7 +34,7 @@ namespace Titanium.Web.Proxy
             // If user requested call back then do it
             if (!args.HttpClient.Response.Locked)
             {
-                await onBeforeResponse(args);
+                await OnBeforeResponse(args);
             }
 
             await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool,

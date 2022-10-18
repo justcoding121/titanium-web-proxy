@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
         public HttpStatusCode ExpectationResponse;
         public string ResponseBody;
 
-        private static Encoding MsgEncoding = HttpHelper.GetEncodingFromContentType(null);
+        private static Encoding _msgEncoding = HttpHelper.GetEncodingFromContentType(null);
 
         public async Task HandleRequest(ConnectionContext context)
         {
@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                     StatusCode = (int)ExpectationResponse,
                     StatusDescription = ExpectationResponse.ToString()
                 };
-                await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes(respondContinue.HeaderText));
+                await context.Transport.Output.WriteAsync(_msgEncoding.GetBytes(respondContinue.HeaderText));
 
                 if (ExpectationResponse != HttpStatusCode.Continue)
                     return;
@@ -36,14 +36,14 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
 
             request = await ReadBody(request, context.Transport.Input);
 
-            var responseMsg = MsgEncoding.GetBytes(ResponseBody);
+            var responseMsg = _msgEncoding.GetBytes(ResponseBody);
             var respondOk = new Response(responseMsg)
             {
                 HttpVersion = new Version(1, 1),
                 StatusCode = (int)HttpStatusCode.OK,
                 StatusDescription = HttpStatusCode.OK.ToString()
             };
-            await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes(respondOk.HeaderText));
+            await context.Transport.Output.WriteAsync(_msgEncoding.GetBytes(respondOk.HeaderText));
             await context.Transport.Output.WriteAsync(responseMsg);
             context.Transport.Output.Complete();
         }
@@ -58,7 +58,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 {
                     var result = await input.ReadAsync();
                     foreach (var seg in result.Buffer)
-                        requestMsg += MsgEncoding.GetString(seg.Span);
+                        requestMsg += _msgEncoding.GetString(seg.Span);
                     input.AdvanceTo(result.Buffer.End);
                 }
             }
@@ -80,7 +80,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 {
                     var result = await input.ReadAsync();
                     foreach (var seg in result.Buffer)
-                        msg += MsgEncoding.GetString(seg.Span);
+                        msg += _msgEncoding.GetString(seg.Span);
                     input.AdvanceTo(result.Buffer.End);
                 }
             }

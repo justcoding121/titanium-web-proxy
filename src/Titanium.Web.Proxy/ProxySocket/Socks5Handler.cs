@@ -142,13 +142,13 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <summary>
         /// Creates an array of bytes that has to be sent when the user wants to connect to a specific IPEndPoint.
         /// </summary>
-        /// <param name="remoteEP">The IPEndPoint to connect to.</param>
+        /// <param name="remoteEp">The IPEndPoint to connect to.</param>
         /// <param name="buffer">The buffer which contains the result data.</param>
         /// <returns>An array of bytes that has to be sent when the user wants to connect to a specific IPEndPoint.</returns>
         /// <exception cref="ArgumentNullException"><c>remoteEP</c> is null.</exception>
-        private int GetEndPointBytes(IPEndPoint remoteEP, Memory<byte> buffer)
+        private int GetEndPointBytes(IPEndPoint remoteEp, Memory<byte> buffer)
         {
-            if (remoteEP == null)
+            if (remoteEp == null)
                 throw new ArgumentNullException();
 
             if (buffer.Length < 10)
@@ -159,8 +159,8 @@ namespace Titanium.Web.Proxy.ProxySocket
             connect[1] = 1;
             connect[2] = 0; // reserved
             connect[3] = 1;
-            remoteEP.Address.GetAddressBytes().CopyTo(connect.Slice(4));
-            PortToBytes(remoteEP.Port, connect.Slice(8));
+            remoteEp.Address.GetAddressBytes().CopyTo(connect.Slice(4));
+            PortToBytes(remoteEp.Port, connect.Slice(8));
             return 10;
         }
 
@@ -194,20 +194,20 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <summary>
         /// Starts negotiating with the SOCKS server.
         /// </summary>
-        /// <param name="remoteEP">The IPEndPoint to connect to.</param>
+        /// <param name="remoteEp">The IPEndPoint to connect to.</param>
         /// <exception cref="ArgumentNullException"><c>remoteEP</c> is null.</exception>
         /// <exception cref="ProxyException">The proxy rejected the request.</exception>
         /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
         /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
         /// <exception cref="ProtocolViolationException">The proxy server uses an invalid protocol.</exception>
-        public override void Negotiate(IPEndPoint remoteEP)
+        public override void Negotiate(IPEndPoint remoteEp)
         {
             var buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 13 + Username.Length + Password.Length));
             try
             {
                 Authenticate(buffer);
 
-                int length = GetEndPointBytes(remoteEP, buffer);
+                int length = GetEndPointBytes(remoteEp, buffer);
                 Negotiate(buffer, length);
             }
             finally
@@ -266,37 +266,37 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
         /// <param name="state">The state.</param>
         /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
-        public override IAsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
+        public override AsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
             IPEndPoint proxyEndPoint, object state)
         {
             ProtocolComplete = callback;
             Buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 10 + host.Length + Username.Length + Password.Length));
 
             // first {ConnectOffset} bytes are reserved for authentication 
-            _handShakeLength = GetHostPortBytes(host, port, Buffer.AsMemory(ConnectOffset));
+            handShakeLength = GetHostPortBytes(host, port, Buffer.AsMemory(ConnectOffset));
             Server.BeginConnect(proxyEndPoint, this.OnConnect, Server);
-            AsyncResult = new IAsyncProxyResult(state);
+            AsyncResult = new AsyncProxyResult(state);
             return AsyncResult;
         }
 
         /// <summary>
         /// Starts negotiating asynchronously with the SOCKS server. 
         /// </summary>
-        /// <param name="remoteEP">An IPEndPoint that represents the remote device.</param>
+        /// <param name="remoteEp">An IPEndPoint that represents the remote device.</param>
         /// <param name="callback">The method to call when the negotiation is complete.</param>
         /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
         /// <param name="state">The state.</param>
         /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
-        public override IAsyncProxyResult BeginNegotiate(IPEndPoint remoteEP, HandShakeComplete callback,
+        public override AsyncProxyResult BeginNegotiate(IPEndPoint remoteEp, HandShakeComplete callback,
             IPEndPoint proxyEndPoint, object state)
         {
             ProtocolComplete = callback;
             Buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 13 + Username.Length + Password.Length));
 
             // first {ConnectOffset} bytes are reserved for authentication 
-            _handShakeLength = GetEndPointBytes(remoteEP, Buffer.AsMemory(ConnectOffset));
+            handShakeLength = GetEndPointBytes(remoteEp, Buffer.AsMemory(ConnectOffset));
             Server.BeginConnect(proxyEndPoint, this.OnConnect, Server);
-            AsyncResult = new IAsyncProxyResult(state);
+            AsyncResult = new AsyncProxyResult(state);
             return AsyncResult;
         }
 
@@ -422,7 +422,7 @@ namespace Titanium.Web.Proxy.ProxySocket
 
             try
             {
-                Server.BeginSend(Buffer, ConnectOffset, _handShakeLength, SocketFlags.None, this.OnSent,
+                Server.BeginSend(Buffer, ConnectOffset, handShakeLength, SocketFlags.None, this.OnSent,
                     Server);
             }
             catch (Exception ex)
@@ -551,7 +551,7 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <summary>
         /// The length of the connect request.
         /// </summary>
-        private int _handShakeLength;
+        private int handShakeLength;
 
         /// <summary>
         /// Gets or sets the password to use when authenticating with the SOCKS5 server.
@@ -559,12 +559,12 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <value>The password to use when authenticating with the SOCKS5 server.</value>
         private string Password
         {
-            get => _password;
-            set => _password = value ?? throw new ArgumentNullException();
+            get => password;
+            set => password = value ?? throw new ArgumentNullException();
         }
 
         // private variables
         /// <summary>Holds the value of the Password property.</summary>
-        private string _password = string.Empty;
+        private string password = string.Empty;
     }
 }

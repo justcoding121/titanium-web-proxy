@@ -42,7 +42,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
         }
 
-        private bool hasMulipartEventSubscribers => MultipartRequestPartSent != null;
+        private bool HasMulipartEventSubscribers => MultipartRequestPartSent != null;
 
         /// <summary>
         /// Should we send the request again ?
@@ -76,7 +76,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Read request body content as bytes[] for current session
         /// </summary>
-        private async Task readRequestBodyAsync(CancellationToken cancellationToken)
+        private async Task ReadRequestBodyAsync(CancellationToken cancellationToken)
         {
             HttpClient.Request.EnsureBodyAvailable(false);
 
@@ -112,7 +112,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 }
                 else
                 {
-                    var body = await readBodyAsync(true, cancellationToken);
+                    var body = await ReadBodyAsync(true, cancellationToken);
                     if (!request.BodyAvailable)
                     {
                         request.Body = body;
@@ -151,7 +151,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// <summary>
         /// Read response body as byte[] for current response
         /// </summary>
-        private async Task readResponseBodyAsync(CancellationToken cancellationToken)
+        private async Task ReadResponseBodyAsync(CancellationToken cancellationToken)
         {
             if (!HttpClient.Request.Locked)
             {
@@ -194,7 +194,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 }
                 else
                 {
-                    var body = await readBodyAsync(false, cancellationToken);
+                    var body = await ReadBodyAsync(false, cancellationToken);
                     if (!response.BodyAvailable)
                     {
                         response.Body = body;
@@ -208,7 +208,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
         }
 
-        private async Task<byte[]> readBodyAsync(bool isRequest, CancellationToken cancellationToken)
+        private async Task<byte[]> ReadBodyAsync(bool isRequest, CancellationToken cancellationToken)
         {
             using var bodyStream = new MemoryStream();
             using var writer = new HttpStream(Server, bodyStream, BufferPool, cancellationToken);
@@ -219,7 +219,7 @@ namespace Titanium.Web.Proxy.EventArguments
             }
             else
             {
-                await copyResponseBodyAsync(writer, TransformationMode.Uncompress, cancellationToken);
+                await CopyResponseBodyAsync(writer, TransformationMode.Uncompress, cancellationToken);
             }
 
             return bodyStream.ToArray();
@@ -258,7 +258,7 @@ namespace Titanium.Web.Proxy.EventArguments
             long contentLength = request.ContentLength;
 
             // send the request body bytes to server
-            if (contentLength > 0 && hasMulipartEventSubscribers && request.IsMultipartFormData)
+            if (contentLength > 0 && HasMulipartEventSubscribers && request.IsMultipartFormData)
             {
                 var boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
 
@@ -266,7 +266,7 @@ namespace Titanium.Web.Proxy.EventArguments
                 {
                     while (contentLength > copyStream.ReadBytes)
                     {
-                        long read = await readUntilBoundaryAsync(copyStream, contentLength, boundary, cancellationToken);
+                        long read = await ReadUntilBoundaryAsync(copyStream, contentLength, boundary, cancellationToken);
                         if (read == 0)
                         {
                             break;
@@ -291,7 +291,7 @@ namespace Titanium.Web.Proxy.EventArguments
             request.IsBodyReceived = true;
         }
 
-        private async Task copyResponseBodyAsync(IHttpStreamWriter writer, TransformationMode transformation, CancellationToken cancellationToken)
+        private async Task CopyResponseBodyAsync(IHttpStreamWriter writer, TransformationMode transformation, CancellationToken cancellationToken)
         {
             var response = HttpClient.Response;
             await HttpClient.Connection.Stream.CopyBodyAsync(response, false, writer, transformation, false, this, cancellationToken);
@@ -302,7 +302,7 @@ namespace Titanium.Web.Proxy.EventArguments
         /// Read a line from the byte stream
         /// </summary>
         /// <returns></returns>
-        private async Task<long> readUntilBoundaryAsync(ILineStream reader, long totalBytesToRead, ReadOnlyMemory<char> boundary, CancellationToken cancellationToken)
+        private async Task<long> ReadUntilBoundaryAsync(ILineStream reader, long totalBytesToRead, ReadOnlyMemory<char> boundary, CancellationToken cancellationToken)
         {
             int bufferDataLength = 0;
 
@@ -369,7 +369,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (!HttpClient.Request.IsBodyRead)
             {
-                await readRequestBodyAsync(cancellationToken);
+                await ReadRequestBodyAsync(cancellationToken);
             }
 
             return HttpClient.Request.Body;
@@ -384,7 +384,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (!HttpClient.Request.IsBodyRead)
             {
-                await readRequestBodyAsync(cancellationToken);
+                await ReadRequestBodyAsync(cancellationToken);
             }
 
             return HttpClient.Request.BodyString;
@@ -429,7 +429,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (!HttpClient.Response.IsBodyRead)
             {
-                await readResponseBodyAsync(cancellationToken);
+                await ReadResponseBodyAsync(cancellationToken);
             }
 
             return HttpClient.Response.Body;
@@ -444,7 +444,7 @@ namespace Titanium.Web.Proxy.EventArguments
         {
             if (!HttpClient.Response.IsBodyRead)
             {
-                await readResponseBodyAsync(cancellationToken);
+                await ReadResponseBodyAsync(cancellationToken);
             }
 
             return HttpClient.Response.BodyString;

@@ -108,17 +108,17 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <summary>
         /// Starts negotiating with the SOCKS server.
         /// </summary>
-        /// <param name="remoteEP">The IPEndPoint to connect to.</param>
+        /// <param name="remoteEp">The IPEndPoint to connect to.</param>
         /// <exception cref="ArgumentNullException"><c>remoteEP</c> is null.</exception>
         /// <exception cref="ProxyException">The proxy rejected the request.</exception>
         /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
         /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
         /// <exception cref="ProtocolViolationException">The proxy server uses an invalid protocol.</exception>
-        public override void Negotiate(IPEndPoint remoteEP)
+        public override void Negotiate(IPEndPoint remoteEp)
         {
-            if (remoteEP == null)
+            if (remoteEp == null)
                 throw new ArgumentNullException();
-            Negotiate(remoteEP.Address.ToString(), remoteEP.Port);
+            Negotiate(remoteEp.Address.ToString(), remoteEp.Port);
         }
 
         /// <summary>
@@ -170,15 +170,15 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <summary>
         /// Starts negotiating asynchronously with the HTTPS server. 
         /// </summary>
-        /// <param name="remoteEP">An IPEndPoint that represents the remote device.</param>
+        /// <param name="remoteEp">An IPEndPoint that represents the remote device.</param>
         /// <param name="callback">The method to call when the negotiation is complete.</param>
         /// <param name="proxyEndPoint">The IPEndPoint of the HTTPS proxy server.</param>
         /// <param name="state">The state.</param>
         /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
-        public override IAsyncProxyResult BeginNegotiate(IPEndPoint remoteEP, HandShakeComplete callback,
+        public override AsyncProxyResult BeginNegotiate(IPEndPoint remoteEp, HandShakeComplete callback,
             IPEndPoint proxyEndPoint, object state)
         {
-            return BeginNegotiate(remoteEP.Address.ToString(), remoteEP.Port, callback, proxyEndPoint, state);
+            return BeginNegotiate(remoteEp.Address.ToString(), remoteEp.Port, callback, proxyEndPoint, state);
         }
 
         /// <summary>
@@ -190,13 +190,13 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <param name="proxyEndPoint">The IPEndPoint of the HTTPS proxy server.</param>
         /// <param name="state">The state.</param>
         /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
-        public override IAsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
+        public override AsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
             IPEndPoint proxyEndPoint, object state)
         {
             ProtocolComplete = callback;
             Buffer = GetConnectBytes(host, port);
             Server.BeginConnect(proxyEndPoint, this.OnConnect, Server);
-            AsyncResult = new IAsyncProxyResult(state);
+            AsyncResult = new AsyncProxyResult(state);
             return AsyncResult;
         }
 
@@ -287,7 +287,7 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <param name="readFirstByte"></param>
         private void ReadUntilHeadersEnd(bool readFirstByte)
         {
-            while (Server.Available > 0 && _receivedNewlineChars < 4)
+            while (Server.Available > 0 && receivedNewlineChars < 4)
             {
                 if (!readFirstByte)
                     readFirstByte = false;
@@ -298,13 +298,13 @@ namespace Titanium.Web.Proxy.ProxySocket
                         throw new SocketException(10054);
                 }
 
-                if (Buffer[0] == (_receivedNewlineChars % 2 == 0 ? '\r' : '\n'))
-                    _receivedNewlineChars++;
+                if (Buffer[0] == (receivedNewlineChars % 2 == 0 ? '\r' : '\n'))
+                    receivedNewlineChars++;
                 else
-                    _receivedNewlineChars = Buffer[0] == '\r' ? 1 : 0;
+                    receivedNewlineChars = Buffer[0] == '\r' ? 1 : 0;
             }
 
-            if (_receivedNewlineChars == 4)
+            if (receivedNewlineChars == 4)
             {
                 OnProtocolComplete(null);
             }
@@ -348,19 +348,19 @@ namespace Titanium.Web.Proxy.ProxySocket
         {
             get
             {
-                return _password;
+                return password;
             }
             set
             {
-                _password = value ?? throw new ArgumentNullException();
+                password = value ?? throw new ArgumentNullException();
             }
         }
 
         // private variables
         /// <summary>Holds the value of the Password property.</summary>
-        private string _password;
+        private string password;
 
         /// <summary>Holds the count of newline characters received.</summary>
-        private int _receivedNewlineChars;
+        private int receivedNewlineChars;
     }
 }

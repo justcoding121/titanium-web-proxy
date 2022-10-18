@@ -27,20 +27,20 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
         private readonly Type typeCAlternativeName;
 
-        private readonly Type typeEKUExt;
+        private readonly Type typeEkuExt;
 
         private readonly Type typeExtNames;
 
-        private readonly Type typeKUExt;
+        private readonly Type typeKuExt;
 
-        private readonly Type typeOID;
+        private readonly Type typeOid;
 
-        private readonly Type typeOIDS;
+        private readonly Type typeOids;
 
         private readonly Type typeRequestCert;
 
         private readonly Type typeSignerCertificate;
-        private readonly Type typeX500DN;
+        private readonly Type typeX500Dn;
 
         private readonly Type typeX509Enrollment;
 
@@ -58,12 +58,12 @@ namespace Titanium.Web.Proxy.Network.Certificate
             this.certificateValidDays = certificateValidDays;
             this.exceptionFunc = exceptionFunc;
 
-            typeX500DN = Type.GetTypeFromProgID("X509Enrollment.CX500DistinguishedName", true);
+            typeX500Dn = Type.GetTypeFromProgID("X509Enrollment.CX500DistinguishedName", true);
             typeX509PrivateKey = Type.GetTypeFromProgID("X509Enrollment.CX509PrivateKey", true);
-            typeOID = Type.GetTypeFromProgID("X509Enrollment.CObjectId", true);
-            typeOIDS = Type.GetTypeFromProgID("X509Enrollment.CObjectIds.1", true);
-            typeEKUExt = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionEnhancedKeyUsage");
-            typeKUExt = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionKeyUsage");
+            typeOid = Type.GetTypeFromProgID("X509Enrollment.CObjectId", true);
+            typeOids = Type.GetTypeFromProgID("X509Enrollment.CObjectIds.1", true);
+            typeEkuExt = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionEnhancedKeyUsage");
+            typeKuExt = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionKeyUsage");
             typeRequestCert = Type.GetTypeFromProgID("X509Enrollment.CX509CertificateRequestCertificate");
             typeX509Extensions = Type.GetTypeFromProgID("X509Enrollment.CX509Extensions");
             typeBasicConstraints = Type.GetTypeFromProgID("X509Enrollment.CX509ExtensionBasicConstraints");
@@ -80,23 +80,23 @@ namespace Titanium.Web.Proxy.Network.Certificate
         /// <summary>
         ///     Make certificate.
         /// </summary>
-        public X509Certificate2 MakeCertificate(string sSubjectCN, X509Certificate2? signingCert = null)
+        public X509Certificate2 MakeCertificate(string sSubjectCn, X509Certificate2? signingCert = null)
         {
-            return makeCertificate(sSubjectCN, true, signingCert);
+            return MakeCertificate(sSubjectCn, true, signingCert);
         }
 
-        private X509Certificate2 makeCertificate(string sSubjectCN,
-            bool switchToMTAIfNeeded, X509Certificate2? signingCertificate = null,
+        private X509Certificate2 MakeCertificate(string sSubjectCn,
+            bool switchToMtaIfNeeded, X509Certificate2? signingCertificate = null,
             CancellationToken cancellationToken = default)
         {
-            if (switchToMTAIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
+            if (switchToMtaIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
             {
-                return Task.Run(() => makeCertificate(sSubjectCN, false, signingCertificate),
+                return Task.Run(() => MakeCertificate(sSubjectCn, false, signingCertificate),
                     cancellationToken).Result;
             }
 
             // Subject
-            string fullSubject = $"CN={sSubjectCN}";
+            string fullSubject = $"CN={sSubjectCn}";
 
             // Sig Algo
             const string hashAlgo = "SHA256";
@@ -109,27 +109,27 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             var now = DateTime.UtcNow;
             var graceTime = now.AddDays(graceDays);
-            var certificate = makeCertificate(sSubjectCN, fullSubject, keyLength, hashAlgo, graceTime,
+            var certificate = MakeCertificate(sSubjectCn, fullSubject, keyLength, hashAlgo, graceTime,
                 now.AddDays(certificateValidDays), signingCertificate);
             return certificate;
         }
 
-        private X509Certificate2 makeCertificate(string subject, string fullSubject,
+        private X509Certificate2 MakeCertificate(string subject, string fullSubject,
             int privateKeyLength, string hashAlg, DateTime validFrom, DateTime validTo,
             X509Certificate2? signingCertificate)
         {
-            var x500CertDN = Activator.CreateInstance(typeX500DN);
+            var x500CertDn = Activator.CreateInstance(typeX500Dn);
             var typeValue = new object[] { fullSubject, 0 };
-            typeX500DN.InvokeMember("Encode", BindingFlags.InvokeMethod, null, x500CertDN, typeValue);
+            typeX500Dn.InvokeMember("Encode", BindingFlags.InvokeMethod, null, x500CertDn, typeValue);
 
-            var x500RootCertDN = Activator.CreateInstance(typeX500DN);
+            var x500RootCertDn = Activator.CreateInstance(typeX500Dn);
 
             if (signingCertificate != null)
             {
                 typeValue[0] = signingCertificate.Subject;
             }
 
-            typeX500DN.InvokeMember("Encode", BindingFlags.InvokeMethod, null, x500RootCertDN, typeValue);
+            typeX500Dn.InvokeMember("Encode", BindingFlags.InvokeMethod, null, x500RootCertDn, typeValue);
 
             object? sharedPrivateKey = null;
             if (signingCertificate != null)
@@ -170,36 +170,36 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
             typeValue = new object[1];
 
-            var oid = Activator.CreateInstance(typeOID);
+            var oid = Activator.CreateInstance(typeOid);
             typeValue[0] = "1.3.6.1.5.5.7.3.1";
-            typeOID.InvokeMember("InitializeFromValue", BindingFlags.InvokeMethod, null, oid, typeValue);
+            typeOid.InvokeMember("InitializeFromValue", BindingFlags.InvokeMethod, null, oid, typeValue);
 
-            var oids = Activator.CreateInstance(typeOIDS);
+            var oids = Activator.CreateInstance(typeOids);
             typeValue[0] = oid;
-            typeOIDS.InvokeMember("Add", BindingFlags.InvokeMethod, null, oids, typeValue);
+            typeOids.InvokeMember("Add", BindingFlags.InvokeMethod, null, oids, typeValue);
 
-            var ekuExt = Activator.CreateInstance(typeEKUExt);
+            var ekuExt = Activator.CreateInstance(typeEkuExt);
             typeValue[0] = oids;
-            typeEKUExt.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, ekuExt, typeValue);
+            typeEkuExt.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, ekuExt, typeValue);
 
             var requestCert = Activator.CreateInstance(typeRequestCert);
 
             typeValue = new[] { 1, sharedPrivateKey, string.Empty };
             typeRequestCert.InvokeMember("InitializeFromPrivateKey", BindingFlags.InvokeMethod, null, requestCert,
                 typeValue);
-            typeValue = new[] { x500CertDN };
+            typeValue = new[] { x500CertDn };
             typeRequestCert.InvokeMember("Subject", BindingFlags.PutDispProperty, null, requestCert, typeValue);
-            typeValue[0] = x500RootCertDN;
+            typeValue[0] = x500RootCertDn;
             typeRequestCert.InvokeMember("Issuer", BindingFlags.PutDispProperty, null, requestCert, typeValue);
             typeValue[0] = validFrom;
             typeRequestCert.InvokeMember("NotBefore", BindingFlags.PutDispProperty, null, requestCert, typeValue);
             typeValue[0] = validTo;
             typeRequestCert.InvokeMember("NotAfter", BindingFlags.PutDispProperty, null, requestCert, typeValue);
 
-            var kuExt = Activator.CreateInstance(typeKUExt);
+            var kuExt = Activator.CreateInstance(typeKuExt);
 
             typeValue[0] = 176;
-            typeKUExt.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, kuExt, typeValue);
+            typeKuExt.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, kuExt, typeValue);
 
             var certificate =
                 typeRequestCert.InvokeMember("X509Extensions", BindingFlags.GetProperty, null, requestCert, null);
@@ -227,7 +227,7 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 if (IPAddress.TryParse(subject, out ip))
                 {
                     String ipBase64 = Convert.ToBase64String(ip.GetAddressBytes());
-                    typeValue = new object[] { AlternativeNameType.XCN_CERT_ALT_NAME_IP_ADDRESS, EncodingType.XCN_CRYPT_STRING_BASE64, ipBase64 };
+                    typeValue = new object[] { AlternativeNameType.XcnCertAltNameIpAddress, EncodingType.XcnCryptStringBase64, ipBase64 };
                     typeCAlternativeName.InvokeMember("InitializeFromRawData", BindingFlags.InvokeMethod, null, altDnsNames, typeValue);
                 }
                 else
@@ -270,10 +270,10 @@ namespace Titanium.Web.Proxy.Network.Certificate
                 typeX509Extensions.InvokeMember("Add", BindingFlags.InvokeMethod, null, certificate, typeValue);
             }
 
-            oid = Activator.CreateInstance(typeOID);
+            oid = Activator.CreateInstance(typeOid);
 
             typeValue = new object[] { 1, 0, 0, hashAlg };
-            typeOID.InvokeMember("InitializeFromAlgorithmName", BindingFlags.InvokeMethod, null, oid, typeValue);
+            typeOid.InvokeMember("InitializeFromAlgorithmName", BindingFlags.InvokeMethod, null, oid, typeValue);
 
             typeValue = new[] { oid };
             typeRequestCert.InvokeMember("HashAlgorithm", BindingFlags.PutDispProperty, null, requestCert, typeValue);
@@ -312,41 +312,41 @@ namespace Titanium.Web.Proxy.Network.Certificate
 
     public enum EncodingType
     {
-        XCN_CRYPT_STRING_ANY = 7,
-        XCN_CRYPT_STRING_BASE64 = 1,
-        XCN_CRYPT_STRING_BASE64_ANY = 6,
-        XCN_CRYPT_STRING_BASE64HEADER = 0,
-        XCN_CRYPT_STRING_BASE64REQUESTHEADER = 3,
-        XCN_CRYPT_STRING_BASE64URI = 13,
-        XCN_CRYPT_STRING_BASE64X509CRLHEADER = 9,
-        XCN_CRYPT_STRING_BINARY = 2,
-        XCN_CRYPT_STRING_CHAIN = 0x100,
-        XCN_CRYPT_STRING_ENCODEMASK = 0xff,
-        XCN_CRYPT_STRING_HASHDATA = 0x10000000,
-        XCN_CRYPT_STRING_HEX = 4,
-        XCN_CRYPT_STRING_HEX_ANY = 8,
-        XCN_CRYPT_STRING_HEXADDR = 10,
-        XCN_CRYPT_STRING_HEXASCII = 5,
-        XCN_CRYPT_STRING_HEXASCIIADDR = 11,
-        XCN_CRYPT_STRING_HEXRAW = 12,
-        XCN_CRYPT_STRING_NOCR = -2147483648,
-        XCN_CRYPT_STRING_NOCRLF = 0x40000000,
-        XCN_CRYPT_STRING_PERCENTESCAPE = 0x8000000,
-        XCN_CRYPT_STRING_STRICT = 0x20000000,
-        XCN_CRYPT_STRING_TEXT = 0x200
+        XcnCryptStringAny = 7,
+        XcnCryptStringBase64 = 1,
+        XcnCryptStringBase64Any = 6,
+        XcnCryptStringBase64Header = 0,
+        XcnCryptStringBase64Requestheader = 3,
+        XcnCryptStringBase64Uri = 13,
+        XcnCryptStringBase64X509Crlheader = 9,
+        XcnCryptStringBinary = 2,
+        XcnCryptStringChain = 0x100,
+        XcnCryptStringEncodemask = 0xff,
+        XcnCryptStringHashdata = 0x10000000,
+        XcnCryptStringHex = 4,
+        XcnCryptStringHexAny = 8,
+        XcnCryptStringHexaddr = 10,
+        XcnCryptStringHexascii = 5,
+        XcnCryptStringHexasciiaddr = 11,
+        XcnCryptStringHexraw = 12,
+        XcnCryptStringNocr = -2147483648,
+        XcnCryptStringNocrlf = 0x40000000,
+        XcnCryptStringPercentescape = 0x8000000,
+        XcnCryptStringStrict = 0x20000000,
+        XcnCryptStringText = 0x200
     }
 
     public enum AlternativeNameType
     {
-        XCN_CERT_ALT_NAME_DIRECTORY_NAME = 5,
-        XCN_CERT_ALT_NAME_DNS_NAME = 3,
-        XCN_CERT_ALT_NAME_GUID = 10,
-        XCN_CERT_ALT_NAME_IP_ADDRESS = 8,
-        XCN_CERT_ALT_NAME_OTHER_NAME = 1,
-        XCN_CERT_ALT_NAME_REGISTERED_ID = 9,
-        XCN_CERT_ALT_NAME_RFC822_NAME = 2,
-        XCN_CERT_ALT_NAME_UNKNOWN = 0,
-        XCN_CERT_ALT_NAME_URL = 7,
-        XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME = 11
+        XcnCertAltNameDirectoryName = 5,
+        XcnCertAltNameDnsName = 3,
+        XcnCertAltNameGuid = 10,
+        XcnCertAltNameIpAddress = 8,
+        XcnCertAltNameOtherName = 1,
+        XcnCertAltNameRegisteredId = 9,
+        XcnCertAltNameRfc822Name = 2,
+        XcnCertAltNameUnknown = 0,
+        XcnCertAltNameUrl = 7,
+        XcnCertAltNameUserPrincipleName = 11
     }
 }

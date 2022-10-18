@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.EventArguments
     /// </summary>
     public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     {
-        private static bool isWindowsAuthenticationSupported => RunTime.IsWindows;
+        private static bool IsWindowsAuthenticationSupported => RunTime.IsWindows;
 
         internal readonly CancellationTokenSource CancellationTokenSource;
 
@@ -60,7 +60,7 @@ namespace Titanium.Web.Proxy.EventArguments
             ClientStream = clientStream;
             HttpClient = new HttpWebClient(connectRequest, request, new Lazy<int>(() => clientStream.Connection.GetProcessId(endPoint)));
             ProxyEndPoint = endPoint;
-            EnableWinAuth = server.EnableWinAuth && isWindowsAuthenticationSupported;
+            EnableWinAuth = server.EnableWinAuth && IsWindowsAuthenticationSupported;
         }
 
         /// <summary>
@@ -81,7 +81,7 @@ namespace Titanium.Web.Proxy.EventArguments
             get => enableWinAuth;
             set
             {
-                if (value && !isWindowsAuthenticationSupported)
+                if (value && !IsWindowsAuthenticationSupported)
                     throw new Exception("Windows Authentication is not supported");
 
                 enableWinAuth = value;

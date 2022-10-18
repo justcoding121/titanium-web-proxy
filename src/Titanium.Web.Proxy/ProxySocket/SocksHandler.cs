@@ -154,8 +154,8 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <exception cref="ArgumentNullException">The specified value is null.</exception>
         protected Socket Server
         {
-            get => _server;
-            set => _server = value ?? throw new ArgumentNullException();
+            get => server;
+            set => server = value ?? throw new ArgumentNullException();
         }
 
         /// <summary>
@@ -165,15 +165,15 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <exception cref="ArgumentNullException">The specified value is null.</exception>
         protected string Username
         {
-            get => _username;
-            set => _username = value ?? throw new ArgumentNullException();
+            get => username;
+            set => username = value ?? throw new ArgumentNullException();
         }
 
         /// <summary>
         /// Gets or sets the return value of the BeginConnect call.
         /// </summary>
         /// <value>An IAsyncProxyResult object that is the return value of the BeginConnect call.</value>
-        protected IAsyncProxyResult AsyncResult { get; set; }
+        protected AsyncProxyResult AsyncResult { get; set; }
 
         /// <summary>
         /// Gets or sets a byte buffer.
@@ -194,10 +194,10 @@ namespace Titanium.Web.Proxy.ProxySocket
 
         // private variables
         /// <summary>Holds the value of the Server property.</summary>
-        private Socket _server;
+        private Socket server;
 
         /// <summary>Holds the value of the Username property.</summary>
-        private string _username = string.Empty;
+        private string username = string.Empty;
 
         /// <summary>Holds the address of the method to call when the SOCKS protocol has been completed.</summary>
         protected HandShakeComplete ProtocolComplete;
@@ -212,18 +212,18 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <summary>
         /// Starts negotiating with a SOCKS proxy server.
         /// </summary>
-        /// <param name="remoteEP">The remote endpoint to connect to.</param>
-        public abstract void Negotiate(IPEndPoint remoteEP);
+        /// <param name="remoteEp">The remote endpoint to connect to.</param>
+        public abstract void Negotiate(IPEndPoint remoteEp);
 
         /// <summary>
         /// Starts negotiating asynchronously with a SOCKS proxy server.
         /// </summary>
-        /// <param name="remoteEP">An IPEndPoint that represents the remote device. </param>
+        /// <param name="remoteEp">An IPEndPoint that represents the remote device. </param>
         /// <param name="callback">The method to call when the connection has been established.</param>
         /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
         /// <param name="state">The state.</param>
         /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
-        public abstract IAsyncProxyResult BeginNegotiate(IPEndPoint remoteEP, HandShakeComplete callback,
+        public abstract AsyncProxyResult BeginNegotiate(IPEndPoint remoteEp, HandShakeComplete callback,
             IPEndPoint proxyEndPoint, object state);
 
         /// <summary>
@@ -235,7 +235,7 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
         /// <param name="state">The state.</param>
         /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
-        public abstract IAsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
+        public abstract AsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
             IPEndPoint proxyEndPoint, object state);
     }
 }

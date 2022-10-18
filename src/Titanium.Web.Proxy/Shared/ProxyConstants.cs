@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.Shared
                 KnownHeaders.ContentEncodingBrotli.String
             };
 
-        internal static readonly Regex CNRemoverRegex =
+        internal static readonly Regex CnRemoverRegex =
             new Regex(@"^CN\s*=\s*", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     }
 }

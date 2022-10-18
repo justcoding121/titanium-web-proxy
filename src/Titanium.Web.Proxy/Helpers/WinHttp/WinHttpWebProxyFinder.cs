@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             session = NativeMethods.WinHttp.WinHttpOpen(null, NativeMethods.WinHttp.AccessType.NoProxy, null, null, 0);
             if (session == null || session.IsInvalid)
             {
-                int lastWin32Error = getLastWin32Error();
+                int lastWin32Error = GetLastWin32Error();
             }
             else
             {
@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                     return;
                 }
 
-                int lastWin32Error = getLastWin32Error();
+                int lastWin32Error = GetLastWin32Error();
             }
         }
 
@@ -46,7 +46,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
 
         public bool AutomaticallyDetectSettings { get; internal set; }
 
-        private WebProxy? proxy { get; set; }
+        private WebProxy? Proxy { get; set; }
 
         public bool GetAutoProxies(Uri destination, out IList<string>? proxyList)
         {
@@ -60,8 +60,8 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             var errorCode = NativeMethods.WinHttp.ErrorCodes.AudodetectionFailed;
             if (AutomaticallyDetectSettings && !autoDetectFailed)
             {
-                errorCode = (NativeMethods.WinHttp.ErrorCodes)getAutoProxies(destination, null, out proxyListString);
-                autoDetectFailed = isErrorFatalForAutoDetect(errorCode);
+                errorCode = (NativeMethods.WinHttp.ErrorCodes)GetAutoProxies(destination, null, out proxyListString);
+                autoDetectFailed = IsErrorFatalForAutoDetect(errorCode);
                 if (errorCode == NativeMethods.WinHttp.ErrorCodes.UnrecognizedScheme)
                 {
                     state = AutoWebProxyState.UnrecognizedScheme;
@@ -69,13 +69,13 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                 }
             }
 
-            if (AutomaticConfigurationScript != null && isRecoverableAutoProxyError(errorCode))
+            if (AutomaticConfigurationScript != null && IsRecoverableAutoProxyError(errorCode))
             {
-                errorCode = (NativeMethods.WinHttp.ErrorCodes)getAutoProxies(destination, AutomaticConfigurationScript,
+                errorCode = (NativeMethods.WinHttp.ErrorCodes)GetAutoProxies(destination, AutomaticConfigurationScript,
                     out proxyListString);
             }
 
-            state = getStateFromErrorCode(errorCode);
+            state = GetStateFromErrorCode(errorCode);
             if (state != AutoWebProxyState.Completed)
             {
                 return false;
@@ -83,7 +83,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
 
             if (!string.IsNullOrEmpty(proxyListString))
             {
-                proxyListString = removeWhitespaces(proxyListString!);
+                proxyListString = RemoveWhitespaces(proxyListString!);
                 proxyList = proxyListString.Split(';');
             }
 
@@ -114,7 +114,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                 return systemProxy;
             }
 
-            if (proxy?.IsBypassed(destination) == true)
+            if (Proxy?.IsBypassed(destination) == true)
             {
                 return null;
             }
@@ -133,15 +133,15 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             return null;
         }
 
-        public void LoadFromIE()
+        public void LoadFromIe()
         {
-            var pi = getProxyInfo();
+            var pi = GetProxyInfo();
             ProxyInfo = pi;
             AutomaticallyDetectSettings = pi.AutoDetect == true;
             AutomaticConfigurationScript = pi.AutoConfigUrl == null ? null : new Uri(pi.AutoConfigUrl);
             BypassLoopback = pi.BypassLoopback;
             BypassOnLocal = pi.BypassOnLocal;
-            proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal, pi.BypassList);
+            Proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal, pi.BypassList);
         }
 
         internal void UsePacFile(Uri upstreamProxyConfigurationScript)
@@ -150,12 +150,12 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             AutomaticConfigurationScript = upstreamProxyConfigurationScript;
             BypassLoopback = true;
             BypassOnLocal = false;
-            proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal);
+            Proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal);
         }
 
-        private ProxyInfo getProxyInfo()
+        private ProxyInfo GetProxyInfo()
         {
-            var proxyConfig = new NativeMethods.WinHttp.WINHTTP_CURRENT_USER_IE_PROXY_CONFIG();
+            var proxyConfig = new NativeMethods.WinHttp.WinhttpCurrentUserIeProxyConfig();
             RuntimeHelpers.PrepareConstrainedRegions();
             try
             {
@@ -195,10 +195,10 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             autoDetectFailed = false;
         }
 
-        private int getAutoProxies(Uri destination, Uri? scriptLocation, out string? proxyListString)
+        private int GetAutoProxies(Uri destination, Uri? scriptLocation, out string? proxyListString)
         {
             int num = 0;
-            var autoProxyOptions = new NativeMethods.WinHttp.WINHTTP_AUTOPROXY_OPTIONS();
+            var autoProxyOptions = new NativeMethods.WinHttp.WinhttpAutoproxyOptions();
             autoProxyOptions.AutoLogonIfChallenged = false;
             if (scriptLocation == null)
             {
@@ -214,16 +214,16 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
                 autoProxyOptions.AutoDetectFlags = NativeMethods.WinHttp.AutoDetectType.None;
             }
 
-            if (!winHttpGetProxyForUrl(destination.ToString(), ref autoProxyOptions, out proxyListString))
+            if (!WinHttpGetProxyForUrl(destination.ToString(), ref autoProxyOptions, out proxyListString))
             {
-                num = getLastWin32Error();
+                num = GetLastWin32Error();
 
                 if (num == (int)NativeMethods.WinHttp.ErrorCodes.LoginFailure && Credentials != null)
                 {
                     autoProxyOptions.AutoLogonIfChallenged = true;
-                    if (!winHttpGetProxyForUrl(destination.ToString(), ref autoProxyOptions, out proxyListString))
+                    if (!WinHttpGetProxyForUrl(destination.ToString(), ref autoProxyOptions, out proxyListString))
                     {
-                        num = getLastWin32Error();
+                        num = GetLastWin32Error();
                     }
                 }
             }
@@ -231,12 +231,12 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             return num;
         }
 
-        private bool winHttpGetProxyForUrl(string destination,
-            ref NativeMethods.WinHttp.WINHTTP_AUTOPROXY_OPTIONS autoProxyOptions, out string? proxyListString)
+        private bool WinHttpGetProxyForUrl(string destination,
+            ref NativeMethods.WinHttp.WinhttpAutoproxyOptions autoProxyOptions, out string? proxyListString)
         {
             proxyListString = null;
             bool flag;
-            var proxyInfo = new NativeMethods.WinHttp.WINHTTP_PROXY_INFO();
+            var proxyInfo = new NativeMethods.WinHttp.WinhttpProxyInfo();
             RuntimeHelpers.PrepareConstrainedRegions();
             try
             {
@@ -256,7 +256,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             return flag;
         }
 
-        private static int getLastWin32Error()
+        private static int GetLastWin32Error()
         {
             int lastWin32Error = Marshal.GetLastWin32Error();
             if (lastWin32Error == 8)
@@ -267,7 +267,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             return lastWin32Error;
         }
 
-        private static bool isRecoverableAutoProxyError(NativeMethods.WinHttp.ErrorCodes errorCode)
+        private static bool IsRecoverableAutoProxyError(NativeMethods.WinHttp.ErrorCodes errorCode)
         {
             switch (errorCode)
             {
@@ -285,7 +285,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             }
         }
 
-        private static AutoWebProxyState getStateFromErrorCode(NativeMethods.WinHttp.ErrorCodes errorCode)
+        private static AutoWebProxyState GetStateFromErrorCode(NativeMethods.WinHttp.ErrorCodes errorCode)
         {
             if (errorCode == 0L)
             {
@@ -309,7 +309,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             }
         }
 
-        private static string removeWhitespaces(string value)
+        private static string RemoveWhitespaces(string value)
         {
             var stringBuilder = new StringBuilder();
             foreach (char c in value)
@@ -323,7 +323,7 @@ namespace Titanium.Web.Proxy.Helpers.WinHttp
             return stringBuilder.ToString();
         }
 
-        private static bool isErrorFatalForAutoDetect(NativeMethods.WinHttp.ErrorCodes errorCode)
+        private static bool IsErrorFatalForAutoDetect(NativeMethods.WinHttp.ErrorCodes errorCode)
         {
             switch (errorCode)
             {

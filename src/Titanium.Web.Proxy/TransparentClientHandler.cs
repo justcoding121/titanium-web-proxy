@@ -25,14 +25,14 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint">The transparent endpoint.</param>
         /// <param name="clientConnection">The client connection.</param>
         /// <returns></returns>
-        private Task handleClient(TransparentProxyEndPoint endPoint, TcpClientConnection clientConnection)
+        private Task HandleClient(TransparentProxyEndPoint endPoint, TcpClientConnection clientConnection)
         {
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
-            return handleClient(endPoint, clientConnection, endPoint.Port, cancellationTokenSource, cancellationToken);
+            return HandleClient(endPoint, clientConnection, endPoint.Port, cancellationTokenSource, cancellationToken);
         }
 
-        private async Task handleClient(TransparentBaseProxyEndPoint endPoint, TcpClientConnection clientConnection,
+        private async Task HandleClient(TransparentBaseProxyEndPoint endPoint, TcpClientConnection clientConnection,
             int port, CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
         {
             bool isHttps = false;
@@ -91,7 +91,7 @@ namespace Titanium.Web.Proxy
                     else
                     {
                         var sessionArgs = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
-                        var connection = (await tcpConnectionFactory.GetServerConnection(this, args.ForwardHttpsHostName, args.ForwardHttpsPort,
+                        var connection = (await TcpConnectionFactory.GetServerConnection(this, args.ForwardHttpsHostName, args.ForwardHttpsPort,
                                     HttpHeader.VersionUnknown, false, null,
                                     true, sessionArgs, UpStreamEndPoint,
                                     UpStreamHttpsProxy, true, false, cancellationToken))!;
@@ -124,7 +124,7 @@ namespace Titanium.Web.Proxy
                         }
                         finally
                         {
-                            await tcpConnectionFactory.Release(connection, true);
+                            await TcpConnectionFactory.Release(connection, true);
                         }
 
                         return;
@@ -133,23 +133,23 @@ namespace Titanium.Web.Proxy
 
                 // HTTPS server created - we can now decrypt the client's traffic
                 // Now create the request
-                await handleHttpSessionRequest(endPoint, clientStream, cancellationTokenSource, isHttps: isHttps);
+                await HandleHttpSessionRequest(endPoint, clientStream, cancellationTokenSource, isHttps: isHttps);
             }
             catch (ProxyException e)
             {
-                onException(clientStream, e);
+                OnException(clientStream, e);
             }
             catch (IOException e)
             {
-                onException(clientStream, new Exception("Connection was aborted", e));
+                OnException(clientStream, new Exception("Connection was aborted", e));
             }
             catch (SocketException e)
             {
-                onException(clientStream, new Exception("Could not connect", e));
+                OnException(clientStream, new Exception("Could not connect", e));
             }
             catch (Exception e)
             {
-                onException(clientStream, new Exception("Error occured in whilst handling the client", e));
+                OnException(clientStream, new Exception("Error occured in whilst handling the client", e));
             }
             finally
             {

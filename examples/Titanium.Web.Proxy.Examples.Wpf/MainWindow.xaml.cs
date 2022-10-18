@@ -120,7 +120,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 if (value != selectedSession)
                 {
                     selectedSession = value;
-                    selectedSessionChanged();
+                    SelectedSessionChanged();
                 }
             }
         }
@@ -145,7 +145,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 e.DecryptSsl = false;
             }
 
-            await Dispatcher.InvokeAsync(() => { addSession(e); });
+            await Dispatcher.InvokeAsync(() => { AddSession(e); });
         }
 
         private async Task ProxyServer_BeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
@@ -164,7 +164,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             //if (e.HttpClient.Request.HttpVersion.Major != 2) return;
 
             SessionListItem item = null;
-            await Dispatcher.InvokeAsync(() => { item = addSession(e); });
+            await Dispatcher.InvokeAsync(() => { item = AddSession(e); });
 
             if (e.HttpClient.Request.HasBody)
             {
@@ -173,7 +173,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
                 if (item == SelectedSession)
                 {
-                    await Dispatcher.InvokeAsync(selectedSessionChanged);
+                    await Dispatcher.InvokeAsync(SelectedSessionChanged);
                 }
             }
         }
@@ -203,7 +203,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                     await Dispatcher.InvokeAsync(() => { item.Update(e); });
                     if (item == SelectedSession)
                     {
-                        await Dispatcher.InvokeAsync(selectedSessionChanged);
+                        await Dispatcher.InvokeAsync(SelectedSessionChanged);
                     }
                 }
             }
@@ -220,15 +220,15 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             });
         }
 
-        private SessionListItem addSession(SessionEventArgsBase e)
+        private SessionListItem AddSession(SessionEventArgsBase e)
         {
-            var item = createSessionListItem(e);
+            var item = CreateSessionListItem(e);
             Sessions.Add(item);
             sessionDictionary.Add(e.HttpClient, item);
             return item;
         }
 
-        private SessionListItem createSessionListItem(SessionEventArgsBase e)
+        private SessionListItem CreateSessionListItem(SessionEventArgsBase e)
         {
             lastSessionNumber++;
             bool isTunnelConnect = e is TunnelConnectSessionEventArgs;
@@ -359,7 +359,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             }
         }
 
-        private void selectedSessionChanged()
+        private void SelectedSessionChanged()
         {
             if (SelectedSession == null)
             {

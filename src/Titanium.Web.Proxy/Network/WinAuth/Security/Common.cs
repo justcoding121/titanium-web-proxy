@@ -10,17 +10,17 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
         #region Private constants
 
-        private const int ISC_REQ_REPLAY_DETECT = 0x00000004;
-        private const int ISC_REQ_SEQUENCE_DETECT = 0x00000008;
-        private const int ISC_REQ_CONFIDENTIALITY = 0x00000010;
-        private const int ISC_REQ_CONNECTION = 0x00000800;
+        private const int IscReqReplayDetect = 0x00000004;
+        private const int IscReqSequenceDetect = 0x00000008;
+        private const int IscReqConfidentiality = 0x00000010;
+        private const int IscReqConnection = 0x00000800;
 
         #endregion
 
         #region internal constants
 
         internal const int StandardContextAttributes =
-            ISC_REQ_CONFIDENTIALITY | ISC_REQ_REPLAY_DETECT | ISC_REQ_SEQUENCE_DETECT | ISC_REQ_CONNECTION;
+            IscReqConfidentiality | IscReqReplayDetect | IscReqSequenceDetect | IscReqConnection;
 
         internal const int SecurityNativeDataRepresentation = 0x10;
         internal const int MaximumTokenSize = 12288;
@@ -34,10 +34,10 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
         internal enum SecurityBufferType
         {
-            SECBUFFER_VERSION = 0,
-            SECBUFFER_EMPTY = 0,
-            SECBUFFER_DATA = 1,
-            SECBUFFER_TOKEN = 2
+            SecbufferVersion = 0,
+            SecbufferEmpty = 0,
+            SecbufferData = 1,
+            SecbufferToken = 2
         }
 
         [Flags]
@@ -77,18 +77,18 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
         internal enum NtlmAuthLevel
         {
             /* Use LM and NTLM, never use NTLMv2 session security. */
-            LM_and_NTLM,
+            LmAndNtlm,
 
             /* Use NTLMv2 session security if the server supports it,
              * otherwise fall back to LM and NTLM. */
-            LM_and_NTLM_and_try_NTLMv2_Session,
+            LmAndNtlmAndTryNtlMv2Session,
 
             /* Use NTLMv2 session security if the server supports it,
              * otherwise fall back to NTLM.  Never use LM. */
-            NTLM_only,
+            NtlmOnly,
 
             /* Use NTLMv2 only. */
-            NTLMv2_only
+            NtlMv2Only
         }
 
         #endregion
@@ -138,14 +138,14 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
             internal SecurityBuffer(int bufferSize)
             {
                 cbBuffer = bufferSize;
-                cbBufferType = (int)SecurityBufferType.SECBUFFER_TOKEN;
+                cbBufferType = (int)SecurityBufferType.SecbufferToken;
                 pvBuffer = Marshal.AllocHGlobal(bufferSize);
             }
 
             internal SecurityBuffer(byte[] secBufferBytes)
             {
                 cbBuffer = secBufferBytes.Length;
-                cbBufferType = (int)SecurityBufferType.SECBUFFER_TOKEN;
+                cbBufferType = (int)SecurityBufferType.SecbufferToken;
                 pvBuffer = Marshal.AllocHGlobal(cbBuffer);
                 Marshal.Copy(secBufferBytes, 0, pvBuffer, cbBuffer);
             }
@@ -169,7 +169,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
             internal SecurityBufferDesciption(int bufferSize)
             {
-                ulVersion = (int)SecurityBufferType.SECBUFFER_VERSION;
+                ulVersion = (int)SecurityBufferType.SecbufferVersion;
                 cBuffers = 1;
                 var thisSecBuffer = new SecurityBuffer(bufferSize);
                 pBuffers = Marshal.AllocHGlobal(Marshal.SizeOf(thisSecBuffer));
@@ -178,7 +178,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security
 
             internal SecurityBufferDesciption(byte[] secBufferBytes)
             {
-                ulVersion = (int)SecurityBufferType.SECBUFFER_VERSION;
+                ulVersion = (int)SecurityBufferType.SecbufferVersion;
                 cBuffers = 1;
                 var thisSecBuffer = new SecurityBuffer(secBufferBytes);
                 pBuffers = Marshal.AllocHGlobal(Marshal.SizeOf(thisSecBuffer));

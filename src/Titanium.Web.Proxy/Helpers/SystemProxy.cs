@@ -47,11 +47,11 @@ namespace Titanium.Web.Proxy.Helpers
     [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType", Justification = "Reviewed.")]
     internal class SystemProxyManager
     {
-        private const string regKeyInternetSettings = "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
-        private const string regAutoConfigUrl = "AutoConfigURL";
-        private const string regProxyEnable = "ProxyEnable";
-        private const string regProxyServer = "ProxyServer";
-        private const string regProxyOverride = "ProxyOverride";
+        private const string RegKeyInternetSettings = "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
+        private const string RegAutoConfigUrl = "AutoConfigURL";
+        private const string RegProxyEnable = "ProxyEnable";
+        private const string RegProxyServer = "ProxyServer";
+        private const string RegProxyOverride = "ProxyOverride";
 
         internal const int InternetOptionSettingsChanged = 39;
         internal const int InternetOptionRefresh = 37;
@@ -88,17 +88,17 @@ namespace Titanium.Web.Proxy.Helpers
         /// <param name="protocolType"></param>
         internal void SetProxy(string hostname, int port, ProxyProtocolType protocolType)
         {
-            using (var reg = openInternetSettingsKey())
+            using (var reg = OpenInternetSettingsKey())
             {
                 if (reg == null)
                 {
                     return;
                 }
 
-                saveOriginalProxyConfiguration(reg);
-                prepareRegistry(reg);
+                SaveOriginalProxyConfiguration(reg);
+                PrepareRegistry(reg);
 
-                string? existingContent = reg.GetValue(regProxyServer) as string;
+                string? existingContent = reg.GetValue(RegProxyServer) as string;
                 var existingSystemProxyValues = ProxyInfo.GetSystemProxyValues(existingContent);
                 existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);
                 if ((protocolType & ProxyProtocolType.Http) != 0)
@@ -111,12 +111,12 @@ namespace Titanium.Web.Proxy.Helpers
                     existingSystemProxyValues.Add(new HttpSystemProxyValue(hostname, port, ProxyProtocolType.Https));
                 }
 
-                reg.DeleteValue(regAutoConfigUrl, false);
-                reg.SetValue(regProxyEnable, 1);
-                reg.SetValue(regProxyServer,
+                reg.DeleteValue(RegAutoConfigUrl, false);
+                reg.SetValue(RegProxyEnable, 1);
+                reg.SetValue(RegProxyServer,
                     string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
 
-                refresh();
+                Refresh();
             }
         }
 
@@ -125,7 +125,7 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         internal void RemoveProxy(ProxyProtocolType protocolType, bool saveOriginalConfig = true)
         {
-            using (var reg = openInternetSettingsKey())
+            using (var reg = OpenInternetSettingsKey())
             {
                 if (reg == null)
                 {
@@ -134,30 +134,30 @@ namespace Titanium.Web.Proxy.Helpers
 
                 if (saveOriginalConfig)
                 {
-                    saveOriginalProxyConfiguration(reg);
+                    SaveOriginalProxyConfiguration(reg);
                 }
 
-                if (reg.GetValue(regProxyServer) != null)
+                if (reg.GetValue(RegProxyServer) != null)
                 {
-                    string? existingContent = reg.GetValue(regProxyServer) as string;
+                    string? existingContent = reg.GetValue(RegProxyServer) as string;
 
                     var existingSystemProxyValues = ProxyInfo.GetSystemProxyValues(existingContent);
                     existingSystemProxyValues.RemoveAll(x => (protocolType & x.ProtocolType) != 0);
 
                     if (existingSystemProxyValues.Count != 0)
                     {
-                        reg.SetValue(regProxyEnable, 1);
-                        reg.SetValue(regProxyServer,
+                        reg.SetValue(RegProxyEnable, 1);
+                        reg.SetValue(RegProxyServer,
                             string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
                     }
                     else
                     {
-                        reg.SetValue(regProxyEnable, 0);
-                        reg.SetValue(regProxyServer, string.Empty);
+                        reg.SetValue(RegProxyEnable, 0);
+                        reg.SetValue(RegProxyServer, string.Empty);
                     }
                 }
 
-                refresh();
+                Refresh();
             }
         }
 
@@ -166,49 +166,49 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         internal void DisableAllProxy()
         {
-            using (var reg = openInternetSettingsKey())
+            using (var reg = OpenInternetSettingsKey())
             {
                 if (reg == null)
                 {
                     return;
                 }
 
-                saveOriginalProxyConfiguration(reg);
+                SaveOriginalProxyConfiguration(reg);
 
-                reg.SetValue(regProxyEnable, 0);
-                reg.SetValue(regProxyServer, string.Empty);
+                reg.SetValue(RegProxyEnable, 0);
+                reg.SetValue(RegProxyServer, string.Empty);
 
-                refresh();
+                Refresh();
             }
         }
 
         internal void SetAutoProxyUrl(string url)
         {
-            using (var reg = openInternetSettingsKey())
+            using (var reg = OpenInternetSettingsKey())
             {
                 if (reg == null)
                 {
                     return;
                 }
 
-                saveOriginalProxyConfiguration(reg);
-                reg.SetValue(regAutoConfigUrl, url);
-                refresh();
+                SaveOriginalProxyConfiguration(reg);
+                reg.SetValue(RegAutoConfigUrl, url);
+                Refresh();
             }
         }
 
         internal void SetProxyOverride(string proxyOverride)
         {
-            using (var reg = openInternetSettingsKey())
+            using (var reg = OpenInternetSettingsKey())
             {
                 if (reg == null)
                 {
                     return;
                 }
 
-                saveOriginalProxyConfiguration(reg);
-                reg.SetValue(regProxyOverride, proxyOverride);
-                refresh();
+                SaveOriginalProxyConfiguration(reg);
+                reg.SetValue(RegProxyOverride, proxyOverride);
+                Refresh();
             }
         }
 
@@ -219,7 +219,7 @@ namespace Titanium.Web.Proxy.Helpers
                 return;
             }
 
-            using (var reg = Registry.CurrentUser.OpenSubKey(regKeyInternetSettings, true))
+            using (var reg = Registry.CurrentUser.OpenSubKey(RegKeyInternetSettings, true))
             {
                 if (reg == null)
                 {
@@ -229,38 +229,38 @@ namespace Titanium.Web.Proxy.Helpers
                 var ov = originalValues;
                 if (ov.AutoConfigUrl != null)
                 {
-                    reg.SetValue(regAutoConfigUrl, ov.AutoConfigUrl);
+                    reg.SetValue(RegAutoConfigUrl, ov.AutoConfigUrl);
                 }
                 else
                 {
-                    reg.DeleteValue(regAutoConfigUrl, false);
+                    reg.DeleteValue(RegAutoConfigUrl, false);
                 }
 
                 if (ov.ProxyEnable.HasValue)
                 {
-                    reg.SetValue(regProxyEnable, ov.ProxyEnable.Value);
+                    reg.SetValue(RegProxyEnable, ov.ProxyEnable.Value);
                 }
                 else
                 {
-                    reg.DeleteValue(regProxyEnable, false);
+                    reg.DeleteValue(RegProxyEnable, false);
                 }
 
                 if (ov.ProxyServer != null)
                 {
-                    reg.SetValue(regProxyServer, ov.ProxyServer);
+                    reg.SetValue(RegProxyServer, ov.ProxyServer);
                 }
                 else
                 {
-                    reg.DeleteValue(regProxyServer, false);
+                    reg.DeleteValue(RegProxyServer, false);
                 }
 
                 if (ov.ProxyOverride != null)
                 {
-                    reg.SetValue(regProxyOverride, ov.ProxyOverride);
+                    reg.SetValue(RegProxyOverride, ov.ProxyOverride);
                 }
                 else
                 {
-                    reg.DeleteValue(regProxyOverride, false);
+                    reg.DeleteValue(RegProxyOverride, false);
                 }
 
                 // This should not be needed, but sometimes the values are not stored into the registry
@@ -269,74 +269,74 @@ namespace Titanium.Web.Proxy.Helpers
 
                 originalValues = null;
 
-                const int SM_SHUTTINGDOWN = 0x2000;
+                const int smShuttingdown = 0x2000;
                 Version windows7Version = new Version(6, 1);
                 if (Environment.OSVersion.Version > windows7Version ||
-                    NativeMethods.GetSystemMetrics(SM_SHUTTINGDOWN) == 0)
+                    NativeMethods.GetSystemMetrics(smShuttingdown) == 0)
                 {
                     // Do not call refresh() in Windows 7 or earlier at system shutdown.
                     // SetInternetOption in the refresh method re-enables ProxyEnable registry value
                     // in Windows 7 or earlier at system shutdown.
-                    refresh();
+                    Refresh();
                 }
             }
         }
 
         internal ProxyInfo? GetProxyInfoFromRegistry()
         {
-            using (var reg = openInternetSettingsKey())
+            using (var reg = OpenInternetSettingsKey())
             {
                 if (reg == null)
                 {
                     return null;
                 }
 
-                return getProxyInfoFromRegistry(reg);
+                return GetProxyInfoFromRegistry(reg);
             }
         }
 
-        private ProxyInfo getProxyInfoFromRegistry(RegistryKey reg)
+        private ProxyInfo GetProxyInfoFromRegistry(RegistryKey reg)
         {
             var pi = new ProxyInfo(null,
-                reg.GetValue(regAutoConfigUrl) as string,
-                reg.GetValue(regProxyEnable) as int?,
-                reg.GetValue(regProxyServer) as string,
-                reg.GetValue(regProxyOverride) as string);
+                reg.GetValue(RegAutoConfigUrl) as string,
+                reg.GetValue(RegProxyEnable) as int?,
+                reg.GetValue(RegProxyServer) as string,
+                reg.GetValue(RegProxyOverride) as string);
 
             return pi;
         }
 
-        private void saveOriginalProxyConfiguration(RegistryKey reg)
+        private void SaveOriginalProxyConfiguration(RegistryKey reg)
         {
             if (originalValues != null)
             {
                 return;
             }
 
-            originalValues = getProxyInfoFromRegistry(reg);
+            originalValues = GetProxyInfoFromRegistry(reg);
         }
 
         /// <summary>
         ///     Prepares the proxy server registry (create empty values if they don't exist)
         /// </summary>
         /// <param name="reg"></param>
-        private static void prepareRegistry(RegistryKey reg)
+        private static void PrepareRegistry(RegistryKey reg)
         {
-            if (reg.GetValue(regProxyEnable) == null)
+            if (reg.GetValue(RegProxyEnable) == null)
             {
-                reg.SetValue(regProxyEnable, 0);
+                reg.SetValue(RegProxyEnable, 0);
             }
 
-            if (reg.GetValue(regProxyServer) == null || reg.GetValue(regProxyEnable) as int? == 0)
+            if (reg.GetValue(RegProxyServer) == null || reg.GetValue(RegProxyEnable) as int? == 0)
             {
-                reg.SetValue(regProxyServer, string.Empty);
+                reg.SetValue(RegProxyServer, string.Empty);
             }
         }
 
         /// <summary>
         ///     Refresh the settings so that the system know about a change in proxy setting
         /// </summary>
-        private static void refresh()
+        private static void Refresh()
         {
             NativeMethods.InternetSetOption(IntPtr.Zero, InternetOptionSettingsChanged, IntPtr.Zero, 0);
             NativeMethods.InternetSetOption(IntPtr.Zero, InternetOptionRefresh, IntPtr.Zero, 0);
@@ -345,9 +345,9 @@ namespace Titanium.Web.Proxy.Helpers
         /// <summary>
         ///     Opens the registry key with the internet settings
         /// </summary>
-        private static RegistryKey? openInternetSettingsKey()
+        private static RegistryKey? OpenInternetSettingsKey()
         {
-            return Registry.CurrentUser?.OpenSubKey(regKeyInternetSettings, true);
+            return Registry.CurrentUser?.OpenSubKey(RegKeyInternetSettings, true);
         }
     }
 }

@@ -9,24 +9,24 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     /// </summary>
     public class TaskResult : IAsyncResult
     {
-        Task Task;
+        Task task;
         readonly object asyncState;
 
         public TaskResult(Task pTask, object state)
         {
-            Task = pTask;
+            task = pTask;
             asyncState = state;
         }
 
         public object AsyncState => asyncState;
 
-        public WaitHandle AsyncWaitHandle => ((IAsyncResult)Task).AsyncWaitHandle;
+        public WaitHandle AsyncWaitHandle => ((IAsyncResult)task).AsyncWaitHandle;
 
-        public bool CompletedSynchronously => ((IAsyncResult)Task).CompletedSynchronously;
+        public bool CompletedSynchronously => ((IAsyncResult)task).CompletedSynchronously;
 
-        public bool IsCompleted => Task.IsCompleted;
+        public bool IsCompleted => task.IsCompleted;
 
-        public void GetResult() { this.Task.GetAwaiter().GetResult(); }
+        public void GetResult() { this.task.GetAwaiter().GetResult(); }
     }
 
     /// <summary>
@@ -35,23 +35,23 @@ namespace Titanium.Web.Proxy.StreamExtended.Network
     /// <typeparam name="T"></typeparam>
     public class TaskResult<T> : IAsyncResult
     {
-        Task<T> Task;
+        Task<T> task;
         readonly object asyncState;
 
         public TaskResult(Task<T> pTask, object state)
         {
-            Task = pTask;
+            task = pTask;
             asyncState = state;
         }
 
         public object AsyncState => asyncState;
 
-        public WaitHandle AsyncWaitHandle => ((IAsyncResult)Task).AsyncWaitHandle;
+        public WaitHandle AsyncWaitHandle => ((IAsyncResult)task).AsyncWaitHandle;
 
-        public bool CompletedSynchronously => ((IAsyncResult)Task).CompletedSynchronously;
+        public bool CompletedSynchronously => ((IAsyncResult)task).CompletedSynchronously;
 
-        public bool IsCompleted => Task.IsCompleted;
+        public bool IsCompleted => task.IsCompleted;
 
-        public T Result => Task.Result;
+        public T Result => task.Result;
     }
 }

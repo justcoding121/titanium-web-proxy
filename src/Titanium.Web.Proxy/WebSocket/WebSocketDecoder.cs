@@ -24,14 +24,14 @@ namespace Titanium.Web.Proxy
             if (bufferLength > 0)
             {
                 // already have remaining data
-                buffer = copyToBuffer(buffer);
+                buffer = CopyToBuffer(buffer);
                 copied = true;
             }
 
             while (true)
             {
                 var data1 = buffer.Span;
-                if (!isDataEnough(data1))
+                if (!IsDataEnough(data1))
                 {
                     break;
                 }
@@ -112,7 +112,7 @@ namespace Titanium.Web.Proxy
 
             if (!copied && buffer.Length > 0)
             {
-                copyToBuffer(buffer);
+                CopyToBuffer(buffer);
             }
 
             if (copied)
@@ -129,7 +129,7 @@ namespace Titanium.Web.Proxy
             }
         }
 
-        private Memory<byte> copyToBuffer(ReadOnlyMemory<byte> data)
+        private Memory<byte> CopyToBuffer(ReadOnlyMemory<byte> data)
         {
             long requiredLength = bufferLength + data.Length;
             if (requiredLength > buffer.Length)
@@ -142,7 +142,7 @@ namespace Titanium.Web.Proxy
             return buffer.AsMemory(0, (int)bufferLength);
         }
 
-        private static bool isDataEnough(ReadOnlySpan<byte> data)
+        private static bool IsDataEnough(ReadOnlySpan<byte> data)
         {
             int length = data.Length;
             if (length < 2)

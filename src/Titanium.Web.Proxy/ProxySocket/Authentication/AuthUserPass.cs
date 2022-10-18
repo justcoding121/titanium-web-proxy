@@ -182,8 +182,8 @@ namespace Titanium.Web.Proxy.ProxySocket.Authentication
         /// <exception cref="ArgumentNullException">The specified value is null.</exception>
         private string Username
         {
-            get => _username;
-            set => _username = value ?? throw new ArgumentNullException();
+            get => username;
+            set => username = value ?? throw new ArgumentNullException();
         }
 
         /// <summary>
@@ -193,15 +193,15 @@ namespace Titanium.Web.Proxy.ProxySocket.Authentication
         /// <exception cref="ArgumentNullException">The specified value is null.</exception>
         private string Password
         {
-            get => _password;
-            set => _password = value ?? throw new ArgumentNullException();
+            get => password;
+            set => password = value ?? throw new ArgumentNullException();
         }
 
         // private variables
         /// <summary>Holds the value of the Username property.</summary>
-        private string _username;
+        private string username;
 
         /// <summary>Holds the value of the Password property.</summary>
-        private string _password;
+        private string password;
     }
 }

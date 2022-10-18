@@ -43,11 +43,11 @@ namespace Titanium.Web.Proxy.Http2
 
             // Now async relay all server=>client & client=>server data
             var sendRelay =
-                copyHttp2FrameAsync(clientStream, serverStream, clientSettings, serverSettings,
+                CopyHttp2FrameAsync(clientStream, serverStream, clientSettings, serverSettings,
                     sessionFactory, sessions, onBeforeRequest,
                     connectionId, true, cancellationTokenSource.Token, exceptionFunc);
             var receiveRelay =
-                copyHttp2FrameAsync(serverStream, clientStream, serverSettings, clientSettings,
+                CopyHttp2FrameAsync(serverStream, clientStream, serverSettings, clientSettings,
                     sessionFactory, sessions, onBeforeResponse,
                     connectionId, false, cancellationTokenSource.Token, exceptionFunc);
 
@@ -57,7 +57,7 @@ namespace Titanium.Web.Proxy.Http2
             await Task.WhenAll(sendRelay, receiveRelay);
         }
 
-        private static async Task copyHttp2FrameAsync(Stream input, Stream output,
+        private static async Task CopyHttp2FrameAsync(Stream input, Stream output,
             Http2Settings localSettings, Http2Settings remoteSettings,
             Func<SessionEventArgs> sessionFactory, ConcurrentDictionary<int, SessionEventArgs> sessions,
             Func<SessionEventArgs, Task> onBeforeRequestResponse,
@@ -72,7 +72,7 @@ namespace Titanium.Web.Proxy.Http2
             byte[]? buffer = null;
             while (true)
             {
-                int read = await forceRead(input, frameHeaderBuffer, 0, 9, cancellationToken);
+                int read = await ForceRead(input, frameHeaderBuffer, 0, 9, cancellationToken);
                 if (read != 9)
                 {
                     return;
@@ -94,7 +94,7 @@ namespace Titanium.Web.Proxy.Http2
                     buffer = new byte[localSettings.MaxFrameSize];
                 }
 
-                read = await forceRead(input, buffer, 0, length, cancellationToken);
+                read = await ForceRead(input, buffer, 0, length, cancellationToken);
                 if (read != length)
                 {
                     return;
@@ -179,7 +179,7 @@ namespace Titanium.Web.Proxy.Http2
                     if (padded)
                     {
                         offset = 1;
-                        breakpoint();
+                        Breakpoint();
                     }
 
                     if (type == Http2FrameType.PushPromise)
@@ -202,7 +202,7 @@ namespace Titanium.Web.Proxy.Http2
                         if (isClient)
                         {
                             // push_promise from client???
-                            breakpoint();
+                            Breakpoint();
                         }
                     }
                     else
@@ -286,7 +286,7 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (!endHeaders)
                     {
-                        breakpoint();
+                        Breakpoint();
                     }
 
                     if (endHeaders)
@@ -301,7 +301,7 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             rr.ReadHttp2BeforeHandlerTaskCompletionSource = null;
                             tcs.SetResult(true);
-                            await sendHeader(remoteSettings, frameHeader, frameHeaderBuffer, rr, endStream, output, args.IsPromise);
+                            await SendHeader(remoteSettings, frameHeader, frameHeaderBuffer, rr, endStream, output, args.IsPromise);
                         }
                         else
                         {
@@ -316,7 +316,7 @@ namespace Titanium.Web.Proxy.Http2
                 else if (type == Http2FrameType.Continuation)
                 {
                     // todo: implementing this type is mandatory for multi-part headers
-                    breakpoint();
+                    Breakpoint();
                 }
                 else if (type == Http2FrameType.Settings)
                 {
@@ -413,10 +413,10 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (args!.IsPromise)
                     {
-                        breakpoint();
+                        Breakpoint();
                     }
 
-                    await sendBody(remoteSettings, rr, frameHeader, frameHeaderBuffer, buffer, output);
+                    await SendBody(remoteSettings, rr, frameHeader, frameHeaderBuffer, buffer, output);
                 }
 
                 if (!isClient && endStream)
@@ -447,13 +447,13 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         [Conditional("DEBUG")]
-        private static void breakpoint()
+        private static void Breakpoint()
         {
             // when this method is called something received which is not yet implemented
             ;
         }
 
-        private static async Task sendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)
+        private static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)
         {
             var encoder = new Encoder(settings.HeaderTableSize);
             var ms = new MemoryStream();
@@ -516,10 +516,10 @@ namespace Titanium.Web.Proxy.Http2
             await output.WriteAsync(data, 0, data.Length /*, cancellationToken*/);
         }
 
-        private static async Task sendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, byte[] buffer, Stream output)
+        private static async Task SendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, byte[] buffer, Stream output)
         {
             var body = rr.CompressBodyAndUpdateContentLength();
-            await sendHeader(settings, frameHeader, frameHeaderBuffer, rr, !(rr.HasBody && rr.IsBodyRead), output, false);
+            await SendHeader(settings, frameHeader, frameHeaderBuffer, rr, !(rr.HasBody && rr.IsBodyRead), output, false);
 
             if (rr.HasBody && rr.IsBodyRead)
             {
@@ -545,7 +545,7 @@ namespace Titanium.Web.Proxy.Http2
             }
         }
 
-        private static async Task<int> forceRead(Stream input, byte[] buffer, int offset, int bytesToRead,
+        private static async Task<int> ForceRead(Stream input, byte[] buffer, int offset, int bytesToRead,
             CancellationToken cancellationToken)
         {
             int totalRead = 0;

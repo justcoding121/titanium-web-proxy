@@ -41,7 +41,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         internal TcpConnectionFactory(ProxyServer server)
         {
             this.Server = server;
-            Task.Run(async () => await clearOutdatedConnections());
+            Task.Run(async () => await ClearOutdatedConnections());
         }
 
         internal ProxyServer Server { get; }
@@ -263,7 +263,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
                 }
             }
 
-            var connection = await createServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
+            var connection = await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
                 applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey, prefetch, cancellationToken);
 
             return connection;
@@ -287,7 +287,7 @@ namespace Titanium.Web.Proxy.Network.Tcp
         /// <param name="prefetch">if set to <c>true</c> [prefetch].</param>
         /// <param name="cancellationToken">The cancellation token for this async task.</param>
         /// <returns></returns>
-        private async Task<TcpServerConnection?> createServerConnection(string remoteHostName, int remotePort,
+        private async Task<TcpServerConnection?> CreateServerConnection(string remoteHostName, int remotePort,
             Version httpVersion, bool isHttps, SslProtocols sslProtocol, List<SslApplicationProtocol>? applicationProtocols, bool isConnect,
             ProxyServer proxyServer, SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy, string cacheKey,
             bool prefetch, CancellationToken cancellationToken)
@@ -410,7 +410,7 @@ retry:
                         tcpServerSocket.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
                         tcpServerSocket.LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds);
 
-                        if (proxyServer.ReuseSocket && RunTime.IsSocketReuseAvailable)
+                        if (proxyServer.ReuseSocket && RunTime.IsSocketReuseAvailable())
                         {
                             tcpServerSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                         }
@@ -497,7 +497,7 @@ retry:
                         {
                             sessionArgs.CustomUpStreamProxyUsed = newUpstreamProxy;
                             sessionArgs.TimeLine["Retrying Upstream Proxy Connection"] = DateTime.UtcNow;
-                            return await createServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol, applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey, prefetch, cancellationToken);
+                            return await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol, applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey, prefetch, cancellationToken);
                         }
                     }
 
@@ -538,7 +538,7 @@ retry:
                         connectRequest.Headers.AddHeader(HttpHeader.GetProxyAuthorizationHeader(externalProxy.UserName, externalProxy.Password));
                     }
 
-                    await proxyServer.onBeforeUpStreamConnectRequest(connectRequest);
+                    await proxyServer.OnBeforeUpStreamConnectRequest(connectRequest);
 
                     await stream.WriteRequestAsync(connectRequest, cancellationToken);
 
@@ -718,7 +718,7 @@ retry:
             }
         }
 
-        private async Task clearOutdatedConnections()
+        private async Task ClearOutdatedConnections()
         {
             while (runCleanUpTask)
             {
@@ -842,49 +842,49 @@ retry:
 
         static class SocketConnectionTaskFactory
         {
-            static IAsyncResult beginConnect(IPAddress address, int port, AsyncCallback requestCallback,
+            static IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback requestCallback,
                 object state)
             {
                 return ((Socket)state).BeginConnect(address, port, requestCallback, state);
             }
 
-            static void endConnect(IAsyncResult asyncResult)
+            static void EndConnect(IAsyncResult asyncResult)
             {
                 ((Socket)asyncResult.AsyncState).EndConnect(asyncResult);
             }
 
             public static Task CreateTask(Socket socket, IPAddress ipAddress, int port)
             {
-                return Task.Factory.FromAsync(beginConnect, endConnect, ipAddress, port, state: socket);
+                return Task.Factory.FromAsync(BeginConnect, EndConnect, ipAddress, port, state: socket);
             }
         }
 
         static class ProxySocketConnectionTaskFactory
         {
-            static IAsyncResult beginConnect(IPAddress address, int port, AsyncCallback requestCallback,
+            static IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback requestCallback,
                 object state)
             {
                 return ((ProxySocket.ProxySocket)state).BeginConnect(address, port, requestCallback, state);
             }
 
-            static IAsyncResult beginConnect(string hostName, int port, AsyncCallback requestCallback, object state)
+            static IAsyncResult BeginConnect(string hostName, int port, AsyncCallback requestCallback, object state)
             {
                 return ((ProxySocket.ProxySocket)state).BeginConnect(hostName, port, requestCallback, state);
             }
 
-            static void endConnect(IAsyncResult asyncResult)
+            static void EndConnect(IAsyncResult asyncResult)
             {
                 ((ProxySocket.ProxySocket)asyncResult.AsyncState).EndConnect(asyncResult);
             }
 
             public static Task CreateTask(ProxySocket.ProxySocket socket, IPAddress ipAddress, int port)
             {
-                return Task.Factory.FromAsync(beginConnect, endConnect, ipAddress, port, state: socket);
+                return Task.Factory.FromAsync(BeginConnect, EndConnect, ipAddress, port, state: socket);
             }
 
             public static Task CreateTask(ProxySocket.ProxySocket socket, string hostName, int port)
             {
-                return Task.Factory.FromAsync(beginConnect, endConnect, hostName, port, state: socket);
+                return Task.Factory.FromAsync(BeginConnect, EndConnect, hostName, port, state: socket);
             }
         }
     }

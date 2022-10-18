@@ -45,7 +45,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 if (!requireBody)
                     return request;
 
-                if (parseBody(reader, request))
+                if (ParseBody(reader, request))
                     return request;
             }
             catch
@@ -90,7 +90,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 if (line?.Length != 0)
                     return null;
 
-                if (parseBody(reader, response))
+                if (ParseBody(reader, response))
                     return response;
             }
             catch
@@ -101,7 +101,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             return null;
         }
 
-        private static bool parseBody(StringReader reader, RequestResponseBase obj)
+        private static bool ParseBody(StringReader reader, RequestResponseBase obj)
         {
             obj.OriginalContentLength = obj.ContentLength;
             if (obj.ContentLength <= 0)

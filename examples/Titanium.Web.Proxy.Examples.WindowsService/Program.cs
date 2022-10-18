@@ -9,12 +9,12 @@ namespace WindowsServiceExample
         /// </summary>
         static void Main()
         {
-            ServiceBase[] ServicesToRun;
-            ServicesToRun = new ServiceBase[]
+            ServiceBase[] servicesToRun;
+            servicesToRun = new ServiceBase[]
             {
                 new ProxyService()
             };
-            ServiceBase.Run(ServicesToRun);
+            ServiceBase.Run(servicesToRun);
         }
     }
 }

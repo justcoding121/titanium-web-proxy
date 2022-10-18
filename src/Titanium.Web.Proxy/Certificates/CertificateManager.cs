@@ -39,9 +39,9 @@ namespace Titanium.Web.Proxy.Network
     /// </summary>
     public sealed class CertificateManager : IDisposable
     {
-        private const string defaultRootCertificateIssuer = "Titanium";
+        private const string DefaultRootCertificateIssuer = "Titanium";
 
-        private const string defaultRootRootCertificateName = "Titanium Root Certificate Authority";
+        private const string DefaultRootRootCertificateName = "Titanium Root Certificate Authority";
 
         /// <summary>
         ///     Cache dictionary
@@ -68,7 +68,7 @@ namespace Titanium.Web.Proxy.Network
 
         private ICertificateMaker? certEngineValue;
 
-        private ICertificateMaker certEngine
+        private ICertificateMaker CertEngine
         {
             get
             {
@@ -77,10 +77,10 @@ namespace Titanium.Web.Proxy.Network
                     switch (engine)
                     {
                         case CertificateEngine.BouncyCastle:
-                            certEngineValue = new BCCertificateMaker(ExceptionFunc, CertificateValidDays);
+                            certEngineValue = new BcCertificateMaker(ExceptionFunc, CertificateValidDays);
                             break;
                         case CertificateEngine.BouncyCastleFast:
-                            certEngineValue = new BCCertificateMakerFast(ExceptionFunc, CertificateValidDays);
+                            certEngineValue = new BcCertificateMakerFast(ExceptionFunc, CertificateValidDays);
                             break;
                         case CertificateEngine.DefaultWindows:
                         default:
@@ -220,7 +220,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         public string RootCertificateIssuerName
         {
-            get => issuer ?? defaultRootCertificateIssuer;
+            get => issuer ?? DefaultRootCertificateIssuer;
             set => issuer = value;
         }
 
@@ -233,7 +233,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         public string RootCertificateName
         {
-            get => rootCertificateName ?? defaultRootRootCertificateName;
+            get => rootCertificateName ?? DefaultRootRootCertificateName;
             set => rootCertificateName = value;
         }
 
@@ -293,7 +293,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="storeLocation"></param>
         /// <returns></returns>
-        private bool rootCertificateInstalled(StoreLocation storeLocation)
+        private bool RootCertificateInstalled(StoreLocation storeLocation)
         {
             if (RootCertificate == null)
             {
@@ -301,12 +301,12 @@ namespace Titanium.Web.Proxy.Network
             }
 
             string value = $"{RootCertificate.Issuer}";
-            return findCertificates(StoreName.Root, storeLocation, value).Count > 0
+            return FindCertificates(StoreName.Root, storeLocation, value).Count > 0
                    && (CertificateEngine != CertificateEngine.DefaultWindows
-                       || findCertificates(StoreName.My, storeLocation, value).Count > 0);
+                       || FindCertificates(StoreName.My, storeLocation, value).Count > 0);
         }
 
-        private static X509Certificate2Collection findCertificates(StoreName storeName, StoreLocation storeLocation,
+        private static X509Certificate2Collection FindCertificates(StoreName storeName, StoreLocation storeLocation,
             string findValue)
         {
             var x509Store = new X509Store(storeName, storeLocation);
@@ -326,7 +326,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         /// <param name="storeName"></param>
         /// <param name="storeLocation"></param>
-        private void installCertificate(StoreName storeName, StoreLocation storeLocation)
+        private void InstallCertificate(StoreName storeName, StoreLocation storeLocation)
         {
             if (RootCertificate == null)
             {
@@ -344,7 +344,7 @@ namespace Titanium.Web.Proxy.Network
             }
             catch (Exception e)
             {
-                onException(
+                OnException(
                     new Exception("Failed to make system trust root certificate "
                                   + $" for {storeName}\\{storeLocation} store location. You may need admin rights.",
                         e));
@@ -361,11 +361,11 @@ namespace Titanium.Web.Proxy.Network
         /// <param name="storeName"></param>
         /// <param name="storeLocation"></param>
         /// <param name="certificate"></param>
-        private void uninstallCertificate(StoreName storeName, StoreLocation storeLocation, X509Certificate2? certificate)
+        private void UninstallCertificate(StoreName storeName, StoreLocation storeLocation, X509Certificate2? certificate)
         {
             if (certificate == null)
             {
-                onException(new Exception("Could not remove certificate as it is null or empty."));
+                OnException(new Exception("Could not remove certificate as it is null or empty."));
                 return;
             }
 
@@ -379,7 +379,7 @@ namespace Titanium.Web.Proxy.Network
             }
             catch (Exception e)
             {
-                onException(new Exception("Failed to remove root certificate trust "
+                OnException(new Exception("Failed to remove root certificate trust "
                                           + $" for {storeLocation} store location. You may need admin rights.", e));
             }
             finally
@@ -388,7 +388,7 @@ namespace Titanium.Web.Proxy.Network
             }
         }
 
-        private X509Certificate2 makeCertificate(string certificateName, bool isRootCertificate)
+        private X509Certificate2 MakeCertificate(string certificateName, bool isRootCertificate)
         {
             //if (isRoot != (null == signingCertificate))
             //{
@@ -402,22 +402,22 @@ namespace Titanium.Web.Proxy.Network
                 CreateRootCertificate();
             }
 
-            var certificate = certEngine.MakeCertificate(certificateName, isRootCertificate ? null : RootCertificate);
+            var certificate = CertEngine.MakeCertificate(certificateName, isRootCertificate ? null : RootCertificate);
 
             if (CertificateEngine == CertificateEngine.DefaultWindows)
             {
-                Task.Run(() => uninstallCertificate(StoreName.My, StoreLocation.CurrentUser, certificate));
+                Task.Run(() => UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, certificate));
             }
 
             return certificate;
         }
 
-        private void onException(Exception exception)
+        private void OnException(Exception exception)
         {
             ExceptionFunc?.Invoke(exception);
         }
 
-        private static ConcurrentDictionary<string, object> saveCertificateLocks
+        private static ConcurrentDictionary<string, object> _saveCertificateLocks
             = new ConcurrentDictionary<string, object>();
 
         /// <summary>
@@ -433,7 +433,7 @@ namespace Titanium.Web.Proxy.Network
             {
                 if (!isRootCertificate && SaveFakeCertificates)
                 {
-                    string subjectName = ProxyConstants.CNRemoverRegex
+                    string subjectName = ProxyConstants.CnRemoverRegex
                         .Replace(certificateName, string.Empty)
                         .Replace("*", "$x$");
 
@@ -443,19 +443,19 @@ namespace Titanium.Web.Proxy.Network
 
                         if (certificate != null && certificate.NotAfter <= DateTime.Now)
                         {
-                            onException(new Exception($"Cached certificate for {subjectName} has expired."));
+                            OnException(new Exception($"Cached certificate for {subjectName} has expired."));
                             certificate = null;
                         }
                     }
                     catch (Exception e)
                     {
-                        onException(new Exception("Failed to load fake certificate.", e));
+                        OnException(new Exception("Failed to load fake certificate.", e));
                         certificate = null;
                     }
 
                     if (certificate == null)
                     {
-                        certificate = makeCertificate(certificateName, false);
+                        certificate = MakeCertificate(certificateName, false);
 
                         //Don't need to wait for save to complete
                         _ = Task.Run(() =>
@@ -465,7 +465,7 @@ namespace Titanium.Web.Proxy.Network
                                 var lockKey = subjectName.ToLower();
                                 //acquire lock by subjectName
                                 //Async lock is not needed. Since this is a rare race-condition
-                                lock (saveCertificateLocks.GetOrAdd(lockKey, new object()))
+                                lock (_saveCertificateLocks.GetOrAdd(lockKey, new object()))
                                 {
                                     try
                                     {
@@ -475,25 +475,25 @@ namespace Titanium.Web.Proxy.Network
                                     finally
                                     {
                                         //save operation is complete. Free lock from memory.
-                                        saveCertificateLocks.TryRemove(lockKey, out var _);
+                                        _saveCertificateLocks.TryRemove(lockKey, out var _);
                                     }
                                 }
                             }
                             catch (Exception e)
                             {
-                                onException(new Exception("Failed to save fake certificate.", e));
+                                OnException(new Exception("Failed to save fake certificate.", e));
                             }
                         });
                     }
                 }
                 else
                 {
-                    certificate = makeCertificate(certificateName, isRootCertificate);
+                    certificate = MakeCertificate(certificateName, isRootCertificate);
                 }
             }
             catch (Exception e)
             {
-                onException(e);
+                OnException(e);
                 certificate = null;
             }
 
@@ -637,7 +637,7 @@ namespace Titanium.Web.Proxy.Network
 
                         if (rootCert != null && rootCert.NotAfter <= DateTime.Now)
                         {
-                            onException(new Exception("Loaded root certificate has expired."));
+                            OnException(new Exception("Loaded root certificate has expired."));
                             return false;
                         }
 
@@ -650,7 +650,7 @@ namespace Titanium.Web.Proxy.Network
                     catch (Exception e)
                     {
                         // root cert cannot be loaded
-                        onException(new Exception("Root cert cannot be loaded.", e));
+                        OnException(new Exception("Root cert cannot be loaded.", e));
                     }
                 }
 
@@ -660,7 +660,7 @@ namespace Titanium.Web.Proxy.Network
                 }
                 catch (Exception e)
                 {
-                    onException(e);
+                    OnException(e);
                 }
 
                 if (persistToFile && RootCertificate != null)
@@ -673,14 +673,14 @@ namespace Titanium.Web.Proxy.Network
                         }
                         catch (Exception e)
                         {
-                            onException(new Exception("An error happened when clearing certificate cache.", e));
+                            OnException(new Exception("An error happened when clearing certificate cache.", e));
                         }
 
                         certificateCache.SaveRootCertificate(PfxFilePath, PfxPassword, RootCertificate);
                     }
                     catch (Exception e)
                     {
-                        onException(e);
+                        OnException(e);
                     }
                 }
 
@@ -700,7 +700,7 @@ namespace Titanium.Web.Proxy.Network
 
                 if (rootCert != null && rootCert.NotAfter <= DateTime.Now)
                 {
-                    onException(new ArgumentException("Loaded root certificate has expired."));
+                    OnException(new ArgumentException("Loaded root certificate has expired."));
                     return null;
                 }
 
@@ -708,7 +708,7 @@ namespace Titanium.Web.Proxy.Network
             }
             catch (Exception e)
             {
-                onException(e);
+                OnException(e);
                 return null;
             }
         }
@@ -749,20 +749,20 @@ namespace Titanium.Web.Proxy.Network
         public void TrustRootCertificate(bool machineTrusted = false)
         {
             // currentUser\personal
-            installCertificate(StoreName.My, StoreLocation.CurrentUser);
+            InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
 
             if (!machineTrusted)
             {
                 // currentUser\Root
-                installCertificate(StoreName.Root, StoreLocation.CurrentUser);
+                InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
             }
             else
             {
                 // current system
-                installCertificate(StoreName.My, StoreLocation.LocalMachine);
+                InstallCertificate(StoreName.My, StoreLocation.LocalMachine);
 
                 // this adds to both currentUser\Root & currentMachine\Root
-                installCertificate(StoreName.Root, StoreLocation.LocalMachine);
+                InstallCertificate(StoreName.Root, StoreLocation.LocalMachine);
             }
         }
 
@@ -779,7 +779,7 @@ namespace Titanium.Web.Proxy.Network
             }
 
             // currentUser\Personal
-            installCertificate(StoreName.My, StoreLocation.CurrentUser);
+            InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
 
             string pfxFileName = Path.GetTempFileName();
             File.WriteAllBytes(pfxFileName, RootCertificate!.Export(X509ContentType.Pkcs12, PfxPassword));
@@ -817,7 +817,7 @@ namespace Titanium.Web.Proxy.Network
             }
             catch (Exception e)
             {
-                onException(e);
+                OnException(e);
                 return false;
             }
 
@@ -874,7 +874,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         public bool IsRootCertificateUserTrusted()
         {
-            return rootCertificateInstalled(StoreLocation.CurrentUser) || IsRootCertificateMachineTrusted();
+            return RootCertificateInstalled(StoreLocation.CurrentUser) || IsRootCertificateMachineTrusted();
         }
 
         /// <summary>
@@ -882,7 +882,7 @@ namespace Titanium.Web.Proxy.Network
         /// </summary>
         public bool IsRootCertificateMachineTrusted()
         {
-            return rootCertificateInstalled(StoreLocation.LocalMachine);
+            return RootCertificateInstalled(StoreLocation.LocalMachine);
         }
 
         /// <summary>
@@ -893,20 +893,20 @@ namespace Titanium.Web.Proxy.Network
         public void RemoveTrustedRootCertificate(bool machineTrusted = false)
         {
             // currentUser\personal
-            uninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
+            UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
 
             if (!machineTrusted)
             {
                 // currentUser\Root
-                uninstallCertificate(StoreName.Root, StoreLocation.CurrentUser, RootCertificate);
+                UninstallCertificate(StoreName.Root, StoreLocation.CurrentUser, RootCertificate);
             }
             else
             {
                 // current system
-                uninstallCertificate(StoreName.My, StoreLocation.LocalMachine, RootCertificate);
+                UninstallCertificate(StoreName.My, StoreLocation.LocalMachine, RootCertificate);
 
                 // this adds to both currentUser\Root & currentMachine\Root
-                uninstallCertificate(StoreName.Root, StoreLocation.LocalMachine, RootCertificate);
+                UninstallCertificate(StoreName.Root, StoreLocation.LocalMachine, RootCertificate);
             }
         }
 
@@ -922,7 +922,7 @@ namespace Titanium.Web.Proxy.Network
             }
 
             // currentUser\Personal
-            uninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
+            UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
 
             var infos = new List<ProcessStartInfo>();
             if (!machineTrusted)
@@ -1004,7 +1004,7 @@ namespace Titanium.Web.Proxy.Network
 
         private bool disposed = false;
 
-        void dispose(bool disposing)
+        void Dispose(bool disposing)
         {
             if (disposed)
             {
@@ -1021,13 +1021,13 @@ namespace Titanium.Web.Proxy.Network
 
         public void Dispose()
         {
-            dispose(true);
+            Dispose(true);
             GC.SuppressFinalize(this);
         }
 
         ~CertificateManager()
         {
-            dispose(false);
+            Dispose(false);
         }
     }
 }

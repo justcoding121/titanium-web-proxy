@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="args">The session event arguments.</param>
         /// <returns> The task.</returns>
-        private async Task handleHttpSessionResponse(SessionEventArgs args)
+        private async Task HandleHttpSessionResponse(SessionEventArgs args)
         {
             var cancellationToken = args.CancellationTokenSource.Token;
 
@@ -42,7 +42,7 @@ namespace Titanium.Web.Proxy
             {
                 if (response.StatusCode == (int)HttpStatusCode.Unauthorized)
                 {
-                    await handle401UnAuthorized(args);
+                    await Handle401UnAuthorized(args);
                 }
                 else
                 {
@@ -57,7 +57,7 @@ namespace Titanium.Web.Proxy
             // if user requested call back then do it
             if (!response.Locked)
             {
-                await onBeforeResponse(args);
+                await OnBeforeResponse(args);
             }
 
             // it may changed in the user event
@@ -87,12 +87,12 @@ namespace Titanium.Web.Proxy
             {
                 if (args.HttpClient.HasConnection)
                 {
-                    await tcpConnectionFactory.Release(args.HttpClient.Connection);
+                    await TcpConnectionFactory.Release(args.HttpClient.Connection);
                 }
 
                 // clear current response
                 await args.ClearResponse(cancellationToken);
-                var result = await handleHttpSessionRequest(args, null, args.ClientConnection.NegotiatedApplicationProtocol,
+                var result = await HandleHttpSessionRequest(args, null, args.ClientConnection.NegotiatedApplicationProtocol,
                             cancellationToken, args.CancellationTokenSource);
                 if (result.LatestConnection != null)
                 {
@@ -137,7 +137,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="args"></param>
         /// <returns></returns>
-        private async Task onBeforeResponse(SessionEventArgs args)
+        private async Task OnBeforeResponse(SessionEventArgs args)
         {
             if (BeforeResponse != null)
             {
@@ -150,7 +150,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="args"></param>
         /// <returns></returns>
-        private async Task onAfterResponse(SessionEventArgs args)
+        private async Task OnAfterResponse(SessionEventArgs args)
         {
             if (AfterResponse != null)
             {

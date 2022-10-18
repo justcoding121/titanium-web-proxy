@@ -18,37 +18,37 @@ namespace Titanium.Web.Proxy.Helpers
         /// cache for Windows platform check
         /// </summary>
         /// <returns></returns>
-        private static bool isRunningOnWindows => true;
+        private static bool IsRunningOnWindows => true;
 
         /// <summary>
         ///     cache for mono runtime check
         /// </summary>
         /// <returns></returns>
-        private static bool isRunningOnLinux => false;
+        private static bool IsRunningOnLinux => false;
 
         /// <summary>
         ///     cache for mac runtime check
         /// </summary>
         /// <returns></returns>
-        private static bool isRunningOnMac => false;
+        private static bool IsRunningOnMac => false;
 #else
         /// <summary>
         /// cache for Windows platform check
         /// </summary>
         /// <returns></returns>
-        private static bool isRunningOnWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        private static bool IsRunningOnWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
         /// <summary>
         ///     cache for mono runtime check
         /// </summary>
         /// <returns></returns>
-        private static bool isRunningOnLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+        private static bool IsRunningOnLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
         /// <summary>
         ///     cache for mac runtime check
         /// </summary>
         /// <returns></returns>
-        private static bool isRunningOnMac => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+        private static bool IsRunningOnMac => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
 #endif
 
         /// <summary>
@@ -56,22 +56,20 @@ namespace Titanium.Web.Proxy.Helpers
         /// </summary>
         internal static bool IsRunningOnMono => isRunningOnMono.Value;
 
-        public static bool IsLinux => isRunningOnLinux;
+        public static bool IsLinux => IsRunningOnLinux;
 
-        public static bool IsWindows => isRunningOnWindows;
+        public static bool IsWindows => IsRunningOnWindows;
 
         public static bool IsUwpOnWindows => IsWindows && UwpHelper.IsRunningAsUwp();
 
-        public static bool IsMac => isRunningOnMac;
+        public static bool IsMac => IsRunningOnMac;
+
+        private static bool? _isSocketReuseAvailable;
 
         /// <summary>
         /// Is socket reuse available to use?
         /// </summary>
-        public static bool IsSocketReuseAvailable => isSocketReuseAvailable();
-
-        private static bool? _isSocketReuseAvailable;
-
-        private static bool isSocketReuseAvailable()
+        public static bool IsSocketReuseAvailable()
         {
             // use the cached value if we have one
             if (_isSocketReuseAvailable != null)
@@ -123,14 +121,14 @@ namespace Titanium.Web.Proxy.Helpers
         // https://github.com/qmatteoq/DesktopBridgeHelpers/blob/master/DesktopBridge.Helpers/Helpers.cs
         private class UwpHelper
         {
-            const long APPMODEL_ERROR_NO_PACKAGE = 15700L;
+            const long AppmodelErrorNoPackage = 15700L;
 
             [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
             static extern int GetCurrentPackageFullName(ref int packageFullNameLength, StringBuilder packageFullName);
 
             internal static bool IsRunningAsUwp()
             {
-                if (isWindows7OrLower)
+                if (IsWindows7OrLower)
                 {
                     return false;
                 }
@@ -143,11 +141,11 @@ namespace Titanium.Web.Proxy.Helpers
                     sb = new StringBuilder(length);
                     result = GetCurrentPackageFullName(ref length, sb);
 
-                    return result != APPMODEL_ERROR_NO_PACKAGE;
+                    return result != AppmodelErrorNoPackage;
                 }
             }
 
-            private static bool isWindows7OrLower
+            private static bool IsWindows7OrLower
             {
                 get
                 {

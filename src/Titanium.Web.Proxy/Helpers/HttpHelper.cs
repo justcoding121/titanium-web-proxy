@@ -208,7 +208,7 @@ namespace Titanium.Web.Proxy.Helpers
                         int b = buffer[i];
 
                         if (b == ' ' && i > 2)
-                            return getKnownMethod(buffer.AsSpan(0, i));
+                            return GetKnownMethod(buffer.AsSpan(0, i));
 
                         char ch = (char)b;
                         if ((ch < 'A' || ch > 'z' || (ch > 'Z' && ch < 'a')) && (ch != '-')) // ASCII letter
@@ -227,7 +227,7 @@ namespace Titanium.Web.Proxy.Helpers
             }
         }
 
-        private static KnownMethod getKnownMethod(ReadOnlySpan<byte> method)
+        private static KnownMethod GetKnownMethod(ReadOnlySpan<byte> method)
         {
             // the following methods are supported:
             // Connect

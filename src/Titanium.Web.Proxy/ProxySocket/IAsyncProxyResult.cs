@@ -36,15 +36,15 @@ namespace Titanium.Web.Proxy.ProxySocket
     /// <summary>
     /// A class that implements the IAsyncResult interface. Objects from this class are returned by the BeginConnect method of the ProxySocket class.
     /// </summary>
-    internal class IAsyncProxyResult : IAsyncResult
+    internal class AsyncProxyResult : IAsyncResult
     {
         /// <summary>Initializes the internal variables of this object</summary>
         /// <param name="stateObject">An object that contains state information for this request.</param>
-        internal IAsyncProxyResult(object stateObject = null)
+        internal AsyncProxyResult(object stateObject = null)
         {
             AsyncState = stateObject;
             IsCompleted = false;
-            _waitHandle?.Reset();
+            waitHandle?.Reset();
 
         }
 
@@ -53,7 +53,7 @@ namespace Titanium.Web.Proxy.ProxySocket
         {
             //AsyncState = null;
             IsCompleted = true;
-            _waitHandle?.Set();
+            waitHandle?.Set();
         }
 
         /// <summary>Gets a value that indicates whether the server has completed processing the call. It is illegal for the server to use any client supplied resources outside of the agreed upon sharing semantics after it sets the IsCompleted property to "true". Thus, it is safe for the client to destroy the resources after IsCompleted property returns "true".</summary>
@@ -73,11 +73,11 @@ namespace Titanium.Web.Proxy.ProxySocket
         /// WaitHandle supplies methods that support waiting for such synchronization objects to become signaled with "any" or "all" semantics i.e. WaitHandle.WaitOne, WaitAny and WaitAll. Such methods are context aware to avoid deadlocks. The AsyncWaitHandle can be allocated eagerly or on demand. It is the choice of the IAsyncResult implementer.
         ///</summary>
         /// <value>The WaitHandle associated with this asynchronous result.</value>
-        public WaitHandle AsyncWaitHandle => _waitHandle ??= new ManualResetEvent(false);
+        public WaitHandle AsyncWaitHandle => waitHandle ??= new ManualResetEvent(false);
 
         // private variables
 
         /// <summary>Holds the value of the WaitHandle property.</summary>
-        private ManualResetEvent _waitHandle;
+        private ManualResetEvent waitHandle;
     }
 }

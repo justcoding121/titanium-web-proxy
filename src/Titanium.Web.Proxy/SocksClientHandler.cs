@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy
         /// <param name="endPoint">The transparent endpoint.</param>
         /// <param name="clientConnection">The client connection.</param>
         /// <returns></returns>
-        private async Task handleClient(SocksProxyEndPoint endPoint, TcpClientConnection clientConnection)
+        private async Task HandleClient(SocksProxyEndPoint endPoint, TcpClientConnection clientConnection)
         {
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
@@ -168,7 +168,7 @@ namespace Titanium.Web.Proxy
                 BufferPool.ReturnBuffer(buffer);
             }
 
-            await handleClient(endPoint, clientConnection, port, cancellationTokenSource, cancellationToken);
+            await HandleClient(endPoint, clientConnection, port, cancellationTokenSource, cancellationToken);
         }
     }
 }

@@ -45,7 +45,7 @@ namespace Titanium.Web.Proxy
         ///     User to server to authenticate requests.
         ///     To disable this set ProxyServer.EnableWinAuth to false.
         /// </summary>
-        private async Task handle401UnAuthorized(SessionEventArgs args)
+        private async Task Handle401UnAuthorized(SessionEventArgs args)
         {
             string? headerName = null;
             HttpHeader? authHeader = null;
@@ -94,12 +94,12 @@ namespace Titanium.Web.Proxy
                 string? scheme = authSchemes.Contains(authHeader.Value) ? authHeader.Value : null;
 
                 var expectedAuthState =
-                    scheme == null ? State.WinAuthState.INITIAL_TOKEN : State.WinAuthState.UNAUTHORIZED;
+                    scheme == null ? State.WinAuthState.InitialToken : State.WinAuthState.Unauthorized;
 
                 if (!WinAuthEndPoint.ValidateWinAuthState(args.HttpClient.Data, expectedAuthState))
                 {
                     // Invalid state, create proper error message to client
-                    await rewriteUnauthorizedResponse(args);
+                    await RewriteUnauthorizedResponse(args);
                     return;
                 }
 
@@ -162,7 +162,7 @@ namespace Titanium.Web.Proxy
         /// </summary>
         /// <param name="args"></param>
         /// <returns></returns>
-        private async Task rewriteUnauthorizedResponse(SessionEventArgs args)
+        private async Task RewriteUnauthorizedResponse(SessionEventArgs args)
         {
             var response = args.HttpClient.Response;
 

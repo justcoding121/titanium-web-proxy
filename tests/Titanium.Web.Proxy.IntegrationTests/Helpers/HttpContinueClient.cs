@@ -9,13 +9,13 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
 {
     class HttpContinueClient
     {
-        private const int waitTimeout = 200;
+        private const int WaitTimeout = 200;
 
-        private static Encoding MsgEncoding = HttpHelper.GetEncodingFromContentType(null);
+        private static Encoding _msgEncoding = HttpHelper.GetEncodingFromContentType(null);
 
         public async Task<Response> Post(string server, int port, string content)
         {
-            var message = MsgEncoding.GetBytes(content);
+            var message = _msgEncoding.GetBytes(content);
             var client = new TcpClient(server, port);
             client.SendTimeout = client.ReceiveTimeout = 500;
 
@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             request.Headers.AddHeader(KnownHeaders.ContentLength, message.Length.ToString());
             request.Headers.AddHeader(KnownHeaders.Expect, KnownHeaders.Expect100Continue);
 
-            var header = MsgEncoding.GetBytes(request.HeaderText);
+            var header = _msgEncoding.GetBytes(request.HeaderText);
             await client.GetStream().WriteAsync(header, 0, header.Length);
 
             var buffer = new byte[1024];
@@ -39,10 +39,10 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
             while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
             {
                 var readTask = client.GetStream().ReadAsync(buffer, 0, 1024);
-                if (!readTask.Wait(waitTimeout))
+                if (!readTask.Wait(WaitTimeout))
                     return null;
 
-                responseMsg += MsgEncoding.GetString(buffer, 0, readTask.Result);
+                responseMsg += _msgEncoding.GetString(buffer, 0, readTask.Result);
             }
 
             if (response.StatusCode == 100)
@@ -54,9 +54,9 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers
                 while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
                 {
                     var readTask = client.GetStream().ReadAsync(buffer, 0, 1024);
-                    if (!readTask.Wait(waitTimeout))
+                    if (!readTask.Wait(WaitTimeout))
                         return null;
-                    responseMsg += MsgEncoding.GetString(buffer, 0, readTask.Result);
+                    responseMsg += _msgEncoding.GetString(buffer, 0, readTask.Result);
                 }
 
                 return response;
