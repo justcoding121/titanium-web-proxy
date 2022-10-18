@@ -17,19 +17,25 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v2
+
     - name: Install DocFX
+      if: github.ref == 'refs/heads/develop'
       run: choco install docfx -y
+
     - name: Build 
       run: dotnet build src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj
+
     - name: Test 
       shell: pwsh
       run: |
         .\.github\install-unit-test-certificate.ps1
         dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj
         dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj
+
     - name: Update Documentation
       if: github.ref == 'refs/heads/develop'
       run: docfx .github/docfx.json
+
     - name: Publish Documentation
       if: github.ref == 'refs/heads/develop'
       uses: EndBug/add-and-commit@v9
@@ -38,11 +44,13 @@ jobs:
         message: Update documentation
         committer_name: GitHub Actions
         committer_email: actions@github.com
+
     - name: Publish Beta
       if: github.ref == 'refs/heads/beta'
       run: |
        dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --version-suffix "beta"
        dotnet nuget push **\*.nupkg -s "nuget" -k "${{ secrets.NUGET_TOKEN }}"
+
     - name: Publish Stable
       if: github.ref == 'refs/heads/stable'
       run: |
