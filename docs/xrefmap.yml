@@ -41,6 +41,32 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.DecryptSsl
   nameWithType: BeforeSslAuthenticateEventArgs.DecryptSsl
+- uid: Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsHostName
+  name: ForwardHttpsHostName
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_ForwardHttpsHostName
+  commentId: P:Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsHostName
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsHostName
+  nameWithType: BeforeSslAuthenticateEventArgs.ForwardHttpsHostName
+- uid: Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsHostName*
+  name: ForwardHttpsHostName
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_ForwardHttpsHostName_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsHostName
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsHostName
+  nameWithType: BeforeSslAuthenticateEventArgs.ForwardHttpsHostName
+- uid: Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsPort
+  name: ForwardHttpsPort
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_ForwardHttpsPort
+  commentId: P:Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsPort
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsPort
+  nameWithType: BeforeSslAuthenticateEventArgs.ForwardHttpsPort
+- uid: Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsPort*
+  name: ForwardHttpsPort
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_ForwardHttpsPort_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsPort
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsPort
+  nameWithType: BeforeSslAuthenticateEventArgs.ForwardHttpsPort
 - uid: Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.SniHostName
   name: SniHostName
   href: api/Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_SniHostName
@@ -890,6 +916,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.LocalEndPoint
   nameWithType: SessionEventArgsBase.LocalEndPoint
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.OnException(System.Exception)
+  name: OnException(Exception)
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_OnException_System_Exception_
+  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.OnException(System.Exception)
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.OnException(System.Exception)
+  nameWithType: SessionEventArgsBase.OnException(Exception)
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.OnException*
+  name: OnException
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_OnException_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.OnException
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.OnException
+  nameWithType: SessionEventArgsBase.OnException
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyEndPoint
   name: ProxyEndPoint
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ProxyEndPoint
@@ -1012,6 +1051,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DenyConnect
   nameWithType: TunnelConnectSessionEventArgs.DenyConnect
+- uid: Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.Finalize
+  name: Finalize()
+  href: api/Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_Finalize
+  commentId: M:Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.Finalize
+  fullName: Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.Finalize()
+  nameWithType: TunnelConnectSessionEventArgs.Finalize()
+- uid: Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.Finalize*
+  name: Finalize
+  href: api/Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_Finalize_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.Finalize
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.Finalize
+  nameWithType: TunnelConnectSessionEventArgs.Finalize
 - uid: Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.IsHttpsConnect
   name: IsHttpsConnect
   href: api/Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_IsHttpsConnect
@@ -1138,12 +1190,12 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Exceptions.ProxyHttpException.Session
   nameWithType: ProxyHttpException.Session
-- uid: Titanium.Web.Proxy.Exceptions.ServerConnectionException
-  name: ServerConnectionException
-  href: api/Titanium.Web.Proxy.Exceptions.ServerConnectionException.html
-  commentId: T:Titanium.Web.Proxy.Exceptions.ServerConnectionException
-  fullName: Titanium.Web.Proxy.Exceptions.ServerConnectionException
-  nameWithType: ServerConnectionException
+- uid: Titanium.Web.Proxy.Exceptions.RetryableServerConnectionException
+  name: RetryableServerConnectionException
+  href: api/Titanium.Web.Proxy.Exceptions.RetryableServerConnectionException.html
+  commentId: T:Titanium.Web.Proxy.Exceptions.RetryableServerConnectionException
+  fullName: Titanium.Web.Proxy.Exceptions.RetryableServerConnectionException
+  nameWithType: RetryableServerConnectionException
 - uid: Titanium.Web.Proxy.Helpers
   name: Titanium.Web.Proxy.Helpers
   href: api/Titanium.Web.Proxy.Helpers.html
@@ -1183,11 +1235,11 @@ references:
   fullName: Titanium.Web.Proxy.Helpers.RunTime.IsMac
   nameWithType: RunTime.IsMac
 - uid: Titanium.Web.Proxy.Helpers.RunTime.IsSocketReuseAvailable
-  name: IsSocketReuseAvailable
+  name: IsSocketReuseAvailable()
   href: api/Titanium.Web.Proxy.Helpers.RunTime.html#Titanium_Web_Proxy_Helpers_RunTime_IsSocketReuseAvailable
-  commentId: P:Titanium.Web.Proxy.Helpers.RunTime.IsSocketReuseAvailable
-  fullName: Titanium.Web.Proxy.Helpers.RunTime.IsSocketReuseAvailable
-  nameWithType: RunTime.IsSocketReuseAvailable
+  commentId: M:Titanium.Web.Proxy.Helpers.RunTime.IsSocketReuseAvailable
+  fullName: Titanium.Web.Proxy.Helpers.RunTime.IsSocketReuseAvailable()
+  nameWithType: RunTime.IsSocketReuseAvailable()
 - uid: Titanium.Web.Proxy.Helpers.RunTime.IsSocketReuseAvailable*
   name: IsSocketReuseAvailable
   href: api/Titanium.Web.Proxy.Helpers.RunTime.html#Titanium_Web_Proxy_Helpers_RunTime_IsSocketReuseAvailable_
@@ -1703,6 +1755,12 @@ references:
   commentId: F:Titanium.Web.Proxy.Http.KnownHeaders.ContentLength
   fullName: Titanium.Web.Proxy.Http.KnownHeaders.ContentLength
   nameWithType: KnownHeaders.ContentLength
+- uid: Titanium.Web.Proxy.Http.KnownHeaders.ContentLengthHttp2
+  name: ContentLengthHttp2
+  href: api/Titanium.Web.Proxy.Http.KnownHeaders.html#Titanium_Web_Proxy_Http_KnownHeaders_ContentLengthHttp2
+  commentId: F:Titanium.Web.Proxy.Http.KnownHeaders.ContentLengthHttp2
+  fullName: Titanium.Web.Proxy.Http.KnownHeaders.ContentLengthHttp2
+  nameWithType: KnownHeaders.ContentLengthHttp2
 - uid: Titanium.Web.Proxy.Http.KnownHeaders.ContentType
   name: ContentType
   href: api/Titanium.Web.Proxy.Http.KnownHeaders.html#Titanium_Web_Proxy_Http_KnownHeaders_ContentType
@@ -3312,204 +3370,204 @@ references:
   commentId: T:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
   fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
   nameWithType: AlternativeNameType
-- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_DIRECTORY_NAME
-  name: XCN_CERT_ALT_NAME_DIRECTORY_NAME
-  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XCN_CERT_ALT_NAME_DIRECTORY_NAME
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_DIRECTORY_NAME
-  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_DIRECTORY_NAME
-  nameWithType: AlternativeNameType.XCN_CERT_ALT_NAME_DIRECTORY_NAME
-- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_DNS_NAME
-  name: XCN_CERT_ALT_NAME_DNS_NAME
-  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XCN_CERT_ALT_NAME_DNS_NAME
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_DNS_NAME
-  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_DNS_NAME
-  nameWithType: AlternativeNameType.XCN_CERT_ALT_NAME_DNS_NAME
-- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_GUID
-  name: XCN_CERT_ALT_NAME_GUID
-  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XCN_CERT_ALT_NAME_GUID
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_GUID
-  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_GUID
-  nameWithType: AlternativeNameType.XCN_CERT_ALT_NAME_GUID
-- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_IP_ADDRESS
-  name: XCN_CERT_ALT_NAME_IP_ADDRESS
-  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XCN_CERT_ALT_NAME_IP_ADDRESS
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_IP_ADDRESS
-  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_IP_ADDRESS
-  nameWithType: AlternativeNameType.XCN_CERT_ALT_NAME_IP_ADDRESS
-- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_OTHER_NAME
-  name: XCN_CERT_ALT_NAME_OTHER_NAME
-  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XCN_CERT_ALT_NAME_OTHER_NAME
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_OTHER_NAME
-  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_OTHER_NAME
-  nameWithType: AlternativeNameType.XCN_CERT_ALT_NAME_OTHER_NAME
-- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_REGISTERED_ID
-  name: XCN_CERT_ALT_NAME_REGISTERED_ID
-  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XCN_CERT_ALT_NAME_REGISTERED_ID
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_REGISTERED_ID
-  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_REGISTERED_ID
-  nameWithType: AlternativeNameType.XCN_CERT_ALT_NAME_REGISTERED_ID
-- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_RFC822_NAME
-  name: XCN_CERT_ALT_NAME_RFC822_NAME
-  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XCN_CERT_ALT_NAME_RFC822_NAME
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_RFC822_NAME
-  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_RFC822_NAME
-  nameWithType: AlternativeNameType.XCN_CERT_ALT_NAME_RFC822_NAME
-- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_UNKNOWN
-  name: XCN_CERT_ALT_NAME_UNKNOWN
-  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XCN_CERT_ALT_NAME_UNKNOWN
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_UNKNOWN
-  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_UNKNOWN
-  nameWithType: AlternativeNameType.XCN_CERT_ALT_NAME_UNKNOWN
-- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_URL
-  name: XCN_CERT_ALT_NAME_URL
-  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XCN_CERT_ALT_NAME_URL
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_URL
-  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_URL
-  nameWithType: AlternativeNameType.XCN_CERT_ALT_NAME_URL
-- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME
-  name: XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME
-  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME
-  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME
-  nameWithType: AlternativeNameType.XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME
+- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameDirectoryName
+  name: XcnCertAltNameDirectoryName
+  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XcnCertAltNameDirectoryName
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameDirectoryName
+  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameDirectoryName
+  nameWithType: AlternativeNameType.XcnCertAltNameDirectoryName
+- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameDnsName
+  name: XcnCertAltNameDnsName
+  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XcnCertAltNameDnsName
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameDnsName
+  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameDnsName
+  nameWithType: AlternativeNameType.XcnCertAltNameDnsName
+- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameGuid
+  name: XcnCertAltNameGuid
+  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XcnCertAltNameGuid
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameGuid
+  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameGuid
+  nameWithType: AlternativeNameType.XcnCertAltNameGuid
+- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameIpAddress
+  name: XcnCertAltNameIpAddress
+  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XcnCertAltNameIpAddress
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameIpAddress
+  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameIpAddress
+  nameWithType: AlternativeNameType.XcnCertAltNameIpAddress
+- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameOtherName
+  name: XcnCertAltNameOtherName
+  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XcnCertAltNameOtherName
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameOtherName
+  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameOtherName
+  nameWithType: AlternativeNameType.XcnCertAltNameOtherName
+- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameRegisteredId
+  name: XcnCertAltNameRegisteredId
+  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XcnCertAltNameRegisteredId
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameRegisteredId
+  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameRegisteredId
+  nameWithType: AlternativeNameType.XcnCertAltNameRegisteredId
+- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameRfc822Name
+  name: XcnCertAltNameRfc822Name
+  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XcnCertAltNameRfc822Name
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameRfc822Name
+  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameRfc822Name
+  nameWithType: AlternativeNameType.XcnCertAltNameRfc822Name
+- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUnknown
+  name: XcnCertAltNameUnknown
+  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XcnCertAltNameUnknown
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUnknown
+  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUnknown
+  nameWithType: AlternativeNameType.XcnCertAltNameUnknown
+- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUrl
+  name: XcnCertAltNameUrl
+  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XcnCertAltNameUrl
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUrl
+  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUrl
+  nameWithType: AlternativeNameType.XcnCertAltNameUrl
+- uid: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUserPrincipleName
+  name: XcnCertAltNameUserPrincipleName
+  href: api/Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html#Titanium_Web_Proxy_Network_Certificate_AlternativeNameType_XcnCertAltNameUserPrincipleName
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUserPrincipleName
+  fullName: Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUserPrincipleName
+  nameWithType: AlternativeNameType.XcnCertAltNameUserPrincipleName
 - uid: Titanium.Web.Proxy.Network.Certificate.EncodingType
   name: EncodingType
   href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html
   commentId: T:Titanium.Web.Proxy.Network.Certificate.EncodingType
   fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType
   nameWithType: EncodingType
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_ANY
-  name: XCN_CRYPT_STRING_ANY
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_ANY
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_ANY
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_ANY
-  nameWithType: EncodingType.XCN_CRYPT_STRING_ANY
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64
-  name: XCN_CRYPT_STRING_BASE64
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_BASE64
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64
-  nameWithType: EncodingType.XCN_CRYPT_STRING_BASE64
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64_ANY
-  name: XCN_CRYPT_STRING_BASE64_ANY
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_BASE64_ANY
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64_ANY
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64_ANY
-  nameWithType: EncodingType.XCN_CRYPT_STRING_BASE64_ANY
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64HEADER
-  name: XCN_CRYPT_STRING_BASE64HEADER
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_BASE64HEADER
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64HEADER
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64HEADER
-  nameWithType: EncodingType.XCN_CRYPT_STRING_BASE64HEADER
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64REQUESTHEADER
-  name: XCN_CRYPT_STRING_BASE64REQUESTHEADER
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_BASE64REQUESTHEADER
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64REQUESTHEADER
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64REQUESTHEADER
-  nameWithType: EncodingType.XCN_CRYPT_STRING_BASE64REQUESTHEADER
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64URI
-  name: XCN_CRYPT_STRING_BASE64URI
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_BASE64URI
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64URI
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64URI
-  nameWithType: EncodingType.XCN_CRYPT_STRING_BASE64URI
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64X509CRLHEADER
-  name: XCN_CRYPT_STRING_BASE64X509CRLHEADER
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_BASE64X509CRLHEADER
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64X509CRLHEADER
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BASE64X509CRLHEADER
-  nameWithType: EncodingType.XCN_CRYPT_STRING_BASE64X509CRLHEADER
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BINARY
-  name: XCN_CRYPT_STRING_BINARY
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_BINARY
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BINARY
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_BINARY
-  nameWithType: EncodingType.XCN_CRYPT_STRING_BINARY
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_CHAIN
-  name: XCN_CRYPT_STRING_CHAIN
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_CHAIN
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_CHAIN
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_CHAIN
-  nameWithType: EncodingType.XCN_CRYPT_STRING_CHAIN
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_ENCODEMASK
-  name: XCN_CRYPT_STRING_ENCODEMASK
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_ENCODEMASK
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_ENCODEMASK
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_ENCODEMASK
-  nameWithType: EncodingType.XCN_CRYPT_STRING_ENCODEMASK
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HASHDATA
-  name: XCN_CRYPT_STRING_HASHDATA
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_HASHDATA
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HASHDATA
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HASHDATA
-  nameWithType: EncodingType.XCN_CRYPT_STRING_HASHDATA
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEX
-  name: XCN_CRYPT_STRING_HEX
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_HEX
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEX
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEX
-  nameWithType: EncodingType.XCN_CRYPT_STRING_HEX
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEX_ANY
-  name: XCN_CRYPT_STRING_HEX_ANY
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_HEX_ANY
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEX_ANY
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEX_ANY
-  nameWithType: EncodingType.XCN_CRYPT_STRING_HEX_ANY
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEXADDR
-  name: XCN_CRYPT_STRING_HEXADDR
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_HEXADDR
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEXADDR
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEXADDR
-  nameWithType: EncodingType.XCN_CRYPT_STRING_HEXADDR
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEXASCII
-  name: XCN_CRYPT_STRING_HEXASCII
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_HEXASCII
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEXASCII
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEXASCII
-  nameWithType: EncodingType.XCN_CRYPT_STRING_HEXASCII
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEXASCIIADDR
-  name: XCN_CRYPT_STRING_HEXASCIIADDR
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_HEXASCIIADDR
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEXASCIIADDR
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEXASCIIADDR
-  nameWithType: EncodingType.XCN_CRYPT_STRING_HEXASCIIADDR
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEXRAW
-  name: XCN_CRYPT_STRING_HEXRAW
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_HEXRAW
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEXRAW
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_HEXRAW
-  nameWithType: EncodingType.XCN_CRYPT_STRING_HEXRAW
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_NOCR
-  name: XCN_CRYPT_STRING_NOCR
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_NOCR
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_NOCR
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_NOCR
-  nameWithType: EncodingType.XCN_CRYPT_STRING_NOCR
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_NOCRLF
-  name: XCN_CRYPT_STRING_NOCRLF
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_NOCRLF
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_NOCRLF
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_NOCRLF
-  nameWithType: EncodingType.XCN_CRYPT_STRING_NOCRLF
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_PERCENTESCAPE
-  name: XCN_CRYPT_STRING_PERCENTESCAPE
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_PERCENTESCAPE
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_PERCENTESCAPE
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_PERCENTESCAPE
-  nameWithType: EncodingType.XCN_CRYPT_STRING_PERCENTESCAPE
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_STRICT
-  name: XCN_CRYPT_STRING_STRICT
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_STRICT
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_STRICT
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_STRICT
-  nameWithType: EncodingType.XCN_CRYPT_STRING_STRICT
-- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_TEXT
-  name: XCN_CRYPT_STRING_TEXT
-  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XCN_CRYPT_STRING_TEXT
-  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_TEXT
-  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XCN_CRYPT_STRING_TEXT
-  nameWithType: EncodingType.XCN_CRYPT_STRING_TEXT
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringAny
+  name: XcnCryptStringAny
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringAny
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringAny
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringAny
+  nameWithType: EncodingType.XcnCryptStringAny
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64
+  name: XcnCryptStringBase64
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringBase64
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64
+  nameWithType: EncodingType.XcnCryptStringBase64
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Any
+  name: XcnCryptStringBase64Any
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringBase64Any
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Any
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Any
+  nameWithType: EncodingType.XcnCryptStringBase64Any
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Header
+  name: XcnCryptStringBase64Header
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringBase64Header
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Header
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Header
+  nameWithType: EncodingType.XcnCryptStringBase64Header
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Requestheader
+  name: XcnCryptStringBase64Requestheader
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringBase64Requestheader
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Requestheader
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Requestheader
+  nameWithType: EncodingType.XcnCryptStringBase64Requestheader
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Uri
+  name: XcnCryptStringBase64Uri
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringBase64Uri
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Uri
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Uri
+  nameWithType: EncodingType.XcnCryptStringBase64Uri
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64X509Crlheader
+  name: XcnCryptStringBase64X509Crlheader
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringBase64X509Crlheader
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64X509Crlheader
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64X509Crlheader
+  nameWithType: EncodingType.XcnCryptStringBase64X509Crlheader
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBinary
+  name: XcnCryptStringBinary
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringBinary
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBinary
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBinary
+  nameWithType: EncodingType.XcnCryptStringBinary
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringChain
+  name: XcnCryptStringChain
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringChain
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringChain
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringChain
+  nameWithType: EncodingType.XcnCryptStringChain
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringEncodemask
+  name: XcnCryptStringEncodemask
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringEncodemask
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringEncodemask
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringEncodemask
+  nameWithType: EncodingType.XcnCryptStringEncodemask
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHashdata
+  name: XcnCryptStringHashdata
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringHashdata
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHashdata
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHashdata
+  nameWithType: EncodingType.XcnCryptStringHashdata
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHex
+  name: XcnCryptStringHex
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringHex
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHex
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHex
+  nameWithType: EncodingType.XcnCryptStringHex
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexaddr
+  name: XcnCryptStringHexaddr
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringHexaddr
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexaddr
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexaddr
+  nameWithType: EncodingType.XcnCryptStringHexaddr
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexAny
+  name: XcnCryptStringHexAny
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringHexAny
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexAny
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexAny
+  nameWithType: EncodingType.XcnCryptStringHexAny
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexascii
+  name: XcnCryptStringHexascii
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringHexascii
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexascii
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexascii
+  nameWithType: EncodingType.XcnCryptStringHexascii
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexasciiaddr
+  name: XcnCryptStringHexasciiaddr
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringHexasciiaddr
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexasciiaddr
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexasciiaddr
+  nameWithType: EncodingType.XcnCryptStringHexasciiaddr
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexraw
+  name: XcnCryptStringHexraw
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringHexraw
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexraw
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexraw
+  nameWithType: EncodingType.XcnCryptStringHexraw
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringNocr
+  name: XcnCryptStringNocr
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringNocr
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringNocr
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringNocr
+  nameWithType: EncodingType.XcnCryptStringNocr
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringNocrlf
+  name: XcnCryptStringNocrlf
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringNocrlf
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringNocrlf
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringNocrlf
+  nameWithType: EncodingType.XcnCryptStringNocrlf
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringPercentescape
+  name: XcnCryptStringPercentescape
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringPercentescape
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringPercentescape
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringPercentescape
+  nameWithType: EncodingType.XcnCryptStringPercentescape
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringStrict
+  name: XcnCryptStringStrict
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringStrict
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringStrict
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringStrict
+  nameWithType: EncodingType.XcnCryptStringStrict
+- uid: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringText
+  name: XcnCryptStringText
+  href: api/Titanium.Web.Proxy.Network.Certificate.EncodingType.html#Titanium_Web_Proxy_Network_Certificate_EncodingType_XcnCryptStringText
+  commentId: F:Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringText
+  fullName: Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringText
+  nameWithType: EncodingType.XcnCryptStringText
 - uid: Titanium.Web.Proxy.Network.CertificateEngine
   name: CertificateEngine
   href: api/Titanium.Web.Proxy.Network.CertificateEngine.html
@@ -3631,6 +3689,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.CreateServerCertificate
   nameWithType: CertificateManager.CreateServerCertificate
+- uid: Titanium.Web.Proxy.Network.CertificateManager.DisableWildCardCertificates
+  name: DisableWildCardCertificates
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_DisableWildCardCertificates
+  commentId: P:Titanium.Web.Proxy.Network.CertificateManager.DisableWildCardCertificates
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.DisableWildCardCertificates
+  nameWithType: CertificateManager.DisableWildCardCertificates
+- uid: Titanium.Web.Proxy.Network.CertificateManager.DisableWildCardCertificates*
+  name: DisableWildCardCertificates
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_DisableWildCardCertificates_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.DisableWildCardCertificates
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.DisableWildCardCertificates
+  nameWithType: CertificateManager.DisableWildCardCertificates
 - uid: Titanium.Web.Proxy.Network.CertificateManager.Dispose
   name: Dispose()
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_Dispose
@@ -4075,6 +4146,12 @@ references:
   commentId: E:Titanium.Web.Proxy.ProxyServer.BeforeResponse
   fullName: Titanium.Web.Proxy.ProxyServer.BeforeResponse
   nameWithType: ProxyServer.BeforeResponse
+- uid: Titanium.Web.Proxy.ProxyServer.BeforeUpStreamConnectRequest
+  name: BeforeUpStreamConnectRequest
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BeforeUpStreamConnectRequest
+  commentId: E:Titanium.Web.Proxy.ProxyServer.BeforeUpStreamConnectRequest
+  fullName: Titanium.Web.Proxy.ProxyServer.BeforeUpStreamConnectRequest
+  nameWithType: ProxyServer.BeforeUpStreamConnectRequest
 - uid: Titanium.Web.Proxy.ProxyServer.BufferPool
   name: BufferPool
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BufferPool
@@ -4379,6 +4456,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.MaxCachedConnections
   nameWithType: ProxyServer.MaxCachedConnections
+- uid: Titanium.Web.Proxy.ProxyServer.NetworkFailureRetryAttempts
+  name: NetworkFailureRetryAttempts
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_NetworkFailureRetryAttempts
+  commentId: P:Titanium.Web.Proxy.ProxyServer.NetworkFailureRetryAttempts
+  fullName: Titanium.Web.Proxy.ProxyServer.NetworkFailureRetryAttempts
+  nameWithType: ProxyServer.NetworkFailureRetryAttempts
+- uid: Titanium.Web.Proxy.ProxyServer.NetworkFailureRetryAttempts*
+  name: NetworkFailureRetryAttempts
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_NetworkFailureRetryAttempts_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.NetworkFailureRetryAttempts
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.NetworkFailureRetryAttempts
+  nameWithType: ProxyServer.NetworkFailureRetryAttempts
 - uid: Titanium.Web.Proxy.ProxyServer.NoDelay
   name: NoDelay
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_NoDelay
@@ -4585,12 +4675,12 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy
   nameWithType: ProxyServer.SetAsSystemProxy
-- uid: Titanium.Web.Proxy.ProxyServer.Start
-  name: Start()
-  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_Start
-  commentId: M:Titanium.Web.Proxy.ProxyServer.Start
-  fullName: Titanium.Web.Proxy.ProxyServer.Start()
-  nameWithType: ProxyServer.Start()
+- uid: Titanium.Web.Proxy.ProxyServer.Start(System.Boolean)
+  name: Start(Boolean)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_Start_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.ProxyServer.Start(System.Boolean)
+  fullName: Titanium.Web.Proxy.ProxyServer.Start(System.Boolean)
+  nameWithType: ProxyServer.Start(Boolean)
 - uid: Titanium.Web.Proxy.ProxyServer.Start*
   name: Start
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_Start_
@@ -4689,6 +4779,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.UpStreamHttpsProxy
   nameWithType: ProxyServer.UpStreamHttpsProxy
+- uid: Titanium.Web.Proxy.ProxyServer.UpstreamProxyConfigurationScript
+  name: UpstreamProxyConfigurationScript
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_UpstreamProxyConfigurationScript
+  commentId: P:Titanium.Web.Proxy.ProxyServer.UpstreamProxyConfigurationScript
+  fullName: Titanium.Web.Proxy.ProxyServer.UpstreamProxyConfigurationScript
+  nameWithType: ProxyServer.UpstreamProxyConfigurationScript
+- uid: Titanium.Web.Proxy.ProxyServer.UpstreamProxyConfigurationScript*
+  name: UpstreamProxyConfigurationScript
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_UpstreamProxyConfigurationScript_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.UpstreamProxyConfigurationScript
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.UpstreamProxyConfigurationScript
+  nameWithType: ProxyServer.UpstreamProxyConfigurationScript
 - uid: Titanium.Web.Proxy.StreamExtended
   name: Titanium.Web.Proxy.StreamExtended
   href: api/Titanium.Web.Proxy.StreamExtended.html

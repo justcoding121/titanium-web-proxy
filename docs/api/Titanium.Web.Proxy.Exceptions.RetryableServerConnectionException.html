@@ -5,10 +5,10 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-    <title>Class EmptyProxyEventArgs
+    <title>Class RetryableServerConnectionException
    | Titanium Web Proxy </title>
     <meta name="viewport" content="width=device-width">
-    <meta name="title" content="Class EmptyProxyEventArgs
+    <meta name="title" content="Class RetryableServerConnectionException
    | Titanium Web Proxy ">
     <meta name="generator" content="docfx 2.59.4.0">
     
@@ -78,30 +78,67 @@
         </div>
         <div class="article row grid-right">
           <div class="col-md-10">
-            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.EventArguments.EmptyProxyEventArgs">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Exceptions.RetryableServerConnectionException">
   
   
-  <h1 id="Titanium_Web_Proxy_EventArguments_EmptyProxyEventArgs" data-uid="Titanium.Web.Proxy.EventArguments.EmptyProxyEventArgs" class="text-break">Class EmptyProxyEventArgs
+  <h1 id="Titanium_Web_Proxy_Exceptions_RetryableServerConnectionException" data-uid="Titanium.Web.Proxy.Exceptions.RetryableServerConnectionException" class="text-break">Class RetryableServerConnectionException
   </h1>
-  <div class="markdown level0 summary"></div>
+  <div class="markdown level0 summary"><p>The server connection was closed upon first write with the new connection from pool.
+Should retry the request with a new connection.</p>
+</div>
   <div class="markdown level0 conceptual"></div>
   <div class="inheritance">
     <h5>Inheritance</h5>
     <div class="level0"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object">Object</a></div>
-    <div class="level1"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.eventargs">EventArgs</a></div>
-    <div class="level2"><a class="xref" href="Titanium.Web.Proxy.EventArguments.ProxyEventArgsBase.html">ProxyEventArgsBase</a></div>
-    <div class="level3"><span class="xref">EmptyProxyEventArgs</span></div>
+    <div class="level1"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception">Exception</a></div>
+    <div class="level2"><a class="xref" href="Titanium.Web.Proxy.Exceptions.ProxyException.html">ProxyException</a></div>
+    <div class="level3"><span class="xref">RetryableServerConnectionException</span></div>
+  </div>
+  <div class="implements">
+    <h5>Implements</h5>
+    <div><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.runtime.serialization.iserializable">ISerializable</a></div>
+    <div><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.runtime.interopservices._exception">_Exception</a></div>
   </div>
   <div class="inheritedMembers">
     <h5>Inherited Members</h5>
     <div>
-      <a class="xref" href="Titanium.Web.Proxy.EventArguments.ProxyEventArgsBase.html#Titanium_Web_Proxy_EventArguments_ProxyEventArgsBase_ClientUserData">ProxyEventArgsBase.ClientUserData</a>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception.getbaseexception#system-exception-getbaseexception">Exception.GetBaseException()</a>
     </div>
     <div>
-      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.eventargs.empty">EventArgs.Empty</a>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception.tostring#system-exception-tostring">Exception.ToString()</a>
     </div>
     <div>
-      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.tostring#system-object-tostring">Object.ToString()</a>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception.getobjectdata#system-exception-getobjectdata(system-runtime-serialization-serializationinfo-system-runtime-serialization-streamingcontext)">Exception.GetObjectData(SerializationInfo, StreamingContext)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception.gettype#system-exception-gettype">Exception.GetType()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception.message#system-exception-message">Exception.Message</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception.data#system-exception-data">Exception.Data</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception.innerexception#system-exception-innerexception">Exception.InnerException</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception.targetsite#system-exception-targetsite">Exception.TargetSite</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception.stacktrace#system-exception-stacktrace">Exception.StackTrace</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception.helplink#system-exception-helplink">Exception.HelpLink</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception.source#system-exception-source">Exception.Source</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception.hresult#system-exception-hresult">Exception.HResult</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.exception.serializeobjectstate">Exception.SerializeObjectState</a>
     </div>
     <div>
       <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object)">Object.Equals(Object)</a>
@@ -116,17 +153,21 @@
       <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gethashcode#system-object-gethashcode">Object.GetHashCode()</a>
     </div>
     <div>
-      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gettype#system-object-gettype">Object.GetType()</a>
-    </div>
-    <div>
       <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.memberwiseclone#system-object-memberwiseclone">Object.MemberwiseClone()</a>
     </div>
   </div>
-  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.Web.Proxy.EventArguments.html">Titanium.Web.Proxy.EventArguments</a></h6>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.Web.Proxy.Exceptions.html">Titanium.Web.Proxy.Exceptions</a></h6>
   <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
-  <h5 id="Titanium_Web_Proxy_EventArguments_EmptyProxyEventArgs_syntax">Syntax</h5>
+  <h5 id="Titanium_Web_Proxy_Exceptions_RetryableServerConnectionException_syntax">Syntax</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public class EmptyProxyEventArgs : ProxyEventArgsBase</code></pre>
+    <pre><code class="lang-csharp hljs">public class RetryableServerConnectionException : ProxyException, ISerializable, _Exception</code></pre>
+  </div>
+  <h3 id="implements">Implements</h3>
+  <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.runtime.serialization.iserializable">System.Runtime.Serialization.ISerializable</a>
+  </div>
+  <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.runtime.interopservices._exception">System.Runtime.InteropServices._Exception</a>
   </div>
 </article>
           </div>
@@ -136,10 +177,10 @@
               <div class="contribution">
                 <ul class="nav">
                   <li>
-                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_EmptyProxyEventArgs.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.EmptyProxyEventArgs%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Improve this Doc</a>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Exceptions_RetryableServerConnectionException.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Exceptions.RetryableServerConnectionException%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Improve this Doc</a>
                   </li>
                   <li>
-                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/EmptyProxyEventArgs.cs/#L5" class="contribution-link">View Source</a>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Exceptions/RetryableServerConnectionException.cs/#L9" class="contribution-link">View Source</a>
                   </li>
                 </ul>
               </div>
