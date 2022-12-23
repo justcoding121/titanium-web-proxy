@@ -12,8 +12,8 @@ internal static class HttpHeaderExtensions
 
     internal static string GetString(this ReadOnlySpan<byte> bytes)
     {
-#if NETSTANDARD2_1
-            return HttpHeader.Encoding.GetString(bytes);
+#if NET6_0_OR_GREATER
+        return HttpHeader.Encoding.GetString(bytes);
 #else
         return HttpHeader.Encoding.GetString(bytes.ToArray());
 #endif

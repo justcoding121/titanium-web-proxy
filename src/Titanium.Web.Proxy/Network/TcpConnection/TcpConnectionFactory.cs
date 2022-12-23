@@ -435,11 +435,7 @@ internal class TcpConnectionFactory : IDisposable
 
                         try
                         {
-#if NET451
-                            tcpServerSocket?.Close();
-#else
-                                tcpServerSocket?.Dispose();
-#endif
+                            tcpServerSocket?.Dispose();
                             tcpServerSocket = null;
                         }
                         catch
@@ -456,11 +452,7 @@ internal class TcpConnectionFactory : IDisposable
                 {
                     // dispose the current TcpClient and try the next address
                     lastException = e;
-#if NET451
-                    tcpServerSocket?.Close();
-#else
-                        tcpServerSocket?.Dispose();
-#endif
+                    tcpServerSocket?.Dispose();
                     tcpServerSocket = null;
                 }
 
@@ -545,8 +537,8 @@ internal class TcpConnectionFactory : IDisposable
                     CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                 };
                 await sslStream.AuthenticateAsClientAsync(options, cancellationToken);
-#if NETSTANDARD2_1
-                    negotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
+#if NET6_0_OR_GREATER
+                negotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
 #endif
 
                 if (sessionArgs != null) sessionArgs.TimeLine["HTTPS Established"] = DateTime.UtcNow;

@@ -211,11 +211,7 @@ internal class Decoder
                             if (nameLength + HttpHeader.HttpHeaderOverhead > dynamicTable.Capacity)
                             {
                                 dynamicTable.Clear();
-#if NET451
-                                name = Net45Compatibility.EmptyArray;
-#else
-                                    name = Array.Empty<byte>();
-#endif
+                                name = Array.Empty<byte>();
                                 skipLength = nameLength;
                                 state = State.SkipLiteralHeaderName;
                                 break;
@@ -317,11 +313,8 @@ internal class Decoder
 
                         if (valueLength == 0)
                         {
-#if NET451
-                            InsertHeader(headerListener, name, Net45Compatibility.EmptyArray, indexType);
-#else
-                                name = Array.Empty<byte>();
-#endif
+                            //InsertHeader(headerListener, name, Net45Compatibility.EmptyArray, indexType);
+                            name = Array.Empty<byte>();
                             state = State.ReadHeaderRepresentation;
                         }
                         else

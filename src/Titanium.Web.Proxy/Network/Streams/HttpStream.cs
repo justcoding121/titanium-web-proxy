@@ -308,8 +308,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     ///     less than the requested number, or it can be 0 (zero)
     ///     if the end of the stream has been reached.
     /// </returns>
-#if NETSTANDARD2_1
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken =
+#if NET6_0_OR_GREATER
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken =
  default)
 #else
     public async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
@@ -1154,14 +1154,14 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         }
     }
 
-#if NETSTANDARD2_1
-        /// <summary>
-        ///     Asynchronously writes a sequence of bytes to the current stream, advances the current position within this stream by the number of bytes written, and monitors cancellation requests.
-        /// </summary>
-        /// <param name="buffer">The buffer to write data from.</param>
-        /// <param name="cancellationToken">The token to monitor for cancellation requests. The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
-        /// <returns>A task that represents the asynchronous write operation.</returns>
-        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken =
+#if NET6_0_OR_GREATER
+    /// <summary>
+    ///     Asynchronously writes a sequence of bytes to the current stream, advances the current position within this stream by the number of bytes written, and monitors cancellation requests.
+    /// </summary>
+    /// <param name="buffer">The buffer to write data from.</param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests. The default value is <see cref="P:System.Threading.CancellationToken.None" />.</param>
+    /// <returns>A task that represents the asynchronous write operation.</returns>
+    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken =
  default)
         {
             if (closedWrite)
