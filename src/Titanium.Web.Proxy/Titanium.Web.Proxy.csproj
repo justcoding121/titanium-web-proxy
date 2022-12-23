@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net451;net461;netstandard2.0;netstandard2.1</TargetFrameworks>
+    <TargetFrameworks>net461;netstandard2.0;netstandard2.1</TargetFrameworks>
     <RootNamespace>Titanium.Web.Proxy</RootNamespace>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <SignAssembly>True</SignAssembly>
@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="BrotliSharpLib" Version="0.3.3" />
-    <PackageReference Include="Portable.BouncyCastle" Version="1.8.8" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.0.0" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.1'">
