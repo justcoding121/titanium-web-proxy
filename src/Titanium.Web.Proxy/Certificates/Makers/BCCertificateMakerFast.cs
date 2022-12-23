@@ -115,7 +115,7 @@ internal class BcCertificateMakerFast : ICertificateMaker
 
         // Set certificate intended purposes to only Server Authentication
         certificateGenerator.AddExtension(X509Extensions.ExtendedKeyUsage.Id, false,
-            new ExtendedKeyUsage(KeyPurposeID.IdKPServerAuth));
+            new ExtendedKeyUsage(KeyPurposeID.id_kp_serverAuth));
         if (issuerPrivateKey == null)
             certificateGenerator.AddExtension(X509Extensions.BasicConstraints.Id, true, new BasicConstraints(true));
 
