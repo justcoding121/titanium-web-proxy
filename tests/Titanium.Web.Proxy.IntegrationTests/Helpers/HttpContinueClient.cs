@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
 
 internal class HttpContinueClient
 {
-    private const int WaitTimeout = 200;
+    private const int WaitTimeout = 1000;
 
     private static readonly Encoding _msgEncoding = HttpHelper.GetEncodingFromContentType(null);
 
