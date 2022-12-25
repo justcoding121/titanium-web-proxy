@@ -564,11 +564,7 @@ public class SessionEventArgs : SessionEventArgsBase
         var response = new RedirectResponse();
         response.HttpVersion = HttpClient.Request.HttpVersion;
         response.Headers.AddHeader(KnownHeaders.Location, url);
-#if NET451
-        response.Body = Net45Compatibility.EmptyArray;
-#else
-            response.Body = Array.Empty<byte>();
-#endif
+        response.Body = Array.Empty<byte>();
 
         Respond(response, closeServerConnection);
     }

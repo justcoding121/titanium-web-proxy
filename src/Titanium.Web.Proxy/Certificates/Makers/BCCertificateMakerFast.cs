@@ -115,7 +115,7 @@ internal class BcCertificateMakerFast : ICertificateMaker
 
         // Set certificate intended purposes to only Server Authentication
         certificateGenerator.AddExtension(X509Extensions.ExtendedKeyUsage.Id, false,
-            new ExtendedKeyUsage(KeyPurposeID.IdKPServerAuth));
+            new ExtendedKeyUsage(KeyPurposeID.id_kp_serverAuth));
         if (issuerPrivateKey == null)
             certificateGenerator.AddExtension(X509Extensions.BasicConstraints.Id, true, new BasicConstraints(true));
 
@@ -167,20 +167,14 @@ internal class BcCertificateMakerFast : ICertificateMaker
     private static X509Certificate2 WithPrivateKey(X509Certificate certificate, AsymmetricKeyParameter privateKey)
     {
         const string password = "password";
-        Pkcs12Store store;
 
+        var builder = new Pkcs12StoreBuilder();
         if (RunTime.IsRunningOnMono)
         {
-            var builder = new Pkcs12StoreBuilder();
             builder.SetUseDerEncoding(true);
-            store = builder.Build();
-        }
-        else
-        {
-            store = new Pkcs12Store();
         }
 
-        var entry = new X509CertificateEntry(certificate);
+        var store = builder.Build(); var entry = new X509CertificateEntry(certificate);
         store.SetCertificateEntry(certificate.SubjectDN.ToString(), entry);
 
         store.SetKeyEntry(certificate.SubjectDN.ToString(), new AsymmetricKeyEntry(privateKey), new[] { entry });

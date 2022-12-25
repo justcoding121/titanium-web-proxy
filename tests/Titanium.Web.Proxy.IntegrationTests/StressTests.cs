@@ -14,8 +14,6 @@ public class StressTests
     [Timeout(2 * 60 * 1000)]
     public async Task Stress_Test_With_One_Server_And_Many_Clients()
     {
-        var rnd = new Random();
-
         var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
@@ -25,6 +23,8 @@ public class StressTests
         });
 
         using var proxy = testSuite.GetProxy();
+
+        await Task.Delay(1000);
 
         var tasks = new List<Task>();
 

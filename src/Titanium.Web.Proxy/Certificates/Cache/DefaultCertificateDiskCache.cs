@@ -114,12 +114,12 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
                 // dynamically loaded assemblies returns string.Empty location
                 if (assemblyLocation == string.Empty) assemblyLocation = Assembly.GetEntryAssembly().Location;
 
-#if NETSTANDARD2_1
-                    // single-file app returns string.Empty location
-                    if (assemblyLocation == string.Empty)
-                    {
-                        assemblyLocation = AppContext.BaseDirectory;
-                    }
+#if NET6_0_OR_GREATER
+                // single-file app returns string.Empty location
+                if (assemblyLocation == string.Empty)
+                {
+                    assemblyLocation = AppContext.BaseDirectory;
+                }
 #endif
 
                 var path = Path.GetDirectoryName(assemblyLocation);

@@ -1,4 +1,4 @@
-﻿#if NETSTANDARD2_1
+﻿#if NET6_0_OR_GREATER
 /*
  * Copyright 2014 Twitter, Inc
  * This file is a derivative work modified by Ringo Leese
