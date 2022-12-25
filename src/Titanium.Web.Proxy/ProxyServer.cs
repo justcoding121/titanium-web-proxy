@@ -250,6 +250,14 @@ public partial class ProxyServer : IDisposable
 #pragma warning restore 618
 
     /// <summary>
+    ///     List of supported Server Ssl versions.
+    ///     Using SslProtocol.None means to require the same SSL protocol as the proxy client.
+    /// </summary>
+#pragma warning disable 618
+    public SslProtocols SupportedServerSslProtocols { get; set; } = SslProtocols.None;
+#pragma warning restore 618
+
+    /// <summary>
     ///     The buffer pool used throughout this proxy instance.
     ///     Set custom implementations by implementing this interface.
     ///     By default this uses DefaultBufferPool implementation available in StreamExtended library package.

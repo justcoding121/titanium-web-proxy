@@ -3,6 +3,7 @@ using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -121,7 +122,14 @@ public partial class ProxyServer
                 if (decryptSsl && clientHelloInfo != null)
                 {
                     connectRequest.IsHttps = true; // todo: move this line to the previous "if"
-                    clientStream.Connection.SslProtocol = clientHelloInfo.SslProtocol;
+
+                    var sslProtocol = clientHelloInfo.SslProtocol;
+                    if ((sslProtocol & SupportedSslProtocols) == SslProtocols.None)
+                    {
+                        throw new Exception("Unsupported client SSL version.");
+                    }
+
+                    clientStream.Connection.SslProtocol = sslProtocol;
 
                     var http2Supported = false;
 
