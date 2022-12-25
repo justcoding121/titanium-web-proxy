@@ -74,14 +74,14 @@ internal class HeaderBuilder
     {
         var encoding = HttpHeader.Encoding;
 
-#if NETSTANDARD2_1
-            var buf = ArrayPool<byte>.Shared.Rent(encoding.GetMaxByteCount(str.Length));
-            var span = new Span<byte>(buf);
+#if NET6_0_OR_GREATER
+        var buf = ArrayPool<byte>.Shared.Rent(encoding.GetMaxByteCount(str.Length));
+        var span = new Span<byte>(buf);
 
-            int bytes = encoding.GetBytes(str.AsSpan(), span);
+        int bytes = encoding.GetBytes(str.AsSpan(), span);
 
-            stream.Write(span.Slice(0, bytes));
-            ArrayPool<byte>.Shared.Return(buf);
+        stream.Write(span.Slice(0, bytes));
+        ArrayPool<byte>.Shared.Return(buf);
 #else
         var data = encoding.GetBytes(str);
         stream.Write(data, 0, data.Length);
@@ -90,21 +90,13 @@ internal class HeaderBuilder
 
     public ArraySegment<byte> GetBuffer()
     {
-#if NET451
-        return new ArraySegment<byte>(stream.ToArray());
-#else
-            stream.TryGetBuffer(out var buffer);
-            return buffer;
-#endif
+        stream.TryGetBuffer(out var buffer);
+        return buffer;
     }
 
     public string GetString(Encoding encoding)
     {
-#if NET451
-        return encoding.GetString(stream.ToArray());
-#else
-            stream.TryGetBuffer(out var buffer);
-            return encoding.GetString(buffer.Array, buffer.Offset, buffer.Count);
-#endif
+        stream.TryGetBuffer(out var buffer);
+        return encoding.GetString(buffer.Array, buffer.Offset, buffer.Count);
     }
 }

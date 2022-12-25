@@ -124,8 +124,8 @@ public class Response : RequestResponseBase
         var secondSpace = httpStatus.IndexOf(' ', firstSpace + 1);
         if (secondSpace != -1)
         {
-#if NETSTANDARD2_1
-                statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1, secondSpace - firstSpace - 1));
+#if NET6_0_OR_GREATER
+            statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1, secondSpace - firstSpace - 1));
 #else
             statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1, secondSpace - firstSpace - 1).ToString());
 #endif
@@ -133,8 +133,8 @@ public class Response : RequestResponseBase
         }
         else
         {
-#if NETSTANDARD2_1
-                statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1));
+#if NET6_0_OR_GREATER
+            statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1));
 #else
             statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1).ToString());
 #endif

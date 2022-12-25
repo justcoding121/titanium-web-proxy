@@ -189,7 +189,7 @@ public partial class ProxyServer
                         options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
 
-#if NETSTANDARD2_1
+#if NET6_0_OR_GREATER
                             clientStream.Connection.NegotiatedApplicationProtocol =
  sslStream.NegotiatedApplicationProtocol;
 #endif
@@ -313,7 +313,7 @@ public partial class ProxyServer
                         true, false, cancellationToken))!;
                     try
                     {
-#if NETSTANDARD2_1
+#if NET6_0_OR_GREATER
                             var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
                             await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
                             await Http2Helper.SendHttp2(clientStream, connection.Stream,

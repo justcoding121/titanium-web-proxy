@@ -18,8 +18,8 @@ public class HttpHeader
     /// </summary>
     public const int HttpHeaderOverhead = 32;
 
-#if NETSTANDARD2_1
-        internal static Version VersionUnknown => HttpVersion.Unknown;
+#if NET6_0_OR_GREATER
+    internal static Version VersionUnknown => HttpVersion.Unknown;
 #else
     internal static Version VersionUnknown { get; } = new(0, 0);
 #endif
@@ -28,8 +28,8 @@ public class HttpHeader
 
     internal static Version Version11 => HttpVersion.Version11;
 
-#if NETSTANDARD2_1
-        internal static Version Version20 => HttpVersion.Version20;
+#if NET6_0_OR_GREATER
+    internal static Version Version20 => HttpVersion.Version20;
 #else
     internal static Version Version20 { get; } = new(2, 0);
 #endif
