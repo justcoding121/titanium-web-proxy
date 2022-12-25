@@ -123,8 +123,8 @@ public partial class ProxyServer
                 {
                     connectRequest.IsHttps = true; // todo: move this line to the previous "if"
 
-                    var sslProtocol = clientHelloInfo.SslProtocol;
-                    if ((sslProtocol & SupportedSslProtocols) == SslProtocols.None)
+                    var sslProtocol = clientHelloInfo.SslProtocol & SupportedSslProtocols;
+                    if (sslProtocol == SslProtocols.None)
                     {
                         throw new Exception("Unsupported client SSL version.");
                     }

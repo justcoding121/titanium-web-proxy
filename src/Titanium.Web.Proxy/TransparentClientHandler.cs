@@ -57,8 +57,8 @@ public partial class ProxyServer
 
                 if (endPoint.DecryptSsl && args.DecryptSsl)
                 {
-                    var sslProtocol = clientHelloInfo.SslProtocol;
-                    if ((sslProtocol & SupportedSslProtocols) == SslProtocols.None)
+                    var sslProtocol = clientHelloInfo.SslProtocol & SupportedSslProtocols;
+                    if (sslProtocol == SslProtocols.None)
                     {
                         throw new Exception("Unsupported client SSL version.");
                     }

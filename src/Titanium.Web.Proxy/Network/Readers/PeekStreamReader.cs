@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.StreamExtended.Network;
@@ -47,5 +48,10 @@ internal class PeekStreamReader
         for (var i = 0; i < buffer.Length; i++) buffer[i] = ReadByte();
 
         return buffer;
+    }
+
+    public void ReadBytes(Span<byte> data)
+    {
+        for (var i = 0; i < data.Length; i++) data[i] = ReadByte();
     }
 }

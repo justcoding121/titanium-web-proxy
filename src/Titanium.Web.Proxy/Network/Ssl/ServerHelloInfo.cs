@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.StreamExtended.Models;
 
 namespace Titanium.Web.Proxy.StreamExtended;
@@ -93,9 +94,9 @@ public class ServerHelloInfo
             $"A SSLv{HandshakeVersion}-compatible ServerHello handshake was found. Titanium extracted the parameters below.");
         sb.AppendLine();
         sb.AppendLine($"Version: {SslVersionToString(MajorVersion, MinorVersion)}");
-        sb.AppendLine($"Random: {string.Join(" ", Random.Select(x => x.ToString("X2")))}");
+        sb.AppendLine($"Random: {StringExtensions.ByteArrayToHexString(Random)}");
         sb.AppendLine($"\"Time\": {Time}");
-        sb.AppendLine($"SessionID: {string.Join(" ", SessionId.Select(x => x.ToString("X2")))}");
+        sb.AppendLine($"SessionID: {StringExtensions.ByteArrayToHexString(SessionId)}");
 
         if (Extensions != null)
         {
