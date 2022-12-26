@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.Authentication;
 using System.Text;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.StreamExtended.Models;
 
 namespace Titanium.Web.Proxy.StreamExtended;
@@ -71,7 +73,20 @@ public class ClientHelloInfo
             var major = MajorVersion;
             var minor = MinorVersion;
             if (major == 3 && minor == 3)
+            {
+#if NET6_0_OR_GREATER
+                var protocols = this.GetSslProtocols();
+                if (protocols != null)
+                {
+                    if (protocols.Contains("Tls1.3"))
+                    {
+                        return SslProtocols.Tls12 | SslProtocols.Tls13;
+                    }
+                }
+#endif
+
                 return SslProtocols.Tls12;
+            }
 
             if (major == 3 && minor == 2)
                 return SslProtocols.Tls11;
@@ -121,9 +136,9 @@ public class ClientHelloInfo
             $"A SSLv{HandshakeVersion}-compatible ClientHello handshake was found. Titanium extracted the parameters below.");
         sb.AppendLine();
         sb.AppendLine($"Version: {SslVersionToString(MajorVersion, MinorVersion)}");
-        sb.AppendLine($"Random: {string.Join(" ", Random.Select(x => x.ToString("X2")))}");
+        sb.AppendLine($"Random: {StringExtensions.ByteArrayToHexString(Random)}");
         sb.AppendLine($"\"Time\": {Time}");
-        sb.AppendLine($"SessionID: {string.Join(" ", SessionId.Select(x => x.ToString("X2")))}");
+        sb.AppendLine($"SessionID: {StringExtensions.ByteArrayToHexString(SessionId)}");
 
         if (Extensions != null)
         {

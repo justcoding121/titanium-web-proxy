@@ -3,9 +3,11 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.StreamExtended;
+using Titanium.Web.Proxy.StreamExtended.Models;
 
 namespace Titanium.Web.Proxy.Extensions
 {
@@ -31,24 +33,24 @@ namespace Titanium.Web.Proxy.Extensions
         {
             if (clientHelloInfo.Extensions != null && clientHelloInfo.Extensions.TryGetValue("ALPN", out var alpnExtension))
             {
-                var alpn = alpnExtension.Data.Split(',');
-                if (alpn.Length != 0)
+                var alpn = alpnExtension.Alpns;
+                if (alpn.Count != 0)
                 {
-                    var result = new List<SslApplicationProtocol>(alpn.Length);
-                    foreach (string p in alpn)
-                    {
-                        string protocol = p.Trim();
-                        if (protocol.Equals("http/1.1"))
-                        {
-                            result.Add(SslApplicationProtocol.Http11);
-                        }
-                        else if (protocol.Equals("h2"))
-                        {
-                            result.Add(SslApplicationProtocol.Http2);
-                        }
-                    }
+                    return alpn;
+                }
+            }
 
-                    return result;
+            return null;
+        }
+
+        internal static List<string>? GetSslProtocols(this ClientHelloInfo clientHelloInfo)
+        {
+            if (clientHelloInfo.Extensions != null && clientHelloInfo.Extensions.TryGetValue("supported_versions", out var versions))
+            {
+                var protocols = versions.Protocols;
+                if (protocols.Count != 0)
+                {
+                    return protocols;
                 }
             }
 
@@ -80,10 +82,54 @@ namespace Titanium.Web.Proxy.Extensions
 #if !NET6_0_OR_GREATER
 namespace System.Net.Security
 {
-    internal enum SslApplicationProtocol
+    internal struct SslApplicationProtocol
     {
-        Http11,
-        Http2
+        public static readonly SslApplicationProtocol Http11 = new SslApplicationProtocol(SslExtension.Http11Utf8);
+
+        public static readonly SslApplicationProtocol Http2 = new SslApplicationProtocol(SslExtension.Http2Utf8);
+        
+        public static readonly SslApplicationProtocol Http3 = new SslApplicationProtocol(SslExtension.Http3Utf8);
+
+        private readonly byte[] readOnlyProtocol;
+
+        public ReadOnlyMemory<byte> Protocol => readOnlyProtocol;
+
+        public SslApplicationProtocol(byte[] protocol)
+        {
+            readOnlyProtocol = protocol;
+        }
+
+        public bool Equals(SslApplicationProtocol other) => Protocol.Span.SequenceEqual(other.Protocol.Span);
+
+        public override bool Equals(object? obj) => obj is SslApplicationProtocol protocol && Equals(protocol);
+
+        public override int GetHashCode()
+        {
+            var arr = Protocol;
+            if (arr.Length == 0)
+            {
+                return 0;
+            }
+
+            int hash = 0;
+            for (int i = 0; i < arr.Length; i++)
+            {
+                hash = ((hash << 5) + hash) ^ arr.Span[i];
+            }
+
+            return hash;
+        }
+
+        public override string ToString()
+        {
+            return Encoding.UTF8.GetString(readOnlyProtocol);
+        }
+
+        public static bool operator ==(SslApplicationProtocol left, SslApplicationProtocol right) =>
+            left.Equals(right);
+
+        public static bool operator !=(SslApplicationProtocol left, SslApplicationProtocol right) =>
+            !(left == right);
     }
 
     [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType", Justification =

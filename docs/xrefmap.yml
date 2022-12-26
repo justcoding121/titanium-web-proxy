@@ -4701,6 +4701,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.Stop
   nameWithType: ProxyServer.Stop
+- uid: Titanium.Web.Proxy.ProxyServer.SupportedServerSslProtocols
+  name: SupportedServerSslProtocols
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SupportedServerSslProtocols
+  commentId: P:Titanium.Web.Proxy.ProxyServer.SupportedServerSslProtocols
+  fullName: Titanium.Web.Proxy.ProxyServer.SupportedServerSslProtocols
+  nameWithType: ProxyServer.SupportedServerSslProtocols
+- uid: Titanium.Web.Proxy.ProxyServer.SupportedServerSslProtocols*
+  name: SupportedServerSslProtocols
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SupportedServerSslProtocols_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.SupportedServerSslProtocols
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.SupportedServerSslProtocols
+  nameWithType: ProxyServer.SupportedServerSslProtocols
 - uid: Titanium.Web.Proxy.ProxyServer.SupportedSslProtocols
   name: SupportedSslProtocols
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SupportedSslProtocols
@@ -5019,12 +5032,15 @@ references:
   commentId: T:Titanium.Web.Proxy.StreamExtended.Models.SslExtension
   fullName: Titanium.Web.Proxy.StreamExtended.Models.SslExtension
   nameWithType: SslExtension
-- uid: Titanium.Web.Proxy.StreamExtended.Models.SslExtension.#ctor(System.Int32,System.String,System.String,System.Int32)
-  name: SslExtension(Int32, String, String, Int32)
-  href: api/Titanium.Web.Proxy.StreamExtended.Models.SslExtension.html#Titanium_Web_Proxy_StreamExtended_Models_SslExtension__ctor_System_Int32_System_String_System_String_System_Int32_
-  commentId: M:Titanium.Web.Proxy.StreamExtended.Models.SslExtension.#ctor(System.Int32,System.String,System.String,System.Int32)
-  fullName: Titanium.Web.Proxy.StreamExtended.Models.SslExtension.SslExtension(System.Int32, System.String, System.String, System.Int32)
-  nameWithType: SslExtension.SslExtension(Int32, String, String, Int32)
+- uid: Titanium.Web.Proxy.StreamExtended.Models.SslExtension.#ctor(System.Int32,System.ReadOnlyMemory{System.Byte},System.Int32)
+  name: SslExtension(Int32, ReadOnlyMemory<Byte>, Int32)
+  href: api/Titanium.Web.Proxy.StreamExtended.Models.SslExtension.html#Titanium_Web_Proxy_StreamExtended_Models_SslExtension__ctor_System_Int32_System_ReadOnlyMemory_System_Byte__System_Int32_
+  commentId: M:Titanium.Web.Proxy.StreamExtended.Models.SslExtension.#ctor(System.Int32,System.ReadOnlyMemory{System.Byte},System.Int32)
+  name.vb: SslExtension(Int32, ReadOnlyMemory(Of Byte), Int32)
+  fullName: Titanium.Web.Proxy.StreamExtended.Models.SslExtension.SslExtension(System.Int32, System.ReadOnlyMemory<System.Byte>, System.Int32)
+  fullName.vb: Titanium.Web.Proxy.StreamExtended.Models.SslExtension.SslExtension(System.Int32, System.ReadOnlyMemory(Of System.Byte), System.Int32)
+  nameWithType: SslExtension.SslExtension(Int32, ReadOnlyMemory<Byte>, Int32)
+  nameWithType.vb: SslExtension.SslExtension(Int32, ReadOnlyMemory(Of Byte), Int32)
 - uid: Titanium.Web.Proxy.StreamExtended.Models.SslExtension.#ctor*
   name: SslExtension
   href: api/Titanium.Web.Proxy.StreamExtended.Models.SslExtension.html#Titanium_Web_Proxy_StreamExtended_Models_SslExtension__ctor_
