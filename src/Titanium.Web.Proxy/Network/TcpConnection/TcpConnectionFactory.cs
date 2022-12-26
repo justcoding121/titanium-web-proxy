@@ -301,6 +301,8 @@ internal class TcpConnectionFactory : IDisposable
                 throw new Exception(
                     $"A client is making HTTP request via external proxy to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
 
+        if (proxyServer.SupportedServerSslProtocols != SslProtocols.None) sslProtocol = proxyServer.SupportedServerSslProtocols;
+
         if (isHttps && sslProtocol == SslProtocols.None) sslProtocol = proxyServer.SupportedSslProtocols;
 
         var useUpstreamProxy1 = false;
