@@ -42,6 +42,8 @@ public partial class ProxyServer
         {
             if (response.StatusCode == (int)HttpStatusCode.Unauthorized)
                 await Handle401UnAuthorized(args);
+            else if (response.StatusCode == (int)HttpStatusCode.ProxyAuthenticationRequired)
+                await Handle407ProxyAuthorization(args);
             else
                 WinAuthEndPoint.AuthenticatedResponse(args.HttpClient.Data);
         }
@@ -76,11 +78,16 @@ public partial class ProxyServer
         // likely after making modifications from User Response Handler
         if (args.ReRequest)
         {
-            if (args.HttpClient.HasConnection) await TcpConnectionFactory.Release(args.HttpClient.Connection);
+            var serverConnection = args.HttpClient.Connection;
+            if (args.HttpClient.HasConnection && response.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired) 
+            {
+                serverConnection = null;
+                await TcpConnectionFactory.Release(args.HttpClient.Connection);
+            }
 
             // clear current response
             await args.ClearResponse(cancellationToken);
-            var result = await HandleHttpSessionRequest(args, null, args.ClientConnection.NegotiatedApplicationProtocol,
+            var result = await HandleHttpSessionRequest(args, serverConnection, args.ClientConnection.NegotiatedApplicationProtocol,
                 cancellationToken, args.CancellationTokenSource);
             if (result.LatestConnection != null) args.HttpClient.SetConnection(result.LatestConnection);
 

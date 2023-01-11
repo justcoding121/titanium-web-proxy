@@ -19,15 +19,16 @@ internal class WinAuthEndPoint
     /// <param name="hostname"></param>
     /// <param name="authScheme"></param>
     /// <param name="data"></param>
+    /// <param name="attributes"></param>
     /// <returns></returns>
-    internal static byte[]? AcquireInitialSecurityToken(string hostname, string authScheme, InternalDataStore data)
+    internal static byte[]? AcquireInitialSecurityToken(string hostname, string authScheme, InternalDataStore data, int attributes)
     {
         byte[]? token;
 
         // null for initial call
-        var serverToken = new SecurityBufferDesciption();
+        var serverToken = new SecurityBufferDescription();
 
-        var clientToken = new SecurityBufferDesciption(MaximumTokenSize);
+        var clientToken = new SecurityBufferDescription(MaximumTokenSize);
 
         try
         {
@@ -49,7 +50,7 @@ internal class WinAuthEndPoint
             result = InitializeSecurityContext(ref state.Credentials,
                 IntPtr.Zero,
                 hostname,
-                StandardContextAttributes,
+                attributes,
                 0,
                 SecurityNativeDataRepresentation,
                 ref serverToken,
@@ -80,15 +81,16 @@ internal class WinAuthEndPoint
     /// <param name="hostname"></param>
     /// <param name="serverChallenge"></param>
     /// <param name="data"></param>
+    /// <param name="attributes"></param>
     /// <returns></returns>
-    internal static byte[]? AcquireFinalSecurityToken(string hostname, byte[] serverChallenge, InternalDataStore data)
+    internal static byte[]? AcquireFinalSecurityToken(string hostname, byte[] serverChallenge, InternalDataStore data, int attributes)
     {
         byte[]? token;
 
         // user server challenge
-        var serverToken = new SecurityBufferDesciption(serverChallenge);
+        var serverToken = new SecurityBufferDescription(serverChallenge);
 
-        var clientToken = new SecurityBufferDesciption(MaximumTokenSize);
+        var clientToken = new SecurityBufferDescription(MaximumTokenSize);
 
         try
         {
@@ -99,7 +101,7 @@ internal class WinAuthEndPoint
             var result = InitializeSecurityContext(ref state.Credentials,
                 ref state.Context,
                 hostname,
-                StandardContextAttributes,
+                attributes,
                 0,
                 SecurityNativeDataRepresentation,
                 ref serverToken,
@@ -123,7 +125,7 @@ internal class WinAuthEndPoint
         return token;
     }
 
-    private static void DisposeToken(SecurityBufferDesciption clientToken)
+    private static void DisposeToken(SecurityBufferDescription clientToken)
     {
         if (clientToken.pBuffers != IntPtr.Zero)
         {
@@ -186,6 +188,11 @@ internal class WinAuthEndPoint
                    (state!.AuthState == State.WinAuthState.InitialToken ||
                     state.AuthState ==
                     State.WinAuthState.Authorized); // Server may require re-authentication on an open connection
+        
+        if (expectedAuthState == State.WinAuthState.FinalToken)
+            return !stateExists ||
+                   (state!.AuthState == State.WinAuthState.FinalToken ||
+                    state.AuthState == State.WinAuthState.Authorized);
 
         throw new Exception("Unsupported validation of WinAuthState");
     }
@@ -212,24 +219,24 @@ internal class WinAuthEndPoint
         int fContextReq,
         int reserved1,
         int targetDataRep,
-        ref SecurityBufferDesciption pInput, // PSecBufferDesc SecBufferDesc
+        ref SecurityBufferDescription pInput, // PSecBufferDesc SecBufferDesc
         int reserved2,
         out SecurityHandle phNewContext, // PCtxtHandle
-        out SecurityBufferDesciption pOutput, // PSecBufferDesc SecBufferDesc
+        out SecurityBufferDescription pOutput, // PSecBufferDesc SecBufferDesc
         out uint pfContextAttr, // managed ulong == 64 bits!!!
         out SecurityInteger ptsExpiry); // PTimeStamp
 
-    [DllImport("secur32", CharSet = CharSet.Auto, SetLastError = true)]
+    [DllImport("secur32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, // PCredHandle
         ref SecurityHandle phContext, // PCtxtHandle
         string pszTargetName,
         int fContextReq,
         int reserved1,
         int targetDataRep,
-        ref SecurityBufferDesciption secBufferDesc, // PSecBufferDesc SecBufferDesc
+        ref SecurityBufferDescription secBufferDesc, // PSecBufferDesc SecBufferDesc
         int reserved2,
         out SecurityHandle phNewContext, // PCtxtHandle
-        out SecurityBufferDesciption pOutput, // PSecBufferDesc SecBufferDesc
+        out SecurityBufferDescription pOutput, // PSecBufferDesc SecBufferDesc
         out uint pfContextAttr, // managed ulong == 64 bits!!!
         out SecurityInteger ptsExpiry); // PTimeStamp
 

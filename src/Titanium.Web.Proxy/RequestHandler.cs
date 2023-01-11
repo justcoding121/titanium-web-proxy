@@ -372,7 +372,7 @@ public partial class ProxyServer
     /// <summary>
     ///     Invoke before request handler if it is set.
     /// </summary>
-    /// <param name="request">The COONECT request.</param>
+    /// <param name="request">The CONNECT request.</param>
     /// <returns></returns>
     internal async Task OnBeforeUpStreamConnectRequest(ConnectRequest request)
     {

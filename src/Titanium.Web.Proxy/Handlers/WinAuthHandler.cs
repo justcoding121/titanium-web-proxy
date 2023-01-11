@@ -27,6 +27,11 @@ public partial class ProxyServer
         "KerberosAuthorization"
     };
 
+    private static readonly HashSet<string> proxyAuthHeaderNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Proxy-Authenticate"
+    };
+
     /// <summary>
     ///     supported authentication schemes.
     /// </summary>
@@ -142,6 +147,110 @@ public partial class ProxyServer
     }
 
     /// <summary>
+    ///     Handle windows NTLM/Kerberos proxy authentication.
+    ///     Note: NTLM/Kerberos cannot do a man in middle operation
+    ///     we do for HTTPS requests.
+    ///     As such we will be sending local credentials of current
+    ///     User to server to authenticate requests.
+    ///     To disable this set ProxyServer.EnableWinAuth to false.
+    /// </summary>
+    private async Task Handle407ProxyAuthorization(SessionEventArgs args)
+    {
+        string? headerName = null;
+        HttpHeader? authHeader = null;
+
+        var response = args.HttpClient.Response;
+
+        // check in non-unique headers first
+        var header = response.Headers.NonUniqueHeaders.FirstOrDefault(x => proxyAuthHeaderNames.Contains(x.Key));
+
+        if (!header.Equals(new KeyValuePair<string, List<HttpHeader>>())) headerName = header.Key;
+
+        if (headerName != null)
+            authHeader = response.Headers.NonUniqueHeaders[headerName]
+                .FirstOrDefault(
+                    x => authSchemes.Any(y => x.Value.StartsWith(y, StringComparison.OrdinalIgnoreCase)));
+
+        // check in unique headers
+        if (authHeader == null)
+        {
+            headerName = null;
+
+            // check in non-unique headers first
+            var uHeader = response.Headers.Headers.FirstOrDefault(x => proxyAuthHeaderNames.Contains(x.Key));
+
+            if (!uHeader.Equals(new KeyValuePair<string, HttpHeader>())) headerName = uHeader.Key;
+
+            if (headerName != null)
+                authHeader = authSchemes.Any(x => response.Headers.Headers[headerName].Value
+                    .StartsWith(x, StringComparison.OrdinalIgnoreCase))
+                    ? response.Headers.Headers[headerName]
+                    : null;
+        }
+
+        if (authHeader != null)
+        {
+            var scheme = authSchemes.Contains(authHeader.Value) ? authHeader.Value : null;
+
+            var expectedAuthState =
+                scheme == null ? State.WinAuthState.InitialToken : State.WinAuthState.FinalToken;
+
+            if (!WinAuthEndPoint.ValidateWinAuthState(args.HttpClient.Data, expectedAuthState))
+            {
+                // Invalid state, create proper error message to client
+                await RewriteUnauthorizedResponse(args);
+                return;
+            }
+
+            var request = args.HttpClient.Request;
+
+            // clear any existing headers to avoid confusing bad servers
+            request.Headers.RemoveHeader(KnownHeaders.ProxyAuthorization);
+
+            // initial value will match exactly any of the schemes
+            if (scheme != null)
+            {
+                var clientToken = WinAuthHandler.GetInitialProxyAuthToken(args.CustomUpStreamProxyUsed!.HostName, scheme, args.HttpClient.Data);
+
+                var auth = string.Concat(scheme, clientToken);
+
+                // replace existing authorization header if any
+                request.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyAuthorization, auth);
+
+                // don't need to send body for Authorization request
+                if (request.HasBody) request.ContentLength = 0;
+            }
+            else
+            {
+                // challenge value will start with any of the scheme selected
+                scheme = authSchemes.First(x =>
+                    authHeader.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase) &&
+                    authHeader.Value.Length > x.Length + 1);
+
+                var serverToken = authHeader.Value.Substring(scheme.Length + 1);
+                var clientToken = WinAuthHandler.GetFinalProxyAuthToken(args.CustomUpStreamProxyUsed!.HostName, serverToken, args.HttpClient.Data);
+
+                var auth = string.Concat(scheme, clientToken);
+
+                // there will be an existing header from initial client request 
+                request.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyAuthorization, auth);
+
+                // send body for final auth request
+                if (request.OriginalHasBody) request.ContentLength = request.Body.Length;
+
+                args.HttpClient.Connection.IsWinAuthenticated = true;
+            }
+
+            // Need to revisit this.
+            // Should we cache all Set-Cookie headers from server during auth process
+            // and send it to client after auth?
+
+            // Let ResponseHandler send the updated request
+            args.ReRequest = true;
+        }
+    }
+
+    /// <summary>
     ///     Rewrites the response body for failed authentication
     /// </summary>
     /// <param name="args"></param>
@@ -152,6 +261,7 @@ public partial class ProxyServer
 
         // Strip authentication headers to avoid credentials prompt in client web browser
         foreach (var authHeaderName in authHeaderNames) response.Headers.RemoveHeader(authHeaderName);
+        foreach (var proxyAuthHeaderName in proxyAuthHeaderNames) response.Headers.RemoveHeader(proxyAuthHeaderName);
 
         // Add custom div to body to clarify that the proxy (not the client browser) failed authentication
         var authErrorMessage =
