@@ -105,7 +105,10 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             };
             proxyServer.Start();
 
-            proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
+            var proxyLocalhostTraffic = new SystemProxyBypassRuleSet()
+                .SubtractImplicitBypassRules();
+
+            proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp, proxyLocalhostTraffic);
 
             InitializeComponent();
         }
