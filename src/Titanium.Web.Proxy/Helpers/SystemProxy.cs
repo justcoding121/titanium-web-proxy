@@ -84,7 +84,8 @@ internal class SystemProxyManager
     /// <param name="hostname"></param>
     /// <param name="port"></param>
     /// <param name="protocolType"></param>
-    internal void SetProxy(string hostname, int port, ProxyProtocolType protocolType)
+    /// <param name="bypassRules"></param>
+    internal void SetProxy(string hostname, int port, ProxyProtocolType protocolType, string bypassRules)
     {
         using (var reg = OpenInternetSettingsKey())
         {
@@ -106,6 +107,7 @@ internal class SystemProxyManager
             reg.SetValue(RegProxyEnable, 1);
             reg.SetValue(RegProxyServer,
                 string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+            reg.SetValue(RegProxyOverride, bypassRules);
 
             Refresh();
         }

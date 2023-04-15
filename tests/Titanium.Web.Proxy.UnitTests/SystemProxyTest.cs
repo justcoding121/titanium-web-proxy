@@ -19,13 +19,13 @@ namespace Titanium.Web.Proxy.UnitTests
             {
                 CompareUrls();
 
-                proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.Http);
+                proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.Http, string.Empty);
                 CompareUrls();
 
-                proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.Https);
+                proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.Https, string.Empty);
                 CompareUrls();
 
-                proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.AllHttp);
+                proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.AllHttp, string.Empty);
                 CompareUrls();
 
                 // for this test you need to add a proxy.pac file to a local webserver
