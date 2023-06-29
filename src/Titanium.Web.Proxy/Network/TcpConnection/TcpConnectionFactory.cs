@@ -205,6 +205,14 @@ internal class TcpConnectionFactory : IDisposable
             port = uri.Port;
         }
 
+        if (session.IsTransparent && !string.IsNullOrEmpty(((TransparentBaseProxyEndPoint)session.ProxyEndPoint).OverrideForwardHostName))
+        {
+            host = ((TransparentBaseProxyEndPoint)session.ProxyEndPoint).OverrideForwardHostName;
+    
+            if (((TransparentBaseProxyEndPoint)session.ProxyEndPoint).OverrideForwardPort > 0)
+                port = ((TransparentBaseProxyEndPoint)session.ProxyEndPoint).OverrideForwardPort;
+        }
+
         var upStreamEndPoint = session.HttpClient.UpStreamEndPoint ?? proxyServer.UpStreamEndPoint;
         var upStreamProxy = customUpStreamProxy ??
                             (isHttps ? proxyServer.UpStreamHttpsProxy : proxyServer.UpStreamHttpProxy);

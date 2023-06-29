@@ -18,6 +18,16 @@ public abstract class TransparentBaseProxyEndPoint : ProxyEndPoint
     /// </summary>
     public abstract string GenericCertificateName { get; set; }
 
+    /// <summary>
+    ///     The hostname (or IP-address) of the fixed forwarding remote server.
+    /// </summary>
+    public abstract string OverrideForwardHostName { get; set; }
+
+    /// <summary>
+    ///     The port of the fixed forwarding remote server.
+    /// </summary>
+    public abstract int OverrideForwardPort { get; set; }
+
     internal abstract Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
         BeforeSslAuthenticateEventArgs connectArgs, ExceptionHandler? exceptionFunc);
 }
