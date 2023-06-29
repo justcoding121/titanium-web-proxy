@@ -104,14 +104,22 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // Transparent endpoint is useful for reverse proxy (client is not aware of the existence of proxy)
             // A transparent endpoint usually requires a network router port forwarding HTTP(S) packets
             // or by DNS to send data to this endPoint.
-            //var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 443, true)
+            //var transparentEndPointHttp = new TransparentProxyEndPoint(IPAddress.Any, 80, false)
+            //{
+            //    OverrideForwardHostName = "198.51.100.1",
+            //    OverrideForwardPort = 80
+            //};
+            //var transparentEndPointHttps = new TransparentProxyEndPoint(IPAddress.Any, 443, true)
             //{
             //    // Generic Certificate hostname to use
             //    // When SNI is disabled by client
-            //    GenericCertificateName = "localhost"
+            //    GenericCertificateName = "www.example.com",
+            //    OverrideForwardHostName = "198.51.100.1",
+            //    OverrideForwardPort = 443
             //};
+            //proxyServer.AddEndPoint(transparentEndPointHttp);
+            //proxyServer.AddEndPoint(transparentEndPointHttps);
 
-            //proxyServer.AddEndPoint(transparentEndPoint);
             //proxyServer.UpStreamHttpProxy = new ExternalProxy("localhost", 8888);
             //proxyServer.UpStreamHttpsProxy = new ExternalProxy("localhost", 8888);
 

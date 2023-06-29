@@ -32,6 +32,16 @@ public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint
     public override string GenericCertificateName { get; set; }
 
     /// <summary>
+    ///     The hostname (or IP-address) of the fixed forwarding remote server.
+    /// </summary>
+    public override string OverrideForwardHostName { get; set; } = "";
+
+    /// <summary>
+    ///     The port of the fixed forwarding remote server.
+    /// </summary>
+    public override int OverrideForwardPort { get; set; } = -1;
+
+    /// <summary>
     ///     Before Ssl authentication this event is fired.
     /// </summary>
     public event AsyncEventHandler<BeforeSslAuthenticateEventArgs>? BeforeSslAuthenticate;
