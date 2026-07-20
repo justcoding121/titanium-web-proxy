@@ -1,4 +1,4 @@
-name: .NET Core
+name: .NET
 
 on:
   push:
@@ -16,21 +16,28 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          10.0.x
 
     - name: Install DocFX
       if: github.ref == 'refs/heads/develop'
       run: choco install docfx -y
 
     - name: Build 
-      run: dotnet build src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj
+      run: dotnet build src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
 
     - name: Test 
       shell: pwsh
       run: |
         .\.github\install-unit-test-certificate.ps1
-        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj
-        dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release
+        dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release
 
     - name: Update Documentation
       if: github.ref == 'refs/heads/develop'
@@ -48,11 +55,11 @@ jobs:
     - name: Publish Beta
       if: github.ref == 'refs/heads/beta'
       run: |
-       dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --version-suffix "beta"
+       dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release --version-suffix "beta"
        dotnet nuget push **\*.nupkg -s "nuget" -k "${{ secrets.NUGET_TOKEN }}"
 
     - name: Publish Stable
       if: github.ref == 'refs/heads/stable'
       run: |
-       dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj
+       dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
        dotnet nuget push **\*.nupkg -s "nuget" -k "${{ secrets.NUGET_TOKEN }}"

@@ -13,7 +13,7 @@ public static class RunTime
 {
     private static readonly Lazy<bool> isRunningOnMono = new(() => Type.GetType("Mono.Runtime") != null);
 
-#if NET461
+#if NETFRAMEWORK
     /// <summary>
     ///     cache for Windows platform check
     /// </summary>
