@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="BrotliSharpLib" Version="0.3.3" />
-    <PackageReference Include="BouncyCastle.Cryptography" Version="2.0.0" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.3.1" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.1'">
