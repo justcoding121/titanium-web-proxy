@@ -380,23 +380,16 @@ public partial class ProxyServer
             await BeforeUpStreamConnectRequest.InvokeAsync(this, request, ExceptionFunc);
     }
 
-#if DEBUG
-        internal bool ShouldCallBeforeRequestBodyWrite()
-        {
-            if (OnRequestBodyWrite != null)
-            {
-                return true;
-            }
+    internal bool ShouldCallBeforeRequestBodyWrite()
+    {
+        return OnRequestBodyWrite != null;
+    }
 
-            return false;
-        }
-
-        internal async Task OnBeforeRequestBodyWrite(BeforeBodyWriteEventArgs args)
+    internal async Task OnBeforeRequestBodyWrite(BeforeBodyWriteEventArgs args)
+    {
+        if (OnRequestBodyWrite != null)
         {
-            if (OnRequestBodyWrite != null)
-            {
-                await OnRequestBodyWrite.InvokeAsync(this, args, ExceptionFunc);
-            }
+            await OnRequestBodyWrite.InvokeAsync(this, args, ExceptionFunc);
         }
-#endif
+    }
 }

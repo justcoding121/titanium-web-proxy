@@ -90,6 +90,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.BeforeResponse += OnResponse;
             proxyServer.AfterResponse += OnAfterResponse;
 
+            // Inspect/modify the response body chunk-by-chunk as it streams, without buffering it in memory.
+            // Do not combine with SessionEventArgs.GetResponseBody (which buffers the whole body).
+            //proxyServer.OnResponseBodyWrite += OnResponseBodyWrite;
+
             proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
             proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
@@ -368,6 +372,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //        }
             //    }
             //}
+        }
+
+        // Called for each response body chunk as it streams to the client (no full-body buffering).
+        // Replace e.BodyBytes to modify the body on the fly.
+        private Task OnResponseBodyWrite(object sender, BeforeBodyWriteEventArgs e)
+        {
+            WriteToConsole($"Response body chunk: {e.BodyBytes.Length} bytes (last: {e.IsLastChunk})");
+            return Task.CompletedTask;
         }
 
         private async Task OnAfterResponse(object sender, SessionEventArgs e)

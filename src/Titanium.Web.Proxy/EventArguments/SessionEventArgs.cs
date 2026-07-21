@@ -572,6 +572,13 @@ public class SessionEventArgs : SessionEventArgsBase
     /// <summary>
     /// Respond with given response object to client.
     /// </summary>
+    /// <remarks>
+    /// If the server response was already received, the original server body (if any) is drained (syphoned) so the
+    /// server connection stays reusable. To avoid reading a large or endless server body, pass
+    /// <paramref name="closeServerConnection" /> = true (or call <see cref="TerminateServerConnection" />), which
+    /// closes the connection instead of draining. Note that an HTTP/1.1 connection cannot be both reused and have
+    /// its body skipped.
+    /// </remarks>
     /// <param name="response">The response object.</param>
     /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
     public void Respond(Response response, bool closeServerConnection = false)
@@ -607,11 +614,74 @@ public class SessionEventArgs : SessionEventArgsBase
     }
 
     /// <summary>
+    ///     Respond to the client with a streamed body produced on the fly, without buffering the whole body in
+    ///     memory. Use this to serve large or endless bodies (e.g. a multi-gigabyte file or a synthetic
+    ///     server-sent-events stream) from scratch.
+    /// </summary>
+    /// <remarks>
+    ///     Framing is chosen from the response headers: if a Content-Length is set on <paramref name="response" />
+    ///     the body is written raw (the delegate must write exactly that many bytes); otherwise the response is sent
+    ///     using chunked transfer-encoding and each write becomes a chunk. The delegate receives a write-only stream;
+    ///     only a single buffer is in flight at a time, so memory stays bounded regardless of the total size.
+    ///     See <see cref="Respond" /> for the server body syphon-vs-close trade-off controlled by
+    ///     <paramref name="closeServerConnection" />.
+    /// </remarks>
+    /// <param name="response">The response object (status and headers).</param>
+    /// <param name="writeBody">Delegate that writes the body to the provided stream.</param>
+    /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
+    public void RespondStreaming(Response response, Func<Stream, CancellationToken, Task> writeBody,
+        bool closeServerConnection = false)
+    {
+        if (response == null) throw new ArgumentNullException(nameof(response));
+        if (writeBody == null) throw new ArgumentNullException(nameof(writeBody));
+
+        // Choose framing: fixed-length when the caller declared a Content-Length, otherwise chunked.
+        if (response.ContentLength < 0 && !response.IsChunked) response.IsChunked = true;
+
+        response.StreamBodyWriter = writeBody;
+
+        Respond(response, closeServerConnection);
+    }
+
+    /// <summary>
     ///     Terminate the connection to server at the end of this HTTP request/response session.
     /// </summary>
     public void TerminateServerConnection()
     {
         HttpClient.CloseServerConnection = true;
+    }
+
+    /// <summary>
+    ///     Drains (reads and discards) any unread server response body from the backing TCP connection so the
+    ///     connection can be reused. This reads the bytes off the wire without buffering them in memory. It is a
+    ///     no-op if the body was already received or the response has no body.
+    /// </summary>
+    /// <remarks>
+    ///     Warning: for an endless chunked response (one that never sends its terminating zero chunk) this will
+    ///     block until the passed <paramref name="cancellationToken" /> is cancelled or the connection closes. In
+    ///     that case prefer closing the connection (e.g. <see cref="TerminateServerConnection" />) instead.
+    /// </remarks>
+    public Task DrainServerBodyAsync(CancellationToken cancellationToken = default)
+    {
+        return SyphonOutBodyAsync(false, cancellationToken);
+    }
+
+    /// <summary>
+    ///     Drains (reads and discards) any unread client request body from the backing TCP connection so the
+    ///     client's keep-alive connection can be reused. This reads the bytes off the wire without buffering them
+    ///     in memory. It is a no-op if the body was already received or the request has no body.
+    /// </summary>
+    /// <remarks>
+    ///     Useful when short-circuiting a request (e.g. <see cref="Respond" />, <see cref="RespondStreaming" />, or
+    ///     blocking) while the client is uploading a body: draining leaves the client connection in a reusable
+    ///     state. Note the proxy already drains the client body automatically on the normal synthetic-response
+    ///     path, so this is only needed for advanced/manual control.
+    ///     Warning: for an endless chunked request (one that never sends its terminating zero chunk) this will
+    ///     block until the passed <paramref name="cancellationToken" /> is cancelled or the connection closes.
+    /// </remarks>
+    public Task DrainClientBodyAsync(CancellationToken cancellationToken = default)
+    {
+        return SyphonOutBodyAsync(true, cancellationToken);
     }
 
     protected override void Dispose(bool disposing)

@@ -3,6 +3,7 @@ using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy;
@@ -68,6 +69,15 @@ public partial class ProxyServer
         {
             // write custom user response with body and return.
             await clientStream.WriteResponseAsync(response, cancellationToken);
+
+            // if the user requested a streamed body, produce it now without buffering.
+            if (response.StreamBodyWriter != null && !response.IsBodySent)
+            {
+                var bodyWriter = new BodyStreamWriter(clientStream, response.IsChunked);
+                await response.StreamBodyWriter(bodyWriter, cancellationToken);
+                await bodyWriter.CompleteAsync(cancellationToken);
+                response.IsBodySent = true;
+            }
 
             if (args.HttpClient.HasConnection && !args.HttpClient.CloseServerConnection)
                 // syphon out the original response body from server connection
@@ -145,23 +155,16 @@ public partial class ProxyServer
     {
         if (AfterResponse != null) await AfterResponse.InvokeAsync(this, args, ExceptionFunc);
     }
-#if DEBUG
-        internal bool ShouldCallBeforeResponseBodyWrite()
-        {
-            if (OnResponseBodyWrite != null)
-            {
-                return true;
-            }
+    internal bool ShouldCallBeforeResponseBodyWrite()
+    {
+        return OnResponseBodyWrite != null;
+    }
 
-            return false;
-        }
-
-        internal async Task OnBeforeResponseBodyWrite(BeforeBodyWriteEventArgs args)
+    internal async Task OnBeforeResponseBodyWrite(BeforeBodyWriteEventArgs args)
+    {
+        if (OnResponseBodyWrite != null)
         {
-            if (OnResponseBodyWrite != null)
-            {
-                await OnResponseBodyWrite.InvokeAsync(this, args, ExceptionFunc);
-            }
+            await OnResponseBodyWrite.InvokeAsync(this, args, ExceptionFunc);
         }
-#endif
+    }
 }

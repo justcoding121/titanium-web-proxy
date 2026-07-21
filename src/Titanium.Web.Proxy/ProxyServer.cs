@@ -391,23 +391,25 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public event AsyncEventHandler<SessionEventArgs>? BeforeRequest;
 
-#if DEBUG
-        /// <summary>
-        ///     Intercept request body send event to server. 
-        /// </summary>
-        public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnRequestBodyWrite;
-#endif
+    /// <summary>
+    ///     Intercept request body send event to server.
+    ///     Subscribe to inspect or modify the request body chunk-by-chunk as it streams to the server,
+    ///     without buffering the whole body. Do not combine with SessionEventArgs.GetRequestBody (which buffers).
+    /// </summary>
+    public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnRequestBodyWrite;
+
     /// <summary>
     ///     Intercept response event from server.
     /// </summary>
     public event AsyncEventHandler<SessionEventArgs>? BeforeResponse;
 
-#if DEBUG
-        /// <summary>
-        ///     Intercept request body send event to client. 
-        /// </summary>
-        public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnResponseBodyWrite;
-#endif
+    /// <summary>
+    ///     Intercept response body send event to client.
+    ///     Subscribe to inspect or modify the response body chunk-by-chunk as it streams to the client,
+    ///     without buffering the whole body. Do not combine with SessionEventArgs.GetResponseBody (which buffers).
+    /// </summary>
+    public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnResponseBodyWrite;
+
     /// <summary>
     ///     Intercept after response event from server.
     /// </summary>

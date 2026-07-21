@@ -1,5 +1,8 @@
 ﻿using System;
 using System.ComponentModel;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
@@ -38,6 +41,13 @@ public class Response : RequestResponseBase
     public string StatusDescription { get; set; } = string.Empty;
 
     internal string RequestMethod { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     When set via SessionEventArgs.RespondStreaming, this delegate is invoked to produce the response
+    ///     body as a live stream (without buffering it in memory). The provided stream frames writes as HTTP/1.1
+    ///     chunks when the response is chunked, or writes raw bytes when a Content-Length is set.
+    /// </summary>
+    internal Func<Stream, CancellationToken, Task>? StreamBodyWriter { get; set; }
 
     /// <summary>
     ///     Has response body?
