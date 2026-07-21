@@ -453,6 +453,16 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
+    ///     Set the given explicit end point as the default HTTP proxy server for current machine.
+    /// </summary>
+    /// <param name="endPoint">The explicit endpoint.</param>
+    /// <param name="settings">The Windows system proxy settings.</param>
+    public void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint, SystemProxySettings settings)
+    {
+        SetAsSystemProxy(endPoint, ProxyProtocolType.Http, settings);
+    }
+
+    /// <summary>
     ///     Set the given explicit end point as the default proxy server for current machine.
     /// </summary>
     /// <param name="endPoint">The explicit endpoint.</param>
@@ -462,17 +472,44 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
+    ///     Set the given explicit end point as the default HTTPS proxy server for current machine.
+    /// </summary>
+    /// <param name="endPoint">The explicit endpoint.</param>
+    /// <param name="settings">The Windows system proxy settings.</param>
+    public void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint, SystemProxySettings settings)
+    {
+        SetAsSystemProxy(endPoint, ProxyProtocolType.Https, settings);
+    }
+
+    /// <summary>
     ///     Set the given explicit end point as the default proxy server for current machine.
     /// </summary>
     /// <param name="endPoint">The explicit endpoint.</param>
     /// <param name="protocolType">The proxy protocol type.</param>
     public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType)
     {
+        SetAsSystemProxy(endPoint, protocolType, null);
+    }
+
+    /// <summary>
+    ///     Set the given explicit end point as the default proxy server for current machine.
+    /// </summary>
+    /// <param name="endPoint">The explicit endpoint.</param>
+    /// <param name="protocolType">The proxy protocol type.</param>
+    /// <param name="settings">
+    ///     The Windows system proxy settings, or <see langword="null"/> to preserve the current bypass list.
+    /// </param>
+    public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType,
+        SystemProxySettings? settings)
+    {
         if (SystemProxySettingsManager == null)
             throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually configure you operating system to use this proxy's port and address.");
 
         ValidateEndPointAsSystemProxy(endPoint);
+
+        // Validate bypass rules up front so a malformed rule cannot leave the proxy state half-applied.
+        settings?.Validate();
 
         var isHttp = (protocolType & ProxyProtocolType.Http) > 0;
         var isHttps = (protocolType & ProxyProtocolType.Https) > 0;
@@ -494,13 +531,21 @@ public partial class ProxyServer : IDisposable
 
         if (isHttps) ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpsProxy = false);
 
+        string? proxyOverride = null;
+        if (settings != null)
+        {
+            var currentProxyOverride = SystemProxySettingsManager.GetProxyInfoFromRegistry()?.ProxyOverride;
+            proxyOverride = settings.BuildProxyOverride(currentProxyOverride);
+        }
+
         SystemProxySettingsManager.SetProxy(
             Equals(endPoint.IpAddress, IPAddress.Any) |
             Equals(endPoint.IpAddress, IPAddress.Loopback)
                 ? "localhost"
                 : endPoint.IpAddress.ToString(),
             endPoint.Port,
-            protocolType);
+            protocolType,
+            proxyOverride);
 
         if (isHttp) endPoint.IsSystemHttpProxy = true;
 

@@ -105,7 +105,11 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             };
             proxyServer.Start();
 
-            proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
+            proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp, new SystemProxySettings
+            {
+                // Route localhost/loopback traffic through the proxy for this example.
+                ProxyLoopback = true
+            });
 
             InitializeComponent();
         }

@@ -86,6 +86,20 @@ internal class SystemProxyManager
     /// <param name="protocolType"></param>
     internal void SetProxy(string hostname, int port, ProxyProtocolType protocolType)
     {
+        SetProxy(hostname, port, protocolType, null);
+    }
+
+    /// <summary>
+    ///     Set the HTTP and/or HTTPS proxy server for current machine.
+    /// </summary>
+    /// <param name="hostname"></param>
+    /// <param name="port"></param>
+    /// <param name="protocolType"></param>
+    /// <param name="proxyOverride">
+    ///     The proxy bypass list to set, or <see langword="null"/> to preserve the current list.
+    /// </param>
+    internal void SetProxy(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
+    {
         using (var reg = OpenInternetSettingsKey())
         {
             if (reg == null) return;
@@ -106,6 +120,7 @@ internal class SystemProxyManager
             reg.SetValue(RegProxyEnable, 1);
             reg.SetValue(RegProxyServer,
                 string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+            if (proxyOverride != null) reg.SetValue(RegProxyOverride, proxyOverride);
 
             Refresh();
         }
