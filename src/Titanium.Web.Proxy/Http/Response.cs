@@ -86,9 +86,16 @@ public class Response : RequestResponseBase
         {
             var headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Connection);
 
-            if (headerValue != null)
-                if (headerValue.EqualsIgnoreCase(KnownHeaders.ConnectionClose.String))
-                    return false;
+            // HTTP/1.0 is non-persistent by default: the connection is only reusable when the
+            // response explicitly opts in with "Connection: keep-alive". Treating a plain HTTP/1.0
+            // response as keep-alive would let us pool a connection the server is about to close.
+            if (HttpVersion == HttpHeader.Version10)
+                return headerValue != null &&
+                       headerValue.EqualsIgnoreCase(KnownHeaders.ConnectionKeepAlive.String);
+
+            // HTTP/1.1 (and HTTP/2) are persistent by default unless the response asks to close.
+            if (headerValue != null && headerValue.EqualsIgnoreCase(KnownHeaders.ConnectionClose.String))
+                return false;
 
             return true;
         }

@@ -24,7 +24,7 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
     {
         var path = GetRootCertificatePath(pathOrName);
         var exported = certificate.Export(X509ContentType.Pkcs12, password);
-        File.WriteAllBytes(path, exported);
+        WriteFileAtomic(path, exported);
     }
 
     /// <inheritdoc />
@@ -39,7 +39,43 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
     {
         var filePath = Path.Combine(GetCertificatePath(true), subjectName + DefaultCertificateFileExtension);
         var exported = certificate.Export(X509ContentType.Pkcs12);
-        File.WriteAllBytes(filePath, exported);
+        WriteFileAtomic(filePath, exported);
+    }
+
+    /// <summary>
+    ///     Writes a file atomically: the data is written to a temporary file in the same directory
+    ///     and then moved into place, so a concurrent reader never observes a partially written
+    ///     (and therefore corrupt) PKCS#12 file.
+    /// </summary>
+    private static void WriteFileAtomic(string path, byte[] contents)
+    {
+        var directory = Path.GetDirectoryName(path);
+        var tempPath = Path.Combine(string.IsNullOrEmpty(directory) ? "." : directory, Path.GetRandomFileName());
+
+        File.WriteAllBytes(tempPath, contents);
+
+        try
+        {
+            if (File.Exists(path))
+                // File.Replace performs an atomic swap on the same volume (temp is in the same directory).
+                File.Replace(tempPath, path, null);
+            else
+                File.Move(tempPath, path);
+        }
+        catch
+        {
+            // best-effort cleanup of the temp file if the move/replace failed
+            try
+            {
+                if (File.Exists(tempPath)) File.Delete(tempPath);
+            }
+            catch
+            {
+                // ignore
+            }
+
+            throw;
+        }
     }
 
     public void Clear()
@@ -67,11 +103,19 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
         }
         catch (IOException)
         {
-            // file or directory not found
+            // file or directory not found, or a concurrent write is in progress
             return null;
         }
 
-        return CertificateLoader.LoadPkcs12(exported, password, storageFlags);
+        try
+        {
+            return CertificateLoader.LoadPkcs12(exported, password, storageFlags);
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            // corrupt/partial pfx on disk: treat as a cache miss so a fresh certificate is generated
+            return null;
+        }
     }
 
     private string GetRootCertificatePath(string pathOrName)

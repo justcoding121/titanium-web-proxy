@@ -39,10 +39,17 @@ public partial class ProxyServer
         args.ReRequest = false;
 
         // check for windows authentication
+        var serverWinAuthReRequest = false;
         if (args.EnableWinAuth)
         {
             if (response.StatusCode == (int)HttpStatusCode.Unauthorized)
+            {
                 await Handle401UnAuthorized(args);
+
+                // A 401 that triggers a re-request is a connection-oriented NTLM/Negotiate
+                // handshake leg (ISC_REQ_CONNECTION); it must continue on the SAME server connection.
+                serverWinAuthReRequest = args.ReRequest;
+            }
             // don't mark the connection as authenticated on a 407, otherwise the
             // upstream proxy authentication state below would be corrupted.
             else if (response.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired)
@@ -92,15 +99,27 @@ public partial class ProxyServer
         if (args.ReRequest)
         {
             var serverConnection = args.HttpClient.HasConnection ? args.HttpClient.Connection : null;
-            if (args.HttpClient.HasConnection &&
-                response.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired)
+
+            // Connection-oriented auth handshakes must reuse the SAME server connection for every leg:
+            //  - a 407 from an upstream proxy (proxy authentication), and
+            //  - a 401 from the origin server handled by NTLM/Negotiate (server authentication).
+            // Any other re-request (e.g. user-initiated from the response handler) may target a
+            // different destination, so it gets a fresh connection.
+            var keepConnectionForAuth = args.HttpClient.HasConnection &&
+                                        ShouldReuseConnectionForAuthReRequest(response.StatusCode,
+                                            serverWinAuthReRequest);
+
+            // Always drain the challenge response body from the current server connection first,
+            // so the connection is clean before it is reused or released.
+            // (Never release/pool a connection while its body is still on the wire.)
+            await args.ClearResponse(cancellationToken);
+
+            if (args.HttpClient.HasConnection && !keepConnectionForAuth)
             {
                 serverConnection = null;
                 await TcpConnectionFactory.Release(args.HttpClient.Connection);
             }
 
-            // clear current response
-            await args.ClearResponse(cancellationToken);
             var result = await HandleHttpSessionRequest(args, serverConnection,
                 args.ClientConnection.NegotiatedApplicationProtocol,
                 cancellationToken, args.CancellationTokenSource);
@@ -134,6 +153,16 @@ public partial class ProxyServer
         }
 
         args.TimeLine["Response Sent"] = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    ///     Decides whether a re-request must reuse the same server connection.
+    ///     Connection-oriented authentication handshakes (proxy 407, or a server 401 handled by
+    ///     NTLM/Negotiate) require every leg to travel over the same TCP connection.
+    /// </summary>
+    internal static bool ShouldReuseConnectionForAuthReRequest(int responseStatusCode, bool serverWinAuthReRequest)
+    {
+        return responseStatusCode == (int)HttpStatusCode.ProxyAuthenticationRequired || serverWinAuthReRequest;
     }
 
     /// <summary>

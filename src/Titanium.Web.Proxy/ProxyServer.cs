@@ -187,16 +187,20 @@ public partial class ProxyServer : IDisposable
     public bool Enable100ContinueBehaviour { get; set; }
 
     /// <summary>
-    ///     Should we enable experimental server connection pool. Defaults to false.
-    ///     When you enable connection pooling, instead of creating a new TCP connection to server for each client TCP
-    ///     connection,
-    ///     we check if a server connection is available in our cached pool. If it is available in our pool,
-    ///     created from earlier requests to the same server, we will reuse those idle connections.
-    ///     There is also a ConnectionTimeOutSeconds parameter, which determine the eviction time for inactive server
-    ///     connections.
-    ///     This will help to reduce TCP connection establishment cost, both the wall clock time and CPU cycles.
+    ///     Should we enable the server connection pool. Defaults to true.
+    ///     When connection pooling is enabled, instead of creating a new TCP connection to the server for each client TCP
+    ///     connection, we check if an idle server connection is available in our cached pool. If a compatible connection
+    ///     (same destination, scheme, upstream proxy, credentials and negotiated protocol) created from an earlier request
+    ///     is available, we reuse it. Only connections that are safe to reuse under the HTTP protocol are pooled:
+    ///     the response body must be fully received and the connection must be persistent (HTTP/1.1 keep-alive, or an
+    ///     HTTP/1.0 connection that explicitly opted in via "Connection: keep-alive"). Connections whose response asked to
+    ///     close, that failed, or that carry connection-oriented authentication state (WinAuth NTLM/Negotiate) or a
+    ///     per-session client certificate are never returned to the shared pool.
+    ///     The ConnectionTimeOutSeconds parameter determines the eviction time for inactive server connections.
+    ///     This reduces TCP (and TLS) connection establishment cost, both in wall clock time and CPU cycles.
+    ///     Set to false to force a fresh server connection for every client connection.
     /// </summary>
-    public bool EnableConnectionPool { get; set; } = false;
+    public bool EnableConnectionPool { get; set; } = true;
 
     /// <summary>
     ///     Should we enable tcp server connection prefetching?

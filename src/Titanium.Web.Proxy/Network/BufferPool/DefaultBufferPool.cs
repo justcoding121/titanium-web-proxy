@@ -3,10 +3,10 @@
 namespace Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 /// <summary>
-///     A concrete IBufferPool implementation using a thread-safe stack.
-///     Works well when all consumers ask for buffers with the same size.
-///     If your application would use variable size buffers consider implementing IBufferPool using System.Buffers library
-///     from Microsoft.
+///     A concrete IBufferPool implementation backed by the shared <see cref="System.Buffers.ArrayPool{T}" />.
+///     It is thread-safe and handles both fixed and variable size buffer requests.
+///     Note: rented buffers may be larger than the requested size (ArrayPool bucketing) and are not
+///     cleared on return, so callers must not assume the buffer length equals the requested size.
 /// </summary>
 internal class DefaultBufferPool : IBufferPool
 {

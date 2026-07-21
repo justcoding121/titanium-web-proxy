@@ -29,6 +29,44 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         [TestMethod]
+        public async Task ReadLineAsync_LineWithoutTrailingNewlineAtEof_ReturnsContent()
+        {
+            // Regression guard: the pooled buffer must not be returned before the final
+            // string is built when the stream ends without a trailing '\n'.
+            var payload = System.Text.Encoding.ASCII.GetBytes("GET / HTTP/1.1");
+            var source = new MemoryStream(payload);
+            var stream = new HttpStream(
+                new ProxyServer(),
+                source,
+                new DefaultBufferPool(),
+                CancellationToken.None,
+                false);
+
+            var line = await stream.ReadLineAsync(CancellationToken.None);
+
+            Assert.AreEqual("GET / HTTP/1.1", line);
+        }
+
+        [TestMethod]
+        public async Task ReadLineAsync_MultipleLinesWithCrLf_ReturnsEachLine()
+        {
+            var payload = System.Text.Encoding.ASCII.GetBytes("first\r\nsecond\r\n");
+            var source = new MemoryStream(payload);
+            var stream = new HttpStream(
+                new ProxyServer(),
+                source,
+                new DefaultBufferPool(),
+                CancellationToken.None,
+                false);
+
+            var first = await stream.ReadLineAsync(CancellationToken.None);
+            var second = await stream.ReadLineAsync(CancellationToken.None);
+
+            Assert.AreEqual("first", first);
+            Assert.AreEqual("second", second);
+        }
+
+        [TestMethod]
         public void CertificateCallbacks_NullSessionUseSafeDefaultsWithoutInvocation()
         {
             var validationInvoked = false;

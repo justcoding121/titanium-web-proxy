@@ -201,11 +201,15 @@ public partial class ProxyServer
                         if (cancellationTokenSource.IsCancellationRequested)
                             throw new Exception("Session was terminated by user.");
 
-                        // Release server connection for each HTTP session instead of per client connection.
-                        // This will be more efficient especially when client is idly holding server connection 
-                        // between sessions without using it.
-                        // Do not release authenticated connections for performance reasons.
-                        // Otherwise it will keep authenticating per session.
+                        // Release the server connection back to the shared pool after each HTTP session
+                        // (rather than holding it for the whole client connection). This is more efficient
+                        // when a client idly holds a server connection between sessions without using it.
+                        // We only get here when the response was persistent (response.KeepAlive above) and its
+                        // body was fully received, so the connection is at a clean message boundary and safe to reuse.
+                        // WinAuth (NTLM/Negotiate) connections are deliberately NOT returned to the shared pool:
+                        // they are authenticated to a specific identity and are connection-oriented, so they stay
+                        // bound to this client session (reused for its subsequent requests) and are closed when the
+                        // client connection ends, never shared with another client.
                         if (EnableConnectionPool && connection != null
                                                  && !connection.IsWinAuthenticated)
                         {

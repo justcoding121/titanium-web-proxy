@@ -101,6 +101,11 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
 
     public IExternalProxy? GetProxy(Uri destination)
     {
+        // Known limitations of system-proxy resolution:
+        //  - Only the first proxy returned by the PAC/auto-config script is used; additional
+        //    fallback proxies in the list are ignored.
+        //  - The static system bypass list is not re-applied to PAC results here (the PAC script
+        //    itself is expected to return DIRECT for bypassed hosts).
         if (GetAutoProxies(destination, out var proxies))
         {
             if (proxies == null) return null;
@@ -114,8 +119,11 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
                 port = int.Parse(parts[1]);
             }
 
-            // TODO: Apply authorization
-            var systemProxy = new ExternalProxy(proxyStr, port);
+            // Authenticate to the system proxy with the current user's default credentials via
+            // integrated auth (NTLM/Negotiate). This only takes effect if the proxy issues a 407
+            // challenge, and mirrors how Windows authenticates to auto-detected proxies. Explicit
+            // Basic credentials cannot be recovered from WinHTTP auto-config, so they are not set.
+            var systemProxy = new ExternalProxy(proxyStr, port) { UseDefaultCredentials = true };
 
             return systemProxy;
         }

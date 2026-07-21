@@ -238,7 +238,7 @@ proxyServer.ForwardToUpstreamGateway = true;
 
 ## Performance and pooling
 
-- `EnableConnectionPool` — reuse upstream TCP connections.
+- `EnableConnectionPool` — reuse idle upstream TCP connections (enabled by default). Only connections that are safe to reuse under HTTP (persistent, body fully received, not authenticated to a specific identity) are pooled; set to `false` to force a fresh connection per client.
 - `ConnectionTimeOutSeconds`, `TcpTimeWaitSeconds`, `ReuseSocket` — tune connection lifetime.
 - `BufferPool` / `BufferSize` — reuse I/O buffers.
 - `CertificateManager.SaveFakeCertificates` — cache generated certificates.

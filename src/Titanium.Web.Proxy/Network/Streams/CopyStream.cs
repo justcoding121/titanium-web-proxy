@@ -74,7 +74,11 @@ internal class CopyStream : ILineStream, IDisposable
     {
         if (disposed) return;
 
-        if (disposing) bufferPool.ReturnBuffer(buffer);
+        // Return the pooled buffer on both the normal Dispose and the finalizer path.
+        // ArrayPool.Return is thread-safe, and the buffer/bufferPool references remain
+        // reachable via this instance until it is collected, so this is safe from a finalizer.
+        // This prevents leaking a rented buffer if the stream is ever finalized without disposal.
+        bufferPool.ReturnBuffer(buffer);
 
         disposed = true;
     }

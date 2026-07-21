@@ -26,7 +26,15 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
     private static Encoding Encoding => HttpHeader.Encoding;
 
-    private static readonly bool networkStreamHack = true;
+    // On .NET Framework, NetworkStream does not override the cancellable ReadAsync/WriteAsync
+    // overloads (they fall back to Stream's sync-over-async), so we route Begin/End Read/Write
+    // through our own Task-based async methods. Modern .NET implements true async socket I/O, so
+    // this stays false there and the base Stream implementation is used directly.
+#if NETFRAMEWORK
+    private static readonly bool networkStreamHack;
+#else
+    private static readonly bool networkStreamHack = false;
+#endif
 
     private int bufferPos;
 
@@ -47,20 +55,23 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
     public bool IsClosed { get; private set; }
 
+#if NETFRAMEWORK
     static HttpStream()
     {
-        // TODO: remove this hack when removing .NET 4.x support
+        // Detect whether NetworkStream provides its own cancellable ReadAsync. If it only inherits
+        // Stream's implementation (as on .NET Framework), enable the async routing hack below.
         try
         {
             var method = typeof(NetworkStream).GetMethod(nameof(Stream.ReadAsync),
                 new[] { typeof(byte[]), typeof(int), typeof(int), typeof(CancellationToken) });
-            if (method != null && method.DeclaringType != typeof(Stream)) networkStreamHack = false;
+            if (method == null || method.DeclaringType == typeof(Stream)) networkStreamHack = true;
         }
         catch
         {
-            // ignore
+            networkStreamHack = true;
         }
     }
+#endif
 
     private static readonly byte[] newLine = ProxyConstants.NewLineBytes;
     private readonly ProxyServer server;
@@ -714,15 +725,18 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
                 if (bufferDataLength == buffer.Length) Array.Resize(ref buffer, bufferDataLength * 2);
             }
+
+            // reached end of stream without a trailing '\n'.
+            // build the result string here, while the pooled buffer is still valid,
+            // before it is returned in the finally block below.
+            if (bufferDataLength == 0) return null;
+
+            return Encoding.GetString(buffer, 0, bufferDataLength);
         }
         finally
         {
             bufferPool.ReturnBuffer(bufferPoolBuffer);
         }
-
-        if (bufferDataLength == 0) return null;
-
-        return Encoding.GetString(buffer, 0, bufferDataLength);
     }
 
     /// <summary>
@@ -970,13 +984,17 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             s = decompressStream =
                 DecompressionFactory.Create(CompressionUtil.CompressionNameToEnum(contentEncoding), s);
 
+        // leaveOpen: true so disposing the wrapper returns its pooled buffer without
+        // disposing the underlying limited/decompression stream (handled in finally).
+        var http = new HttpStream(server, s, bufferPool, cancellationToken, true);
         try
         {
-            var http = new HttpStream(server, s, bufferPool, cancellationToken, true);
             await http.CopyBodyAsync(writer, false, -1, isRequest, args, cancellationToken);
         }
         finally
         {
+            http.Dispose();
+
             decompressStream?.Dispose();
 
             await limitedStream.Finish();

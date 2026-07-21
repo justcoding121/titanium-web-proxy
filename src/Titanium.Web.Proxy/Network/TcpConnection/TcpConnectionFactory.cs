@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -8,6 +9,8 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -108,16 +111,80 @@ internal class TcpConnectionFactory : IDisposable
             cacheKeyBuilder.Append("-");
             cacheKeyBuilder.Append(externalProxy.ProxyType);
 
-            if (externalProxy.UseDefaultCredentials)
-            {
-                cacheKeyBuilder.Append("-");
-                cacheKeyBuilder.Append(externalProxy.UserName);
-                cacheKeyBuilder.Append("-");
-                cacheKeyBuilder.Append(externalProxy.Password);
-            }
+            // SOCKS remote-DNS toggle changes how the connection is established, so it must
+            // separate otherwise-identical connections.
+            cacheKeyBuilder.Append("-");
+            cacheKeyBuilder.Append(externalProxy.ProxyDnsRequests);
+
+            // Different credentials (or default-credential mode) must never share a pooled
+            // connection to the same proxy. Include a fingerprint of the credentials, regardless
+            // of UseDefaultCredentials, without storing the plaintext password in the key.
+            cacheKeyBuilder.Append("-");
+            cacheKeyBuilder.Append(externalProxy.UseDefaultCredentials);
+            cacheKeyBuilder.Append("-");
+            cacheKeyBuilder.Append(GetCredentialFingerprint(externalProxy.UserName, externalProxy.Password));
         }
 
         return cacheKeyBuilder.ToString();
+    }
+
+    /// <summary>
+    ///     Produces a short, stable fingerprint of proxy credentials so that connections with
+    ///     different credentials do not collide in the pool, without keeping the plaintext
+    ///     password inside the long-lived cache key string.
+    /// </summary>
+    internal static string GetCredentialFingerprint(string? userName, string? password)
+    {
+        if (string.IsNullOrEmpty(userName) && string.IsNullOrEmpty(password)) return string.Empty;
+
+        // NUL separator cannot appear in the individual parts, avoiding ambiguity between
+        // e.g. ("ab", "c") and ("a", "bc").
+        var material = (userName ?? string.Empty) + "\0" + (password ?? string.Empty);
+        using var sha = SHA256.Create();
+        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(material));
+        return Convert.ToBase64String(hash);
+    }
+
+    /// <summary>
+    ///     Resolves the upstream proxy actually used for a destination, applying the same
+    ///     bypass rules as connection creation (proxy == destination, or BypassLocalhost for
+    ///     local addresses). Returns null when the connection is made directly.
+    ///     Keeping this in sync with connection creation ensures the cache key reflects the real route.
+    /// </summary>
+    internal static IExternalProxy? GetEffectiveUpstreamProxy(IExternalProxy? externalProxy, string remoteHostName,
+        int remotePort)
+    {
+        if (externalProxy == null) return null;
+
+        if (externalProxy.HostName == remoteHostName && externalProxy.Port == remotePort) return null;
+
+        if (externalProxy.BypassLocalhost &&
+            NetworkHelper.IsLocalIpAddress(remoteHostName, externalProxy.ProxyDnsRequests))
+            return null;
+
+        return externalProxy;
+    }
+
+    /// <summary>
+    ///     Checks that a pooled connection's negotiated ALPN protocol is acceptable for a request
+    ///     that asked for the given protocols. Prevents e.g. reusing an HTTP/1.1-negotiated connection
+    ///     (that was created while requesting HTTP/2) for a request that requires HTTP/2.
+    /// </summary>
+    private static bool IsNegotiatedProtocolCompatible(TcpServerConnection connection,
+        List<SslApplicationProtocol>? requestedProtocols)
+    {
+        return IsNegotiatedProtocolCompatible(connection.NegotiatedApplicationProtocol, requestedProtocols);
+    }
+
+    internal static bool IsNegotiatedProtocolCompatible(SslApplicationProtocol negotiated,
+        List<SslApplicationProtocol>? requestedProtocols)
+    {
+        if (requestedProtocols == null || requestedProtocols.Count == 0) return true;
+
+        // default => not a TLS/ALPN connection (plain HTTP) or unknown; nothing to verify.
+        if (negotiated == default) return true;
+
+        return requestedProtocols.Contains(negotiated);
     }
 
     /// <summary>
@@ -145,6 +212,10 @@ internal class TcpConnectionFactory : IDisposable
         var uri = session.HttpClient.Request.RequestUri;
         var upStreamEndPoint = session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint;
         var upStreamProxy = customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
+
+        // resolve the effective proxy (post-bypass) so the key matches the connection's actual route
+        upStreamProxy = GetEffectiveUpstreamProxy(upStreamProxy, uri.Host, uri.Port);
+
         return GetConnectionCacheKey(uri.Host, uri.Port, isHttps, applicationProtocols, upStreamEndPoint,
             upStreamProxy);
     }
@@ -266,6 +337,11 @@ internal class TcpConnectionFactory : IDisposable
         string? connectHost = null, int? connectPort = null)
     {
         var sslProtocol = sessionArgs.ClientConnection.SslProtocol;
+
+        // resolve the effective proxy (post-bypass) so that direct and proxied connections to the
+        // same destination don't collide in the pool, and so the connection's stored key matches.
+        externalProxy = GetEffectiveUpstreamProxy(externalProxy, remoteHostName, remotePort);
+
         var cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
             isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort);
 
@@ -279,10 +355,12 @@ internal class TcpConnectionFactory : IDisposable
                         if (existingConnections.TryDequeue(out var recentConnection))
                         {
                             if (recentConnection.LastAccess > cutOff
-                                && recentConnection.TcpSocket.IsGoodConnection())
+                                && recentConnection.TcpSocket.IsGoodConnection()
+                                && IsNegotiatedProtocolCompatible(recentConnection, applicationProtocols))
                                 return recentConnection;
 
-                            disposalBag.Add(recentConnection);
+                            if (recentConnection.TryScheduleDisposal())
+                                disposalBag.Add(recentConnection);
                         }
                 }
 
@@ -361,6 +439,7 @@ internal class TcpConnectionFactory : IDisposable
 
         SslApplicationProtocol negotiatedApplicationProtocol = default;
         var upstreamProxyWinAuthenticated = false;
+        var usedClientCertificate = false;
 
         var retry = true;
         var enabledSslProtocols = sslProtocol;
@@ -408,10 +487,13 @@ internal class TcpConnectionFactory : IDisposable
                         proxySocket.ProxyEndPoint = new IPEndPoint(ipAddress, port);
                         var proxyUser = externalProxy.UserName;
                         var proxyPassword = externalProxy.Password;
-                        if (proxyUser != null && proxyUser.Length > 0 && proxyPassword != null)
+
+                        // SOCKS4 authenticates with a username only (no password), so do not require a
+                        // non-null password to set the user. SOCKS5 user/password auth uses both.
+                        if (proxyUser != null && proxyUser.Length > 0)
                         {
                             proxySocket.ProxyUser = proxyUser;
-                            proxySocket.ProxyPass = proxyPassword;
+                            if (proxyPassword != null) proxySocket.ProxyPass = proxyPassword;
                         }
 
                         tcpServerSocket = proxySocket;
@@ -443,12 +525,15 @@ internal class TcpConnectionFactory : IDisposable
                         }
                         else
                         {
-                            // todo: resolve only once when the SOCKS proxy has multiple addresses (and the first address fails)
                             var remoteIpAddresses = await Dns.GetHostAddressesAsync(connectHostName);
                             if (remoteIpAddresses == null || remoteIpAddresses.Length == 0)
                                 throw new Exception($"Could not resolve the SOCKS remote hostname {connectHostName}");
 
-                            // todo: use the 2nd, 3rd... remote addresses when first fails
+                            // Known limitation: when the proxy resolves the remote host to multiple
+                            // addresses we only attempt the first. Per-remote-address failover would
+                            // require restructuring the shared connect/timeout loop below (which iterates
+                            // over the PROXY addresses, not the remote target addresses) and is left as a
+                            // future improvement to avoid destabilizing the connection path.
                             connectTask = ProxySocketConnectionTaskFactory.CreateTask(
                                 (ProxySocket.ProxySocket)tcpServerSocket, remoteIpAddresses[0], connectPortNumber);
                         }
@@ -506,9 +591,17 @@ internal class TcpConnectionFactory : IDisposable
                     {
                         sessionArgs.CustomUpStreamProxyUsed = newUpstreamProxy;
                         sessionArgs.TimeLine["Retrying Upstream Proxy Connection"] = DateTime.UtcNow;
+
+                        // retry with the NEW proxy: resolve its effective form (bypass rules) and
+                        // recompute the cache key so the retried connection is created via, and cached
+                        // under, the new proxy rather than the one that just failed.
+                        var retryProxy = GetEffectiveUpstreamProxy(newUpstreamProxy, remoteHostName, remotePort);
+                        var retryCacheKey = GetConnectionCacheKey(remoteHostName, remotePort, isHttps,
+                            applicationProtocols, upStreamEndPoint, retryProxy, connectHost, connectPort);
+
                         return await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps,
                             sslProtocol, applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint,
-                            externalProxy, cacheKey, prefetch, cancellationToken, connectHost, connectPort);
+                            retryProxy, retryCacheKey, prefetch, cancellationToken, connectHost, connectPort);
                     }
                 }
 
@@ -598,8 +691,16 @@ internal class TcpConnectionFactory : IDisposable
                     (sender, certificate, chain, sslPolicyErrors) =>
                         proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain, sslPolicyErrors),
                     (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
-                        proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost, localCertificates,
-                            remoteCertificate, acceptableIssuers)!);
+                    {
+                        var clientCertificate = proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost,
+                            localCertificates, remoteCertificate, acceptableIssuers);
+
+                        // a per-session client certificate makes this TLS connection identity-specific;
+                        // it must not be reused by another session from the pool.
+                        if (clientCertificate != null) usedClientCertificate = true;
+
+                        return clientCertificate!;
+                    });
                 stream = new HttpServerStream(proxyServer, sslStream, proxyServer.BufferPool, cancellationToken);
 
                 var options = new SslClientAuthenticationOptions
@@ -660,7 +761,8 @@ internal class TcpConnectionFactory : IDisposable
         return new TcpServerConnection(proxyServer, tcpServerSocket, stream, remoteHostName, remotePort, isHttps,
             negotiatedApplicationProtocol, httpVersion, externalProxy, upStreamEndPoint, cacheKey)
         {
-            IsWinAuthenticated = upstreamProxyWinAuthenticated
+            IsWinAuthenticated = upstreamProxyWinAuthenticated,
+            UsedClientCertificate = usedClientCertificate
         };
     }
 
@@ -737,12 +839,20 @@ internal class TcpConnectionFactory : IDisposable
 
     private static async Task DrainBytes(HttpServerStream stream, long count, CancellationToken cancellationToken)
     {
-        var buffer = new byte[8192];
-        while (count > 0)
+        var buffer = ArrayPool<byte>.Shared.Rent(8192);
+        try
         {
-            var read = await stream.ReadAsync(buffer, 0, (int)Math.Min(buffer.Length, count), cancellationToken);
-            if (read <= 0) throw new IOException("Upstream proxy closed the connection while sending a response body");
-            count -= read;
+            while (count > 0)
+            {
+                var read = await stream.ReadAsync(buffer, 0, (int)Math.Min(buffer.Length, count), cancellationToken);
+                if (read <= 0)
+                    throw new IOException("Upstream proxy closed the connection while sending a response body");
+                count -= read;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 
@@ -756,11 +866,13 @@ internal class TcpConnectionFactory : IDisposable
     {
         if (connection == null) return;
 
-        if (disposalBag.Any(x => x == connection)) return;
+        // already scheduled for disposal: never pool it again.
+        if (connection.IsDisposalScheduled) return;
 
-        if (close || connection.IsWinAuthenticated || !Server.EnableConnectionPool || connection.IsClosed)
+        if (close || connection.IsWinAuthenticated || connection.UsedClientCertificate
+            || !Server.EnableConnectionPool || connection.IsClosed)
         {
-            disposalBag.Add(connection);
+            if (connection.TryScheduleDisposal()) disposalBag.Add(connection);
             return;
         }
 
@@ -776,7 +888,8 @@ internal class TcpConnectionFactory : IDisposable
                 {
                     while (existingConnections.Count >= Server.MaxCachedConnections)
                         if (existingConnections.TryDequeue(out var staleConnection))
-                            disposalBag.Add(staleConnection);
+                            if (staleConnection.TryScheduleDisposal())
+                                disposalBag.Add(staleConnection);
 
                     if (existingConnections.Any(x => x == connection)) break;
 
@@ -824,19 +937,25 @@ internal class TcpConnectionFactory : IDisposable
                 {
                     var queue = item.Value;
 
-                    while (queue.Count > 0)
-                        if (queue.TryDequeue(out var connection))
-                        {
-                            if (!Server.EnableConnectionPool || connection.LastAccess < cutOff)
+                    // take the same lock used by the pool-get path so that dequeue/enqueue here
+                    // does not race with a concurrent Get on the same queue.
+                    lock (queue)
+                    {
+                        while (queue.Count > 0)
+                            if (queue.TryDequeue(out var connection))
                             {
-                                disposalBag.Add(connection);
+                                if (!Server.EnableConnectionPool || connection.LastAccess < cutOff)
+                                {
+                                    if (connection.TryScheduleDisposal())
+                                        disposalBag.Add(connection);
+                                }
+                                else
+                                {
+                                    queue.Enqueue(connection);
+                                    break;
+                                }
                             }
-                            else
-                            {
-                                queue.Enqueue(connection);
-                                break;
-                            }
-                        }
+                    }
                 }
 
                 try
