@@ -52,14 +52,37 @@ jobs:
         committer_name: GitHub Actions
         committer_email: actions@github.com
 
-    - name: Publish Beta
-      if: github.ref == 'refs/heads/beta'
-      run: |
-       dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release --version-suffix "beta"
-       dotnet nuget push **\*.nupkg -s "nuget" -k "${{ secrets.NUGET_TOKEN }}"
+  publish:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
+    needs: build
+    runs-on: windows-latest
+    environment: nuget-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
 
-    - name: Publish Stable
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          10.0.x
+
+    - name: Pack Beta
+      if: github.ref == 'refs/heads/beta'
+      run: dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release --version-suffix "beta"
+
+    - name: Pack Stable
       if: github.ref == 'refs/heads/stable'
-      run: |
-       dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
-       dotnet nuget push **\*.nupkg -s "nuget" -k "${{ secrets.NUGET_TOKEN }}"
+      run: dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
+
+    - name: Log in to NuGet
+      uses: NuGet/login@v1
+      id: login
+      with:
+        user: ${{ secrets.NUGET_USER }}
+
+    - name: Publish Package
+      run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
