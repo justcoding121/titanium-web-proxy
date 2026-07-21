@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 
@@ -9,7 +10,13 @@ public class TestProxyServer : IDisposable
 {
     public TestProxyServer(bool isReverseProxy, ProxyServer upStreamProxy = null)
     {
-        ProxyServer = new ProxyServer();
+        ProxyServer = new ProxyServer(false, false, false);
+        ProxyServer.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
+        ProxyServer.ServerCertificateValidationCallback += (_, args) =>
+        {
+            args.IsValid = TestCertificateAuthority.Validate(args.Certificate, args.SslPolicyErrors);
+            return Task.CompletedTask;
+        };
 
         var explicitEndPoint = isReverseProxy
             ? (ProxyEndPoint)new TransparentProxyEndPoint(IPAddress.Any, 0)

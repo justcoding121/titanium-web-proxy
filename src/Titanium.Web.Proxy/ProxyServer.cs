@@ -790,48 +790,82 @@ public partial class ProxyServer : IDisposable
         var listener = endPoint.Listener!;
 
         Socket? tcpClient = null;
+        var listenerDisposed = false;
 
         try
         {
-            // based on end point type call appropriate request handlers
             tcpClient = listener.EndAcceptSocket(asyn);
-            tcpClient.NoDelay = NoDelay;
         }
         catch (ObjectDisposedException)
         {
             // The listener was Stop()'d, disposing the underlying socket and
-            // triggering the completion of the callback. We're already exiting,
-            // so just return.
-            return;
+            // triggering the completion of the callback. We're already exiting.
+            listenerDisposed = true;
         }
-        catch
+        catch (Exception ex)
         {
-            // Other errors are discarded to keep proxy running
+            // Errors here (e.g. transient socket errors under heavy load) are
+            // reported but must not prevent re-arming the accept loop below.
+            OnException(null, ex);
         }
+
+        // Re-arm the accept loop as early as possible (before dispatching the
+        // just-accepted client) so bursts of near-simultaneous connections are
+        // drained from the backlog without delay.
+        if (!listenerDisposed) BeginAcceptConnection(endPoint, listener);
 
         if (tcpClient != null)
         {
             if (ProxyRunning)
             {
+                try
+                {
+                    tcpClient.NoDelay = NoDelay;
+                }
+                catch (Exception ex)
+                {
+                    OnException(null, ex);
+                }
+
                 var acceptedClient = tcpClient;
                 Task.Run(async () => { await HandleClient(acceptedClient, endPoint); });
             }
             else
                 tcpClient.Dispose();
         }
+    }
+
+    /// <summary>
+    ///     (Re)arms the accept loop for the given end point.
+    ///     Any exception thrown by <see cref="TcpListener.BeginAcceptSocket" /> (e.g. transient
+    ///     resource exhaustion under heavy connection load) is caught and retried instead of being
+    ///     allowed to escape the async I/O completion callback, which would otherwise crash the
+    ///     process or silently stop the proxy from accepting any further connections.
+    /// </summary>
+    private void BeginAcceptConnection(ProxyEndPoint endPoint, TcpListener listener)
+    {
+        if (!ProxyRunning) return;
 
         try
         {
-            // based on end point type call appropriate request handlers
-            // Get the listener that handles the client request.
-            if (ProxyRunning)
-                listener.BeginAcceptSocket(OnAcceptConnection, endPoint);
+            listener.BeginAcceptSocket(OnAcceptConnection, endPoint);
         }
         catch (Exception ex) when (ex is ObjectDisposedException || ex is InvalidOperationException)
         {
             // The listener was Stop()'d, disposing the underlying socket and
             // triggering the completion of the callback. We're already exiting,
             // so just return.
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+
+            // Retry shortly instead of permanently abandoning the accept loop.
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(100).ConfigureAwait(false);
+                BeginAcceptConnection(endPoint, listener);
+            });
         }
     }
 

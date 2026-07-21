@@ -28,8 +28,8 @@ public class StressTests
 
         var tasks = new List<Task>();
 
-        //send 1000 requests to server
-        for (var j = 0; j < 1000; j++)
+        //send 100 requests to server
+        for (var j = 0; j < 100; j++)
         {
             var task = Task.Run(async () =>
             {

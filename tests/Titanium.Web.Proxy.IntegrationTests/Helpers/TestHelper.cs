@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net;
 using System.Net.Http;
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 
 namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
 
@@ -11,14 +12,25 @@ public static class TestHelper
     {
         var proxy = new TestProxy($"http://localhost:{localProxyPort}", enableBasicProxyAuthorization);
 
-        var handler = new HttpClientHandler { Proxy = proxy, UseProxy = true };
+        var handler = CreateHandler();
+        handler.Proxy = proxy;
+        handler.UseProxy = true;
 
         return new HttpClient(handler);
     }
 
     public static HttpClient GetHttpClient()
     {
-        return new HttpClient(new HttpClientHandler());
+        return new HttpClient(CreateHandler());
+    }
+
+    private static HttpClientHandler CreateHandler()
+    {
+        return new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback =
+                (_, certificate, _, errors) => TestCertificateAuthority.Validate(certificate, errors)
+        };
     }
 
     public class TestProxy : IWebProxy
