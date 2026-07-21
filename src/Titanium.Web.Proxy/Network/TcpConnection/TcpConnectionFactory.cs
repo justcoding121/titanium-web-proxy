@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -24,6 +25,10 @@ namespace Titanium.Web.Proxy.Network.Tcp;
 /// </summary>
 internal class TcpConnectionFactory : IDisposable
 {
+    private const int MaximumUpstreamProxyAuthenticationAttempts = 5;
+
+    private static readonly string[] UpstreamProxyAuthenticationSchemes = { "Negotiate", "NTLM", "Kerberos" };
+
     // Tcp server connection pool cache
     private readonly ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>> cache = new();
 
@@ -355,6 +360,7 @@ internal class TcpConnectionFactory : IDisposable
         HttpServerStream? stream = null;
 
         SslApplicationProtocol negotiatedApplicationProtocol = default;
+        var upstreamProxyWinAuthenticated = false;
 
         var retry = true;
         var enabledSslProtocols = sslProtocol;
@@ -530,24 +536,58 @@ internal class TcpConnectionFactory : IDisposable
                 connectRequest.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionKeepAlive);
                 connectRequest.Headers.AddHeader(KnownHeaders.Host, authority);
 
-                if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
+                if (!externalProxy.UseDefaultCredentials &&
+                    !string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
                 {
                     connectRequest.Headers.AddHeader(HttpHeader.ProxyConnectionKeepAlive);
                     connectRequest.Headers.AddHeader(
                         HttpHeader.GetProxyAuthorizationHeader(externalProxy.UserName, externalProxy.Password));
                 }
 
-                await proxyServer.OnBeforeUpStreamConnectRequest(connectRequest);
+                var authenticationData = new InternalDataStore();
+                var authenticationAttempts = 0;
 
-                await stream.WriteRequestAsync(connectRequest, cancellationToken);
+                while (true)
+                {
+                    await proxyServer.OnBeforeUpStreamConnectRequest(connectRequest);
+                    await stream.WriteRequestAsync(connectRequest, cancellationToken);
 
-                var httpStatus = await stream.ReadResponseStatus(cancellationToken);
-                var headers = new HeaderCollection();
-                await HeaderParser.ReadHeaders(stream, headers, cancellationToken);
+                    var httpStatus = await stream.ReadResponseStatus(cancellationToken);
+                    var headers = new HeaderCollection();
+                    await HeaderParser.ReadHeaders(stream, headers, cancellationToken);
 
-                if (httpStatus.StatusCode != 200 && !httpStatus.Description.EqualsIgnoreCase("OK")
-                                                 && !httpStatus.Description.EqualsIgnoreCase("Connection Established"))
-                    throw new Exception("Upstream proxy failed to create a secure tunnel");
+                    if (httpStatus.StatusCode == (int)HttpStatusCode.OK ||
+                        httpStatus.Description.EqualsIgnoreCase("Connection Established"))
+                    {
+                        upstreamProxyWinAuthenticated = authenticationAttempts > 0;
+                        break;
+                    }
+
+                    await DrainUpstreamProxyResponseBody(stream, headers, cancellationToken);
+
+                    if (httpStatus.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired ||
+                        !externalProxy.UseDefaultCredentials ||
+                        authenticationAttempts >= MaximumUpstreamProxyAuthenticationAttempts ||
+                        !TryGetUpstreamProxyAuthenticationChallenge(headers, out var scheme, out var challenge))
+                        throw new Exception("Upstream proxy failed to create a secure tunnel");
+
+                    if (headers.GetHeaderValueOrNull(KnownHeaders.Connection)
+                            ?.EqualsIgnoreCase(KnownHeaders.ConnectionClose.String) == true ||
+                        headers.GetHeaderValueOrNull(KnownHeaders.ProxyConnection)
+                            ?.EqualsIgnoreCase(KnownHeaders.ProxyConnectionClose.String) == true)
+                        throw new Exception("Upstream proxy closed the connection during authentication");
+
+                    var token = proxyServer.GenerateUpstreamProxyWinAuthToken(externalProxy, scheme!, challenge,
+                        authenticationData);
+                    if (string.IsNullOrEmpty(token))
+                        throw new Exception("Failed to generate an upstream proxy authentication token");
+
+                    connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyAuthorization,
+                        string.Concat(scheme, token));
+                    connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyConnection,
+                        KnownHeaders.ConnectionKeepAlive.String);
+                    authenticationAttempts++;
+                }
             }
 
             if (isHttps)
@@ -615,7 +655,92 @@ internal class TcpConnectionFactory : IDisposable
         }
 
         return new TcpServerConnection(proxyServer, tcpServerSocket, stream, remoteHostName, remotePort, isHttps,
-            negotiatedApplicationProtocol, httpVersion, externalProxy, upStreamEndPoint, cacheKey);
+            negotiatedApplicationProtocol, httpVersion, externalProxy, upStreamEndPoint, cacheKey)
+        {
+            IsWinAuthenticated = upstreamProxyWinAuthenticated
+        };
+    }
+
+    private static bool TryGetUpstreamProxyAuthenticationChallenge(HeaderCollection headers, out string? scheme,
+        out string? challenge)
+    {
+        scheme = null;
+        challenge = null;
+        var authenticationHeaders = headers.GetHeaders(KnownHeaders.ProxyAuthenticate.String);
+        if (authenticationHeaders == null) return false;
+
+        foreach (var supportedScheme in UpstreamProxyAuthenticationSchemes)
+            foreach (var header in authenticationHeaders)
+            {
+                var value = header.Value.Trim();
+                if (!value.StartsWith(supportedScheme, StringComparison.OrdinalIgnoreCase) ||
+                    value.Length > supportedScheme.Length && !char.IsWhiteSpace(value[supportedScheme.Length]))
+                    continue;
+
+                scheme = supportedScheme;
+                challenge = value.Length == supportedScheme.Length
+                    ? null
+                    : value.Substring(supportedScheme.Length).Trim();
+                return true;
+            }
+
+        return false;
+    }
+
+    private static async Task DrainUpstreamProxyResponseBody(HttpServerStream stream, HeaderCollection headers,
+        CancellationToken cancellationToken)
+    {
+        var transferEncoding = headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
+        if (transferEncoding != null && transferEncoding.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked.String))
+        {
+            await DrainChunkedBody(stream, cancellationToken);
+            return;
+        }
+
+        var contentLengthValue = headers.GetHeaderValueOrNull(KnownHeaders.ContentLength);
+        if (!long.TryParse(contentLengthValue, out var remaining) || remaining <= 0) return;
+
+        await DrainBytes(stream, remaining, cancellationToken);
+    }
+
+    private static async Task DrainChunkedBody(HttpServerStream stream, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var chunkHead = await stream.ReadLineAsync(cancellationToken);
+            if (chunkHead == null)
+                throw new IOException("Upstream proxy closed the connection while sending a chunked response body");
+
+            var idx = chunkHead.IndexOf(';');
+            if (idx >= 0) chunkHead = chunkHead.Substring(0, idx);
+
+            if (!int.TryParse(chunkHead, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var chunkSize))
+                throw new IOException("Upstream proxy sent an invalid chunk header during authentication");
+
+            if (chunkSize == 0)
+            {
+                // consume the optional trailer headers until the terminating blank line
+                while (!string.IsNullOrEmpty(await stream.ReadLineAsync(cancellationToken)))
+                {
+                }
+
+                return;
+            }
+
+            // chunk data followed by its trailing CRLF
+            await DrainBytes(stream, chunkSize + 2, cancellationToken);
+        }
+    }
+
+    private static async Task DrainBytes(HttpServerStream stream, long count, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[8192];
+        while (count > 0)
+        {
+            var read = await stream.ReadAsync(buffer, 0, (int)Math.Min(buffer.Length, count), cancellationToken);
+            if (read <= 0) throw new IOException("Upstream proxy closed the connection while sending a response body");
+            count -= read;
+        }
     }
 
 

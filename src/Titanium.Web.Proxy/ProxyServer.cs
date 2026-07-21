@@ -15,6 +15,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Network.WinAuth;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy;
@@ -142,6 +143,27 @@ public partial class ProxyServer : IDisposable
     ///     Defaults to false.
     /// </summary>
     public bool EnableWinAuth { get; set; }
+
+    /// <summary>
+    ///     Overrides upstream proxy Windows authentication token generation.
+    ///     Intended for internal testing; production uses the current process identity through SSPI.
+    /// </summary>
+    internal Func<IExternalProxy, string, string?, InternalDataStore, string?>?
+        UpstreamProxyWinAuthTokenGenerator { get; set; }
+
+    internal string? GenerateUpstreamProxyWinAuthToken(IExternalProxy proxy, string scheme, string? challenge,
+        InternalDataStore data)
+    {
+        if (UpstreamProxyWinAuthTokenGenerator != null)
+            return UpstreamProxyWinAuthTokenGenerator(proxy, scheme, challenge, data);
+
+        // Negotiate/Kerberos require the service principal name of the proxy, not the bare host.
+        var targetName = "HTTP/" + proxy.HostName;
+
+        return challenge == null
+            ? WinAuthHandler.GetInitialProxyAuthToken(targetName, scheme, data)
+            : WinAuthHandler.GetFinalProxyAuthToken(targetName, challenge, data);
+    }
 
     /// <summary>
     ///     Enable disable HTTP/2 support.

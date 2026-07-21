@@ -20,14 +20,15 @@ internal class WinAuthEndPoint
     /// <param name="authScheme"></param>
     /// <param name="data"></param>
     /// <returns></returns>
-    internal static byte[]? AcquireInitialSecurityToken(string hostname, string authScheme, InternalDataStore data)
+    internal static byte[]? AcquireInitialSecurityToken(string hostname, string authScheme, InternalDataStore data,
+        int attributes)
     {
         byte[]? token;
 
         // null for initial call
-        var serverToken = new SecurityBufferDesciption();
+        var serverToken = new SecurityBufferDescription();
 
-        var clientToken = new SecurityBufferDesciption(MaximumTokenSize);
+        var clientToken = new SecurityBufferDescription(MaximumTokenSize);
 
         try
         {
@@ -49,7 +50,7 @@ internal class WinAuthEndPoint
             result = InitializeSecurityContext(ref state.Credentials,
                 IntPtr.Zero,
                 hostname,
-                StandardContextAttributes,
+                attributes,
                 0,
                 SecurityNativeDataRepresentation,
                 ref serverToken,
@@ -59,9 +60,11 @@ internal class WinAuthEndPoint
                 out NewContextAttributes,
                 out NewLifeTime);
 
-            if (result != IntermediateResult) return null;
+            if (result != IntermediateResult && result != SuccessfulResult) return null;
 
-            state.AuthState = State.WinAuthState.InitialToken;
+            state.AuthState = result == SuccessfulResult
+                ? State.WinAuthState.FinalToken
+                : State.WinAuthState.InitialToken;
             token = clientToken.GetBytes();
             data.Add(AuthStateKey, state);
         }
@@ -81,14 +84,15 @@ internal class WinAuthEndPoint
     /// <param name="serverChallenge"></param>
     /// <param name="data"></param>
     /// <returns></returns>
-    internal static byte[]? AcquireFinalSecurityToken(string hostname, byte[] serverChallenge, InternalDataStore data)
+    internal static byte[]? AcquireFinalSecurityToken(string hostname, byte[] serverChallenge, InternalDataStore data,
+        int attributes)
     {
         byte[]? token;
 
         // user server challenge
-        var serverToken = new SecurityBufferDesciption(serverChallenge);
+        var serverToken = new SecurityBufferDescription(serverChallenge);
 
-        var clientToken = new SecurityBufferDesciption(MaximumTokenSize);
+        var clientToken = new SecurityBufferDescription(MaximumTokenSize);
 
         try
         {
@@ -99,7 +103,7 @@ internal class WinAuthEndPoint
             var result = InitializeSecurityContext(ref state.Credentials,
                 ref state.Context,
                 hostname,
-                StandardContextAttributes,
+                attributes,
                 0,
                 SecurityNativeDataRepresentation,
                 ref serverToken,
@@ -109,9 +113,13 @@ internal class WinAuthEndPoint
                 out NewContextAttributes,
                 out NewLifeTime);
 
-            if (result != SuccessfulResult) return null;
+            // SuccessfulResult => authentication complete.
+            // IntermediateResult => another leg is required (multi-round Negotiate).
+            if (result != SuccessfulResult && result != IntermediateResult) return null;
 
-            state.AuthState = State.WinAuthState.FinalToken;
+            state.AuthState = result == SuccessfulResult
+                ? State.WinAuthState.Authorized
+                : State.WinAuthState.FinalToken;
             token = clientToken.GetBytes();
         }
         finally
@@ -123,7 +131,7 @@ internal class WinAuthEndPoint
         return token;
     }
 
-    private static void DisposeToken(SecurityBufferDesciption clientToken)
+    private static void DisposeToken(SecurityBufferDescription clientToken)
     {
         if (clientToken.pBuffers != IntPtr.Zero)
         {
@@ -187,6 +195,11 @@ internal class WinAuthEndPoint
                     state.AuthState ==
                     State.WinAuthState.Authorized); // Server may require re-authentication on an open connection
 
+        if (expectedAuthState == State.WinAuthState.FinalToken)
+            return stateExists &&
+                   (state!.AuthState == State.WinAuthState.FinalToken ||
+                    state.AuthState == State.WinAuthState.Authorized);
+
         throw new Exception("Unsupported validation of WinAuthState");
     }
 
@@ -212,10 +225,10 @@ internal class WinAuthEndPoint
         int fContextReq,
         int reserved1,
         int targetDataRep,
-        ref SecurityBufferDesciption pInput, // PSecBufferDesc SecBufferDesc
+        ref SecurityBufferDescription pInput, // PSecBufferDesc SecBufferDesc
         int reserved2,
         out SecurityHandle phNewContext, // PCtxtHandle
-        out SecurityBufferDesciption pOutput, // PSecBufferDesc SecBufferDesc
+        out SecurityBufferDescription pOutput, // PSecBufferDesc SecBufferDesc
         out uint pfContextAttr, // managed ulong == 64 bits!!!
         out SecurityInteger ptsExpiry); // PTimeStamp
 
@@ -226,10 +239,10 @@ internal class WinAuthEndPoint
         int fContextReq,
         int reserved1,
         int targetDataRep,
-        ref SecurityBufferDesciption secBufferDesc, // PSecBufferDesc SecBufferDesc
+        ref SecurityBufferDescription secBufferDesc, // PSecBufferDesc SecBufferDesc
         int reserved2,
         out SecurityHandle phNewContext, // PCtxtHandle
-        out SecurityBufferDesciption pOutput, // PSecBufferDesc SecBufferDesc
+        out SecurityBufferDescription pOutput, // PSecBufferDesc SecBufferDesc
         out uint pfContextAttr, // managed ulong == 64 bits!!!
         out SecurityInteger ptsExpiry); // PTimeStamp
 

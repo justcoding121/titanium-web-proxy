@@ -42,9 +42,14 @@ public partial class ProxyServer
         {
             if (response.StatusCode == (int)HttpStatusCode.Unauthorized)
                 await Handle401UnAuthorized(args);
-            else
+            // don't mark the connection as authenticated on a 407, otherwise the
+            // upstream proxy authentication state below would be corrupted.
+            else if (response.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired)
                 WinAuthEndPoint.AuthenticatedResponse(args.HttpClient.Data);
         }
+
+        if (response.StatusCode == (int)HttpStatusCode.ProxyAuthenticationRequired)
+            await Handle407ProxyAuthorization(args);
 
         // save original values so that if user changes them
         // we can still use original values when syphoning out data from attached tcp connection.
@@ -76,11 +81,18 @@ public partial class ProxyServer
         // likely after making modifications from User Response Handler
         if (args.ReRequest)
         {
-            if (args.HttpClient.HasConnection) await TcpConnectionFactory.Release(args.HttpClient.Connection);
+            var serverConnection = args.HttpClient.HasConnection ? args.HttpClient.Connection : null;
+            if (args.HttpClient.HasConnection &&
+                response.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired)
+            {
+                serverConnection = null;
+                await TcpConnectionFactory.Release(args.HttpClient.Connection);
+            }
 
             // clear current response
             await args.ClearResponse(cancellationToken);
-            var result = await HandleHttpSessionRequest(args, null, args.ClientConnection.NegotiatedApplicationProtocol,
+            var result = await HandleHttpSessionRequest(args, serverConnection,
+                args.ClientConnection.NegotiatedApplicationProtocol,
                 cancellationToken, args.CancellationTokenSource);
             if (result.LatestConnection != null) args.HttpClient.SetConnection(result.LatestConnection);
 
