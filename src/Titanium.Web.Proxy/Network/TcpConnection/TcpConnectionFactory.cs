@@ -53,7 +53,8 @@ internal class TcpConnectionFactory : IDisposable
 
     internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
         bool isHttps, List<SslApplicationProtocol>? applicationProtocols,
-        IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy)
+        IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
+        string? connectHost = null, int? connectPort = null)
     {
         // http version is ignored since its an application level decision b/w HTTP 1.0/1.1
         // also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
@@ -64,6 +65,16 @@ internal class TcpConnectionFactory : IDisposable
         cacheKeyBuilder.Append("-");
         cacheKeyBuilder.Append(remotePort);
         cacheKeyBuilder.Append("-");
+
+        // a fixed forward target changes the actual connection destination while keeping
+        // remoteHostName for TLS/identity, so it must be part of the cache key.
+        if (!string.IsNullOrEmpty(connectHost))
+        {
+            cacheKeyBuilder.Append(connectHost);
+            cacheKeyBuilder.Append("-");
+            cacheKeyBuilder.Append(connectPort ?? remotePort);
+            cacheKeyBuilder.Append("-");
+        }
 
         // when creating Tcp client isConnect won't matter
         cacheKeyBuilder.Append(isHttps);
@@ -208,9 +219,21 @@ internal class TcpConnectionFactory : IDisposable
         var upStreamEndPoint = session.HttpClient.UpStreamEndPoint ?? proxyServer.UpStreamEndPoint;
         var upStreamProxy = customUpStreamProxy ??
                             (isHttps ? proxyServer.UpStreamHttpsProxy : proxyServer.UpStreamHttpProxy);
+
+        // For transparent endpoints with a fixed forward target, only the TCP connection
+        // destination is overridden; host/port stay the original for TLS SNI and Host header.
+        string? connectHost = null;
+        int? connectPort = null;
+        if (session.ProxyEndPoint is TransparentBaseProxyEndPoint transparentEndPoint
+            && !string.IsNullOrEmpty(transparentEndPoint.ForwardHost))
+        {
+            connectHost = transparentEndPoint.ForwardHost;
+            connectPort = transparentEndPoint.ForwardPort;
+        }
+
         return await GetServerConnection(proxyServer, host, port, session.HttpClient.Request.HttpVersion, isHttps,
             applicationProtocols, isConnect, session, upStreamEndPoint, upStreamProxy, noCache, prefetch,
-            cancellationToken);
+            cancellationToken, connectHost, connectPort);
     }
 
     /// <summary>
@@ -234,11 +257,12 @@ internal class TcpConnectionFactory : IDisposable
         int remotePort,
         Version httpVersion, bool isHttps, List<SslApplicationProtocol>? applicationProtocols, bool isConnect,
         SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
-        bool noCache, bool prefetch, CancellationToken cancellationToken)
+        bool noCache, bool prefetch, CancellationToken cancellationToken,
+        string? connectHost = null, int? connectPort = null)
     {
         var sslProtocol = sessionArgs.ClientConnection.SslProtocol;
         var cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
-            isHttps, applicationProtocols, upStreamEndPoint, externalProxy);
+            isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort);
 
         if (proxyServer.EnableConnectionPool && !noCache)
             if (cache.TryGetValue(cacheKey, out var existingConnections))
@@ -259,7 +283,7 @@ internal class TcpConnectionFactory : IDisposable
 
         var connection = await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
             applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
-            prefetch, cancellationToken);
+            prefetch, cancellationToken, connectHost, connectPort);
 
         return connection;
     }
@@ -287,13 +311,20 @@ internal class TcpConnectionFactory : IDisposable
         bool isConnect,
         ProxyServer proxyServer, SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint,
         IExternalProxy? externalProxy, string cacheKey,
-        bool prefetch, CancellationToken cancellationToken)
+        bool prefetch, CancellationToken cancellationToken,
+        string? connectHost = null, int? connectPort = null)
     {
+        // The actual destination we open the TCP connection to. When a fixed forward target
+        // is configured, this differs from remoteHostName/remotePort which are kept for
+        // TLS SNI/certificate validation, the HTTP Host header and connection identity.
+        var connectHostName = string.IsNullOrEmpty(connectHost) ? remoteHostName : connectHost!;
+        var connectPortNumber = connectPort ?? remotePort;
+
         // deny connection to proxy end points to avoid infinite connection loop.
-        if (Server.ProxyEndPoints.Any(x => x.Port == remotePort)
-            && NetworkHelper.IsLocalIpAddress(remoteHostName))
+        if (Server.ProxyEndPoints.Any(x => x.Port == connectPortNumber)
+            && NetworkHelper.IsLocalIpAddress(connectHostName))
             throw new Exception(
-                $"A client is making HTTP request to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
+                $"A client is making HTTP request to one of the listening ports of this proxy {connectHostName}:{connectPortNumber}");
 
         if (externalProxy != null)
             if (Server.ProxyEndPoints.Any(x => x.Port == externalProxy.Port)
@@ -332,8 +363,8 @@ internal class TcpConnectionFactory : IDisposable
         try
         {
             var socks = externalProxy != null && externalProxy.ProxyType != ExternalProxyType.Http;
-            var hostname = remoteHostName;
-            var port = remotePort;
+            var hostname = connectHostName;
+            var port = connectPortNumber;
 
             if (externalProxy != null)
             {
@@ -400,18 +431,18 @@ internal class TcpConnectionFactory : IDisposable
                         {
                             connectTask =
                                 ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)tcpServerSocket,
-                                    remoteHostName, remotePort);
+                                    connectHostName, connectPortNumber);
                         }
                         else
                         {
                             // todo: resolve only once when the SOCKS proxy has multiple addresses (and the first address fails)
-                            var remoteIpAddresses = await Dns.GetHostAddressesAsync(remoteHostName);
+                            var remoteIpAddresses = await Dns.GetHostAddressesAsync(connectHostName);
                             if (remoteIpAddresses == null || remoteIpAddresses.Length == 0)
-                                throw new Exception($"Could not resolve the SOCKS remote hostname {remoteHostName}");
+                                throw new Exception($"Could not resolve the SOCKS remote hostname {connectHostName}");
 
                             // todo: use the 2nd, 3rd... remote addresses when first fails
                             connectTask = ProxySocketConnectionTaskFactory.CreateTask(
-                                (ProxySocket.ProxySocket)tcpServerSocket, remoteIpAddresses[0], remotePort);
+                                (ProxySocket.ProxySocket)tcpServerSocket, remoteIpAddresses[0], connectPortNumber);
                         }
                     }
                     else
@@ -469,7 +500,7 @@ internal class TcpConnectionFactory : IDisposable
                         sessionArgs.TimeLine["Retrying Upstream Proxy Connection"] = DateTime.UtcNow;
                         return await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps,
                             sslProtocol, applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint,
-                            externalProxy, cacheKey, prefetch, cancellationToken);
+                            externalProxy, cacheKey, prefetch, cancellationToken, connectHost, connectPort);
                     }
                 }
 
@@ -487,7 +518,7 @@ internal class TcpConnectionFactory : IDisposable
 
             if (externalProxy != null && externalProxy.ProxyType == ExternalProxyType.Http && (isConnect || isHttps))
             {
-                var authority = $"{remoteHostName}:{remotePort}";
+                var authority = $"{connectHostName}:{connectPortNumber}";
                 var authorityBytes = authority.GetByteString();
                 var connectRequest = new ConnectRequest(authorityBytes)
                 {

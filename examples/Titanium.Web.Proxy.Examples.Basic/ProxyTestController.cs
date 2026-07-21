@@ -108,7 +108,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //{
             //    // Generic Certificate hostname to use
             //    // When SNI is disabled by client
-            //    GenericCertificateName = "localhost"
+            //    GenericCertificateName = "localhost",
+            //
+            //    // Optionally forward all traffic on this endpoint to a fixed upstream server
+            //    // (e.g. a reverse proxy pointing at a fixed backend). Only the TCP connection
+            //    // target changes; the original hostname is still used for TLS SNI/certificate
+            //    // validation and the HTTP Host header.
+            //    ForwardHost = "198.51.100.1",
+            //    ForwardPort = 443
             //};
 
             //proxyServer.AddEndPoint(transparentEndPoint);

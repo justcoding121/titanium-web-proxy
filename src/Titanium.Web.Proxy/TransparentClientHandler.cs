@@ -50,6 +50,14 @@ public partial class ProxyServer
                 var args = new BeforeSslAuthenticateEventArgs(this, clientConnection, cancellationTokenSource,
                     httpsHostName);
 
+                // seed the forward target from the endpoint's fixed forward configuration (if any);
+                // the BeforeSslAuthenticate event can still override it per request.
+                if (!string.IsNullOrEmpty(endPoint.ForwardHost))
+                {
+                    args.ForwardHttpsHostName = endPoint.ForwardHost!;
+                    if (endPoint.ForwardPort is int forwardPort) args.ForwardHttpsPort = forwardPort;
+                }
+
                 await endPoint.InvokeBeforeSslAuthenticate(this, args, ExceptionFunc);
 
                 if (cancellationTokenSource.IsCancellationRequested)
