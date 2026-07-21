@@ -16,15 +16,28 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: |
           8.0.x
           10.0.x
+
+    - name: Install SonarScanner
+      if: env.SONAR_TOKEN != ''
+      shell: pwsh
+      run: dotnet tool install --tool-path .sonar/scanner dotnet-sonarscanner
+
+    - name: Install coverage tool
+      shell: pwsh
+      run: dotnet tool install --tool-path .coverage/tools dotnet-coverage
 
     - name: Install DocFX
       if: github.ref == 'refs/heads/develop'
@@ -36,10 +49,25 @@ jobs:
     - name: Build
       run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --warnaserror
 
+    - name: Begin SonarCloud analysis
+      if: env.SONAR_TOKEN != ''
+      shell: pwsh
+      run: >
+        .\.sonar\scanner\dotnet-sonarscanner begin
+        /k:"justcoding121_titanium-web-proxy"
+        /o:"justcoding121"
+        /d:sonar.token="$env:SONAR_TOKEN"
+        /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
+
+    - name: Build for SonarCloud analysis
+      if: env.SONAR_TOKEN != ''
+      run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --no-incremental --disable-build-servers
+
     - name: Test
       shell: pwsh
       run: |
-        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/unit
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         # The integration suite spins up real listening sockets and TLS handshakes, which
         # occasionally hang or get "connection refused" on shared, resource-constrained CI
@@ -48,12 +76,21 @@ jobs:
         $maxAttempts = 3
         for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
           Write-Output "Integration tests attempt $attempt of $maxAttempts"
-          dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --blame-hang --blame-hang-timeout 5m
+          dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --blame-hang --blame-hang-timeout 5m --collect:"Code Coverage" --results-directory "coverage/integration/attempt-$attempt"
           if ($LASTEXITCODE -eq 0) { break }
           if ($attempt -eq $maxAttempts) { exit $LASTEXITCODE }
           Write-Output "Integration tests failed on attempt $attempt, retrying..."
           Start-Sleep -Seconds 5
         }
+
+    - name: Merge code coverage
+      shell: pwsh
+      run: .\.coverage\tools\dotnet-coverage merge "coverage\**\*.coverage" --output coverage/coverage.xml --output-format xml
+
+    - name: Complete SonarCloud analysis
+      if: env.SONAR_TOKEN != ''
+      shell: pwsh
+      run: .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
 
     - name: Update Documentation
       if: github.ref == 'refs/heads/develop'
@@ -77,10 +114,10 @@ jobs:
       contents: read
       id-token: write
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: |
           8.0.x
