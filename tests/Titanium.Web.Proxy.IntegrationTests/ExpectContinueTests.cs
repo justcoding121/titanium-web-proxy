@@ -14,7 +14,7 @@ public class ExpectContinueTests
     [TestMethod]
     public async Task ReverseProxy_GotContinueAndOkResponse()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
         var server = testSuite.GetServer();
         var continueServer = new HttpContinueServer
         {
@@ -41,7 +41,7 @@ public class ExpectContinueTests
     [TestMethod]
     public async Task ReverseProxy_GotExpectationFailedResponse()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
         var server = testSuite.GetServer();
         var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.ExpectationFailed };
         server.HandleTcpRequest(continueServer.HandleRequest);
@@ -64,7 +64,7 @@ public class ExpectContinueTests
     [TestMethod]
     public async Task ReverseProxy_GotNotFoundResponse()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
         var server = testSuite.GetServer();
         var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.NotFound };
         server.HandleTcpRequest(continueServer.HandleRequest);
@@ -87,7 +87,7 @@ public class ExpectContinueTests
     [TestMethod]
     public async Task ReverseProxy_BeforeRequestThrows()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
         var server = testSuite.GetServer();
         var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.Continue };
         server.HandleTcpRequest(continueServer.HandleRequest);

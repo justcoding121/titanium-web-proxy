@@ -13,7 +13,7 @@ public class UpstreamProxyAuthTests
     [TestMethod]
     public async Task Authenticates_Https_Connect_To_Upstream_Proxy()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("secure target response"));
 
@@ -31,7 +31,7 @@ public class UpstreamProxyAuthTests
     [TestMethod]
     public async Task Authenticates_Plain_Http_Request_To_Upstream_Proxy()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
         var server = testSuite.GetServer();
 
         using var upstreamProxy = new FakeUpstreamProxy(server.HttpsListeningPort);

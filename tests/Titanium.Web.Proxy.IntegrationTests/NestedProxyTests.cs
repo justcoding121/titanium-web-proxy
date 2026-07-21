@@ -15,7 +15,7 @@ public class NestedProxyTests
     [TestMethod]
     public async Task Smoke_Test_Nested_Proxy()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -40,7 +40,7 @@ public class NestedProxyTests
     [TestMethod]
     public async Task Smoke_Test_Nested_Proxy_UserData()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -81,7 +81,7 @@ public class NestedProxyTests
     {
         var rnd = new Random();
 
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -166,7 +166,7 @@ public class NestedProxyTests
     {
         var rnd = new Random();
 
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>

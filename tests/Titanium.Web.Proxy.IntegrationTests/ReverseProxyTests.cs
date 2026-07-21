@@ -15,7 +15,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Http_To_Http_Reverse_Proxy()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -44,7 +44,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Https_To_Http_Reverse_Proxy()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -73,7 +73,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Http_To_Https_Reverse_Proxy()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -102,7 +102,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Https_To_Https_Reverse_Proxy()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -131,7 +131,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Https_To_Https_Reverse_Proxy_Tunnel_Without_Decryption()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -163,7 +163,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Http_Reverse_Proxy_With_Fixed_Forward_Endpoint()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -192,7 +192,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Https_Reverse_Proxy_With_Fixed_Forward_Endpoint()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -222,7 +222,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Https_Reverse_Proxy_Tunnel_With_Fixed_Forward_Endpoint()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>

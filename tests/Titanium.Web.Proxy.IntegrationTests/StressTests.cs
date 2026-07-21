@@ -14,7 +14,7 @@ public class StressTests
     [Timeout(2 * 60 * 1000)]
     public async Task Stress_Test_With_One_Server_And_Many_Clients()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>

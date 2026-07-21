@@ -13,7 +13,7 @@ public class HttpsTests
     [TestMethod]
     public async Task Can_Handle_Https_Request()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -36,7 +36,7 @@ public class HttpsTests
     [TestMethod]
     public async Task Can_Handle_Https_Fake_Tunnel_Request()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -65,7 +65,7 @@ public class HttpsTests
     [TestMethod]
     public async Task Can_Handle_Https_Mutual_Tls_Request()
     {
-        var testSuite = new TestSuite(true);
+        using var testSuite = new TestSuite(true);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>

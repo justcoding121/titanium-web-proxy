@@ -15,6 +15,7 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
     - uses: actions/checkout@v4
 
@@ -37,7 +38,7 @@ jobs:
       run: |
         .\.github\install-unit-test-certificate.ps1
         dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release
-        dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release
+        dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --blame-hang --blame-hang-timeout 5m
 
     - name: Update Documentation
       if: github.ref == 'refs/heads/develop'
