@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Runtime.Versioning;
 using Microsoft.Win32;
 using Titanium.Web.Proxy.Models;
 
@@ -46,6 +47,9 @@ internal class HttpSystemProxyValue
 /// </summary>
 [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType",
     Justification = "Reviewed.")]
+#if !NETFRAMEWORK
+[SupportedOSPlatform("windows")]
+#endif
 internal class SystemProxyManager
 {
     private const string RegKeyInternetSettings = "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
@@ -205,13 +209,13 @@ internal class SystemProxyManager
 
     internal void RestoreOriginalSettings()
     {
-        if (originalValues == null) return;
+        var ov = originalValues;
+        if (ov == null) return;
 
         using (var reg = Registry.CurrentUser.OpenSubKey(RegKeyInternetSettings, true))
         {
             if (reg == null) return;
 
-            var ov = originalValues;
             if (ov.AutoConfigUrl != null)
                 reg.SetValue(RegAutoConfigUrl, ov.AutoConfigUrl);
             else
@@ -261,9 +265,10 @@ internal class SystemProxyManager
 
     private ProxyInfo GetProxyInfoFromRegistry(RegistryKey reg)
     {
+        var proxyEnableValue = reg.GetValue(RegProxyEnable);
         var pi = new ProxyInfo(null,
             reg.GetValue(RegAutoConfigUrl) as string,
-            reg.GetValue(RegProxyEnable) as int?,
+            proxyEnableValue is int proxyEnable ? proxyEnable : null,
             reg.GetValue(RegProxyServer) as string,
             reg.GetValue(RegProxyOverride) as string);
 
@@ -285,7 +290,8 @@ internal class SystemProxyManager
     {
         if (reg.GetValue(RegProxyEnable) == null) reg.SetValue(RegProxyEnable, 0);
 
-        if (reg.GetValue(RegProxyServer) == null || reg.GetValue(RegProxyEnable) as int? == 0)
+        if (reg.GetValue(RegProxyServer) == null ||
+            reg.GetValue(RegProxyEnable) is int proxyEnable && proxyEnable == 0)
             reg.SetValue(RegProxyServer, string.Empty);
     }
 

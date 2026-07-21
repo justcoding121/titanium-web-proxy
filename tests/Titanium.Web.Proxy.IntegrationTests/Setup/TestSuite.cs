@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net.Http;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
@@ -9,6 +10,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 public class TestSuite : IDisposable
 {
     private readonly TestServer server;
+    private readonly ConcurrentBag<HttpClient> clients = new();
     private readonly List<ProxyServer> proxyServers = new();
     private bool disposed;
 
@@ -40,12 +42,16 @@ public class TestSuite : IDisposable
 
     public HttpClient GetClient(ProxyServer proxyServer, bool enableBasicProxyAuthorization = false)
     {
-        return TestHelper.GetHttpClient(proxyServer.ProxyEndPoints[0].Port, enableBasicProxyAuthorization);
+        var client = TestHelper.GetHttpClient(proxyServer.ProxyEndPoints[0].Port, enableBasicProxyAuthorization);
+        clients.Add(client);
+        return client;
     }
 
     public HttpClient GetReverseProxyClient()
     {
-        return TestHelper.GetHttpClient();
+        var client = TestHelper.GetHttpClient();
+        clients.Add(client);
+        return client;
     }
 
     public void Dispose()
@@ -53,6 +59,11 @@ public class TestSuite : IDisposable
         if (disposed) return;
 
         disposed = true;
+
+        foreach (var client in clients)
+        {
+            client.Dispose();
+        }
 
         for (var i = proxyServers.Count - 1; i >= 0; i--)
         {

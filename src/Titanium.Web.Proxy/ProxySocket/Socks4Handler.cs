@@ -200,14 +200,15 @@ internal sealed class Socks4Handler : SocksHandler
     /// <param name="state">The state.</param>
     /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
     public override AsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
-        IPEndPoint proxyEndPoint, object state)
+        IPEndPoint proxyEndPoint, AsyncProxyResult asyncResult)
     {
         ProtocolComplete = callback;
         Buffer = ArrayPool<byte>.Shared.Rent(10 + Username.Length + host.Length);
         BufferCount = GetHostPortBytes(host, port, Buffer);
+        // Assign all callback-visible state before BeginConnect can complete.
+        var result = asyncResult ?? throw new ArgumentNullException(nameof(asyncResult));
         Server.BeginConnect(proxyEndPoint, OnConnect, Server);
-        AsyncResult = new AsyncProxyResult(state);
-        return AsyncResult;
+        return result;
     }
 
     /// <summary>
@@ -219,14 +220,15 @@ internal sealed class Socks4Handler : SocksHandler
     /// <param name="state">The state.</param>
     /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
     public override AsyncProxyResult BeginNegotiate(IPEndPoint remoteEp, HandShakeComplete callback,
-        IPEndPoint proxyEndPoint, object state)
+        IPEndPoint proxyEndPoint, AsyncProxyResult asyncResult)
     {
         ProtocolComplete = callback;
         Buffer = ArrayPool<byte>.Shared.Rent(9 + Username.Length);
         BufferCount = GetEndPointBytes(remoteEp, Buffer);
+        // Assign all callback-visible state before BeginConnect can complete.
+        var result = asyncResult ?? throw new ArgumentNullException(nameof(asyncResult));
         Server.BeginConnect(proxyEndPoint, OnConnect, Server);
-        AsyncResult = new AsyncProxyResult(state);
-        return AsyncResult;
+        return result;
     }
 
     /// <summary>

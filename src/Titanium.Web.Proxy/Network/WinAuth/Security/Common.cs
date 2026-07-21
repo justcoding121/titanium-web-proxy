@@ -186,7 +186,7 @@ internal class Common
 
             if (cBuffers == 1)
             {
-                var thisSecBuffer = (SecurityBuffer)Marshal.PtrToStructure(pBuffers, typeof(SecurityBuffer));
+                var thisSecBuffer = Marshal.PtrToStructure<SecurityBuffer>(pBuffers);
 
                 if (thisSecBuffer.cbBuffer > 0)
                 {
@@ -205,7 +205,7 @@ internal class Common
                     // int BufferType;
                     // pvBuffer;
                     // What we need to do here calculate the total number of bytes we need to copy...
-                    var currentOffset = index * Marshal.SizeOf(typeof(Buffer));
+                    var currentOffset = index * Marshal.SizeOf(typeof(SecurityBuffer));
                     bytesToAllocate += Marshal.ReadInt32(pBuffers, currentOffset);
                 }
 
@@ -219,7 +219,7 @@ internal class Common
                     // pvBuffer;
                     // Now iterate over the individual buffers and put them together into a
                     // byte array...
-                    var currentOffset = index * Marshal.SizeOf(typeof(Buffer));
+                    var currentOffset = index * Marshal.SizeOf(typeof(SecurityBuffer));
                     var bytesToCopy = Marshal.ReadInt32(pBuffers, currentOffset);
                     var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers,
                         currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));

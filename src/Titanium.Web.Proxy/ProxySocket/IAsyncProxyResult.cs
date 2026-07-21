@@ -42,15 +42,15 @@ internal class AsyncProxyResult : IAsyncResult
     // private variables
 
     /// <summary>Holds the value of the WaitHandle property.</summary>
-    private ManualResetEvent waitHandle;
+    private readonly object syncRoot = new();
+    private ManualResetEvent? waitHandle;
+    private volatile bool isCompleted;
 
     /// <summary>Initializes the internal variables of this object</summary>
     /// <param name="stateObject">An object that contains state information for this request.</param>
-    internal AsyncProxyResult(object stateObject = null)
+    internal AsyncProxyResult(object? stateObject = null)
     {
         AsyncState = stateObject;
-        IsCompleted = false;
-        waitHandle?.Reset();
     }
 
     /// <summary>
@@ -60,7 +60,9 @@ internal class AsyncProxyResult : IAsyncResult
     ///     "true".
     /// </summary>
     /// <value>A boolean that indicates whether the server has completed processing the call.</value>
-    public bool IsCompleted { get; private set; }
+    public bool IsCompleted => isCompleted;
+
+    internal Exception? Error { get; private set; }
 
     /// <summary>
     ///     Gets a value that indicates whether the BeginXXXX call has been completed synchronously. If this is detected
@@ -71,7 +73,7 @@ internal class AsyncProxyResult : IAsyncResult
 
     /// <summary>Gets an object that was passed as the state parameter of the BeginXXXX method call.</summary>
     /// <value>The object that was passed as the state parameter of the BeginXXXX method call.</value>
-    public object AsyncState { get; }
+    public object? AsyncState { get; }
 
     /// <summary>
     ///     The AsyncWaitHandle property returns the WaitHandle that can use to perform a WaitHandle.WaitOne or WaitAny or
@@ -84,13 +86,21 @@ internal class AsyncProxyResult : IAsyncResult
     ///     The AsyncWaitHandle can be allocated eagerly or on demand. It is the choice of the IAsyncResult implementer.
     /// </summary>
     /// <value>The WaitHandle associated with this asynchronous result.</value>
-    public WaitHandle AsyncWaitHandle => waitHandle ??= new ManualResetEvent(false);
+    public WaitHandle AsyncWaitHandle
+    {
+        get
+        {
+            lock (syncRoot)
+                return waitHandle ??= new ManualResetEvent(isCompleted);
+        }
+    }
 
     /// <summary>Initializes the internal variables of this object</summary>
-    internal void Reset()
+    internal void Complete(Exception? error)
     {
-        //AsyncState = null;
-        IsCompleted = true;
-        waitHandle?.Set();
+        Error = error;
+        isCompleted = true;
+        lock (syncRoot)
+            waitHandle?.Set();
     }
 }

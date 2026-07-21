@@ -142,7 +142,7 @@ internal class BcCertificateMaker : ICertificateMaker
         // Set private key onto certificate instance
         var x509Certificate = WithPrivateKey(certificate, rsaparams);
 
-        if (!_doNotSetFriendlyName)
+        if (!_doNotSetFriendlyName && RunTime.IsWindows)
             try
             {
                 x509Certificate.FriendlyName = ProxyConstants.CnRemoverRegex.Replace(subjectName, string.Empty);
@@ -173,7 +173,7 @@ internal class BcCertificateMaker : ICertificateMaker
         {
             store.Save(ms, password.ToCharArray(), new SecureRandom(new CryptoApiRandomGenerator()));
 
-            return new X509Certificate2(ms.ToArray(), password, X509KeyStorageFlags.Exportable);
+            return CertificateLoader.LoadPkcs12(ms.ToArray(), password, X509KeyStorageFlags.Exportable);
         }
     }
 
@@ -195,7 +195,9 @@ internal class BcCertificateMaker : ICertificateMaker
     {
         if (signingCertificate == null) return GenerateCertificate(null, subjectName, subjectName, validFrom, validTo);
 
-        var kp = DotNetUtilities.GetKeyPair(signingCertificate.PrivateKey);
+        using var privateKey = signingCertificate.GetRSAPrivateKey()
+                               ?? throw new InvalidOperationException("The signing certificate has no RSA private key.");
+        var kp = DotNetUtilities.GetKeyPair(privateKey);
         return GenerateCertificate(hostName, subjectName, signingCertificate.Subject, validFrom, validTo,
             issuerPrivateKey: kp.Private);
     }

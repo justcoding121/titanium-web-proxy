@@ -44,7 +44,7 @@ internal class TcpConnectionFactory : IDisposable
 
     internal TcpConnectionFactory(ProxyServer server)
     {
-        Server = server;
+        Server = server ?? throw new ArgumentNullException(nameof(server));
         Task.Run(async () => await ClearOutdatedConnections());
     }
 
@@ -406,10 +406,12 @@ internal class TcpConnectionFactory : IDisposable
                             : ProxyTypes.Socks5;
 
                         proxySocket.ProxyEndPoint = new IPEndPoint(ipAddress, port);
-                        if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
+                        var proxyUser = externalProxy.UserName;
+                        var proxyPassword = externalProxy.Password;
+                        if (proxyUser != null && proxyUser.Length > 0 && proxyPassword != null)
                         {
-                            proxySocket.ProxyUser = externalProxy.UserName;
-                            proxySocket.ProxyPass = externalProxy.Password;
+                            proxySocket.ProxyUser = proxyUser;
+                            proxySocket.ProxyPass = proxyPassword;
                         }
 
                         tcpServerSocket = proxySocket;
@@ -594,18 +596,17 @@ internal class TcpConnectionFactory : IDisposable
             {
                 var sslStream = new SslStream(stream, false,
                     (sender, certificate, chain, sslPolicyErrors) =>
-                        proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
-                            sslPolicyErrors),
+                        proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain, sslPolicyErrors),
                     (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
                         proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost, localCertificates,
-                            remoteCertificate, acceptableIssuers));
+                            remoteCertificate, acceptableIssuers)!);
                 stream = new HttpServerStream(proxyServer, sslStream, proxyServer.BufferPool, cancellationToken);
 
                 var options = new SslClientAuthenticationOptions
                 {
                     ApplicationProtocols = applicationProtocols,
                     TargetHost = remoteHostName,
-                    ClientCertificates = null!,
+                    ClientCertificates = null,
                     EnabledSslProtocols = enabledSslProtocols,
                     CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                 };
@@ -617,6 +618,7 @@ internal class TcpConnectionFactory : IDisposable
                 if (sessionArgs != null) sessionArgs.TimeLine["HTTPS Established"] = DateTime.UtcNow;
             }
         }
+#pragma warning disable SYSLIB0039 // TLS 1.0/1.1 are intentionally retained for legacy upstream compatibility fallback.
         catch (IOException ex) when (ex.HResult == unchecked((int)0x80131620) && retry &&
                                      enabledSslProtocols >= SslProtocols.Tls11)
         {
@@ -647,6 +649,7 @@ internal class TcpConnectionFactory : IDisposable
             retry = false;
             goto retry;
         }
+#pragma warning restore SYSLIB0039
         catch (Exception)
         {
             stream?.Dispose();
@@ -903,15 +906,18 @@ internal class TcpConnectionFactory : IDisposable
 
     private static class SocketConnectionTaskFactory
     {
-        private static IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback requestCallback,
-            object state)
+        private static IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback? requestCallback,
+            object? state)
         {
-            return ((Socket)state).BeginConnect(address, port, requestCallback, state);
+            var socket = state as Socket ?? throw new InvalidOperationException("Socket APM state is missing.");
+            return socket.BeginConnect(address, port, requestCallback, state);
         }
 
         private static void EndConnect(IAsyncResult asyncResult)
         {
-            ((Socket)asyncResult.AsyncState).EndConnect(asyncResult);
+            var socket = asyncResult.AsyncState as Socket
+                         ?? throw new InvalidOperationException("Socket APM state is missing.");
+            socket.EndConnect(asyncResult);
         }
 
         public static Task CreateTask(Socket socket, IPAddress ipAddress, int port)
@@ -922,20 +928,27 @@ internal class TcpConnectionFactory : IDisposable
 
     private static class ProxySocketConnectionTaskFactory
     {
-        private static IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback requestCallback,
-            object state)
+        private static IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback? requestCallback,
+            object? state)
         {
-            return ((ProxySocket.ProxySocket)state).BeginConnect(address, port, requestCallback, state);
+            var socket = state as ProxySocket.ProxySocket
+                         ?? throw new InvalidOperationException("Proxy socket APM state is missing.");
+            return socket.BeginConnect(address, port, requestCallback, state);
         }
 
-        private static IAsyncResult BeginConnect(string hostName, int port, AsyncCallback requestCallback, object state)
+        private static IAsyncResult BeginConnect(string hostName, int port, AsyncCallback? requestCallback,
+            object? state)
         {
-            return ((ProxySocket.ProxySocket)state).BeginConnect(hostName, port, requestCallback, state);
+            var socket = state as ProxySocket.ProxySocket
+                         ?? throw new InvalidOperationException("Proxy socket APM state is missing.");
+            return socket.BeginConnect(hostName, port, requestCallback, state);
         }
 
         private static void EndConnect(IAsyncResult asyncResult)
         {
-            ((ProxySocket.ProxySocket)asyncResult.AsyncState).EndConnect(asyncResult);
+            var socket = asyncResult.AsyncState as ProxySocket.ProxySocket
+                         ?? throw new InvalidOperationException("Proxy socket APM state is missing.");
+            socket.EndConnect(asyncResult);
         }
 
         public static Task CreateTask(ProxySocket.ProxySocket socket, IPAddress ipAddress, int port)

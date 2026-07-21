@@ -84,6 +84,9 @@ public partial class ProxyServer
                             CertificateManager.DisableWildCardCertificates);
                         certificate = endPoint.GenericCertificate ??
                                       await CertificateManager.CreateServerCertificate(certName);
+                        if (certificate == null)
+                            throw new InvalidOperationException(
+                                $"Could not create a server certificate for '{certName}'.");
 
                         // Successfully managed to authenticate the client using the certificate
                         await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls12, false);
@@ -124,8 +127,15 @@ public partial class ProxyServer
                             try
                             {
                                 // clientStream.Available should be at most BufferSize because it is using the same buffer size
-                                await clientStream.ReadAsync(data, 0, available, cancellationToken);
-                                await connection.Stream.WriteAsync(data, 0, available, true, cancellationToken);
+                                var remaining = available;
+                                while (remaining > 0)
+                                {
+                                    var bytesRead = await clientStream.ReadAsync(data, 0, remaining, cancellationToken);
+                                    if (bytesRead == 0) break;
+
+                                    remaining -= bytesRead;
+                                    await connection.Stream.WriteAsync(data, 0, bytesRead, true, cancellationToken);
+                                }
                             }
                             finally
                             {

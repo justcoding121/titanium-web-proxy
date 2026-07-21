@@ -19,7 +19,7 @@ public partial class ProxyServer
     /// <returns></returns>
     private async Task HandleClient(SocksProxyEndPoint endPoint, TcpClientConnection clientConnection)
     {
-        var cancellationTokenSource = new CancellationTokenSource();
+        using var cancellationTokenSource = new CancellationTokenSource();
         var cancellationToken = cancellationTokenSource.Token;
 
         var stream = clientConnection.GetStream();

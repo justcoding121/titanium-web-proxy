@@ -3,6 +3,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Network.WinAuth.Security;
@@ -23,6 +24,8 @@ internal class WinAuthEndPoint
     internal static byte[]? AcquireInitialSecurityToken(string hostname, string authScheme, InternalDataStore data,
         int attributes)
     {
+        if (!RunTime.IsWindows) return null;
+
         byte[]? token;
 
         // null for initial call
@@ -87,6 +90,8 @@ internal class WinAuthEndPoint
     internal static byte[]? AcquireFinalSecurityToken(string hostname, byte[] serverChallenge, InternalDataStore data,
         int attributes)
     {
+        if (!RunTime.IsWindows) return null;
+
         byte[]? token;
 
         // user server challenge
@@ -137,8 +142,7 @@ internal class WinAuthEndPoint
         {
             if (clientToken.cBuffers == 1)
             {
-                var thisSecBuffer =
-                    (SecurityBuffer)Marshal.PtrToStructure(clientToken.pBuffers, typeof(SecurityBuffer));
+                var thisSecBuffer = Marshal.PtrToStructure<SecurityBuffer>(clientToken.pBuffers);
                 DisposeSecBuffer(thisSecBuffer);
             }
             else
@@ -151,7 +155,7 @@ internal class WinAuthEndPoint
                     // pvBuffer;
                     // What we need to do here is to grab a hold of the pvBuffer allocate by the individual
                     // SecBuffer and release it...
-                    var currentOffset = index * Marshal.SizeOf(typeof(Buffer));
+                    var currentOffset = index * Marshal.SizeOf(typeof(SecurityBuffer));
                     var secBufferpvBuffer = Marshal.ReadIntPtr(clientToken.pBuffers,
                         currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
                     Marshal.FreeHGlobal(secBufferpvBuffer);

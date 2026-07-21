@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Network.Certificate;
 
 namespace Titanium.Web.Proxy.Network;
 
@@ -70,7 +71,7 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
             return null;
         }
 
-        return new X509Certificate2(exported, password, storageFlags);
+        return CertificateLoader.LoadPkcs12(exported, password, storageFlags);
     }
 
     private string GetRootCertificatePath(string pathOrName)
@@ -112,7 +113,8 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
                 var assemblyLocation = GetType().Assembly.Location;
 
                 // dynamically loaded assemblies returns string.Empty location
-                if (assemblyLocation == string.Empty) assemblyLocation = Assembly.GetEntryAssembly().Location;
+                if (assemblyLocation == string.Empty)
+                    assemblyLocation = Assembly.GetEntryAssembly()?.Location ?? string.Empty;
 
 #if NET6_0_OR_GREATER
                 // single-file app returns string.Empty location

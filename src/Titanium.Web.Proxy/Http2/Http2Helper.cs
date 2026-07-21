@@ -161,7 +161,10 @@ namespace Titanium.Web.Proxy.Http2
                             length -= buffer[0];
                         }
 
-                        data!.Write(buffer, offset, length);
+                        if (data == null)
+                            throw new InvalidOperationException("HTTP/2 body buffering was requested without a buffer.");
+
+                        data.Write(buffer, offset, length);
                     }
                 }
                 else if (type == Http2FrameType.Headers/* || type == Http2FrameType.PushPromise*/)
@@ -190,10 +193,8 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             args = sessionFactory();
                             args.IsPromise = true;
-                            if (!sessions.TryAdd(streamId, args))
-                                ;
-                            if (!sessions.TryAdd(promisedStreamId, args))
-                                ;
+                            _ = sessions.TryAdd(streamId, args);
+                            _ = sessions.TryAdd(promisedStreamId, args);
                         }
 
                         System.Diagnostics.Debug.WriteLine("PROMISE STREAM: " + streamId + ", " + promisedStreamId +
@@ -211,8 +212,7 @@ namespace Titanium.Web.Proxy.Http2
                         if (!sessions.TryGetValue(streamId, out args))
                         {
                             args = sessionFactory();
-                            if (!sessions.TryAdd(streamId, args))
-                                ;
+                            _ = sessions.TryAdd(streamId, args);
                         }
 
                         rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
@@ -231,10 +231,14 @@ namespace Titanium.Web.Proxy.Http2
                         dataLength -= buffer[0];
                     }
 
+                    var sessionArgs = args ??
+                                      throw new InvalidOperationException("An HTTP/2 header frame has no session.");
                     var headerListener = new MyHeaderListener(
                         (name, value) =>
                         {
-                            var headers = isClient ? args.HttpClient.Request.Headers : args.HttpClient.Response.Headers;
+                            var headers = isClient
+                                ? sessionArgs.HttpClient.Request.Headers
+                                : sessionArgs.HttpClient.Response.Headers;
                             headers.AddHeader(new HttpHeader(name, value));
                         });
                     try
@@ -295,14 +299,15 @@ namespace Titanium.Web.Proxy.Http2
                         var tcs = new TaskCompletionSource<bool>();
                         rr.ReadHttp2BeforeHandlerTaskCompletionSource = tcs;
 
-                        var handler = onBeforeRequestResponse(args);
+                        var handler = onBeforeRequestResponse(sessionArgs);
                         rr.Http2BeforeHandlerTask = handler;
 
                         if (handler == await Task.WhenAny(tcs.Task, handler))
                         {
                             rr.ReadHttp2BeforeHandlerTaskCompletionSource = null;
                             tcs.SetResult(true);
-                            await SendHeader(remoteSettings, frameHeader, frameHeaderBuffer, rr, endStream, output, args.IsPromise);
+                            await SendHeader(remoteSettings, frameHeader, frameHeaderBuffer, rr, endStream, output,
+                                sessionArgs.IsPromise);
                         }
                         else
                         {
@@ -368,12 +373,18 @@ namespace Titanium.Web.Proxy.Http2
                     }
                 }
 
+                if (endStream && rr == null)
+                    throw new InvalidOperationException("An HTTP/2 end-stream frame has no request or response.");
+
                 if (endStream && rr!.ReadHttp2BodyTaskCompletionSource != null)
                 {
                     if (!rr.BodyAvailable)
                     {
                         var data = rr.Http2BodyData;
-                        var body = data!.ToArray();
+                        if (data == null)
+                            throw new InvalidOperationException("HTTP/2 body completion was signaled without a buffer.");
+
+                        var body = data.ToArray();
 
                         if (rr.ContentEncoding != null)
                         {
@@ -413,7 +424,10 @@ namespace Titanium.Web.Proxy.Http2
                         await rr.Http2BeforeHandlerTask;
                     }
 
-                    if (args!.IsPromise)
+                    if (args == null)
+                        throw new InvalidOperationException("HTTP/2 body completion has no session.");
+
+                    if (args.IsPromise)
                     {
                         Breakpoint();
                     }
@@ -452,7 +466,6 @@ namespace Titanium.Web.Proxy.Http2
         private static void Breakpoint()
         {
             // when this method is called something received which is not yet implemented
-            ;
         }
 
         private static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)
@@ -525,8 +538,11 @@ namespace Titanium.Web.Proxy.Http2
 
             if (rr.HasBody && rr.IsBodyRead)
             {
+                if (body == null)
+                    throw new InvalidOperationException("An HTTP/2 body was marked as read but is unavailable.");
+
                 int pos = 0;
-                while (pos < body!.Length)
+                while (pos < body.Length)
                 {
                     int bodyFrameLength = Math.Min(buffer.Length, body.Length - pos);
                     Buffer.BlockCopy(body, pos, buffer, 0, bodyFrameLength);
@@ -540,10 +556,6 @@ namespace Titanium.Web.Proxy.Http2
                     await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length/*, cancellationToken*/);
                     await output.WriteAsync(buffer, 0, bodyFrameLength /*, cancellationToken*/);
                 }
-            }
-            else
-            {
-                ;
             }
         }
 

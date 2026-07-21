@@ -37,7 +37,7 @@ public class Response : RequestResponseBase
     /// </summary>
     public string StatusDescription { get; set; } = string.Empty;
 
-    internal string RequestMethod { get; set; }
+    internal string RequestMethod { get; set; } = string.Empty;
 
     /// <summary>
     ///     Has response body?

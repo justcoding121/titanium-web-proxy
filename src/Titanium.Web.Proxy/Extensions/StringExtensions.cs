@@ -18,12 +18,12 @@ internal static class StringExtensions
         return str.Equals(value, StringComparison.CurrentCultureIgnoreCase);
     }
 
-    internal static bool ContainsIgnoreCase(this string str, string? value)
+    internal static bool ContainsIgnoreCase(this string str, string value)
     {
         return CultureInfo.CurrentCulture.CompareInfo.IndexOf(str, value, CompareOptions.IgnoreCase) >= 0;
     }
 
-    internal static int IndexOfIgnoreCase(this string str, string? value)
+    internal static int IndexOfIgnoreCase(this string str, string value)
     {
         return CultureInfo.CurrentCulture.CompareInfo.IndexOf(str, value, CompareOptions.IgnoreCase);
     }

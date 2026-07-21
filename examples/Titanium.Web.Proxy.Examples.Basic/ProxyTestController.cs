@@ -228,8 +228,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private void WebSocketDataSentReceived(SessionEventArgs args, DataEventArgs e, bool sent)
         {
             var color = sent ? ConsoleColor.Green : ConsoleColor.Blue;
+            var decoder = sent ? args.WebSocketDecoderSend : args.WebSocketDecoderReceive;
 
-            foreach (var frame in args.WebSocketDecoder.Decode(e.Buffer, e.Offset, e.Count))
+            foreach (var frame in decoder.Decode(e.Buffer, e.Offset, e.Count))
             {
                 if (frame.OpCode == WebsocketOpCode.Binary)
                 {

@@ -733,7 +733,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     ///     https://github.com/justcoding121/Titanium-Web-Proxy/issues/575
     /// </summary>
     /// <returns></returns>
-    public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+    public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback? callback, object? state)
     {
         if (!networkStreamHack) return base.BeginRead(buffer, offset, count, callback, state);
 
@@ -768,7 +768,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     ///     That's why we need to call NetworkStream.BeginWrite only (while read is waiting SemaphoreSlim)
     /// </summary>
     /// <returns></returns>
-    public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+    public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback? callback, object? state)
     {
         if (!networkStreamHack) return base.BeginWrite(buffer, offset, count, callback, state);
 
@@ -869,10 +869,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     internal async Task WriteHeadersAsync(HeaderBuilder headerBuilder, CancellationToken cancellationToken = default)
     {
         var buffer = headerBuilder.GetBuffer();
+        var array = buffer.Array ??
+                    throw new InvalidOperationException("The header buffer has no backing array.");
 
         try
         {
-            await WriteAsync(buffer.Array, buffer.Offset, buffer.Count, true, cancellationToken);
+            await WriteAsync(array, buffer.Offset, buffer.Count, true, cancellationToken);
         }
         catch (IOException e)
         {
@@ -1194,15 +1196,19 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     public async Task WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
     {
         var buf = ArrayPool<byte>.Shared.Rent(buffer.Length);
-        buffer.CopyTo(buf);
         try
         {
-            await BaseStream.WriteAsync(buf, 0, buf.Length, cancellationToken);
+            buffer.CopyTo(buf);
+            await BaseStream.WriteAsync(buf, 0, buffer.Length, cancellationToken);
         }
         catch
         {
             if (!IsNetworkStream)
                 throw;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buf);
         }
     }
 #endif

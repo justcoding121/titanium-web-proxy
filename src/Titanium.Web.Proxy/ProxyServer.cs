@@ -133,7 +133,7 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     If set, the upstream proxy will be detected by a script that will be loaded from the provided Uri
     /// </summary>
-    public Uri UpstreamProxyConfigurationScript { get; set; }
+    public Uri? UpstreamProxyConfigurationScript { get; set; }
 
     /// <summary>
     ///     Enable disable Windows Authentication (NTLM/Kerberos).
@@ -266,22 +266,20 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     List of supported Ssl versions.
     /// </summary>
-#pragma warning disable 618
+#pragma warning disable CS0618, SYSLIB0039 // SSL 3.0/TLS 1.0/1.1 remain opt-in defaults for legacy proxy compatibility.
     public SslProtocols SupportedSslProtocols { get; set; } =
         SslProtocols.Ssl3 | SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12
 #if NET6_0_OR_GREATER
         | SslProtocols.Tls13
 #endif
         ;
-#pragma warning restore 618
+#pragma warning restore CS0618, SYSLIB0039
 
     /// <summary>
     ///     List of supported Server Ssl versions.
     ///     Using SslProtocol.None means to require the same SSL protocol as the proxy client.
     /// </summary>
-#pragma warning disable 618
     public SslProtocols SupportedServerSslProtocols { get; set; } = SslProtocols.None;
-#pragma warning restore 618
 
     /// <summary>
     ///     The buffer pool used throughout this proxy instance.
@@ -347,7 +345,7 @@ public partial class ProxyServer : IDisposable
     ///     Parameters are username and password as provided by client.
     ///     Should return true for successful authentication.
     /// </summary>
-    public Func<SessionEventArgsBase, string, string, Task<bool>>? ProxyBasicAuthenticateFunc { get; set; }
+    public Func<SessionEventArgsBase?, string, string, Task<bool>>? ProxyBasicAuthenticateFunc { get; set; }
 
     /// <summary>
     ///     A pluggable callback to authenticate clients by scheme instead of requiring basic authentication through
@@ -524,7 +522,7 @@ public partial class ProxyServer : IDisposable
     public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType,
         SystemProxySettings? settings)
     {
-        if (SystemProxySettingsManager == null)
+        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
             throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually configure you operating system to use this proxy's port and address.");
 
@@ -613,7 +611,7 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void RestoreOriginalProxySettings()
     {
-        if (SystemProxySettingsManager == null)
+        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
             throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually configure your operating system to use this proxy's port and address.");
 
@@ -625,7 +623,7 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void DisableSystemProxy(ProxyProtocolType protocolType)
     {
-        if (SystemProxySettingsManager == null)
+        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
             throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually configure your operating system to use this proxy's port and address.");
 
@@ -637,7 +635,7 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void DisableAllSystemProxies()
     {
-        if (SystemProxySettingsManager == null)
+        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
             throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually confugure you operating system to use this proxy's port and address.");
 
@@ -677,7 +675,8 @@ public partial class ProxyServer : IDisposable
             }
         }
 
-        if (ForwardToUpstreamGateway && GetCustomUpStreamProxyFunc == null && SystemProxySettingsManager != null)
+        if (RunTime.IsWindows && ForwardToUpstreamGateway && GetCustomUpStreamProxyFunc == null &&
+            SystemProxySettingsManager != null)
         {
             systemProxyResolver = new WinHttpWebProxyFinder();
             if (UpstreamProxyConfigurationScript != null)
@@ -704,13 +703,16 @@ public partial class ProxyServer : IDisposable
     {
         if (!ProxyRunning) throw new Exception("Proxy is not running.");
 
-        if (SystemProxySettingsManager != null)
+        if (RunTime.IsWindows && SystemProxySettingsManager != null)
         {
             var setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
                 .Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
 
             if (setAsSystemProxy) SystemProxySettingsManager.RestoreOriginalSettings();
         }
+
+        // Prevent accept callbacks from scheduling another accept while listeners are stopping.
+        ProxyRunning = false;
 
         foreach (var endPoint in ProxyEndPoints) QuitListen(endPoint);
 
@@ -719,7 +721,6 @@ public partial class ProxyServer : IDisposable
         CertificateManager?.StopClearIdleCertificates();
         TcpConnectionFactory.Dispose();
 
-        ProxyRunning = false;
     }
 
     /// <summary>
@@ -740,7 +741,8 @@ public partial class ProxyServer : IDisposable
             endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
 
             // accept clients asynchronously
-            endPoint.Listener.BeginAcceptSocket(OnAcceptConnection, endPoint);
+            endPoint.Listener.BeginAcceptSocket(OnAcceptConnection,
+                new AcceptState(endPoint, endPoint.Listener));
         }
         catch (SocketException ex)
         {
@@ -773,6 +775,9 @@ public partial class ProxyServer : IDisposable
     /// <returns>The external proxy as task result.</returns>
     private Task<IExternalProxy?> GetSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
     {
+        if (!RunTime.IsWindows)
+            throw new PlatformNotSupportedException("System upstream proxy discovery is only supported on Windows.");
+
         var proxy = systemProxyResolver!.GetProxy(sessionEventArgs.HttpClient.Request.RequestUri);
         return Task.FromResult(proxy);
     }
@@ -782,14 +787,17 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     private void OnAcceptConnection(IAsyncResult asyn)
     {
-        var endPoint = (ProxyEndPoint)asyn.AsyncState;
+        var acceptState = asyn.AsyncState as AcceptState
+                          ?? throw new InvalidOperationException("Listener APM state is missing.");
+        var endPoint = acceptState.EndPoint;
+        var listener = acceptState.Listener;
 
         Socket? tcpClient = null;
 
         try
         {
             // based on end point type call appropriate request handlers
-            tcpClient = endPoint.Listener!.EndAcceptSocket(asyn);
+            tcpClient = listener.EndAcceptSocket(asyn);
             tcpClient.NoDelay = NoDelay;
         }
         catch (ObjectDisposedException)
@@ -805,13 +813,22 @@ public partial class ProxyServer : IDisposable
         }
 
         if (tcpClient != null)
-            Task.Run(async () => { await HandleClient(tcpClient, endPoint); });
+        {
+            if (ProxyRunning)
+            {
+                var acceptedClient = tcpClient;
+                Task.Run(async () => { await HandleClient(acceptedClient, endPoint); });
+            }
+            else
+                tcpClient.Dispose();
+        }
 
         try
         {
             // based on end point type call appropriate request handlers
             // Get the listener that handles the client request.
-            endPoint.Listener!.BeginAcceptSocket(OnAcceptConnection, endPoint);
+            if (ProxyRunning && ReferenceEquals(endPoint.Listener, listener))
+                listener.BeginAcceptSocket(OnAcceptConnection, acceptState);
         }
         catch (Exception ex) when (ex is ObjectDisposedException || ex is InvalidOperationException)
         {
@@ -877,8 +894,24 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     private void QuitListen(ProxyEndPoint endPoint)
     {
-        endPoint.Listener!.Stop();
-        endPoint.Listener.Server.Dispose();
+        var listener = endPoint.Listener;
+        if (listener == null) return;
+
+        listener.Stop();
+        listener.Server.Dispose();
+    }
+
+    private sealed class AcceptState
+    {
+        internal AcceptState(ProxyEndPoint endPoint, TcpListener listener)
+        {
+            EndPoint = endPoint;
+            Listener = listener;
+        }
+
+        internal ProxyEndPoint EndPoint { get; }
+
+        internal TcpListener Listener { get; }
     }
 
     /// <summary>

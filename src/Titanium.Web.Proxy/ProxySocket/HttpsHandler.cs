@@ -42,7 +42,7 @@ internal sealed class HttpsHandler : SocksHandler
 {
     // private variables
     /// <summary>Holds the value of the Password property.</summary>
-    private string password;
+    private string password = string.Empty;
 
     /// <summary>Holds the count of newline characters received.</summary>
     private int receivedNewlineChars;
@@ -191,9 +191,9 @@ internal sealed class HttpsHandler : SocksHandler
     /// <param name="state">The state.</param>
     /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
     public override AsyncProxyResult BeginNegotiate(IPEndPoint remoteEp, HandShakeComplete callback,
-        IPEndPoint proxyEndPoint, object state)
+        IPEndPoint proxyEndPoint, AsyncProxyResult asyncResult)
     {
-        return BeginNegotiate(remoteEp.Address.ToString(), remoteEp.Port, callback, proxyEndPoint, state);
+        return BeginNegotiate(remoteEp.Address.ToString(), remoteEp.Port, callback, proxyEndPoint, asyncResult);
     }
 
     /// <summary>
@@ -206,13 +206,14 @@ internal sealed class HttpsHandler : SocksHandler
     /// <param name="state">The state.</param>
     /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
     public override AsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
-        IPEndPoint proxyEndPoint, object state)
+        IPEndPoint proxyEndPoint, AsyncProxyResult asyncResult)
     {
         ProtocolComplete = callback;
         Buffer = GetConnectBytes(host, port);
+        // Assign all callback-visible state before BeginConnect can complete.
+        var result = asyncResult ?? throw new ArgumentNullException(nameof(asyncResult));
         Server.BeginConnect(proxyEndPoint, OnConnect, Server);
-        AsyncResult = new AsyncProxyResult(state);
-        return AsyncResult;
+        return result;
     }
 
     /// <summary>

@@ -58,8 +58,14 @@ public static class RunTime
 
     public static bool IsLinux => IsRunningOnLinux;
 
+#if !NETFRAMEWORK
+    [SupportedOSPlatformGuard("windows")]
+#endif
     public static bool IsWindows => IsRunningOnWindows;
 
+#if !NETFRAMEWORK
+    [SupportedOSPlatformGuard("windows")]
+#endif
     public static bool IsUwpOnWindows => IsWindows && UwpHelper.IsRunningAsUwp();
 
     public static bool IsMac => IsRunningOnMac;

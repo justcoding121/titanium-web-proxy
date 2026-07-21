@@ -127,11 +127,14 @@ public sealed class CertificateManager : IDisposable
                         break;
                     case CertificateEngine.DefaultWindows:
                     default:
+                        if (!RunTime.IsWindows)
+                            throw new PlatformNotSupportedException("The Windows certificate engine requires Windows.");
                         certEngineValue = new WinCertificateMaker(ExceptionFunc, CertificateValidDays);
                         break;
                 }
 
-            return certEngineValue;
+            return certEngineValue
+                   ?? throw new InvalidOperationException("The certificate engine could not be initialized.");
         }
     }
 
@@ -177,7 +180,7 @@ public sealed class CertificateManager : IDisposable
 
             if (value != engine)
             {
-                certEngineValue = null!;
+                certEngineValue = null;
                 engine = value;
             }
         }
@@ -292,9 +295,10 @@ public sealed class CertificateManager : IDisposable
     /// <returns></returns>
     private bool RootCertificateInstalled(StoreLocation storeLocation)
     {
-        if (RootCertificate == null) throw new Exception("Root certificate is null.");
+        var certificate = RootCertificate;
+        if (certificate == null) throw new Exception("Root certificate is null.");
 
-        var value = $"{RootCertificate.Issuer}";
+        var value = certificate.Issuer;
         return FindCertificates(StoreName.Root, storeLocation, value).Count > 0
                && (CertificateEngine != CertificateEngine.DefaultWindows
                    || FindCertificates(StoreName.My, storeLocation, value).Count > 0);
@@ -322,7 +326,8 @@ public sealed class CertificateManager : IDisposable
     /// <param name="storeLocation"></param>
     private void InstallCertificate(StoreName storeName, StoreLocation storeLocation)
     {
-        if (RootCertificate == null) throw new Exception("Could not install certificate as it is null or empty.");
+        var certificate = RootCertificate;
+        if (certificate == null) throw new Exception("Could not install certificate as it is null or empty.");
 
         var x509Store = new X509Store(storeName, storeLocation);
 
@@ -331,7 +336,7 @@ public sealed class CertificateManager : IDisposable
         try
         {
             x509Store.Open(OpenFlags.ReadWrite);
-            x509Store.Add(RootCertificate);
+            x509Store.Add(certificate);
         }
         catch (Exception e)
         {
@@ -438,7 +443,8 @@ public sealed class CertificateManager : IDisposable
 
                 if (certificate == null)
                 {
-                    certificate = MakeCertificate(certificateName, false);
+                    var createdCertificate = MakeCertificate(certificateName, false);
+                    certificate = createdCertificate;
 
                     //Don't need to wait for save to complete
                     _ = Task.Run(() =>
@@ -453,7 +459,7 @@ public sealed class CertificateManager : IDisposable
                                 try
                                 {
                                     //no two tasks with same subject name should together enter here 
-                                    certificateCache.SaveCertificate(subjectName, certificate);
+                                    certificateCache.SaveCertificate(subjectName, createdCertificate);
                                 }
                                 finally
                                 {
@@ -511,7 +517,8 @@ public sealed class CertificateManager : IDisposable
 
             // handle burst requests with same certificate name
             // by checking for existing task for same certificate name
-            if (!pendingCertificateCreationTasks.TryGetValue(certificateName, out createCertificateTask))
+            if (!pendingCertificateCreationTasks.TryGetValue(certificateName, out var existingTask)
+                || existingTask == null)
             {
                 // run certificate creation task & add it to pending tasks
                 createCertificateTask = Task.Run(() =>
@@ -524,6 +531,10 @@ public sealed class CertificateManager : IDisposable
 
                 pendingCertificateCreationTasks[certificateName] = createCertificateTask;
                 createdTask = true;
+            }
+            else
+            {
+                createCertificateTask = existingTask;
             }
         }
         finally
@@ -743,11 +754,14 @@ public sealed class CertificateManager : IDisposable
     {
         if (!RunTime.IsWindows) return false;
 
+        var certificate = RootCertificate;
+        if (certificate == null) return false;
+
         // currentUser\Personal
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
 
         var pfxFileName = Path.GetTempFileName();
-        File.WriteAllBytes(pfxFileName, RootCertificate!.Export(X509ContentType.Pkcs12, PfxPassword));
+        File.WriteAllBytes(pfxFileName, certificate.Export(X509ContentType.Pkcs12, PfxPassword));
 
         // currentUser\Root, currentMachine\Personal &  currentMachine\Root
         var info = new ProcessStartInfo
