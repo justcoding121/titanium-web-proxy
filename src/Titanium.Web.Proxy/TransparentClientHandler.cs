@@ -52,11 +52,11 @@ public partial class ProxyServer
 
                 // seed the forward target from the endpoint's fixed forward configuration (if any);
                 // the BeforeSslAuthenticate event can still override it per request.
-                if (!string.IsNullOrEmpty(endPoint.ForwardHost))
-                {
-                    args.ForwardHttpsHostName = endPoint.ForwardHost!;
-                    if (endPoint.ForwardPort is int forwardPort) args.ForwardHttpsPort = forwardPort;
-                }
+                var forwardHost = endPoint.ForwardHost;
+                if (forwardHost != null && forwardHost.Length != 0)
+                    args.ForwardHttpsHostName = forwardHost;
+                if (endPoint.ForwardPort is int forwardPort)
+                    args.ForwardHttpsPort = forwardPort;
 
                 await endPoint.InvokeBeforeSslAuthenticate(this, args, ExceptionFunc);
 
@@ -110,7 +110,9 @@ public partial class ProxyServer
                 else
                 {
                     var sessionArgs = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
-                    var connection = (await TcpConnectionFactory.GetServerConnection(this, args.ForwardHttpsHostName,
+                    var forwardHttpsHostName = args.ForwardHttpsHostName ??
+                                               throw new InvalidOperationException("Forward HTTPS host is not set.");
+                    var connection = (await TcpConnectionFactory.GetServerConnection(this, forwardHttpsHostName,
                         args.ForwardHttpsPort,
                         HttpHeader.VersionUnknown, false, null,
                         true, sessionArgs, UpStreamEndPoint,

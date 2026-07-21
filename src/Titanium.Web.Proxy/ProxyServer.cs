@@ -741,8 +741,7 @@ public partial class ProxyServer : IDisposable
             endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
 
             // accept clients asynchronously
-            endPoint.Listener.BeginAcceptSocket(OnAcceptConnection,
-                new AcceptState(endPoint, endPoint.Listener));
+            endPoint.Listener.BeginAcceptSocket(OnAcceptConnection, endPoint);
         }
         catch (SocketException ex)
         {
@@ -787,10 +786,8 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     private void OnAcceptConnection(IAsyncResult asyn)
     {
-        var acceptState = asyn.AsyncState as AcceptState
-                          ?? throw new InvalidOperationException("Listener APM state is missing.");
-        var endPoint = acceptState.EndPoint;
-        var listener = acceptState.Listener;
+        var endPoint = (ProxyEndPoint)asyn.AsyncState!;
+        var listener = endPoint.Listener!;
 
         Socket? tcpClient = null;
 
@@ -827,8 +824,8 @@ public partial class ProxyServer : IDisposable
         {
             // based on end point type call appropriate request handlers
             // Get the listener that handles the client request.
-            if (ProxyRunning && ReferenceEquals(endPoint.Listener, listener))
-                listener.BeginAcceptSocket(OnAcceptConnection, acceptState);
+            if (ProxyRunning)
+                listener.BeginAcceptSocket(OnAcceptConnection, endPoint);
         }
         catch (Exception ex) when (ex is ObjectDisposedException || ex is InvalidOperationException)
         {
@@ -899,19 +896,6 @@ public partial class ProxyServer : IDisposable
 
         listener.Stop();
         listener.Server.Dispose();
-    }
-
-    private sealed class AcceptState
-    {
-        internal AcceptState(ProxyEndPoint endPoint, TcpListener listener)
-        {
-            EndPoint = endPoint;
-            Listener = listener;
-        }
-
-        internal ProxyEndPoint EndPoint { get; }
-
-        internal TcpListener Listener { get; }
     }
 
     /// <summary>
