@@ -31,6 +31,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
             Task.Run(() => ListenToConsole());
 
             proxyServer = new ProxyServer();
+            var certificateDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Titanium.Web.Proxy");
+            Directory.CreateDirectory(certificateDirectory);
+            proxyServer.CertificateManager.PfxFilePath = Path.Combine(certificateDirectory, "rootCert.pfx");
 
             //proxyServer.EnableHttp2 = true;
 

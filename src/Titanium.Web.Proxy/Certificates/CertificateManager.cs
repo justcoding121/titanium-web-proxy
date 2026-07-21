@@ -298,20 +298,20 @@ public sealed class CertificateManager : IDisposable
         var certificate = RootCertificate;
         if (certificate == null) throw new Exception("Root certificate is null.");
 
-        var value = certificate.Issuer;
-        return FindCertificates(StoreName.Root, storeLocation, value).Count > 0
+        var thumbprint = certificate.Thumbprint;
+        return FindCertificates(StoreName.Root, storeLocation, thumbprint).Count > 0
                && (CertificateEngine != CertificateEngine.DefaultWindows
-                   || FindCertificates(StoreName.My, storeLocation, value).Count > 0);
+                   || FindCertificates(StoreName.My, storeLocation, thumbprint).Count > 0);
     }
 
     private static X509Certificate2Collection FindCertificates(StoreName storeName, StoreLocation storeLocation,
-        string findValue)
+        string thumbprint)
     {
         var x509Store = new X509Store(storeName, storeLocation);
         try
         {
             x509Store.Open(OpenFlags.OpenExistingOnly);
-            return x509Store.Certificates.Find(X509FindType.FindBySubjectDistinguishedName, findValue, false);
+            return x509Store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false);
         }
         finally
         {
@@ -329,10 +329,10 @@ public sealed class CertificateManager : IDisposable
         var certificate = RootCertificate;
         if (certificate == null) throw new Exception("Could not install certificate as it is null or empty.");
 
+        if (FindCertificates(storeName, storeLocation, certificate.Thumbprint).Count > 0) return;
+
         var x509Store = new X509Store(storeName, storeLocation);
 
-        // todo
-        // also it should do not duplicate if certificate already exists
         try
         {
             x509Store.Open(OpenFlags.ReadWrite);
