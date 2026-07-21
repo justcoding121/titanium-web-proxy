@@ -1,0 +1,14 @@
+{
+  "allowUnsafe": false,
+  "checkOverflow": false,
+  "mainTypeName": null,
+  "outputKind": "WindowsApplication",
+  "scriptClassName": "Script",
+  "usings": [],
+  "moduleName": "Titanium.Web.Proxy.Examples.Wpf.dll",
+  "optionCompareText": false,
+  "optionExplicit": false,
+  "optionInfer": false,
+  "optionStrict": null,
+  "rootNamespace": null
+}

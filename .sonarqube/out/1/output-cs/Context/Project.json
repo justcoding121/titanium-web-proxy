@@ -1,0 +1,7 @@
+{
+  "language": "C#",
+  "targetFramework": "net10.0",
+  "assemblyName": "Titanium.Web.Proxy",
+  "projectType": "Product",
+  "projectPath": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\src\\Titanium.Web.Proxy\\Titanium.Web.Proxy.csproj"
+}

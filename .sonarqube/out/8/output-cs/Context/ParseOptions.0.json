@@ -1,0 +1,28 @@
+{
+  "documentationMode": "None",
+  "features": [
+
+  ],
+  "kind": "Regular",
+  "languageVersion": "CSharp7_3",
+  "preprocessorSymbols": [
+    { "key": "TRACE", "value": null },
+    { "key": "RELEASE", "value": null },
+    { "key": "NETFRAMEWORK", "value": null },
+    { "key": "NET48", "value": null },
+    { "key": "NET20_OR_GREATER", "value": null },
+    { "key": "NET30_OR_GREATER", "value": null },
+    { "key": "NET35_OR_GREATER", "value": null },
+    { "key": "NET40_OR_GREATER", "value": null },
+    { "key": "NET45_OR_GREATER", "value": null },
+    { "key": "NET451_OR_GREATER", "value": null },
+    { "key": "NET452_OR_GREATER", "value": null },
+    { "key": "NET46_OR_GREATER", "value": null },
+    { "key": "NET461_OR_GREATER", "value": null },
+    { "key": "NET462_OR_GREATER", "value": null },
+    { "key": "NET47_OR_GREATER", "value": null },
+    { "key": "NET471_OR_GREATER", "value": null },
+    { "key": "NET472_OR_GREATER", "value": null },
+    { "key": "NET48_OR_GREATER", "value": null }
+  ]
+}

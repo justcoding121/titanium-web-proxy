@@ -1,0 +1,7 @@
+{
+  "language": "C#",
+  "targetFramework": "net48",
+  "assemblyName": "Titanium.Web.Proxy.UnitTests",
+  "projectType": "Test",
+  "projectPath": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\Titanium.Web.Proxy.UnitTests.csproj"
+}

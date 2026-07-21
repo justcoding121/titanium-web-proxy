@@ -1,0 +1,46 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!-- **************************************************************************** -->
+  <!-- Compute the SonarQube analysis temporary directory -->
+  <!-- **************************************************************************** -->
+  <PropertyGroup Condition=" $(SonarQubeTempPath) == '' ">
+    <!-- TFS 2013 -->
+    <SonarQubeBuildDirectory>$(TF_BUILD_BUILDDIRECTORY)</SonarQubeBuildDirectory>
+    <!-- TFS 2015 -->
+    <SonarQubeBuildDirectory Condition=" $(SonarQubeBuildDirectory) == '' ">$(AGENT_BUILDDIRECTORY)</SonarQubeBuildDirectory>
+    <!-- Command line -->
+    <SonarQubeBuildDirectory Condition=" $(SonarQubeBuildDirectory) == '' ">$(MSBuildStartupDirectory)</SonarQubeBuildDirectory>
+    <SonarQubeTempPath Condition=" $(SonarQubeBuildDirectory) != '' AND Exists('$(SonarQubeBuildDirectory)\.sonarqube\conf\SonarQubeAnalysisConfig.xml') ">$(SonarQubeBuildDirectory)\.sonarqube</SonarQubeTempPath>
+  </PropertyGroup>
+
+  <!-- **************************************************************************** -->
+  <!-- Compute the path to the targets if not specified -->
+  <!-- **************************************************************************** -->
+  <PropertyGroup Condition=" $(SonarQubeTempPath) != '' AND $(SonarQubeTargetsPath) == '' ">
+    <SonarQubeTargetsPath>$(SonarQubeTempPath)\bin\targets</SonarQubeTargetsPath>
+  </PropertyGroup>
+
+  <!-- **************************************************************************** -->
+  <!-- Import the analysis targets if appropriate -->
+  <!-- **************************************************************************** -->
+  <PropertyGroup Condition=" $(SonarQubeTargetsPath) != '' AND $(SonarQubeTargetFilePath) == '' ">
+    <SonarQubeTargetFilePath>$(SonarQubeTargetsPath)\SonarQube.Integration.targets</SonarQubeTargetFilePath>
+  </PropertyGroup>
+  <Import Condition=" $(SonarQubeTargetsImported) != 'true' AND $(BuildingInsideVisualStudio) != 'true' AND Exists('$(SonarQubeTargetFilePath)') " Project="$(SonarQubeTargetFilePath)" />
+
+  <!-- **************************************************************************** -->
+  <!-- Write out diagnostic information to help with troubleshooting.               -->
+  <!-- **************************************************************************** -->
+  <Target Name="SonarQubeImportBeforeInfo" Condition=" $(SonarQubeTempPath) != '' AND $(BuildingInsideVisualStudio) != 'true' " BeforeTargets="CoreCompile">
+
+    <PropertyGroup>
+      <AnalysisTargetsFileFound Condition=" Exists('$(SonarQubeTargetFilePath)') " >true</AnalysisTargetsFileFound>
+    </PropertyGroup>
+
+    <!-- Diagnostic messages for troubleshooting -->
+    <Message Importance="normal" Text="Sonar: ($(MSBuildProjectName)) SonarQube.Integration.ImportBefore.targets was loaded" />
+    <Message Importance="low" Text="Sonar: ($(MSBuildProjectFile)) SonarQube analysis targets imported: $(SonarQubeTargetsImported)" />
+    <Message Condition=" $(AnalysisTargetsFileFound) != 'true'" Importance="high" Text="Sonar: ($(MSBuildProjectFile)) The analysis targets file not found: $(SonarQubeTargetFilePath)" />
+
+  </Target>
+</Project>

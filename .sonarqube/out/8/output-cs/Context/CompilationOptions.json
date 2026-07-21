@@ -1,0 +1,14 @@
+{
+  "allowUnsafe": false,
+  "checkOverflow": false,
+  "mainTypeName": null,
+  "outputKind": "ConsoleApplication",
+  "scriptClassName": "Script",
+  "usings": [],
+  "moduleName": "Titanium.Web.Proxy.Examples.Basic.exe",
+  "optionCompareText": false,
+  "optionExplicit": false,
+  "optionInfer": false,
+  "optionStrict": null,
+  "rootNamespace": null
+}

@@ -1,0 +1,6 @@
+﻿{"dotnetenterprise.s4net.build.override_warnings_as_errors.cnt":"true"}
+{"dotnetenterprise.s4net.build.target_framework_moniker":".NETCoreApp,Version=v10.0"}
+{"dotnetenterprise.s4net.build.using_microsoft_net_sdk.cnt":"true"}
+{"dotnetenterprise.s4net.build.deterministic.cnt":"true"}
+{"dotnetenterprise.s4net.build.nuget_project_style.cnt":"PackageReference"}
+{"dotnetenterprise.s4net.build.netcore_sdk_version.cnt":"10.0.302"}

@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>dotnet-coverage</id>
+    <version>18.9.0</version>
+    <authors>Microsoft</authors>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <license type="file">License.txt</license>
+    <licenseUrl>https://aka.ms/deprecateLicenseUrl</licenseUrl>
+    <icon>Icon.png</icon>
+    <readme>PACKAGE.md</readme>
+    <projectUrl>https://aka.ms/dotnet-coverage</projectUrl>
+    <iconUrl>http://go.microsoft.com/fwlink/?LinkID=288859</iconUrl>
+    <description>Code coverage tools.</description>
+    <copyright>© Microsoft Corporation. All rights reserved.</copyright>
+    <tags>coverage testing unit-test quality</tags>
+    <serviceable>true</serviceable>
+    <packageTypes>
+      <packageType name="DotnetTool" />
+    </packageTypes>
+    <repository type="git" url="https://github.com/microsoft/codecoverage" commit="5e1b5d91e7399de7c03f20609606da8996ac3539" />
+  </metadata>
+</package>

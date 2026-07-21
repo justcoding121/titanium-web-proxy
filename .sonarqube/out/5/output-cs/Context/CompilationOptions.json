@@ -1,0 +1,14 @@
+{
+  "allowUnsafe": false,
+  "checkOverflow": false,
+  "mainTypeName": "WindowsServiceExample.Program",
+  "outputKind": "WindowsApplication",
+  "scriptClassName": "Script",
+  "usings": [],
+  "moduleName": "WindowsServiceExample.exe",
+  "optionCompareText": false,
+  "optionExplicit": false,
+  "optionInfer": false,
+  "optionStrict": null,
+  "rootNamespace": null
+}
