@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -19,7 +21,7 @@ using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Helpers;
 
-internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekStream
+internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekStream, ITransportCapableStream
 {
     private readonly bool leaveOpen;
     private readonly byte[] streamBuffer;
@@ -46,6 +48,13 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     private readonly CancellationToken cancellationToken;
 
     public bool IsNetworkStream { get; }
+
+    /// <summary>
+    ///     See <see cref="ITransportCapableStream" />. True for a plain socket <see cref="NetworkStream" />
+    ///     or a TLS-wrapped <see cref="SslStream" /> - i.e. any real duplex network transport, decrypted or
+    ///     not - so the per-chunk body-write hook fires with parity for plain and TLS-decrypted connections.
+    /// </summary>
+    public bool SupportsBodyWriteHook { get; }
 
     public event EventHandler<DataEventArgs>? DataRead;
 
@@ -92,6 +101,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         this.server = server;
 
         if (baseStream is NetworkStream) IsNetworkStream = true;
+
+        SupportsBodyWriteHook = baseStream is NetworkStream || baseStream is SslStream;
 
         BaseStream = baseStream;
         this.leaveOpen = leaveOpen;
@@ -947,11 +958,16 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// </summary>
     /// <param name="data"></param>
     /// <param name="isChunked"></param>
+    /// <param name="trailingHeaders">
+    ///     Optional trailer headers to emit after the terminating zero-length chunk (ignored when
+    ///     <paramref name="isChunked" /> is false - trailers are not defined for fixed-length bodies).
+    /// </param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    internal ValueTask WriteBodyAsync(byte[] data, bool isChunked, CancellationToken cancellationToken)
+    internal ValueTask WriteBodyAsync(byte[] data, bool isChunked, HeaderCollection? trailingHeaders,
+        CancellationToken cancellationToken)
     {
-        if (isChunked) return WriteBodyChunkedAsync(data, cancellationToken);
+        if (isChunked) return WriteBodyChunkedAsync(data, trailingHeaders, cancellationToken);
 
         return WriteAsync(data, cancellationToken: cancellationToken);
     }
@@ -978,7 +994,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             ? requestResponse.OriginalContentEncoding
             : requestResponse.ContentEncoding;
 
-        Stream s = limitedStream = new LimitedStream(this, bufferPool, isChunked, contentLength);
+        Stream s = limitedStream = new LimitedStream(this, bufferPool, isChunked, contentLength,
+            requestResponse.TrailingHeaders);
 
         if (transformation == TransformationMode.Uncompress && contentEncoding != null)
             s = decompressStream =
@@ -1018,7 +1035,15 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     {
         var isResponse = !isRequest;
 
-        if (IsNetworkStream && writer.IsNetworkStream &&
+        // The per-chunk body-write hook needs a real duplex network transport on both ends (plain socket or
+        // TLS-decrypted) - it is not meaningful for in-memory/decompression streams. Checked via the internal
+        // ITransportCapableStream marker rather than the public IHttpStreamWriter/IHttpStreamReader interfaces,
+        // so external implementers of those public interfaces are not source-broken; one that doesn't also
+        // implement the marker is simply treated as not supporting the hook (today's behavior, preserved).
+        var readerSupportsHook = this is ITransportCapableStream { SupportsBodyWriteHook: true };
+        var writerSupportsHook = writer is ITransportCapableStream { SupportsBodyWriteHook: true };
+
+        if (readerSupportsHook && writerSupportsHook &&
             ((isRequest && args.HttpClient.Request.OriginalHasBody && !args.HttpClient.Request.IsBodyRead && server.ShouldCallBeforeRequestBodyWrite()) ||
              (isResponse && args.HttpClient.Response.OriginalHasBody && !args.HttpClient.Response.IsBodyRead && server.ShouldCallBeforeResponseBodyWrite())))
         {
@@ -1046,11 +1071,10 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     private async Task HandleBodyWrite(IHttpStreamWriter writer, bool isChunked, long contentLength,
         bool isRequest, SessionEventArgs args, CancellationToken cancellationToken)
     {
-        var originalContentLength = isRequest
-            ? args.HttpClient.Request.OriginalContentLength
-            : args.HttpClient.Response.OriginalContentLength;
-        var originalIsChunked =
-            isRequest ? args.HttpClient.Request.OriginalIsChunked : args.HttpClient.Response.OriginalIsChunked;
+        var requestResponse = isRequest ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
+
+        var originalContentLength = requestResponse.OriginalContentLength;
+        var originalIsChunked = requestResponse.OriginalIsChunked;
 
         async ValueTask writeFramed(byte[] data)
         {
@@ -1073,7 +1097,9 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             if (isChunked)
             {
                 await writer.WriteLineAsync("0", cancellationToken);
-                await writer.WriteLineAsync(cancellationToken);
+                await ChunkedTrailerHelper.WriteTrailingHeadersAsync(writer,
+                    requestResponse.HasTrailingHeaders ? requestResponse.TrailingHeaders : null,
+                    cancellationToken);
             }
         }
 
@@ -1094,6 +1120,57 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
         var buffer = bufferPool.GetBuffer();
 
+        // The handler ended the message before the source's real end (isLastChunk / handler-driven stop).
+        // Drain (read and discard) everything still remaining on the source - the rest of the chunk in
+        // progress, any further chunks, and the trailer block - so the underlying connection is left at a
+        // clean message boundary and can still be safely reused/pooled, even though none of this is
+        // relayed to `writer` (the consumer already decided to stop emitting).
+        async Task drainRemainingChunkedBody(int remainingInCurrentChunk)
+        {
+            while (remainingInCurrentChunk > 0)
+            {
+                var toRead = Math.Min(buffer.Length, remainingInCurrentChunk);
+                var bytesRead = await ReadAsync(buffer, 0, toRead, cancellationToken);
+                if (bytesRead == 0) return;
+                remainingInCurrentChunk -= bytesRead;
+            }
+
+            // trailing CRLF of the chunk that was in progress
+            await ReadLineAsync(cancellationToken);
+
+            while (true)
+            {
+                var chunkHead = await ReadLineAsync(cancellationToken);
+                if (chunkHead == null) return;
+
+                var idx = chunkHead.IndexOf(";", StringComparison.Ordinal);
+                if (idx >= 0) chunkHead = chunkHead.Substring(0, idx);
+
+                if (!int.TryParse(chunkHead, NumberStyles.HexNumber, null, out var chunkSize))
+                    throw new ProxyHttpException($"Invalid chunk length: '{chunkHead}'", null, null);
+
+                if (chunkSize == 0)
+                {
+                    // discard the trailer block too - it belongs to a message we chose not to forward in full
+                    await ChunkedTrailerHelper.ReadTrailingHeaders(this, new HeaderCollection(), null,
+                        cancellationToken);
+                    return;
+                }
+
+                var toDiscard = chunkSize;
+                while (toDiscard > 0)
+                {
+                    var toRead = Math.Min(buffer.Length, toDiscard);
+                    var bytesRead = await ReadAsync(buffer, 0, toRead, cancellationToken);
+                    if (bytesRead == 0) return;
+                    toDiscard -= bytesRead;
+                }
+
+                // trailing CRLF after chunk data
+                await ReadLineAsync(cancellationToken);
+            }
+        }
+
         try
         {
             if (originalIsChunked)
@@ -1111,8 +1188,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
                     if (chunkSize == 0)
                     {
-                        // trailer line of the terminating chunk
-                        await ReadLineAsync(cancellationToken);
+                        // Read the optional trailer header block, strictly through the terminating blank
+                        // line, populating requestResponse.TrailingHeaders (writeTerminator() below
+                        // re-emits them for `writer`). See ChunkedTrailerHelper for why this is bounded.
+                        await ChunkedTrailerHelper.ReadTrailingHeaders(this, requestResponse.TrailingHeaders,
+                            null, cancellationToken);
                         await emit(Array.Empty<byte>(), true);
                         break;
                     }
@@ -1141,7 +1221,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                         }
                     }
 
-                    if (stop) break;
+                    if (stop)
+                    {
+                        await drainRemainingChunkedBody(remaining);
+                        break;
+                    }
 
                     // trailing CRLF after chunk data
                     await ReadLineAsync(cancellationToken);
@@ -1183,9 +1267,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     ///     Copies the given input bytes to output stream chunked
     /// </summary>
     /// <param name="data"></param>
+    /// <param name="trailingHeaders">Optional trailer headers to emit after the terminating zero-length chunk.</param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    private async ValueTask WriteBodyChunkedAsync(byte[] data, CancellationToken cancellationToken)
+    private async ValueTask WriteBodyChunkedAsync(byte[] data, HeaderCollection? trailingHeaders,
+        CancellationToken cancellationToken)
     {
         var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
 
@@ -1195,7 +1281,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         await WriteLineAsync(cancellationToken);
 
         await WriteLineAsync("0", cancellationToken);
-        await WriteLineAsync(cancellationToken);
+        await ChunkedTrailerHelper.WriteTrailingHeadersAsync(this, trailingHeaders, cancellationToken);
     }
 
     /// <summary>
@@ -1208,6 +1294,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     private async Task CopyBodyChunkedAsync(IHttpStreamWriter writer, bool isRequest, SessionEventArgs args,
         CancellationToken cancellationToken)
     {
+        var requestResponse = isRequest ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
+
         while (true)
         {
             var chunkHead = await ReadLineAsync(cancellationToken);
@@ -1221,14 +1309,28 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
             await writer.WriteLineAsync(chunkHead, cancellationToken);
 
-            if (chunkSize != 0) await CopyBytesToStream(writer, chunkSize, isRequest, args, cancellationToken);
+            if (chunkSize == 0)
+            {
+                // Read the optional trailer header block, strictly through the terminating blank line -
+                // even when there turn out to be no trailers - so a pooled keep-alive connection never
+                // retains stray trailer bytes that would corrupt the next message (see ChunkedTrailerHelper).
+                // This is a pure pass-through relay, so the exact raw lines are also captured and forwarded
+                // to `writer` byte-for-byte below, rather than re-serializing the parsed HeaderCollection.
+                var rawTrailerLines = new List<string>();
+                await ChunkedTrailerHelper.ReadTrailingHeaders(this, requestResponse.TrailingHeaders,
+                    rawTrailerLines, cancellationToken);
+
+                await ChunkedTrailerHelper.WriteRawTrailingLinesAsync(writer, rawTrailerLines, cancellationToken);
+
+                break;
+            }
+
+            await CopyBytesToStream(writer, chunkSize, isRequest, args, cancellationToken);
 
             await writer.WriteLineAsync(cancellationToken);
 
             // chunk trail
             await ReadLineAsync(cancellationToken);
-
-            if (chunkSize == 0) break;
         }
     }
 
@@ -1289,7 +1391,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
         if (body != null)
         {
-            await WriteBodyAsync(body, requestResponse.IsChunked, cancellationToken);
+            await WriteBodyAsync(body, requestResponse.IsChunked,
+                requestResponse.HasTrailingHeaders ? requestResponse.TrailingHeaders : null, cancellationToken);
             requestResponse.IsBodySent = true;
         }
     }

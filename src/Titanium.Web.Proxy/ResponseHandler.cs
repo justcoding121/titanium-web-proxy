@@ -25,10 +25,22 @@ public partial class ProxyServer
         // read response & headers from server
         await args.HttpClient.ReceiveResponse(cancellationToken);
 
-        // Server may send expect-continue even if not asked for it in request.
-        // According to spec "the client can simply discard this interim response."
-        if (args.HttpClient.Response.StatusCode == (int)HttpStatusCode.Continue)
+        // Relay/consume every interim (1xx) response that precedes the final response on this connection.
+        // 100 Continue is discarded exactly as before - per spec, "the client can simply discard this
+        // interim response" (the proxy itself already consumed/acted on it, if at all, while sending the
+        // request body in HttpWebClient.SendRequest). Any other 1xx (e.g. 103 Early Hints) has no dedicated
+        // event yet, so it is relayed to the client verbatim - interim responses never carry a body
+        // (RFC 9110 §15.2) - and the proxy loops back onto the same connection for the next message.
+        // 101 Switching Protocols is excluded: it *is* the final message of this exchange (the connection
+        // becomes a raw tunnel immediately afterwards), so it must fall through to the normal
+        // response-handling path below instead of looping. Interim responses are not exposed through
+        // BeforeResponse; only the final response is.
+        while (args.HttpClient.Response.StatusCode is >= 100 and <= 199
+               and not (int)HttpStatusCode.SwitchingProtocols)
         {
+            if (args.HttpClient.Response.StatusCode != (int)HttpStatusCode.Continue)
+                await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+
             await args.ClearResponse(cancellationToken);
             await args.HttpClient.ReceiveResponse(cancellationToken);
         }
@@ -82,7 +94,8 @@ public partial class ProxyServer
             {
                 var bodyWriter = new BodyStreamWriter(clientStream, response.IsChunked);
                 await response.StreamBodyWriter(bodyWriter, cancellationToken);
-                await bodyWriter.CompleteAsync(cancellationToken);
+                await bodyWriter.CompleteAsync(response.HasTrailingHeaders ? response.TrailingHeaders : null,
+                    cancellationToken);
                 response.IsBodySent = true;
             }
 

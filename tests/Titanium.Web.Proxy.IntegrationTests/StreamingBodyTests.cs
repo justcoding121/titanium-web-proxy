@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -202,14 +203,13 @@ public class StreamingBodyTests
     }
 
     [TestMethod]
-    public async Task OnResponseBodyWrite_Tls_Decrypted_Http11_Body_Relays_Correctly_But_Hook_Does_Not_Fire_Yet()
+    public async Task OnResponseBodyWrite_Tls_Decrypted_Http11_Body_Relays_Correctly_And_Hook_Fires()
     {
-        // Phase 0A characterization test: HttpStream.IsNetworkStream is false for the SslStream used to
-        // relay a TLS-decrypted HTTP/1.x connection, so the per-chunk body-write hook gate in
-        // HttpStream.CopyBodyAsync never invokes OnResponseBodyWrite for such connections today (see
-        // phase1-tls-hook). The body itself still relays byte-for-byte via the ordinary buffered/streamed
-        // copy path. Update this test once an internal transport-capability check replaces the
-        // IsNetworkStream gate and the hook starts firing for TLS as well.
+        // Phase 1 (phase1-tls-hook): the per-chunk body-write hook gate in HttpStream.CopyBodyAsync now
+        // checks the internal ITransportCapableStream.SupportsBodyWriteHook capability instead of the old
+        // IsNetworkStream flag, and HttpStream reports that capability as true whenever its backing stream
+        // is either a plain NetworkStream or a decrypted SslStream. So OnResponseBodyWrite must fire with
+        // parity for a TLS-decrypted HTTP/1.x connection, exactly as it already does for plain HTTP.
         using var testSuite = new TestSuite();
 
         const string expected = "I am server. I received your greetings.";
@@ -220,9 +220,11 @@ public class StreamingBodyTests
         var proxy = testSuite.GetProxy();
 
         var callbackCount = 0;
+        var observedBytes = new List<byte>();
         proxy.OnResponseBodyWrite += (sender, e) =>
         {
             callbackCount++;
+            observedBytes.AddRange(e.BodyBytes);
             return Task.CompletedTask;
         };
 
@@ -232,9 +234,40 @@ public class StreamingBodyTests
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(expected, body, "The body must still be relayed correctly even though the hook is skipped.");
-        Assert.AreEqual(0, callbackCount,
-            "Documents today's gap: the per-chunk body-write hook is not invoked for TLS-decrypted HTTP/1.x connections.");
+        Assert.AreEqual(expected, body);
+        Assert.IsTrue(callbackCount > 0,
+            "The response body write hook should now fire for TLS-decrypted HTTP/1.x connections too.");
+        Assert.AreEqual(expected, Encoding.ASCII.GetString(observedBytes.ToArray()),
+            "The hook should observe the same bytes that were relayed to the client.");
+    }
+
+    [TestMethod]
+    public async Task OnResponseBodyWrite_Tls_Decrypted_Http11_Can_Rewrite_Body()
+    {
+        // Companion to the read-only test above: proves the hook is not just invoked but its mutation of
+        // e.BodyBytes is actually relayed to the client for a TLS-decrypted HTTP/1.x connection, matching
+        // the plain-HTTP behavior in OnResponseBodyWrite_Can_Rewrite_Body.
+        using var testSuite = new TestSuite();
+
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("hello world"));
+
+        var proxy = testSuite.GetProxy();
+
+        proxy.OnResponseBodyWrite += (sender, e) =>
+        {
+            var text = Encoding.ASCII.GetString(e.BodyBytes);
+            e.BodyBytes = Encoding.ASCII.GetBytes(text.ToUpperInvariant());
+            return Task.CompletedTask;
+        };
+
+        var client = testSuite.GetClient(proxy);
+
+        var response = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("HELLO WORLD", body);
     }
 
     [TestMethod]

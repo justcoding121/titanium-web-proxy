@@ -20,6 +20,13 @@ public static class KnownHeaders
     public static KnownHeader Upgrade = "Upgrade";
     public static KnownHeader UpgradeWebsocket = "websocket";
 
+    /// <summary>
+    ///     Declares which header field names will appear in the trailer of a chunked message (RFC 9110 §6.5).
+    ///     Titanium does not manage this header automatically; set/read it explicitly alongside
+    ///     <see cref="RequestResponseBase.TrailingHeaders" /> if you want it announced/observed.
+    /// </summary>
+    public static KnownHeader Trailer = "Trailer";
+
     // Request headers
     public static KnownHeader AcceptEncoding = "Accept-Encoding";
 

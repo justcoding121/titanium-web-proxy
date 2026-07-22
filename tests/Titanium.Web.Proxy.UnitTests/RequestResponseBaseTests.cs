@@ -106,5 +106,34 @@ namespace Titanium.Web.Proxy.UnitTests
 
             Assert.IsNull(result);
         }
+
+        [TestMethod]
+        public void TrailingHeaders_DefaultsToEmptyAndHasTrailingHeadersReflectsContent()
+        {
+            var response = new Response();
+
+            // HasTrailingHeaders must not force the lazy allocation that the public getter performs.
+            Assert.IsFalse(response.HasTrailingHeaders);
+
+            Assert.IsNotNull(response.TrailingHeaders);
+            Assert.IsFalse(response.TrailingHeaders.GetEnumerator().MoveNext());
+            Assert.IsFalse(response.HasTrailingHeaders, "An empty collection was allocated but nothing was added.");
+
+            response.TrailingHeaders.AddHeader("X-Checksum", "abc123");
+
+            Assert.IsTrue(response.HasTrailingHeaders);
+            Assert.AreEqual("abc123", response.TrailingHeaders.GetFirstHeader("X-Checksum")?.Value);
+        }
+
+        [TestMethod]
+        public void TrailingHeaders_SameInstanceReturnedOnRepeatedAccess()
+        {
+            var request = new Request();
+
+            var first = request.TrailingHeaders;
+            var second = request.TrailingHeaders;
+
+            Assert.AreSame(first, second);
+        }
     }
 }

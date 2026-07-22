@@ -322,7 +322,8 @@ public partial class ProxyServer
         if (request.HasBody)
         {
             if (request.IsBodyRead)
-                await args.HttpClient.Connection.Stream.WriteBodyAsync(body!, request.IsChunked, cancellationToken);
+                await args.HttpClient.Connection.Stream.WriteBodyAsync(body!, request.IsChunked,
+                    request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
             else if (!request.ExpectationFailed)
                 // get the request body unless an unsuccessful 100 continue request was made
                 await args.CopyRequestBodyAsync(args.HttpClient.Connection.Stream, TransformationMode.None,

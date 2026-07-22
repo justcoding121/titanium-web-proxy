@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Helpers;
@@ -102,7 +103,12 @@ internal sealed class BodyStreamWriter : Stream
     ///     Writes the terminating chunk when in chunked mode. Must be called once the consumer's write delegate
     ///     has completed. No-op for fixed-length mode.
     /// </summary>
-    internal async Task CompleteAsync(CancellationToken cancellationToken)
+    /// <param name="trailingHeaders">
+    ///     Optional trailer headers to emit after the terminating zero-length chunk (ignored in fixed-length
+    ///     mode - trailers are not defined for fixed-length bodies).
+    /// </param>
+    /// <param name="cancellationToken"></param>
+    internal async Task CompleteAsync(HeaderCollection? trailingHeaders, CancellationToken cancellationToken)
     {
         if (completed) return;
         completed = true;
@@ -110,7 +116,7 @@ internal sealed class BodyStreamWriter : Stream
         if (isChunked)
         {
             await writer.WriteLineAsync("0", cancellationToken);
-            await writer.WriteLineAsync(cancellationToken);
+            await ChunkedTrailerHelper.WriteTrailingHeadersAsync(writer, trailingHeaders, cancellationToken);
         }
     }
 }
