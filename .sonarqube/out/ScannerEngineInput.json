@@ -10,7 +10,7 @@
     },
     {
       "key": "sonar.scanner.bootstrapStartTime",
-      "value": "1784754123000"
+      "value": "1784756362000"
     },
     {
       "key": "sonar.projectKey",
@@ -38,7 +38,7 @@
     },
     {
       "key": "sonar.modules",
-      "value": "91018B6D-A7A9-45BE-9CB3-79CBB8B169A6,1FAC4205-4445-4F2B-BB8F-618E8A0C15FD,63635F50-7D6F-4A93-84C6-04CF9D2754C5,4406CE17-9A39-4F28-8363-6169A4F799C1,1D053D72-DCB4-4517-ACDD-D35ADC186950,B517E3D0-D03B-436F-AB03-34BA0D5321AF"
+      "value": "91018B6D-A7A9-45BE-9CB3-79CBB8B169A6,1FAC4205-4445-4F2B-BB8F-618E8A0C15FD,63635F50-7D6F-4A93-84C6-04CF9D2754C5,4406CE17-9A39-4F28-8363-6169A4F799C1,B517E3D0-D03B-436F-AB03-34BA0D5321AF,1D053D72-DCB4-4517-ACDD-D35ADC186950"
     },
     {
       "key": "91018B6D-A7A9-45BE-9CB3-79CBB8B169A6.sonar.projectKey",
@@ -201,46 +201,6 @@
       "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\3\\Telemetry.json"
     },
     {
-      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.projectKey",
-      "value": "justcoding121_titanium-web-proxy:1D053D72-DCB4-4517-ACDD-D35ADC186950"
-    },
-    {
-      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.projectName",
-      "value": "Titanium.Web.Proxy.IntegrationTests"
-    },
-    {
-      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.projectBaseDir",
-      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests"
-    },
-    {
-      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.working.directory",
-      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\.sonar\\mod4"
-    },
-    {
-      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.sourceEncoding",
-      "value": "utf-8"
-    },
-    {
-      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.sources",
-      "value": ""
-    },
-    {
-      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.tests",
-      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\obj\\project.assets.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\obj\\Titanium.Web.Proxy.IntegrationTests.csproj.nuget.dgspec.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\bin\\Release\\net10.0\\Titanium.Web.Proxy.dll.config,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\bin\\Release\\net10.0\\Titanium.Web.Proxy.IntegrationTests.deps.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\bin\\Release\\net10.0\\Titanium.Web.Proxy.IntegrationTests.runtimeconfig.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\obj\\Release\\net10.0\\Titanium.Web.Proxy.IntegrationTests.sourcelink.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\ChunkedTrailerTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\ConnectionPoolTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\ExpectContinueTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Helpers\\FakeUpstreamProxy.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Helpers\\HttpContinueClient.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Helpers\\HttpContinueServer.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Helpers\\HttpMessageParsing.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Helpers\\TestHelper.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Http2Tests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\HttpsTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\InterceptionTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\InterimResponseTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\NestedProxyTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\ReverseProxyTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Setup\\TestCertificateAuthority.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Setup\\TestProxyServer.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Setup\\TestServer.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Setup\\TestSuite.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\StreamingBodyTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\StressTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\UpstreamProxyAuthTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\.editorconfig,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\StrongNameKey.snk"
-    },
-    {
-      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.cs.analyzer.projectOutPaths",
-      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\4"
-    },
-    {
-      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.cs.roslyn.reportFilePaths",
-      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\4\\Issues.json"
-    },
-    {
-      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.cs.scanner.telemetry",
-      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\4\\Telemetry.json"
-    },
-    {
       "key": "B517E3D0-D03B-436F-AB03-34BA0D5321AF.sonar.projectKey",
       "value": "justcoding121_titanium-web-proxy:B517E3D0-D03B-436F-AB03-34BA0D5321AF"
     },
@@ -254,7 +214,7 @@
     },
     {
       "key": "B517E3D0-D03B-436F-AB03-34BA0D5321AF.sonar.working.directory",
-      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\.sonar\\mod5"
+      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\.sonar\\mod4"
     },
     {
       "key": "B517E3D0-D03B-436F-AB03-34BA0D5321AF.sonar.sourceEncoding",
@@ -266,18 +226,58 @@
     },
     {
       "key": "B517E3D0-D03B-436F-AB03-34BA0D5321AF.sonar.tests",
-      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\obj\\project.assets.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\obj\\Titanium.Web.Proxy.UnitTests.csproj.nuget.dgspec.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\bin\\Release\\net10.0\\Titanium.Web.Proxy.dll.config,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\bin\\Release\\net10.0\\Titanium.Web.Proxy.UnitTests.deps.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\bin\\Release\\net10.0\\Titanium.Web.Proxy.UnitTests.runtimeconfig.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\obj\\Release\\net10.0\\Titanium.Web.Proxy.UnitTests.sourcelink.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\CertificateManagerTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\ChunkedTrailerTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\ConnectionCacheKeyTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\HeaderCollectionTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\HpackRegressionTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\Http2HpackEncoderTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\Http2HpackEvictionScratchTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\HttpModelAndProxySocketTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\Properties\\AssemblyInfo.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\ProxyServerTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\RequestResponseBaseTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\ResponseKeepAliveTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\StreamAndCertificateRegressionTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\SystemProxyTest.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\WinAuthTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\StrongNameKey.snk"
+      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\obj\\project.assets.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\obj\\Titanium.Web.Proxy.UnitTests.csproj.nuget.dgspec.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\bin\\Release\\net10.0\\Titanium.Web.Proxy.dll.config,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\bin\\Release\\net10.0\\Titanium.Web.Proxy.UnitTests.deps.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\bin\\Release\\net10.0\\Titanium.Web.Proxy.UnitTests.runtimeconfig.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\obj\\Release\\net10.0\\Titanium.Web.Proxy.UnitTests.sourcelink.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\CertificateManagerTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\ChunkedTrailerTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\ConnectionCacheKeyTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\HeaderCollectionTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\HpackRegressionTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\Http2HpackEncoderTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\Http2HpackEvictionTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\HttpModelAndProxySocketTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\Properties\\AssemblyInfo.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\ProxyServerTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\RequestResponseBaseTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\ResponseKeepAliveTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\StreamAndCertificateRegressionTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\SystemProxyTest.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\WinAuthTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\StrongNameKey.snk"
     },
     {
       "key": "B517E3D0-D03B-436F-AB03-34BA0D5321AF.sonar.cs.analyzer.projectOutPaths",
-      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\5"
+      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\4"
     },
     {
       "key": "B517E3D0-D03B-436F-AB03-34BA0D5321AF.sonar.cs.roslyn.reportFilePaths",
-      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\5\\Issues.json"
+      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\4\\Issues.json"
     },
     {
       "key": "B517E3D0-D03B-436F-AB03-34BA0D5321AF.sonar.cs.scanner.telemetry",
+      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\4\\Telemetry.json"
+    },
+    {
+      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.projectKey",
+      "value": "justcoding121_titanium-web-proxy:1D053D72-DCB4-4517-ACDD-D35ADC186950"
+    },
+    {
+      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.projectName",
+      "value": "Titanium.Web.Proxy.IntegrationTests"
+    },
+    {
+      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.projectBaseDir",
+      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests"
+    },
+    {
+      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.working.directory",
+      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\.sonar\\mod5"
+    },
+    {
+      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.sourceEncoding",
+      "value": "utf-8"
+    },
+    {
+      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.sources",
+      "value": ""
+    },
+    {
+      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.tests",
+      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\obj\\project.assets.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\obj\\Titanium.Web.Proxy.IntegrationTests.csproj.nuget.dgspec.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\bin\\Release\\net10.0\\Titanium.Web.Proxy.dll.config,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\bin\\Release\\net10.0\\Titanium.Web.Proxy.IntegrationTests.deps.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\bin\\Release\\net10.0\\Titanium.Web.Proxy.IntegrationTests.runtimeconfig.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\obj\\Release\\net10.0\\Titanium.Web.Proxy.IntegrationTests.sourcelink.json,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\ChunkedTrailerTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\ConnectionPoolTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\ExpectContinueTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Helpers\\FakeUpstreamProxy.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Helpers\\Http2RawClient.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Helpers\\Http2RawFrame.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Helpers\\Http2RawOriginServer.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Helpers\\HttpContinueClient.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Helpers\\HttpContinueServer.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Helpers\\HttpMessageParsing.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Helpers\\TestHelper.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Http2Tests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Http2TrailerInterimContinuationTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\HttpsTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\InterceptionTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\InterimResponseTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\NestedProxyTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\ReverseProxyTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Setup\\TestCertificateAuthority.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Setup\\TestProxyServer.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Setup\\TestServer.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Setup\\TestSuite.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\StreamingBodyTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\StressTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\UpstreamProxyAuthTests.cs,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\.editorconfig,D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\StrongNameKey.snk"
+    },
+    {
+      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.cs.analyzer.projectOutPaths",
+      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\5"
+    },
+    {
+      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.cs.roslyn.reportFilePaths",
+      "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\5\\Issues.json"
+    },
+    {
+      "key": "1D053D72-DCB4-4517-ACDD-D35ADC186950.sonar.cs.scanner.telemetry",
       "value": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\.sonarqube\\out\\5\\Telemetry.json"
     },
     {

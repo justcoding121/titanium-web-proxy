@@ -2184,7 +2184,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Titanium.Web.Proxy.Examples.Wpf")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+474a52d5be783c98c62e60cbc5b6e05e65693996")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c2a21211b4a7a84a0ed9d585154ffb3535e0a2a7")]
 [assembly: System.Reflection.AssemblyProductAttribute("Titanium.Web.Proxy.Examples.Wpf")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Titanium.Web.Proxy.Examples.Wpf")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

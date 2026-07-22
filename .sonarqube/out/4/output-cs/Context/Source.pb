@@ -1,3167 +1,1657 @@
-§w
-kD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\ChunkedTrailerTests.cs¢vusing System;
+ã-
+hD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\CertificateManagerTests.csá,using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
-using System.Net;
-using System.Net.Sockets;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Network;
+
+namespace Titanium.Web.Proxy.UnitTests
+{
+    [TestClass]
+    public class CertificateManagerTests
+    {
+        private static readonly string[] hostNames
+            = { "facebook.com", "youtube.com", "google.com", "bing.com", "yahoo.com" };
+
+
+        [TestMethod]
+        public async Task Simple_BC_Create_Certificate_Test()
+        {
+            var tasks = new List<Task>();
+
+            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => e =>
+            {
+                Debug.WriteLine(e.ToString());
+                Debug.WriteLine(e.InnerException?.ToString());
+            }).Value)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+            mgr.ClearIdleCertificates();
+            for (var i = 0; i < 5; i++)
+                tasks.AddRange(hostNames.Select(host => Task.Run(() =>
+                {
+                    // get the connection
+                    var certificate = mgr.CreateCertificate(host, false);
+                    Assert.IsNotNull(certificate);
+                })));
+
+            await Task.WhenAll(tasks.ToArray());
+
+            mgr.StopClearIdleCertificates();
+        }
+
+        // uncomment this to compare WinCert maker performance with BC (BC takes more time for same test above)
+        //[TestMethod]
+        public async Task Simple_Create_Win_Certificate_Test()
+        {
+            var tasks = new List<Task>();
+
+            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => e =>
+                {
+                    Debug.WriteLine(e.ToString());
+                    Debug.WriteLine(e.InnerException?.ToString());
+                }).Value)
+                { CertificateEngine = CertificateEngine.DefaultWindows };
+
+            mgr.CreateRootCertificate();
+            mgr.TrustRootCertificate(true);
+            mgr.ClearIdleCertificates();
+
+            for (var i = 0; i < 5; i++)
+                tasks.AddRange(hostNames.Select(host => Task.Run(() =>
+                {
+                    // get the connection
+                    var certificate = mgr.CreateCertificate(host, false);
+                    Assert.IsNotNull(certificate);
+                })));
+
+            await Task.WhenAll(tasks.ToArray());
+            mgr.RemoveTrustedRootCertificate(true);
+            mgr.StopClearIdleCertificates();
+        }
+
+        [TestMethod]
+        public async Task Create_Server_Certificate_Test()
+        {
+            var tasks = new List<Task>();
+
+            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => e =>
+                {
+                    Debug.WriteLine(e.ToString());
+                    Debug.WriteLine(e.InnerException?.ToString());
+                }).Value)
+                { CertificateEngine = CertificateEngine.BouncyCastleFast };
+
+            mgr.SaveFakeCertificates = true;
+
+            for (var i = 0; i < 500; i++)
+                tasks.AddRange(hostNames.Select(host => Task.Run(() =>
+                {
+                    var certificate = mgr.CreateServerCertificate(host);
+                    Assert.IsNotNull(certificate);
+                })));
+
+            await Task.WhenAll(tasks.ToArray());
+        }
+
+        [TestMethod]
+        public async Task CreateServerCertificate_ExpiredCachedCertificate_IsRegenerated()
+        {
+            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => e =>
+                {
+                    Debug.WriteLine(e.ToString());
+                    Debug.WriteLine(e.InnerException?.ToString());
+                }).Value)
+                { CertificateEngine = CertificateEngine.BouncyCastleFast };
+
+            const string host = "expired.test";
+
+            // build an already-expired self-signed certificate and inject it into the in-memory cache
+            X509Certificate2 expiredCert;
+            using (var rsa = RSA.Create(2048))
+            {
+                var request = new CertificateRequest("CN=" + host, rsa, HashAlgorithmName.SHA256,
+                    RSASignaturePadding.Pkcs1);
+                expiredCert = request.CreateSelfSigned(
+                    DateTimeOffset.Now.AddDays(-10), DateTimeOffset.Now.AddDays(-1));
+            }
+
+            var cacheField = typeof(CertificateManager).GetField("cachedCertificates",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNotNull(cacheField);
+            var cache = (ConcurrentDictionary<string, CachedCertificate>)cacheField.GetValue(mgr);
+            cache[host] = new CachedCertificate(expiredCert) { LastAccess = DateTime.UtcNow };
+
+            // capture before the call: the expired cert is evicted and disposed by the fix
+            var expiredThumbprint = expiredCert.Thumbprint;
+
+            var result = await mgr.CreateServerCertificate(host);
+
+            Assert.IsNotNull(result);
+            Assert.IsTrue(result.NotAfter > DateTime.Now, "regenerated certificate should be valid");
+            Assert.AreNotEqual(expiredThumbprint, result.Thumbprint,
+                "expired cached certificate should have been replaced");
+        }
+    }
+}ParseOptions.0.json•<
+dD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\ChunkedTrailerTests.cs—;using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.IntegrationTests.Setup;
+using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
-namespace Titanium.Web.Proxy.IntegrationTests;
+namespace Titanium.Web.Proxy.UnitTests;
 
 /// <summary>
-///     Integration tests for HTTP/1.1 chunked trailer handling (RFC 9110 Â§6.5 / RFC 9112 Â§7.1.2).
-///     Previously the proxy relayed a syntactically valid, trailer-less terminator ("0\r\n\r\n") to the
-///     client regardless of whether the upstream message actually carried trailers, silently dropping them.
-///     These tests assert the corrected behavior: trailers are forwarded byte-for-byte, and - critically -
-///     the source connection is always fully drained through the terminating blank line so a pooled
-///     connection is never left in a corrupt state for the next message, whether or not the caller cares
-///     about the trailer's contents.
+///     Unit tests for <see cref="ChunkedTrailerHelper" />, the strict, size-bounded reader/writer shared by
+///     every chunked-trailer read/write code path (<c>HttpStream.CopyBodyChunkedAsync</c>,
+///     <c>HttpStream.HandleBodyWrite</c>, <c>LimitedStream</c>, <c>BodyStreamWriter</c>).
 /// </summary>
 [TestClass]
 public class ChunkedTrailerTests
 {
-    private static readonly Encoding MsgEncoding = HttpHelper.GetEncodingFromContentType(null);
-
-    [TestMethod]
-    public async Task Chunked_Response_Trailer_Is_Forwarded_To_Client()
+    private static HttpStream MakeReader(string content)
     {
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
+        var bytes = Encoding.ASCII.GetBytes(content);
+        return new HttpStream(new ProxyServer(), new MemoryStream(bytes), new DefaultBufferPool(),
+            CancellationToken.None, false);
+    }
 
-        server.HandleTcpRequest(async context =>
-        {
-            await DrainRequestHeaders(context);
-
-            var response = MsgEncoding.GetBytes(
-                "HTTP/1.1 200 OK\r\n" +
-                "Transfer-Encoding: chunked\r\n" +
-                "\r\n" +
-                "5\r\nhello\r\n" +
-                "0\r\n" +
-                "X-Trailer: trailer-value\r\n" +
-                "\r\n");
-
-            await context.Transport.Output.WriteAsync(response);
-            context.Transport.Output.Complete();
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningTcpUrl;
-            return Task.CompletedTask;
-        };
-
-        var client = testSuite.GetReverseProxyClient();
-
-        var response = await client.GetAsync(new Uri($"http://localhost:{proxy.ProxyEndPoints[0].Port}"));
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual("hello", body);
-
-        Assert.IsTrue(response.TrailingHeaders.Contains("X-Trailer"),
-            "The trailer header should now be forwarded to the client.");
-        Assert.AreEqual("trailer-value", response.TrailingHeaders.GetValues("X-Trailer").Single());
+    private static (HttpStream writer, MemoryStream destination) MakeWriter()
+    {
+        var destination = new MemoryStream();
+        var writer = new HttpStream(new ProxyServer(), destination, new DefaultBufferPool(),
+            CancellationToken.None, true);
+        return (writer, destination);
     }
 
     [TestMethod]
-    public async Task Chunked_Response_With_Multiple_Trailers_Are_All_Forwarded()
+    public async Task ReadTrailingHeaders_NoTrailers_ConsumesOnlyTheBlankLineAndLeavesCollectionEmpty()
     {
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
+        // Terminating blank line with nothing after it - and something following in the stream, to prove
+        // we stop exactly at the blank line rather than over-consuming.
+        using var reader = MakeReader("\r\nGET / HTTP/1.1\r\n");
+        var trailers = new HeaderCollection();
 
-        server.HandleTcpRequest(async context =>
-        {
-            await DrainRequestHeaders(context);
+        await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, null);
 
-            var response = MsgEncoding.GetBytes(
-                "HTTP/1.1 200 OK\r\n" +
-                "Transfer-Encoding: chunked\r\n" +
-                "\r\n" +
-                "5\r\nhello\r\n" +
-                "0\r\n" +
-                "X-Checksum: abc123\r\n" +
-                "X-Digest: def456\r\n" +
-                "\r\n");
+        Assert.IsFalse(trailers.GetEnumerator().MoveNext());
 
-            await context.Transport.Output.WriteAsync(response);
-            context.Transport.Output.Complete();
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningTcpUrl;
-            return Task.CompletedTask;
-        };
-
-        var client = testSuite.GetReverseProxyClient();
-
-        var response = await client.GetAsync(new Uri($"http://localhost:{proxy.ProxyEndPoints[0].Port}"));
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("hello", body);
-        Assert.AreEqual("abc123", response.TrailingHeaders.GetValues("X-Checksum").Single());
-        Assert.AreEqual("def456", response.TrailingHeaders.GetValues("X-Digest").Single());
+        var nextLine = await reader.ReadLineAsync();
+        Assert.AreEqual("GET / HTTP/1.1", nextLine);
     }
 
     [TestMethod]
-    public async Task Chunked_Response_Without_Trailers_Still_Relays_Body_And_Terminator_Correctly()
+    public async Task ReadTrailingHeaders_SingleTrailer_IsParsedIntoCollection()
     {
-        // Regression guard for the common case (no trailers at all): the terminating blank line must
-        // still be written so chunked framing stays valid even when there is nothing to forward.
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
+        using var reader = MakeReader("X-Trailer: trailer-value\r\n\r\n");
+        var trailers = new HeaderCollection();
 
-        server.HandleTcpRequest(async context =>
-        {
-            await DrainRequestHeaders(context);
+        await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, null);
 
-            var response = MsgEncoding.GetBytes(
-                "HTTP/1.1 200 OK\r\n" +
-                "Transfer-Encoding: chunked\r\n" +
-                "\r\n" +
-                "5\r\nhello\r\n" +
-                "0\r\n" +
-                "\r\n");
-
-            await context.Transport.Output.WriteAsync(response);
-            context.Transport.Output.Complete();
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningTcpUrl;
-            return Task.CompletedTask;
-        };
-
-        var client = testSuite.GetReverseProxyClient();
-
-        var response = await client.GetAsync(new Uri($"http://localhost:{proxy.ProxyEndPoints[0].Port}"));
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual("hello", body);
-        Assert.IsFalse(response.TrailingHeaders.GetEnumerator().MoveNext());
+        Assert.AreEqual("trailer-value", trailers.GetFirstHeader("X-Trailer")?.Value);
     }
 
     [TestMethod]
-    [Timeout(30 * 1000)]
-    public async Task Chunked_Request_Trailer_Is_Forwarded_To_Server()
+    public async Task ReadTrailingHeaders_MultipleTrailerLines_AreAllParsedAndRawLinesCapturedInOrder()
     {
-        // Mirrors the response-side test above but for the client -> proxy -> server direction, which goes
-        // through the same HttpStream.HandleBodyWrite path. HttpClient has no public API for setting request
-        // trailers, so a raw socket is used to send a hand-built chunked request with a trailer.
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
+        using var reader = MakeReader("X-First: one\r\nX-Second: two\r\nX-Third: three\r\n\r\n");
+        var trailers = new HeaderCollection();
+        var rawLines = new List<string>();
 
-        var receivedRequestText = string.Empty;
-        var trailerReceivedSignal = new SemaphoreSlim(0, 1);
+        await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, rawLines);
 
-        server.HandleTcpRequest(async context =>
-        {
-            while (!(receivedRequestText.Contains("\r\n0\r\n", StringComparison.Ordinal) &&
-                     receivedRequestText.EndsWith("\r\n\r\n", StringComparison.Ordinal)))
-            {
-                var result = await context.Transport.Input.ReadAsync();
-                foreach (var seg in result.Buffer) receivedRequestText += MsgEncoding.GetString(seg.Span);
-                context.Transport.Input.AdvanceTo(result.Buffer.End);
+        Assert.AreEqual("one", trailers.GetFirstHeader("X-First")?.Value);
+        Assert.AreEqual("two", trailers.GetFirstHeader("X-Second")?.Value);
+        Assert.AreEqual("three", trailers.GetFirstHeader("X-Third")?.Value);
 
-                if (result.IsCompleted) break;
-            }
-
-            trailerReceivedSignal.Release();
-
-            var response = MsgEncoding.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
-            await context.Transport.Output.WriteAsync(response);
-            context.Transport.Output.Complete();
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningTcpUrl;
-            return Task.CompletedTask;
-        };
-
-        using var tcpClient = new TcpClient();
-        await tcpClient.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
-        var stream = tcpClient.GetStream();
-
-        var request = MsgEncoding.GetBytes(
-            "POST / HTTP/1.1\r\n" +
-            "Host: localhost\r\n" +
-            "Transfer-Encoding: chunked\r\n" +
-            "Connection: close\r\n" +
-            "\r\n" +
-            "5\r\nhello\r\n" +
-            "0\r\n" +
-            "X-Trailer: req-trailer-value\r\n" +
-            "\r\n");
-        await stream.WriteAsync(request);
-
-        Assert.IsTrue(await trailerReceivedSignal.WaitAsync(TimeSpan.FromSeconds(20)),
-            "The server never observed the request's terminating blank line.");
-
-        using var responseReader = new System.IO.StreamReader(stream, MsgEncoding);
-        var statusLine = await responseReader.ReadLineAsync();
-        Assert.AreEqual("HTTP/1.1 200 OK", statusLine);
-
-        Assert.IsTrue(receivedRequestText.Contains("X-Trailer: req-trailer-value", StringComparison.Ordinal),
-            "The request trailer should have been forwarded to the server.");
+        CollectionAssert.AreEqual(
+            new[] { "X-First: one", "X-Second: two", "X-Third: three" }, rawLines);
     }
 
     [TestMethod]
-    [Timeout(30 * 1000)]
-    public async Task Chunked_Response_Trailer_Fully_Drained_Allows_Pooled_Connection_Reuse()
+    public async Task ReadTrailingHeaders_DuplicateHeaderName_KeepsBothAsNonUniqueHeader()
     {
-        // Proves the fix drains all the way through the trailer's terminating blank line (not just the
-        // zero-length chunk) by reusing the SAME raw upstream TCP connection for two sequential requests:
-        // if any trailer bytes were left unconsumed on the wire, the second request's response would be
-        // parsed starting mid-trailer and the test would fail well before reaching the final assertion.
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
+        using var reader = MakeReader("X-Trailer: one\r\nX-Trailer: two\r\n\r\n");
+        var trailers = new HeaderCollection();
 
-        var connectionCount = 0;
+        await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, null);
 
-        server.HandleTcpRequest(async context =>
-        {
-            Interlocked.Increment(ref connectionCount);
-
-            for (var i = 0; i < 2; i++)
-            {
-                var requestText = string.Empty;
-                while (!requestText.Contains("\r\n\r\n", StringComparison.Ordinal))
-                {
-                    var result = await context.Transport.Input.ReadAsync();
-                    foreach (var seg in result.Buffer) requestText += MsgEncoding.GetString(seg.Span);
-                    context.Transport.Input.AdvanceTo(result.Buffer.End);
-                }
-
-                var chunkBody = "hello" + new string('!', i);
-                var response = MsgEncoding.GetBytes(
-                    "HTTP/1.1 200 OK\r\n" +
-                    "Transfer-Encoding: chunked\r\n" +
-                    "\r\n" +
-                    $"{chunkBody.Length:x}\r\n{chunkBody}\r\n" +
-                    "0\r\n" +
-                    $"X-Response-Index: {i}\r\n" +
-                    "\r\n");
-
-                await context.Transport.Output.WriteAsync(response);
-            }
-
-            context.Transport.Output.Complete();
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningTcpUrl;
-            return Task.CompletedTask;
-        };
-
-        var client = testSuite.GetReverseProxyClient();
-        var proxyUrl = new Uri($"http://localhost:{proxy.ProxyEndPoints[0].Port}");
-
-        var firstResponse = await client.GetAsync(proxyUrl);
-        var firstBody = await firstResponse.Content.ReadAsStringAsync();
-        Assert.AreEqual("hello", firstBody);
-        Assert.AreEqual("0", firstResponse.TrailingHeaders.GetValues("X-Response-Index").Single());
-
-        var secondResponse = await client.GetAsync(proxyUrl);
-        var secondBody = await secondResponse.Content.ReadAsStringAsync();
-        Assert.AreEqual(HttpStatusCode.OK, secondResponse.StatusCode);
-        Assert.AreEqual("hello!", secondBody);
-        Assert.AreEqual("1", secondResponse.TrailingHeaders.GetValues("X-Response-Index").Single());
-
-        Assert.AreEqual(1, connectionCount,
-            "the proxy should have reused the single pooled upstream TCP connection for both requests");
+        var values = trailers.GetHeaders("X-Trailer")!.Select(h => h.Value).ToArray();
+        CollectionAssert.AreEquivalent(new[] { "one", "two" }, values);
     }
 
     [TestMethod]
-    [Timeout(30 * 1000)]
-    public async Task BeforeResponse_Respond_With_Custom_Response_Drains_Original_Chunked_Body_Without_Throwing()
+    public async Task ReadTrailingHeaders_MalformedLineWithoutColon_ThrowsProxyHttpException()
     {
-        // Regression test: NullWriter.WriteLineAsync used to throw NotImplementedException. That method is
-        // invoked whenever SessionEventArgs.SyphonOutBodyAsync drains an unread *chunked* body/trailer -
-        // here triggered by a BeforeResponse handler that overrides a chunked upstream response with
-        // e.Ok(...) before the original body is read. Draining must succeed silently so the pooled
-        // proxy -> server connection is left clean for reuse.
-        using var testSuite = new TestSuite();
+        using var reader = MakeReader("this-is-not-a-valid-header-line\r\n\r\n");
+        var trailers = new HeaderCollection();
 
-        var server = testSuite.GetServer();
-        var connectionIds = new ConcurrentBag<string>();
-        var requestIndex = 0;
-        server.HandleRequest(async context =>
-        {
-            connectionIds.Add(context.Connection.Id);
-            var n = Interlocked.Increment(ref requestIndex);
-
-            // No Content-Length is set, so Kestrel uses chunked transfer-encoding for this HTTP/1.1 response.
-            await context.Response.WriteAsync(n == 1
-                ? "original-upstream-body-that-should-be-discarded"
-                : "second-request-body");
-        });
-
-        var proxy = testSuite.GetProxy();
-        var respondedOnce = false;
-        proxy.BeforeResponse += (sender, e) =>
-        {
-            if (!respondedOnce)
-            {
-                respondedOnce = true;
-                e.Ok("custom-response-body");
-            }
-
-            return Task.CompletedTask;
-        };
-
-        using var client = testSuite.GetClient(proxy);
-
-        var firstResponse = await client.GetAsync(new Uri(server.ListeningHttpUrl));
-        var firstBody = await firstResponse.Content.ReadAsStringAsync();
-        Assert.AreEqual(HttpStatusCode.OK, firstResponse.StatusCode);
-        Assert.AreEqual("custom-response-body", firstBody);
-
-        // If draining the first (discarded) chunked body/trailer had thrown or left stray bytes on the
-        // wire, this second request over the same pooled connection would fail or return garbage.
-        var secondResponse = await client.GetAsync(new Uri(server.ListeningHttpUrl));
-        var secondBody = await secondResponse.Content.ReadAsStringAsync();
-        Assert.AreEqual(HttpStatusCode.OK, secondResponse.StatusCode);
-        Assert.AreEqual("second-request-body", secondBody);
-
-        Assert.AreEqual(1, connectionIds.Distinct().Count(),
-            "the pooled upstream connection should have been safely drained and reused");
+        await Assert.ThrowsExceptionAsync<ProxyHttpException>(
+            async () => await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, null));
     }
 
-    private static async Task DrainRequestHeaders(Microsoft.AspNetCore.Connections.ConnectionContext context)
+    [TestMethod]
+    public async Task ReadTrailingHeaders_TooManyLines_ThrowsProxyHttpException()
     {
-        // Drains the (headers-only, bodyless GET) request so the write below completes cleanly.
-        var requestText = string.Empty;
-        while (!requestText.Contains("\r\n\r\n", StringComparison.Ordinal))
-        {
-            var result = await context.Transport.Input.ReadAsync();
-            foreach (var seg in result.Buffer) requestText += MsgEncoding.GetString(seg.Span);
-            context.Transport.Input.AdvanceTo(result.Buffer.End);
-        }
+        var sb = new StringBuilder();
+        for (var i = 0; i < ChunkedTrailerHelper.MaxTrailerHeaderCount + 1; i++)
+            sb.Append($"X-{i}: v\r\n");
+        sb.Append("\r\n");
+
+        using var reader = MakeReader(sb.ToString());
+        var trailers = new HeaderCollection();
+
+        await Assert.ThrowsExceptionAsync<ProxyHttpException>(
+            async () => await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, null));
+    }
+
+    [TestMethod]
+    public async Task ReadTrailingHeaders_OversizedBlock_ThrowsProxyHttpException()
+    {
+        var hugeValue = new string('a', ChunkedTrailerHelper.MaxTrailerHeaderBlockSize + 1);
+        using var reader = MakeReader($"X-Trailer: {hugeValue}\r\n\r\n");
+        var trailers = new HeaderCollection();
+
+        await Assert.ThrowsExceptionAsync<ProxyHttpException>(
+            async () => await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, null));
+    }
+
+    [TestMethod]
+    public async Task WriteTrailingHeadersAsync_NullCollection_WritesOnlyTheBlankTerminator()
+    {
+        var (writer, destination) = MakeWriter();
+
+        await ChunkedTrailerHelper.WriteTrailingHeadersAsync(writer, null);
+
+        Assert.AreEqual("\r\n", Encoding.ASCII.GetString(destination.ToArray()));
+    }
+
+    [TestMethod]
+    public async Task WriteTrailingHeadersAsync_WithHeaders_WritesEachLineThenBlankTerminator()
+    {
+        var (writer, destination) = MakeWriter();
+        var trailers = new HeaderCollection();
+        trailers.AddHeader("X-Checksum", "abc123");
+
+        await ChunkedTrailerHelper.WriteTrailingHeadersAsync(writer, trailers);
+
+        Assert.AreEqual("X-Checksum: abc123\r\n\r\n", Encoding.ASCII.GetString(destination.ToArray()));
+    }
+
+    [TestMethod]
+    public async Task WriteTrailingHeadersAsync_ForbiddenField_ThrowsProxyHttpExceptionAndDoesNotSilentlyDrop()
+    {
+        var (writer, _) = MakeWriter();
+        var trailers = new HeaderCollection();
+        trailers.AddHeader(KnownHeaders.ContentLength.String, "5");
+
+        await Assert.ThrowsExceptionAsync<ProxyHttpException>(
+            async () => await ChunkedTrailerHelper.WriteTrailingHeadersAsync(writer, trailers));
+    }
+
+    [TestMethod]
+    public async Task WriteRawTrailingLinesAsync_PreservesExactLineTextAndOrder()
+    {
+        var (writer, destination) = MakeWriter();
+        // Deliberately non-normalized spacing to prove raw lines are forwarded byte-for-byte rather than
+        // re-serialized through a parsed HeaderCollection (which would trim/normalize the value).
+        var rawLines = new List<string> { "X-Trailer:   spaced-value  ", "X-Other:v2" };
+
+        await ChunkedTrailerHelper.WriteRawTrailingLinesAsync(writer, rawLines);
+
+        Assert.AreEqual("X-Trailer:   spaced-value  \r\nX-Other:v2\r\n\r\n",
+            Encoding.ASCII.GetString(destination.ToArray()));
+    }
+
+    [TestMethod]
+    public async Task WriteRawTrailingLinesAsync_NullList_WritesOnlyTheBlankTerminator()
+    {
+        var (writer, destination) = MakeWriter();
+
+        await ChunkedTrailerHelper.WriteRawTrailingLinesAsync(writer, null);
+
+        Assert.AreEqual("\r\n", Encoding.ASCII.GetString(destination.ToArray()));
     }
 }
-ParseOptions.0.jsonƒ
-kD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\ConnectionPoolTests.csþusing System.Collections.Concurrent;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
+ParseOptions.0.json£4
+hD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\ConnectionCacheKeyTests.cs¡3using System.Collections.Generic;
+using System.Net.Security;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Tcp;
 
-namespace Titanium.Web.Proxy.IntegrationTests;
-
-[TestClass]
-public class ConnectionPoolTests
+namespace Titanium.Web.Proxy.UnitTests
 {
-    [TestMethod]
-    [Timeout(60 * 1000)]
-    public async Task Connection_Pool_Is_Enabled_By_Default_And_Reuses_Server_Connection()
+    [TestClass]
+    public class ConnectionCacheKeyTests
     {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-
-        // Kestrel assigns a distinct Connection.Id per upstream TCP connection, so reuse of a pooled
-        // proxy -> server connection shows up as the same id across sequential requests.
-        var connectionIds = new ConcurrentBag<string>();
-        server.HandleRequest(context =>
+        private static TcpConnectionFactory CreateFactory()
         {
-            connectionIds.Add(context.Connection.Id);
-            return context.Response.WriteAsync("ok");
-        });
-
-        var proxy = testSuite.GetProxy();
-        Assert.IsTrue(proxy.EnableConnectionPool, "connection pool should be enabled by default");
-
-        using var client = testSuite.GetClient(proxy);
-
-        // sequential requests over the same client connection: the proxy should reuse one upstream connection
-        for (var i = 0; i < 4; i++)
-        {
-            var body = await client.GetStringAsync(server.ListeningHttpUrl);
-            Assert.AreEqual("ok", body);
+            return new TcpConnectionFactory(new ProxyServer());
         }
 
-        Assert.AreEqual(1, connectionIds.Distinct().Count(),
-            "the proxy should have reused a single pooled upstream connection across the requests");
-    }
-
-    [TestMethod]
-    [Timeout(60 * 1000)]
-    public async Task Connection_Pool_Disabled_Does_Not_Reuse_Across_Client_Connections()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-
-        var connectionIds = new ConcurrentBag<string>();
-        server.HandleRequest(context =>
+        private static ExternalProxy HttpProxy(string user, string password)
         {
-            connectionIds.Add(context.Connection.Id);
-            return context.Response.WriteAsync("ok");
-        });
-
-        var proxy = testSuite.GetProxy();
-        proxy.EnableConnectionPool = false;
-
-        // Two separate client connections. Pooling governs reuse ACROSS client connections, so with it
-        // disabled each client connection must open its own upstream connection.
-        // (Within a single client connection the upstream connection is reused regardless of pooling.)
-        using (var client1 = testSuite.GetClient(proxy))
-            Assert.AreEqual("ok", await client1.GetStringAsync(server.ListeningHttpUrl));
-
-        using (var client2 = testSuite.GetClient(proxy))
-            Assert.AreEqual("ok", await client2.GetStringAsync(server.ListeningHttpUrl));
-
-        Assert.AreEqual(2, connectionIds.Distinct().Count(),
-            "without pooling each client connection should get its own upstream connection");
-    }
-}
-ParseOptions.0.json×(
-kD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\ExpectContinueTests.csÒ'using System;
-using System.Net;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.IntegrationTests.Helpers;
-
-namespace Titanium.Web.Proxy.IntegrationTests;
-
-[TestClass]
-public class ExpectContinueTests
-{
-    [TestMethod]
-    public async Task ReverseProxy_GotContinueAndOkResponse()
-    {
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
-        var continueServer = new HttpContinueServer
-        {
-            ExpectationResponse = HttpStatusCode.Continue, ResponseBody = "I am server. I received your greetings."
-        };
-        server.HandleTcpRequest(continueServer.HandleRequest);
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.Enable100ContinueBehaviour = true;
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningTcpUrl;
-            return Task.CompletedTask;
-        };
-
-        var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
-
-        Assert.IsNotNull(response, "No response to 'expect: 100-continue' request");
-        Assert.AreEqual((int)HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(continueServer.ResponseBody, response.BodyString);
-    }
-
-    [TestMethod]
-    public async Task ReverseProxy_GotExpectationFailedResponse()
-    {
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
-        var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.ExpectationFailed };
-        server.HandleTcpRequest(continueServer.HandleRequest);
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.Enable100ContinueBehaviour = true;
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningTcpUrl;
-            return Task.CompletedTask;
-        };
-
-        var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
-
-        Assert.IsNotNull(response, "No response to 'expect: 100-continue' request");
-        Assert.AreEqual((int)HttpStatusCode.ExpectationFailed, response.StatusCode);
-    }
-
-    [TestMethod]
-    public async Task ReverseProxy_GotNotFoundResponse()
-    {
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
-        var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.NotFound };
-        server.HandleTcpRequest(continueServer.HandleRequest);
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.Enable100ContinueBehaviour = true;
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningTcpUrl;
-            return Task.CompletedTask;
-        };
-
-        var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
-
-        Assert.IsNotNull(response, "No response to 'expect: 100-continue' request");
-        Assert.AreEqual((int)HttpStatusCode.NotFound, response.StatusCode);
-    }
-
-    [TestMethod]
-    public async Task ReverseProxy_BeforeRequestThrows()
-    {
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
-        var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.Continue };
-        server.HandleTcpRequest(continueServer.HandleRequest);
-
-        var dbzEx = new DivideByZeroException("Undefined");
-        var dbzString = $"{dbzEx.GetType()}: {dbzEx.Message}";
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.Enable100ContinueBehaviour = true;
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            try
+            return new ExternalProxy("proxy.example", 8080)
             {
-                e.HttpClient.Request.Url = server.ListeningTcpUrl;
-                throw dbzEx;
-            }
-            catch
-            {
-                var serverError = new Response(Encoding.ASCII.GetBytes(dbzString))
-                {
-                    HttpVersion = new Version(1, 1),
-                    StatusCode = (int)HttpStatusCode.InternalServerError,
-                    StatusDescription = HttpStatusCode.InternalServerError.ToString()
-                };
-
-                e.Respond(serverError);
-            }
-
-            return Task.CompletedTask;
-        };
-
-        var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
-
-        Assert.IsNotNull(response, "No response to 'expect: 100-continue' request");
-        Assert.AreEqual(response.StatusCode, (int)HttpStatusCode.InternalServerError);
-        Assert.AreEqual(response.BodyString, dbzString);
-    }
-}
-ParseOptions.0.json­5
-qD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Helpers\FakeUpstreamProxy.cs¢4#nullable enable
-
-using System;
-using System.Collections.Concurrent;
-using System.IO;
-using System.Linq;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-
-namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
-
-internal sealed class FakeUpstreamProxy : IDisposable
-{
-    private readonly CancellationTokenSource cancellationTokenSource = new();
-    private readonly ConcurrentBag<Task> clientTasks = new();
-    private readonly TcpListener listener;
-    private readonly int httpsTargetPort;
-    private readonly Task acceptTask;
-
-    internal FakeUpstreamProxy(int httpsTargetPort)
-    {
-        this.httpsTargetPort = httpsTargetPort;
-        listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        acceptTask = AcceptClientsAsync();
-    }
-
-    internal int Port => ((IPEndPoint)listener.LocalEndpoint).Port;
-
-    internal ConcurrentQueue<string> ProxyAuthorizationValues { get; } = new();
-
-    public void Dispose()
-    {
-        cancellationTokenSource.Cancel();
-        listener.Stop();
-
-        try
-        {
-            acceptTask.GetAwaiter().GetResult();
-            Task.WaitAll(clientTasks.ToArray(), TimeSpan.FromSeconds(5));
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (AggregateException)
-        {
-        }
-
-        cancellationTokenSource.Dispose();
-    }
-
-    private async Task AcceptClientsAsync()
-    {
-        while (!cancellationTokenSource.IsCancellationRequested)
-        {
-            try
-            {
-                var client = await listener.AcceptTcpClientAsync(cancellationTokenSource.Token);
-                clientTasks.Add(HandleClientAsync(client, cancellationTokenSource.Token));
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-            catch (SocketException) when (cancellationTokenSource.IsCancellationRequested)
-            {
-                return;
-            }
-        }
-    }
-
-    private async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
-    {
-        using (client)
-        {
-            var stream = client.GetStream();
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                var requestHeaders = await ReadHeadersAsync(stream, cancellationToken);
-                if (requestHeaders == null) return;
-
-                var requestLine = requestHeaders.Split(new[] { "\r\n" }, StringSplitOptions.None)[0];
-                var proxyAuthorization = GetHeaderValue(requestHeaders, "Proxy-Authorization") ?? string.Empty;
-                ProxyAuthorizationValues.Enqueue(proxyAuthorization);
-
-                if (proxyAuthorization.Length == 0)
-                {
-                    await Write407Async(stream, "NTLM", cancellationToken);
-                    continue;
-                }
-
-                if (proxyAuthorization.Equals("NTLM t1", StringComparison.Ordinal))
-                {
-                    await Write407Async(stream, "NTLM challenge", cancellationToken);
-                    continue;
-                }
-
-                if (!proxyAuthorization.Equals("NTLM t2", StringComparison.Ordinal))
-                {
-                    await WriteAsync(stream,
-                        "HTTP/1.1 407 Proxy Authentication Required\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-                        cancellationToken);
-                    return;
-                }
-
-                if (requestLine.StartsWith("CONNECT ", StringComparison.OrdinalIgnoreCase))
-                {
-                    await TunnelHttpsAsync(stream, cancellationToken);
-                    return;
-                }
-
-                const string body = "authenticated plain HTTP";
-                await WriteAsync(stream,
-                    $"HTTP/1.1 200 OK\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{body}",
-                    cancellationToken);
-                return;
-            }
-        }
-    }
-
-    private async Task TunnelHttpsAsync(NetworkStream clientStream, CancellationToken cancellationToken)
-    {
-        using var target = new TcpClient();
-        await target.ConnectAsync(IPAddress.Loopback, httpsTargetPort, cancellationToken);
-        await WriteAsync(clientStream, "HTTP/1.1 200 Connection Established\r\n\r\n", cancellationToken);
-
-        var targetStream = target.GetStream();
-        var clientToTarget = clientStream.CopyToAsync(targetStream, cancellationToken);
-        var targetToClient = targetStream.CopyToAsync(clientStream, cancellationToken);
-        await Task.WhenAny(clientToTarget, targetToClient);
-    }
-
-    private static async Task Write407Async(NetworkStream stream, string challenge,
-        CancellationToken cancellationToken)
-    {
-        const string body = "deny";
-        await WriteAsync(stream,
-            "HTTP/1.1 407 Proxy Authentication Required\r\n" +
-            $"Proxy-Authenticate: {challenge}\r\n" +
-            "Proxy-Connection: keep-alive\r\n" +
-            $"Content-Length: {body.Length}\r\n\r\n{body}",
-            cancellationToken);
-    }
-
-    private static async Task<string?> ReadHeadersAsync(NetworkStream stream, CancellationToken cancellationToken)
-    {
-        using var buffer = new MemoryStream();
-        var value = new byte[1];
-        var matched = 0;
-        var terminator = new byte[] { 13, 10, 13, 10 };
-
-        while (buffer.Length < 64 * 1024)
-        {
-            var read = await stream.ReadAsync(value, cancellationToken);
-            if (read == 0) return null;
-
-            buffer.WriteByte(value[0]);
-            matched = value[0] == terminator[matched] ? matched + 1 : value[0] == terminator[0] ? 1 : 0;
-            if (matched == terminator.Length)
-                return Encoding.ASCII.GetString(buffer.ToArray());
-        }
-
-        throw new InvalidDataException("Proxy request headers exceeded the test limit.");
-    }
-
-    private static string? GetHeaderValue(string headers, string name)
-    {
-        var prefix = name + ":";
-        return headers.Split(new[] { "\r\n" }, StringSplitOptions.None)
-            .FirstOrDefault(x => x.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            ?.Substring(prefix.Length).Trim();
-    }
-
-    private static Task WriteAsync(NetworkStream stream, string value, CancellationToken cancellationToken)
-    {
-        return stream.WriteAsync(Encoding.ASCII.GetBytes(value), cancellationToken).AsTask();
-    }
-}
-ParseOptions.0.jsonî
-rD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Helpers\HttpContinueClient.csâusing System;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading.Tasks;
-using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Http;
-
-namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
-
-internal class HttpContinueClient
-{
-    private const int WaitTimeout = 500;
-
-    private static readonly Encoding _msgEncoding = HttpHelper.GetEncodingFromContentType(null);
-
-    public async Task<Response> Post(string server, int port, string content)
-    {
-        var message = _msgEncoding.GetBytes(content);
-        var client = new TcpClient(server, port);
-        client.SendTimeout = client.ReceiveTimeout = 500;
-
-        var request = new Request { Method = "POST", RequestUriString = "/", HttpVersion = new Version(1, 1) };
-        request.Headers.AddHeader(KnownHeaders.Host, server);
-        request.Headers.AddHeader(KnownHeaders.ContentLength, message.Length.ToString());
-        request.Headers.AddHeader(KnownHeaders.Expect, KnownHeaders.Expect100Continue);
-
-        var header = _msgEncoding.GetBytes(request.HeaderText);
-        await client.GetStream().WriteAsync(header, 0, header.Length);
-
-        var buffer = new byte[1024];
-        var responseMsg = string.Empty;
-        Response response;
-
-        while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
-        {
-            var readTask = client.GetStream().ReadAsync(buffer, 0, 1024);
-            if (!readTask.Wait(WaitTimeout))
-            {
-                return null;
-            }
-
-            responseMsg += _msgEncoding.GetString(buffer, 0, readTask.Result);
-        }
-
-        if (response.StatusCode == 100)
-        {
-            await client.GetStream().WriteAsync(message);
-
-            responseMsg = string.Empty;
-
-            while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
-            {
-                var readTask = client.GetStream().ReadAsync(buffer, 0, 1024);
-                if (!readTask.Wait(WaitTimeout))
-                {
-                    return null;
-                }
-
-                responseMsg += _msgEncoding.GetString(buffer, 0, readTask.Result);
-            }
-
-            return response;
-        }
-
-        return response;
-    }
-}
-ParseOptions.0.jsonû
-rD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Helpers\HttpContinueServer.csïusing System;
-using System.IO.Pipelines;
-using System.Net;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Connections;
-using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.Http;
-
-namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
-
-internal class HttpContinueServer
-{
-    private static readonly Encoding _msgEncoding = HttpHelper.GetEncodingFromContentType(null);
-    public HttpStatusCode ExpectationResponse;
-    public string ResponseBody;
-
-    public async Task HandleRequest(ConnectionContext context)
-    {
-        var request = await ReadHeaders(context.Transport.Input);
-
-        if (request.ExpectContinue)
-        {
-            var respondContinue = new Response
-            {
-                HttpVersion = request.HttpVersion,
-                StatusCode = (int)ExpectationResponse,
-                StatusDescription = ExpectationResponse.ToString()
+                ProxyType = ExternalProxyType.Http,
+                UserName = user,
+                Password = password
             };
-            await context.Transport.Output.WriteAsync(_msgEncoding.GetBytes(respondContinue.HeaderText));
+        }
 
-            if (ExpectationResponse != HttpStatusCode.Continue)
+        [TestMethod]
+        public void CacheKey_DifferentExplicitCredentials_ProduceDifferentKeys()
+        {
+            var factory = CreateFactory();
+            try
             {
-                return;
+                var key1 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, HttpProxy("alice", "pw1"));
+                var key2 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, HttpProxy("bob", "pw2"));
+
+                Assert.AreNotEqual(key1, key2);
+            }
+            finally
+            {
+                factory.Dispose();
             }
         }
 
-        request = await ReadBody(request, context.Transport.Input);
-
-        var responseMsg = _msgEncoding.GetBytes(ResponseBody);
-        var respondOk = new Response(responseMsg)
+        [TestMethod]
+        public void CacheKey_DefaultCredentialsFlag_ProducesDifferentKey()
         {
-            HttpVersion = new Version(1, 1),
-            StatusCode = (int)HttpStatusCode.OK,
-            StatusDescription = HttpStatusCode.OK.ToString()
-        };
-        await context.Transport.Output.WriteAsync(_msgEncoding.GetBytes(respondOk.HeaderText));
-        await context.Transport.Output.WriteAsync(responseMsg);
-        context.Transport.Output.Complete();
-    }
-
-    private async Task<Request> ReadHeaders(PipeReader input)
-    {
-        Request request = null;
-        try
-        {
-            var requestMsg = string.Empty;
-            while ((request = HttpMessageParsing.ParseRequest(requestMsg, false)) == null)
+            var factory = CreateFactory();
+            try
             {
-                var result = await input.ReadAsync();
-                foreach (var seg in result.Buffer)
-                {
-                    requestMsg += _msgEncoding.GetString(seg.Span);
-                }
+                // explicit credentials (setting UserName/Password forces UseDefaultCredentials = false)
+                var explicitCreds = factory.GetConnectionCacheKey("example.com", 443, true, null, null,
+                    HttpProxy("alice", "pw1"));
 
-                input.AdvanceTo(result.Buffer.End);
+                // default (Windows) credentials mode
+                var defaultCreds = factory.GetConnectionCacheKey("example.com", 443, true, null, null,
+                    new ExternalProxy("proxy.example", 8080)
+                        { ProxyType = ExternalProxyType.Http, UseDefaultCredentials = true });
+
+                Assert.AreNotEqual(explicitCreds, defaultCreds);
+            }
+            finally
+            {
+                factory.Dispose();
             }
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"{ex.GetType()}: {ex.Message}");
-        }
 
-        return request;
-    }
-
-    private async Task<Request> ReadBody(Request request, PipeReader input)
-    {
-        var msg = request.HeaderText;
-        try
+        [TestMethod]
+        public void CacheKey_ProxyVsDirect_ProduceDifferentKeys()
         {
-            while ((request = HttpMessageParsing.ParseRequest(msg, true)) == null)
+            var factory = CreateFactory();
+            try
             {
-                var result = await input.ReadAsync();
-                foreach (var seg in result.Buffer)
-                {
-                    msg += _msgEncoding.GetString(seg.Span);
-                }
+                var direct = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null);
+                var viaProxy = factory.GetConnectionCacheKey("example.com", 443, true, null, null,
+                    HttpProxy("alice", "pw1"));
 
-                input.AdvanceTo(result.Buffer.End);
+                Assert.AreNotEqual(direct, viaProxy);
+            }
+            finally
+            {
+                factory.Dispose();
             }
         }
-        catch (Exception ex)
+
+        [TestMethod]
+        public void CacheKey_ProxyDnsRequestsToggle_ProduceDifferentKeys()
         {
-            Console.WriteLine($"{ex.GetType()}: {ex.Message}");
+            var factory = CreateFactory();
+            try
+            {
+                var socksLocal = new ExternalProxy("proxy.example", 1080)
+                    { ProxyType = ExternalProxyType.Socks5, ProxyDnsRequests = false };
+                var socksRemote = new ExternalProxy("proxy.example", 1080)
+                    { ProxyType = ExternalProxyType.Socks5, ProxyDnsRequests = true };
+
+                var key1 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, socksLocal);
+                var key2 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, socksRemote);
+
+                Assert.AreNotEqual(key1, key2);
+            }
+            finally
+            {
+                factory.Dispose();
+            }
         }
 
-        return request;
+        [TestMethod]
+        public void EffectiveUpstreamProxy_BypassLocalhost_ReturnsNullForLocalHost()
+        {
+            var proxy = new ExternalProxy("proxy.example", 8080) { BypassLocalhost = true, ProxyDnsRequests = true };
+
+            var forLocal = TcpConnectionFactory.GetEffectiveUpstreamProxy(proxy, "127.0.0.1", 443);
+            var forRemote = TcpConnectionFactory.GetEffectiveUpstreamProxy(proxy, "example.com", 443);
+
+            Assert.IsNull(forLocal, "local destination should bypass the proxy");
+            Assert.AreSame(proxy, forRemote, "remote destination should keep the proxy");
+        }
+
+        [TestMethod]
+        public void EffectiveUpstreamProxy_ProxyEqualsDestination_ReturnsNull()
+        {
+            var proxy = new ExternalProxy("example.com", 443);
+
+            var effective = TcpConnectionFactory.GetEffectiveUpstreamProxy(proxy, "example.com", 443);
+
+            Assert.IsNull(effective);
+        }
+
+        [TestMethod]
+        public void NegotiatedProtocolCompatible_Rules()
+        {
+            // no requested protocols => always compatible
+            Assert.IsTrue(TcpConnectionFactory.IsNegotiatedProtocolCompatible(SslApplicationProtocol.Http11, null));
+
+            // default negotiated (plain/unknown) => compatible
+            Assert.IsTrue(TcpConnectionFactory.IsNegotiatedProtocolCompatible(default,
+                new List<SslApplicationProtocol> { SslApplicationProtocol.Http2 }));
+
+            // negotiated matches requested => compatible
+            Assert.IsTrue(TcpConnectionFactory.IsNegotiatedProtocolCompatible(SslApplicationProtocol.Http2,
+                new List<SslApplicationProtocol> { SslApplicationProtocol.Http2 }));
+
+            // negotiated http/1.1 but request requires http/2 => incompatible
+            Assert.IsFalse(TcpConnectionFactory.IsNegotiatedProtocolCompatible(SslApplicationProtocol.Http11,
+                new List<SslApplicationProtocol> { SslApplicationProtocol.Http2 }));
+        }
+
+        [TestMethod]
+        public void CredentialFingerprint_IsUnambiguousAndStable()
+        {
+            Assert.AreEqual(string.Empty, TcpConnectionFactory.GetCredentialFingerprint(null, null));
+
+            // stable for identical inputs
+            Assert.AreEqual(
+                TcpConnectionFactory.GetCredentialFingerprint("user", "pass"),
+                TcpConnectionFactory.GetCredentialFingerprint("user", "pass"));
+
+            // no ambiguity between ("ab","c") and ("a","bc")
+            Assert.AreNotEqual(
+                TcpConnectionFactory.GetCredentialFingerprint("ab", "c"),
+                TcpConnectionFactory.GetCredentialFingerprint("a", "bc"));
+        }
     }
 }
-ParseOptions.0.jsonÜ
-rD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Helpers\HttpMessageParsing.csÐusing System.IO;
-using System.Text;
+ParseOptions.0.jsonß,
+fD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\HeaderCollectionTests.csß+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http;
 
-namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
-
-internal static class HttpMessageParsing
+namespace Titanium.Web.Proxy.UnitTests
 {
-    private static readonly char[] colonSplit = { ':' };
-
     /// <summary>
-    ///     This is a terribly inefficient way of reading & parsing an
-    ///     http request, but it's good enough for testing purposes.
+    ///     Unit tests for <see cref="HeaderCollection" />.
+    ///     HeaderCollection underpins the <c>TrailingHeaders</c> property, so its core
+    ///     unique/non-unique/add/remove/set semantics need a documented baseline.
     /// </summary>
-    /// <param name="messageText">The request message</param>
-    /// <param name="requireBody"></param>
-    /// <returns>Request object if message complete, null otherwise</returns>
-    internal static Request ParseRequest(string messageText, bool requireBody)
+    [TestClass]
+    public class HeaderCollectionTests
     {
-        var reader = new StringReader(messageText);
-        var line = reader.ReadLine();
-        if (string.IsNullOrEmpty(line))
+        [TestMethod]
+        public void AddHeader_SameNameTwice_MovesBothValuesToNonUniqueCollection()
         {
-            return null;
+            var headers = new HeaderCollection();
+            headers.AddHeader("X-Test", "1");
+            headers.AddHeader("X-Test", "2");
+
+            Assert.IsFalse(headers.Headers.ContainsKey("X-Test"));
+            Assert.IsTrue(headers.NonUniqueHeaders.ContainsKey("X-Test"));
+
+            var all = headers.GetHeaders("X-Test");
+            Assert.IsNotNull(all);
+            Assert.AreEqual(2, all.Count);
+            CollectionAssert.AreEquivalent(new[] { "1", "2" }, all.ConvertAll(h => h.Value));
         }
 
-        try
+        [TestMethod]
+        public void AddHeader_SingleName_StaysInUniqueCollection()
         {
-            Request.ParseRequestLine(line, out var method, out var url, out var version);
-            var request = new Request { Method = method, RequestUriString8 = url, HttpVersion = version };
-            while (!string.IsNullOrEmpty(line = reader.ReadLine()))
-            {
-                var header = line.Split(colonSplit, 2);
-                request.Headers.AddHeader(header[0].Trim(), header[1].Trim());
-            }
+            var headers = new HeaderCollection();
+            headers.AddHeader("X-Test", "1");
 
-            // First zero-length line denotes end of headers. If we
-            // didn't get one, then we're not done with request
-            if (line?.Length != 0)
-            {
-                return null;
-            }
-
-            if (!requireBody)
-            {
-                return request;
-            }
-
-            if (ParseBody(reader, request))
-            {
-                return request;
-            }
-        }
-        catch
-        {
-            // ignore
+            Assert.IsTrue(headers.Headers.ContainsKey("X-Test"));
+            Assert.IsFalse(headers.NonUniqueHeaders.ContainsKey("X-Test"));
         }
 
-        return null;
-    }
-
-    /// <summary>
-    ///     This is a terribly inefficient way of reading & parsing an
-    ///     http response, but it's good enough for testing purposes.
-    /// </summary>
-    /// <param name="messageText">The response message</param>
-    /// <returns>Response object if message complete, null otherwise</returns>
-    internal static Response ParseResponse(string messageText)
-    {
-        var reader = new StringReader(messageText);
-        var line = reader.ReadLine();
-        if (string.IsNullOrEmpty(line))
+        [TestMethod]
+        public void GetFirstHeader_ForNonUniqueHeaders_ReturnsFirstAddedValue()
         {
-            return null;
+            var headers = new HeaderCollection();
+            headers.AddHeader("Set-Cookie", "a=1");
+            headers.AddHeader("Set-Cookie", "b=2");
+
+            var first = headers.GetFirstHeader("Set-Cookie");
+
+            Assert.IsNotNull(first);
+            Assert.AreEqual("a=1", first.Value);
         }
 
-        try
+        [TestMethod]
+        public void GetHeaders_ForMissingName_ReturnsNull()
         {
-            Response.ParseResponseLine(line, out var version, out var status, out var desc);
-            var response = new Response { HttpVersion = version, StatusCode = status, StatusDescription = desc };
+            var headers = new HeaderCollection();
 
-            while (!string.IsNullOrEmpty(line = reader.ReadLine()))
-            {
-                var header = line.Split(colonSplit, 2);
-                response.Headers.AddHeader(header[0], header[1]);
-            }
-
-            // First zero-length line denotes end of headers. If we
-            // didn't get one, then we're not done with response
-            if (line?.Length != 0)
-            {
-                return null;
-            }
-
-            if (ParseBody(reader, response))
-            {
-                return response;
-            }
-        }
-        catch
-        {
-            // ignore
+            Assert.IsNull(headers.GetHeaders("X-Missing"));
+            Assert.IsNull(headers.GetFirstHeader("X-Missing"));
         }
 
-        return null;
-    }
-
-    private static bool ParseBody(StringReader reader, RequestResponseBase obj)
-    {
-        obj.OriginalContentLength = obj.ContentLength;
-        if (obj.ContentLength <= 0)
+        [TestMethod]
+        public void RemoveHeader_ByName_RemovesFromEitherCollectionAndReportsWhetherItExisted()
         {
-            // no body, done
-            return true;
+            var headers = new HeaderCollection();
+            headers.AddHeader("X-Single", "1");
+            headers.AddHeader("X-Multi", "a");
+            headers.AddHeader("X-Multi", "b");
+
+            Assert.IsTrue(headers.RemoveHeader("X-Single"));
+            Assert.IsTrue(headers.RemoveHeader("X-Multi"));
+            Assert.IsFalse(headers.HeaderExists("X-Single"));
+            Assert.IsFalse(headers.HeaderExists("X-Multi"));
+            Assert.IsFalse(headers.RemoveHeader("X-DoesNotExist"));
         }
 
-        obj.Body = Encoding.ASCII.GetBytes(reader.ReadToEnd());
-
-        // done reading body
-        return obj.ContentLength == obj.OriginalContentLength;
-    }
-}
-ParseOptions.0.jsonš
-jD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Helpers\TestHelper.cs–using System;
-using System.Net;
-using System.Net.Http;
-using Titanium.Web.Proxy.IntegrationTests.Setup;
-
-namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
-
-public static class TestHelper
-{
-    public static HttpClient GetHttpClient(int localProxyPort,
-        bool enableBasicProxyAuthorization = false)
-    {
-        var proxy = new TestProxy($"http://localhost:{localProxyPort}", enableBasicProxyAuthorization);
-
-        var handler = CreateHandler();
-        handler.Proxy = proxy;
-        handler.UseProxy = true;
-
-        return new HttpClient(handler);
-    }
-
-    public static HttpClient GetHttpClient()
-    {
-        return new HttpClient(CreateHandler());
-    }
-
-    /// <summary>
-    ///     An HttpClient forced onto HTTP/2 (via a fixed proxy and RequestVersionExact) for exercising the
-    ///     proxy's HTTP/2 relay. A single instance reuses one underlying HTTP/2 connection (and therefore one
-    ///     HPACK encoder/decoder pair on each leg) across multiple requests, which is what tests of
-    ///     connection-scoped state (e.g. HPACK dynamic table reuse) need.
-    /// </summary>
-    public static HttpClient GetHttp2Client(ProxyServer proxy)
-    {
-        var handler = new SocketsHttpHandler
+        [TestMethod]
+        public void HeaderExists_And_Lookups_AreCaseInsensitive()
         {
-            Proxy = new TestProxy($"http://localhost:{proxy.ProxyEndPoints[0].Port}", false),
-            UseProxy = true,
-            SslOptions =
-            {
-                RemoteCertificateValidationCallback =
-                    (_, certificate, _, errors) => TestCertificateAuthority.Validate(certificate, errors)
-            }
-        };
+            var headers = new HeaderCollection();
+            headers.AddHeader("Content-Type", "text/plain");
 
-        return new HttpClient(handler)
-        {
-            DefaultRequestVersion = new Version(2, 0),
-            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
-        };
-    }
-
-    private static HttpClientHandler CreateHandler()
-    {
-        return new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback =
-                (_, certificate, _, errors) => TestCertificateAuthority.Validate(certificate, errors)
-        };
-    }
-
-    public class TestProxy : IWebProxy
-    {
-        public TestProxy(string proxyUri, bool enableAuthorization)
-            : this(new Uri(proxyUri))
-        {
-            if (enableAuthorization)
-            {
-                Credentials = new NetworkCredential("test", "Test56");
-            }
+            Assert.IsTrue(headers.HeaderExists("content-type"));
+            Assert.IsTrue(headers.HeaderExists("CONTENT-TYPE"));
+            Assert.IsNotNull(headers.GetFirstHeader("content-type"));
         }
 
-        private TestProxy(Uri proxyUri)
+        [TestMethod]
+        public void Clear_RemovesAllUniqueAndNonUniqueHeaders()
         {
-            ProxyUri = proxyUri;
+            var headers = new HeaderCollection();
+            headers.AddHeader("A", "1");
+            headers.AddHeader("B", "1");
+            headers.AddHeader("B", "2");
+
+            headers.Clear();
+
+            Assert.AreEqual(0, headers.GetAllHeaders().Count);
+            Assert.IsFalse(headers.HeaderExists("A"));
+            Assert.IsFalse(headers.HeaderExists("B"));
         }
 
-        public Uri ProxyUri { get; set; }
-        public ICredentials Credentials { get; set; }
-
-        public Uri GetProxy(Uri destination)
+        [TestMethod]
+        public void SetOrAddHeaderValue_UpdatesExistingUniqueHeaderInPlaceRatherThanDuplicating()
         {
-            return ProxyUri;
+            var headers = new HeaderCollection();
+            headers.AddHeader(KnownHeaders.ContentType, "text/plain");
+
+            headers.SetOrAddHeaderValue(KnownHeaders.ContentType, "application/json");
+
+            Assert.AreEqual("application/json", headers.GetHeaderValueOrNull(KnownHeaders.ContentType));
+            Assert.AreEqual(1, headers.GetHeaders("Content-Type").Count);
         }
 
-        public bool IsBypassed(Uri host)
+        [TestMethod]
+        public void SetOrAddHeaderValue_NullValue_RemovesHeader()
         {
-            return false;
+            var headers = new HeaderCollection();
+            headers.AddHeader(KnownHeaders.ContentType, "text/plain");
+
+            headers.SetOrAddHeaderValue(KnownHeaders.ContentType, (string)null);
+
+            Assert.IsFalse(headers.HeaderExists("Content-Type"));
+        }
+
+        [TestMethod]
+        public void FixProxyHeaders_MovesProxyConnectionValueOntoConnectionHeader()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeader(KnownHeaders.ProxyConnection, "close");
+
+            headers.FixProxyHeaders();
+
+            Assert.IsFalse(headers.HeaderExists("Proxy-Connection"));
+            Assert.AreEqual("close", headers.GetHeaderValueOrNull(KnownHeaders.Connection));
+        }
+
+        [TestMethod]
+        public void FixProxyHeaders_WithoutProxyConnectionHeader_LeavesConnectionHeaderUntouched()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeader(KnownHeaders.Connection, "keep-alive");
+
+            headers.FixProxyHeaders();
+
+            Assert.AreEqual("keep-alive", headers.GetHeaderValueOrNull(KnownHeaders.Connection));
         }
     }
 }
-ParseOptions.0.jsonä4
-bD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Http2Tests.csè3using System;
-using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
+ParseOptions.0.jsonÊ
+eD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\HpackRegressionTests.csËusing System;
+using System.Collections.Generic;
+using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Titanium.Web.Proxy.IntegrationTests.Helpers;
-using Titanium.Web.Proxy.IntegrationTests.Setup;
+using Titanium.Web.Proxy.Http2.Hpack;
+using Titanium.Web.Proxy.Models;
 
-namespace Titanium.Web.Proxy.IntegrationTests;
+namespace Titanium.Web.Proxy.UnitTests
+{
+    [TestClass]
+    public class HpackRegressionTests
+    {
+        [TestMethod]
+        public void Decode_FragmentedStringLiteral_EmitsCompleteHeader()
+        {
+            var encodedHeader = new byte[]
+            {
+                0x00, // literal header without indexing, new name
+                0x03, (byte)'f', (byte)'o', (byte)'o',
+                0x03, (byte)'b', (byte)'a', (byte)'r'
+            };
+            var listener = new RecordingHeaderListener();
+            var decoder = new Decoder(8192, 4096);
+
+            using (var stream = new FragmentedReadStream(encodedHeader))
+            using (var reader = new BinaryReader(stream))
+            {
+                decoder.Decode(reader, listener);
+                decoder.EndHeaderBlock();
+            }
+
+            Assert.AreEqual(1, listener.Headers.Count);
+            Assert.AreEqual("foo", listener.Headers[0].Item1);
+            Assert.AreEqual("bar", listener.Headers[0].Item2);
+        }
+
+        [TestMethod]
+        public void DynamicTable_WrappedEntriesSurviveCapacityChangeInIndexOrder()
+        {
+            var table = new DynamicTable(68);
+            table.Add(new HttpHeader("a", "1"));
+            table.Add(new HttpHeader("b", "2"));
+
+            // Adding the third same-sized entry evicts the oldest and wraps the circular queue.
+            table.Add(new HttpHeader("c", "3"));
+            table.SetCapacity(100);
+
+            Assert.AreEqual(2, table.Length());
+            Assert.AreEqual("c", table.GetEntry(1).Name);
+            Assert.AreEqual("3", table.GetEntry(1).Value);
+            Assert.AreEqual("b", table.GetEntry(2).Name);
+            Assert.AreEqual("2", table.GetEntry(2).Value);
+        }
+
+        private sealed class RecordingHeaderListener : IHeaderListener
+        {
+            internal List<Tuple<string, string>> Headers { get; } = new List<Tuple<string, string>>();
+
+            public void AddHeader(ByteString name, ByteString value, bool sensitive)
+            {
+                Headers.Add(Tuple.Create(name.ToString(), value.ToString()));
+            }
+        }
+
+        private sealed class FragmentedReadStream : MemoryStream
+        {
+            internal FragmentedReadStream(byte[] buffer) : base(buffer)
+            {
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                return base.Read(buffer, offset, Math.Min(1, count));
+            }
+        }
+    }
+}
+ParseOptions.0.jsonõ'
+gD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\Http2HpackEncoderTests.csô&// The Encoder type (like Http2Helper) only compiles for net6.0+ targets; this whole file is a no-op
+// on net462/net48, matching that existing convention. It activates once the unit test project itself
+// moves to net10.0 or is otherwise built against a net6.0+ target.
+#if NET6_0_OR_GREATER
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Http2.Hpack;
+// System.Text also defines abstract Encoder/Decoder types (for char<->byte transcoding); alias the HPACK
+// ones explicitly so they win over those System.Text names brought in by the `using System.Text;` above.
+using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
+using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
+
+namespace Titanium.Web.Proxy.UnitTests
+{
+    /// <summary>
+    ///     Unit tests for <see cref="Encoder" />, establishing two baselines:
+    ///     1. The Encoder type itself supports dynamic-table reuse correctly when the *same instance* is used
+    ///        across calls.
+    ///     2. Two independent Encoder instances can never benefit from cross-instance indexing - this is an
+    ///        inherent property of HPACK's per-connection-direction dynamic table, not a bug.
+    ///     <c>Http2Helper.SendHeader</c> reuses one <c>Encoder</c> per connection direction (stored on the
+    ///     shared <c>Http2Settings</c> instance) instead of constructing a fresh one on every call, so
+    ///     production traffic benefits from baseline 1 across streams on the same HTTP/2 connection. See
+    ///     <c>Http2Tests.Http2_Repeated_Response_Header_Round_Trips_Correctly_Across_Multiple_Requests</c>
+    ///     in the integration test suite for an end-to-end proof through the real relay.
+    /// </summary>
+    [TestClass]
+    public class Http2HpackEncoderTests
+    {
+        [TestMethod]
+        public void Encoder_ReusedInstance_IndexesRepeatedHeaderIntoDynamicTable()
+        {
+            var encoder = new Encoder(4096);
+            var decoder = new Decoder(8192, 4096);
+            var listener = new RecordingHeaderListener();
+
+            var first = EncodeHeader(encoder, "x-custom-header", "some-repeated-value");
+            var second = EncodeHeader(encoder, "x-custom-header", "some-repeated-value");
+
+            Assert.IsTrue(second.Length < first.Length,
+                "A reused Encoder instance should emit a compact indexed reference for a header " +
+                "it has already added to the dynamic table.");
+
+            Decode(decoder, listener, first);
+            Decode(decoder, listener, second);
+
+            Assert.AreEqual(2, listener.Headers.Count);
+            foreach (var (name, value) in listener.Headers)
+            {
+                Assert.AreEqual("x-custom-header", name);
+                Assert.AreEqual("some-repeated-value", value);
+            }
+        }
+
+        [TestMethod]
+        public void Encoder_FreshInstancePerCall_NeverIndexesRepeatedHeader()
+        {
+            // Two independent Encoder instances have two independent (empty) dynamic tables, so neither can
+            // ever emit an indexed reference into the other's table - this is inherent to HPACK, not something
+            // any wiring change can affect. Http2Helper.SendHeader no longer constructs a fresh Encoder per
+            // call; this test just pins the Encoder type's own behavior for the case where a caller
+            // genuinely does use unrelated instances.
+            var first = EncodeHeader(new Encoder(4096), "x-custom-header", "some-repeated-value");
+            var second = EncodeHeader(new Encoder(4096), "x-custom-header", "some-repeated-value");
+
+            Assert.AreEqual(first.Length, second.Length,
+                "Two independent Encoder instances/tables can never benefit from cross-instance indexing.");
+        }
+
+        private static byte[] EncodeHeader(Encoder encoder, string name, string value)
+        {
+            using var ms = new MemoryStream();
+            using var writer = new BinaryWriter(ms);
+            encoder.EncodeHeader(writer, Encoding.ASCII.GetBytes(name), Encoding.ASCII.GetBytes(value));
+            return ms.ToArray();
+        }
+
+        private static void Decode(Decoder decoder, RecordingHeaderListener listener, byte[] encoded)
+        {
+            using var reader = new BinaryReader(new MemoryStream(encoded));
+            decoder.Decode(reader, listener);
+            decoder.EndHeaderBlock();
+        }
+
+        private sealed class RecordingHeaderListener : IHeaderListener
+        {
+            internal List<(string, string)> Headers { get; } = new();
+
+            public void AddHeader(Models.ByteString name, Models.ByteString value, bool sensitive)
+            {
+                Headers.Add((name.ToString(), value.ToString()));
+            }
+        }
+    }
+}
+#endif
+ParseOptions.0.json˜"
+hD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\Http2HpackEvictionTests.cs–!#if NET6_0_OR_GREATER
+using System.IO;
+using System.Text;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Http2.Hpack;
+using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
+using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
+
+namespace Titanium.Web.Proxy.UnitTests;
 
 /// <summary>
-///     HTTP/2 integration tests. Complements the existing HTTP/2 coverage in
-///     <see cref="StreamingBodyTests" /> (body-write hooks, RespondStreaming) with tests for HPACK
-///     encoder persistence: previously <c>Http2Helper.SendHeader</c> constructed a brand-new
-///     <c>Encoder</c> (with an empty dynamic table) on every call, so repeated headers across streams/requests
-///     on the same HTTP/2 connection were never indexed - see the characterization tests in
-///     <c>Http2HpackEncoderTests</c>. The encoder is now persisted per connection direction, matching how the
-///     decoder was already handled, so these tests exercise many requests over one HTTP/2 connection to prove
-///     the dynamic table is actually being reused end-to-end without corrupting headers.
+///     Regression coverage for HPACK dynamic-table eviction: a persistent encoder/decoder pair (as used per
+///     connection direction by <c>Http2Helper</c>) must keep producing correctly-decodable output as the
+///     dynamic table fills and entries get evicted, both for many distinct headers and for the
+///     Kestrel-shaped repeated-header case that originally exposed the encoder's <c>COMPRESSION_ERROR</c>
+///     bug (see the end-to-end coverage in <c>Titanium.Web.Proxy.IntegrationTests.Http2Tests</c>).
 /// </summary>
 [TestClass]
-public class Http2Tests
+public class Http2HpackEvictionTests
 {
     [TestMethod]
-    [Timeout(30 * 1000)]
-    public async Task Http2_Repeated_Response_Header_Round_Trips_Correctly_Across_Multiple_Requests()
+    public void Encoder_ManyDistinctHeaders_ForcingEviction_StillDecodesCorrectly()
     {
-        // A long, distinctive value so it would dominate a naive per-call HPACK encoding if it were re-sent
-        // literally on every response; a persistent encoder should index it after the first response and
-        // reference it on every subsequent one, on the same underlying HTTP/2 connection.
+        var encoder = new Encoder(4096);
+        var decoder = new Decoder(8192, 4096);
+        var listener = new RecordingHeaderListener();
+
+        for (var i = 0; i < 200; i++)
+        {
+            var name = $"x-header-{i % 7}";
+            var value = $"value-{i}-" + new string('v', 60);
+
+            using var ms = new MemoryStream();
+            using var writer = new BinaryWriter(ms);
+            encoder.EncodeHeader(writer, Encoding.ASCII.GetBytes(name), Encoding.ASCII.GetBytes(value));
+            var encoded = ms.ToArray();
+
+            using var reader = new BinaryReader(new MemoryStream(encoded));
+            listener.Headers.Clear();
+            decoder.Decode(reader, listener);
+            decoder.EndHeaderBlock();
+
+            Assert.AreEqual(1, listener.Headers.Count, $"iteration {i}: expected exactly one decoded header");
+            Assert.AreEqual(name, listener.Headers[0].Item1, $"iteration {i}: name mismatch");
+            Assert.AreEqual(value, listener.Headers[0].Item2, $"iteration {i}: value mismatch");
+        }
+    }
+
+    [TestMethod]
+    public void Encoder_KestrelLikeResponseHeaders_RepeatedAcrossManyResponses_StillDecodesCorrectly()
+    {
+        var encoder = new Encoder(4096);
+        var decoder = new Decoder(8192, 4096);
         const string repeatedValue =
             "a-fairly-long-repeated-header-value-used-to-exercise-http2-hpack-dynamic-table-reuse-across-requests";
 
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            context.Response.Headers["X-Custom-Repeated"] = repeatedValue;
-            return context.Response.WriteAsync("ok");
-        });
-
-        var proxy = testSuite.GetProxy();
-        proxy.EnableHttp2 = true;
-
-        using var client = TestHelper.GetHttp2Client(proxy);
-
         for (var i = 0; i < 10; i++)
         {
-            var response = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
-            var body = await response.Content.ReadAsStringAsync();
+            var headers = new (string name, string value)[]
+            {
+                (":status", "200"),
+                ("date", $"Wed, 22 Jul 2026 18:{i:D2}:00 GMT"),
+                ("content-type", "text/plain"),
+                ("server", "Kestrel"),
+                ("x-custom-repeated", repeatedValue),
+            };
 
-            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-            Assert.AreEqual(new Version(2, 0), response.Version);
-            Assert.AreEqual("ok", body);
-            Assert.IsTrue(response.Headers.TryGetValues("X-Custom-Repeated", out var values),
-                $"Request #{i} is missing the repeated header.");
-            Assert.AreEqual(repeatedValue, values.Single(),
-                $"Request #{i}'s repeated header value was corrupted - possible HPACK dynamic-table indexing bug.");
+            using var ms = new MemoryStream();
+            using var writer = new BinaryWriter(ms);
+            foreach (var (name, value) in headers)
+                encoder.EncodeHeader(writer, Encoding.ASCII.GetBytes(name), Encoding.ASCII.GetBytes(value));
+            var encoded = ms.ToArray();
+
+            var listener = new RecordingHeaderListener();
+            using var reader = new BinaryReader(new MemoryStream(encoded));
+            decoder.Decode(reader, listener);
+            decoder.EndHeaderBlock();
+
+            Assert.AreEqual(headers.Length, listener.Headers.Count, $"iteration {i}: header count mismatch");
+            for (var h = 0; h < headers.Length; h++)
+            {
+                Assert.AreEqual(headers[h].name, listener.Headers[h].Item1, $"iteration {i}, header {h}: name mismatch");
+                Assert.AreEqual(headers[h].value, listener.Headers[h].Item2, $"iteration {i}, header {h}: value mismatch");
+            }
         }
     }
 
-    [TestMethod]
-    [Timeout(30 * 1000)]
-    public async Task Http2_Repeated_Request_Header_Round_Trips_Correctly_Across_Multiple_Requests()
+    private sealed class RecordingHeaderListener : IHeaderListener
     {
-        // Same as above but for the client -> proxy -> server direction (the encoder for that direction is
-        // used only within a single relay task, unlike the client-bound one which is shared across both relay
-        // tasks for synthetic responses - so this exercises the simpler, but still previously-unindexed, path).
-        const string repeatedValue =
-            "another-fairly-long-repeated-header-value-for-the-request-direction-hpack-dynamic-table";
+        internal System.Collections.Generic.List<(string, string)> Headers { get; } = new();
 
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
-        var receivedValues = new System.Collections.Concurrent.ConcurrentBag<string>();
-        server.HandleRequest(context =>
+        public void AddHeader(Models.ByteString name, Models.ByteString value, bool sensitive)
         {
-            receivedValues.Add(context.Request.Headers["X-Custom-Repeated"].ToString());
-            return context.Response.WriteAsync("ok");
-        });
-
-        var proxy = testSuite.GetProxy();
-        proxy.EnableHttp2 = true;
-
-        using var client = TestHelper.GetHttp2Client(proxy);
-
-        for (var i = 0; i < 10; i++)
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(server.ListeningHttpsUrl));
-            request.Headers.Add("X-Custom-Repeated", repeatedValue);
-
-            var response = await client.SendAsync(request);
-            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            Headers.Add((name.ToString(), value.ToString()));
         }
-
-        Assert.AreEqual(10, receivedValues.Count);
-        Assert.IsTrue(receivedValues.All(v => v == repeatedValue),
-            "Every request's repeated header value should have round-tripped intact - possible HPACK dynamic-table indexing bug.");
-    }
-
-    [TestMethod]
-    [Timeout(30 * 1000)]
-    public async Task Http2_Many_Concurrent_Streams_With_Distinct_Headers_Do_Not_Cross_Contaminate()
-    {
-        // Fires many concurrent requests over the same HTTP/2 connection (true multiplexing, interleaved
-        // frames) each with a stream-specific header value, guarding against the shared encoder/decoder
-        // introducing cross-stream contamination now that state is persisted per connection direction.
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            var echo = context.Request.Headers["X-Stream-Id"].ToString();
-            context.Response.Headers["X-Stream-Id-Echo"] = echo;
-            return context.Response.WriteAsync(echo);
-        });
-
-        var proxy = testSuite.GetProxy();
-        proxy.EnableHttp2 = true;
-
-        using var client = TestHelper.GetHttp2Client(proxy);
-
-        const int concurrency = 20;
-        var tasks = Enumerable.Range(0, concurrency).Select(async i =>
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(server.ListeningHttpsUrl));
-            request.Headers.Add("X-Stream-Id", i.ToString());
-
-            var response = await client.SendAsync(request);
-            var body = await response.Content.ReadAsStringAsync();
-
-            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-            Assert.AreEqual(i.ToString(), body, $"Stream #{i}'s response body was cross-contaminated.");
-            Assert.AreEqual(i.ToString(), response.Headers.GetValues("X-Stream-Id-Echo").Single(),
-                $"Stream #{i}'s response header was cross-contaminated.");
-        });
-
-        await Task.WhenAll(tasks);
     }
 }
-ParseOptions.0.jsonÂ
-bD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\HttpsTests.csÆusing System;
-using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-
-namespace Titanium.Web.Proxy.IntegrationTests;
-
-[TestClass]
-public class HttpsTests
-{
-    [TestMethod]
-    public async Task Can_Handle_Https_Request()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetProxy();
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.PostAsync(new Uri(server.ListeningHttpsUrl),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("I am server. I received your greetings.", body);
-    }
-
-    [TestMethod]
-    public async Task Can_Handle_Https_Fake_Tunnel_Request()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetProxy();
-        proxy.BeforeRequest += async (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningHttpUrl;
-            await Task.FromResult(0);
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.PostAsync(new Uri($"https://{Guid.NewGuid().ToString()}.com"),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("I am server. I received your greetings.", body);
-    }
-
-    [TestMethod]
-    public async Task Can_Handle_Https_Mutual_Tls_Request()
-    {
-        using var testSuite = new TestSuite(true);
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetProxy();
-        var clientCert = proxy.CertificateManager.CreateCertificate("client.com", false);
-
-        proxy.ClientCertificateSelectionCallback += async (sender, e) =>
-        {
-            e.ClientCertificate = clientCert;
-            await Task.CompletedTask;
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.PostAsync(new Uri(server.ListeningHttpsUrl),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("I am server. I received your greetings.", body);
-    }
-}
-ParseOptions.0.jsonµ.
-iD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\InterceptionTests.cs²-using System;
-using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-
-namespace Titanium.Web.Proxy.IntegrationTests;
-
-[TestClass]
-public class InterceptionTests
-{
-    [TestMethod]
-    public async Task Can_Intercept_Get_Requests()
-    {
-        using var testSuite = new TestSuite();
-
-        var serverCalled = false;
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            serverCalled = true;
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetProxy();
-        proxy.BeforeRequest += async (sender, e) =>
-        {
-            if (e.HttpClient.Request.Url.Contains("localhost"))
-            {
-                e.Ok("<html><body>TitaniumWebProxy-Stopped!!</body></html>");
-                return;
-            }
-
-            await Task.FromResult(0);
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.GetAsync(new Uri(server.ListeningHttpUrl));
-
-        Assert.IsFalse(serverCalled, "Server should not be called.");
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.IsTrue(body.Contains("TitaniumWebProxy-Stopped!!"));
-    }
-
-    [TestMethod]
-    public async Task Can_Intercept_Post_Requests()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetProxy();
-        proxy.BeforeRequest += async (sender, e) =>
-        {
-            if (e.HttpClient.Request.Url.Contains("localhost"))
-            {
-                e.Ok("<html><body>TitaniumWebProxy-Stopped!!</body></html>");
-                return;
-            }
-
-            await Task.FromResult(0);
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.PostAsync(new Uri(server.ListeningHttpUrl),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.IsTrue(body.Contains("TitaniumWebProxy-Stopped!!"));
-    }
-
-    [TestMethod]
-    public async Task Can_Intercept_Put_Requests()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetProxy();
-        proxy.BeforeRequest += async (sender, e) =>
-        {
-            if (e.HttpClient.Request.Url.Contains("localhost"))
-            {
-                e.Ok("<html><body>TitaniumWebProxy-Stopped!!</body></html>");
-                return;
-            }
-
-            await Task.FromResult(0);
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.PutAsync(new Uri(server.ListeningHttpUrl),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.IsTrue(body.Contains("TitaniumWebProxy-Stopped!!"));
-    }
-
-
-    [TestMethod]
-    public async Task Can_Intercept_Patch_Requests()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetProxy();
-        proxy.BeforeRequest += async (sender, e) =>
-        {
-            if (e.HttpClient.Request.Url.Contains("localhost"))
-            {
-                e.Ok("<html><body>TitaniumWebProxy-Stopped!!</body></html>");
-                return;
-            }
-
-            await Task.FromResult(0);
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.PatchAsync(new Uri(server.ListeningHttpUrl),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.IsTrue(body.Contains("TitaniumWebProxy-Stopped!!"));
-    }
-
-    [TestMethod]
-    public async Task Can_Intercept_Delete_Requests()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetProxy();
-        proxy.BeforeRequest += async (sender, e) =>
-        {
-            if (e.HttpClient.Request.Url.Contains("localhost"))
-            {
-                e.Ok("<html><body>TitaniumWebProxy-Stopped!!</body></html>");
-                return;
-            }
-
-            await Task.FromResult(0);
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.DeleteAsync(new Uri(server.ListeningHttpUrl));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.IsTrue(body.Contains("TitaniumWebProxy-Stopped!!"));
-    }
-}
-ParseOptions.0.json‹Y
-lD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\InterimResponseTests.cs…Xusing System;
-using System.IO;
+#endif
+ParseOptions.0.jsonÿ
+mD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\HttpModelAndProxySocketTests.csøusing System;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.ProxySocket;
+
+namespace Titanium.Web.Proxy.UnitTests
+{
+    [TestClass]
+    public class HttpModelAndProxySocketTests
+    {
+        [TestMethod]
+        public void NewHttpModels_HaveNonNullMethodDefaults()
+        {
+            var request = new Request();
+            var response = new Response();
+
+            Assert.AreEqual(string.Empty, request.Method);
+            Assert.AreEqual(string.Empty, response.RequestMethod);
+            Assert.AreEqual(string.Empty, response.StatusDescription);
+        }
+
+        [TestMethod]
+        public void BeginConnect_InvalidProxyTypeWithProxyEndpoint_Throws()
+        {
+            using (var socket = CreateSocket())
+            {
+                socket.ProxyEndPoint = new IPEndPoint(IPAddress.Loopback, 1);
+                socket.ProxyType = (ProxyTypes)int.MaxValue;
+
+                var exception = Assert.ThrowsException<InvalidOperationException>(() =>
+                    socket.BeginConnect(new IPEndPoint(IPAddress.Loopback, 80), null, null));
+
+                StringAssert.Contains(exception.Message, "Unsupported proxy type");
+            }
+        }
+
+        [TestMethod]
+        public async Task BeginConnect_InvalidProxyTypeWithoutProxyEndpoint_ConnectsDirectly()
+        {
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+
+            try
+            {
+                var endpoint = (IPEndPoint)listener.LocalEndpoint;
+                var acceptTask = listener.AcceptSocketAsync();
+
+                using (var socket = CreateSocket())
+                {
+                    socket.ProxyType = (ProxyTypes)int.MaxValue;
+                    socket.ProxyEndPoint = null;
+
+                    var result = socket.BeginConnect(endpoint, null, null);
+                    socket.EndConnect(result);
+
+                    using (var accepted = await acceptTask)
+                    {
+                        Assert.IsTrue(socket.Connected);
+                        Assert.IsTrue(accepted.Connected);
+                    }
+                }
+            }
+            finally
+            {
+                listener.Stop();
+            }
+        }
+
+        private static Titanium.Web.Proxy.ProxySocket.ProxySocket CreateSocket()
+        {
+            return new Titanium.Web.Proxy.ProxySocket.ProxySocket(
+                AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        }
+    }
+}
+ParseOptions.0.json¶
+hD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\Properties\AssemblyInfo.cs´using System.Reflection;
+using System.Runtime.InteropServices;
+
+// General Information about an assembly is controlled through the following 
+// set of attributes. Change these attribute values to modify the information
+// associated with an assembly.
+[assembly: AssemblyDescription("")]
+[assembly: AssemblyCopyright("Copyright Â© Titanium 2015-2019")]
+[assembly: AssemblyTrademark("")]
+[assembly: AssemblyCulture("")]
+
+// Setting ComVisible to false makes the types in this assembly not visible 
+// to COM components.  If you need to access a type in this assembly from 
+// COM, set the ComVisible attribute to true on that type.
+[assembly: ComVisible(false)]
+
+// The following GUID is for the ID of the typelib if this project is exposed to COM
+[assembly: Guid("b517e3d0-d03b-436f-ab03-34ba0d5321af")]ParseOptions.0.json¼
+aD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\ProxyServerTests.csÁusing System;
+using System.Net;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Models;
+
+namespace Titanium.Web.Proxy.UnitTests
+{
+    [TestClass]
+    public class ProxyServerTests
+    {
+        [TestMethod]
+        public void
+            GivenOneEndpointIsAlreadyAddedToAddress_WhenAddingNewEndpointToExistingAddress_ThenExceptionIsThrown()
+        {
+            // Arrange
+            var proxy = new ProxyServer();
+            const int port = 9999;
+            var firstIpAddress = IPAddress.Parse("127.0.0.1");
+            var secondIpAddress = IPAddress.Parse("127.0.0.1");
+            proxy.AddEndPoint(new ExplicitProxyEndPoint(firstIpAddress, port, false));
+
+            // Act
+            try
+            {
+                proxy.AddEndPoint(new ExplicitProxyEndPoint(secondIpAddress, port, false));
+            }
+            catch (Exception exc)
+            {
+                // Assert
+                StringAssert.Contains(exc.Message, "Cannot add another endpoint to same port");
+                return;
+            }
+
+            Assert.Fail("An exception should be thrown by now");
+        }
+
+        [TestMethod]
+        public void
+            GivenOneEndpointIsAlreadyAddedToAddress_WhenAddingNewEndpointToExistingAddress_ThenTwoEndpointsExists()
+        {
+            // Arrange
+            var proxy = new ProxyServer();
+            const int port = 9999;
+            var firstIpAddress = IPAddress.Parse("127.0.0.1");
+            var secondIpAddress = IPAddress.Parse("192.168.1.1");
+            proxy.AddEndPoint(new ExplicitProxyEndPoint(firstIpAddress, port, false));
+
+            // Act
+            proxy.AddEndPoint(new ExplicitProxyEndPoint(secondIpAddress, port, false));
+
+            // Assert
+            Assert.AreEqual(2, proxy.ProxyEndPoints.Count);
+        }
+
+        [TestMethod]
+        public void GivenOneEndpointIsAlreadyAddedToPort_WhenAddingNewEndpointToExistingPort_ThenExceptionIsThrown()
+        {
+            // Arrange
+            var proxy = new ProxyServer();
+            const int port = 9999;
+            proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, port, false));
+
+            // Act
+            try
+            {
+                proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, port, false));
+            }
+            catch (Exception exc)
+            {
+                // Assert
+                StringAssert.Contains(exc.Message, "Cannot add another endpoint to same port");
+                return;
+            }
+
+            Assert.Fail("An exception should be thrown by now");
+        }
+
+        [TestMethod]
+        public void
+            GivenOneEndpointIsAlreadyAddedToZeroPort_WhenAddingNewEndpointToExistingPort_ThenTwoEndpointsExists()
+        {
+            // Arrange
+            var proxy = new ProxyServer();
+            const int port = 0;
+            proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, port, false));
+
+            // Act
+            proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, port, false));
+
+            // Assert
+            Assert.AreEqual(2, proxy.ProxyEndPoints.Count);
+        }
+    }
+}ParseOptions.0.jsonß)
+iD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\RequestResponseBaseTests.csÜ(using System.IO;
+using System.IO.Compression;
 using System.Text;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Http;
+
+namespace Titanium.Web.Proxy.UnitTests
+{
+    /// <summary>
+    ///     Unit tests for <see cref="RequestResponseBase" /> (via <see cref="Response" />):
+    ///     body assignment, chunked/content-length bookkeeping, and the compression helper used when relaying a
+    ///     buffered, modified body back onto the wire.
+    /// </summary>
+    [TestClass]
+    public class RequestResponseBaseTests
+    {
+        [TestMethod]
+        public void SettingBody_NonChunked_UpdatesContentLengthHeaderToMatchByteLength()
+        {
+            var response = new Response();
+
+            response.Body = Encoding.ASCII.GetBytes("hello world");
+
+            Assert.AreEqual(11, response.ContentLength);
+            Assert.AreEqual("11", response.Headers.GetHeaderValueOrNull(KnownHeaders.ContentLength));
+        }
+
+        [TestMethod]
+        public void IsChunked_True_ClearsContentLengthAndAddsTransferEncodingHeader()
+        {
+            var response = new Response();
+
+            response.IsChunked = true;
+
+            Assert.AreEqual(-1, response.ContentLength);
+            Assert.IsTrue(response.Headers.HeaderExists("Transfer-Encoding"));
+
+            response.IsChunked = false;
+
+            Assert.IsFalse(response.Headers.HeaderExists("Transfer-Encoding"));
+        }
+
+        [TestMethod]
+        public void ContentLength_SetToNegative_RemovesContentLengthHeader()
+        {
+            var response = new Response();
+            response.Body = Encoding.ASCII.GetBytes("hello");
+            Assert.IsTrue(response.Headers.HeaderExists("Content-Length"));
+
+            response.ContentLength = -1;
+
+            Assert.IsFalse(response.Headers.HeaderExists("Content-Length"));
+        }
+
+        [TestMethod]
+        public void BodyString_DecodesBodyUsingContentTypeEncoding()
+        {
+            var response = new Response(Encoding.UTF8.GetBytes("hÃ©llo"))
+            {
+                ContentType = "text/plain; charset=utf-8"
+            };
+
+            Assert.AreEqual("hÃ©llo", response.BodyString);
+        }
+
+        [TestMethod]
+        public void CompressBodyAndUpdateContentLength_Gzip_ProducesDecodableOutputAndUpdatesContentLength()
+        {
+            var original = Encoding.ASCII.GetBytes(
+                "the quick brown fox jumps over the lazy dog. the quick brown fox jumps over the lazy dog.");
+            var response = new Response(original);
+            response.Headers.AddHeader(KnownHeaders.ContentEncoding, "gzip");
+
+            var compressed = response.CompressBodyAndUpdateContentLength();
+
+            Assert.IsNotNull(compressed);
+            Assert.AreEqual(compressed.Length, response.ContentLength);
+
+            using (var compressedStream = new MemoryStream(compressed))
+            using (var gzip = new GZipStream(compressedStream, CompressionMode.Decompress))
+            using (var decompressed = new MemoryStream())
+            {
+                gzip.CopyTo(decompressed);
+                CollectionAssert.AreEqual(original, decompressed.ToArray());
+            }
+        }
+
+        [TestMethod]
+        public void CompressBodyAndUpdateContentLength_Chunked_SetsContentLengthToUnknown()
+        {
+            var original = Encoding.ASCII.GetBytes("streamed body content");
+            var response = new Response(original) { IsChunked = true };
+            response.Headers.AddHeader(KnownHeaders.ContentEncoding, "gzip");
+
+            response.CompressBodyAndUpdateContentLength();
+
+            Assert.AreEqual(-1, response.ContentLength);
+        }
+
+        [TestMethod]
+        public void CompressBodyAndUpdateContentLength_NoBodyAndNotRead_ReturnsNull()
+        {
+            var response = new Response();
+
+            var result = response.CompressBodyAndUpdateContentLength();
+
+            Assert.IsNull(result);
+        }
+
+        [TestMethod]
+        public void TrailingHeaders_DefaultsToEmptyAndHasTrailingHeadersReflectsContent()
+        {
+            var response = new Response();
+
+            // HasTrailingHeaders must not force the lazy allocation that the public getter performs.
+            Assert.IsFalse(response.HasTrailingHeaders);
+
+            Assert.IsNotNull(response.TrailingHeaders);
+            Assert.IsFalse(response.TrailingHeaders.GetEnumerator().MoveNext());
+            Assert.IsFalse(response.HasTrailingHeaders, "An empty collection was allocated but nothing was added.");
+
+            response.TrailingHeaders.AddHeader("X-Checksum", "abc123");
+
+            Assert.IsTrue(response.HasTrailingHeaders);
+            Assert.AreEqual("abc123", response.TrailingHeaders.GetFirstHeader("X-Checksum")?.Value);
+        }
+
+        [TestMethod]
+        public void TrailingHeaders_SameInstanceReturnedOnRepeatedAccess()
+        {
+            var request = new Request();
+
+            var first = request.TrailingHeaders;
+            var second = request.TrailingHeaders;
+
+            Assert.AreSame(first, second);
+        }
+    }
+}
+ParseOptions.0.json„
+gD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\ResponseKeepAliveTests.csƒusing System;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Http;
+
+namespace Titanium.Web.Proxy.UnitTests
+{
+    [TestClass]
+    public class ResponseKeepAliveTests
+    {
+        private static readonly Version Http10 = new Version(1, 0);
+        private static readonly Version Http11 = new Version(1, 1);
+        private static readonly Version Http20 = new Version(2, 0);
+
+        [TestMethod]
+        public void Http11_NoConnectionHeader_IsKeepAlive()
+        {
+            var response = new Response { HttpVersion = Http11 };
+            Assert.IsTrue(response.KeepAlive);
+        }
+
+        [TestMethod]
+        public void Http11_ConnectionClose_IsNotKeepAlive()
+        {
+            var response = new Response { HttpVersion = Http11 };
+            response.Headers.AddHeader("Connection", "close");
+            Assert.IsFalse(response.KeepAlive);
+        }
+
+        [TestMethod]
+        public void Http10_NoConnectionHeader_IsNotKeepAlive()
+        {
+            // HTTP/1.0 defaults to close: such a connection must not be pooled/reused.
+            var response = new Response { HttpVersion = Http10 };
+            Assert.IsFalse(response.KeepAlive);
+        }
+
+        [TestMethod]
+        public void Http10_ConnectionKeepAlive_IsKeepAlive()
+        {
+            var response = new Response { HttpVersion = Http10 };
+            response.Headers.AddHeader("Connection", "keep-alive");
+            Assert.IsTrue(response.KeepAlive);
+        }
+
+        [TestMethod]
+        public void Http10_ConnectionClose_IsNotKeepAlive()
+        {
+            var response = new Response { HttpVersion = Http10 };
+            response.Headers.AddHeader("Connection", "close");
+            Assert.IsFalse(response.KeepAlive);
+        }
+
+        [TestMethod]
+        public void Http2_NoConnectionHeader_IsKeepAlive()
+        {
+            var response = new Response { HttpVersion = Http20 };
+            Assert.IsTrue(response.KeepAlive);
+        }
+    }
+}
+ParseOptions.0.json¿
+tD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\StreamAndCertificateRegressionTests.cs±using System.IO;
+using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
-using Titanium.Web.Proxy.IntegrationTests.Setup;
+using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
-namespace Titanium.Web.Proxy.IntegrationTests;
-
-/// <summary>
-///     Integration tests for interim (1xx) response handling in
-///     <c>ResponseHandler.HandleHttpSessionResponse</c>. Previously only 100 Continue was recognized;
-///     any other 1xx (e.g. 103 Early Hints) was mistakenly treated as the final response - forwarded to the
-///     client as-is, with the proxy then trying to read the *next* HTTP message on the connection as if it
-///     were a brand new request/response pair. These tests assert the corrected behavior: every interim
-///     response is relayed (100 is still discarded, matching the documented "client can simply discard this
-///     interim response" behavior) and the proxy keeps reading interim responses on the connection until
-///     the true final response arrives. 101 Switching Protocols is verified separately, since it is
-///     deliberately excluded from the loop (it *is* the final message of the exchange).
-///     <para>
-///         Uses raw <see cref="TcpClient" />/<see cref="Setup.TestServer.HandleTcpRequest" /> on both sides
-///         because .NET's <c>HttpClient</c> does not reliably surface arbitrary 1xx responses (other than
-///         100/101, which it has dedicated handling for) to application code.
-///     </para>
-/// </summary>
-[TestClass]
-public class InterimResponseTests
+namespace Titanium.Web.Proxy.UnitTests
 {
-    private static readonly Encoding MsgEncoding = HttpHelper.GetEncodingFromContentType(null);
-
-    [TestMethod]
-    [Timeout(30 * 1000)]
-    public async Task Interim_103_EarlyHints_Response_Is_Relayed_Before_Final_Response()
+    [TestClass]
+    public class StreamAndCertificateRegressionTests
     {
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
-
-        server.HandleTcpRequest(async context =>
+        [TestMethod]
+        public async Task WriteAsync_ReadOnlyMemory_WritesOnlyRequestedBytes()
         {
-            await DrainRequestHeaders(context);
+            var destination = new MemoryStream();
+            var stream = new HttpStream(
+                new ProxyServer(),
+                destination,
+                new DefaultBufferPool(),
+                CancellationToken.None,
+                true);
+            var data = new byte[] { 1, 2, 3 };
 
-            var raw = MsgEncoding.GetBytes(
-                "HTTP/1.1 103 Early Hints\r\n" +
-                "Link: </style.css>; rel=preload\r\n" +
-                "\r\n" +
-                "HTTP/1.1 200 OK\r\n" +
-                "Content-Length: 5\r\n" +
-                "\r\n" +
-                "hello");
+            await stream.WriteAsync(new System.ReadOnlyMemory<byte>(data), CancellationToken.None);
 
-            await context.Transport.Output.WriteAsync(raw);
-            context.Transport.Output.Complete();
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningTcpUrl;
-            return Task.CompletedTask;
-        };
-
-        var responseText = await SendRawRequestAndReadResponse(proxy,
-            "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", TimeSpan.FromSeconds(8));
-
-        var firstStatusIndex = responseText.IndexOf("HTTP/1.1 103", StringComparison.Ordinal);
-        var finalStatusIndex = responseText.IndexOf("HTTP/1.1 200", StringComparison.Ordinal);
-
-        Assert.IsTrue(firstStatusIndex >= 0,
-            "The 103 Early Hints interim response should have been relayed to the client.");
-        Assert.IsTrue(finalStatusIndex > firstStatusIndex,
-            "The final 200 response should follow the interim response.");
-        Assert.IsTrue(responseText.Contains("Link: </style.css>; rel=preload", StringComparison.Ordinal),
-            "The interim response's own headers should have been relayed too.");
-        Assert.IsTrue(responseText.EndsWith("hello", StringComparison.Ordinal),
-            "The final response's body should still be relayed correctly.");
-    }
-
-    [TestMethod]
-    [Timeout(30 * 1000)]
-    public async Task Interim_Multiple_1xx_Responses_Are_All_Relayed_In_Order_Before_Final_Response()
-    {
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
-
-        server.HandleTcpRequest(async context =>
-        {
-            await DrainRequestHeaders(context);
-
-            var raw = MsgEncoding.GetBytes(
-                "HTTP/1.1 103 Early Hints\r\nX-Seq: 1\r\n\r\n" +
-                "HTTP/1.1 103 Early Hints\r\nX-Seq: 2\r\n\r\n" +
-                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
-
-            await context.Transport.Output.WriteAsync(raw);
-            context.Transport.Output.Complete();
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningTcpUrl;
-            return Task.CompletedTask;
-        };
-
-        var responseText = await SendRawRequestAndReadResponse(proxy,
-            "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", TimeSpan.FromSeconds(8));
-
-        var seq1Index = responseText.IndexOf("X-Seq: 1", StringComparison.Ordinal);
-        var seq2Index = responseText.IndexOf("X-Seq: 2", StringComparison.Ordinal);
-        var finalIndex = responseText.IndexOf("HTTP/1.1 200", StringComparison.Ordinal);
-
-        Assert.IsTrue(seq1Index >= 0 && seq2Index > seq1Index && finalIndex > seq2Index,
-            $"Expected both interim responses relayed in order before the final response. Got:\n{responseText}");
-        Assert.IsTrue(responseText.EndsWith("ok", StringComparison.Ordinal));
-    }
-
-    [TestMethod]
-    [Timeout(30 * 1000)]
-    public async Task Interim_100Continue_From_Server_Is_Discarded_Not_Relayed_To_Client()
-    {
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
-
-        server.HandleTcpRequest(async context =>
-        {
-            await DrainRequestHeaders(context);
-
-            var raw = MsgEncoding.GetBytes(
-                "HTTP/1.1 100 Continue\r\n\r\n" +
-                "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello");
-
-            await context.Transport.Output.WriteAsync(raw);
-            context.Transport.Output.Complete();
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningTcpUrl;
-            return Task.CompletedTask;
-        };
-
-        var responseText = await SendRawRequestAndReadResponse(proxy,
-            "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", TimeSpan.FromSeconds(8));
-
-        Assert.IsFalse(responseText.Contains("100 Continue", StringComparison.Ordinal),
-            "100 Continue must still be discarded rather than relayed to the client (per spec, it is safe to discard).");
-        Assert.IsTrue(responseText.StartsWith("HTTP/1.1 200", StringComparison.Ordinal));
-        Assert.IsTrue(responseText.EndsWith("hello", StringComparison.Ordinal));
-    }
-
-    [TestMethod]
-    [Timeout(30 * 1000)]
-    public async Task SwitchingProtocols_101_Response_Is_Relayed_Exactly_Once_Not_Looped_As_Interim()
-    {
-        // Regression guard for the loop's exclusion of 101: 100-199 broadly includes 101, so a naive
-        // interim-response loop would incorrectly try to read yet another response after it (hanging, since
-        // the "connection" is about to become a raw tunnel and nothing else will arrive framed as HTTP).
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
-
-        server.HandleTcpRequest(async context =>
-        {
-            await DrainRequestHeaders(context);
-
-            var raw = MsgEncoding.GetBytes(
-                "HTTP/1.1 101 Switching Protocols\r\n" +
-                "Upgrade: custom-protocol\r\n" +
-                "Connection: Upgrade\r\n" +
-                "\r\n");
-
-            await context.Transport.Output.WriteAsync(raw);
-            context.Transport.Output.Complete();
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningTcpUrl;
-            return Task.CompletedTask;
-        };
-
-        var responseText = await SendRawRequestAndReadResponse(proxy,
-            "GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: custom-protocol\r\nConnection: Upgrade\r\n\r\n",
-            TimeSpan.FromSeconds(5));
-
-        Assert.IsTrue(responseText.StartsWith("HTTP/1.1 101", StringComparison.Ordinal));
-        Assert.AreEqual(1, CountOccurrences(responseText, "HTTP/1.1 101"),
-            "The 101 response must be relayed exactly once, never looped as if it were a discardable interim response.");
-        Assert.AreEqual(1, CountOccurrences(responseText, "HTTP/1.1"),
-            "Nothing else should have been read/relayed as a second message after the 101.");
-    }
-
-    private static int CountOccurrences(string haystack, string needle)
-    {
-        var count = 0;
-        var index = 0;
-        while ((index = haystack.IndexOf(needle, index, StringComparison.Ordinal)) != -1)
-        {
-            count++;
-            index += needle.Length;
+            CollectionAssert.AreEqual(data, destination.ToArray());
         }
 
-        return count;
-    }
-
-    private static async Task DrainRequestHeaders(Microsoft.AspNetCore.Connections.ConnectionContext context)
-    {
-        var requestText = string.Empty;
-        while (!requestText.Contains("\r\n\r\n", StringComparison.Ordinal))
+        [TestMethod]
+        public async Task ReadLineAsync_LineWithoutTrailingNewlineAtEof_ReturnsContent()
         {
-            var result = await context.Transport.Input.ReadAsync();
-            foreach (var seg in result.Buffer) requestText += MsgEncoding.GetString(seg.Span);
-            context.Transport.Input.AdvanceTo(result.Buffer.End);
+            // Regression guard: the pooled buffer must not be returned before the final
+            // string is built when the stream ends without a trailing '\n'.
+            var payload = System.Text.Encoding.ASCII.GetBytes("GET / HTTP/1.1");
+            var source = new MemoryStream(payload);
+            var stream = new HttpStream(
+                new ProxyServer(),
+                source,
+                new DefaultBufferPool(),
+                CancellationToken.None,
+                false);
+
+            var line = await stream.ReadLineAsync(CancellationToken.None);
+
+            Assert.AreEqual("GET / HTTP/1.1", line);
         }
-    }
 
-    /// <summary>
-    ///     Sends a hand-built raw HTTP request directly to the proxy and accumulates whatever bytes come
-    ///     back within <paramref name="readTimeout" />. A bounded timeout (rather than reading to end-of-stream)
-    ///     is used deliberately so a test can't hang forever if a scenario leaves the connection open (e.g.
-    ///     after switching protocols) instead of closing it.
-    /// </summary>
-    private static async Task<string> SendRawRequestAndReadResponse(ProxyServer proxy, string rawRequest,
-        TimeSpan readTimeout)
-    {
-        using var tcpClient = new TcpClient();
-        await tcpClient.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
-        var stream = tcpClient.GetStream();
-
-        await stream.WriteAsync(MsgEncoding.GetBytes(rawRequest));
-
-        using var ms = new MemoryStream();
-        var buffer = new byte[8192];
-        using var cts = new CancellationTokenSource(readTimeout);
-        try
+        [TestMethod]
+        public async Task ReadLineAsync_MultipleLinesWithCrLf_ReturnsEachLine()
         {
-            while (true)
+            var payload = System.Text.Encoding.ASCII.GetBytes("first\r\nsecond\r\n");
+            var source = new MemoryStream(payload);
+            var stream = new HttpStream(
+                new ProxyServer(),
+                source,
+                new DefaultBufferPool(),
+                CancellationToken.None,
+                false);
+
+            var first = await stream.ReadLineAsync(CancellationToken.None);
+            var second = await stream.ReadLineAsync(CancellationToken.None);
+
+            Assert.AreEqual("first", first);
+            Assert.AreEqual("second", second);
+        }
+
+        [TestMethod]
+        public void CertificateCallbacks_NullSessionUseSafeDefaultsWithoutInvocation()
+        {
+            var validationInvoked = false;
+            var selectionInvoked = false;
+            var proxy = new ProxyServer();
+            proxy.ServerCertificateValidationCallback += (sender, args) =>
             {
-                var read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
-                if (read == 0) break;
-                ms.Write(buffer, 0, read);
+                validationInvoked = true;
+                return Task.CompletedTask;
+            };
+            proxy.ClientCertificateSelectionCallback += (sender, args) =>
+            {
+                selectionInvoked = true;
+                return Task.CompletedTask;
+            };
+
+            var valid = proxy.ValidateServerCertificate(
+                proxy, null, null, null, SslPolicyErrors.None);
+            var invalid = proxy.ValidateServerCertificate(
+                proxy, null, null, null, SslPolicyErrors.RemoteCertificateNotAvailable);
+            var selected = proxy.SelectClientCertificate(
+                proxy, null, "example.test", null, null, null);
+
+            Assert.IsTrue(valid);
+            Assert.IsFalse(invalid);
+            Assert.IsNull(selected);
+            Assert.IsFalse(validationInvoked);
+            Assert.IsFalse(selectionInvoked);
+        }
+    }
+}
+ParseOptions.0.jsonÒ?
+`D:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\SystemProxyTest.csØ>using System;
+using System.Runtime.Versioning;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Helpers.WinHttp;
+using Titanium.Web.Proxy.Models;
+
+namespace Titanium.Web.Proxy.UnitTests
+{
+    // SystemProxyManager and WinHttpWebProxyFinder are both [SupportedOSPlatform("windows")]; this whole
+    // test class exercises Windows-only system-proxy-registration APIs (matching CI, which runs on
+    // windows-latest), so it is annotated the same way to satisfy the platform-compatibility analyzer.
+    [SupportedOSPlatform("windows")]
+    [TestClass]
+    public class SystemProxyTest
+    {
+        // This used to cross-check WinHttpWebProxyFinder against WebRequest.GetSystemWebProxy() for every
+        // change made below. That approach turned out to be fundamentally unreliable on modern .NET:
+        //   1. WebRequest.GetSystemWebProxy() returns an IWebProxy (System.Net.Http.HttpWindowsProxy) that
+        //      is cached for the lifetime of the process; repeated calls within the same process do not
+        //      reliably observe rapid, successive registry + InternetSetOption changes the way the old
+        //      .NET Framework WinInet-backed implementation did (verified empirically - a second call
+        //      after changing ProxyServer in the registry, even with a following InternetSetOption
+        //      refresh, kept returning the first-observed value).
+        //   2. HttpWindowsProxy also has hardcoded bypass behavior for loopback (and, seemingly, the
+        //      local machine's own hostname) that is independent of the configured bypass list - see
+        //      https://github.com/dotnet/runtime's HttpWindowsProxy.GetMultiProxy ("This is optimization
+        //      for loopback addresses.").
+        // Neither of those is a bug in Titanium: WinHttpWebProxyFinder intentionally reads the live
+        // WinINet registry configuration on every LoadFromIe() call and applies only the bypass rules
+        // that are actually configured (via System.Net.WebProxy.IsBypassed, which - on modern .NET - does
+        // not hardcode a loopback exception the way HttpWindowsProxy does). So this test now asserts
+        // WinHttpWebProxyFinder's own resolution directly against the settings SystemProxyManager just
+        // wrote, instead of cross-checking against .NET's own (differently-behaved) system proxy resolver.
+        [TestMethod]
+        public void WinHttpWebProxyFinderResolvesConfiguredProxyAndBypassRules()
+        {
+            var proxyManager = new SystemProxyManager();
+
+            try
+            {
+                proxyManager.DisableAllProxy();
+                AssertNoProxy("http://google.com");
+                AssertNoProxy("https://google.com");
+
+                proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.Http);
+                AssertProxy("http://google.com", "127.0.0.1", 8000);
+                AssertNoProxy("https://google.com");
+
+                proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.Https);
+                AssertProxy("http://google.com", "127.0.0.1", 8000);
+                AssertProxy("https://google.com", "127.0.0.1", 8000);
+
+                proxyManager.SetProxy("127.0.0.1", 8000, ProxyProtocolType.AllHttp);
+                AssertProxy("http://bing.com", "127.0.0.1", 8000);
+                AssertProxy("https://bing.com", "127.0.0.1", 8000);
+
+                // A bare hostname bypass rule only matches that exact host; unrelated hosts still proxy.
+                proxyManager.SetProxyOverride("yahoo.com");
+                AssertNoProxy("http://yahoo.com");
+                AssertNoProxy("https://yahoo.com");
+                AssertProxy("http://google.com", "127.0.0.1", 8000);
+
+                // A wildcard rule matches the whole subdomain but not unrelated hosts.
+                proxyManager.SetProxyOverride("*.local");
+                AssertNoProxy("http://test.local");
+                AssertNoProxy("https://test.local");
+                AssertProxy("http://google.com", "127.0.0.1", 8000);
+
+                // <local> bypasses simple (no-dot) hostnames but not dotted ones.
+                proxyManager.SetProxyOverride("<local>");
+                AssertNoProxy("http://simplehostname");
+                AssertProxy("http://google.com", "127.0.0.1", 8000);
+                AssertProxy("http://test.local", "127.0.0.1", 8000);
+
+                // Combining rules with ';' still leaves unrelated hosts proxied.
+                proxyManager.SetProxyOverride("*.local;<local>");
+                AssertNoProxy("http://test.local");
+                AssertNoProxy("http://simplehostname");
+                AssertProxy("http://google.com", "127.0.0.1", 8000);
+            }
+            finally
+            {
+                proxyManager.RestoreOriginalSettings();
             }
         }
-        catch (OperationCanceledException)
+
+        private static void AssertProxy(string url, string expectedHost, int expectedPort)
         {
-            // Timed out waiting for more data - the connection was likely kept open (e.g. pooled, or
-            // switched to a raw tunnel after a 101). Return whatever was received so far.
+            using var resolver = new WinHttpWebProxyFinder();
+            resolver.LoadFromIe();
+
+            var proxy = resolver.GetProxy(new Uri(url));
+
+            Assert.IsNotNull(proxy, $"Expected a proxy to be resolved for '{url}' but got none.");
+            Assert.AreEqual(expectedHost, proxy!.HostName);
+            Assert.AreEqual(expectedPort, proxy.Port);
         }
 
-        return MsgEncoding.GetString(ms.ToArray());
-    }
-}
-ParseOptions.0.jsonîK
-hD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\NestedProxyTests.csìJusing System;
-using System.Collections.Generic;
-using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Titanium.Web.Proxy.Models;
-
-namespace Titanium.Web.Proxy.IntegrationTests;
-
-[TestClass]
-public class NestedProxyTests
-{
-    [TestMethod]
-    public async Task Smoke_Test_Nested_Proxy()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
+        private static void AssertNoProxy(string url)
         {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
+            using var resolver = new WinHttpWebProxyFinder();
+            resolver.LoadFromIe();
 
-        var proxy1 = testSuite.GetProxy();
-        var proxy2 = testSuite.GetProxy(proxy1);
+            var proxy = resolver.GetProxy(new Uri(url));
 
-        var client = testSuite.GetClient(proxy2);
+            Assert.IsNull(proxy,
+                $"Expected no proxy to be resolved for '{url}' but got {proxy?.HostName}:{proxy?.Port}.");
+        }
 
-        var response = await client.PostAsync(new Uri(server.ListeningHttpsUrl),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("I am server. I received your greetings.", body);
-    }
-
-    [TestMethod]
-    public async Task Smoke_Test_Nested_Proxy_UserData()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
+        [TestMethod]
+        public void SystemProxySettingsMergeExistingRulesAndProxyLoopback()
         {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy1 = testSuite.GetProxy();
-        proxy1.ProxyBasicAuthenticateFunc = async (session, username, password) =>
-        {
-            session.UserData = "Test";
-            return await Task.FromResult(true);
-        };
-
-        var proxy2 = testSuite.GetProxy();
-
-        proxy1.GetCustomUpStreamProxyFunc = async session =>
-        {
-            Assert.AreEqual("Test", session.UserData);
-
-            return await Task.FromResult(new ExternalProxy("localhost", proxy2.ProxyEndPoints[0].Port));
-        };
-
-        var client = testSuite.GetClient(proxy1, true);
-
-        var response = await client.PostAsync(new Uri(server.ListeningHttpsUrl),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("I am server. I received your greetings.", body);
-    }
-
-    [TestMethod]
-    [Timeout(60 * 1000)]
-    public async Task Upstream_Proxy_Failure_Fails_Over_To_New_Proxy()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context => context.Response.WriteAsync("failover ok"));
-
-        // a working upstream proxy the failover callback will switch to
-        var workingUpstream = testSuite.GetProxy();
-
-        var proxy = testSuite.GetProxy();
-        var failoverInvoked = false;
-
-        // initial upstream points at a closed port so the first connection attempt fails
-        proxy.GetCustomUpStreamProxyFunc = _ =>
-            Task.FromResult<IExternalProxy>(new ExternalProxy("localhost", 1) { ProxyType = ExternalProxyType.Http });
-
-        proxy.CustomUpStreamProxyFailureFunc = _ =>
-        {
-            failoverInvoked = true;
-            return Task.FromResult<IExternalProxy>(
-                new ExternalProxy("localhost", workingUpstream.ProxyEndPoints[0].Port)
-                    { ProxyType = ExternalProxyType.Http });
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.PostAsync(new Uri(server.ListeningHttpsUrl),
-            new StringContent("hello"));
-
-        Assert.IsTrue(failoverInvoked, "the failover callback should have been invoked");
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual("failover ok", await response.Content.ReadAsStringAsync());
-    }
-
-    [TestMethod]
-    [Timeout(2 * 60 * 1000)]
-    public async Task Nested_Proxy_Farm_Without_Connection_Cache_Should_Not_Hang()
-    {
-        var rnd = new Random();
-
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxies2 = new List<ProxyServer>();
-
-        //create a level 2 upstream proxy farm that forwards to server
-        for (var i = 0; i < 10; i++)
-        {
-            var proxy2 = testSuite.GetProxy();
-            proxy2.ProxyBasicAuthenticateFunc += (_, _, _) =>
+            var settings = new SystemProxySettings
             {
-                return Task.FromResult(true);
+                ProxyLoopback = true
             };
+            settings.BypassRules.Add("*.example.com");
+            settings.BypassRules.Add("<local>");
 
-            proxies2.Add(proxy2);
+            var proxyOverride = settings.BuildProxyOverride("*.internal;<local>");
+
+            Assert.AreEqual("<-loopback>;*.internal;<local>;*.example.com", proxyOverride);
         }
 
-        var proxies1 = new List<ProxyServer>();
-
-        //create a level 1 upstream proxy farm that forwards to level 2 farm
-        for (var i = 0; i < 10; i++)
+        [TestMethod]
+        public void SystemProxySettingsReplaceExistingRules()
         {
-            var proxy1 = testSuite.GetProxy();
-            proxy1.EnableConnectionPool = false;
-            var proxy2 = proxies2[rnd.Next() % proxies2.Count];
-
-            proxy1.GetCustomUpStreamProxyFunc += async _ =>
+            var settings = new SystemProxySettings
             {
-                var proxy = new ExternalProxy
-                {
-                    HostName = "localhost",
-                    Port = proxy2.ProxyEndPoints[0].Port,
-                    ProxyType = ExternalProxyType.Http,
-                    UserName = "test_user",
-                    Password = "test_password"
-                };
-
-                return await Task.FromResult(proxy);
+                BypassRuleMode = SystemProxyBypassRuleMode.Replace
             };
+            settings.BypassRules.Add("*.example.com");
 
-            proxies1.Add(proxy1);
+            var proxyOverride = settings.BuildProxyOverride("*.internal;<local>");
+
+            Assert.AreEqual("*.example.com", proxyOverride);
         }
 
-        var tasks = new List<Task>();
-
-        //send multiple concurrent requests from client => proxy farm 1 => proxy farm 2 => server
-        for (var j = 0; j < 10_000; j++)
+        [TestMethod]
+        public void DefaultSystemProxySettingsPreserveExistingRules()
         {
-            var task = Task.Run(async () =>
-            {
-                try
-                {
-                    var proxy = proxies1[rnd.Next() % proxies1.Count];
-                    using var client = testSuite.GetClient(proxy);
+            var settings = new SystemProxySettings();
 
-                    //tests should not keep hanging for 30 mins.
-                    client.Timeout = TimeSpan.FromMinutes(30);
-                    await client.PostAsync(new Uri(server.ListeningHttpsUrl),
-                        new StringContent("hello server. I am a client."));
-                }
-                //if error is thrown because of server getting overloaded its okay.
-                //But client.PostAsync should'nt hang in all cases.
-                catch { }
-            });
+            var proxyOverride = settings.BuildProxyOverride("*.internal;<local>");
 
-            tasks.Add(task);
+            Assert.AreEqual("*.internal;<local>", proxyOverride);
         }
 
-        await Task.WhenAll(tasks);
-    }
-
-
-    //Reproduce bug reported so that we can fix it.
-    //https://github.com/justcoding121/titanium-web-proxy/issues/826
-    [TestMethod]
-    [Timeout(2 * 60 * 1000)]
-    public async Task Nested_Proxy_Farm_With_Connection_Cache_Should_Not_Hang()
-    {
-        var rnd = new Random();
-
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
+        [TestMethod]
+        public void SystemProxySettingsPlacesLoopbackRuleLastWhenRequested()
         {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxies2 = new List<ProxyServer>();
-
-        //create a level 2 upstream proxy farm that forwards to server
-        for (var i = 0; i < 10; i++)
-        {
-            var proxy2 = testSuite.GetProxy();
-            proxy2.ProxyBasicAuthenticateFunc += (_, _, _) =>
+            var settings = new SystemProxySettings
             {
-                return Task.FromResult(true);
+                ProxyLoopback = true,
+                ProxyLoopbackPlacement = SystemProxyLoopbackPlacement.Last
             };
-            proxies2.Add(proxy2);
+            settings.BypassRules.Add("*.example.com");
+
+            var proxyOverride = settings.BuildProxyOverride(null);
+
+            Assert.AreEqual("*.example.com;<-loopback>", proxyOverride);
         }
 
-        var proxies1 = new List<ProxyServer>();
-
-        //create a level 1 upstream proxy farm that forwards to level 2 farm
-        for (var i = 0; i < 10; i++)
+        [TestMethod]
+        public void SystemProxySettingsValidateThrowsForMalformedRules()
         {
-            var proxy1 = testSuite.GetProxy();
-            var proxy2 = proxies2[rnd.Next() % proxies2.Count];
+            var settings = new SystemProxySettings();
+            settings.BypassRules.Add("*.example.com;*.other.com");
 
-            proxy1.GetCustomUpStreamProxyFunc += async _ =>
-            {
-                var proxy = new ExternalProxy
-                {
-                    HostName = "localhost",
-                    Port = proxy2.ProxyEndPoints[0].Port,
-                    ProxyType = ExternalProxyType.Http,
-                    UserName = "test_user",
-                    Password = "test_password"
-                };
-
-                return await Task.FromResult(proxy);
-            };
-
-            proxies1.Add(proxy1);
-        }
-
-        var tasks = new List<Task>();
-
-        //send multiple concurrent requests from client => proxy farm 1 => proxy farm 2 => server
-        for (var j = 0; j < 10_000; j++)
-        {
-            var task = Task.Run(async () =>
-            {
-                try
-                {
-                    var proxy = proxies1[rnd.Next() % proxies1.Count];
-                    using var client = testSuite.GetClient(proxy);
-
-                    //tests should not keep hanging for 30 mins.
-                    client.Timeout = TimeSpan.FromMinutes(30);
-                    await client.PostAsync(new Uri(server.ListeningHttpsUrl),
-                        new StringContent("hello server. I am a client."));
-                }
-                //if error is thrown because of server getting overloaded its okay.
-                //But client.PostAsync should'nt hang in all cases.
-                catch { }
-            });
-
-            tasks.Add(task);
-        }
-
-        await Task.WhenAll(tasks);
-    }
-}
-ParseOptions.0.json³J
-iD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\ReverseProxyTests.cs°Iusing System;
-using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Titanium.Web.Proxy.Models;
-
-namespace Titanium.Web.Proxy.IntegrationTests;
-
-[TestClass]
-public class ReverseProxyTests
-{
-    [TestMethod]
-    public async Task Smoke_Test_Http_To_Http_Reverse_Proxy()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.BeforeRequest += async (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningHttpUrl;
-            await Task.FromResult(0);
-        };
-
-        var client = testSuite.GetReverseProxyClient();
-
-        var response = await client.PostAsync(new Uri($"http://localhost:{proxy.ProxyEndPoints[0].Port}"),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("I am server. I received your greetings.", body);
-    }
-
-    [TestMethod]
-    public async Task Smoke_Test_Https_To_Http_Reverse_Proxy()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.BeforeRequest += async (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningHttpUrl;
-            await Task.FromResult(0);
-        };
-
-        var client = testSuite.GetReverseProxyClient();
-
-        var response = await client.PostAsync(new Uri($"https://localhost:{proxy.ProxyEndPoints[0].Port}"),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("I am server. I received your greetings.", body);
-    }
-
-    [TestMethod]
-    public async Task Smoke_Test_Http_To_Https_Reverse_Proxy()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.BeforeRequest += async (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningHttpsUrl;
-            await Task.FromResult(0);
-        };
-
-        var client = testSuite.GetReverseProxyClient();
-
-        var response = await client.PostAsync(new Uri($"http://localhost:{proxy.ProxyEndPoints[0].Port}"),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("I am server. I received your greetings.", body);
-    }
-
-    [TestMethod]
-    public async Task Smoke_Test_Https_To_Https_Reverse_Proxy()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        proxy.BeforeRequest += async (sender, e) =>
-        {
-            e.HttpClient.Request.Url = server.ListeningHttpsUrl;
-            await Task.FromResult(0);
-        };
-
-        var client = testSuite.GetReverseProxyClient();
-
-        var response = await client.PostAsync(new Uri($"https://localhost:{proxy.ProxyEndPoints[0].Port}"),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("I am server. I received your greetings.", body);
-    }
-
-    [TestMethod]
-    public async Task Smoke_Test_Https_To_Https_Reverse_Proxy_Tunnel_Without_Decryption()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        var endpoint =
-            proxy.ProxyEndPoints.Where(x => x is TransparentProxyEndPoint).First() as TransparentProxyEndPoint;
-
-        endpoint.BeforeSslAuthenticate += async (sender, e) =>
-        {
-            e.DecryptSsl = false;
-            e.ForwardHttpsPort = server.HttpsListeningPort;
-        };
-
-        var client = testSuite.GetReverseProxyClient();
-
-        var response = await client.PostAsync(new Uri($"https://localhost:{proxy.ProxyEndPoints[0].Port}"),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("I am server. I received your greetings.", body);
-    }
-
-    [TestMethod]
-    public async Task Smoke_Test_Http_Reverse_Proxy_With_Fixed_Forward_Endpoint()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
-
-        // forward everything to the fixed backend without rewriting the request in BeforeRequest.
-        endpoint.ForwardHost = "localhost";
-        endpoint.ForwardPort = server.HttpListeningPort;
-
-        var client = testSuite.GetReverseProxyClient();
-
-        var response = await client.PostAsync(new Uri($"http://localhost:{proxy.ProxyEndPoints[0].Port}"),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("I am server. I received your greetings.", body);
-    }
-
-    [TestMethod]
-    public async Task Smoke_Test_Https_Reverse_Proxy_With_Fixed_Forward_Endpoint()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
-
-        // decrypt and forward to the fixed backend; the original "localhost" host is still
-        // used for TLS SNI/certificate validation while only the connection port changes.
-        endpoint.ForwardHost = "localhost";
-        endpoint.ForwardPort = server.HttpsListeningPort;
-
-        var client = testSuite.GetReverseProxyClient();
-
-        var response = await client.PostAsync(new Uri($"https://localhost:{proxy.ProxyEndPoints[0].Port}"),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("I am server. I received your greetings.", body);
-    }
-
-    [TestMethod]
-    public async Task Smoke_Test_Https_Reverse_Proxy_Tunnel_With_Fixed_Forward_Endpoint()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        var proxy = testSuite.GetReverseProxy();
-        var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
-
-        // configure the fixed forward on the endpoint; the tunnel path should pick it up
-        // as the default forward target without a BeforeSslAuthenticate handler.
-        endpoint.ForwardPort = server.HttpsListeningPort;
-        endpoint.BeforeSslAuthenticate += async (sender, e) =>
-        {
-            e.DecryptSsl = false;
-            await Task.CompletedTask;
-        };
-
-        var client = testSuite.GetReverseProxyClient();
-
-        var response = await client.PostAsync(new Uri($"https://localhost:{proxy.ProxyEndPoints[0].Port}"),
-            new StringContent("hello server. I am a client."));
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual("I am server. I received your greetings.", body);
-    }
-}
-ParseOptions.0.jsonå
-vD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Setup\TestCertificateAuthority.csÕusing System;
-using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
-
-namespace Titanium.Web.Proxy.IntegrationTests.Setup;
-
-internal static class TestCertificateAuthority
-{
-    private static readonly Lazy<X509Certificate2> rootCertificate = new(CreateRootCertificate);
-
-    public static X509Certificate2 RootCertificate => rootCertificate.Value;
-
-    public static bool Validate(X509Certificate certificate, SslPolicyErrors sslPolicyErrors)
-    {
-        const SslPolicyErrors fatalErrors =
-            SslPolicyErrors.RemoteCertificateNameMismatch | SslPolicyErrors.RemoteCertificateNotAvailable;
-
-        if (certificate == null || (sslPolicyErrors & fatalErrors) != SslPolicyErrors.None)
-        {
-            return false;
-        }
-
-        var loadedCertificate = certificate as X509Certificate2;
-        var disposeCertificate = loadedCertificate == null;
-        loadedCertificate ??= X509CertificateLoader.LoadCertificate(certificate.GetRawCertData());
-
-        try
-        {
-            using var chain = new X509Chain();
-            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-            chain.ChainPolicy.CustomTrustStore.Add(RootCertificate);
-            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-            return chain.Build(loadedCertificate);
-        }
-        finally
-        {
-            if (disposeCertificate)
-            {
-                loadedCertificate.Dispose();
-            }
+            Assert.ThrowsException<ArgumentException>(() => settings.Validate());
         }
     }
-
-    private static X509Certificate2 CreateRootCertificate()
-    {
-        using var proxy = new ProxyServer(false, false, false);
-        if (!proxy.CertificateManager.CreateRootCertificate(false) ||
-            proxy.CertificateManager.RootCertificate == null)
-        {
-            throw new InvalidOperationException("Could not create the integration test root certificate.");
-        }
-
-        return proxy.CertificateManager.RootCertificate;
-    }
-}
-ParseOptions.0.jsonÒ
-mD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Setup\TestProxyServer.csËusing System;
-using System.Net;
-using System.Threading.Tasks;
-using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
-
-namespace Titanium.Web.Proxy.IntegrationTests.Setup;
-
-public class TestProxyServer : IDisposable
-{
-    public TestProxyServer(bool isReverseProxy, ProxyServer upStreamProxy = null)
-    {
-        ProxyServer = new ProxyServer(false, false, false);
-        ProxyServer.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
-        ProxyServer.ServerCertificateValidationCallback += (_, args) =>
-        {
-            args.IsValid = TestCertificateAuthority.Validate(args.Certificate, args.SslPolicyErrors);
-            return Task.CompletedTask;
-        };
-
-        var explicitEndPoint = isReverseProxy
-            ? (ProxyEndPoint)new TransparentProxyEndPoint(IPAddress.Any, 0)
-            : new ExplicitProxyEndPoint(IPAddress.Any, 0);
-
-        ProxyServer.AddEndPoint(explicitEndPoint);
-
-        if (upStreamProxy != null)
-        {
-            ProxyServer.UpStreamHttpProxy = new ExternalProxy("localhost", upStreamProxy.ProxyEndPoints[0].Port);
-            ProxyServer.UpStreamHttpsProxy = new ExternalProxy("localhost", upStreamProxy.ProxyEndPoints[0].Port);
-        }
-
-        ProxyServer.Start();
-    }
-
-    public ProxyServer ProxyServer { get; }
-
-    public int ListeningPort => ProxyServer.ProxyEndPoints[0].Port;
-
-    public CertificateManager CertificateManager => ProxyServer.CertificateManager;
-
-    public void Dispose()
-    {
-        ProxyServer.Stop();
-        ProxyServer.Dispose();
-    }
-}
-ParseOptions.0.json˜%
-hD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Setup\TestServer.cs–$using System;
-using System.Linq;
-using System.Net;
-using System.Security.Cryptography.X509Certificates;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Connections;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Hosting.Server;
-using Microsoft.AspNetCore.Hosting.Server.Features;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Server.Kestrel.Https;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-
-namespace Titanium.Web.Proxy.IntegrationTests.Setup;
-
-// set up a kestrel test server
-public class TestServer : IDisposable
-{
-    private readonly IHost host;
-
-    private Func<HttpContext, Task> requestHandler;
-    private Func<ConnectionContext, Task> tcpRequestHandler;
-
-    public TestServer(X509Certificate2 serverCertificate, bool requireMutualTls)
-    {
-        host = Host.CreateDefaultBuilder()
-            .ConfigureLogging(logging =>
-            {
-                logging.ClearProviders();
-                logging.AddDebug();
-                logging.SetMinimumLevel(LogLevel.Trace);
-            })
-            .ConfigureWebHostDefaults(webBuilder =>
-            {
-                webBuilder.UseStartup(x => new Startup(() => requestHandler));
-                webBuilder.ConfigureKestrel(options =>
-                {
-                    options.Listen(IPAddress.Loopback, 0);
-                    if (requireMutualTls)
-                    {
-                        options.ConfigureHttpsDefaults(options =>
-                        {
-                            options.ClientCertificateValidation = (certificate, chain, errors) =>
-                            {
-                                return true;
-                            };
-                            options.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
-                        });
-                    }
-
-                    options.Listen(IPAddress.Loopback, 0, listenOptions =>
-                    {
-                        listenOptions.UseHttps(serverCertificate);
-                    });
-                    options.Listen(IPAddress.Loopback, 0, listenOptions =>
-                    {
-                        listenOptions.Run(context =>
-                        {
-                            if (tcpRequestHandler == null)
-                            {
-                                throw new Exception("Test server not configured to handle tcp request.");
-                            }
-
-                            return tcpRequestHandler(context);
-                        });
-                    });
-                });
-            })
-            .Build();
-
-        host.Start();
-
-        var addresses = host.Services.GetRequiredService<IServer>()
-            .Features.Get<IServerAddressesFeature>()
-            .Addresses.ToArray();
-
-        HttpListeningPort = new Uri(addresses[0]).Port;
-        HttpsListeningPort = new Uri(addresses[1]).Port;
-        TcpListeningPort = new Uri(addresses[2]).Port;
-    }
-
-    public string ListeningHttpUrl => $"http://localhost:{HttpListeningPort}";
-    public string ListeningHttpsUrl => $"https://localhost:{HttpsListeningPort}";
-    public string ListeningTcpUrl => $"http://localhost:{TcpListeningPort}";
-
-    public int HttpListeningPort { get; }
-    public int HttpsListeningPort { get; }
-    public int TcpListeningPort { get; }
-
-    public void Dispose()
-    {
-        host.StopAsync().Wait();
-        host.Dispose();
-    }
-
-    public void HandleRequest(Func<HttpContext, Task> requestHandler)
-    {
-        this.requestHandler = requestHandler;
-    }
-
-    public void HandleTcpRequest(Func<ConnectionContext, Task> tcpRequestHandler)
-    {
-        this.tcpRequestHandler = tcpRequestHandler;
-    }
-
-    private class Startup
-    {
-        private readonly Func<Func<HttpContext, Task>> requestHandler;
-
-        public Startup(Func<Func<HttpContext, Task>> requestHandler)
-        {
-            this.requestHandler = requestHandler;
-        }
-
-        public void Configure(IApplicationBuilder app)
-        {
-            app.Run(context =>
-            {
-                if (requestHandler == null)
-                {
-                    throw new Exception("Test server not configured to handle request.");
-                }
-
-                return requestHandler()(context);
-            });
-        }
-
-        public void ConfigureServices(IServiceCollection services)
-        {
-        }
-    }
-}
-ParseOptions.0.jsonå
-gD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Setup\TestSuite.csäusing System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Net.Http;
-using Titanium.Web.Proxy.IntegrationTests.Helpers;
-using Titanium.Web.Proxy.IntegrationTests.Setup;
-
-namespace Titanium.Web.Proxy.IntegrationTests;
-
-public class TestSuite : IDisposable
-{
-    private readonly TestServer server;
-    private readonly ConcurrentBag<HttpClient> clients = new();
-    private readonly List<ProxyServer> proxyServers = new();
-    private bool disposed;
-
-    public TestSuite(bool requireMutualTls = false)
-    {
-        using var dummyProxy = new ProxyServer(false, false, false);
-        dummyProxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
-        var serverCertificate = dummyProxy.CertificateManager.CreateServerCertificate("localhost").Result;
-        server = new TestServer(serverCertificate, requireMutualTls);
-    }
-
-    public TestServer GetServer()
-    {
-        return server;
-    }
-
-    public ProxyServer GetProxy(ProxyServer upStreamProxy = null)
-    {
-        var proxyServer = new TestProxyServer(false, upStreamProxy).ProxyServer;
-        proxyServers.Add(proxyServer);
-        return proxyServer;
-    }
-
-    public ProxyServer GetReverseProxy(ProxyServer upStreamProxy = null)
-    {
-        var proxyServer = new TestProxyServer(true, upStreamProxy).ProxyServer;
-        proxyServers.Add(proxyServer);
-        return proxyServer;
-    }
-
-    public HttpClient GetClient(ProxyServer proxyServer, bool enableBasicProxyAuthorization = false)
-    {
-        var client = TestHelper.GetHttpClient(proxyServer.ProxyEndPoints[0].Port, enableBasicProxyAuthorization);
-        clients.Add(client);
-        return client;
-    }
-
-    public HttpClient GetReverseProxyClient()
-    {
-        var client = TestHelper.GetHttpClient();
-        clients.Add(client);
-        return client;
-    }
-
-    public void Dispose()
-    {
-        if (disposed) return;
-
-        disposed = true;
-
-        foreach (var client in clients)
-        {
-            client.Dispose();
-        }
-
-        for (var i = proxyServers.Count - 1; i >= 0; i--)
-        {
-            proxyServers[i].Dispose();
-        }
-
-        server.Dispose();
-    }
-}
-ParseOptions.0.json²m
-jD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\StreamingBodyTests.cs®lusing System;
-using System.Collections.Generic;
-using System.IO;
-using System.Net;
-using System.Net.Http;
-using System.Net.Security;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
+}ParseOptions.0.jsonÃ
+]D:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\WinAuthTests.csÌusing System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.IntegrationTests.Helpers;
-using Titanium.Web.Proxy.IntegrationTests.Setup;
+using Titanium.Web.Proxy.Network.WinAuth;
 
-namespace Titanium.Web.Proxy.IntegrationTests;
-
-[TestClass]
-public class StreamingBodyTests
+namespace Titanium.Web.Proxy.UnitTests
 {
-    // The per-chunk body-write hook only runs for plain (non-TLS) HTTP, because it operates directly on the
-    // network stream. These tests therefore go over http:// so the hook is exercised.
-
-    [TestMethod]
-    public async Task OnResponseBodyWrite_Passthrough_Is_Byte_For_Byte()
+    [TestClass]
+    public class WinAuthTests
     {
-        using var testSuite = new TestSuite();
-
-        const string expected = "I am server. I received your greetings.";
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context => context.Response.WriteAsync(expected));
-
-        var proxy = testSuite.GetProxy();
-
-        var callbackCount = 0;
-        proxy.OnResponseBodyWrite += (sender, e) =>
+        [TestMethod]
+        public void Test_Acquire_Client_Token()
         {
-            callbackCount++;
-            // leave the bytes unchanged
-            return Task.CompletedTask;
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.GetAsync(new Uri(server.ListeningHttpUrl));
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(expected, body);
-        Assert.IsTrue(callbackCount > 0, "The response body write hook should have been invoked.");
-    }
-
-    [TestMethod]
-    public async Task OnResponseBodyWrite_Can_Rewrite_Body()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context => context.Response.WriteAsync("hello world"));
-
-        var proxy = testSuite.GetProxy();
-
-        proxy.OnResponseBodyWrite += (sender, e) =>
-        {
-            var text = Encoding.ASCII.GetString(e.BodyBytes);
-            e.BodyBytes = Encoding.ASCII.GetBytes(text.ToUpperInvariant());
-            return Task.CompletedTask;
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.GetAsync(new Uri(server.ListeningHttpUrl));
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual("HELLO WORLD", body);
-    }
-
-    [TestMethod]
-    public async Task Large_Response_Streams_Incrementally_Without_Full_Buffering()
-    {
-        using var testSuite = new TestSuite();
-
-        // ~1 MB body so it spans many buffer-sized reads.
-        const int totalSize = 1024 * 1024;
-        var payload = new byte[totalSize];
-        for (var i = 0; i < payload.Length; i++) payload[i] = (byte)(i % 251);
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context => context.Response.Body.WriteAsync(payload, 0, payload.Length));
-
-        var proxy = testSuite.GetProxy();
-
-        var callbackCount = 0;
-        long observedBytes = 0;
-        proxy.OnResponseBodyWrite += (sender, e) =>
-        {
-            Interlocked.Increment(ref callbackCount);
-            observedBytes += e.BodyBytes.Length;
-            return Task.CompletedTask;
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.GetAsync(new Uri(server.ListeningHttpUrl));
-        var body = await response.Content.ReadAsByteArrayAsync();
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(totalSize, body.Length);
-        CollectionAssert.AreEqual(payload, body);
-
-        // The hook must have fired multiple times (proving the body was streamed in pieces, not buffered whole).
-        Assert.IsTrue(callbackCount > 1,
-            $"Expected the body to stream in multiple pieces but the hook fired {callbackCount} time(s).");
-        Assert.AreEqual(totalSize, observedBytes);
-    }
-
-    [TestMethod]
-    public async Task RespondStreaming_Chunked_Generates_Body_Without_Contacting_Server()
-    {
-        using var testSuite = new TestSuite();
-
-        var serverCalled = false;
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            serverCalled = true;
-            return context.Response.WriteAsync("from server");
-        });
-
-        var proxy = testSuite.GetProxy();
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            var response = new Response
-            {
-                StatusCode = 200,
-                StatusDescription = "OK",
-                HttpVersion = e.HttpClient.Request.HttpVersion
-            };
-
-            e.RespondStreaming(response, async (stream, ct) =>
-            {
-                foreach (var part in new[] { "chunk1", "chunk2", "chunk3" })
-                {
-                    var bytes = Encoding.ASCII.GetBytes(part);
-                    await stream.WriteAsync(bytes, 0, bytes.Length, ct);
-                }
-            }, closeServerConnection: true);
-
-            return Task.CompletedTask;
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.GetAsync(new Uri(server.ListeningHttpUrl));
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual("chunk1chunk2chunk3", body);
-        Assert.IsFalse(serverCalled, "Server should not be contacted for a synthetic streamed response.");
-    }
-
-    [TestMethod]
-    public async Task RespondStreaming_FixedLength_Writes_Raw_With_ContentLength()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context => context.Response.WriteAsync("from server"));
-
-        var payload = Encoding.ASCII.GetBytes("0123456789ABCDEF");
-
-        var proxy = testSuite.GetProxy();
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            var response = new Response
-            {
-                StatusCode = 200,
-                StatusDescription = "OK",
-                HttpVersion = e.HttpClient.Request.HttpVersion
-            };
-            response.Headers.AddHeader(KnownHeaders.ContentLength, payload.Length.ToString());
-
-            e.RespondStreaming(response, async (stream, ct) =>
-            {
-                // write in two pieces to prove streaming
-                await stream.WriteAsync(payload, 0, 8, ct);
-                await stream.WriteAsync(payload, 8, payload.Length - 8, ct);
-            }, closeServerConnection: true);
-
-            return Task.CompletedTask;
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.GetAsync(new Uri(server.ListeningHttpUrl));
-        var body = await response.Content.ReadAsByteArrayAsync();
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        CollectionAssert.AreEqual(payload, body);
-        Assert.AreEqual(payload.Length, response.Content.Headers.ContentLength);
-    }
-
-    [TestMethod]
-    public async Task OnResponseBodyWrite_Tls_Decrypted_Http11_Body_Relays_Correctly_And_Hook_Fires()
-    {
-        // The per-chunk body-write hook gate in HttpStream.CopyBodyAsync checks the internal
-        // ITransportCapableStream.SupportsBodyWriteHook capability instead of the old IsNetworkStream flag,
-        // and HttpStream reports that capability as true whenever its backing stream is either a plain
-        // NetworkStream or a decrypted SslStream. So OnResponseBodyWrite must fire with parity for a
-        // TLS-decrypted HTTP/1.x connection, exactly as it already does for plain HTTP.
-        using var testSuite = new TestSuite();
-
-        const string expected = "I am server. I received your greetings.";
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context => context.Response.WriteAsync(expected));
-
-        var proxy = testSuite.GetProxy();
-
-        var callbackCount = 0;
-        var observedBytes = new List<byte>();
-        proxy.OnResponseBodyWrite += (sender, e) =>
-        {
-            callbackCount++;
-            observedBytes.AddRange(e.BodyBytes);
-            return Task.CompletedTask;
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(expected, body);
-        Assert.IsTrue(callbackCount > 0,
-            "The response body write hook should now fire for TLS-decrypted HTTP/1.x connections too.");
-        Assert.AreEqual(expected, Encoding.ASCII.GetString(observedBytes.ToArray()),
-            "The hook should observe the same bytes that were relayed to the client.");
-    }
-
-    [TestMethod]
-    public async Task OnResponseBodyWrite_Tls_Decrypted_Http11_Can_Rewrite_Body()
-    {
-        // Companion to the read-only test above: proves the hook is not just invoked but its mutation of
-        // e.BodyBytes is actually relayed to the client for a TLS-decrypted HTTP/1.x connection, matching
-        // the plain-HTTP behavior in OnResponseBodyWrite_Can_Rewrite_Body.
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context => context.Response.WriteAsync("hello world"));
-
-        var proxy = testSuite.GetProxy();
-
-        proxy.OnResponseBodyWrite += (sender, e) =>
-        {
-            var text = Encoding.ASCII.GetString(e.BodyBytes);
-            e.BodyBytes = Encoding.ASCII.GetBytes(text.ToUpperInvariant());
-            return Task.CompletedTask;
-        };
-
-        var client = testSuite.GetClient(proxy);
-
-        var response = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual("HELLO WORLD", body);
-    }
-
-    [TestMethod]
-    public async Task OnResponseBodyWrite_Http2_Can_Rewrite_Body()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context => context.Response.WriteAsync("hello world"));
-
-        var proxy = testSuite.GetProxy();
-        proxy.EnableHttp2 = true;
-
-        proxy.OnResponseBodyWrite += (sender, e) =>
-        {
-            var text = Encoding.ASCII.GetString(e.BodyBytes);
-            e.BodyBytes = Encoding.ASCII.GetBytes(text.ToUpperInvariant());
-            return Task.CompletedTask;
-        };
-
-        using var client = CreateHttp2Client(proxy);
-
-        var response = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(new Version(2, 0), response.Version);
-        Assert.AreEqual("HELLO WORLD", body);
-    }
-
-    [TestMethod]
-    public async Task RespondStreaming_Http2_Generates_Body_Without_Contacting_Server()
-    {
-        using var testSuite = new TestSuite();
-
-        var serverCalled = false;
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            serverCalled = true;
-            return context.Response.WriteAsync("from server");
-        });
-
-        var proxy = testSuite.GetProxy();
-        proxy.EnableHttp2 = true;
-
-        proxy.BeforeRequest += (sender, e) =>
-        {
-            var response = new Response
-            {
-                StatusCode = 200,
-                StatusDescription = "OK",
-                HttpVersion = e.HttpClient.Request.HttpVersion
-            };
-
-            e.RespondStreaming(response, async (stream, ct) =>
-            {
-                foreach (var part in new[] { "chunk1", "chunk2", "chunk3" })
-                {
-                    var bytes = Encoding.ASCII.GetBytes(part);
-                    await stream.WriteAsync(bytes, 0, bytes.Length, ct);
-                }
-            }, closeServerConnection: true);
-
-            return Task.CompletedTask;
-        };
-
-        using var client = CreateHttp2Client(proxy);
-
-        var response = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(new Version(2, 0), response.Version);
-        Assert.AreEqual("chunk1chunk2chunk3", body);
-        Assert.IsFalse(serverCalled, "Server should not be contacted for a synthetic streamed response.");
-    }
-
-    private static HttpClient CreateHttp2Client(ProxyServer proxy)
-    {
-        var handler = new SocketsHttpHandler
-        {
-            Proxy = new TestHelper.TestProxy($"http://localhost:{proxy.ProxyEndPoints[0].Port}", false),
-            UseProxy = true,
-            SslOptions =
-            {
-                RemoteCertificateValidationCallback =
-                    (_, certificate, _, errors) => TestCertificateAuthority.Validate(certificate, errors)
-            }
-        };
-
-        return new HttpClient(handler)
-        {
-            DefaultRequestVersion = new Version(2, 0),
-            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
-        };
-    }
-}
-ParseOptions.0.jsonì
-
-cD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\StressTests.csï	using System;
-using System.Collections.Generic;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-
-namespace Titanium.Web.Proxy.IntegrationTests;
-
-[TestClass]
-public class StressTests
-{
-    [TestMethod]
-    [Timeout(2 * 60 * 1000)]
-    public async Task Stress_Test_With_One_Server_And_Many_Clients()
-    {
-        using var testSuite = new TestSuite();
-
-        var server = testSuite.GetServer();
-        server.HandleRequest(context =>
-        {
-            return context.Response.WriteAsync("I am server. I received your greetings.");
-        });
-
-        using var proxy = testSuite.GetProxy();
-
-        await Task.Delay(1000);
-
-        var tasks = new List<Task>();
-
-        //send 100 requests to server
-        for (var j = 0; j < 100; j++)
-        {
-            var task = Task.Run(async () =>
-            {
-                using var client = testSuite.GetClient(proxy);
-
-                await client.PostAsync(new Uri(server.ListeningHttpsUrl),
-                    new StringContent("hello server. I am a client."));
-            });
-
-            tasks.Add(task);
+            var token = WinAuthHandler.GetInitialAuthToken("mylocalserver.com", "NTLM", new InternalDataStore());
+            Assert.IsTrue(token.Length > 1);
         }
 
-        await Task.WhenAll(tasks);
-    }
-}
-ParseOptions.0.json…
-nD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\UpstreamProxyAuthTests.csýusing System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Titanium.Web.Proxy.IntegrationTests.Helpers;
-using Titanium.Web.Proxy.Models;
-
-namespace Titanium.Web.Proxy.IntegrationTests;
-
-[TestClass]
-public class UpstreamProxyAuthTests
-{
-    [TestMethod]
-    public async Task Authenticates_Https_Connect_To_Upstream_Proxy()
-    {
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
-        server.HandleRequest(context => context.Response.WriteAsync("secure target response"));
-
-        using var upstreamProxy = new FakeUpstreamProxy(server.HttpsListeningPort);
-        using var proxy = CreateProxy(testSuite, upstreamProxy, useForHttps: true);
-        using var client = testSuite.GetClient(proxy);
-
-        var body = await client.GetStringAsync(server.ListeningHttpsUrl);
-
-        Assert.AreEqual("secure target response", body);
-        CollectionAssert.AreEqual(new[] { string.Empty, "NTLM t1", "NTLM t2" },
-            upstreamProxy.ProxyAuthorizationValues.ToArray());
-    }
-
-    [TestMethod]
-    public async Task Authenticates_Plain_Http_Request_To_Upstream_Proxy()
-    {
-        using var testSuite = new TestSuite();
-        var server = testSuite.GetServer();
-
-        using var upstreamProxy = new FakeUpstreamProxy(server.HttpsListeningPort);
-        using var proxy = CreateProxy(testSuite, upstreamProxy, useForHttps: false);
-        using var client = testSuite.GetClient(proxy);
-
-        var response = await client.GetAsync(server.ListeningHttpUrl);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual(System.Net.HttpStatusCode.OK, response.StatusCode,
-            string.Join(", ", upstreamProxy.ProxyAuthorizationValues));
-        Assert.AreEqual("authenticated plain HTTP", body);
-        CollectionAssert.AreEqual(new[] { string.Empty, "NTLM t1", "NTLM t2" },
-            upstreamProxy.ProxyAuthorizationValues.ToArray());
-    }
-
-    private static ProxyServer CreateProxy(TestSuite testSuite, FakeUpstreamProxy upstreamProxy, bool useForHttps)
-    {
-        var proxy = testSuite.GetProxy();
-        var externalProxy = new ExternalProxy("localhost", upstreamProxy.Port)
+        [TestMethod]
+        public void Test_Acquire_Upstream_Proxy_Client_Token()
         {
-            UseDefaultCredentials = true
-        };
+            if (Environment.OSVersion.Platform != PlatformID.Win32NT)
+                Assert.Inconclusive("Windows SSPI is required.");
 
-        if (useForHttps)
-            proxy.UpStreamHttpsProxy = externalProxy;
-        else
-            proxy.UpStreamHttpProxy = externalProxy;
+            var token =
+                WinAuthHandler.GetInitialProxyAuthToken("proxy.example.com", "NTLM", new InternalDataStore());
 
-        // EnableWinAuth must not corrupt the upstream proxy authentication state on a 407.
-        proxy.EnableWinAuth = true;
+            StringAssert.StartsWith(token, " ");
+            Assert.IsTrue(token.Length > 1);
+        }
 
-        proxy.UpstreamProxyWinAuthTokenGenerator = (_, _, challenge, _) =>
-            challenge == null ? " t1" : " t2";
-        return proxy;
+        [TestMethod]
+        public void ReuseConnectionForAuthReRequest_ProxyAuth_ReusesConnection()
+        {
+            // 407 (upstream proxy auth) must reuse the same connection regardless of the WinAuth flag.
+            Assert.IsTrue(ProxyServer.ShouldReuseConnectionForAuthReRequest(407, false));
+            Assert.IsTrue(ProxyServer.ShouldReuseConnectionForAuthReRequest(407, true));
+        }
+
+        [TestMethod]
+        public void ReuseConnectionForAuthReRequest_ServerWinAuth401_ReusesConnection()
+        {
+            // 401 handled by NTLM/Negotiate is connection-oriented and must reuse the same connection.
+            Assert.IsTrue(ProxyServer.ShouldReuseConnectionForAuthReRequest(401, true));
+        }
+
+        [TestMethod]
+        public void ReuseConnectionForAuthReRequest_NonAuthReRequest_UsesFreshConnection()
+        {
+            // A user-initiated re-request (not an auth handshake) may target a different destination.
+            Assert.IsFalse(ProxyServer.ShouldReuseConnectionForAuthReRequest(200, false));
+            Assert.IsFalse(ProxyServer.ShouldReuseConnectionForAuthReRequest(302, false));
+            Assert.IsFalse(ProxyServer.ShouldReuseConnectionForAuthReRequest(401, false));
+        }
     }
-}
-ParseOptions.0.jsonã
+}ParseOptions.0.jsonã
 rC:\Users\runneradmin\.nuget\packages\microsoft.net.test.sdk\17.14.1\build\net8.0\Microsoft.NET.Test.Sdk.Program.cs×// <auto-generated> This file has been auto generated. </auto-generated>
 using System;
 [Microsoft.VisualStudio.TestPlatform.TestSDKAutoGeneratedCode]
-class AutoGeneratedProgram {static void Main(string[] args){}}ParseOptions.0.jsonû
-˜D:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\obj\Release\net10.0\.NETCoreApp,Version=v10.0.AssemblyAttributes.csÈ// <autogenerated />
+class AutoGeneratedProgram {static void Main(string[] args){}}ParseOptions.0.jsonô
+‘D:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\obj\Release\net10.0\.NETCoreApp,Version=v10.0.AssemblyAttributes.csÈ// <autogenerated />
 using System;
 using System.Reflection;
 [assembly: global::System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v10.0", FrameworkDisplayName = ".NET 10.0")]
-ParseOptions.0.jsonð	
-œD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\obj\Release\net10.0\Titanium.Web.Proxy.IntegrationTests.AssemblyInfo.cs¹//------------------------------------------------------------------------------
+ParseOptions.0.jsonÍ	
+ŽD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\obj\Release\net10.0\Titanium.Web.Proxy.UnitTests.AssemblyInfo.cs¤//------------------------------------------------------------------------------
 // <auto-generated>
 //     This code was generated by a tool.
 //
@@ -3173,12 +1663,12 @@ using System.Reflection;
 using System;
 using System.Reflection;
 
-[assembly: System.Reflection.AssemblyCompanyAttribute("Titanium.Web.Proxy.IntegrationTests")]
+[assembly: System.Reflection.AssemblyCompanyAttribute("Titanium.Web.Proxy.UnitTests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+474a52d5be783c98c62e60cbc5b6e05e65693996")]
-[assembly: System.Reflection.AssemblyProductAttribute("Titanium.Web.Proxy.IntegrationTests")]
-[assembly: System.Reflection.AssemblyTitleAttribute("Titanium.Web.Proxy.IntegrationTests")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c2a21211b4a7a84a0ed9d585154ffb3535e0a2a7")]
+[assembly: System.Reflection.AssemblyProductAttribute("Titanium.Web.Proxy.UnitTests")]
+[assembly: System.Reflection.AssemblyTitleAttribute("Titanium.Web.Proxy.UnitTests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
 
 // Generated by the MSBuild WriteCodeFragment class.

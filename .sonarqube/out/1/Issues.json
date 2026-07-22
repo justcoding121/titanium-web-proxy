@@ -264,6 +264,55 @@
           }
         },
         {
+          "ruleId": "S3881",
+          "level": "warning",
+          "message": "Fix this implementation of 'IDisposable' to conform to the dispose pattern.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
+                "region": {
+                  "startLine": 18,
+                  "startColumn": 18,
+                  "endLine": 18,
+                  "endColumn": 37
+                }
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "physicalLocation": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
+                "region": {
+                  "startLine": 18,
+                  "startColumn": 18,
+                  "endLine": 18,
+                  "endColumn": 37
+                }
+              }
+            },
+            {
+              "physicalLocation": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
+                "region": {
+                  "startLine": 81,
+                  "startColumn": 21,
+                  "endLine": 81,
+                  "endColumn": 28
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "0": "Provide 'protected' overridable implementation of 'Dispose(bool)' on 'ProxyTestController' or mark the type as 'sealed'.",
+              "1": "'ProxyTestController.Dispose()' should call 'Dispose(true)' and 'GC.SuppressFinalize(this)'."
+            }
+          }
+        },
+        {
           "ruleId": "SYSLIB1054",
           "level": "note",
           "message": "Mark the method 'GetStdHandle' with 'LibraryImportAttribute' instead of 'DllImportAttribute' to generate P/Invoke marshalling code at compile time",
@@ -316,55 +365,6 @@
           }
         },
         {
-          "ruleId": "S3881",
-          "level": "warning",
-          "message": "Fix this implementation of 'IDisposable' to conform to the dispose pattern.",
-          "locations": [
-            {
-              "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
-                "region": {
-                  "startLine": 18,
-                  "startColumn": 18,
-                  "endLine": 18,
-                  "endColumn": 37
-                }
-              }
-            }
-          ],
-          "relatedLocations": [
-            {
-              "physicalLocation": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
-                "region": {
-                  "startLine": 18,
-                  "startColumn": 18,
-                  "endLine": 18,
-                  "endColumn": 37
-                }
-              }
-            },
-            {
-              "physicalLocation": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
-                "region": {
-                  "startLine": 81,
-                  "startColumn": 21,
-                  "endLine": 81,
-                  "endColumn": 28
-                }
-              }
-            }
-          ],
-          "properties": {
-            "warningLevel": 1,
-            "customProperties": {
-              "0": "Provide 'protected' overridable implementation of 'Dispose(bool)' on 'ProxyTestController' or mark the type as 'sealed'.",
-              "1": "'ProxyTestController.Dispose()' should call 'Dispose(true)' and 'GC.SuppressFinalize(this)'."
-            }
-          }
-        },
-        {
           "ruleId": "SYSLIB1054",
           "level": "note",
           "message": "Mark the method 'SetConsoleMode' with 'LibraryImportAttribute' instead of 'DllImportAttribute' to generate P/Invoke marshalling code at compile time",
@@ -388,27 +388,6 @@
               "ExactSpelling": "False",
               "MayRequireAdditionalWork": "True"
             }
-          }
-        },
-        {
-          "ruleId": "S2068",
-          "level": "warning",
-          "message": "\"password\" detected here, make sure this is not a hard-coded credential.",
-          "locations": [
-            {
-              "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
-                "region": {
-                  "startLine": 186,
-                  "startColumn": 17,
-                  "endLine": 186,
-                  "endColumn": 34
-                }
-              }
-            }
-          ],
-          "properties": {
-            "warningLevel": 1
           }
         },
         {
@@ -441,10 +420,10 @@
               "resultFile": {
                 "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
                 "region": {
-                  "startLine": 202,
+                  "startLine": 186,
                   "startColumn": 17,
-                  "endLine": 202,
-                  "endColumn": 35
+                  "endLine": 186,
+                  "endColumn": 34
                 }
               }
             }
@@ -454,18 +433,18 @@
           }
         },
         {
-          "ruleId": "S2325",
+          "ruleId": "S2068",
           "level": "warning",
-          "message": "Make 'OnBeforeTunnelConnectResponse' a static method.",
+          "message": "\"password\" detected here, make sure this is not a hard-coded credential.",
           "locations": [
             {
               "resultFile": {
                 "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
                 "region": {
-                  "startLine": 255,
-                  "startColumn": 22,
-                  "endLine": 255,
-                  "endColumn": 51
+                  "startLine": 202,
+                  "startColumn": 17,
+                  "endLine": 202,
+                  "endColumn": 35
                 }
               }
             }
@@ -487,6 +466,27 @@
                   "startColumn": 53,
                   "endLine": 247,
                   "endColumn": 60
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "S2325",
+          "level": "warning",
+          "message": "Make 'OnBeforeTunnelConnectResponse' a static method.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
+                "region": {
+                  "startLine": 255,
+                  "startColumn": 22,
+                  "endLine": 255,
+                  "endColumn": 51
                 }
               }
             }
@@ -522,27 +522,6 @@
         {
           "ruleId": "S1481",
           "level": "warning",
-          "message": "Remove the unused local variable 'session'.",
-          "locations": [
-            {
-              "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
-                "region": {
-                  "startLine": 318,
-                  "startColumn": 17,
-                  "endLine": 318,
-                  "endColumn": 24
-                }
-              }
-            }
-          ],
-          "properties": {
-            "warningLevel": 1
-          }
-        },
-        {
-          "ruleId": "S1481",
-          "level": "warning",
           "message": "Remove the unused local variable 'ext'.",
           "locations": [
             {
@@ -553,6 +532,27 @@
                   "startColumn": 17,
                   "endLine": 335,
                   "endColumn": 20
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "S2325",
+          "level": "warning",
+          "message": "Make 'OnCertificateValidation' a static method.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
+                "region": {
+                  "startLine": 395,
+                  "startColumn": 21,
+                  "endLine": 395,
+                  "endColumn": 44
                 }
               }
             }
@@ -583,18 +583,18 @@
           }
         },
         {
-          "ruleId": "S2325",
+          "ruleId": "S1481",
           "level": "warning",
-          "message": "Make 'OnCertificateValidation' a static method.",
+          "message": "Remove the unused local variable 'session'.",
           "locations": [
             {
               "resultFile": {
                 "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
                 "region": {
-                  "startLine": 395,
-                  "startColumn": 21,
-                  "endLine": 395,
-                  "endColumn": 44
+                  "startLine": 318,
+                  "startColumn": 17,
+                  "endLine": 318,
+                  "endColumn": 24
                 }
               }
             }

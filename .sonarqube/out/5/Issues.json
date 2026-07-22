@@ -12,42 +12,18 @@
       },
       "results": [
         {
-          "ruleId": "CA1861",
-          "level": "note",
-          "message": "Prefer 'static readonly' fields over constant array arguments if the called method is called repeatedly and is not mutating the passed array",
+          "ruleId": "S3415",
+          "level": "warning",
+          "message": "Make sure these 2 arguments are in the correct order: expected value, actual value.",
           "locations": [
             {
               "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/ExpectContinueTests.cs",
                 "region": {
-                  "startLine": 79,
-                  "startColumn": 13,
-                  "endLine": 79,
-                  "endColumn": 72
-                }
-              }
-            }
-          ],
-          "properties": {
-            "warningLevel": 1,
-            "customProperties": {
-              "paramName": "expected"
-            }
-          }
-        },
-        {
-          "ruleId": "MSTEST0039",
-          "level": "note",
-          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
-          "locations": [
-            {
-              "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
-                "region": {
-                  "startLine": 100,
-                  "startColumn": 15,
-                  "endLine": 101,
-                  "endColumn": 96
+                  "startLine": 126,
+                  "startColumn": 25,
+                  "endLine": 126,
+                  "endColumn": 85
                 }
               }
             }
@@ -57,42 +33,18 @@
           }
         },
         {
-          "ruleId": "CA1861",
+          "ruleId": "MSTEST0017",
           "level": "note",
-          "message": "Prefer 'static readonly' fields over constant array arguments if the called method is called repeatedly and is not mutating the passed array",
+          "message": "Assertion arguments should be passed in the correct order. 'actual' and 'expected'/'notExpected' arguments have been swapped.",
           "locations": [
             {
               "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/ExpectContinueTests.cs",
                 "region": {
-                  "startLine": 91,
-                  "startColumn": 40,
-                  "endLine": 91,
-                  "endColumn": 62
-                }
-              }
-            }
-          ],
-          "properties": {
-            "warningLevel": 1,
-            "customProperties": {
-              "paramName": "expected"
-            }
-          }
-        },
-        {
-          "ruleId": "MSTEST0039",
-          "level": "note",
-          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
-          "locations": [
-            {
-              "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/SystemProxyTest.cs",
-                "region": {
-                  "startLine": 171,
-                  "startColumn": 13,
-                  "endLine": 171,
-                  "endColumn": 81
+                  "startLine": 126,
+                  "startColumn": 9,
+                  "endLine": 126,
+                  "endColumn": 86
                 }
               }
             }
@@ -104,16 +56,16 @@
         {
           "ruleId": "CA1822",
           "level": "note",
-          "message": "Member 'Simple_Create_Win_Certificate_Test' does not access instance data and can be marked as static",
+          "message": "Member 'ReadBody' does not access instance data and can be marked as static",
           "locations": [
             {
               "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/CertificateManagerTests.cs",
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Helpers/HttpContinueServer.cs",
                 "region": {
-                  "startLine": 51,
-                  "startColumn": 27,
-                  "endLine": 51,
-                  "endColumn": 61
+                  "startLine": 77,
+                  "startColumn": 33,
+                  "endLine": 77,
+                  "endColumn": 41
                 }
               }
             }
@@ -123,18 +75,18 @@
           }
         },
         {
-          "ruleId": "MSTEST0039",
+          "ruleId": "CA1822",
           "level": "note",
-          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
+          "message": "Member 'ReadHeaders' does not access instance data and can be marked as static",
           "locations": [
             {
               "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Helpers/HttpContinueServer.cs",
                 "region": {
-                  "startLine": 115,
-                  "startColumn": 15,
-                  "endLine": 116,
-                  "endColumn": 96
+                  "startLine": 52,
+                  "startColumn": 33,
+                  "endLine": 52,
+                  "endColumn": 44
                 }
               }
             }
@@ -144,18 +96,18 @@
           }
         },
         {
-          "ruleId": "MSTEST0039",
-          "level": "note",
-          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
+          "ruleId": "S2699",
+          "level": "warning",
+          "message": "Add at least one assertion to this test case.",
           "locations": [
             {
               "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/StressTests.cs",
                 "region": {
-                  "startLine": 126,
-                  "startColumn": 15,
-                  "endLine": 127,
-                  "endColumn": 96
+                  "startLine": 15,
+                  "startColumn": 23,
+                  "endLine": 15,
+                  "endColumn": 67
                 }
               }
             }
@@ -171,12 +123,12 @@
           "locations": [
             {
               "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/HeaderCollectionTests.cs",
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/StreamingBodyTests.cs",
                 "region": {
-                  "startLine": 27,
-                  "startColumn": 44,
-                  "endLine": 27,
-                  "endColumn": 62
+                  "startLine": 144,
+                  "startColumn": 38,
+                  "endLine": 144,
+                  "endColumn": 76
                 }
               }
             }
@@ -184,23 +136,44 @@
           "properties": {
             "warningLevel": 1,
             "customProperties": {
-              "paramName": "expected"
+              "paramName": "writeBody"
             }
           }
         },
         {
-          "ruleId": "MSTEST0039",
+          "ruleId": "CA1835",
           "level": "note",
-          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
+          "message": "Change the 'WriteAsync' method call to use the 'Stream.WriteAsync(ReadOnlyMemory<byte>, CancellationToken)' overload",
           "locations": [
             {
               "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/StreamingBodyTests.cs",
                 "region": {
-                  "startLine": 159,
+                  "startLine": 147,
+                  "startColumn": 27,
+                  "endLine": 147,
+                  "endColumn": 72
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1835",
+          "level": "note",
+          "message": "Change the 'WriteAsync' method call to use the 'Stream.WriteAsync(ReadOnlyMemory<byte>, CancellationToken)' overload",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Helpers/HttpContinueClient.cs",
+                "region": {
+                  "startLine": 28,
                   "startColumn": 15,
-                  "endLine": 160,
-                  "endColumn": 96
+                  "endLine": 28,
+                  "endColumn": 70
                 }
               }
             }
@@ -210,28 +183,572 @@
           }
         },
         {
-          "ruleId": "MSTEST0039",
+          "ruleId": "CA1822",
           "level": "note",
-          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
+          "message": "Member 'Post' does not access instance data and can be marked as static",
           "locations": [
             {
               "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/HttpModelAndProxySocketTests.cs",
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Helpers/HttpContinueClient.cs",
                 "region": {
-                  "startLine": 33,
+                  "startLine": 16,
                   "startColumn": 33,
-                  "endLine": 34,
-                  "endColumn": 93
+                  "endLine": 16,
+                  "endColumn": 37
                 }
               }
             }
           ],
           "properties": {
             "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1835",
+          "level": "note",
+          "message": "Change the 'WriteAsync' method call to use the 'Stream.WriteAsync(ReadOnlyMemory<byte>, CancellationToken)' overload",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/StreamingBodyTests.cs",
+                "region": {
+                  "startLine": 188,
+                  "startColumn": 23,
+                  "endLine": 188,
+                  "endColumn": 59
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1835",
+          "level": "note",
+          "message": "Change the 'WriteAsync' method call to use the 'Stream.WriteAsync(ReadOnlyMemory<byte>, CancellationToken)' overload",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/StreamingBodyTests.cs",
+                "region": {
+                  "startLine": 189,
+                  "startColumn": 23,
+                  "endLine": 189,
+                  "endColumn": 76
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "MSTEST0037",
+          "level": "note",
+          "message": "Use 'Assert.AreEqual' instead of 'Assert.IsFalse'",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Http2TrailerInterimContinuationTests.cs",
+                "region": {
+                  "startLine": 81,
+                  "startColumn": 9,
+                  "endLine": 81,
+                  "endColumn": 74
+                }
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "physicalLocation": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Http2TrailerInterimContinuationTests.cs",
+                "region": {
+                  "startLine": 81,
+                  "startColumn": 24,
+                  "endLine": 81,
+                  "endColumn": 73
+                }
+              }
+            },
+            {
+              "physicalLocation": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Http2TrailerInterimContinuationTests.cs",
+                "region": {
+                  "startLine": 81,
+                  "startColumn": 72,
+                  "endLine": 81,
+                  "endColumn": 73
+                }
+              }
+            },
+            {
+              "physicalLocation": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Http2TrailerInterimContinuationTests.cs",
+                "region": {
+                  "startLine": 81,
+                  "startColumn": 25,
+                  "endLine": 81,
+                  "endColumn": 67
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "CodeFixModeKey": "CodeFixModeAddArgument",
+              "ProperAssertMethodNameKey": "AreEqual"
+            }
+          }
+        },
+        {
+          "ruleId": "CA1861",
+          "level": "note",
+          "message": "Prefer 'static readonly' fields over constant array arguments if the called method is called repeatedly and is not mutating the passed array",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/StreamingBodyTests.cs",
+                "region": {
+                  "startLine": 328,
+                  "startColumn": 38,
+                  "endLine": 328,
+                  "endColumn": 76
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "paramName": "writeBody"
+            }
+          }
+        },
+        {
+          "ruleId": "CA1835",
+          "level": "note",
+          "message": "Change the 'WriteAsync' method call to use the 'Stream.WriteAsync(ReadOnlyMemory<byte>, CancellationToken)' overload",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/StreamingBodyTests.cs",
+                "region": {
+                  "startLine": 331,
+                  "startColumn": 27,
+                  "endLine": 331,
+                  "endColumn": 72
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1835",
+          "level": "note",
+          "message": "Change the 'WriteAsync' method call to use the 'Stream.WriteAsync(ReadOnlyMemory<byte>, CancellationToken)' overload",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Helpers/Http2RawFrame.cs",
+                "region": {
+                  "startLine": 39,
+                  "startColumn": 15,
+                  "endLine": 39,
+                  "endColumn": 58
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1835",
+          "level": "note",
+          "message": "Change the 'WriteAsync' method call to use the 'Stream.WriteAsync(ReadOnlyMemory<byte>, CancellationToken)' overload",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Helpers/Http2RawFrame.cs",
+                "region": {
+                  "startLine": 42,
+                  "startColumn": 19,
+                  "endLine": 42,
+                  "endColumn": 56
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1835",
+          "level": "note",
+          "message": "Change the 'ReadAsync' method call to use the 'Stream.ReadAsync(Memory<byte>, CancellationToken)' overload",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Helpers/Http2RawFrame.cs",
+                "region": {
+                  "startLine": 69,
+                  "startColumn": 30,
+                  "endLine": 69,
+                  "endColumn": 69
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "MSTEST0037",
+          "level": "note",
+          "message": "Use 'Assert.AreNotEqual' instead of 'Assert.IsTrue'",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Http2TrailerInterimContinuationTests.cs",
+                "region": {
+                  "startLine": 214,
+                  "startColumn": 9,
+                  "endLine": 214,
+                  "endColumn": 73
+                }
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "physicalLocation": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Http2TrailerInterimContinuationTests.cs",
+                "region": {
+                  "startLine": 214,
+                  "startColumn": 23,
+                  "endLine": 214,
+                  "endColumn": 72
+                }
+              }
+            },
+            {
+              "physicalLocation": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Http2TrailerInterimContinuationTests.cs",
+                "region": {
+                  "startLine": 214,
+                  "startColumn": 71,
+                  "endLine": 214,
+                  "endColumn": 72
+                }
+              }
+            },
+            {
+              "physicalLocation": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Http2TrailerInterimContinuationTests.cs",
+                "region": {
+                  "startLine": 214,
+                  "startColumn": 24,
+                  "endLine": 214,
+                  "endColumn": 66
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "CodeFixModeKey": "CodeFixModeAddArgument",
+              "ProperAssertMethodNameKey": "AreNotEqual"
+            }
+          }
+        },
+        {
+          "ruleId": "CA1816",
+          "level": "note",
+          "message": "Change TestSuite.Dispose() to call GC.SuppressFinalize(object). This will prevent derived types that introduce a finalizer from needing to re-implement 'IDisposable' to call it.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Setup/TestSuite.cs",
+                "region": {
+                  "startLine": 58,
+                  "startColumn": 17,
+                  "endLine": 58,
+                  "endColumn": 24
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1816",
+          "level": "note",
+          "message": "Change TestServer.Dispose() to call GC.SuppressFinalize(object). This will prevent derived types that introduce a finalizer from needing to re-implement 'IDisposable' to call it.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Setup/TestServer.cs",
+                "region": {
+                  "startLine": 93,
+                  "startColumn": 17,
+                  "endLine": 93,
+                  "endColumn": 24
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1822",
+          "level": "note",
+          "message": "Member 'ConfigureServices' does not access instance data and can be marked as static",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Setup/TestServer.cs",
+                "region": {
+                  "startLine": 131,
+                  "startColumn": 21,
+                  "endLine": 131,
+                  "endColumn": 38
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1835",
+          "level": "note",
+          "message": "Change the 'ReadAsync' method call to use the 'Stream.ReadAsync(Memory<byte>, CancellationToken)' overload",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Helpers/Http2RawClient.cs",
+                "region": {
+                  "startLine": 78,
+                  "startColumn": 30,
+                  "endLine": 78,
+                  "endColumn": 60
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1835",
+          "level": "note",
+          "message": "Change the 'WriteAsync' method call to use the 'Stream.WriteAsync(ReadOnlyMemory<byte>, CancellationToken)' overload",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Helpers/Http2RawClient.cs",
+                "region": {
+                  "startLine": 44,
+                  "startColumn": 15,
+                  "endLine": 44,
+                  "endColumn": 77
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1835",
+          "level": "note",
+          "message": "Change the 'WriteAsync' method call to use the 'Stream.WriteAsync(ReadOnlyMemory<byte>, CancellationToken)' overload",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Helpers/Http2RawClient.cs",
+                "region": {
+                  "startLine": 58,
+                  "startColumn": 15,
+                  "endLine": 58,
+                  "endColumn": 107
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1816",
+          "level": "note",
+          "message": "Change TestProxyServer.Dispose() to call GC.SuppressFinalize(object). This will prevent derived types that introduce a finalizer from needing to re-implement 'IDisposable' to call it.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Setup/TestProxyServer.cs",
+                "region": {
+                  "startLine": 42,
+                  "startColumn": 17,
+                  "endLine": 42,
+                  "endColumn": 24
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1835",
+          "level": "note",
+          "message": "Change the 'ReadAsync' method call to use the 'Stream.ReadAsync(Memory<byte>, CancellationToken)' overload",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/InterimResponseTests.cs",
+                "region": {
+                  "startLine": 244,
+                  "startColumn": 34,
+                  "endLine": 244,
+                  "endColumn": 87
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "S2699",
+          "level": "warning",
+          "message": "Add at least one assertion to this test case.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/NestedProxyTests.cs",
+                "region": {
+                  "startLine": 117,
+                  "startColumn": 23,
+                  "endLine": 117,
+                  "endColumn": 81
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "S2699",
+          "level": "warning",
+          "message": "Add at least one assertion to this test case.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/NestedProxyTests.cs",
+                "region": {
+                  "startLine": 202,
+                  "startColumn": 23,
+                  "endLine": 202,
+                  "endColumn": 78
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1861",
+          "level": "note",
+          "message": "Prefer 'static readonly' fields over constant array arguments if the called method is called repeatedly and is not mutating the passed array",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Helpers/FakeUpstreamProxy.cs",
+                "region": {
+                  "startLine": 85,
+                  "startColumn": 56,
+                  "endLine": 85,
+                  "endColumn": 72
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "paramName": "separator"
+            }
+          }
+        },
+        {
+          "ruleId": "CA1861",
+          "level": "note",
+          "message": "Prefer 'static readonly' fields over constant array arguments if the called method is called repeatedly and is not mutating the passed array",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.IntegrationTests/Helpers/FakeUpstreamProxy.cs",
+                "region": {
+                  "startLine": 172,
+                  "startColumn": 30,
+                  "endLine": 172,
+                  "endColumn": 46
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "paramName": "separator"
+            }
           }
         }
       ],
       "rules": {
+        "CA1816": {
+          "id": "CA1816",
+          "shortDescription": "Dispose methods should call SuppressFinalize",
+          "fullDescription": "A method that is an implementation of Dispose does not call GC.SuppressFinalize; or a method that is not an implementation of Dispose calls GC.SuppressFinalize; or a method calls GC.SuppressFinalize and passes something other than this (Me in Visual Basic).",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca1816",
+          "properties": {
+            "category": "Usage",
+            "isEnabledByDefault": true,
+            "tags": [
+              "PortedFromFxCop",
+              "Telemetry",
+              "EnabledRuleInAggressiveMode"
+            ]
+          }
+        },
         "CA1822": {
           "id": "CA1822",
           "shortDescription": "Mark members as static",
@@ -243,6 +760,21 @@
             "isEnabledByDefault": true,
             "tags": [
               "PortedFromFxCop",
+              "Telemetry",
+              "EnabledRuleInAggressiveMode"
+            ]
+          }
+        },
+        "CA1835": {
+          "id": "CA1835",
+          "shortDescription": "Prefer the 'Memory'-based overloads for 'ReadAsync' and 'WriteAsync'",
+          "fullDescription": "'Stream' has a 'ReadAsync' overload that takes a 'Memory<Byte>' as the first argument, and a 'WriteAsync' overload that takes a 'ReadOnlyMemory<Byte>' as the first argument. Prefer calling the memory based overloads, which are more efficient.",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca1835",
+          "properties": {
+            "category": "Performance",
+            "isEnabledByDefault": true,
+            "tags": [
               "Telemetry",
               "EnabledRuleInAggressiveMode"
             ]
@@ -263,14 +795,55 @@
             ]
           }
         },
-        "MSTEST0039": {
-          "id": "MSTEST0039",
-          "shortDescription": "Use newer methods to assert exceptions",
+        "MSTEST0017": {
+          "id": "MSTEST0017",
+          "shortDescription": "Assertion arguments should be passed in the correct order",
+          "fullDescription": "'Assert.AreEqual', 'Assert.AreNotEqual', 'Assert.AreSame' and 'Assert.AreNotSame' expects the expected value to be passed first and the actual value to be passed as second argument.",
           "defaultLevel": "note",
-          "helpUri": "https://learn.microsoft.com/dotnet/core/testing/mstest-analyzers/mstest0039",
+          "helpUri": "https://learn.microsoft.com/dotnet/core/testing/mstest-analyzers/mstest0017",
           "properties": {
             "category": "Usage",
             "isEnabledByDefault": true
+          }
+        },
+        "MSTEST0037": {
+          "id": "MSTEST0037",
+          "shortDescription": "Use proper 'Assert' methods",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/core/testing/mstest-analyzers/mstest0037",
+          "properties": {
+            "category": "Usage",
+            "isEnabledByDefault": true
+          }
+        },
+        "S2699": {
+          "id": "S2699",
+          "shortDescription": "Tests should include assertions",
+          "fullDescription": "The rule targets test methods that lack an assertion and consist solely of an action and, optionally, a setup.",
+          "defaultLevel": "warning",
+          "properties": {
+            "category": "Blocker Code Smell",
+            "isEnabledByDefault": true,
+            "tags": [
+              "C#",
+              "TestSourceScope",
+              "SonarWay"
+            ]
+          }
+        },
+        "S3415": {
+          "id": "S3415",
+          "shortDescription": "Assertion arguments should be passed in the correct order",
+          "fullDescription": "The standard assertions library methods such as AreEqual and AreSame in MSTest and NUnit, or Equal and Same in XUnit, expect the first argument to be the expected value and the second argument to be the actual value.",
+          "defaultLevel": "warning",
+          "properties": {
+            "category": "Major Code Smell",
+            "isEnabledByDefault": true,
+            "tags": [
+              "C#",
+              "TestSourceScope",
+              "SonarWay"
+            ]
           }
         }
       }

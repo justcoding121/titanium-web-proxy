@@ -359,27 +359,6 @@
               "resultFile": {
                 "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Wpf/Properties/Annotations.cs",
                 "region": {
-                  "startLine": 457,
-                  "startColumn": 17,
-                  "endLine": 457,
-                  "endColumn": 37
-                }
-              }
-            }
-          ],
-          "properties": {
-            "warningLevel": 1
-          }
-        },
-        {
-          "ruleId": "S2344",
-          "level": "warning",
-          "message": "Rename this enumeration to remove the 'Flags' suffix.",
-          "locations": [
-            {
-              "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Wpf/Properties/Annotations.cs",
-                "region": {
                   "startLine": 482,
                   "startColumn": 17,
                   "endLine": 482,
@@ -405,6 +384,27 @@
                   "startColumn": 9,
                   "endLine": 485,
                   "endColumn": 15
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "S2344",
+          "level": "warning",
+          "message": "Rename this enumeration to remove the 'Flags' suffix.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Wpf/Properties/Annotations.cs",
+                "region": {
+                  "startLine": 457,
+                  "startColumn": 17,
+                  "endLine": 457,
+                  "endColumn": 37
                 }
               }
             }
@@ -556,43 +556,6 @@
           }
         },
         {
-          "ruleId": "S2583",
-          "level": "warning",
-          "message": "Change this condition so that it does not always evaluate to 'False'. Some code paths are unreachable.",
-          "locations": [
-            {
-              "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Wpf/MainWindow.xaml.cs",
-                "region": {
-                  "startLine": 194,
-                  "startColumn": 17,
-                  "endLine": 194,
-                  "endColumn": 29
-                }
-              }
-            }
-          ],
-          "relatedLocations": [
-            {
-              "physicalLocation": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Wpf/MainWindow.xaml.cs",
-                "region": {
-                  "startLine": 195,
-                  "startColumn": 21,
-                  "endLine": 201,
-                  "endColumn": 103
-                }
-              }
-            }
-          ],
-          "properties": {
-            "warningLevel": 1,
-            "customProperties": {
-              "0": null
-            }
-          }
-        },
-        {
           "ruleId": "S2325",
           "level": "warning",
           "message": "Make 'TunnelTypeToString' a static method.",
@@ -719,6 +682,43 @@
               "4": "+3 (incl 2 for nesting)",
               "5": "+3 (incl 2 for nesting)",
               "6": "+1"
+            }
+          }
+        },
+        {
+          "ruleId": "S2583",
+          "level": "warning",
+          "message": "Change this condition so that it does not always evaluate to 'False'. Some code paths are unreachable.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Wpf/MainWindow.xaml.cs",
+                "region": {
+                  "startLine": 194,
+                  "startColumn": 17,
+                  "endLine": 194,
+                  "endColumn": 29
+                }
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "physicalLocation": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Wpf/MainWindow.xaml.cs",
+                "region": {
+                  "startLine": 195,
+                  "startColumn": 21,
+                  "endLine": 201,
+                  "endColumn": 103
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "0": null
             }
           }
         },

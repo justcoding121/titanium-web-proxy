@@ -1444,7 +1444,11 @@ mD:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples
 Ë	Ë	 
 Ë	Ë	 
 Ë	Ë	 :
-Ë	Ë	= F©
+Ë	Ë	= Fé
+_D:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.Wpf\App.xaml.cs
+ 
+ 	  *  
+    *©
 mD:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.Wpf\ObservableCollectionEx.cs
  
  
@@ -1727,8 +1731,4 @@ fD:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples
 ¡¡. C
 ¡¡_ `
 ¢¢ %
-££ é
-_D:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.Wpf\App.xaml.cs
- 
- 	  *  
-    *
+££ 

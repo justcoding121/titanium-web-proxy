@@ -1,7 +1,7 @@
 {
   "language": "C#",
   "targetFramework": "net10.0",
-  "assemblyName": "Titanium.Web.Proxy.UnitTests",
+  "assemblyName": "Titanium.Web.Proxy.IntegrationTests",
   "projectType": "Test",
-  "projectPath": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\Titanium.Web.Proxy.UnitTests.csproj"
+  "projectPath": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Titanium.Web.Proxy.IntegrationTests.csproj"
 }

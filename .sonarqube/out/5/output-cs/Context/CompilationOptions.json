@@ -5,7 +5,7 @@
   "outputKind": "ConsoleApplication",
   "scriptClassName": "Script",
   "usings": [],
-  "moduleName": "Titanium.Web.Proxy.UnitTests.dll",
+  "moduleName": "Titanium.Web.Proxy.IntegrationTests.dll",
   "optionCompareText": false,
   "optionExplicit": false,
   "optionInfer": false,
