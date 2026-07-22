@@ -109,6 +109,9 @@ Configure your client to use `127.0.0.1:8000` as its HTTP and HTTPS proxy. Trust
 This project is actively maintained by:
 
 - [justcoding121](https://github.com/justcoding121)
+
+Past contributors:
+
 - [honfika](https://github.com/honfika)
 
 ## License
