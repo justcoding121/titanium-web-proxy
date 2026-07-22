@@ -16,14 +16,17 @@ using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
 namespace Titanium.Web.Proxy.UnitTests
 {
     /// <summary>
-    ///     Phase 0A characterization tests for <see cref="Encoder" />. Before Phase 0A there were no dedicated
-    ///     Encoder tests (only Decoder/DynamicTable regressions). These tests establish two baselines that Phase 2
-    ///     (HTTP/2 HPACK persistence) will build on:
-    ///     1. The Encoder type itself already supports dynamic-table reuse correctly when the *same instance* is
-    ///        used across calls.
-    ///     2. Http2Helper.SendHeader's current wiring constructs a brand-new Encoder on every call, so in
-    ///        production no dynamic-table reuse happens across header blocks today. Update/replace this second
-    ///        test once Http2Helper persists one Encoder per connection direction.
+    ///     Unit tests for <see cref="Encoder" />. Originally written in Phase 0A as characterization tests
+    ///     (before dedicated Encoder tests existed), establishing two baselines:
+    ///     1. The Encoder type itself supports dynamic-table reuse correctly when the *same instance* is used
+    ///        across calls (still true, and still the mechanism Phase 2 relies on).
+    ///     2. Two independent Encoder instances can never benefit from cross-instance indexing - this is an
+    ///        inherent property of HPACK's per-connection-direction dynamic table, not a bug.
+    ///     Phase 2 (HTTP/2 HPACK persistence) made <c>Http2Helper.SendHeader</c> reuse one <c>Encoder</c> per
+    ///     connection direction (stored on the shared <c>Http2Settings</c> instance) instead of constructing a
+    ///     fresh one on every call, so production traffic now benefits from baseline 1 above across streams on
+    ///     the same HTTP/2 connection. See <c>Http2Tests.Http2_Repeated_Response_Header_Round_Trips_Correctly_Across_Multiple_Requests</c>
+    ///     in the integration test suite for an end-to-end proof through the real relay.
     /// </summary>
     [TestClass]
     public class Http2HpackEncoderTests
@@ -54,19 +57,18 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         [TestMethod]
-        public void Encoder_FreshInstancePerCall_MirroringHttp2HelperSendHeaderWiring_NeverIndexesRepeatedHeader()
+        public void Encoder_FreshInstancePerCall_NeverIndexesRepeatedHeader()
         {
-            // Characterizes today's Http2Helper.SendHeader, which does `new Encoder(settings.HeaderTableSize)`
-            // on every call instead of persisting one encoder per connection/direction. With a fresh instance
-            // each time, the dynamic table never accumulates state across header blocks, so repeated headers
-            // are always encoded literally (no size benefit, and the two peers' HPACK contexts never diverge
-            // only because they're never actually shared to begin with).
+            // Two independent Encoder instances have two independent (empty) dynamic tables, so neither can
+            // ever emit an indexed reference into the other's table - this is inherent to HPACK, not something
+            // any wiring change can affect. Http2Helper.SendHeader no longer constructs a fresh Encoder per
+            // call (Phase 2); this test just pins the Encoder type's own behavior for the case where a caller
+            // genuinely does use unrelated instances.
             var first = EncodeHeader(new Encoder(4096), "x-custom-header", "some-repeated-value");
             var second = EncodeHeader(new Encoder(4096), "x-custom-header", "some-repeated-value");
 
             Assert.AreEqual(first.Length, second.Length,
-                "A fresh Encoder per call cannot benefit from dynamic-table indexing across calls; " +
-                "this pins today's (sub-optimal) Http2Helper wiring ahead of the Phase 2 HPACK persistence work.");
+                "Two independent Encoder instances/tables can never benefit from cross-instance indexing.");
         }
 
         private static byte[] EncodeHeader(Encoder encoder, string name, string value)

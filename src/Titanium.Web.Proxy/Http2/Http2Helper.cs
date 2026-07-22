@@ -576,9 +576,31 @@ namespace Titanium.Web.Proxy.Http2
 
         private static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)
         {
-            var encoder = new Encoder(settings.HeaderTableSize);
+            // Reuse one Encoder (and its HPACK dynamic table) per direction for the lifetime of the connection,
+            // mirroring how the Decoder is persisted below - the dynamic table is connection-scoped, not
+            // per-message, so recreating it on every call (as before) meant every header was encoded as a
+            // literal and repeated headers across streams/messages were never indexed. `settings` is one of
+            // the two Http2Settings instances created once in SendHttp2 and shared by both relay directions,
+            // so storing the encoder on it here gives every SendHeader call for this direction (including the
+            // one used for synthetic responses) the same encoder/table instance.
+            var encoder = settings.Encoder;
+            if (encoder == null)
+            {
+                encoder = new Encoder(settings.HeaderTableSize);
+                settings.Encoder = encoder;
+            }
+
             var ms = new MemoryStream();
             var writer = new BinaryWriter(ms);
+
+            // If the peer's advertised header table size changed since our last encode, emit a Dynamic Table
+            // Size Update (RFC 7541 §6.3) at the start of this header block so the peer's decoder resizes in
+            // lockstep before any indexed reference relying on the new size is used.
+            if (encoder.MaxHeaderTableSize != settings.HeaderTableSize)
+            {
+                encoder.SetMaxHeaderTableSize(writer, settings.HeaderTableSize);
+            }
+
             if (rr.Priority.HasValue)
             {
                 long p = rr.Priority.Value;
@@ -772,6 +794,13 @@ namespace Titanium.Web.Proxy.Http2
             public int HeaderTableSize { get; set; } = 4096;
 
             public int MaxFrameSize { get; set; } = 16384;
+
+            /// <summary>
+            ///     The HPACK encoder (and its dynamic table) used for header blocks sent in the direction this
+            ///     settings instance represents the peer for. Lazily created and persisted for the life of the
+            ///     connection - see the comment in <see cref="SendHeader" />.
+            /// </summary>
+            public Encoder? Encoder { get; set; }
         }
 
         /// <summary>

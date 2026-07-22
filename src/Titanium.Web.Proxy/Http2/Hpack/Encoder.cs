@@ -118,11 +118,39 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 }
                 else
                 {
+                    // Only "Incremental" indexing inserts a new entry into the dynamic table (RFC 7541
+                    // 6.2.2/6.2.3: "Literal Header Field without Indexing"/"Never Indexed" representations
+                    // MUST NOT be added to the dynamic table). A peer's compliant decoder mirrors this exactly,
+                    // so unconditionally calling Add() here (as this used to) desyncs our dynamic table from
+                    // the peer's: our table ends up with extra entries the peer never inserted, so every index
+                    // computed afterwards for a *later* entry is off relative to what the peer's decoder has,
+                    // eventually resolving to a wrong/out-of-range index and the peer failing decode with a
+                    // COMPRESSION_ERROR (e.g. this is hit whenever ":path" - encoded with IndexType.None to
+                    // avoid polluting the table with highly variable paths - is followed by any subsequently
+                    // indexed header).
+                    bool willIndex = indexType == HpackUtil.IndexType.Incremental;
+
+                    // Make room for the new entry *before* resolving a name-only reference: EnsureCapacity
+                    // evicts the oldest dynamic-table entries, and if it evicted the very entry a name-only
+                    // lookup would have matched, an index computed beforehand would now point at a stale/wrong
+                    // slot (a real HPACK protocol violation - the peer's decoder would reject or misdecode the
+                    // header block). Evicting first means a subsequent lookup can only match entries that are
+                    // actually still present once the new entry is added. Only relevant when we're actually
+                    // about to add an entry; skip it otherwise so a non-indexed header never evicts entries it
+                    // has no need to make room for.
+                    if (willIndex)
+                    {
+                        EnsureCapacity(headerSize);
+                    }
+
                     int nameIndex = useStaticName ? GetNameIndex(name) : -1;
-                    EnsureCapacity(headerSize);
 
                     EncodeLiteral(output, name, value, indexType, nameIndex);
-                    Add(name, value);
+
+                    if (willIndex)
+                    {
+                        Add(name, value);
+                    }
                 }
             }
         }

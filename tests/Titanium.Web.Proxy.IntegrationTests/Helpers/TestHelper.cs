@@ -24,6 +24,32 @@ public static class TestHelper
         return new HttpClient(CreateHandler());
     }
 
+    /// <summary>
+    ///     An HttpClient forced onto HTTP/2 (via a fixed proxy and RequestVersionExact) for exercising the
+    ///     proxy's HTTP/2 relay. A single instance reuses one underlying HTTP/2 connection (and therefore one
+    ///     HPACK encoder/decoder pair on each leg) across multiple requests, which is what tests of
+    ///     connection-scoped state (e.g. HPACK dynamic table reuse) need.
+    /// </summary>
+    public static HttpClient GetHttp2Client(ProxyServer proxy)
+    {
+        var handler = new SocketsHttpHandler
+        {
+            Proxy = new TestProxy($"http://localhost:{proxy.ProxyEndPoints[0].Port}", false),
+            UseProxy = true,
+            SslOptions =
+            {
+                RemoteCertificateValidationCallback =
+                    (_, certificate, _, errors) => TestCertificateAuthority.Validate(certificate, errors)
+            }
+        };
+
+        return new HttpClient(handler)
+        {
+            DefaultRequestVersion = new Version(2, 0),
+            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
+        };
+    }
+
     private static HttpClientHandler CreateHandler()
     {
         return new HttpClientHandler
