@@ -47,9 +47,10 @@ dotnet add package Titanium.Web.Proxy --prerelease
 
 ## Supported frameworks
 
-- .NET Framework 4.6.2
-- .NET 8
 - .NET 10
+
+> Versions prior to 4.0 also supported .NET Framework 4.6.2 and .NET 8; starting with 4.0, the package
+> targets .NET 10 only so the codebase can take full advantage of modern APIs.
 
 ## Quick start
 

@@ -8,6 +8,10 @@ using System.IO;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http2.Hpack;
+// System.Text also defines abstract Encoder/Decoder types (for char<->byte transcoding); alias the HPACK
+// ones explicitly so they win over those System.Text names brought in by the `using System.Text;` above.
+using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
+using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
 
 namespace Titanium.Web.Proxy.UnitTests
 {
