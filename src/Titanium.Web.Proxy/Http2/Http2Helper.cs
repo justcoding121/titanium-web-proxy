@@ -890,6 +890,18 @@ namespace Titanium.Web.Proxy.Http2
                         return;
                     }
 
+                    if ((flags & Http2FrameFlag.Ack) != 0 && length != 0)
+                    {
+                        // RFC 7540 §6.5: "Receipt of a SETTINGS frame with the ACK flag set and a length
+                        // field value other than 0 MUST be treated as a connection error of type
+                        // FRAME_SIZE_ERROR."
+                        exceptionFunc?.Invoke(new ProxyHttpException(
+                            "HTTP/2 protocol error: SETTINGS ACK frame with non-zero length.", null, null));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                            Http2ErrorCode.FrameSizeError, input));
+                        return;
+                    }
+
                     bool invalidSettings = false;
                     Http2ErrorCode invalidSettingsError = Http2ErrorCode.ProtocolError;
 
@@ -902,7 +914,6 @@ namespace Titanium.Web.Proxy.Http2
 
                         if (identifier == (int)Http2SettingsId.HeaderTableSize)
                         {
-                            //System.Diagnostics.Debug.WriteLine("HEADER SIZE CONN: " + connectionId + ", CLIENT: " + isClient + ", value: " + value);
                             localSettings.HeaderTableSize = (int)value;
                         }
                         else if (identifier == (int)Http2SettingsId.MaxFrameSize)
@@ -1068,7 +1079,6 @@ namespace Titanium.Web.Proxy.Http2
                         if (closingStream.IsClosed)
                         {
                             connectionState.RemoveStream(streamId);
-                            System.Diagnostics.Debug.WriteLine("REMOVED CONN: " + connectionId + ", CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
                         }
                     }
                 }
