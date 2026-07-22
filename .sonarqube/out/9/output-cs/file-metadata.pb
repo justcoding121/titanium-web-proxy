@@ -1,0 +1,13 @@
+ò
+åD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\obj\Release\net48\Titanium.Web.Proxy.UnitTests.AssemblyInfo.csutf-8ú
+êD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\obj\Release\net48\.NETFramework,Version=v4.8.AssemblyAttributes.csutf-8f
+]D:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\WinAuthTests.csutf-8i
+`D:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\SystemProxyTest.csutf-8}
+tD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\StreamAndCertificateRegressionTests.csutf-8p
+gD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\ResponseKeepAliveTests.csutf-8j
+aD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\ProxyServerTests.csutf-8q
+hD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\Properties\AssemblyInfo.csutf-8v
+mD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\HttpModelAndProxySocketTests.csutf-8n
+eD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\HpackRegressionTests.csutf-8q
+hD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\ConnectionCacheKeyTests.csutf-8q
+hD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\CertificateManagerTests.csutf-8

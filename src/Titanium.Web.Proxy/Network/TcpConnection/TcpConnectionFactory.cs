@@ -1,12 +1,16 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,6 +28,10 @@ namespace Titanium.Web.Proxy.Network.Tcp;
 /// </summary>
 internal class TcpConnectionFactory : IDisposable
 {
+    private const int MaximumUpstreamProxyAuthenticationAttempts = 5;
+
+    private static readonly string[] UpstreamProxyAuthenticationSchemes = { "Negotiate", "NTLM", "Kerberos" };
+
     // Tcp server connection pool cache
     private readonly ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>> cache = new();
 
@@ -39,7 +47,7 @@ internal class TcpConnectionFactory : IDisposable
 
     internal TcpConnectionFactory(ProxyServer server)
     {
-        Server = server;
+        Server = server ?? throw new ArgumentNullException(nameof(server));
         Task.Run(async () => await ClearOutdatedConnections());
     }
 
@@ -53,7 +61,8 @@ internal class TcpConnectionFactory : IDisposable
 
     internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
         bool isHttps, List<SslApplicationProtocol>? applicationProtocols,
-        IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy)
+        IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
+        string? connectHost = null, int? connectPort = null)
     {
         // http version is ignored since its an application level decision b/w HTTP 1.0/1.1
         // also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
@@ -64,6 +73,16 @@ internal class TcpConnectionFactory : IDisposable
         cacheKeyBuilder.Append("-");
         cacheKeyBuilder.Append(remotePort);
         cacheKeyBuilder.Append("-");
+
+        // a fixed forward target changes the actual connection destination while keeping
+        // remoteHostName for TLS/identity, so it must be part of the cache key.
+        if (!string.IsNullOrEmpty(connectHost))
+        {
+            cacheKeyBuilder.Append(connectHost);
+            cacheKeyBuilder.Append("-");
+            cacheKeyBuilder.Append(connectPort ?? remotePort);
+            cacheKeyBuilder.Append("-");
+        }
 
         // when creating Tcp client isConnect won't matter
         cacheKeyBuilder.Append(isHttps);
@@ -92,16 +111,80 @@ internal class TcpConnectionFactory : IDisposable
             cacheKeyBuilder.Append("-");
             cacheKeyBuilder.Append(externalProxy.ProxyType);
 
-            if (externalProxy.UseDefaultCredentials)
-            {
-                cacheKeyBuilder.Append("-");
-                cacheKeyBuilder.Append(externalProxy.UserName);
-                cacheKeyBuilder.Append("-");
-                cacheKeyBuilder.Append(externalProxy.Password);
-            }
+            // SOCKS remote-DNS toggle changes how the connection is established, so it must
+            // separate otherwise-identical connections.
+            cacheKeyBuilder.Append("-");
+            cacheKeyBuilder.Append(externalProxy.ProxyDnsRequests);
+
+            // Different credentials (or default-credential mode) must never share a pooled
+            // connection to the same proxy. Include a fingerprint of the credentials, regardless
+            // of UseDefaultCredentials, without storing the plaintext password in the key.
+            cacheKeyBuilder.Append("-");
+            cacheKeyBuilder.Append(externalProxy.UseDefaultCredentials);
+            cacheKeyBuilder.Append("-");
+            cacheKeyBuilder.Append(GetCredentialFingerprint(externalProxy.UserName, externalProxy.Password));
         }
 
         return cacheKeyBuilder.ToString();
+    }
+
+    /// <summary>
+    ///     Produces a short, stable fingerprint of proxy credentials so that connections with
+    ///     different credentials do not collide in the pool, without keeping the plaintext
+    ///     password inside the long-lived cache key string.
+    /// </summary>
+    internal static string GetCredentialFingerprint(string? userName, string? password)
+    {
+        if (string.IsNullOrEmpty(userName) && string.IsNullOrEmpty(password)) return string.Empty;
+
+        // NUL separator cannot appear in the individual parts, avoiding ambiguity between
+        // e.g. ("ab", "c") and ("a", "bc").
+        var material = (userName ?? string.Empty) + "\0" + (password ?? string.Empty);
+        using var sha = SHA256.Create();
+        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(material));
+        return Convert.ToBase64String(hash);
+    }
+
+    /// <summary>
+    ///     Resolves the upstream proxy actually used for a destination, applying the same
+    ///     bypass rules as connection creation (proxy == destination, or BypassLocalhost for
+    ///     local addresses). Returns null when the connection is made directly.
+    ///     Keeping this in sync with connection creation ensures the cache key reflects the real route.
+    /// </summary>
+    internal static IExternalProxy? GetEffectiveUpstreamProxy(IExternalProxy? externalProxy, string remoteHostName,
+        int remotePort)
+    {
+        if (externalProxy == null) return null;
+
+        if (externalProxy.HostName == remoteHostName && externalProxy.Port == remotePort) return null;
+
+        if (externalProxy.BypassLocalhost &&
+            NetworkHelper.IsLocalIpAddress(remoteHostName, externalProxy.ProxyDnsRequests))
+            return null;
+
+        return externalProxy;
+    }
+
+    /// <summary>
+    ///     Checks that a pooled connection's negotiated ALPN protocol is acceptable for a request
+    ///     that asked for the given protocols. Prevents e.g. reusing an HTTP/1.1-negotiated connection
+    ///     (that was created while requesting HTTP/2) for a request that requires HTTP/2.
+    /// </summary>
+    private static bool IsNegotiatedProtocolCompatible(TcpServerConnection connection,
+        List<SslApplicationProtocol>? requestedProtocols)
+    {
+        return IsNegotiatedProtocolCompatible(connection.NegotiatedApplicationProtocol, requestedProtocols);
+    }
+
+    internal static bool IsNegotiatedProtocolCompatible(SslApplicationProtocol negotiated,
+        List<SslApplicationProtocol>? requestedProtocols)
+    {
+        if (requestedProtocols == null || requestedProtocols.Count == 0) return true;
+
+        // default => not a TLS/ALPN connection (plain HTTP) or unknown; nothing to verify.
+        if (negotiated == default) return true;
+
+        return requestedProtocols.Contains(negotiated);
     }
 
     /// <summary>
@@ -129,6 +212,10 @@ internal class TcpConnectionFactory : IDisposable
         var uri = session.HttpClient.Request.RequestUri;
         var upStreamEndPoint = session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint;
         var upStreamProxy = customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
+
+        // resolve the effective proxy (post-bypass) so the key matches the connection's actual route
+        upStreamProxy = GetEffectiveUpstreamProxy(upStreamProxy, uri.Host, uri.Port);
+
         return GetConnectionCacheKey(uri.Host, uri.Port, isHttps, applicationProtocols, upStreamEndPoint,
             upStreamProxy);
     }
@@ -208,9 +295,21 @@ internal class TcpConnectionFactory : IDisposable
         var upStreamEndPoint = session.HttpClient.UpStreamEndPoint ?? proxyServer.UpStreamEndPoint;
         var upStreamProxy = customUpStreamProxy ??
                             (isHttps ? proxyServer.UpStreamHttpsProxy : proxyServer.UpStreamHttpProxy);
+
+        // For transparent endpoints with a fixed forward target, only the TCP connection
+        // destination is overridden; host/port stay the original for TLS SNI and Host header.
+        string? connectHost = null;
+        int? connectPort = null;
+        if (session.ProxyEndPoint is TransparentBaseProxyEndPoint transparentEndPoint
+            && !string.IsNullOrEmpty(transparentEndPoint.ForwardHost))
+        {
+            connectHost = transparentEndPoint.ForwardHost;
+            connectPort = transparentEndPoint.ForwardPort;
+        }
+
         return await GetServerConnection(proxyServer, host, port, session.HttpClient.Request.HttpVersion, isHttps,
             applicationProtocols, isConnect, session, upStreamEndPoint, upStreamProxy, noCache, prefetch,
-            cancellationToken);
+            cancellationToken, connectHost, connectPort);
     }
 
     /// <summary>
@@ -234,11 +333,17 @@ internal class TcpConnectionFactory : IDisposable
         int remotePort,
         Version httpVersion, bool isHttps, List<SslApplicationProtocol>? applicationProtocols, bool isConnect,
         SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
-        bool noCache, bool prefetch, CancellationToken cancellationToken)
+        bool noCache, bool prefetch, CancellationToken cancellationToken,
+        string? connectHost = null, int? connectPort = null)
     {
         var sslProtocol = sessionArgs.ClientConnection.SslProtocol;
+
+        // resolve the effective proxy (post-bypass) so that direct and proxied connections to the
+        // same destination don't collide in the pool, and so the connection's stored key matches.
+        externalProxy = GetEffectiveUpstreamProxy(externalProxy, remoteHostName, remotePort);
+
         var cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
-            isHttps, applicationProtocols, upStreamEndPoint, externalProxy);
+            isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort);
 
         if (proxyServer.EnableConnectionPool && !noCache)
             if (cache.TryGetValue(cacheKey, out var existingConnections))
@@ -250,16 +355,18 @@ internal class TcpConnectionFactory : IDisposable
                         if (existingConnections.TryDequeue(out var recentConnection))
                         {
                             if (recentConnection.LastAccess > cutOff
-                                && recentConnection.TcpSocket.IsGoodConnection())
+                                && recentConnection.TcpSocket.IsGoodConnection()
+                                && IsNegotiatedProtocolCompatible(recentConnection, applicationProtocols))
                                 return recentConnection;
 
-                            disposalBag.Add(recentConnection);
+                            if (recentConnection.TryScheduleDisposal())
+                                disposalBag.Add(recentConnection);
                         }
                 }
 
         var connection = await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
             applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
-            prefetch, cancellationToken);
+            prefetch, cancellationToken, connectHost, connectPort);
 
         return connection;
     }
@@ -287,13 +394,20 @@ internal class TcpConnectionFactory : IDisposable
         bool isConnect,
         ProxyServer proxyServer, SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint,
         IExternalProxy? externalProxy, string cacheKey,
-        bool prefetch, CancellationToken cancellationToken)
+        bool prefetch, CancellationToken cancellationToken,
+        string? connectHost = null, int? connectPort = null)
     {
+        // The actual destination we open the TCP connection to. When a fixed forward target
+        // is configured, this differs from remoteHostName/remotePort which are kept for
+        // TLS SNI/certificate validation, the HTTP Host header and connection identity.
+        var connectHostName = string.IsNullOrEmpty(connectHost) ? remoteHostName : connectHost!;
+        var connectPortNumber = connectPort ?? remotePort;
+
         // deny connection to proxy end points to avoid infinite connection loop.
-        if (Server.ProxyEndPoints.Any(x => x.Port == remotePort)
-            && NetworkHelper.IsLocalIpAddress(remoteHostName))
+        if (Server.ProxyEndPoints.Any(x => x.Port == connectPortNumber)
+            && NetworkHelper.IsLocalIpAddress(connectHostName))
             throw new Exception(
-                $"A client is making HTTP request to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
+                $"A client is making HTTP request to one of the listening ports of this proxy {connectHostName}:{connectPortNumber}");
 
         if (externalProxy != null)
             if (Server.ProxyEndPoints.Any(x => x.Port == externalProxy.Port)
@@ -324,6 +438,8 @@ internal class TcpConnectionFactory : IDisposable
         HttpServerStream? stream = null;
 
         SslApplicationProtocol negotiatedApplicationProtocol = default;
+        var upstreamProxyWinAuthenticated = false;
+        var usedClientCertificate = false;
 
         var retry = true;
         var enabledSslProtocols = sslProtocol;
@@ -332,8 +448,8 @@ internal class TcpConnectionFactory : IDisposable
         try
         {
             var socks = externalProxy != null && externalProxy.ProxyType != ExternalProxyType.Http;
-            var hostname = remoteHostName;
-            var port = remotePort;
+            var hostname = connectHostName;
+            var port = connectPortNumber;
 
             if (externalProxy != null)
             {
@@ -369,10 +485,15 @@ internal class TcpConnectionFactory : IDisposable
                             : ProxyTypes.Socks5;
 
                         proxySocket.ProxyEndPoint = new IPEndPoint(ipAddress, port);
-                        if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
+                        var proxyUser = externalProxy.UserName;
+                        var proxyPassword = externalProxy.Password;
+
+                        // SOCKS4 authenticates with a username only (no password), so do not require a
+                        // non-null password to set the user. SOCKS5 user/password auth uses both.
+                        if (proxyUser != null && proxyUser.Length > 0)
                         {
-                            proxySocket.ProxyUser = externalProxy.UserName;
-                            proxySocket.ProxyPass = externalProxy.Password;
+                            proxySocket.ProxyUser = proxyUser;
+                            if (proxyPassword != null) proxySocket.ProxyPass = proxyPassword;
                         }
 
                         tcpServerSocket = proxySocket;
@@ -400,18 +521,21 @@ internal class TcpConnectionFactory : IDisposable
                         {
                             connectTask =
                                 ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)tcpServerSocket,
-                                    remoteHostName, remotePort);
+                                    connectHostName, connectPortNumber);
                         }
                         else
                         {
-                            // todo: resolve only once when the SOCKS proxy has multiple addresses (and the first address fails)
-                            var remoteIpAddresses = await Dns.GetHostAddressesAsync(remoteHostName);
+                            var remoteIpAddresses = await Dns.GetHostAddressesAsync(connectHostName);
                             if (remoteIpAddresses == null || remoteIpAddresses.Length == 0)
-                                throw new Exception($"Could not resolve the SOCKS remote hostname {remoteHostName}");
+                                throw new Exception($"Could not resolve the SOCKS remote hostname {connectHostName}");
 
-                            // todo: use the 2nd, 3rd... remote addresses when first fails
+                            // Known limitation: when the proxy resolves the remote host to multiple
+                            // addresses we only attempt the first. Per-remote-address failover would
+                            // require restructuring the shared connect/timeout loop below (which iterates
+                            // over the PROXY addresses, not the remote target addresses) and is left as a
+                            // future improvement to avoid destabilizing the connection path.
                             connectTask = ProxySocketConnectionTaskFactory.CreateTask(
-                                (ProxySocket.ProxySocket)tcpServerSocket, remoteIpAddresses[0], remotePort);
+                                (ProxySocket.ProxySocket)tcpServerSocket, remoteIpAddresses[0], connectPortNumber);
                         }
                     }
                     else
@@ -467,9 +591,17 @@ internal class TcpConnectionFactory : IDisposable
                     {
                         sessionArgs.CustomUpStreamProxyUsed = newUpstreamProxy;
                         sessionArgs.TimeLine["Retrying Upstream Proxy Connection"] = DateTime.UtcNow;
+
+                        // retry with the NEW proxy: resolve its effective form (bypass rules) and
+                        // recompute the cache key so the retried connection is created via, and cached
+                        // under, the new proxy rather than the one that just failed.
+                        var retryProxy = GetEffectiveUpstreamProxy(newUpstreamProxy, remoteHostName, remotePort);
+                        var retryCacheKey = GetConnectionCacheKey(remoteHostName, remotePort, isHttps,
+                            applicationProtocols, upStreamEndPoint, retryProxy, connectHost, connectPort);
+
                         return await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps,
                             sslProtocol, applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint,
-                            externalProxy, cacheKey, prefetch, cancellationToken);
+                            retryProxy, retryCacheKey, prefetch, cancellationToken, connectHost, connectPort);
                     }
                 }
 
@@ -487,7 +619,7 @@ internal class TcpConnectionFactory : IDisposable
 
             if (externalProxy != null && externalProxy.ProxyType == ExternalProxyType.Http && (isConnect || isHttps))
             {
-                var authority = $"{remoteHostName}:{remotePort}";
+                var authority = $"{connectHostName}:{connectPortNumber}";
                 var authorityBytes = authority.GetByteString();
                 var connectRequest = new ConnectRequest(authorityBytes)
                 {
@@ -499,42 +631,83 @@ internal class TcpConnectionFactory : IDisposable
                 connectRequest.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionKeepAlive);
                 connectRequest.Headers.AddHeader(KnownHeaders.Host, authority);
 
-                if (!string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
+                if (!externalProxy.UseDefaultCredentials &&
+                    !string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
                 {
                     connectRequest.Headers.AddHeader(HttpHeader.ProxyConnectionKeepAlive);
                     connectRequest.Headers.AddHeader(
                         HttpHeader.GetProxyAuthorizationHeader(externalProxy.UserName, externalProxy.Password));
                 }
 
-                await proxyServer.OnBeforeUpStreamConnectRequest(connectRequest);
+                var authenticationData = new InternalDataStore();
+                var authenticationAttempts = 0;
 
-                await stream.WriteRequestAsync(connectRequest, cancellationToken);
+                while (true)
+                {
+                    await proxyServer.OnBeforeUpStreamConnectRequest(connectRequest);
+                    await stream.WriteRequestAsync(connectRequest, cancellationToken);
 
-                var httpStatus = await stream.ReadResponseStatus(cancellationToken);
-                var headers = new HeaderCollection();
-                await HeaderParser.ReadHeaders(stream, headers, cancellationToken);
+                    var httpStatus = await stream.ReadResponseStatus(cancellationToken);
+                    var headers = new HeaderCollection();
+                    await HeaderParser.ReadHeaders(stream, headers, cancellationToken);
 
-                if (httpStatus.StatusCode != 200 && !httpStatus.Description.EqualsIgnoreCase("OK")
-                                                 && !httpStatus.Description.EqualsIgnoreCase("Connection Established"))
-                    throw new Exception("Upstream proxy failed to create a secure tunnel");
+                    if (httpStatus.StatusCode == (int)HttpStatusCode.OK ||
+                        httpStatus.Description.EqualsIgnoreCase("Connection Established"))
+                    {
+                        upstreamProxyWinAuthenticated = authenticationAttempts > 0;
+                        break;
+                    }
+
+                    await DrainUpstreamProxyResponseBody(stream, headers, cancellationToken);
+
+                    if (httpStatus.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired ||
+                        !externalProxy.UseDefaultCredentials ||
+                        authenticationAttempts >= MaximumUpstreamProxyAuthenticationAttempts ||
+                        !TryGetUpstreamProxyAuthenticationChallenge(headers, out var scheme, out var challenge))
+                        throw new Exception("Upstream proxy failed to create a secure tunnel");
+
+                    if (headers.GetHeaderValueOrNull(KnownHeaders.Connection)
+                            ?.EqualsIgnoreCase(KnownHeaders.ConnectionClose.String) == true ||
+                        headers.GetHeaderValueOrNull(KnownHeaders.ProxyConnection)
+                            ?.EqualsIgnoreCase(KnownHeaders.ProxyConnectionClose.String) == true)
+                        throw new Exception("Upstream proxy closed the connection during authentication");
+
+                    var token = proxyServer.GenerateUpstreamProxyWinAuthToken(externalProxy, scheme!, challenge,
+                        authenticationData);
+                    if (string.IsNullOrEmpty(token))
+                        throw new Exception("Failed to generate an upstream proxy authentication token");
+
+                    connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyAuthorization,
+                        string.Concat(scheme, token));
+                    connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyConnection,
+                        KnownHeaders.ConnectionKeepAlive.String);
+                    authenticationAttempts++;
+                }
             }
 
             if (isHttps)
             {
                 var sslStream = new SslStream(stream, false,
                     (sender, certificate, chain, sslPolicyErrors) =>
-                        proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
-                            sslPolicyErrors),
+                        proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain, sslPolicyErrors),
                     (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
-                        proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost, localCertificates,
-                            remoteCertificate, acceptableIssuers));
+                    {
+                        var clientCertificate = proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost,
+                            localCertificates, remoteCertificate, acceptableIssuers);
+
+                        // a per-session client certificate makes this TLS connection identity-specific;
+                        // it must not be reused by another session from the pool.
+                        if (clientCertificate != null) usedClientCertificate = true;
+
+                        return clientCertificate!;
+                    });
                 stream = new HttpServerStream(proxyServer, sslStream, proxyServer.BufferPool, cancellationToken);
 
                 var options = new SslClientAuthenticationOptions
                 {
                     ApplicationProtocols = applicationProtocols,
                     TargetHost = remoteHostName,
-                    ClientCertificates = null!,
+                    ClientCertificates = null,
                     EnabledSslProtocols = enabledSslProtocols,
                     CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                 };
@@ -546,6 +719,7 @@ internal class TcpConnectionFactory : IDisposable
                 if (sessionArgs != null) sessionArgs.TimeLine["HTTPS Established"] = DateTime.UtcNow;
             }
         }
+#pragma warning disable SYSLIB0039 // TLS 1.0/1.1 are intentionally retained for legacy upstream compatibility fallback.
         catch (IOException ex) when (ex.HResult == unchecked((int)0x80131620) && retry &&
                                      enabledSslProtocols >= SslProtocols.Tls11)
         {
@@ -576,6 +750,7 @@ internal class TcpConnectionFactory : IDisposable
             retry = false;
             goto retry;
         }
+#pragma warning restore SYSLIB0039
         catch (Exception)
         {
             stream?.Dispose();
@@ -584,7 +759,101 @@ internal class TcpConnectionFactory : IDisposable
         }
 
         return new TcpServerConnection(proxyServer, tcpServerSocket, stream, remoteHostName, remotePort, isHttps,
-            negotiatedApplicationProtocol, httpVersion, externalProxy, upStreamEndPoint, cacheKey);
+            negotiatedApplicationProtocol, httpVersion, externalProxy, upStreamEndPoint, cacheKey)
+        {
+            IsWinAuthenticated = upstreamProxyWinAuthenticated,
+            UsedClientCertificate = usedClientCertificate
+        };
+    }
+
+    private static bool TryGetUpstreamProxyAuthenticationChallenge(HeaderCollection headers, out string? scheme,
+        out string? challenge)
+    {
+        scheme = null;
+        challenge = null;
+        var authenticationHeaders = headers.GetHeaders(KnownHeaders.ProxyAuthenticate.String);
+        if (authenticationHeaders == null) return false;
+
+        foreach (var supportedScheme in UpstreamProxyAuthenticationSchemes)
+            foreach (var header in authenticationHeaders)
+            {
+                var value = header.Value.Trim();
+                if (!value.StartsWith(supportedScheme, StringComparison.OrdinalIgnoreCase) ||
+                    value.Length > supportedScheme.Length && !char.IsWhiteSpace(value[supportedScheme.Length]))
+                    continue;
+
+                scheme = supportedScheme;
+                challenge = value.Length == supportedScheme.Length
+                    ? null
+                    : value.Substring(supportedScheme.Length).Trim();
+                return true;
+            }
+
+        return false;
+    }
+
+    private static async Task DrainUpstreamProxyResponseBody(HttpServerStream stream, HeaderCollection headers,
+        CancellationToken cancellationToken)
+    {
+        var transferEncoding = headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
+        if (transferEncoding != null && transferEncoding.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked.String))
+        {
+            await DrainChunkedBody(stream, cancellationToken);
+            return;
+        }
+
+        var contentLengthValue = headers.GetHeaderValueOrNull(KnownHeaders.ContentLength);
+        if (!long.TryParse(contentLengthValue, out var remaining) || remaining <= 0) return;
+
+        await DrainBytes(stream, remaining, cancellationToken);
+    }
+
+    private static async Task DrainChunkedBody(HttpServerStream stream, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var chunkHead = await stream.ReadLineAsync(cancellationToken);
+            if (chunkHead == null)
+                throw new IOException("Upstream proxy closed the connection while sending a chunked response body");
+
+            var idx = chunkHead.IndexOf(';');
+            if (idx >= 0) chunkHead = chunkHead.Substring(0, idx);
+
+            if (!int.TryParse(chunkHead, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var chunkSize))
+                throw new IOException("Upstream proxy sent an invalid chunk header during authentication");
+
+            if (chunkSize == 0)
+            {
+                // consume the optional trailer headers until the terminating blank line
+                while (!string.IsNullOrEmpty(await stream.ReadLineAsync(cancellationToken)))
+                {
+                }
+
+                return;
+            }
+
+            // chunk data followed by its trailing CRLF
+            await DrainBytes(stream, chunkSize + 2, cancellationToken);
+        }
+    }
+
+    private static async Task DrainBytes(HttpServerStream stream, long count, CancellationToken cancellationToken)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(8192);
+        try
+        {
+            while (count > 0)
+            {
+                var read = await stream.ReadAsync(buffer, 0, (int)Math.Min(buffer.Length, count), cancellationToken);
+                if (read <= 0)
+                    throw new IOException("Upstream proxy closed the connection while sending a response body");
+                count -= read;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
 
@@ -597,11 +866,13 @@ internal class TcpConnectionFactory : IDisposable
     {
         if (connection == null) return;
 
-        if (disposalBag.Any(x => x == connection)) return;
+        // already scheduled for disposal: never pool it again.
+        if (connection.IsDisposalScheduled) return;
 
-        if (close || connection.IsWinAuthenticated || !Server.EnableConnectionPool || connection.IsClosed)
+        if (close || connection.IsWinAuthenticated || connection.UsedClientCertificate
+            || !Server.EnableConnectionPool || connection.IsClosed)
         {
-            disposalBag.Add(connection);
+            if (connection.TryScheduleDisposal()) disposalBag.Add(connection);
             return;
         }
 
@@ -617,7 +888,8 @@ internal class TcpConnectionFactory : IDisposable
                 {
                     while (existingConnections.Count >= Server.MaxCachedConnections)
                         if (existingConnections.TryDequeue(out var staleConnection))
-                            disposalBag.Add(staleConnection);
+                            if (staleConnection.TryScheduleDisposal())
+                                disposalBag.Add(staleConnection);
 
                     if (existingConnections.Any(x => x == connection)) break;
 
@@ -665,19 +937,25 @@ internal class TcpConnectionFactory : IDisposable
                 {
                     var queue = item.Value;
 
-                    while (queue.Count > 0)
-                        if (queue.TryDequeue(out var connection))
-                        {
-                            if (!Server.EnableConnectionPool || connection.LastAccess < cutOff)
+                    // take the same lock used by the pool-get path so that dequeue/enqueue here
+                    // does not race with a concurrent Get on the same queue.
+                    lock (queue)
+                    {
+                        while (queue.Count > 0)
+                            if (queue.TryDequeue(out var connection))
                             {
-                                disposalBag.Add(connection);
+                                if (!Server.EnableConnectionPool || connection.LastAccess < cutOff)
+                                {
+                                    if (connection.TryScheduleDisposal())
+                                        disposalBag.Add(connection);
+                                }
+                                else
+                                {
+                                    queue.Enqueue(connection);
+                                    break;
+                                }
                             }
-                            else
-                            {
-                                queue.Enqueue(connection);
-                                break;
-                            }
-                        }
+                    }
                 }
 
                 try
@@ -747,15 +1025,18 @@ internal class TcpConnectionFactory : IDisposable
 
     private static class SocketConnectionTaskFactory
     {
-        private static IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback requestCallback,
-            object state)
+        private static IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback? requestCallback,
+            object? state)
         {
-            return ((Socket)state).BeginConnect(address, port, requestCallback, state);
+            var socket = state as Socket ?? throw new InvalidOperationException("Socket APM state is missing.");
+            return socket.BeginConnect(address, port, requestCallback, state);
         }
 
         private static void EndConnect(IAsyncResult asyncResult)
         {
-            ((Socket)asyncResult.AsyncState).EndConnect(asyncResult);
+            var socket = asyncResult.AsyncState as Socket
+                         ?? throw new InvalidOperationException("Socket APM state is missing.");
+            socket.EndConnect(asyncResult);
         }
 
         public static Task CreateTask(Socket socket, IPAddress ipAddress, int port)
@@ -766,20 +1047,27 @@ internal class TcpConnectionFactory : IDisposable
 
     private static class ProxySocketConnectionTaskFactory
     {
-        private static IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback requestCallback,
-            object state)
+        private static IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback? requestCallback,
+            object? state)
         {
-            return ((ProxySocket.ProxySocket)state).BeginConnect(address, port, requestCallback, state);
+            var socket = state as ProxySocket.ProxySocket
+                         ?? throw new InvalidOperationException("Proxy socket APM state is missing.");
+            return socket.BeginConnect(address, port, requestCallback, state);
         }
 
-        private static IAsyncResult BeginConnect(string hostName, int port, AsyncCallback requestCallback, object state)
+        private static IAsyncResult BeginConnect(string hostName, int port, AsyncCallback? requestCallback,
+            object? state)
         {
-            return ((ProxySocket.ProxySocket)state).BeginConnect(hostName, port, requestCallback, state);
+            var socket = state as ProxySocket.ProxySocket
+                         ?? throw new InvalidOperationException("Proxy socket APM state is missing.");
+            return socket.BeginConnect(hostName, port, requestCallback, state);
         }
 
         private static void EndConnect(IAsyncResult asyncResult)
         {
-            ((ProxySocket.ProxySocket)asyncResult.AsyncState).EndConnect(asyncResult);
+            var socket = asyncResult.AsyncState as ProxySocket.ProxySocket
+                         ?? throw new InvalidOperationException("Proxy socket APM state is missing.");
+            socket.EndConnect(asyncResult);
         }
 
         public static Task CreateTask(ProxySocket.ProxySocket socket, IPAddress ipAddress, int port)

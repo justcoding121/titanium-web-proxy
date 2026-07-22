@@ -34,7 +34,7 @@ internal class Decoder
     private HpackUtil.IndexType indexType;
     private int maxDynamicTableSize;
     private bool maxDynamicTableSizeChangeRequired;
-    private ByteString name;
+    private ByteString name = ByteString.Empty;
     private int nameLength;
     private int skipLength;
     private State state;
@@ -510,12 +510,14 @@ internal class Decoder
     private ByteString ReadStringLiteral(BinaryReader input, int length)
     {
         var buf = new byte[length];
-        var lengthToRead = length;
-        if (input.BaseStream.Length - input.BaseStream.Position < length)
-            lengthToRead = (int)input.BaseStream.Length - (int)input.BaseStream.Position;
+        var totalRead = 0;
+        while (totalRead < length)
+        {
+            var read = input.Read(buf, totalRead, length - totalRead);
+            if (read == 0) throw new IOException("decompression failure");
 
-        var readBytes = input.Read(buf, 0, lengthToRead);
-        if (readBytes != length) throw new IOException("decompression failure");
+            totalRead += read;
+        }
 
         return new ByteString(huffmanEncoded ? HuffmanDecoder.Instance.Decode(buf) : buf);
     }

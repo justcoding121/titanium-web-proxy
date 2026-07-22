@@ -18,7 +18,7 @@ public abstract class ProxyEventArgsBase : EventArgs
         Server = server;
     }
 
-    public object ClientUserData
+    public object? ClientUserData
     {
         get => clientConnection.ClientUserData;
         set => clientConnection.ClientUserData = value;

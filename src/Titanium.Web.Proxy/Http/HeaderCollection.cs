@@ -182,7 +182,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     ///     Adds the given header objects to Request
     /// </summary>
     /// <param name="newHeaders"></param>
-    public void AddHeaders(IEnumerable<KeyValuePair<string, string>> newHeaders)
+    public void AddHeaders(IEnumerable<KeyValuePair<string, string>>? newHeaders)
     {
         if (newHeaders == null) return;
 

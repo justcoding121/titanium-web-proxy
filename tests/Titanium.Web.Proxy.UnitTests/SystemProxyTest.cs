@@ -69,6 +69,69 @@ namespace Titanium.Web.Proxy.UnitTests
             }
         }
 
+        [TestMethod]
+        public void SystemProxySettingsMergeExistingRulesAndProxyLoopback()
+        {
+            var settings = new SystemProxySettings
+            {
+                ProxyLoopback = true
+            };
+            settings.BypassRules.Add("*.example.com");
+            settings.BypassRules.Add("<local>");
+
+            var proxyOverride = settings.BuildProxyOverride("*.internal;<local>");
+
+            Assert.AreEqual("<-loopback>;*.internal;<local>;*.example.com", proxyOverride);
+        }
+
+        [TestMethod]
+        public void SystemProxySettingsReplaceExistingRules()
+        {
+            var settings = new SystemProxySettings
+            {
+                BypassRuleMode = SystemProxyBypassRuleMode.Replace
+            };
+            settings.BypassRules.Add("*.example.com");
+
+            var proxyOverride = settings.BuildProxyOverride("*.internal;<local>");
+
+            Assert.AreEqual("*.example.com", proxyOverride);
+        }
+
+        [TestMethod]
+        public void DefaultSystemProxySettingsPreserveExistingRules()
+        {
+            var settings = new SystemProxySettings();
+
+            var proxyOverride = settings.BuildProxyOverride("*.internal;<local>");
+
+            Assert.AreEqual("*.internal;<local>", proxyOverride);
+        }
+
+        [TestMethod]
+        public void SystemProxySettingsPlacesLoopbackRuleLastWhenRequested()
+        {
+            var settings = new SystemProxySettings
+            {
+                ProxyLoopback = true,
+                ProxyLoopbackPlacement = SystemProxyLoopbackPlacement.Last
+            };
+            settings.BypassRules.Add("*.example.com");
+
+            var proxyOverride = settings.BuildProxyOverride(null);
+
+            Assert.AreEqual("*.example.com;<-loopback>", proxyOverride);
+        }
+
+        [TestMethod]
+        public void SystemProxySettingsValidateThrowsForMalformedRules()
+        {
+            var settings = new SystemProxySettings();
+            settings.BypassRules.Add("*.example.com;*.other.com");
+
+            Assert.ThrowsException<ArgumentException>(() => settings.Validate());
+        }
+
         private void CompareUrls()
         {
             var webProxy = WebRequest.GetSystemWebProxy();

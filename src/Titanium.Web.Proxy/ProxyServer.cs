@@ -15,6 +15,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Network.WinAuth;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy;
@@ -132,7 +133,7 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     If set, the upstream proxy will be detected by a script that will be loaded from the provided Uri
     /// </summary>
-    public Uri UpstreamProxyConfigurationScript { get; set; }
+    public Uri? UpstreamProxyConfigurationScript { get; set; }
 
     /// <summary>
     ///     Enable disable Windows Authentication (NTLM/Kerberos).
@@ -142,6 +143,27 @@ public partial class ProxyServer : IDisposable
     ///     Defaults to false.
     /// </summary>
     public bool EnableWinAuth { get; set; }
+
+    /// <summary>
+    ///     Overrides upstream proxy Windows authentication token generation.
+    ///     Intended for internal testing; production uses the current process identity through SSPI.
+    /// </summary>
+    internal Func<IExternalProxy, string, string?, InternalDataStore, string?>?
+        UpstreamProxyWinAuthTokenGenerator { get; set; }
+
+    internal string? GenerateUpstreamProxyWinAuthToken(IExternalProxy proxy, string scheme, string? challenge,
+        InternalDataStore data)
+    {
+        if (UpstreamProxyWinAuthTokenGenerator != null)
+            return UpstreamProxyWinAuthTokenGenerator(proxy, scheme, challenge, data);
+
+        // Negotiate/Kerberos require the service principal name of the proxy, not the bare host.
+        var targetName = "HTTP/" + proxy.HostName;
+
+        return challenge == null
+            ? WinAuthHandler.GetInitialProxyAuthToken(targetName, scheme, data)
+            : WinAuthHandler.GetFinalProxyAuthToken(targetName, challenge, data);
+    }
 
     /// <summary>
     ///     Enable disable HTTP/2 support.
@@ -165,16 +187,20 @@ public partial class ProxyServer : IDisposable
     public bool Enable100ContinueBehaviour { get; set; }
 
     /// <summary>
-    ///     Should we enable experimental server connection pool. Defaults to false.
-    ///     When you enable connection pooling, instead of creating a new TCP connection to server for each client TCP
-    ///     connection,
-    ///     we check if a server connection is available in our cached pool. If it is available in our pool,
-    ///     created from earlier requests to the same server, we will reuse those idle connections.
-    ///     There is also a ConnectionTimeOutSeconds parameter, which determine the eviction time for inactive server
-    ///     connections.
-    ///     This will help to reduce TCP connection establishment cost, both the wall clock time and CPU cycles.
+    ///     Should we enable the server connection pool. Defaults to true.
+    ///     When connection pooling is enabled, instead of creating a new TCP connection to the server for each client TCP
+    ///     connection, we check if an idle server connection is available in our cached pool. If a compatible connection
+    ///     (same destination, scheme, upstream proxy, credentials and negotiated protocol) created from an earlier request
+    ///     is available, we reuse it. Only connections that are safe to reuse under the HTTP protocol are pooled:
+    ///     the response body must be fully received and the connection must be persistent (HTTP/1.1 keep-alive, or an
+    ///     HTTP/1.0 connection that explicitly opted in via "Connection: keep-alive"). Connections whose response asked to
+    ///     close, that failed, or that carry connection-oriented authentication state (WinAuth NTLM/Negotiate) or a
+    ///     per-session client certificate are never returned to the shared pool.
+    ///     The ConnectionTimeOutSeconds parameter determines the eviction time for inactive server connections.
+    ///     This reduces TCP (and TLS) connection establishment cost, both in wall clock time and CPU cycles.
+    ///     Set to false to force a fresh server connection for every client connection.
     /// </summary>
-    public bool EnableConnectionPool { get; set; } = false;
+    public bool EnableConnectionPool { get; set; } = true;
 
     /// <summary>
     ///     Should we enable tcp server connection prefetching?
@@ -244,22 +270,20 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     List of supported Ssl versions.
     /// </summary>
-#pragma warning disable 618
+#pragma warning disable CS0618, SYSLIB0039 // SSL 3.0/TLS 1.0/1.1 remain opt-in defaults for legacy proxy compatibility.
     public SslProtocols SupportedSslProtocols { get; set; } =
         SslProtocols.Ssl3 | SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12
 #if NET6_0_OR_GREATER
         | SslProtocols.Tls13
 #endif
         ;
-#pragma warning restore 618
+#pragma warning restore CS0618, SYSLIB0039
 
     /// <summary>
     ///     List of supported Server Ssl versions.
     ///     Using SslProtocol.None means to require the same SSL protocol as the proxy client.
     /// </summary>
-#pragma warning disable 618
     public SslProtocols SupportedServerSslProtocols { get; set; } = SslProtocols.None;
-#pragma warning restore 618
 
     /// <summary>
     ///     The buffer pool used throughout this proxy instance.
@@ -325,7 +349,7 @@ public partial class ProxyServer : IDisposable
     ///     Parameters are username and password as provided by client.
     ///     Should return true for successful authentication.
     /// </summary>
-    public Func<SessionEventArgsBase, string, string, Task<bool>>? ProxyBasicAuthenticateFunc { get; set; }
+    public Func<SessionEventArgsBase?, string, string, Task<bool>>? ProxyBasicAuthenticateFunc { get; set; }
 
     /// <summary>
     ///     A pluggable callback to authenticate clients by scheme instead of requiring basic authentication through
@@ -371,23 +395,25 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public event AsyncEventHandler<SessionEventArgs>? BeforeRequest;
 
-#if DEBUG
-        /// <summary>
-        ///     Intercept request body send event to server. 
-        /// </summary>
-        public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnRequestBodyWrite;
-#endif
+    /// <summary>
+    ///     Intercept request body send event to server.
+    ///     Subscribe to inspect or modify the request body chunk-by-chunk as it streams to the server,
+    ///     without buffering the whole body. Do not combine with SessionEventArgs.GetRequestBody (which buffers).
+    /// </summary>
+    public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnRequestBodyWrite;
+
     /// <summary>
     ///     Intercept response event from server.
     /// </summary>
     public event AsyncEventHandler<SessionEventArgs>? BeforeResponse;
 
-#if DEBUG
-        /// <summary>
-        ///     Intercept request body send event to client. 
-        /// </summary>
-        public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnResponseBodyWrite;
-#endif
+    /// <summary>
+    ///     Intercept response body send event to client.
+    ///     Subscribe to inspect or modify the response body chunk-by-chunk as it streams to the client,
+    ///     without buffering the whole body. Do not combine with SessionEventArgs.GetResponseBody (which buffers).
+    /// </summary>
+    public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnResponseBodyWrite;
+
     /// <summary>
     ///     Intercept after response event from server.
     /// </summary>
@@ -453,6 +479,16 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
+    ///     Set the given explicit end point as the default HTTP proxy server for current machine.
+    /// </summary>
+    /// <param name="endPoint">The explicit endpoint.</param>
+    /// <param name="settings">The Windows system proxy settings.</param>
+    public void SetAsSystemHttpProxy(ExplicitProxyEndPoint endPoint, SystemProxySettings settings)
+    {
+        SetAsSystemProxy(endPoint, ProxyProtocolType.Http, settings);
+    }
+
+    /// <summary>
     ///     Set the given explicit end point as the default proxy server for current machine.
     /// </summary>
     /// <param name="endPoint">The explicit endpoint.</param>
@@ -462,17 +498,44 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
+    ///     Set the given explicit end point as the default HTTPS proxy server for current machine.
+    /// </summary>
+    /// <param name="endPoint">The explicit endpoint.</param>
+    /// <param name="settings">The Windows system proxy settings.</param>
+    public void SetAsSystemHttpsProxy(ExplicitProxyEndPoint endPoint, SystemProxySettings settings)
+    {
+        SetAsSystemProxy(endPoint, ProxyProtocolType.Https, settings);
+    }
+
+    /// <summary>
     ///     Set the given explicit end point as the default proxy server for current machine.
     /// </summary>
     /// <param name="endPoint">The explicit endpoint.</param>
     /// <param name="protocolType">The proxy protocol type.</param>
     public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType)
     {
-        if (SystemProxySettingsManager == null)
+        SetAsSystemProxy(endPoint, protocolType, null);
+    }
+
+    /// <summary>
+    ///     Set the given explicit end point as the default proxy server for current machine.
+    /// </summary>
+    /// <param name="endPoint">The explicit endpoint.</param>
+    /// <param name="protocolType">The proxy protocol type.</param>
+    /// <param name="settings">
+    ///     The Windows system proxy settings, or <see langword="null"/> to preserve the current bypass list.
+    /// </param>
+    public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType,
+        SystemProxySettings? settings)
+    {
+        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
             throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually configure you operating system to use this proxy's port and address.");
 
         ValidateEndPointAsSystemProxy(endPoint);
+
+        // Validate bypass rules up front so a malformed rule cannot leave the proxy state half-applied.
+        settings?.Validate();
 
         var isHttp = (protocolType & ProxyProtocolType.Http) > 0;
         var isHttps = (protocolType & ProxyProtocolType.Https) > 0;
@@ -494,13 +557,21 @@ public partial class ProxyServer : IDisposable
 
         if (isHttps) ProxyEndPoints.OfType<ExplicitProxyEndPoint>().ToList().ForEach(x => x.IsSystemHttpsProxy = false);
 
+        string? proxyOverride = null;
+        if (settings != null)
+        {
+            var currentProxyOverride = SystemProxySettingsManager.GetProxyInfoFromRegistry()?.ProxyOverride;
+            proxyOverride = settings.BuildProxyOverride(currentProxyOverride);
+        }
+
         SystemProxySettingsManager.SetProxy(
             Equals(endPoint.IpAddress, IPAddress.Any) |
             Equals(endPoint.IpAddress, IPAddress.Loopback)
                 ? "localhost"
                 : endPoint.IpAddress.ToString(),
             endPoint.Port,
-            protocolType);
+            protocolType,
+            proxyOverride);
 
         if (isHttp) endPoint.IsSystemHttpProxy = true;
 
@@ -546,7 +617,7 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void RestoreOriginalProxySettings()
     {
-        if (SystemProxySettingsManager == null)
+        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
             throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually configure your operating system to use this proxy's port and address.");
 
@@ -558,7 +629,7 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void DisableSystemProxy(ProxyProtocolType protocolType)
     {
-        if (SystemProxySettingsManager == null)
+        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
             throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually configure your operating system to use this proxy's port and address.");
 
@@ -570,7 +641,7 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void DisableAllSystemProxies()
     {
-        if (SystemProxySettingsManager == null)
+        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
             throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
                             Please manually confugure you operating system to use this proxy's port and address.");
 
@@ -610,7 +681,8 @@ public partial class ProxyServer : IDisposable
             }
         }
 
-        if (ForwardToUpstreamGateway && GetCustomUpStreamProxyFunc == null && SystemProxySettingsManager != null)
+        if (RunTime.IsWindows && ForwardToUpstreamGateway && GetCustomUpStreamProxyFunc == null &&
+            SystemProxySettingsManager != null)
         {
             systemProxyResolver = new WinHttpWebProxyFinder();
             if (UpstreamProxyConfigurationScript != null)
@@ -637,13 +709,16 @@ public partial class ProxyServer : IDisposable
     {
         if (!ProxyRunning) throw new Exception("Proxy is not running.");
 
-        if (SystemProxySettingsManager != null)
+        if (RunTime.IsWindows && SystemProxySettingsManager != null)
         {
             var setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
                 .Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
 
             if (setAsSystemProxy) SystemProxySettingsManager.RestoreOriginalSettings();
         }
+
+        // Prevent accept callbacks from scheduling another accept while listeners are stopping.
+        ProxyRunning = false;
 
         foreach (var endPoint in ProxyEndPoints) QuitListen(endPoint);
 
@@ -652,7 +727,6 @@ public partial class ProxyServer : IDisposable
         CertificateManager?.StopClearIdleCertificates();
         TcpConnectionFactory.Dispose();
 
-        ProxyRunning = false;
     }
 
     /// <summary>
@@ -706,6 +780,9 @@ public partial class ProxyServer : IDisposable
     /// <returns>The external proxy as task result.</returns>
     private Task<IExternalProxy?> GetSystemUpStreamProxy(SessionEventArgsBase sessionEventArgs)
     {
+        if (!RunTime.IsWindows)
+            throw new PlatformNotSupportedException("System upstream proxy discovery is only supported on Windows.");
+
         var proxy = systemProxyResolver!.GetProxy(sessionEventArgs.HttpClient.Request.RequestUri);
         return Task.FromResult(proxy);
     }
@@ -715,42 +792,86 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     private void OnAcceptConnection(IAsyncResult asyn)
     {
-        var endPoint = (ProxyEndPoint)asyn.AsyncState;
+        var endPoint = (ProxyEndPoint)asyn.AsyncState!;
+        var listener = endPoint.Listener!;
 
         Socket? tcpClient = null;
+        var listenerDisposed = false;
 
         try
         {
-            // based on end point type call appropriate request handlers
-            tcpClient = endPoint.Listener!.EndAcceptSocket(asyn);
-            tcpClient.NoDelay = NoDelay;
+            tcpClient = listener.EndAcceptSocket(asyn);
         }
         catch (ObjectDisposedException)
         {
             // The listener was Stop()'d, disposing the underlying socket and
-            // triggering the completion of the callback. We're already exiting,
-            // so just return.
-            return;
+            // triggering the completion of the callback. We're already exiting.
+            listenerDisposed = true;
         }
-        catch
+        catch (Exception ex)
         {
-            // Other errors are discarded to keep proxy running
+            // Errors here (e.g. transient socket errors under heavy load) are
+            // reported but must not prevent re-arming the accept loop below.
+            OnException(null, ex);
         }
 
+        // Re-arm the accept loop as early as possible (before dispatching the
+        // just-accepted client) so bursts of near-simultaneous connections are
+        // drained from the backlog without delay.
+        if (!listenerDisposed) BeginAcceptConnection(endPoint, listener);
+
         if (tcpClient != null)
-            Task.Run(async () => { await HandleClient(tcpClient, endPoint); });
+        {
+            if (ProxyRunning)
+            {
+                try
+                {
+                    tcpClient.NoDelay = NoDelay;
+                }
+                catch (Exception ex)
+                {
+                    OnException(null, ex);
+                }
+
+                var acceptedClient = tcpClient;
+                Task.Run(async () => { await HandleClient(acceptedClient, endPoint); });
+            }
+            else
+                tcpClient.Dispose();
+        }
+    }
+
+    /// <summary>
+    ///     (Re)arms the accept loop for the given end point.
+    ///     Any exception thrown by <see cref="TcpListener.BeginAcceptSocket" /> (e.g. transient
+    ///     resource exhaustion under heavy connection load) is caught and retried instead of being
+    ///     allowed to escape the async I/O completion callback, which would otherwise crash the
+    ///     process or silently stop the proxy from accepting any further connections.
+    /// </summary>
+    private void BeginAcceptConnection(ProxyEndPoint endPoint, TcpListener listener)
+    {
+        if (!ProxyRunning) return;
 
         try
         {
-            // based on end point type call appropriate request handlers
-            // Get the listener that handles the client request.
-            endPoint.Listener!.BeginAcceptSocket(OnAcceptConnection, endPoint);
+            listener.BeginAcceptSocket(OnAcceptConnection, endPoint);
         }
         catch (Exception ex) when (ex is ObjectDisposedException || ex is InvalidOperationException)
         {
             // The listener was Stop()'d, disposing the underlying socket and
             // triggering the completion of the callback. We're already exiting,
             // so just return.
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+
+            // Retry shortly instead of permanently abandoning the accept loop.
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(100).ConfigureAwait(false);
+                BeginAcceptConnection(endPoint, listener);
+            });
         }
     }
 
@@ -810,8 +931,11 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     private void QuitListen(ProxyEndPoint endPoint)
     {
-        endPoint.Listener!.Stop();
-        endPoint.Listener.Server.Dispose();
+        var listener = endPoint.Listener;
+        if (listener == null) return;
+
+        listener.Stop();
+        listener.Server.Dispose();
     }
 
     /// <summary>

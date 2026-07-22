@@ -1,0 +1,20 @@
+C:\Users\runneradmin\.nuget\packages\bouncycastle.cryptography\2.6.2\lib\net461\BouncyCastle.Cryptography.dll
+C:\Users\runneradmin\.nuget\packages\brotlisharplib\0.3.3\lib\net451\BrotliSharpLib.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.win32.registry\5.0.0\ref\net461\Microsoft.Win32.Registry.dll
+C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6.2\mscorlib.dll
+C:\Users\runneradmin\.nuget\packages\system.buffers\4.6.1\lib\net462\System.Buffers.dll
+C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6.2\System.Core.dll
+C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6.2\System.Data.dll
+C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6.2\System.dll
+C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6.2\System.Drawing.dll
+C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6.2\System.IO.Compression.FileSystem.dll
+C:\Users\runneradmin\.nuget\packages\system.memory\4.6.3\lib\net462\System.Memory.dll
+C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6.2\System.Numerics.dll
+C:\Users\runneradmin\.nuget\packages\system.numerics.vectors\4.6.1\lib\net462\System.Numerics.Vectors.dll
+C:\Users\runneradmin\.nuget\packages\system.runtime.compilerservices.unsafe\6.1.2\lib\net462\System.Runtime.CompilerServices.Unsafe.dll
+C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6.2\System.Runtime.Serialization.dll
+C:\Users\runneradmin\.nuget\packages\system.security.accesscontrol\5.0.0\ref\net461\System.Security.AccessControl.dll
+C:\Users\runneradmin\.nuget\packages\system.security.principal.windows\5.0.0\ref\net461\System.Security.Principal.Windows.dll
+C:\Users\runneradmin\.nuget\packages\system.threading.tasks.extensions\4.6.3\lib\net462\System.Threading.Tasks.Extensions.dll
+C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6.2\System.Xml.dll
+C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6.2\System.Xml.Linq.dll

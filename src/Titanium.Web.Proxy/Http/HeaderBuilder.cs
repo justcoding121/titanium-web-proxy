@@ -76,12 +76,16 @@ internal class HeaderBuilder
 
 #if NET6_0_OR_GREATER
         var buf = ArrayPool<byte>.Shared.Rent(encoding.GetMaxByteCount(str.Length));
-        var span = new Span<byte>(buf);
-
-        int bytes = encoding.GetBytes(str.AsSpan(), span);
-
-        stream.Write(span.Slice(0, bytes));
-        ArrayPool<byte>.Shared.Return(buf);
+        try
+        {
+            var span = new Span<byte>(buf);
+            int bytes = encoding.GetBytes(str.AsSpan(), span);
+            stream.Write(span.Slice(0, bytes));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buf);
+        }
 #else
         var data = encoding.GetBytes(str);
         stream.Write(data, 0, data.Length);
@@ -90,13 +94,18 @@ internal class HeaderBuilder
 
     public ArraySegment<byte> GetBuffer()
     {
-        stream.TryGetBuffer(out var buffer);
+        if (!stream.TryGetBuffer(out var buffer))
+            throw new InvalidOperationException("The header buffer is unexpectedly unavailable.");
+
         return buffer;
     }
 
     public string GetString(Encoding encoding)
     {
-        stream.TryGetBuffer(out var buffer);
+        var buffer = GetBuffer();
+        if (buffer.Array == null)
+            throw new InvalidOperationException("The header buffer has no backing array.");
+
         return encoding.GetString(buffer.Array, buffer.Offset, buffer.Count);
     }
 }

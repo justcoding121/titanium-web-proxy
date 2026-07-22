@@ -1,0 +1,1 @@
+Roslyn version: 5.6.0.0Language version: CSharp14!Concurrent execution: enabled¯ªFile 'D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\obj\Release\net462\.NETFramework,Version=v4.6.2.AssemblyAttributes.cs' was recognized as generated

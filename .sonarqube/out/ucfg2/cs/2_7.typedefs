@@ -1,0 +1,30 @@
+—
+3Titanium.Web.Proxy.Examples.Basic.SampleClientStateobject^
+SampleClientState()GTitanium.Web.Proxy.Examples.Basic.SampleClientState.SampleClientState()X
+PipelineInfo.getDTitanium.Web.Proxy.Examples.Basic.SampleClientState.PipelineInfo.getX
+PipelineInfo.setDTitanium.Web.Proxy.Examples.Basic.SampleClientState.PipelineInfo.set√!
+5Titanium.Web.Proxy.Examples.Basic.ProxyTestControllerobjectSystem.IDisposabled
+ProxyTestController()KTitanium.Web.Proxy.Examples.Basic.ProxyTestController.ProxyTestController()L
+	Dispose()?Titanium.Web.Proxy.Examples.Basic.ProxyTestController.Dispose()R
+StartProxy()BTitanium.Web.Proxy.Examples.Basic.ProxyTestController.StartProxy()F
+Stop()<Titanium.Web.Proxy.Examples.Basic.ProxyTestController.Stop()„
+TOnGetCustomUpStreamProxyFunc(Titanium.Web.Proxy.EventArguments.SessionEventArgsBase)äTitanium.Web.Proxy.Examples.Basic.ProxyTestController.OnGetCustomUpStreamProxyFunc(Titanium.Web.Proxy.EventArguments.SessionEventArgsBase)Î
+XOnCustomUpStreamProxyFailureFunc(Titanium.Web.Proxy.EventArguments.SessionEventArgsBase)éTitanium.Web.Proxy.Examples.Basic.ProxyTestController.OnCustomUpStreamProxyFailureFunc(Titanium.Web.Proxy.EventArguments.SessionEventArgsBase)Ö
+eOnBeforeTunnelConnectRequest(object, Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs)õTitanium.Web.Proxy.Examples.Basic.ProxyTestController.OnBeforeTunnelConnectRequest(object, Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs)·
+SWebSocket_DataSent(object, Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs)âTitanium.Web.Proxy.Examples.Basic.ProxyTestController.WebSocket_DataSent(object, Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs)È
+WWebSocket_DataReceived(object, Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs)çTitanium.Web.Proxy.Examples.Basic.ProxyTestController.WebSocket_DataReceived(object, Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs)‘
+åWebSocketDataSentReceived(Titanium.Web.Proxy.EventArguments.SessionEventArgs, Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs, bool)¬Titanium.Web.Proxy.Examples.Basic.ProxyTestController.WebSocketDataSentReceived(Titanium.Web.Proxy.EventArguments.SessionEventArgs, Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs, bool)á
+fOnBeforeTunnelConnectResponse(object, Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs)úTitanium.Web.Proxy.Examples.Basic.ProxyTestController.OnBeforeTunnelConnectResponse(object, Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs)ƒ
+EOnRequest(object, Titanium.Web.Proxy.EventArguments.SessionEventArgs){Titanium.Web.Proxy.Examples.Basic.ProxyTestController.OnRequest(object, Titanium.Web.Proxy.EventArguments.SessionEventArgs)Ö
+eMultipartRequestPartSent(object, Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs)õTitanium.Web.Proxy.Examples.Basic.ProxyTestController.MultipartRequestPartSent(object, Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs)∆
+FOnResponse(object, Titanium.Web.Proxy.EventArguments.SessionEventArgs)|Titanium.Web.Proxy.Examples.Basic.ProxyTestController.OnResponse(object, Titanium.Web.Proxy.EventArguments.SessionEventArgs)È
+WOnResponseBodyWrite(object, Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs)çTitanium.Web.Proxy.Examples.Basic.ProxyTestController.OnResponseBodyWrite(object, Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs)—
+KOnAfterResponse(object, Titanium.Web.Proxy.EventArguments.SessionEventArgs)ÅTitanium.Web.Proxy.Examples.Basic.ProxyTestController.OnAfterResponse(object, Titanium.Web.Proxy.EventArguments.SessionEventArgs)˝
+aOnCertificateValidation(object, Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs)óTitanium.Web.Proxy.Examples.Basic.ProxyTestController.OnCertificateValidation(object, Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs)˘
+_OnCertificateSelection(object, Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs)ïTitanium.Web.Proxy.Examples.Basic.ProxyTestController.OnCertificateSelection(object, Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs)í
+,WriteToConsole(string, System.ConsoleColor?)bTitanium.Web.Proxy.Examples.Basic.ProxyTestController.WriteToConsole(string, System.ConsoleColor?)\
+ListenToConsole()GTitanium.Web.Proxy.Examples.Basic.ProxyTestController.ListenToConsole()d
+CancellationToken.getKTitanium.Web.Proxy.Examples.Basic.ProxyTestController.CancellationToken.getd
+CancellationToken.setKTitanium.Web.Proxy.Examples.Basic.ProxyTestController.CancellationToken.setu
+)Titanium.Web.Proxy.Examples.Basic.Programobject@
+	Program()3Titanium.Web.Proxy.Examples.Basic.Program.Program()

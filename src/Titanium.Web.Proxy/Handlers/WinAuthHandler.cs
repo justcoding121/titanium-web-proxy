@@ -27,6 +27,11 @@ public partial class ProxyServer
         "KerberosAuthorization"
     };
 
+    private static readonly HashSet<string> proxyAuthHeaderNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Proxy-Authenticate"
+    };
+
     /// <summary>
     ///     supported authentication schemes.
     /// </summary>
@@ -142,6 +147,76 @@ public partial class ProxyServer
     }
 
     /// <summary>
+    ///     Handles NTLM/Kerberos authentication challenges from an upstream proxy.
+    /// </summary>
+    private async Task Handle407ProxyAuthorization(SessionEventArgs args)
+    {
+        if (!args.HttpClient.HasConnection) return;
+
+        var upstreamProxy = args.HttpClient.Connection.UpStreamProxy;
+        if (upstreamProxy?.UseDefaultCredentials != true) return;
+
+        var response = args.HttpClient.Response;
+        var authHeader = response.Headers.GetHeaders(KnownHeaders.ProxyAuthenticate.String)?
+            .FirstOrDefault(x => authSchemes.Any(y =>
+                x.Value.Equals(y, StringComparison.OrdinalIgnoreCase) ||
+                x.Value.StartsWith(y + " ", StringComparison.OrdinalIgnoreCase)));
+        if (authHeader == null) return;
+
+        var scheme = authSchemes.Contains(authHeader.Value) ? authHeader.Value : null;
+        var expectedAuthState =
+            scheme == null ? State.WinAuthState.InitialToken : State.WinAuthState.Unauthorized;
+
+        if (UpstreamProxyWinAuthTokenGenerator == null &&
+            !WinAuthEndPoint.ValidateWinAuthState(args.HttpClient.Data, expectedAuthState))
+        {
+            await RewriteUnauthorizedResponse(args);
+            return;
+        }
+
+        var request = args.HttpClient.Request;
+        request.Headers.RemoveHeader(KnownHeaders.ProxyAuthorization);
+
+        if (scheme != null)
+        {
+            var clientToken = GenerateUpstreamProxyWinAuthToken(upstreamProxy, scheme, null, args.HttpClient.Data);
+            if (string.IsNullOrEmpty(clientToken))
+            {
+                await RewriteUnauthorizedResponse(args);
+                return;
+            }
+
+            request.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyAuthorization,
+                string.Concat(scheme, clientToken));
+            if (request.HasBody) request.ContentLength = 0;
+        }
+        else
+        {
+            scheme = authSchemes.First(x =>
+                authHeader.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase) &&
+                authHeader.Value.Length > x.Length &&
+                char.IsWhiteSpace(authHeader.Value[x.Length]));
+
+            var serverToken = authHeader.Value.Substring(scheme.Length).Trim();
+            var clientToken =
+                GenerateUpstreamProxyWinAuthToken(upstreamProxy, scheme, serverToken, args.HttpClient.Data);
+            if (string.IsNullOrEmpty(clientToken))
+            {
+                await RewriteUnauthorizedResponse(args);
+                return;
+            }
+
+            request.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyAuthorization,
+                string.Concat(scheme, clientToken));
+            if (request.OriginalHasBody) request.ContentLength = request.Body.Length;
+
+            args.HttpClient.Connection.IsWinAuthenticated = true;
+        }
+
+        args.ReRequest = true;
+    }
+
+    /// <summary>
     ///     Rewrites the response body for failed authentication
     /// </summary>
     /// <param name="args"></param>
@@ -152,6 +227,7 @@ public partial class ProxyServer
 
         // Strip authentication headers to avoid credentials prompt in client web browser
         foreach (var authHeaderName in authHeaderNames) response.Headers.RemoveHeader(authHeaderName);
+        foreach (var proxyAuthHeaderName in proxyAuthHeaderNames) response.Headers.RemoveHeader(proxyAuthHeaderName);
 
         // Add custom div to body to clarify that the proxy (not the client browser) failed authentication
         var authErrorMessage =

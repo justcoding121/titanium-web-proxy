@@ -1,16 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
+#if NETFRAMEWORK
 using System.Runtime.CompilerServices;
+#endif
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Text;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Helpers.WinHttp;
 
+#if !NETFRAMEWORK
+[SupportedOSPlatform("windows")]
+#endif
 internal sealed class WinHttpWebProxyFinder : IDisposable
 {
-    private readonly WinHttpHandle session;
+    private readonly WinHttpHandle? session;
     private bool autoDetectFailed;
 
     private bool disposed;
@@ -95,6 +101,11 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
 
     public IExternalProxy? GetProxy(Uri destination)
     {
+        // Known limitations of system-proxy resolution:
+        //  - Only the first proxy returned by the PAC/auto-config script is used; additional
+        //    fallback proxies in the list are ignored.
+        //  - The static system bypass list is not re-applied to PAC results here (the PAC script
+        //    itself is expected to return DIRECT for bypassed hosts).
         if (GetAutoProxies(destination, out var proxies))
         {
             if (proxies == null) return null;
@@ -108,8 +119,11 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
                 port = int.Parse(parts[1]);
             }
 
-            // TODO: Apply authorization
-            var systemProxy = new ExternalProxy(proxyStr, port);
+            // Authenticate to the system proxy with the current user's default credentials via
+            // integrated auth (NTLM/Negotiate). This only takes effect if the proxy issues a 407
+            // challenge, and mirrors how Windows authenticates to auto-detected proxies. Explicit
+            // Basic credentials cannot be recovered from WinHTTP auto-config, so they are not set.
+            var systemProxy = new ExternalProxy(proxyStr, port) { UseDefaultCredentials = true };
 
             return systemProxy;
         }
@@ -153,7 +167,9 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
     private ProxyInfo GetProxyInfo()
     {
         var proxyConfig = new NativeMethods.WinHttp.WinhttpCurrentUserIeProxyConfig();
+#if NETFRAMEWORK
         RuntimeHelpers.PrepareConstrainedRegions();
+#endif
         try
         {
             ProxyInfo result;
@@ -227,12 +243,17 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
         ref NativeMethods.WinHttp.WinhttpAutoproxyOptions autoProxyOptions, out string? proxyListString)
     {
         proxyListString = null;
+        var currentSession = session;
+        if (currentSession == null || currentSession.IsInvalid) return false;
+
         bool flag;
         var proxyInfo = new NativeMethods.WinHttp.WinhttpProxyInfo();
+#if NETFRAMEWORK
         RuntimeHelpers.PrepareConstrainedRegions();
+#endif
         try
         {
-            flag = NativeMethods.WinHttp.WinHttpGetProxyForUrl(session, destination, ref autoProxyOptions,
+            flag = NativeMethods.WinHttp.WinHttpGetProxyForUrl(currentSession, destination, ref autoProxyOptions,
                 out proxyInfo);
             if (flag) proxyListString = Marshal.PtrToStringUni(proxyInfo.Proxy);
         }

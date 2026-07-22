@@ -1,0 +1,32 @@
+name: Sync GitHub Wiki
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - wiki/**
+      - .github/workflows/wiki-sync.yml
+  workflow_dispatch:
+
+concurrency:
+  group: wiki-sync
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Publish wiki
+        uses: Andrew-Chen-Wang/github-wiki-action@v5
+        with:
+          path: wiki
+          preprocess: false
+          disable-empty-commits: true
+          ignore: README.md

@@ -41,11 +41,11 @@ namespace Titanium.Web.Proxy.ProxySocket.Authentication;
 internal sealed class AuthUserPass : AuthMethod
 {
     /// <summary>Holds the value of the Password property.</summary>
-    private string password;
+    private string password = string.Empty;
 
     // private variables
     /// <summary>Holds the value of the Username property.</summary>
-    private string username;
+    private string username = string.Empty;
 
     /// <summary>
     ///     Initializes a new AuthUserPass instance.
@@ -116,26 +116,25 @@ internal sealed class AuthUserPass : AuthMethod
         {
             GetAuthenticationBytes(buffer);
             if (Server.Send(buffer, 0, length, SocketFlags.None) < length) throw new SocketException(10054);
+
+            var received = 0;
+            while (received != 2)
+            {
+                var recv = Server.Receive(buffer, received, 2 - received, SocketFlags.None);
+                if (recv == 0)
+                    throw new SocketException(10054);
+
+                received += recv;
+            }
+
+            if (buffer[1] == 0) return;
+
+            Server.Close();
+            throw new ProxyException("Username/password combination rejected.");
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
-        }
-
-        var received = 0;
-        while (received != 2)
-        {
-            var recv = Server.Receive(buffer, received, 2 - received, SocketFlags.None);
-            if (recv == 0)
-                throw new SocketException(10054);
-
-            received += recv;
-        }
-
-        if (buffer[1] != 0)
-        {
-            Server.Close();
-            throw new ProxyException("Username/password combination rejected.");
         }
     }
 
@@ -201,7 +200,7 @@ internal sealed class AuthUserPass : AuthMethod
 
     private void OnCallBack(Exception? exception)
     {
-        ArrayPool<byte>.Shared.Return(Buffer);
+        ArrayPool<byte>.Shared.Return(TakeBuffer());
         CallBack(exception);
     }
 }

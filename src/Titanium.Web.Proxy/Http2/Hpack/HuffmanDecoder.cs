@@ -69,7 +69,9 @@ public class HuffmanDecoder
             while (bits >= 8)
             {
                 var c = (current >> (bits - 8)) & 0xFF;
-                node = node.Children![c];
+                var children = node.Children ??
+                               throw new IOException("Invalid Huffman code: terminal node has trailing bits.");
+                node = children[c] ?? throw new IOException("Invalid Huffman code.");
                 bits -= node.Bits;
                 if (node.IsTerminal)
                 {
@@ -84,7 +86,9 @@ public class HuffmanDecoder
         while (bits > 0)
         {
             var c = (current << (8 - bits)) & 0xFF;
-            node = node.Children![c];
+            var children = node.Children ??
+                           throw new IOException("Invalid Huffman code: terminal node has trailing bits.");
+            node = children[c] ?? throw new IOException("Invalid Huffman code.");
             if (node.IsTerminal && node.Bits <= bits)
             {
                 bits -= node.Bits;
@@ -124,16 +128,20 @@ public class HuffmanDecoder
 
             length -= 8;
             var i = (code >> length) & 0xFF;
-            if (current.Children![i] == null) current.Children[i] = new Node();
+            var children = current.Children ??
+                           throw new InvalidDataException("invalid Huffman code: terminal node has trailing bits");
+            children[i] ??= new Node();
 
-            current = current.Children[i];
+            current = children[i]!;
         }
 
         var terminal = new Node(symbol, length);
         var shift = 8 - length;
         var start = (code << shift) & 0xFF;
         var end = 1 << shift;
-        for (var i = start; i < start + end; i++) current.Children![i] = terminal;
+        var currentChildren = current.Children ??
+                              throw new InvalidDataException("invalid Huffman code: prefix not unique");
+        for (var i = start; i < start + end; i++) currentChildren[i] = terminal;
     }
 
     private class Node
@@ -145,7 +153,7 @@ public class HuffmanDecoder
         {
             Symbol = 0;
             Bits = 8;
-            Children = new Node[256];
+            Children = new Node?[256];
         }
 
         /// <summary>
@@ -168,7 +176,7 @@ public class HuffmanDecoder
         public int Bits { get; }
 
         // internal nodes have children
-        public Node[]? Children { get; }
+        public Node?[]? Children { get; }
 
         public bool IsTerminal => Children == null;
     }

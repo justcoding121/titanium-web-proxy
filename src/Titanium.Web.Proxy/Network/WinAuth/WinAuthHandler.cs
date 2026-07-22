@@ -4,6 +4,8 @@ using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy.Network.WinAuth;
 
+using static Common;
+
 /// <summary>
 ///     A handler for NTLM/Kerberos windows authentication challenge from server
 ///     NTLM process details below
@@ -21,7 +23,10 @@ internal static class WinAuthHandler
     /// <returns></returns>
     internal static string GetInitialAuthToken(string serverHostname, string authScheme, InternalDataStore data)
     {
-        var tokenBytes = WinAuthEndPoint.AcquireInitialSecurityToken(serverHostname, authScheme, data);
+        var tokenBytes = WinAuthEndPoint.AcquireInitialSecurityToken(serverHostname, authScheme, data,
+            IscReqConfidentiality | IscReqReplayDetect | IscReqSequenceDetect | IscReqConnection);
+        if (tokenBytes == null) throw new InvalidOperationException("Failed to acquire the initial authentication token.");
+
         return string.Concat(" ", Convert.ToBase64String(tokenBytes));
     }
 
@@ -36,7 +41,31 @@ internal static class WinAuthHandler
     {
         var tokenBytes =
             WinAuthEndPoint.AcquireFinalSecurityToken(serverHostname, Convert.FromBase64String(serverToken),
-                data);
+                data, IscReqConfidentiality | IscReqReplayDetect | IscReqSequenceDetect | IscReqConnection);
+        if (tokenBytes == null) throw new InvalidOperationException("Failed to acquire the final authentication token.");
+
+        return string.Concat(" ", Convert.ToBase64String(tokenBytes));
+    }
+
+    /// <summary>
+    ///     Get the initial authentication token for an upstream proxy using the current process identity.
+    /// </summary>
+    internal static string GetInitialProxyAuthToken(string proxyHostname, string authScheme, InternalDataStore data)
+    {
+        var tokenBytes = WinAuthEndPoint.AcquireInitialSecurityToken(proxyHostname, authScheme, data, 0);
+        if (tokenBytes == null) throw new InvalidOperationException("Failed to acquire the initial proxy authentication token.");
+
+        return string.Concat(" ", Convert.ToBase64String(tokenBytes));
+    }
+
+    /// <summary>
+    ///     Get the response token for an upstream proxy challenge.
+    /// </summary>
+    internal static string GetFinalProxyAuthToken(string proxyHostname, string serverToken, InternalDataStore data)
+    {
+        var tokenBytes = WinAuthEndPoint.AcquireFinalSecurityToken(proxyHostname,
+            Convert.FromBase64String(serverToken), data, 0);
+        if (tokenBytes == null) throw new InvalidOperationException("Failed to acquire the final proxy authentication token.");
 
         return string.Concat(" ", Convert.ToBase64String(tokenBytes));
     }

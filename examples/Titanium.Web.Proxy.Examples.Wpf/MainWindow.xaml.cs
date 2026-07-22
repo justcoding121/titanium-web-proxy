@@ -38,6 +38,11 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         public MainWindow()
         {
             proxyServer = new ProxyServer();
+            var certificateDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Titanium.Web.Proxy");
+            Directory.CreateDirectory(certificateDirectory);
+            proxyServer.CertificateManager.PfxFilePath = Path.Combine(certificateDirectory, "rootCert.pfx");
 
             //proxyServer.EnableHttp2 = true;
 
@@ -105,7 +110,11 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             };
             proxyServer.Start();
 
-            proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
+            proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp, new SystemProxySettings
+            {
+                // Route localhost/loopback traffic through the proxy for this example.
+                ProxyLoopback = true
+            });
 
             InitializeComponent();
         }

@@ -290,16 +290,17 @@ internal sealed class Socks5Handler : SocksHandler
     /// <param name="state">The state.</param>
     /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
     public override AsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
-        IPEndPoint proxyEndPoint, object state)
+        IPEndPoint proxyEndPoint, AsyncProxyResult asyncResult)
     {
         ProtocolComplete = callback;
         Buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 10 + host.Length + Username.Length + Password.Length));
 
         // first {ConnectOffset} bytes are reserved for authentication 
         handShakeLength = GetHostPortBytes(host, port, Buffer.AsMemory(ConnectOffset));
+        // Assign all callback-visible state before BeginConnect can complete.
+        var result = asyncResult ?? throw new ArgumentNullException(nameof(asyncResult));
         Server.BeginConnect(proxyEndPoint, OnConnect, Server);
-        AsyncResult = new AsyncProxyResult(state);
-        return AsyncResult;
+        return result;
     }
 
     /// <summary>
@@ -311,16 +312,17 @@ internal sealed class Socks5Handler : SocksHandler
     /// <param name="state">The state.</param>
     /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
     public override AsyncProxyResult BeginNegotiate(IPEndPoint remoteEp, HandShakeComplete callback,
-        IPEndPoint proxyEndPoint, object state)
+        IPEndPoint proxyEndPoint, AsyncProxyResult asyncResult)
     {
         ProtocolComplete = callback;
         Buffer = ArrayPool<byte>.Shared.Rent(Math.Max(258, 13 + Username.Length + Password.Length));
 
         // first {ConnectOffset} bytes are reserved for authentication 
         handShakeLength = GetEndPointBytes(remoteEp, Buffer.AsMemory(ConnectOffset));
+        // Assign all callback-visible state before BeginConnect can complete.
+        var result = asyncResult ?? throw new ArgumentNullException(nameof(asyncResult));
         Server.BeginConnect(proxyEndPoint, OnConnect, Server);
-        AsyncResult = new AsyncProxyResult(state);
-        return AsyncResult;
+        return result;
     }
 
     /// <summary>
@@ -435,7 +437,7 @@ internal sealed class Socks5Handler : SocksHandler
     ///     Called when the socket has been successfully authenticated with the server.
     /// </summary>
     /// <param name="e">The exception that has occurred while authenticating, or <em>null</em> if no error occurred.</param>
-    private void OnAuthenticated(Exception e)
+    private void OnAuthenticated(Exception? e)
     {
         if (e != null)
         {

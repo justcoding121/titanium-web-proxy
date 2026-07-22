@@ -62,9 +62,6 @@ internal enum ProxyTypes
 /// </remarks>
 internal class ProxySocket : Socket
 {
-    /// <summary>Holds a pointer to the method that should be called when the Socket is connected to the remote device.</summary>
-    private AsyncCallback callBack;
-
     /// <summary>Holds the value of the ProxyPass property.</summary>
     private string proxyPass = string.Empty;
 
@@ -123,26 +120,19 @@ internal class ProxySocket : Socket
     {
         ProxyUser = proxyUsername;
         ProxyPass = proxyPassword;
-        ToThrow = new InvalidOperationException();
     }
 
     /// <summary>
     ///     Gets or sets the EndPoint of the proxy server.
     /// </summary>
     /// <value>An IPEndPoint object that holds the IP address and the port of the proxy server.</value>
-    public IPEndPoint ProxyEndPoint { get; set; }
+    public IPEndPoint? ProxyEndPoint { get; set; }
 
     /// <summary>
     ///     Gets or sets the type of proxy server to use.
     /// </summary>
     /// <value>One of the ProxyTypes values.</value>
     public ProxyTypes ProxyType { get; set; } = ProxyTypes.None;
-
-    /// <summary>
-    ///     Gets or sets a user-defined object.
-    /// </summary>
-    /// <value>The user-defined object.</value>
-    private object State { get; set; }
 
     /// <summary>
     ///     Gets or sets the username to use when authenticating with the proxy.
@@ -165,24 +155,6 @@ internal class ProxySocket : Socket
         get => proxyPass;
         set => proxyPass = value ?? throw new ArgumentNullException();
     }
-
-    /// <summary>
-    ///     Gets or sets the asynchronous result object.
-    /// </summary>
-    /// <value>An instance of the IAsyncProxyResult class.</value>
-    private AsyncProxyResult AsyncResult { get; set; }
-
-    /// <summary>
-    ///     Gets or sets the exception to throw when the EndConnect method is called.
-    /// </summary>
-    /// <value>An instance of the Exception class (or subclasses of Exception).</value>
-    private Exception? ToThrow { get; set; }
-
-    /// <summary>
-    ///     Gets or sets the remote port the user wants to connect to.
-    /// </summary>
-    /// <value>An integer that specifies the port the user wants to connect to.</value>
-    private int RemotePort { get; set; }
 
     /// <summary>
     ///     Establishes a connection to a remote device.
@@ -276,7 +248,7 @@ internal class ProxySocket : Socket
     /// <exception cref="ArgumentNullException">The remoteEP parameter is a null reference (Nothing in Visual Basic).</exception>
     /// <exception cref="SocketException">An operating system error occurs while creating the Socket.</exception>
     /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-    public new IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback callback, object state)
+    public new IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback? callback, object? state)
     {
         var remoteEp = new IPEndPoint(address, port);
         return BeginConnect(remoteEp, callback, state);
@@ -292,7 +264,7 @@ internal class ProxySocket : Socket
     /// <exception cref="ArgumentNullException">The remoteEP parameter is a null reference (Nothing in Visual Basic).</exception>
     /// <exception cref="SocketException">An operating system error occurs while creating the Socket.</exception>
     /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-    public new IAsyncResult BeginConnect(EndPoint remoteEp, AsyncCallback callback, object state)
+    public new IAsyncResult BeginConnect(EndPoint remoteEp, AsyncCallback? callback, object? state)
     {
         if (remoteEp == null)
             throw new ArgumentNullException();
@@ -300,29 +272,27 @@ internal class ProxySocket : Socket
         if (ProtocolType != ProtocolType.Tcp || ProxyType == ProxyTypes.None || ProxyEndPoint == null)
             return base.BeginConnect(remoteEp, callback, state);
 
-        callBack = callback;
+        var result = new AsyncProxyResult(state);
+        HandShakeComplete protocolComplete = error => OnHandShakeComplete(result, callback, error);
         if (ProxyType == ProxyTypes.Https)
         {
-            AsyncResult = new HttpsHandler(this, ProxyUser, ProxyPass).BeginNegotiate((IPEndPoint)remoteEp,
-                OnHandShakeComplete, ProxyEndPoint, state);
-            return AsyncResult;
+            return new HttpsHandler(this, ProxyUser, ProxyPass).BeginNegotiate((IPEndPoint)remoteEp,
+                protocolComplete, ProxyEndPoint, result);
         }
 
         if (ProxyType == ProxyTypes.Socks4)
         {
-            AsyncResult = new Socks4Handler(this, ProxyUser).BeginNegotiate((IPEndPoint)remoteEp,
-                OnHandShakeComplete, ProxyEndPoint, state);
-            return AsyncResult;
+            return new Socks4Handler(this, ProxyUser).BeginNegotiate((IPEndPoint)remoteEp,
+                protocolComplete, ProxyEndPoint, result);
         }
 
         if (ProxyType == ProxyTypes.Socks5)
         {
-            AsyncResult = new Socks5Handler(this, ProxyUser, ProxyPass).BeginNegotiate((IPEndPoint)remoteEp,
-                OnHandShakeComplete, ProxyEndPoint, state);
-            return AsyncResult;
+            return new Socks5Handler(this, ProxyUser, ProxyPass).BeginNegotiate((IPEndPoint)remoteEp,
+                protocolComplete, ProxyEndPoint, result);
         }
 
-        return null;
+        throw new InvalidOperationException($"Unsupported proxy type: {ProxyType}.");
     }
 
     /// <summary>
@@ -337,42 +307,39 @@ internal class ProxySocket : Socket
     /// <exception cref="ArgumentException">The port parameter is invalid.</exception>
     /// <exception cref="SocketException">An operating system error occurs while creating the Socket.</exception>
     /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-    public new IAsyncResult BeginConnect(string host, int port, AsyncCallback callback, object state)
+    public new IAsyncResult BeginConnect(string host, int port, AsyncCallback? callback, object? state)
     {
         if (host == null)
             throw new ArgumentNullException();
         if (port <= 0 || port > 65535)
             throw new ArgumentException();
-        callBack = callback;
+        var result = new AsyncProxyResult(state);
+        HandShakeComplete protocolComplete = error => OnHandShakeComplete(result, callback, error);
         if (ProtocolType != ProtocolType.Tcp || ProxyType == ProxyTypes.None || ProxyEndPoint == null)
         {
-            RemotePort = port;
-            AsyncResult = BeginDns(host, OnHandShakeComplete, state);
-            return AsyncResult;
+            BeginDns(host, port, protocolComplete, result);
+            return result;
         }
 
         if (ProxyType == ProxyTypes.Https)
         {
-            AsyncResult = new HttpsHandler(this, ProxyUser, ProxyPass).BeginNegotiate(host, port,
-                OnHandShakeComplete, ProxyEndPoint, state);
-            return AsyncResult;
+            return new HttpsHandler(this, ProxyUser, ProxyPass).BeginNegotiate(host, port,
+                protocolComplete, ProxyEndPoint, result);
         }
 
         if (ProxyType == ProxyTypes.Socks4)
         {
-            AsyncResult = new Socks4Handler(this, ProxyUser).BeginNegotiate(host, port,
-                OnHandShakeComplete, ProxyEndPoint, state);
-            return AsyncResult;
+            return new Socks4Handler(this, ProxyUser).BeginNegotiate(host, port,
+                protocolComplete, ProxyEndPoint, result);
         }
 
         if (ProxyType == ProxyTypes.Socks5)
         {
-            AsyncResult = new Socks5Handler(this, ProxyUser, ProxyPass).BeginNegotiate(host, port,
-                OnHandShakeComplete, ProxyEndPoint, state);
-            return AsyncResult;
+            return new Socks5Handler(this, ProxyUser, ProxyPass).BeginNegotiate(host, port,
+                protocolComplete, ProxyEndPoint, result);
         }
 
-        return null;
+        throw new InvalidOperationException($"Unsupported proxy type: {ProxyType}.");
     }
 
     /// <summary>
@@ -390,7 +357,7 @@ internal class ProxySocket : Socket
         if (asyncResult == null)
             throw new ArgumentNullException();
         // In case we called Socket.BeginConnect() directly
-        if (!(asyncResult is AsyncProxyResult))
+        if (!(asyncResult is AsyncProxyResult proxyResult))
         {
             base.EndConnect(asyncResult);
             return;
@@ -398,8 +365,8 @@ internal class ProxySocket : Socket
 
         if (!asyncResult.IsCompleted)
             asyncResult.AsyncWaitHandle.WaitOne();
-        if (ToThrow != null)
-            throw ToThrow;
+        if (proxyResult.Error != null)
+            throw proxyResult.Error;
     }
 
     /// <summary>
@@ -411,12 +378,11 @@ internal class ProxySocket : Socket
     /// <param name="state">The state.</param>
     /// <returns>An IAsyncResult instance that references the asynchronous request.</returns>
     /// <exception cref="SocketException">There was an error while trying to resolve the host.</exception>
-    internal AsyncProxyResult BeginDns(string host, HandShakeComplete callback, object state)
+    private void BeginDns(string host, int port, HandShakeComplete callback, AsyncProxyResult result)
     {
         try
         {
-            Dns.BeginGetHostEntry(host, OnResolved, this);
-            return new AsyncProxyResult(state);
+            Dns.BeginGetHostEntry(host, OnResolved, new DnsConnectState(port, callback, result));
         }
         catch
         {
@@ -430,15 +396,16 @@ internal class ProxySocket : Socket
     /// <param name="asyncResult">The result of the asynchronous operation.</param>
     private void OnResolved(IAsyncResult asyncResult)
     {
+        var state = asyncResult.AsyncState as DnsConnectState
+                    ?? throw new InvalidOperationException("DNS callback state is missing.");
         try
         {
             var dns = Dns.EndGetHostEntry(asyncResult);
-            base.BeginConnect(new IPEndPoint(dns.AddressList[0], RemotePort), OnConnect,
-                State);
+            base.BeginConnect(new IPEndPoint(dns.AddressList[0], state.Port), OnConnect, state);
         }
         catch (Exception e)
         {
-            OnHandShakeComplete(e);
+            state.Callback(e);
         }
     }
 
@@ -448,14 +415,16 @@ internal class ProxySocket : Socket
     /// <param name="asyncResult">The result of the asynchronous operation.</param>
     private void OnConnect(IAsyncResult asyncResult)
     {
+        var state = asyncResult.AsyncState as DnsConnectState
+                    ?? throw new InvalidOperationException("Connect callback state is missing.");
         try
         {
             base.EndConnect(asyncResult);
-            OnHandShakeComplete(null);
+            state.Callback(null);
         }
         catch (Exception e)
         {
-            OnHandShakeComplete(e);
+            state.Callback(e);
         }
     }
 
@@ -463,13 +432,28 @@ internal class ProxySocket : Socket
     ///     Called when the Socket has finished talking to the proxy server and is ready to relay data.
     /// </summary>
     /// <param name="error">The error to throw when the EndConnect method is called.</param>
-    private void OnHandShakeComplete(Exception? error)
+    private void OnHandShakeComplete(AsyncProxyResult result, AsyncCallback? callback, Exception? error)
     {
         if (error != null)
             Close();
 
-        ToThrow = error;
-        AsyncResult.Reset();
-        callBack?.Invoke(AsyncResult);
+        result.Complete(error);
+        callback?.Invoke(result);
+    }
+
+    private sealed class DnsConnectState
+    {
+        internal DnsConnectState(int port, HandShakeComplete callback, AsyncProxyResult result)
+        {
+            Port = port;
+            Callback = callback;
+            Result = result;
+        }
+
+        internal int Port { get; }
+
+        internal HandShakeComplete Callback { get; }
+
+        internal AsyncProxyResult Result { get; }
     }
 }

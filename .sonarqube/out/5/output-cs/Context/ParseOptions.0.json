@@ -1,0 +1,11 @@
+{
+  "documentationMode": "None",
+  "features": [
+
+  ],
+  "kind": "Regular",
+  "languageVersion": "CSharp7_3",
+  "preprocessorSymbols": [
+    { "key": "TRACE", "value": null }
+  ]
+}

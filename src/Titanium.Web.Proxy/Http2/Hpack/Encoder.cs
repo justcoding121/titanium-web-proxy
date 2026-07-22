@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         private const int BucketSize = 17;
 
         // a linked hash map of header fields
-        private readonly HeaderEntry[] headerFields = new HeaderEntry[BucketSize];
+        private readonly HeaderEntry?[] headerFields = new HeaderEntry?[BucketSize];
         private readonly HeaderEntry head = new HeaderEntry(-1, ByteString.Empty, ByteString.Empty, int.MaxValue, null);
         private int size;
 

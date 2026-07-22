@@ -128,7 +128,8 @@ public class HttpWebClient
             url = Request.RequestUri.ToString();
 
             // Send Authentication to Upstream proxy if needed
-            if (!string.IsNullOrEmpty(upstreamProxy!.UserName) && upstreamProxy.Password != null)
+            if (!upstreamProxy!.UseDefaultCredentials &&
+                !string.IsNullOrEmpty(upstreamProxy.UserName) && upstreamProxy.Password != null)
             {
                 upstreamProxyUserName = upstreamProxy.UserName;
                 upstreamProxyPassword = upstreamProxy.Password;

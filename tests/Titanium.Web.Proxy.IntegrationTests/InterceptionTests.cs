@@ -13,7 +13,7 @@ public class InterceptionTests
     [TestMethod]
     public async Task Can_Intercept_Get_Requests()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var serverCalled = false;
 
@@ -50,7 +50,7 @@ public class InterceptionTests
     [TestMethod]
     public async Task Can_Intercept_Post_Requests()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -84,7 +84,7 @@ public class InterceptionTests
     [TestMethod]
     public async Task Can_Intercept_Put_Requests()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -119,7 +119,7 @@ public class InterceptionTests
     [TestMethod]
     public async Task Can_Intercept_Patch_Requests()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -153,7 +153,7 @@ public class InterceptionTests
     [TestMethod]
     public async Task Can_Intercept_Delete_Requests()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>

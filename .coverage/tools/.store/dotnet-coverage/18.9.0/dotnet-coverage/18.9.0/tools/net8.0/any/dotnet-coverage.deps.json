@@ -1,0 +1,400 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "dotnet-coverage/18.9.0": {
+        "dependencies": {
+          "Microsoft.CodeCoverage.Console.Common": "18.9.0"
+        },
+        "runtime": {
+          "dotnet-coverage.dll": {}
+        }
+      },
+      "Microsoft.DiaSymReader/2.2.9": {
+        "runtime": {
+          "lib/netstandard2.0/Microsoft.DiaSymReader.dll": {
+            "assemblyVersion": "2.2.9.0",
+            "fileVersion": "2.200.926.27113",
+            "localPath": "Microsoft.DiaSymReader.dll"
+          }
+        }
+      },
+      "Microsoft.DotNet.Cecil/0.11.5-preview.26357.109": {
+        "runtime": {
+          "lib/netstandard2.0/Mono.Cecil.Mdb.dll": {
+            "assemblyVersion": "0.11.5.0",
+            "fileVersion": "0.11.5.0",
+            "localPath": "Mono.Cecil.Mdb.dll"
+          },
+          "lib/netstandard2.0/Mono.Cecil.Pdb.dll": {
+            "assemblyVersion": "0.11.5.0",
+            "fileVersion": "0.11.5.0",
+            "localPath": "Mono.Cecil.Pdb.dll"
+          },
+          "lib/netstandard2.0/Mono.Cecil.Rocks.dll": {
+            "assemblyVersion": "0.11.5.0",
+            "fileVersion": "0.11.5.0",
+            "localPath": "Mono.Cecil.Rocks.dll"
+          },
+          "lib/netstandard2.0/Mono.Cecil.dll": {
+            "assemblyVersion": "0.11.5.0",
+            "fileVersion": "0.11.5.0",
+            "localPath": "Mono.Cecil.dll"
+          }
+        }
+      },
+      "Microsoft.Extensions.DependencyModel/6.0.2": {
+        "runtime": {
+          "lib/netstandard2.0/Microsoft.Extensions.DependencyModel.dll": {
+            "assemblyVersion": "6.0.0.2",
+            "fileVersion": "6.0.3624.51421",
+            "localPath": "Microsoft.Extensions.DependencyModel.dll"
+          }
+        }
+      },
+      "Microsoft.Extensions.FileSystemGlobbing/9.0.0": {
+        "runtime": {
+          "lib/net8.0/Microsoft.Extensions.FileSystemGlobbing.dll": {
+            "assemblyVersion": "9.0.0.0",
+            "fileVersion": "9.0.24.52809",
+            "localPath": "Microsoft.Extensions.FileSystemGlobbing.dll"
+          }
+        }
+      },
+      "Serilog/4.2.0": {
+        "runtime": {
+          "lib/net8.0/Serilog.dll": {
+            "assemblyVersion": "4.2.0.0",
+            "fileVersion": "4.2.0.0",
+            "localPath": "Serilog.dll"
+          }
+        }
+      },
+      "Serilog.Sinks.File/5.0.0": {
+        "dependencies": {
+          "Serilog": "4.2.0"
+        },
+        "runtime": {
+          "lib/net5.0/Serilog.Sinks.File.dll": {
+            "assemblyVersion": "5.0.0.0",
+            "fileVersion": "5.0.0.0",
+            "localPath": "Serilog.Sinks.File.dll"
+          }
+        }
+      },
+      "System.CommandLine/2.0.0-beta4.22402.1": {
+        "runtime": {
+          "lib/net6.0/System.CommandLine.dll": {
+            "assemblyVersion": "2.0.0.0",
+            "fileVersion": "2.0.22.40201",
+            "localPath": "System.CommandLine.dll"
+          }
+        },
+        "resources": {
+          "lib/net6.0/cs/System.CommandLine.resources.dll": {
+            "locale": "cs",
+            "localPath": "cs/System.CommandLine.resources.dll"
+          },
+          "lib/net6.0/de/System.CommandLine.resources.dll": {
+            "locale": "de",
+            "localPath": "de/System.CommandLine.resources.dll"
+          },
+          "lib/net6.0/es/System.CommandLine.resources.dll": {
+            "locale": "es",
+            "localPath": "es/System.CommandLine.resources.dll"
+          },
+          "lib/net6.0/fr/System.CommandLine.resources.dll": {
+            "locale": "fr",
+            "localPath": "fr/System.CommandLine.resources.dll"
+          },
+          "lib/net6.0/it/System.CommandLine.resources.dll": {
+            "locale": "it",
+            "localPath": "it/System.CommandLine.resources.dll"
+          },
+          "lib/net6.0/ja/System.CommandLine.resources.dll": {
+            "locale": "ja",
+            "localPath": "ja/System.CommandLine.resources.dll"
+          },
+          "lib/net6.0/ko/System.CommandLine.resources.dll": {
+            "locale": "ko",
+            "localPath": "ko/System.CommandLine.resources.dll"
+          },
+          "lib/net6.0/pl/System.CommandLine.resources.dll": {
+            "locale": "pl",
+            "localPath": "pl/System.CommandLine.resources.dll"
+          },
+          "lib/net6.0/pt-BR/System.CommandLine.resources.dll": {
+            "locale": "pt-BR",
+            "localPath": "pt-BR/System.CommandLine.resources.dll"
+          },
+          "lib/net6.0/ru/System.CommandLine.resources.dll": {
+            "locale": "ru",
+            "localPath": "ru/System.CommandLine.resources.dll"
+          },
+          "lib/net6.0/tr/System.CommandLine.resources.dll": {
+            "locale": "tr",
+            "localPath": "tr/System.CommandLine.resources.dll"
+          },
+          "lib/net6.0/zh-Hans/System.CommandLine.resources.dll": {
+            "locale": "zh-Hans",
+            "localPath": "zh-Hans/System.CommandLine.resources.dll"
+          },
+          "lib/net6.0/zh-Hant/System.CommandLine.resources.dll": {
+            "locale": "zh-Hant",
+            "localPath": "zh-Hant/System.CommandLine.resources.dll"
+          }
+        }
+      },
+      "Microsoft.CodeCoverage.Console.Common/18.9.0": {
+        "dependencies": {
+          "Microsoft.CodeCoverage.Core": "18.9.0",
+          "Microsoft.CodeCoverage.Interprocess": "18.9.0",
+          "Microsoft.Extensions.FileSystemGlobbing": "9.0.0",
+          "Serilog": "4.2.0",
+          "Serilog.Sinks.File": "5.0.0",
+          "System.CommandLine": "2.0.0-beta4.22402.1"
+        },
+        "runtime": {
+          "Microsoft.CodeCoverage.Console.Common.dll": {
+            "assemblyVersion": "18.9.0.0",
+            "fileVersion": "18.900.26.35804"
+          }
+        },
+        "resources": {
+          "cs/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "cs"
+          },
+          "de/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "de"
+          },
+          "es/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "es"
+          },
+          "fr/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "fr"
+          },
+          "hu/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "hu"
+          },
+          "it/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "it"
+          },
+          "ja/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "ja"
+          },
+          "ko/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "ko"
+          },
+          "nl/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "nl"
+          },
+          "pl/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "pl"
+          },
+          "pt-BR/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "pt-BR"
+          },
+          "pt-PT/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "pt-PT"
+          },
+          "ru/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "ru"
+          },
+          "sv/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "sv"
+          },
+          "tr/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "tr"
+          },
+          "zh-Hans/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "zh-Hans"
+          },
+          "zh-Hant/Microsoft.CodeCoverage.Console.Common.resources.dll": {
+            "locale": "zh-Hant"
+          }
+        }
+      },
+      "Microsoft.CodeCoverage.Core/18.9.0": {
+        "runtime": {
+          "Microsoft.CodeCoverage.Core.dll": {
+            "assemblyVersion": "18.9.0.0",
+            "fileVersion": "18.900.26.35804"
+          }
+        },
+        "resources": {
+          "cs/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "cs"
+          },
+          "de/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "de"
+          },
+          "es/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "es"
+          },
+          "fr/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "fr"
+          },
+          "hu/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "hu"
+          },
+          "it/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "it"
+          },
+          "ja/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "ja"
+          },
+          "ko/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "ko"
+          },
+          "nl/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "nl"
+          },
+          "pl/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "pl"
+          },
+          "pt-BR/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "pt-BR"
+          },
+          "pt-PT/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "pt-PT"
+          },
+          "ru/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "ru"
+          },
+          "sv/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "sv"
+          },
+          "tr/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "tr"
+          },
+          "zh-Hans/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "zh-Hans"
+          },
+          "zh-Hant/Microsoft.CodeCoverage.Core.resources.dll": {
+            "locale": "zh-Hant"
+          }
+        }
+      },
+      "Microsoft.CodeCoverage.Instrumentation/18.9.0": {
+        "dependencies": {
+          "Microsoft.CodeCoverage.Core": "18.9.0",
+          "Microsoft.CodeCoverage.Instrumentation.Core": "18.9.0",
+          "Microsoft.DiaSymReader": "2.2.9",
+          "Microsoft.DotNet.Cecil": "0.11.5-preview.26357.109",
+          "Microsoft.Extensions.DependencyModel": "6.0.2"
+        },
+        "runtime": {
+          "Microsoft.CodeCoverage.Instrumentation.dll": {
+            "assemblyVersion": "18.9.0.0",
+            "fileVersion": "18.900.26.35804"
+          }
+        }
+      },
+      "Microsoft.CodeCoverage.Instrumentation.Core/18.9.0": {
+        "runtime": {
+          "Microsoft.CodeCoverage.Instrumentation.Core.dll": {
+            "assemblyVersion": "18.9.0.0",
+            "fileVersion": "18.900.26.35804"
+          }
+        }
+      },
+      "Microsoft.CodeCoverage.Interprocess/18.9.0": {
+        "dependencies": {
+          "Microsoft.CodeCoverage.Core": "18.9.0",
+          "Microsoft.CodeCoverage.Instrumentation": "18.9.0"
+        },
+        "runtime": {
+          "Microsoft.CodeCoverage.Interprocess.dll": {
+            "assemblyVersion": "18.9.0.0",
+            "fileVersion": "18.900.26.35804"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "dotnet-coverage/18.9.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Microsoft.DiaSymReader/2.2.9": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-WLbDc/W9XkHpGVtd1L6Vml8W6+PaaYZZTJASHjHF7W2WX/hld6bfNK102Ui+I3a6zIdx4+oKRJtMgHz44JmBfw==",
+      "path": "microsoft.diasymreader/2.2.9",
+      "hashPath": "microsoft.diasymreader.2.2.9.nupkg.sha512"
+    },
+    "Microsoft.DotNet.Cecil/0.11.5-preview.26357.109": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-0/Dj8T0VcjhRoFYcBb5hAd257q7sbDZIdIGomQ9t9M3KR7kmXRhmc5Hw5YtKrkZVC+6vhYgp+gGpG3ea6MVN4g==",
+      "path": "microsoft.dotnet.cecil/0.11.5-preview.26357.109",
+      "hashPath": "microsoft.dotnet.cecil.0.11.5-preview.26357.109.nupkg.sha512"
+    },
+    "Microsoft.Extensions.DependencyModel/6.0.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-HS5YsudCGSVoCVdsYJ5FAO9vx0z04qSAXgVzpDJSQ1/w/X9q8hrQVGU2p+Yfui+2KcXLL+Zjc0SX3yJWtBmYiw==",
+      "path": "microsoft.extensions.dependencymodel/6.0.2",
+      "hashPath": "microsoft.extensions.dependencymodel.6.0.2.nupkg.sha512"
+    },
+    "Microsoft.Extensions.FileSystemGlobbing/9.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-jGFKZiXs2HNseK3NK/rfwHNNovER71jSj4BD1a/649ml9+h6oEtYd0GSALZDNW8jZ2Rh+oAeadOa6sagYW1F2A==",
+      "path": "microsoft.extensions.filesystemglobbing/9.0.0",
+      "hashPath": "microsoft.extensions.filesystemglobbing.9.0.0.nupkg.sha512"
+    },
+    "Serilog/4.2.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-gmoWVOvKgbME8TYR+gwMf7osROiWAURterc6Rt2dQyX7wtjZYpqFiA/pY6ztjGQKKV62GGCyOcmtP1UKMHgSmA==",
+      "path": "serilog/4.2.0",
+      "hashPath": "serilog.4.2.0.nupkg.sha512"
+    },
+    "Serilog.Sinks.File/5.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-uwV5hdhWPwUH1szhO8PJpFiahqXmzPzJT/sOijH/kFgUx+cyoDTMM8MHD0adw9+Iem6itoibbUXHYslzXsLEAg==",
+      "path": "serilog.sinks.file/5.0.0",
+      "hashPath": "serilog.sinks.file.5.0.0.nupkg.sha512"
+    },
+    "System.CommandLine/2.0.0-beta4.22402.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-/UMU7bQnhtOS/nI9BSYZNiatkCTOHc/wF1MR6I/Ff+C18x66Oy1eu+199ul1XGOnf6wyouCuK42bbDEduvzDqQ==",
+      "path": "system.commandline/2.0.0-beta4.22402.1",
+      "hashPath": "system.commandline.2.0.0-beta4.22402.1.nupkg.sha512"
+    },
+    "Microsoft.CodeCoverage.Console.Common/18.9.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Microsoft.CodeCoverage.Core/18.9.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Microsoft.CodeCoverage.Instrumentation/18.9.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Microsoft.CodeCoverage.Instrumentation.Core/18.9.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Microsoft.CodeCoverage.Interprocess/18.9.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
