@@ -1666,7 +1666,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Titanium.Web.Proxy.UnitTests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c2a21211b4a7a84a0ed9d585154ffb3535e0a2a7")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9822cec4d024b97be630f3fffa3b51388a54afe1")]
 [assembly: System.Reflection.AssemblyProductAttribute("Titanium.Web.Proxy.UnitTests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Titanium.Web.Proxy.UnitTests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

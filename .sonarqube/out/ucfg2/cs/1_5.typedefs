@@ -1,8 +1,4 @@
-—
-3Titanium.Web.Proxy.Examples.Basic.SampleClientStateobject^
-SampleClientState()GTitanium.Web.Proxy.Examples.Basic.SampleClientState.SampleClientState()X
-PipelineInfo.getDTitanium.Web.Proxy.Examples.Basic.SampleClientState.PipelineInfo.getX
-PipelineInfo.setDTitanium.Web.Proxy.Examples.Basic.SampleClientState.PipelineInfo.setu
+u
 )Titanium.Web.Proxy.Examples.Basic.Programobject@
 	Program()3Titanium.Web.Proxy.Examples.Basic.Program.Program()√!
 5Titanium.Web.Proxy.Examples.Basic.ProxyTestControllerobjectSystem.IDisposabled
@@ -27,4 +23,8 @@ _OnCertificateSelection(object, Titanium.Web.Proxy.EventArguments.CertificateSel
 ,WriteToConsole(string, System.ConsoleColor?)bTitanium.Web.Proxy.Examples.Basic.ProxyTestController.WriteToConsole(string, System.ConsoleColor?)\
 ListenToConsole()GTitanium.Web.Proxy.Examples.Basic.ProxyTestController.ListenToConsole()d
 CancellationToken.getKTitanium.Web.Proxy.Examples.Basic.ProxyTestController.CancellationToken.getd
-CancellationToken.setKTitanium.Web.Proxy.Examples.Basic.ProxyTestController.CancellationToken.set
+CancellationToken.setKTitanium.Web.Proxy.Examples.Basic.ProxyTestController.CancellationToken.set—
+3Titanium.Web.Proxy.Examples.Basic.SampleClientStateobject^
+SampleClientState()GTitanium.Web.Proxy.Examples.Basic.SampleClientState.SampleClientState()X
+PipelineInfo.getDTitanium.Web.Proxy.Examples.Basic.SampleClientState.PipelineInfo.getX
+PipelineInfo.setDTitanium.Web.Proxy.Examples.Basic.SampleClientState.PipelineInfo.set

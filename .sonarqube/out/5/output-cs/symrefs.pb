@@ -32,60 +32,7 @@ nD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.Integration
 CC7 8
 CC: CDD 
 
-CCE FØ
-hD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Setup\TestServer.cs
-
- <
-  JJ LL __ `` 
-$ 2&&= Kee (
-* ;>>  1CC# 4jj 
-' 888/ @
-? O** ((
- %   !! "" 
-$$& 0&& '' 
-
-&&& '2
-'', 3)) ,, 66 :: 
-,,7 >.. #22 #
-
-..C N
-
-..P U
-
-..W ]
-66: G88 %
-::: G<< %
-<<* 1CC5 <(
-LL PP$ -QQ% .RR# ,
-
-UU "
-
-VV #
-
-WW !
-YY  PP UU: K
-ZZ !QQ VV< N
-[[ RR WW9 I
-
-]] 
-
-cc 
-cc6 Dee ,
-
-hh  
-hh? Pjj! 2
-
-mm (
-oo7 Ess zz " %
-qq5 Css" 0
-
-vv 
-vv2 5xx 
-xx ( /
-
-ƒƒ %
-
-ƒƒ9 Aß
+CCE Fß
 cD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\StressTests.cs
 
  
@@ -472,7 +419,60 @@ gD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.Integration
 55 66 77 
 
 :: (
-EE EE- .EE5 6GG ¥
+EE EE- .EE5 6GG Ø
+hD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Setup\TestServer.cs
+
+ <
+  JJ LL __ `` 
+$ 2&&= Kee (
+* ;>>  1CC# 4jj 
+' 888/ @
+? O** ((
+ %   !! "" 
+$$& 0&& '' 
+
+&&& '2
+'', 3)) ,, 66 :: 
+,,7 >.. #22 #
+
+..C N
+
+..P U
+
+..W ]
+66: G88 %
+::: G<< %
+<<* 1CC5 <(
+LL PP$ -QQ% .RR# ,
+
+UU "
+
+VV #
+
+WW !
+YY  PP UU: K
+ZZ !QQ VV< N
+[[ RR WW9 I
+
+]] 
+
+cc 
+cc6 Dee ,
+
+hh  
+hh? Pjj! 2
+
+mm (
+oo7 Ess zz " %
+qq5 Css" 0
+
+vv 
+vv2 5xx 
+xx ( /
+
+ƒƒ %
+
+ƒƒ9 A¥
 mD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Setup\TestProxyServer.cs
 
 		 
@@ -1414,7 +1414,54 @@ bD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.Integration
 ‚‚; <
 
 „„; <
-„„@ AÎ	
+„„@ A
+jD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Helpers\TestHelper.cs
+
+ 
+
+
+
+ *
+
+
+/ =6 D
+ *H e
+  (
+    %
+
+ *
+
+!! +
+!!8 =%%6 ;
+## .. %
+
+** 
+** #**U `
+
+**% &
+**( .**b h
+55% 2 # +
+
+:: 
+:: ::Q \
+
+::! "
+::$ *::^ d
+
+>> 
+@@  (AA #
+@@/ BCC #
+II &KK 
+NN KK SS 
+OO 'EE 
+
+QQ 
+
+QQ  +
+
+VV 
+
+VV# 'Î	
 bD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Http2Tests.cs
 
  
@@ -1469,54 +1516,7 @@ bD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.Integration
 ††* 2
 
 ‚‚ 
-……* .
-jD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Helpers\TestHelper.cs
-
- 
-
-
-
- *
-
-
-/ =6 D
- *H e
-  (
-    %
-
- *
-
-!! +
-!!8 =%%6 ;
-## .. %
-
-** 
-** #**U `
-
-**% &
-**( .**b h
-55% 2 # +
-
-:: 
-:: ::Q \
-
-::! "
-::$ *::^ d
-
->> 
-@@  (AA #
-@@/ BCC #
-II &KK 
-NN KK SS 
-OO 'EE 
-
-QQ 
-
-QQ  +
-
-VV 
-
-VV# 'ê
+……* .ê
 rD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Helpers\HttpMessageParsing.cs
 
  (

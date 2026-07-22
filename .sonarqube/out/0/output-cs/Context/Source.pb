@@ -8928,7 +8928,308 @@ internal static class StaticTable
             staticIndexByName[name] = staticTable.Count;
         }
     }
-}ParseOptions.0.json∆
+}ParseOptions.0.jsoné-
+_D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2ConnectionState.csï,#if NET6_0_OR_GREATER
+using System;
+using System.Collections.Concurrent;
+using System.Threading;
+using System.Threading.Tasks;
+using Titanium.Web.Proxy.EventArguments;
+
+namespace Titanium.Web.Proxy.Http2;
+
+/// <summary>
+///     All state shared by *both* relay directions (client->server and server->client) of one HTTP/2
+///     connection pair, i.e. everything that cannot correctly live as a local variable of a single
+///     <c>Http2Helper.CopyHttp2FrameAsync</c> call because the two directions read frames that affect each
+///     other's bookkeeping (a WINDOW_UPDATE read from the client affects how much the *other* direction may
+///     send to the client; a stream is only really closed once *both* directions have seen its end). Owns
+///     one instance per connection, created once in <c>Http2Helper.SendHttp2</c> and passed to both
+///     <c>CopyHttp2FrameAsync</c> tasks.
+/// </summary>
+internal sealed class Http2ConnectionState
+{
+    public Http2ConnectionState(Guid connectionId, CancellationTokenSource cancellationTokenSource)
+    {
+        ConnectionId = connectionId;
+        CancellationTokenSource = cancellationTokenSource;
+    }
+
+    public Guid ConnectionId { get; }
+
+    /// <summary>What the client has told the proxy about itself (client is the "remote" for the server->client leg).</summary>
+    public Http2Settings ClientSettings { get; } = new();
+
+    /// <summary>What the server has told the proxy about itself (server is the "remote" for the client->server leg).</summary>
+    public Http2Settings ServerSettings { get; } = new();
+
+    /// <summary>
+    ///     Governs writes toward the client (used by the server->client relay task; fed by WINDOW_UPDATE/
+    ///     SETTINGS_INITIAL_WINDOW_SIZE frames read from the client on the client->server relay task).
+    /// </summary>
+    public Http2FlowController ClientSendFlow { get; } = new();
+
+    /// <summary>
+    ///     Governs writes toward the server (used by the client->server relay task; fed by WINDOW_UPDATE/
+    ///     SETTINGS_INITIAL_WINDOW_SIZE frames read from the server on the server->client relay task).
+    /// </summary>
+    public Http2FlowController ServerSendFlow { get; } = new();
+
+    /// <summary>All currently open (or draining) streams, keyed by the stream id used identically on both legs.</summary>
+    public ConcurrentDictionary<int, Http2StreamState> Streams { get; } = new();
+
+    /// <summary>
+    ///     Writes toward the client can originate from the server->client relay as well as a synthetic
+    ///     response emitted from the client->server relay; serialize them so frames never interleave.
+    /// </summary>
+    public SemaphoreSlim ClientWriteLock { get; } = new(1, 1);
+
+    /// <summary>
+    ///     Writes toward the server are currently only ever issued by the client->server relay task, but a
+    ///     lock is still kept (mirroring <see cref="ClientWriteLock" />) so a future writer on that leg
+    ///     (e.g. proxy-originated PING/WINDOW_UPDATE) cannot interleave with an in-progress HEADERS/
+    ///     CONTINUATION/DATA sequence.
+    /// </summary>
+    public SemaphoreSlim ServerWriteLock { get; } = new(1, 1);
+
+    /// <summary>Completed once the server's connection SETTINGS frame has been relayed to the client.</summary>
+    public TaskCompletionSource<bool> ServerSettingsRelayed { get; } =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    ///     Background tasks for synthetic (proxy-generated) responses, tracked so they can be observed for
+    ///     failure and awaited before the owning relay direction completes.
+    /// </summary>
+    public ConcurrentBag<Task> PendingSynthetics { get; } = new();
+
+    /// <summary>Cancels both relay directions; shared with the caller so either can trigger connection-wide teardown.</summary>
+    public CancellationTokenSource CancellationTokenSource { get; }
+
+    /// <summary>Set once a GOAWAY has been received from the client; no new client-initiated streams above the recorded id should be admitted.</summary>
+    public volatile bool ClientGoingAway;
+
+    /// <summary>Highest client-initiated stream id the client itself said it would still process, once <see cref="ClientGoingAway" />.</summary>
+    public int ClientLastStreamId = int.MaxValue;
+
+    /// <summary>Set once a GOAWAY has been received from the server; no new streams should be opened toward it.</summary>
+    public volatile bool ServerGoingAway;
+
+    /// <summary>Highest stream id the server itself said it would still process, once <see cref="ServerGoingAway" />.</summary>
+    public int ServerLastStreamId = int.MaxValue;
+
+    /// <summary>
+    ///     Registers a newly observed stream (first HEADERS frame) in both the stream registry and both
+    ///     flow-control send windows.
+    /// </summary>
+    public Http2StreamState RegisterStream(int streamId, SessionEventArgs sessionArgs)
+    {
+        var state = new Http2StreamState(streamId, sessionArgs);
+        if (!Streams.TryAdd(streamId, state))
+        {
+            return Streams[streamId];
+        }
+
+        ClientSendFlow.RegisterStream(streamId);
+        ServerSendFlow.RegisterStream(streamId);
+        return state;
+    }
+
+    /// <summary>Removes a stream from the registry and both flow-control send windows once fully closed/reset.</summary>
+    public void RemoveStream(int streamId)
+    {
+        Streams.TryRemove(streamId, out _);
+        ClientSendFlow.RemoveStream(streamId);
+        ServerSendFlow.RemoveStream(streamId);
+    }
+}
+#endif
+ParseOptions.0.json∂
+YD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2ErrorCode.cs√#if NET6_0_OR_GREATER
+namespace Titanium.Web.Proxy.Http2;
+
+/// <summary>
+///     Error codes carried by RST_STREAM and GOAWAY frames (RFC 7540 ¬ß7).
+/// </summary>
+internal enum Http2ErrorCode
+{
+    NoError = 0x0,
+    ProtocolError = 0x1,
+    InternalError = 0x2,
+    FlowControlError = 0x3,
+    SettingsTimeout = 0x4,
+    StreamClosed = 0x5,
+    FrameSizeError = 0x6,
+    RefusedStream = 0x7,
+    Cancel = 0x8,
+    CompressionError = 0x9,
+    ConnectError = 0xa,
+    EnhanceYourCalm = 0xb,
+    InadequateSecurity = 0xc,
+    Http11Required = 0xd
+}
+#endif
+ParseOptions.0.jsonÌ7
+^D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2FlowController.csı6#if NET6_0_OR_GREATER
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Titanium.Web.Proxy.Http2;
+
+/// <summary>
+///     Tracks the SEND-side flow-control window (connection window + one window per open stream) that
+///     constrains how many DATA-frame octets the proxy may write toward one peer on one leg of the relay
+///     (RFC 7540 ¬ß6.9). One instance governs writes toward a single peer; <see cref="ReserveAsync" /> must
+///     be awaited (and will suspend, honoring cancellation, if the window is temporarily exhausted) before
+///     each outbound DATA frame's payload is written, for every source of outbound DATA on that leg -
+///     plain pass-through relay, a resized/rewritten body-write-hook frame, a fully buffered
+///     <c>SendBody</c>, and a synthetic <c>RespondStreaming</c>/<c>Respond</c> body alike - so no write path
+///     can silently bypass flow control.
+///     <para>
+///         Fed from two sources, both driven by frames read from that same peer: inbound WINDOW_UPDATE
+///         frames (<see cref="OnWindowUpdate" />) and the peer's own SETTINGS_INITIAL_WINDOW_SIZE
+///         (<see cref="OnInitialWindowSizeChanged" />), which retroactively adjusts every currently open
+///         stream's window by the delta (RFC 7540 ¬ß6.9.2) and may drive a stream's window negative - callers
+///         must still wait, per spec, until it becomes non-negative again before sending more on that stream.
+///     </para>
+///     <para>
+///         The corresponding *receive*-side credit the proxy grants back to that same peer (so its window
+///         does not run dry) is not modeled by this type - see the "always fully regrant after processing"
+///         strategy in <c>Http2Helper.CopyHttp2FrameAsync</c>, which needs no window bookkeeping at all
+///         because this relay never buffers DATA past the point of writing/discarding it inline.
+///     </para>
+/// </summary>
+internal sealed class Http2FlowController
+{
+    private readonly object gate = new();
+    private readonly Dictionary<int, long> streamWindows = new();
+    private long connectionWindow = InitialConnectionWindow;
+    private int initialStreamWindow = InitialConnectionWindow;
+    private TaskCompletionSource<bool> creditAvailable =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>RFC 7540 ¬ß6.9.2 default initial flow-control window size for both the connection and every stream.</summary>
+    internal const int InitialConnectionWindow = 65535;
+
+    /// <summary>RFC 7540 ¬ß6.9.1 - a flow-control window (connection or stream) must never exceed this value.</summary>
+    internal const long MaxWindow = int.MaxValue; // 2^31 - 1
+
+    /// <summary>
+    ///     Begins tracking a per-stream send window, initialized to the peer's current
+    ///     SETTINGS_INITIAL_WINDOW_SIZE. Must be called once when a stream is opened, before the first
+    ///     <see cref="ReserveAsync" /> call for it.
+    /// </summary>
+    public void RegisterStream(int streamId)
+    {
+        lock (gate)
+        {
+            streamWindows[streamId] = initialStreamWindow;
+        }
+    }
+
+    /// <summary>Stops tracking a stream's send window once it is closed (RST_STREAM or both sides END_STREAM).</summary>
+    public void RemoveStream(int streamId)
+    {
+        lock (gate)
+        {
+            streamWindows.Remove(streamId);
+        }
+    }
+
+    /// <summary>
+    ///     Applies the peer's SETTINGS_INITIAL_WINDOW_SIZE (RFC 7540 ¬ß6.9.2): the delta from the previous
+    ///     value is applied to every currently tracked stream window (which may drive some negative - that
+    ///     is valid and callers must simply keep waiting), and the new value becomes the initial window for
+    ///     streams registered after this point.
+    /// </summary>
+    public void OnInitialWindowSizeChanged(int newValue)
+    {
+        lock (gate)
+        {
+            var delta = (long)newValue - initialStreamWindow;
+            initialStreamWindow = newValue;
+            if (delta != 0)
+            {
+                var streamIds = new List<int>(streamWindows.Keys);
+                foreach (var id in streamIds)
+                {
+                    streamWindows[id] += delta;
+                }
+            }
+
+            WakeWaitersNoLock();
+        }
+    }
+
+    /// <summary>
+    ///     Applies an inbound WINDOW_UPDATE increment (RFC 7540 ¬ß6.9.1) to the connection window
+    ///     (<paramref name="streamId" /> == 0) or a stream window. An update for a stream that is not (or no
+    ///     longer) tracked is ignored, matching the RFC's allowance for WINDOW_UPDATE racing a stream's
+    ///     closure.
+    /// </summary>
+    public void OnWindowUpdate(int streamId, int increment)
+    {
+        lock (gate)
+        {
+            if (streamId == 0)
+            {
+                connectionWindow += increment;
+            }
+            else if (streamWindows.TryGetValue(streamId, out var current))
+            {
+                streamWindows[streamId] = current + increment;
+            }
+
+            WakeWaitersNoLock();
+        }
+    }
+
+    /// <summary>
+    ///     Waits until both the connection window and the given stream's window have at least
+    ///     <paramref name="bytes" /> of credit, then atomically reserves (decrements) both. Must be called
+    ///     with the exact on-wire payload length of the DATA frame that is about to be written, before it is
+    ///     written, for every outbound DATA frame on the leg this controller governs.
+    /// </summary>
+    public async Task ReserveAsync(int streamId, int bytes, CancellationToken cancellationToken)
+    {
+        if (bytes <= 0) return;
+
+        while (true)
+        {
+            Task wait;
+            lock (gate)
+            {
+                if (!streamWindows.TryGetValue(streamId, out var streamWindow))
+                {
+                    // defensive: a stream that was never registered (e.g. a synthetic/promise edge case)
+                    // is treated as having the current initial window rather than failing the write.
+                    streamWindow = initialStreamWindow;
+                    streamWindows[streamId] = streamWindow;
+                }
+
+                if (connectionWindow >= bytes && streamWindow >= bytes)
+                {
+                    connectionWindow -= bytes;
+                    streamWindows[streamId] = streamWindow - bytes;
+                    return;
+                }
+
+                wait = creditAvailable.Task;
+            }
+
+            await wait.WaitAsync(cancellationToken);
+        }
+    }
+
+    private void WakeWaitersNoLock()
+    {
+        var previous = creditAvailable;
+        creditAvailable = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        previous.TrySetResult(true);
+    }
+}
+#endif
+ParseOptions.0.json∆
 YD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2FrameFlag.cs”using System;
 
 namespace Titanium.Web.Proxy.Http2;
@@ -8982,9 +9283,10 @@ internal enum Http2FrameType : byte
     GoAway = 0x07,
     WindowUpdate = 0x08,
     Continuation = 0x09
-}ParseOptions.0.json‘’
-VD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2Helper.cs„‘#if NET6_0_OR_GREATER
+}ParseOptions.0.jsonÈñ
+VD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2Helper.cs¯ï#if NET6_0_OR_GREATER
 using System;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -9010,6 +9312,15 @@ namespace Titanium.Web.Proxy.Http2
         public static readonly byte[] ConnectionPreface = Encoding.ASCII.GetBytes("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
 
         /// <summary>
+        ///     The largest frame payload this proxy will accept from either peer. Neither leg is ever told
+        ///     (via a proxy-originated SETTINGS frame) that a larger value is acceptable, so this is the
+        ///     value a conformant peer will honor; a peer that ignores it and sends a larger frame anyway is
+        ///     treated as a protocol violation (FRAME_SIZE_ERROR) rather than risking an unbounded/undersized
+        ///     buffer allocation.
+        /// </summary>
+        private const int MaxAcceptableFrameSize = 16384;
+
+        /// <summary>
         ///     relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers
         ///     as prefix
         ///     Useful for websocket requests
@@ -9022,30 +9333,15 @@ namespace Titanium.Web.Proxy.Http2
             CancellationTokenSource cancellationTokenSource, Guid connectionId,
             ExceptionHandler? exceptionFunc)
         {
-            var clientSettings = new Http2Settings();
-            var serverSettings = new Http2Settings();
-
-            var sessions = new ConcurrentDictionary<int, SessionEventArgs>();
-
-            // Writes toward the client can originate from the server=>client relay as well as from a
-            // synthetic response emitted on the client=>server relay. Serialize them so frames never interleave.
-            var clientWriteLock = new SemaphoreSlim(1, 1);
-
-            // Completed once the server's connection SETTINGS frame has been relayed to the client. A synthetic
-            // response must not send HEADERS before this, or the client rejects the connection.
-            var serverSettingsRelayed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource);
 
             // Now async relay all server=>client & client=>server data
             var sendRelay =
-                CopyHttp2FrameAsync(clientStream, serverStream, clientSettings, serverSettings,
-                    sessionFactory, sessions, onBeforeRequest,
-                    connectionId, true, clientWriteLock, serverSettingsRelayed, cancellationTokenSource,
-                    cancellationTokenSource.Token, exceptionFunc);
+                CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
+                    sessionFactory, onBeforeRequest, true, cancellationTokenSource.Token, exceptionFunc);
             var receiveRelay =
-                CopyHttp2FrameAsync(serverStream, clientStream, serverSettings, clientSettings,
-                    sessionFactory, sessions, onBeforeResponse,
-                    connectionId, false, clientWriteLock, serverSettingsRelayed, cancellationTokenSource,
-                    cancellationTokenSource.Token, exceptionFunc);
+                CopyHttp2FrameAsync(serverStream, clientStream, connectionState,
+                    sessionFactory, onBeforeResponse, false, cancellationTokenSource.Token, exceptionFunc);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             cancellationTokenSource.Cancel();
@@ -9059,15 +9355,45 @@ namespace Titanium.Web.Proxy.Http2
         /// </summary>
         private const int MaxHeaderBlockBytes = 256 * 1024;
 
+        private static readonly HashSet<string> ForbiddenConnectionSpecificHeaders = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade"
+        };
+
         private static async Task CopyHttp2FrameAsync(Stream input, Stream output,
-            Http2Settings localSettings, Http2Settings remoteSettings,
-            Func<SessionEventArgs> sessionFactory, ConcurrentDictionary<int, SessionEventArgs> sessions,
+            Http2ConnectionState connectionState,
+            Func<SessionEventArgs> sessionFactory,
             Func<SessionEventArgs, Task> onBeforeRequestResponse,
-            Guid connectionId, bool isClient, SemaphoreSlim clientWriteLock,
-            TaskCompletionSource<bool> serverSettingsRelayed, CancellationTokenSource cancellationTokenSource,
+            bool isClient,
             CancellationToken cancellationToken,
             ExceptionHandler? exceptionFunc)
         {
+            var connectionId = connectionState.ConnectionId;
+            var cancellationTokenSource = connectionState.CancellationTokenSource;
+
+            // "Settings describing the peer this task reads from" - used both to size the HPACK decoder for
+            // header blocks read from that peer, and (SETTINGS handling below) updated directly from that
+            // peer's own SETTINGS frames, since both describe properties *of that same peer*.
+            var localSettings = isClient ? connectionState.ClientSettings : connectionState.ServerSettings;
+
+            // "Settings describing the peer this task writes to" - used to size outbound HEADERS/
+            // CONTINUATION/DATA framing so it never exceeds what that peer advertised it will accept.
+            var remoteSettings = isClient ? connectionState.ServerSettings : connectionState.ClientSettings;
+
+            // Flow control governing DATA this task writes toward `output`; replenished by WINDOW_UPDATE/
+            // SETTINGS_INITIAL_WINDOW_SIZE frames read from that same peer - necessarily by the *other*
+            // relay task, since both directions of one leg are read/written by different tasks here. Also
+            // used by SendBody/SendData for this same output.
+            var outboundFlow = isClient ? connectionState.ServerSendFlow : connectionState.ClientSendFlow;
+
+            // The lock protecting every write onto `input` itself (same-leg replies: PING ACK, WINDOW_UPDATE
+            // receive-credit grants, RST_STREAM for a malformed block).
+            var ownLegWriteLock = isClient ? connectionState.ClientWriteLock : connectionState.ServerWriteLock;
+
+            // The lock protecting every write onto `output` (shared with the other task, which reads from
+            // `output`'s peer and may itself need to reply directly on it).
+            var outputWriteLock = isClient ? connectionState.ServerWriteLock : connectionState.ClientWriteLock;
+
             int headerTableSize = 0;
             Decoder? decoder = null;
 
@@ -9080,33 +9406,79 @@ namespace Titanium.Web.Proxy.Http2
             // not stall every other multiplexed stream on the connection. Track them here so we can still
             // observe/report failures and make sure they are fully drained before this relay direction's
             // task completes.
-            var pendingSynthetics = new ConcurrentBag<Task>();
+            var pendingSynthetics = connectionState.PendingSynthetics;
 
             var frameHeader = new Http2FrameHeader();
             var frameHeaderBuffer = new byte[9];
 
-            // Writes toward the client must be serialized against the other relay.
-            async Task lockedClientWrite(Func<Task> writeAction)
+            // Writes toward `output` must be serialized against every other writer of that same stream: the
+            // other relay task's own-leg control-frame replies (WINDOW_UPDATE receive-credit grants,
+            // RST_STREAM, GOAWAY, PING ACK - all written directly onto this task's `output`, since it is
+            // that other task's `input`), and any synthetic response task writing toward the client. Every
+            // write onto `output`, including this task's own main relay/dispatch path, must go through this
+            // helper - a writer that bypasses it can still interleave bytes with one that does not.
+            async Task lockedOutputWrite(Func<Task> writeAction)
             {
-                await clientWriteLock.WaitAsync(cancellationToken);
+                await outputWriteLock.WaitAsync(cancellationToken);
                 try
                 {
                     await writeAction();
                 }
                 finally
                 {
-                    clientWriteLock.Release();
+                    outputWriteLock.Release();
                 }
+            }
+
+            // Writes directly back onto `input` (same leg this task reads from) - PING ACK, receive-credit
+            // WINDOW_UPDATE, or a stream-level RST_STREAM for a malformed header block.
+            async Task lockedOwnLegWrite(Func<Task> writeAction)
+            {
+                await ownLegWriteLock.WaitAsync(cancellationToken);
+                try
+                {
+                    await writeAction();
+                }
+                finally
+                {
+                    ownLegWriteLock.Release();
+                }
+            }
+
+            // Grants back the flow-control credit this task consumed by reading one DATA frame's on-wire
+            // payload (which always happens, via ForceRead, regardless of whether the frame is then
+            // relayed, resized, or discarded) so the sender's window never runs dry. Safe to call
+            // unconditionally after processing every DATA frame because this relay never buffers DATA past
+            // the point of writing/discarding it inline - there is no "pending, not yet regranted" backlog.
+            // Uses its own Http2FrameHeader/buffer (never the outer `frameHeader`/`frameHeaderBuffer`, which
+            // still holds the currently-being-processed frame's own metadata at this point in the loop and
+            // must not be clobbered before that frame's own relay/dispatch finishes using it).
+            Task GrantReceiveCreditAsync(int streamId, int bytes)
+            {
+                if (bytes <= 0) return Task.CompletedTask;
+                bool streamStillTracked = connectionState.Streams.ContainsKey(streamId);
+                return lockedOwnLegWrite(async () =>
+                {
+                    var controlFrameHeader = new Http2FrameHeader();
+                    var controlFrameHeaderBuffer = new byte[9];
+                    await SendWindowUpdateAsync(controlFrameHeader, controlFrameHeaderBuffer, 0, bytes, input);
+                    if (streamStillTracked)
+                    {
+                        await SendWindowUpdateAsync(controlFrameHeader, controlFrameHeaderBuffer, streamId, bytes,
+                            input);
+                    }
+                });
             }
 
             // Decodes one fully-assembled HEADERS(+CONTINUATION...) block (already stripped of padding/
             // priority bytes) and dispatches it. A HEADERS block on an already-established request/response
             // (one that already carries pseudo-headers) is the *main* message; a further block without
-            // request/status pseudo-headers is trailers (RFC 7540 ¬ß8.1.2.1); a response block whose :status
-            // is 1xx is an interim informational response (RFC 9110 ¬ß15.2) and is relayed without invoking
-            // BeforeRequest/BeforeResponse and without ever touching/locking the final Request/Response.
-            // Returns true if this block was an interim (1xx) response, so the caller does not treat a
-            // (spec-invalid, but let's be defensive) END_STREAM flag on it as ending the stream.
+            // request/status pseudo-headers is trailers (RFC 7230 ¬ß4.1.2 / RFC 7540 ¬ß8.1.2.1); a response
+            // block whose :status is 1xx is an interim informational response (RFC 9110 ¬ß15.2) and is
+            // relayed without invoking BeforeRequest/BeforeResponse and without ever touching/locking the
+            // final Request/Response. Returns true if this block was an interim (1xx) response, so the
+            // caller does not treat a (spec-invalid, but let's be defensive) END_STREAM flag on it as ending
+            // the stream.
             async Task<bool> ProcessCompleteHeaderBlockAsync(int hbStreamId, SessionEventArgs sessionArgs,
                 RequestResponseBase headerRr, byte[] compressed, bool endStreamFlag, bool isPromise)
             {
@@ -9134,11 +9506,48 @@ namespace Titanium.Web.Proxy.Http2
                     return false;
                 }
 
+                if (headerListener.HasMalformedHeader)
+                {
+                    // RFC 7540 ¬ß8.1.2/¬ß8.1.2.1: unknown pseudo-header fields, uppercase field names, and
+                    // (checked just below) connection-specific header fields are malformed - a stream-level
+                    // PROTOCOL_ERROR that must not tear down the rest of the connection, whose HPACK decoder
+                    // state has already been kept in sync by the decode above.
+                    exceptionFunc?.Invoke(new ProxyHttpException(
+                        "HTTP/2 protocol error: " + headerListener.MalformedReason, null, sessionArgs));
+                    await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
+                        Http2ErrorCode.ProtocolError, input));
+                    return false;
+                }
+
+                foreach (var header in collected)
+                {
+                    if (ForbiddenConnectionSpecificHeaders.Contains(header.Name))
+                    {
+                        exceptionFunc?.Invoke(new ProxyHttpException(
+                            "HTTP/2 protocol error: connection-specific header field '" + header.Name +
+                            "' is forbidden.", null, sessionArgs));
+                        await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
+                            Http2ErrorCode.ProtocolError, input));
+                        return false;
+                    }
+                }
+
                 if (isClient)
                 {
                     var method = headerListener.Method;
                     var path = headerListener.Path;
                     bool isMainHeaders = method.Length > 0 && path.Length > 0;
+
+                    if (isMainHeaders && connectionState.ServerGoingAway &&
+                        hbStreamId > connectionState.ServerLastStreamId)
+                    {
+                        // the server has already told us (via GOAWAY) it will not process any new stream
+                        // above its last-accepted id - refuse this one locally instead of forwarding a
+                        // request we already know will never be answered.
+                        await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
+                            Http2ErrorCode.RefusedStream, input));
+                        return false;
+                    }
 
                     if (!isMainHeaders)
                     {
@@ -9161,8 +9570,8 @@ namespace Titanium.Web.Proxy.Http2
                         // decoder state in sync with the peer's encoder.
                         if (!syntheticStreams.Contains(hbStreamId))
                         {
-                            await SendTrailer(remoteSettings, frameHeader, frameHeaderBuffer, hbStreamId,
-                                headerRr.TrailingHeaders, endStreamFlag, output);
+                            await lockedOutputWrite(() => SendTrailer(remoteSettings, frameHeader, frameHeaderBuffer,
+                                hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output));
                         }
 
                         return false;
@@ -9199,8 +9608,15 @@ namespace Titanium.Web.Proxy.Http2
                             // connection; failures are reported centrally instead of tearing down the whole
                             // relay.
                             syntheticStreams.Add(hbStreamId);
-                            var synthTask = EmitSyntheticResponseAsync(sessionArgs, hbStreamId, localSettings, input,
-                                    clientWriteLock, serverSettingsRelayed, cancellationToken)
+                            connectionState.Streams.TryGetValue(hbStreamId, out var streamState);
+                            var streamToken = streamState != null
+                                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
+                                    streamState.Cancellation.Token).Token
+                                : cancellationToken;
+                            // we are inside the `if (isClient)` branch, so `input` is always the client
+                            // stream here (see the isClient=true call in SendHttp2).
+                            var synthTask = EmitSyntheticResponseAsync(sessionArgs, hbStreamId, connectionState,
+                                    input, streamToken)
                                 .ContinueWith(t =>
                                 {
                                     if (t.IsFaulted)
@@ -9210,12 +9626,13 @@ namespace Titanium.Web.Proxy.Http2
                                             sessionArgs));
                                     }
                                 }, TaskScheduler.Default);
+                            if (streamState != null) streamState.SyntheticTask = synthTask;
                             pendingSynthetics.Add(synthTask);
                         }
                         else
                         {
-                            await SendHeader(remoteSettings, frameHeader, frameHeaderBuffer, request, endStreamFlag,
-                                output, isPromise);
+                            await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
+                                request, endStreamFlag, output, isPromise));
                         }
                     }
                     else
@@ -9261,7 +9678,7 @@ namespace Titanium.Web.Proxy.Http2
                             response.ReadHttp2BeforeHandlerTaskCompletionSource = null;
                             tcs.SetResult(true);
 
-                            await lockedClientWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
+                            await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                 response, endStreamFlag, output, isPromise));
                         }
                         else
@@ -9284,7 +9701,7 @@ namespace Titanium.Web.Proxy.Http2
                             synthetic.Headers.AddHeader(header);
                         }
 
-                        await lockedClientWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
+                        await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                             synthetic, false, output, false));
                         return true;
                     }
@@ -9303,13 +9720,13 @@ namespace Titanium.Web.Proxy.Http2
                         headerRr.TrailingHeaders.AddHeader(header);
                     }
 
-                    await lockedClientWrite(() => SendTrailer(remoteSettings, frameHeader, frameHeaderBuffer,
+                    await lockedOutputWrite(() => SendTrailer(remoteSettings, frameHeader, frameHeaderBuffer,
                         hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output));
                     return false;
                 }
             }
 
-            byte[]? buffer = null;
+            byte[] buffer = new byte[MaxAcceptableFrameSize];
 
             // Metadata for a HEADERS/PUSH_PROMISE block that has not yet been terminated by END_HEADERS and
             // is being assembled from subsequent CONTINUATION frames (RFC 7540 ¬ß6.10). Only one such block
@@ -9344,9 +9761,29 @@ namespace Titanium.Web.Proxy.Http2
                 frameHeader.Flags = flags;
                 frameHeader.StreamId = streamId;
 
-                if (buffer == null || buffer.Length < localSettings.MaxFrameSize)
+                if (length > MaxAcceptableFrameSize)
                 {
-                    buffer = new byte[localSettings.MaxFrameSize];
+                    // RFC 7540 ¬ß4.2: a frame larger than what we (implicitly, by never advertising anything
+                    // else) declared we would accept is a connection-level FRAME_SIZE_ERROR. Reject before
+                    // attempting to buffer/read the (potentially huge, up to 2^24-1 byte) payload.
+                    exceptionFunc?.Invoke(new ProxyHttpException(
+                        $"HTTP/2 protocol error: frame of type {type} exceeded the maximum accepted frame size.",
+                        null, null));
+                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                        Http2ErrorCode.FrameSizeError, input));
+                    return;
+                }
+
+                if ((type == Http2FrameType.Data || type == Http2FrameType.Headers ||
+                     type == Http2FrameType.RstStream || type == Http2FrameType.Priority) && streamId == 0)
+                {
+                    // RFC 7540 ¬ß5.1.1 / relevant frame definitions: these frame types are always
+                    // stream-specific; stream id 0 on any of them is a connection-level PROTOCOL_ERROR.
+                    exceptionFunc?.Invoke(new ProxyHttpException(
+                        $"HTTP/2 protocol error: frame of type {type} received with stream id 0.", null, null));
+                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], 0,
+                        Http2ErrorCode.ProtocolError, input));
+                    return;
                 }
 
                 read = await ForceRead(input, buffer, 0, length, cancellationToken);
@@ -9362,7 +9799,12 @@ namespace Titanium.Web.Proxy.Http2
                 RequestResponseBase? rr = null;
                 if (type == Http2FrameType.Data || type == Http2FrameType.Headers/* || type == Http2FrameType.PushPromise*/)
                 {
-                    if (!sessions.TryGetValue(streamId, out args))
+                    if (connectionState.Streams.TryGetValue(streamId, out var existingStreamState))
+                    {
+                        args = existingStreamState.SessionArgs;
+                    }
+
+                    if (args == null)
                     {
                         //if (type == Http2FrameType.Data)
                         //{
@@ -9403,10 +9845,10 @@ namespace Titanium.Web.Proxy.Http2
                         offset = 1;
                     }
 
-                    if (!sessions.TryGetValue(streamId, out args))
+                    if (args == null)
                     {
                         args = sessionFactory();
-                        _ = sessions.TryAdd(streamId, args);
+                        connectionState.RegisterStream(streamId, args);
                     }
 
                     rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
@@ -9431,6 +9873,8 @@ namespace Titanium.Web.Proxy.Http2
                         exceptionFunc?.Invoke(new ProxyHttpException(
                             "HTTP/2 protocol error: HEADERS frame received while a previous header block on this connection was still open.",
                             null, args));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                            pendingHeaderStreamId, Http2ErrorCode.ProtocolError, input));
                         return;
                     }
 
@@ -9466,6 +9910,8 @@ namespace Titanium.Web.Proxy.Http2
                     {
                         exceptionFunc?.Invoke(new ProxyHttpException(
                             "HTTP/2 protocol error: unexpected CONTINUATION frame.", null, args));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                            Http2ErrorCode.ProtocolError, input));
                         return;
                     }
 
@@ -9474,6 +9920,8 @@ namespace Titanium.Web.Proxy.Http2
                         exceptionFunc?.Invoke(new ProxyHttpException(
                             "HTTP/2 header block exceeded the maximum allowed compressed size.", null,
                             pendingHeaderArgs));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                            Http2ErrorCode.EnhanceYourCalm, input));
                         return;
                     }
 
@@ -9510,9 +9958,19 @@ namespace Titanium.Web.Proxy.Http2
                 {
                     // this stream was answered with a synthetic response; never forward its request frames upstream.
                     sendPacket = false;
+
+                    if (type == Http2FrameType.Data)
+                    {
+                        await GrantReceiveCreditAsync(streamId, length);
+                    }
                 }
                 else if (type == Http2FrameType.Data && args != null)
                 {
+                    // Grant back the credit consumed by reading this frame's on-wire payload before doing
+                    // anything else with it - see GrantReceiveCreditAsync's remarks for why this is always
+                    // safe regardless of what happens to the payload below.
+                    await GrantReceiveCreditAsync(streamId, length);
+
                     if (isClient)
                         args.OnDataSent(buffer, 0, read);
                     else
@@ -9577,15 +10035,114 @@ namespace Titanium.Web.Proxy.Http2
 
                         var outBytes = bodyWriteArgs.BodyBytes ?? Array.Empty<byte>();
 
-                        if (isClient)
-                            await SendData(frameHeader, frameHeaderBuffer, streamId, outBytes, endStreamFlag,
-                                remoteSettings.MaxFrameSize, output);
-                        else
-                            await lockedClientWrite(() => SendData(frameHeader, frameHeaderBuffer, streamId, outBytes,
-                                endStreamFlag, remoteSettings.MaxFrameSize, output));
+                        await lockedOutputWrite(() => SendData(frameHeader, frameHeaderBuffer, streamId, outBytes,
+                            endStreamFlag, remoteSettings.MaxFrameSize, outboundFlow, output, cancellationToken));
 
                         // we have emitted our own (possibly re-sized) DATA frame(s); suppress the default relay
                         sendPacket = false;
+                    }
+                }
+                else if (type == Http2FrameType.WindowUpdate)
+                {
+                    sendPacket = false;
+
+                    if (length != 4)
+                    {
+                        exceptionFunc?.Invoke(new ProxyHttpException(
+                            "HTTP/2 protocol error: WINDOW_UPDATE frame with invalid length.", null, args));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                            Http2ErrorCode.FrameSizeError, input));
+                        return;
+                    }
+
+                    int increment = ((buffer[0] & 0x7f) << 24) + (buffer[1] << 16) + (buffer[2] << 8) + buffer[3];
+                    if (increment == 0)
+                    {
+                        // RFC 7540 ¬ß6.9.1: a zero increment is a stream error (or connection error if
+                        // stream id 0) of type PROTOCOL_ERROR.
+                        if (streamId == 0)
+                        {
+                            await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], 0,
+                                Http2ErrorCode.ProtocolError, input));
+                            return;
+                        }
+
+                        await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], streamId,
+                            Http2ErrorCode.ProtocolError, input));
+                    }
+                    else
+                    {
+                        // this WINDOW_UPDATE governs how much *this* task's peer will accept - it is
+                        // consumed here as internal bookkeeping for the *other* relay task's writes toward
+                        // that same peer, never forwarded onward as a frame itself.
+                        var flow = isClient ? connectionState.ClientSendFlow : connectionState.ServerSendFlow;
+                        flow.OnWindowUpdate(streamId, increment);
+                    }
+                }
+                else if (type == Http2FrameType.Ping)
+                {
+                    sendPacket = false;
+
+                    if (length != 8)
+                    {
+                        exceptionFunc?.Invoke(new ProxyHttpException(
+                            "HTTP/2 protocol error: PING frame with invalid length.", null, args));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                            Http2ErrorCode.FrameSizeError, input));
+                        return;
+                    }
+
+                    if ((flags & Http2FrameFlag.Ack) == 0)
+                    {
+                        // terminate PING/PONG locally on the leg it arrived on rather than relaying it
+                        // through to the other leg, which has no bearing on this leg's round trip.
+                        var ackPayload = new byte[8];
+                        Buffer.BlockCopy(buffer, 0, ackPayload, 0, 8);
+                        await lockedOwnLegWrite(async () =>
+                        {
+                            // dedicated header/buffer - never the outer `frameHeader`/`frameHeaderBuffer`,
+                            // which still holds this same PING frame's own metadata that the main loop below
+                            // (harmlessly, since PING always suppresses the default relay) still references.
+                            var pingFrameHeader = new Http2FrameHeader
+                            {
+                                StreamId = 0, Type = Http2FrameType.Ping, Flags = Http2FrameFlag.Ack, Length = 8
+                            };
+                            var pingFrameHeaderBuffer = new byte[9];
+                            pingFrameHeader.CopyToBuffer(pingFrameHeaderBuffer);
+                            await input.WriteAsync(pingFrameHeaderBuffer, 0, pingFrameHeaderBuffer.Length);
+                            await input.WriteAsync(ackPayload, 0, 8);
+                        });
+                    }
+                    // an ACK for a PING this proxy never sends today - nothing to do.
+                }
+                else if (type == Http2FrameType.GoAway)
+                {
+                    sendPacket = true; // still let the true endpoint learn the connection is going away.
+
+                    if (length >= 8)
+                    {
+                        int lastStreamId = ((buffer[0] & 0x7f) << 24) + (buffer[1] << 16) + (buffer[2] << 8) + buffer[3];
+                        if (isClient)
+                        {
+                            connectionState.ClientGoingAway = true;
+                            connectionState.ClientLastStreamId = lastStreamId;
+                        }
+                        else
+                        {
+                            connectionState.ServerGoingAway = true;
+                            connectionState.ServerLastStreamId = lastStreamId;
+                        }
+
+                        // unblock any stream-scoped waiter (synthetic response task, etc.) for streams the
+                        // sender has already said it will not process, without tearing down the streams
+                        // that are still permitted to drain.
+                        foreach (var kvp in connectionState.Streams)
+                        {
+                            if (kvp.Key > lastStreamId)
+                            {
+                                kvp.Value.Cancellation.Cancel();
+                            }
+                        }
                     }
                 }
                 else if (type == Http2FrameType.Settings)
@@ -9595,45 +10152,111 @@ namespace Titanium.Web.Proxy.Http2
                         // https://httpwg.org/specs/rfc7540.html#SETTINGS
                         // 6.5. SETTINGS
                         // A SETTINGS frame with a length other than a multiple of 6 octets MUST be treated as a connection error (Section 5.4.1) of type FRAME_SIZE_ERROR
-                        throw new ProxyHttpException("Invalid settings length", null, null);
+                        exceptionFunc?.Invoke(new ProxyHttpException("Invalid settings length", null, null));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                            Http2ErrorCode.FrameSizeError, input));
+                        return;
                     }
+
+                    bool invalidSettings = false;
+                    Http2ErrorCode invalidSettingsError = Http2ErrorCode.ProtocolError;
 
                     int pos = 0;
                     while (pos < length)
                     {
                         int identifier = (buffer[pos++] << 8) + buffer[pos++];
-                        int value =
- (buffer[pos++] << 24) + (buffer[pos++] << 16) + (buffer[pos++] << 8) + buffer[pos++];
-                        if (identifier == 1 /*SETTINGS_HEADER_TABLE_SIZE*/)
+                        long value =
+                            ((long)buffer[pos++] << 24) + (buffer[pos++] << 16) + (buffer[pos++] << 8) + buffer[pos++];
+
+                        if (identifier == (int)Http2SettingsId.HeaderTableSize)
                         {
                             //System.Diagnostics.Debug.WriteLine("HEADER SIZE CONN: " + connectionId + ", CLIENT: " + isClient + ", value: " + value);
-                            remoteSettings.HeaderTableSize = value;
+                            localSettings.HeaderTableSize = (int)value;
                         }
-                        else if (identifier == 5 /*SETTINGS_MAX_FRAME_SIZE*/)
+                        else if (identifier == (int)Http2SettingsId.MaxFrameSize)
                         {
-                            remoteSettings.MaxFrameSize = value;
+                            // RFC 7540 ¬ß6.5.2: valid range is [2^14, 2^24-1]; below the minimum every
+                            // implementation must support is a PROTOCOL_ERROR.
+                            if (value < 16384 || value > 16777215)
+                            {
+                                invalidSettings = true;
+                                invalidSettingsError = Http2ErrorCode.ProtocolError;
+                            }
+                            else
+                            {
+                                localSettings.MaxFrameSize = (int)value;
+                            }
                         }
+                        else if (identifier == (int)Http2SettingsId.InitialWindowSize)
+                        {
+                            // RFC 7540 ¬ß6.5.2: valid range is [0, 2^31-1]; above that is a FLOW_CONTROL_ERROR.
+                            if (value > Http2FlowController.MaxWindow)
+                            {
+                                invalidSettings = true;
+                                invalidSettingsError = Http2ErrorCode.FlowControlError;
+                            }
+                            else
+                            {
+                                // this peer is telling us the initial send-window it grants us for streams
+                                // we open toward it - i.e. it feeds the SEND flow controller for writes
+                                // toward *this* peer, symmetrically with WINDOW_UPDATE above.
+                                var flow = isClient ? connectionState.ClientSendFlow : connectionState.ServerSendFlow;
+                                flow.OnInitialWindowSizeChanged((int)value);
+                            }
+                        }
+                    }
+
+                    if (invalidSettings)
+                    {
+                        exceptionFunc?.Invoke(new ProxyHttpException(
+                            "HTTP/2 protocol error: SETTINGS frame contained an out-of-range value.", null, null));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                            invalidSettingsError, input));
+                        return;
                     }
                 }
 
                 if (type == Http2FrameType.RstStream)
                 {
-                    int errorCode = (buffer[0] << 24) + (buffer[1] << 16) + (buffer[2] << 8) + buffer[3];
-                    if (streamId == 0)
+                    if (length != 4)
                     {
-                        // connection error
-                        exceptionFunc?.Invoke(new ProxyHttpException("HTTP/2 connection error. Error code: " + errorCode, null, args));
+                        exceptionFunc?.Invoke(new ProxyHttpException(
+                            "HTTP/2 protocol error: RST_STREAM frame with invalid length.", null, args));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                            Http2ErrorCode.FrameSizeError, input));
                         return;
                     }
-                    else
-                    {
-                        // stream error
-                        sessions.TryRemove(streamId, out _);
 
-                        if (errorCode != 8 /*cancel*/)
+                    int errorCode = (buffer[0] << 24) + (buffer[1] << 16) + (buffer[2] << 8) + buffer[3];
+
+                    // stream error: cancel any waiter/synthetic task scoped to this stream and stop tracking
+                    // its flow-control windows and session mapping - regardless of the error code, the
+                    // stream is now closed.
+                    if (connectionState.Streams.TryRemove(streamId, out var resetStream))
+                    {
+                        resetStream.Cancellation.Cancel();
+                        connectionState.ClientSendFlow.RemoveStream(streamId);
+                        connectionState.ServerSendFlow.RemoveStream(streamId);
+
+                        var resetRr = isClient
+                            ? (RequestResponseBase)resetStream.SessionArgs.HttpClient.Request
+                            : resetStream.SessionArgs.HttpClient.Response;
+
+                        // unblock a pending GetBody()-style waiter rather than hanging forever now that no
+                        // further DATA/END_STREAM will ever arrive for this stream.
+                        var bodyTcs = resetRr.ReadHttp2BodyTaskCompletionSource;
+                        if (bodyTcs != null && !bodyTcs.Task.IsCompleted)
                         {
-                            exceptionFunc?.Invoke(new ProxyHttpException("HTTP/2 stream error. Error code: " + errorCode, null, args));
+                            resetRr.ReadHttp2BodyTaskCompletionSource = null;
+                            resetRr.IsBodyRead = true;
+                            resetRr.IsBodyReceived = true;
+                            bodyTcs.TrySetResult(true);
                         }
+                    }
+
+                    if (errorCode != (int)Http2ErrorCode.Cancel)
+                    {
+                        exceptionFunc?.Invoke(new ProxyHttpException("HTTP/2 stream error. Error code: " + errorCode, null, args));
                     }
                 }
 
@@ -9696,22 +10319,36 @@ namespace Titanium.Web.Proxy.Http2
                         Breakpoint();
                     }
 
-                    if (isClient)
-                        await SendBody(remoteSettings, rr, frameHeader, frameHeaderBuffer, buffer, output);
-                    else
-                        await lockedClientWrite(() =>
-                            SendBody(remoteSettings, rr, frameHeader, frameHeaderBuffer, buffer, output));
+                    await lockedOutputWrite(() =>
+                        SendBody(remoteSettings, rr, frameHeader, frameHeaderBuffer, buffer, outboundFlow,
+                            output, cancellationToken));
                 }
 
-                if (!isClient && endStream)
+                if (endStream)
                 {
-                    sessions.TryRemove(streamId, out _);
-                    System.Diagnostics.Debug.WriteLine("REMOVED CONN: " + connectionId + ", CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
+                    if (connectionState.Streams.TryGetValue(streamId, out var closingStream))
+                    {
+                        if (isClient)
+                            closingStream.RequestClosed = true;
+                        else
+                            closingStream.ResponseClosed = true;
+
+                        if (closingStream.IsClosed)
+                        {
+                            connectionState.RemoveStream(streamId);
+                            System.Diagnostics.Debug.WriteLine("REMOVED CONN: " + connectionId + ", CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
+                        }
+                    }
                 }
 
                 if (sendPacket)
                 {
                     var frameLength = length;
+
+                    if (type == Http2FrameType.Data)
+                    {
+                        await outboundFlow.ReserveAsync(streamId, frameLength, cancellationToken);
+                    }
 
                     async Task writeFrame()
                     {
@@ -9721,15 +10358,12 @@ namespace Titanium.Web.Proxy.Http2
                         await output.WriteAsync(buffer, 0, frameLength /*, cancellationToken*/);
                     }
 
-                    if (isClient)
-                        await writeFrame();
-                    else
-                        await lockedClientWrite(writeFrame);
+                    await lockedOutputWrite(writeFrame);
 
                     // signal once the server's SETTINGS frame has actually reached the client, so a synthetic
                     // response on the other relay can safely send HEADERS afterwards.
                     if (!isClient && type == Http2FrameType.Settings && (flags & Http2FrameFlag.Ack) == 0)
-                        serverSettingsRelayed.TrySetResult(true);
+                        connectionState.ServerSettingsRelayed.TrySetResult(true);
                 }
 
                 if (cancellationToken.IsCancellationRequested)
@@ -9747,7 +10381,7 @@ namespace Titanium.Web.Proxy.Http2
             finally
             {
                 // Ensure the other relay direction (and any synthetic task below still waiting on a
-                // cross-direction signal such as serverSettingsRelayed) is unblocked before this method
+                // cross-direction signal such as ServerSettingsRelayed) is unblocked before this method
                 // awaits tracked synthetic tasks. SendHttp2 only cancels the shared token once one of the
                 // two CopyHttp2FrameAsync tasks has *already completed*; without cancelling here first, a
                 // synthetic task on this direction that is still waiting on a signal only the other,
@@ -9872,7 +10506,8 @@ namespace Titanium.Web.Proxy.Http2
         ///     by as many CONTINUATION frames as needed so that no single frame's payload exceeds the
         ///     destination's advertised SETTINGS_MAX_FRAME_SIZE (RFC 7540 ¬ß4.2/¬ß6.10). END_HEADERS is set
         ///     only on the last frame of the sequence; END_STREAM/PRIORITY (when applicable) are set only
-        ///     on the first, matching the semantics of the frame types they belong to.
+        ///     on the first, matching the semantics of the frame types they belong to. HEADERS/CONTINUATION
+        ///     frames are not subject to flow control (RFC 7540 ¬ß6.9), so no reservation is made here.
         /// </summary>
         private static async Task WriteHeaderBlockAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int streamId, Http2FrameType type, bool endStream, bool hasPriority, byte[] data, int maxFrameSize,
@@ -9915,7 +10550,9 @@ namespace Titanium.Web.Proxy.Http2
             } while (pos < data.Length);
         }
 
-        private static async Task SendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, byte[] buffer, Stream output)
+        private static async Task SendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader,
+            byte[] frameHeaderBuffer, byte[] buffer, Http2FlowController flow, Stream output,
+            CancellationToken cancellationToken)
         {
             var body = rr.CompressBodyAndUpdateContentLength();
             await SendHeader(settings, frameHeader, frameHeaderBuffer, rr, !(rr.HasBody && rr.IsBodyRead), output, false);
@@ -9925,12 +10562,15 @@ namespace Titanium.Web.Proxy.Http2
                 if (body == null)
                     throw new InvalidOperationException("An HTTP/2 body was marked as read but is unavailable.");
 
+                int streamId = frameHeader.StreamId;
                 int pos = 0;
                 while (pos < body.Length)
                 {
                     int bodyFrameLength = Math.Min(buffer.Length, body.Length - pos);
                     Buffer.BlockCopy(body, pos, buffer, 0, bodyFrameLength);
                     pos += bodyFrameLength;
+
+                    await flow.ReserveAsync(streamId, bodyFrameLength, cancellationToken);
 
                     frameHeader.Length = bodyFrameLength;
                     frameHeader.Type = Http2FrameType.Data;
@@ -9946,9 +10586,12 @@ namespace Titanium.Web.Proxy.Http2
         /// <summary>
         ///     Sends the given bytes as one or more HTTP/2 DATA frames on the specified stream, splitting on
         ///     the peer's max frame size. An END_STREAM flag is set on the final frame when endStream is true.
+        ///     Each frame's payload is reserved against <paramref name="flow" /> before being written, so
+        ///     this never exceeds the destination's flow-control window (RFC 7540 ¬ß6.9).
         /// </summary>
         private static async Task SendData(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, int streamId,
-            byte[] data, bool endStream, int maxFrameSize, Stream output)
+            byte[] data, bool endStream, int maxFrameSize, Http2FlowController flow, Stream output,
+            CancellationToken cancellationToken)
         {
             if (maxFrameSize <= 0) maxFrameSize = 16384;
 
@@ -9970,6 +10613,8 @@ namespace Titanium.Web.Proxy.Http2
                 var frameLength = Math.Min(maxFrameSize, data.Length - pos);
                 var isLastFrame = pos + frameLength >= data.Length;
 
+                await flow.ReserveAsync(streamId, frameLength, cancellationToken);
+
                 frameHeader.Length = frameLength;
                 frameHeader.Flags = isLastFrame && endStream ? Http2FrameFlag.EndStream : (Http2FrameFlag)0;
                 frameHeader.CopyToBuffer(frameHeaderBuffer);
@@ -9981,6 +10626,57 @@ namespace Titanium.Web.Proxy.Http2
             }
         }
 
+        /// <summary>Writes an RST_STREAM frame (RFC 7540 ¬ß6.4) resetting the given stream with the given error code.</summary>
+        private static async Task SendRstStreamAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
+            int streamId, Http2ErrorCode errorCode, Stream output)
+        {
+            frameHeader.StreamId = streamId;
+            frameHeader.Type = Http2FrameType.RstStream;
+            frameHeader.Flags = 0;
+            frameHeader.Length = 4;
+            frameHeader.CopyToBuffer(frameHeaderBuffer);
+            await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length);
+
+            var payload = new byte[4];
+            BinaryPrimitives.WriteInt32BigEndian(payload, (int)errorCode);
+            await output.WriteAsync(payload, 0, 4);
+        }
+
+        /// <summary>Writes a GOAWAY frame (RFC 7540 ¬ß6.8) announcing connection-level shutdown with the given error code.</summary>
+        private static async Task SendGoAwayAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
+            int lastStreamId, Http2ErrorCode errorCode, Stream output)
+        {
+            frameHeader.StreamId = 0;
+            frameHeader.Type = Http2FrameType.GoAway;
+            frameHeader.Flags = 0;
+            frameHeader.Length = 8;
+            frameHeader.CopyToBuffer(frameHeaderBuffer);
+            await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length);
+
+            var payload = new byte[8];
+            BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), lastStreamId & 0x7fffffff);
+            BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), (int)errorCode);
+            await output.WriteAsync(payload, 0, 8);
+        }
+
+        /// <summary>Writes a WINDOW_UPDATE frame (RFC 7540 ¬ß6.9) granting the given amount of flow-control credit.</summary>
+        private static async Task SendWindowUpdateAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
+            int streamId, int increment, Stream output)
+        {
+            if (increment <= 0) return;
+
+            frameHeader.StreamId = streamId;
+            frameHeader.Type = Http2FrameType.WindowUpdate;
+            frameHeader.Flags = 0;
+            frameHeader.Length = 4;
+            frameHeader.CopyToBuffer(frameHeaderBuffer);
+            await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length);
+
+            var payload = new byte[4];
+            BinaryPrimitives.WriteInt32BigEndian(payload, increment & 0x7fffffff);
+            await output.WriteAsync(payload, 0, 4);
+        }
+
         /// <summary>
         ///     Emits a proxy-generated (synthetic) response to the client on the given stream without contacting
         ///     the server. The response body is streamed from the consumer's RespondStreaming delegate as DATA
@@ -9988,8 +10684,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     used), so the chunked header is stripped.
         /// </summary>
         private static async Task EmitSyntheticResponseAsync(SessionEventArgs args, int streamId,
-            Http2Settings settings, Stream clientStream, SemaphoreSlim clientWriteLock,
-            TaskCompletionSource<bool> serverSettingsRelayed, CancellationToken cancellationToken)
+            Http2ConnectionState connectionState, Stream clientStream, CancellationToken cancellationToken)
         {
             var response = args.HttpClient.Response;
 
@@ -10002,20 +10697,25 @@ namespace Titanium.Web.Proxy.Http2
             // The client must receive the connection SETTINGS frame (relayed from the server) before any
             // HEADERS frame, otherwise it treats the connection as a protocol error. Wait for that relay,
             // but honor cancellation so we never hang if the server never sends SETTINGS / closes early.
-            await serverSettingsRelayed.Task.WaitAsync(cancellationToken);
+            await connectionState.ServerSettingsRelayed.Task.WaitAsync(cancellationToken);
+
+            var clientWriteLock = connectionState.ClientWriteLock;
+            var clientSendFlow = connectionState.ClientSendFlow;
 
             // send the response headers first; the body (if any) follows as DATA frames.
             await clientWriteLock.WaitAsync(cancellationToken);
             try
             {
-                await SendHeader(settings, frameHeader, frameHeaderBuffer, response, false, clientStream, false);
+                await SendHeader(connectionState.ClientSettings, frameHeader, frameHeaderBuffer, response, false,
+                    clientStream, false);
             }
             finally
             {
                 clientWriteLock.Release();
             }
 
-            var bodyWriter = new Http2BodyStreamWriter(streamId, clientStream, clientWriteLock, cancellationToken);
+            var bodyWriter = new Http2BodyStreamWriter(streamId, clientStream, clientWriteLock, clientSendFlow,
+                cancellationToken);
 
             if (response.StreamBodyWriter != null) await response.StreamBodyWriter(bodyWriter, cancellationToken);
 
@@ -10044,26 +10744,12 @@ namespace Titanium.Web.Proxy.Http2
             return totalRead;
         }
 
-
-        class Http2Settings
-        {
-            public int HeaderTableSize { get; set; } = 4096;
-
-            public int MaxFrameSize { get; set; } = 16384;
-
-            /// <summary>
-            ///     The HPACK encoder (and its dynamic table) used for header blocks sent in the direction this
-            ///     settings instance represents the peer for. Lazily created and persisted for the life of the
-            ///     connection - see the comment in <see cref="SendHeader" />.
-            /// </summary>
-            public Encoder? Encoder { get; set; }
-        }
-
         /// <summary>
         ///     A write-only stream handed to consumers of RespondStreaming over HTTP/2. Each write is emitted as
         ///     one or more DATA frames on the given stream (split at the guaranteed-safe 16384 byte frame size).
         ///     The terminating empty END_STREAM DATA frame is sent by <see cref="CompleteAsync" />.
-        ///     Writes are serialized against the other relay via a shared lock so frames never interleave.
+        ///     Writes are serialized against the other relay via a shared lock so frames never interleave, and
+        ///     reserved against the client's flow-control window like any other outbound DATA.
         /// </summary>
         private sealed class Http2BodyStreamWriter : Stream
         {
@@ -10073,17 +10759,19 @@ namespace Titanium.Web.Proxy.Http2
             private readonly int streamId;
             private readonly Stream clientStream;
             private readonly SemaphoreSlim clientWriteLock;
+            private readonly Http2FlowController flow;
             private readonly CancellationToken cancellationToken;
             private readonly Http2FrameHeader frameHeader = new Http2FrameHeader();
             private readonly byte[] frameHeaderBuffer = new byte[9];
             private bool completed;
 
             internal Http2BodyStreamWriter(int streamId, Stream clientStream, SemaphoreSlim clientWriteLock,
-                CancellationToken cancellationToken)
+                Http2FlowController flow, CancellationToken cancellationToken)
             {
                 this.streamId = streamId;
                 this.clientStream = clientStream;
                 this.clientWriteLock = clientWriteLock;
+                this.flow = flow;
                 this.cancellationToken = cancellationToken;
             }
 
@@ -10140,8 +10828,8 @@ namespace Titanium.Web.Proxy.Http2
                 await clientWriteLock.WaitAsync(cancellationToken);
                 try
                 {
-                    await SendData(frameHeader, frameHeaderBuffer, streamId, data, false, SafeMaxFrameSize,
-                        clientStream);
+                    await SendData(frameHeader, frameHeaderBuffer, streamId, data, false, SafeMaxFrameSize, flow,
+                        clientStream, cancellationToken);
                 }
                 finally
                 {
@@ -10171,7 +10859,7 @@ namespace Titanium.Web.Proxy.Http2
                 try
                 {
                     await SendData(frameHeader, frameHeaderBuffer, streamId, Array.Empty<byte>(), true,
-                        SafeMaxFrameSize, clientStream);
+                        SafeMaxFrameSize, flow, clientStream, cancellationToken);
                 }
                 finally
                 {
@@ -10193,6 +10881,15 @@ namespace Titanium.Web.Proxy.Http2
             private ByteString scheme;
 
             public ByteString Path { get; private set; }
+
+            /// <summary>
+            ///     Set when this header block contained an unknown pseudo-header field or a field name with
+            ///     uppercase characters (RFC 7540 ¬ß8.1.2/¬ß8.1.2.1) - both are malformed and the block's stream
+            ///     must be reset rather than acted upon.
+            /// </summary>
+            public bool HasMalformedHeader { get; private set; }
+
+            public string? MalformedReason { get; private set; }
 
             public string Scheme
             {
@@ -10219,7 +10916,7 @@ namespace Titanium.Web.Proxy.Http2
 
             public void AddHeader(ByteString name, ByteString value, bool sensitive)
             {
-                if (name.Span[0] == ':')
+                if (name.Length > 0 && name.Span[0] == ':')
                 {
                     string nameStr = Encoding.ASCII.GetString(name.Span);
                     switch (nameStr)
@@ -10239,6 +10936,27 @@ namespace Titanium.Web.Proxy.Http2
                         case ":status":
                             Status = value;
                             return;
+                    }
+
+                    if (!HasMalformedHeader)
+                    {
+                        HasMalformedHeader = true;
+                        MalformedReason = $"unknown pseudo-header field '{nameStr}'";
+                    }
+
+                    return;
+                }
+
+                if (!HasMalformedHeader)
+                {
+                    foreach (var b in name.Span)
+                    {
+                        if (b is >= (byte)'A' and <= (byte)'Z')
+                        {
+                            HasMalformedHeader = true;
+                            MalformedReason = "header field name contains uppercase characters";
+                            break;
+                        }
                     }
                 }
 
@@ -10268,7 +10986,102 @@ namespace Titanium.Web.Proxy.Http2
         }
     }
 }
-#endifParseOptions.0.jsonˆ8
+#endif
+ParseOptions.0.jsonõ
+XD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2Settings.cs©#if NET6_0_OR_GREATER
+using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
+
+namespace Titanium.Web.Proxy.Http2;
+
+/// <summary>
+///     The subset of one peer's advertised SETTINGS this relay leg needs to remember - i.e. this instance
+///     represents what a given peer has told the proxy about itself and constrains how the proxy must
+///     encode/frame data destined for that peer.
+/// </summary>
+internal class Http2Settings
+{
+    public int HeaderTableSize { get; set; } = 4096;
+
+    public int MaxFrameSize { get; set; } = 16384;
+
+    /// <summary>
+    ///     The HPACK encoder (and its dynamic table) used for header blocks sent in the direction this
+    ///     settings instance represents the peer for. Lazily created and persisted for the life of the
+    ///     connection - see the comment in <c>Http2Helper.SendHeader</c>.
+    /// </summary>
+    public Encoder? Encoder { get; set; }
+}
+#endif
+ParseOptions.0.json˚
+ZD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2SettingsId.csá#if NET6_0_OR_GREATER
+namespace Titanium.Web.Proxy.Http2;
+
+/// <summary>
+///     SETTINGS frame parameter identifiers (RFC 7540 ¬ß6.5.2 / RFC 9113 ¬ß6.5.2).
+/// </summary>
+internal enum Http2SettingsId
+{
+    HeaderTableSize = 0x1,
+    EnablePush = 0x2,
+    MaxConcurrentStreams = 0x3,
+    InitialWindowSize = 0x4,
+    MaxFrameSize = 0x5,
+    MaxHeaderListSize = 0x6
+}
+#endif
+ParseOptions.0.jsonˆ
+[D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2StreamState.csÅ#if NET6_0_OR_GREATER
+using System.Threading;
+using System.Threading.Tasks;
+using Titanium.Web.Proxy.EventArguments;
+
+namespace Titanium.Web.Proxy.Http2;
+
+/// <summary>
+///     Per-stream state tracked for the lifetime of one HTTP/2 stream (a single request/response pair
+///     multiplexed on the connection), keyed by stream id in <see cref="Http2ConnectionState.Streams" />.
+///     A stream is only removed from that registry - and only then may its id be reused by neither side,
+///     per RFC 7540, though this proxy does not police reuse itself - once both halves are closed or it is
+///     reset (RST_STREAM) or the connection goes away, not merely on the first END_STREAM seen (request and
+///     response close independently).
+/// </summary>
+internal sealed class Http2StreamState
+{
+    public Http2StreamState(int streamId, SessionEventArgs sessionArgs)
+    {
+        StreamId = streamId;
+        SessionArgs = sessionArgs;
+        Cancellation = new CancellationTokenSource();
+    }
+
+    public int StreamId { get; }
+
+    public SessionEventArgs SessionArgs { get; }
+
+    /// <summary>
+    ///     Cancelled when this stream is individually reset (RST_STREAM) or the peer GOAWAYs past it, so a
+    ///     body/before-handler waiter or synthetic-response task blocked only on this stream can unblock
+    ///     without tearing down every other multiplexed stream on the connection.
+    /// </summary>
+    public CancellationTokenSource Cancellation { get; }
+
+    /// <summary>True once the request side (client -> proxy -> server) has seen END_STREAM or been reset.</summary>
+    public bool RequestClosed { get; set; }
+
+    /// <summary>True once the response side (server -> proxy -> client) has seen END_STREAM or been reset.</summary>
+    public bool ResponseClosed { get; set; }
+
+    /// <summary>
+    ///     Set once a synthetic (proxy-generated) response has been dispatched for this stream so its
+    ///     background task (tracked in <see cref="Http2ConnectionState.PendingSynthetics" />) can be found
+    ///     and observed/cancelled on RST_STREAM/GOAWAY without scanning the whole bag.
+    /// </summary>
+    public Task? SyntheticTask { get; set; }
+
+    public bool IsClosed => RequestClosed && ResponseClosed;
+}
+#endif
+ParseOptions.0.jsonˆ8
 ^D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http\ChunkedTrailerHelper.cs˛7using System;
 using System.Collections.Generic;
 using System.Threading;

@@ -18,6 +18,30 @@
           "locations": [
             {
               "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/HeaderCollectionTests.cs",
+                "region": {
+                  "startLine": 27,
+                  "startColumn": 44,
+                  "endLine": 27,
+                  "endColumn": 62
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "paramName": "expected"
+            }
+          }
+        },
+        {
+          "ruleId": "CA1861",
+          "level": "note",
+          "message": "Prefer 'static readonly' fields over constant array arguments if the called method is called repeatedly and is not mutating the passed array",
+          "locations": [
+            {
+              "resultFile": {
                 "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
                 "region": {
                   "startLine": 79,
@@ -81,27 +105,6 @@
           }
         },
         {
-          "ruleId": "MSTEST0039",
-          "level": "note",
-          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
-          "locations": [
-            {
-              "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
-                "region": {
-                  "startLine": 115,
-                  "startColumn": 15,
-                  "endLine": 116,
-                  "endColumn": 96
-                }
-              }
-            }
-          ],
-          "properties": {
-            "warningLevel": 1
-          }
-        },
-        {
           "ruleId": "CA1822",
           "level": "note",
           "message": "Member 'Simple_Create_Win_Certificate_Test' does not access instance data and can be marked as static",
@@ -152,9 +155,9 @@
               "resultFile": {
                 "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
                 "region": {
-                  "startLine": 126,
+                  "startLine": 115,
                   "startColumn": 15,
-                  "endLine": 127,
+                  "endLine": 116,
                   "endColumn": 96
                 }
               }
@@ -165,42 +168,18 @@
           }
         },
         {
-          "ruleId": "CA1861",
-          "level": "note",
-          "message": "Prefer 'static readonly' fields over constant array arguments if the called method is called repeatedly and is not mutating the passed array",
-          "locations": [
-            {
-              "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/HeaderCollectionTests.cs",
-                "region": {
-                  "startLine": 27,
-                  "startColumn": 44,
-                  "endLine": 27,
-                  "endColumn": 62
-                }
-              }
-            }
-          ],
-          "properties": {
-            "warningLevel": 1,
-            "customProperties": {
-              "paramName": "expected"
-            }
-          }
-        },
-        {
           "ruleId": "MSTEST0039",
           "level": "note",
           "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
           "locations": [
             {
               "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/HttpModelAndProxySocketTests.cs",
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
                 "region": {
-                  "startLine": 33,
-                  "startColumn": 33,
-                  "endLine": 34,
-                  "endColumn": 93
+                  "startLine": 126,
+                  "startColumn": 15,
+                  "endLine": 127,
+                  "endColumn": 96
                 }
               }
             }
@@ -222,6 +201,27 @@
                   "startColumn": 15,
                   "endLine": 160,
                   "endColumn": 96
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "MSTEST0039",
+          "level": "note",
+          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/HttpModelAndProxySocketTests.cs",
+                "region": {
+                  "startLine": 33,
+                  "startColumn": 33,
+                  "endLine": 34,
+                  "endColumn": 93
                 }
               }
             }

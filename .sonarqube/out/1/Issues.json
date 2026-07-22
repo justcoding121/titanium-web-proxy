@@ -496,42 +496,18 @@
           }
         },
         {
-          "ruleId": "S1172",
-          "level": "warning",
-          "message": "Remove this unused method parameter 'sender'.",
-          "locations": [
-            {
-              "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
-                "region": {
-                  "startLine": 379,
-                  "startColumn": 42,
-                  "endLine": 379,
-                  "endColumn": 55
-                }
-              }
-            }
-          ],
-          "properties": {
-            "warningLevel": 1,
-            "customProperties": {
-              "IsRemovable": "True"
-            }
-          }
-        },
-        {
           "ruleId": "S1481",
           "level": "warning",
-          "message": "Remove the unused local variable 'ext'.",
+          "message": "Remove the unused local variable 'session'.",
           "locations": [
             {
               "resultFile": {
                 "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
                 "region": {
-                  "startLine": 335,
+                  "startLine": 318,
                   "startColumn": 17,
-                  "endLine": 335,
-                  "endColumn": 20
+                  "endLine": 318,
+                  "endColumn": 24
                 }
               }
             }
@@ -585,22 +561,46 @@
         {
           "ruleId": "S1481",
           "level": "warning",
-          "message": "Remove the unused local variable 'session'.",
+          "message": "Remove the unused local variable 'ext'.",
           "locations": [
             {
               "resultFile": {
                 "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
                 "region": {
-                  "startLine": 318,
+                  "startLine": 335,
                   "startColumn": 17,
-                  "endLine": 318,
-                  "endColumn": 24
+                  "endLine": 335,
+                  "endColumn": 20
                 }
               }
             }
           ],
           "properties": {
             "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "S1172",
+          "level": "warning",
+          "message": "Remove this unused method parameter 'sender'.",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.Basic/ProxyTestController.cs",
+                "region": {
+                  "startLine": 379,
+                  "startColumn": 42,
+                  "endLine": 379,
+                  "endColumn": 55
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "IsRemovable": "True"
+            }
           }
         }
       ],
