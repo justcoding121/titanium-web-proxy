@@ -206,3 +206,10 @@ FakesAssemblies/
 
 # Docfx
 docs/manifest.json
+.github/obj/
+
+# CI / analysis tooling and outputs (must not be committed by docs publish)
+.sonar/
+.sonarqube/
+.coverage/
+coverage/

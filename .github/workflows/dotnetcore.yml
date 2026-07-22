@@ -103,6 +103,8 @@ jobs:
         message: Update documentation
         committer_name: GitHub Actions
         committer_email: actions@github.com
+        # Only commit DocFX output — never Sonar/coverage/tool install artifacts
+        add: 'docs'
 
   publish:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
