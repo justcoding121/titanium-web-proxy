@@ -17,6 +17,7 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents t
 - [Authentication](#authentication)
 - [Performance and pooling](#performance-and-pooling)
 - [Supported frameworks](#supported-frameworks)
+- [Protocol feature support](Protocol-Support)
 
 ## Getting started
 
@@ -249,3 +250,9 @@ proxyServer.ForwardToUpstreamGateway = true;
 
 Versions prior to 4.0 also supported .NET Framework 4.6.2 and .NET 8; starting with 4.0, the package targets
 .NET 10 only.
+
+## Protocol feature support
+
+Wondering whether a specific HTTP/1.x or HTTP/2 feature (trailers, interim 1xx responses, HPACK, server
+push, ...) is supported? See the **[Protocol Feature Support](Protocol-Support)** page for a full
+Yes/No/Partial breakdown.
