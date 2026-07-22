@@ -111,10 +111,12 @@ jobs:
     runs-on: windows-latest
     environment: nuget-publish
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
     - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
@@ -139,3 +141,33 @@ jobs:
 
     - name: Publish Package
       run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
+
+    - name: Create GitHub Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      shell: pwsh
+      run: |
+        $nupkg = Get-ChildItem -Recurse -Filter *.nupkg |
+          Where-Object { $_.Name -notlike '*.symbols.nupkg' } |
+          Select-Object -First 1
+        if (-not $nupkg) { throw "No nupkg found to attach to the GitHub release." }
+
+        # Titanium.Web.Proxy.3.2.3-beta.nupkg -> 3.2.3-beta
+        $version = $nupkg.BaseName -replace '^Titanium\.Web\.Proxy\.', ''
+        $isPrerelease = $version -match '-'
+
+        gh release view $version 2>$null
+        if ($LASTEXITCODE -eq 0) {
+          Write-Output "Release $version already exists; uploading package."
+          gh release upload $version $nupkg.FullName --clobber
+        }
+        else {
+          $createArgs = @(
+            'release', 'create', $version, $nupkg.FullName,
+            '--title', $version,
+            '--generate-notes',
+            '--target', $env:GITHUB_SHA
+          )
+          if ($isPrerelease) { $createArgs += '--prerelease' }
+          gh @createArgs
+        }
