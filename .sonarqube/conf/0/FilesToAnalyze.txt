@@ -66,6 +66,7 @@ D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2Fra
 D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2FrameHeader.cs
 D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2FrameType.cs
 D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2Helper.cs
+D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http\ChunkedTrailerHelper.cs
 D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http\ConnectRequest.cs
 D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http\ConnectResponse.cs
 D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http\HeaderBuilder.cs
@@ -115,6 +116,7 @@ D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Stream
 D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Streams\HttpStream.cs
 D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Streams\ILineStream.cs
 D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Streams\IPeekStream.cs
+D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Streams\ITransportCapableStream.cs
 D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Streams\LimitedStream.cs
 D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\TcpConnection\TcpClientConnection.cs
 D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\TcpConnection\TcpConnectionFactory.cs

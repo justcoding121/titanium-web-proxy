@@ -1,9 +1,8 @@
-|
-jD:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.Basic\SampleClientState.cs 8r	’
-lD:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.Basic\ProxyTestController.csi 8+jß(*+-.>@CDEGHIKL]^_dhlmqrstvwxz{|}~‚ƒ„†‡ˆ‰Š‘”š›œ¬­´ÄÛÜİ‡–—˜š›œŸ ¢¥¦§©ª«¬­®¯²³µ¹ÑÒÔÖ×ØÙÚÛÜŞßáâåæèéëíïğòóùú†‡ˆ‰Š•–—˜™¾ÃÄÅÆÇÉÊËr‚	
-!"#$%&012345689:;<=MOQRSTUWXYZ[abfijno–—˜ ¡¢£¥¦§¨ª®°±²µ¶·¸¹º»¼½¾ÀÁÂÅÆÇÈÉÊËÌÍÎĞÑÒÓÔÖ×ØÚŞßáâãäåçèéêëíîïğòóôõö÷øùûüıÿ€‚„…ˆ‰ŠŒ‘“”·º»¼¾¿ÀÁÃÄÅÇÈÉÊËÍÏ÷ûüışÿ‚ƒ„‹Œ’“š›œ ¡£¤¥¦¨©ª«¬­®¯±²³´µ¶·¸¹º»¼¿ÀÁÍÎx‚¯!"#%&023589:;<=OSTYZ[abfijno–—˜¢£¥¦§¨ª²µÂÅÒÓÔÖ×ØÚŞäêïğòôö÷øû‚„ŠŒ‘“”¼¿ÀÅÇÉÊÍÏışƒ’œ ¥ª¬®¯±³´µ¶º¿”
-uD:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.Basic\ProxyEventArgsBaseExtensions.cs 8r	x‚	
-`D:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.Basic\Program.cs 8jr	x‚¬
-nD:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.Basic\Helpers\ConsoleHelper.cs 8j
-	 #&(r
-!$')+,-.x‚!$')+
+‹
+mD:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.WindowsService\ProxyWorker.cs 8j"SZarX	 #$%&'()*+,-./01245689:;=>@ABCDEGHJLNOQRTUVWXY[\^_`bcefhijklmnopqx
+‚+ #%&'()*+,-./0245689;=>@CDGHJLNV`bcejkmo
+oD:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.WindowsService\ProxySettings.cs $8$j)*+,r	
+!#%'-/12‚
+iD:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.WindowsService\Program.csj	r
+‚	
+

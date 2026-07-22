@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ProjectInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://www.sonarsource.com/msbuild/integration/2015/1">
-  <ProjectName>Titanium.Web.Proxy</ProjectName>
+  <ProjectName>Titanium.Web.Proxy.Examples.Basic</ProjectName>
   <ProjectLanguage>C#</ProjectLanguage>
   <ProjectType>Product</ProjectType>
-  <ProjectGuid>91018b6d-a7a9-45be-9cb3-79cbb8b169a6</ProjectGuid>
-  <FullPath>D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj</FullPath>
+  <ProjectGuid>1fac4205-4445-4f2b-bb8f-618e8a0c15fd</ProjectGuid>
+  <FullPath>D:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.Basic\Titanium.Web.Proxy.Examples.Basic.csproj</FullPath>
   <IsExcluded>false</IsExcluded>
   <AnalysisResultFiles>
     <AnalysisResultFile Id="FilesToAnalyze" Location="D:\a\titanium-web-proxy\titanium-web-proxy\.sonarqube\conf\1\FilesToAnalyze.txt" />

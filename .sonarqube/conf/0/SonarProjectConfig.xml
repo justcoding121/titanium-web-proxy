@@ -5,5 +5,5 @@
   <FilesToAnalyzePath>D:\a\titanium-web-proxy\titanium-web-proxy\.sonarqube\conf\0\FilesToAnalyze.txt</FilesToAnalyzePath>
   <OutPath>D:\a\titanium-web-proxy\titanium-web-proxy\.sonarqube\out\0</OutPath>
   <ProjectType>Product</ProjectType>
-  <TargetFramework>net462</TargetFramework>
+  <TargetFramework>net10.0</TargetFramework>
 </SonarProjectConfig>

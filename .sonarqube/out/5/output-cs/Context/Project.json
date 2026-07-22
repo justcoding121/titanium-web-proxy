@@ -1,7 +1,7 @@
 {
   "language": "C#",
-  "targetFramework": "",
-  "assemblyName": "WindowsServiceExample",
-  "projectType": "Product",
-  "projectPath": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\examples\\Titanium.Web.Proxy.Examples.WindowsService\\Titanium.Web.Proxy.Examples.WindowsService.csproj"
+  "targetFramework": "net10.0",
+  "assemblyName": "Titanium.Web.Proxy.UnitTests",
+  "projectType": "Test",
+  "projectPath": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.UnitTests\\Titanium.Web.Proxy.UnitTests.csproj"
 }

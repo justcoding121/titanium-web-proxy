@@ -1,1 +1,1 @@
-‡RzD:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.Wpf\Titanium.Web.Proxy.Examples.Wpf.csprojòCSharp14
+ŒRD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Titanium.Web.Proxy.IntegrationTests.csprojòCSharp14

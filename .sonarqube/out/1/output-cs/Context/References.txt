@@ -166,4 +166,5 @@ C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Syst
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Xml.XmlSerializer.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Xml.XPath.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Xml.XPath.XDocument.dll
+D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\obj\Release\net10.0\ref\Titanium.Web.Proxy.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\WindowsBase.dll

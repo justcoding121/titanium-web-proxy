@@ -7538,8 +7538,8 @@ public class DynamicTable
         head = tail + len;
         headerFields = tmp;
     }
-}ParseOptions.0.json„ê
-XD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Hpack\Encoder.csè#if NET6_0_OR_GREATER
+}ParseOptions.0.json∑°
+XD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Hpack\Encoder.csƒ†#if NET6_0_OR_GREATER
 /*
  * Copyright 2014 Twitter, Inc
  * This file is a derivative work modified by Ringo Leese
@@ -7659,11 +7659,39 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 }
                 else
                 {
+                    // Only "Incremental" indexing inserts a new entry into the dynamic table (RFC 7541
+                    // 6.2.2/6.2.3: "Literal Header Field without Indexing"/"Never Indexed" representations
+                    // MUST NOT be added to the dynamic table). A peer's compliant decoder mirrors this exactly,
+                    // so unconditionally calling Add() here (as this used to) desyncs our dynamic table from
+                    // the peer's: our table ends up with extra entries the peer never inserted, so every index
+                    // computed afterwards for a *later* entry is off relative to what the peer's decoder has,
+                    // eventually resolving to a wrong/out-of-range index and the peer failing decode with a
+                    // COMPRESSION_ERROR (e.g. this is hit whenever ":path" - encoded with IndexType.None to
+                    // avoid polluting the table with highly variable paths - is followed by any subsequently
+                    // indexed header).
+                    bool willIndex = indexType == HpackUtil.IndexType.Incremental;
+
+                    // Make room for the new entry *before* resolving a name-only reference: EnsureCapacity
+                    // evicts the oldest dynamic-table entries, and if it evicted the very entry a name-only
+                    // lookup would have matched, an index computed beforehand would now point at a stale/wrong
+                    // slot (a real HPACK protocol violation - the peer's decoder would reject or misdecode the
+                    // header block). Evicting first means a subsequent lookup can only match entries that are
+                    // actually still present once the new entry is added. Only relevant when we're actually
+                    // about to add an entry; skip it otherwise so a non-indexed header never evicts entries it
+                    // has no need to make room for.
+                    if (willIndex)
+                    {
+                        EnsureCapacity(headerSize);
+                    }
+
                     int nameIndex = useStaticName ? GetNameIndex(name) : -1;
-                    EnsureCapacity(headerSize);
 
                     EncodeLiteral(output, name, value, indexType, nameIndex);
-                    Add(name, value);
+
+                    if (willIndex)
+                    {
+                        Add(name, value);
+                    }
                 }
             }
         }
@@ -8713,8 +8741,8 @@ internal interface IHeaderListener
     /// <param name="value">Value.</param>
     /// <param name="sensitive">If set to <c>true</c> sensitive.</param>
     void AddHeader(ByteString name, ByteString value, bool sensitive);
-}ParseOptions.0.jsonõ7
-\D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Hpack\StaticTable.cs•6/*
+}ParseOptions.0.jsonº=
+\D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Hpack\StaticTable.cs∆</*
  * Copyright 2014 Twitter, Inc
  * This file is a derivative work modified by Ringo Leese
  *
@@ -8887,7 +8915,18 @@ internal static class StaticTable
     private static void Create(ByteString name, string value)
     {
         staticTable.Add(new HttpHeader(name, (ByteString)value));
-        staticIndexByName[name] = staticTable.Count;
+
+        // GetIndex(name) is documented to return the *lowest* index for a name (RFC 7541 Appendix A has
+        // several names - :status, :method, :path, :scheme - repeated across multiple entries with
+        // different values). Only record the first (lowest) index per name; overwriting it on later
+        // Create() calls for the same name (e.g. ":status" appears 7 times, for 200/204/206/304/400/404/500)
+        // would make a name-only lookup resolve to some arbitrary *other* value's index instead of the
+        // canonical lowest one - still a "valid" static index, but the wrong one, silently corrupting which
+        // name a decoder resolves it to only by coincidence rather than by contract.
+        if (!staticIndexByName.ContainsKey(name))
+        {
+            staticIndexByName[name] = staticTable.Count;
+        }
     }
 }ParseOptions.0.json∆
 YD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2FrameFlag.cs”using System;
@@ -8943,8 +8982,8 @@ internal enum Http2FrameType : byte
     GoAway = 0x07,
     WindowUpdate = 0x08,
     Continuation = 0x09
-}ParseOptions.0.jsonÿ”
-VD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2Helper.csÁ“#if NET6_0_OR_GREATER
+}ParseOptions.0.jsonÓ·
+VD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http2\Http2Helper.cs˝‡#if NET6_0_OR_GREATER
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -9522,9 +9561,31 @@ namespace Titanium.Web.Proxy.Http2
 
         private static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)
         {
-            var encoder = new Encoder(settings.HeaderTableSize);
+            // Reuse one Encoder (and its HPACK dynamic table) per direction for the lifetime of the connection,
+            // mirroring how the Decoder is persisted below - the dynamic table is connection-scoped, not
+            // per-message, so recreating it on every call (as before) meant every header was encoded as a
+            // literal and repeated headers across streams/messages were never indexed. `settings` is one of
+            // the two Http2Settings instances created once in SendHttp2 and shared by both relay directions,
+            // so storing the encoder on it here gives every SendHeader call for this direction (including the
+            // one used for synthetic responses) the same encoder/table instance.
+            var encoder = settings.Encoder;
+            if (encoder == null)
+            {
+                encoder = new Encoder(settings.HeaderTableSize);
+                settings.Encoder = encoder;
+            }
+
             var ms = new MemoryStream();
             var writer = new BinaryWriter(ms);
+
+            // If the peer's advertised header table size changed since our last encode, emit a Dynamic Table
+            // Size Update (RFC 7541 ¬ß6.3) at the start of this header block so the peer's decoder resizes in
+            // lockstep before any indexed reference relying on the new size is used.
+            if (encoder.MaxHeaderTableSize != settings.HeaderTableSize)
+            {
+                encoder.SetMaxHeaderTableSize(writer, settings.HeaderTableSize);
+            }
+
             if (rr.Priority.HasValue)
             {
                 long p = rr.Priority.Value;
@@ -9718,6 +9779,13 @@ namespace Titanium.Web.Proxy.Http2
             public int HeaderTableSize { get; set; } = 4096;
 
             public int MaxFrameSize { get; set; } = 16384;
+
+            /// <summary>
+            ///     The HPACK encoder (and its dynamic table) used for header blocks sent in the direction this
+            ///     settings instance represents the peer for. Lazily created and persisted for the life of the
+            ///     connection - see the comment in <see cref="SendHeader" />.
+            /// </summary>
+            public Encoder? Encoder { get; set; }
         }
 
         /// <summary>
@@ -9929,7 +9997,144 @@ namespace Titanium.Web.Proxy.Http2
         }
     }
 }
-#endifParseOptions.0.jsonœ
+#endifParseOptions.0.jsonˆ8
+^D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http\ChunkedTrailerHelper.cs˛7using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.StreamExtended.Network;
+
+namespace Titanium.Web.Proxy.Http;
+
+/// <summary>
+///     Strict, size-bounded reading and writing of the optional trailer header block that follows the
+///     terminating zero-length chunk of a chunked message body (RFC 9112 ¬ß7.1.2 / RFC 9110 ¬ß6.5).
+///     Centralized here so every read/write code path (pass-through relay, per-chunk body-write hook,
+///     buffered/decompressing reads, and buffered/streamed writes) parses and emits trailers identically,
+///     and - critically - always fully consumes through the terminating blank line even when the caller
+///     does not care about the parsed result, so a pooled keep-alive connection never retains stray
+///     trailer bytes that would corrupt the next message.
+/// </summary>
+internal static class ChunkedTrailerHelper
+{
+    /// <summary>
+    ///     Maximum number of trailer header lines accepted from the wire. Bounds worst-case parsing time
+    ///     for a hostile/broken peer that never sends the terminating blank line.
+    /// </summary>
+    internal const int MaxTrailerHeaderCount = 100;
+
+    /// <summary>
+    ///     Maximum total size (in characters) of the trailer header block accepted from the wire. Bounds
+    ///     worst-case memory use for the same scenario.
+    /// </summary>
+    internal const int MaxTrailerHeaderBlockSize = 16 * 1024;
+
+    /// <summary>
+    ///     Header field names that RFC 9110 ¬ß6.5.1 says a sender should not (and Titanium will not) generate
+    ///     in a trailer, because they are either framing-critical or only meaningful before the body starts.
+    ///     Reading/relaying an origin's own (possibly non-compliant) trailer is not gated by this list -
+    ///     this only guards the write side, i.e. trailers Titanium itself emits.
+    /// </summary>
+    private static readonly HashSet<string> ForbiddenTrailerFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        KnownHeaders.TransferEncoding.String,
+        KnownHeaders.ContentLength.String,
+        KnownHeaders.Trailer.String,
+        KnownHeaders.Host.String
+    };
+
+    /// <summary>
+    ///     Reads the trailer block following a zero-length chunk, strictly through the terminating blank
+    ///     line. Parsed header lines are added to <paramref name="into" />; when <paramref name="rawLines" />
+    ///     is supplied, the exact (unparsed) line text is also collected so a pure pass-through relay can
+    ///     forward the trailer byte-for-byte instead of re-serializing a normalized <see cref="HeaderCollection" />.
+    /// </summary>
+    /// <param name="reader">The line-oriented stream positioned right after the zero-length chunk's size line.</param>
+    /// <param name="into">Collection to populate with the parsed trailer headers (usually a request/response's <see cref="RequestResponseBase.TrailingHeaders" />).</param>
+    /// <param name="rawLines">Optional list to receive the raw (unparsed) trailer lines, in order.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <exception cref="ProxyHttpException">The trailer block is malformed, or exceeds the count/size bounds above.</exception>
+    internal static async ValueTask ReadTrailingHeaders(ILineStream reader, HeaderCollection into,
+        List<string>? rawLines, CancellationToken cancellationToken = default)
+    {
+        var count = 0;
+        var totalSize = 0;
+
+        string? line;
+        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(cancellationToken)))
+        {
+            count++;
+            if (count > MaxTrailerHeaderCount)
+                throw new ProxyHttpException(
+                    $"Chunked trailer has too many header lines (> {MaxTrailerHeaderCount}).", null, null);
+
+            totalSize += line!.Length;
+            if (totalSize > MaxTrailerHeaderBlockSize)
+                throw new ProxyHttpException(
+                    $"Chunked trailer exceeds the maximum allowed size of {MaxTrailerHeaderBlockSize} bytes.",
+                    null, null);
+
+            var colonIndex = line.IndexOf(':');
+            if (colonIndex == -1)
+                throw new ProxyHttpException($"Invalid trailer header line: '{line}'.", null, null);
+
+            rawLines?.Add(line);
+
+            var name = line.AsSpan(0, colonIndex).ToString();
+            var value = line.AsSpan(colonIndex + 1).TrimStart().ToString();
+            into.AddHeader(name, value);
+        }
+    }
+
+    /// <summary>
+    ///     Writes the trailer block for <paramref name="trailingHeaders" /> (if any) followed by the
+    ///     terminating blank line. Always writes the blank line, even when there are no trailers, so the
+    ///     chunked framing is valid either way. Used for buffered/modified/synthetic writes, where the
+    ///     header collection is necessarily re-serialized rather than forwarded byte-for-byte.
+    /// </summary>
+    /// <exception cref="ProxyHttpException">
+    ///     <paramref name="trailingHeaders" /> contains a header field that is forbidden in a trailer.
+    /// </exception>
+    internal static async ValueTask WriteTrailingHeadersAsync(IHttpStreamWriter writer,
+        HeaderCollection? trailingHeaders, CancellationToken cancellationToken = default)
+    {
+        if (trailingHeaders != null)
+            foreach (var header in trailingHeaders)
+            {
+                EnsureTrailerFieldPermitted(header.Name);
+                await writer.WriteLineAsync($"{header.Name}: {header.Value}", cancellationToken);
+            }
+
+        await writer.WriteLineAsync(cancellationToken);
+    }
+
+    /// <summary>
+    ///     Writes previously-collected raw trailer lines (see <paramref name="rawLines" /> in
+    ///     <see cref="ReadTrailingHeaders" />) verbatim, followed by the terminating blank line. Used by a
+    ///     pure pass-through relay to preserve the origin's exact trailer bytes/order instead of
+    ///     re-serializing them through a parsed <see cref="HeaderCollection" />. Not subject to the
+    ///     forbidden-field check in <see cref="WriteTrailingHeadersAsync" />: the proxy is transparently
+    ///     forwarding the origin's own wire data here, not generating it.
+    /// </summary>
+    internal static async ValueTask WriteRawTrailingLinesAsync(IHttpStreamWriter writer, List<string>? rawLines,
+        CancellationToken cancellationToken = default)
+    {
+        if (rawLines != null)
+            foreach (var line in rawLines)
+                await writer.WriteLineAsync(line, cancellationToken);
+
+        await writer.WriteLineAsync(cancellationToken);
+    }
+
+    private static void EnsureTrailerFieldPermitted(string headerName)
+    {
+        if (ForbiddenTrailerFields.Contains(headerName))
+            throw new ProxyHttpException(
+                $"'{headerName}' is not permitted as a trailer field (RFC 9110 ¬ß6.5.1).", null, null);
+    }
+}
+ParseOptions.0.jsonœ
 XD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http\ConnectRequest.cs›using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.StreamExtended;
 
@@ -10491,8 +10696,8 @@ public class KnownHeader
     {
         return new(str);
     }
-}ParseOptions.0.jsonÜ
-VD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http\KnownHeaders.csñnamespace Titanium.Web.Proxy.Http;
+}ParseOptions.0.jsonô
+VD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http\KnownHeaders.cs©namespace Titanium.Web.Proxy.Http;
 
 /// <summary>
 ///     Well known http headers.
@@ -10513,6 +10718,13 @@ public static class KnownHeaders
 
     public static KnownHeader Upgrade = "Upgrade";
     public static KnownHeader UpgradeWebsocket = "websocket";
+
+    /// <summary>
+    ///     Declares which header field names will appear in the trailer of a chunked message (RFC 9110 ¬ß6.5).
+    ///     Titanium does not manage this header automatically; set/read it explicitly alongside
+    ///     <see cref="RequestResponseBase.TrailingHeaders" /> if you want it announced/observed.
+    /// </summary>
+    public static KnownHeader Trailer = "Trailer";
 
     // Request headers
     public static KnownHeader AcceptEncoding = "Accept-Encoding";
@@ -10806,10 +11018,11 @@ public class Request : RequestResponseBase
 
         return true;
     }
-}ParseOptions.0.json„H
-]D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http\RequestResponseBase.csÏGusing System;
+}ParseOptions.0.json±Y
+]D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Http\RequestResponseBase.cs∫Xusing System;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Compression;
@@ -10828,6 +11041,12 @@ public abstract class RequestResponseBase
     ///     Cached body as string.
     /// </summary>
     private string? bodyString;
+
+    /// <summary>
+    ///     Backing field for <see cref="TrailingHeaders" />, lazily allocated so the common case (a message
+    ///     with no trailers) does not pay for an empty <see cref="HeaderCollection" /> on every request/response.
+    /// </summary>
+    private HeaderCollection? trailingHeaders;
 
     internal Task? Http2BeforeHandlerTask;
 
@@ -10887,6 +11106,33 @@ public abstract class RequestResponseBase
     ///     Collection of all headers.
     /// </summary>
     public HeaderCollection Headers { get; } = new();
+
+    /// <summary>
+    ///     Trailing headers ("trailers") carried after a chunked body, per RFC 9110 ¬ß6.5 / RFC 7230 ¬ß4.1.2.
+    ///     Empty by default (lazily allocated on first access). Only meaningful for chunked bodies -
+    ///     trailers are not defined for, and are always ignored on, fixed <c>Content-Length</c> bodies.
+    ///     <para>
+    ///         On the read side, this is populated once the body has actually been consumed (streamed,
+    ///         buffered, or drained) - it is <b>not</b> guaranteed to be populated yet during
+    ///         <c>BeforeRequest</c>/<c>BeforeResponse</c>. It is reliably observable in <c>AfterResponse</c>
+    ///         for streaming pass-through, or earlier only when the body was explicitly buffered
+    ///         (e.g. via <c>GetResponseBody</c>/<c>GetRequestBody</c>).
+    ///     </para>
+    ///     <para>
+    ///         On the write side, entries added here before the body finishes writing are emitted as the
+    ///         trailer block following the terminating zero-length chunk. A small set of framing/routing
+    ///         header fields (e.g. <c>Transfer-Encoding</c>, <c>Content-Length</c>, <c>Trailer</c>,
+    ///         <c>Host</c>) are forbidden in a trailer and will fail with a clear exception rather than
+    ///         being silently dropped.
+    ///     </para>
+    /// </summary>
+    public HeaderCollection TrailingHeaders => trailingHeaders ??= new HeaderCollection();
+
+    /// <summary>
+    ///     True if any trailing headers have been recorded, without forcing the lazy allocation that the
+    ///     public <see cref="TrailingHeaders" /> getter performs.
+    /// </summary>
+    internal bool HasTrailingHeaders => trailingHeaders != null && trailingHeaders.Any();
 
     /// <summary>
     ///     Length of the body.
@@ -14396,11 +14642,12 @@ internal class SslTools
 
         return extensions;
     }
-}ParseOptions.0.jsonÏ
-eD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Streams\BodyStreamWriter.csÌusing System;
+}ParseOptions.0.jsonÉ!
+eD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Streams\BodyStreamWriter.csÑ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Helpers;
@@ -14501,7 +14748,12 @@ internal sealed class BodyStreamWriter : Stream
     ///     Writes the terminating chunk when in chunked mode. Must be called once the consumer's write delegate
     ///     has completed. No-op for fixed-length mode.
     /// </summary>
-    internal async Task CompleteAsync(CancellationToken cancellationToken)
+    /// <param name="trailingHeaders">
+    ///     Optional trailer headers to emit after the terminating zero-length chunk (ignored in fixed-length
+    ///     mode - trailers are not defined for fixed-length bodies).
+    /// </param>
+    /// <param name="cancellationToken"></param>
+    internal async Task CompleteAsync(HeaderCollection? trailingHeaders, CancellationToken cancellationToken)
     {
         if (completed) return;
         completed = true;
@@ -14509,7 +14761,7 @@ internal sealed class BodyStreamWriter : Stream
         if (isChunked)
         {
             await writer.WriteLineAsync("0", cancellationToken);
-            await writer.WriteLineAsync(cancellationToken);
+            await ChunkedTrailerHelper.WriteTrailingHeadersAsync(writer, trailingHeaders, cancellationToken);
         }
     }
 }
@@ -14698,12 +14950,14 @@ internal sealed class HttpServerStream : HttpStream
         Response.ParseResponseLine(httpStatus, out var version, out var statusCode, out var description);
         return new ResponseStatusInfo { Version = version, StatusCode = statusCode, Description = description };
     }
-}ParseOptions.0.jsonÊä
-_D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Streams\HttpStream.csÏâusing System;
+}ParseOptions.0.json√∫
+_D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Streams\HttpStream.cs…πusing System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -14720,7 +14974,7 @@ using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Helpers;
 
-internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekStream
+internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekStream, ITransportCapableStream
 {
     private readonly bool leaveOpen;
     private readonly byte[] streamBuffer;
@@ -14747,6 +15001,13 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     private readonly CancellationToken cancellationToken;
 
     public bool IsNetworkStream { get; }
+
+    /// <summary>
+    ///     See <see cref="ITransportCapableStream" />. True for a plain socket <see cref="NetworkStream" />
+    ///     or a TLS-wrapped <see cref="SslStream" /> - i.e. any real duplex network transport, decrypted or
+    ///     not - so the per-chunk body-write hook fires with parity for plain and TLS-decrypted connections.
+    /// </summary>
+    public bool SupportsBodyWriteHook { get; }
 
     public event EventHandler<DataEventArgs>? DataRead;
 
@@ -14793,6 +15054,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         this.server = server;
 
         if (baseStream is NetworkStream) IsNetworkStream = true;
+
+        SupportsBodyWriteHook = baseStream is NetworkStream || baseStream is SslStream;
 
         BaseStream = baseStream;
         this.leaveOpen = leaveOpen;
@@ -15648,11 +15911,16 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// </summary>
     /// <param name="data"></param>
     /// <param name="isChunked"></param>
+    /// <param name="trailingHeaders">
+    ///     Optional trailer headers to emit after the terminating zero-length chunk (ignored when
+    ///     <paramref name="isChunked" /> is false - trailers are not defined for fixed-length bodies).
+    /// </param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    internal ValueTask WriteBodyAsync(byte[] data, bool isChunked, CancellationToken cancellationToken)
+    internal ValueTask WriteBodyAsync(byte[] data, bool isChunked, HeaderCollection? trailingHeaders,
+        CancellationToken cancellationToken)
     {
-        if (isChunked) return WriteBodyChunkedAsync(data, cancellationToken);
+        if (isChunked) return WriteBodyChunkedAsync(data, trailingHeaders, cancellationToken);
 
         return WriteAsync(data, cancellationToken: cancellationToken);
     }
@@ -15679,7 +15947,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             ? requestResponse.OriginalContentEncoding
             : requestResponse.ContentEncoding;
 
-        Stream s = limitedStream = new LimitedStream(this, bufferPool, isChunked, contentLength);
+        Stream s = limitedStream = new LimitedStream(this, bufferPool, isChunked, contentLength,
+            requestResponse.TrailingHeaders);
 
         if (transformation == TransformationMode.Uncompress && contentEncoding != null)
             s = decompressStream =
@@ -15719,7 +15988,15 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     {
         var isResponse = !isRequest;
 
-        if (IsNetworkStream && writer.IsNetworkStream &&
+        // The per-chunk body-write hook needs a real duplex network transport on both ends (plain socket or
+        // TLS-decrypted) - it is not meaningful for in-memory/decompression streams. Checked via the internal
+        // ITransportCapableStream marker rather than the public IHttpStreamWriter/IHttpStreamReader interfaces,
+        // so external implementers of those public interfaces are not source-broken; one that doesn't also
+        // implement the marker is simply treated as not supporting the hook (today's behavior, preserved).
+        var readerSupportsHook = this is ITransportCapableStream { SupportsBodyWriteHook: true };
+        var writerSupportsHook = writer is ITransportCapableStream { SupportsBodyWriteHook: true };
+
+        if (readerSupportsHook && writerSupportsHook &&
             ((isRequest && args.HttpClient.Request.OriginalHasBody && !args.HttpClient.Request.IsBodyRead && server.ShouldCallBeforeRequestBodyWrite()) ||
              (isResponse && args.HttpClient.Response.OriginalHasBody && !args.HttpClient.Response.IsBodyRead && server.ShouldCallBeforeResponseBodyWrite())))
         {
@@ -15747,11 +16024,10 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     private async Task HandleBodyWrite(IHttpStreamWriter writer, bool isChunked, long contentLength,
         bool isRequest, SessionEventArgs args, CancellationToken cancellationToken)
     {
-        var originalContentLength = isRequest
-            ? args.HttpClient.Request.OriginalContentLength
-            : args.HttpClient.Response.OriginalContentLength;
-        var originalIsChunked =
-            isRequest ? args.HttpClient.Request.OriginalIsChunked : args.HttpClient.Response.OriginalIsChunked;
+        var requestResponse = isRequest ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
+
+        var originalContentLength = requestResponse.OriginalContentLength;
+        var originalIsChunked = requestResponse.OriginalIsChunked;
 
         async ValueTask writeFramed(byte[] data)
         {
@@ -15774,7 +16050,9 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             if (isChunked)
             {
                 await writer.WriteLineAsync("0", cancellationToken);
-                await writer.WriteLineAsync(cancellationToken);
+                await ChunkedTrailerHelper.WriteTrailingHeadersAsync(writer,
+                    requestResponse.HasTrailingHeaders ? requestResponse.TrailingHeaders : null,
+                    cancellationToken);
             }
         }
 
@@ -15795,6 +16073,57 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
         var buffer = bufferPool.GetBuffer();
 
+        // The handler ended the message before the source's real end (isLastChunk / handler-driven stop).
+        // Drain (read and discard) everything still remaining on the source - the rest of the chunk in
+        // progress, any further chunks, and the trailer block - so the underlying connection is left at a
+        // clean message boundary and can still be safely reused/pooled, even though none of this is
+        // relayed to `writer` (the consumer already decided to stop emitting).
+        async Task drainRemainingChunkedBody(int remainingInCurrentChunk)
+        {
+            while (remainingInCurrentChunk > 0)
+            {
+                var toRead = Math.Min(buffer.Length, remainingInCurrentChunk);
+                var bytesRead = await ReadAsync(buffer, 0, toRead, cancellationToken);
+                if (bytesRead == 0) return;
+                remainingInCurrentChunk -= bytesRead;
+            }
+
+            // trailing CRLF of the chunk that was in progress
+            await ReadLineAsync(cancellationToken);
+
+            while (true)
+            {
+                var chunkHead = await ReadLineAsync(cancellationToken);
+                if (chunkHead == null) return;
+
+                var idx = chunkHead.IndexOf(";", StringComparison.Ordinal);
+                if (idx >= 0) chunkHead = chunkHead.Substring(0, idx);
+
+                if (!int.TryParse(chunkHead, NumberStyles.HexNumber, null, out var chunkSize))
+                    throw new ProxyHttpException($"Invalid chunk length: '{chunkHead}'", null, null);
+
+                if (chunkSize == 0)
+                {
+                    // discard the trailer block too - it belongs to a message we chose not to forward in full
+                    await ChunkedTrailerHelper.ReadTrailingHeaders(this, new HeaderCollection(), null,
+                        cancellationToken);
+                    return;
+                }
+
+                var toDiscard = chunkSize;
+                while (toDiscard > 0)
+                {
+                    var toRead = Math.Min(buffer.Length, toDiscard);
+                    var bytesRead = await ReadAsync(buffer, 0, toRead, cancellationToken);
+                    if (bytesRead == 0) return;
+                    toDiscard -= bytesRead;
+                }
+
+                // trailing CRLF after chunk data
+                await ReadLineAsync(cancellationToken);
+            }
+        }
+
         try
         {
             if (originalIsChunked)
@@ -15812,8 +16141,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
                     if (chunkSize == 0)
                     {
-                        // trailer line of the terminating chunk
-                        await ReadLineAsync(cancellationToken);
+                        // Read the optional trailer header block, strictly through the terminating blank
+                        // line, populating requestResponse.TrailingHeaders (writeTerminator() below
+                        // re-emits them for `writer`). See ChunkedTrailerHelper for why this is bounded.
+                        await ChunkedTrailerHelper.ReadTrailingHeaders(this, requestResponse.TrailingHeaders,
+                            null, cancellationToken);
                         await emit(Array.Empty<byte>(), true);
                         break;
                     }
@@ -15842,7 +16174,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                         }
                     }
 
-                    if (stop) break;
+                    if (stop)
+                    {
+                        await drainRemainingChunkedBody(remaining);
+                        break;
+                    }
 
                     // trailing CRLF after chunk data
                     await ReadLineAsync(cancellationToken);
@@ -15884,9 +16220,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     ///     Copies the given input bytes to output stream chunked
     /// </summary>
     /// <param name="data"></param>
+    /// <param name="trailingHeaders">Optional trailer headers to emit after the terminating zero-length chunk.</param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    private async ValueTask WriteBodyChunkedAsync(byte[] data, CancellationToken cancellationToken)
+    private async ValueTask WriteBodyChunkedAsync(byte[] data, HeaderCollection? trailingHeaders,
+        CancellationToken cancellationToken)
     {
         var chunkHead = Encoding.ASCII.GetBytes(data.Length.ToString("x2"));
 
@@ -15896,7 +16234,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         await WriteLineAsync(cancellationToken);
 
         await WriteLineAsync("0", cancellationToken);
-        await WriteLineAsync(cancellationToken);
+        await ChunkedTrailerHelper.WriteTrailingHeadersAsync(this, trailingHeaders, cancellationToken);
     }
 
     /// <summary>
@@ -15909,6 +16247,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     private async Task CopyBodyChunkedAsync(IHttpStreamWriter writer, bool isRequest, SessionEventArgs args,
         CancellationToken cancellationToken)
     {
+        var requestResponse = isRequest ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
+
         while (true)
         {
             var chunkHead = await ReadLineAsync(cancellationToken);
@@ -15922,14 +16262,28 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
             await writer.WriteLineAsync(chunkHead, cancellationToken);
 
-            if (chunkSize != 0) await CopyBytesToStream(writer, chunkSize, isRequest, args, cancellationToken);
+            if (chunkSize == 0)
+            {
+                // Read the optional trailer header block, strictly through the terminating blank line -
+                // even when there turn out to be no trailers - so a pooled keep-alive connection never
+                // retains stray trailer bytes that would corrupt the next message (see ChunkedTrailerHelper).
+                // This is a pure pass-through relay, so the exact raw lines are also captured and forwarded
+                // to `writer` byte-for-byte below, rather than re-serializing the parsed HeaderCollection.
+                var rawTrailerLines = new List<string>();
+                await ChunkedTrailerHelper.ReadTrailingHeaders(this, requestResponse.TrailingHeaders,
+                    rawTrailerLines, cancellationToken);
+
+                await ChunkedTrailerHelper.WriteRawTrailingLinesAsync(writer, rawTrailerLines, cancellationToken);
+
+                break;
+            }
+
+            await CopyBytesToStream(writer, chunkSize, isRequest, args, cancellationToken);
 
             await writer.WriteLineAsync(cancellationToken);
 
             // chunk trail
             await ReadLineAsync(cancellationToken);
-
-            if (chunkSize == 0) break;
         }
     }
 
@@ -15990,7 +16344,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
         if (body != null)
         {
-            await WriteBodyAsync(body, requestResponse.IsChunked, cancellationToken);
+            await WriteBodyAsync(body, requestResponse.IsChunked,
+                requestResponse.HasTrailingHeaders ? requestResponse.TrailingHeaders : null, cancellationToken);
             requestResponse.IsBodySent = true;
         }
     }
@@ -16111,13 +16466,40 @@ public interface IPeekStream
     /// <returns></returns>
     ValueTask<int> PeekBytesAsync(byte[] buffer, int offset, int index, int count,
         CancellationToken cancellationToken = default);
-}ParseOptions.0.jsonƒ-
-bD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Streams\LimitedStream.cs»,using System;
+}ParseOptions.0.json‘
+lD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Streams\ITransportCapableStream.csŒnamespace Titanium.Web.Proxy.StreamExtended.Network;
+
+/// <summary>
+///     Internal capability marker for transports whose underlying stream is a real duplex network
+///     transport - either a plain socket (<see cref="System.Net.Sockets.NetworkStream" />) or a
+///     TLS-wrapped connection (<see cref="System.Net.Security.SslStream" />). Used only to decide whether
+///     the per-chunk body-write hook (<c>OnRequestBodyWrite</c> / <c>OnResponseBodyWrite</c>) is safe/useful
+///     to invoke for a given reader/writer pair.
+///     <para>
+///         This is intentionally kept internal rather than added as a member of the public
+///         <see cref="IHttpStreamWriter" />/<see cref="IHttpStreamReader" /> interfaces, so that external
+///         implementers of those public interfaces are not source-broken by this capability check. An
+///         external implementation that does not also implement this internal interface is simply treated
+///         as not supporting the hook (preserving today's no-hook behavior for it).
+///     </para>
+/// </summary>
+internal interface ITransportCapableStream
+{
+    /// <summary>
+    ///     True when the underlying transport is a plain <see cref="System.Net.Sockets.NetworkStream" /> or
+    ///     a TLS-wrapped <see cref="System.Net.Security.SslStream" />; false for in-memory, decompression,
+    ///     or other non-network-backed streams.
+    /// </summary>
+    bool SupportsBodyWriteHook { get; }
+}
+ParseOptions.0.json…8
+bD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Streams\LimitedStream.csÕ7using System;
 using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
@@ -16128,16 +16510,27 @@ internal class LimitedStream : Stream
     private readonly IHttpStreamReader baseReader;
     private readonly IBufferPool bufferPool;
     private readonly bool isChunked;
+    private readonly HeaderCollection? trailingHeaders;
     private long bytesRemaining;
 
     private bool readChunkTrail;
 
+    /// <param name="baseStream"></param>
+    /// <param name="bufferPool"></param>
+    /// <param name="isChunked"></param>
+    /// <param name="contentLength"></param>
+    /// <param name="trailingHeaders">
+    ///     Optional collection to populate with the chunked body's trailer headers, if any (ignored when
+    ///     <paramref name="isChunked" /> is false). Used so buffered/decompressing whole-body reads still
+    ///     populate a request/response's trailing headers the same way the pass-through relay path does.
+    /// </param>
     internal LimitedStream(IHttpStreamReader baseStream, IBufferPool bufferPool, bool isChunked,
-        long contentLength)
+        long contentLength, HeaderCollection? trailingHeaders = null)
     {
         baseReader = baseStream;
         this.bufferPool = bufferPool;
         this.isChunked = isChunked;
+        this.trailingHeaders = trailingHeaders;
         bytesRemaining = isChunked
             ? 0
             : contentLength == -1
@@ -16193,10 +16586,11 @@ internal class LimitedStream : Stream
         {
             bytesRemaining = -1;
 
-            // chunk trail
-            var task = baseReader.ReadLineAsync();
-            if (!task.IsCompleted)
-                task.AsTask().Wait();
+            // Trailer header block, strictly through the terminating blank line (see ChunkedTrailerHelper) -
+            // reading only a single line here (as before) left any additional trailer lines unread on the
+            // source, corrupting a pooled keep-alive connection's next message.
+            ChunkedTrailerHelper.ReadTrailingHeaders(baseReader, trailingHeaders ?? new HeaderCollection(), null)
+                .AsTask().GetAwaiter().GetResult();
         }
     }
 
@@ -16234,8 +16628,11 @@ internal class LimitedStream : Stream
         {
             bytesRemaining = -1;
 
-            // chunk trail
-            await baseReader.ReadLineAsync();
+            // Trailer header block, strictly through the terminating blank line (see ChunkedTrailerHelper) -
+            // reading only a single line here (as before) left any additional trailer lines unread on the
+            // source, corrupting a pooled keep-alive connection's next message.
+            await ChunkedTrailerHelper.ReadTrailingHeaders(baseReader, trailingHeaders ?? new HeaderCollection(),
+                null);
         }
     }
 
@@ -18686,15 +19083,21 @@ public interface IHttpStreamWriter
     ValueTask WriteLineAsync(CancellationToken cancellationToken = default);
 
     ValueTask WriteLineAsync(string value, CancellationToken cancellationToken = default);
-}ParseOptions.0.json˙
-_D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Writers\NullWriter.csÅusing System;
+}ParseOptions.0.jsonΩ
+_D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Network\Writers\NullWriter.csƒ
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Helpers;
 
-internal class NullWriter : IHttpStreamWriter
+/// <summary>
+///     A discard writer used to drain (read and throw away) a body/trailer from the wire, e.g. when
+///     syphoning out an unread request/response body so a connection can be safely reused. Every write is
+///     a deliberate no-op rather than an error - a caller passing <see cref="Instance" /> is explicitly
+///     asking for the data to be discarded, not signaling a programming mistake.
+/// </summary>
+internal class NullWriter : IHttpStreamWriter, ITransportCapableStream
 {
     private NullWriter()
     {
@@ -18703,6 +19106,8 @@ internal class NullWriter : IHttpStreamWriter
     public static NullWriter Instance { get; } = new();
 
     public bool IsNetworkStream => false;
+
+    public bool SupportsBodyWriteHook => false;
 
     public void Write(byte[] buffer, int offset, int count)
     {
@@ -18715,14 +19120,15 @@ internal class NullWriter : IHttpStreamWriter
 
     public ValueTask WriteLineAsync(CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        return default;
     }
 
     public ValueTask WriteLineAsync(string value, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        return default;
     }
-}ParseOptions.0.jsonç
+}
+ParseOptions.0.jsonç
 \D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Properties\AssemblyInfo.csóusing System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -22368,8 +22774,8 @@ internal abstract class SocksHandler
     /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
     public abstract AsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
         IPEndPoint proxyEndPoint, AsyncProxyResult asyncResult);
-}ParseOptions.0.jsoníã
-SD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\RequestHandler.cs§äusing System;
+}ParseOptions.0.json‰ã
+SD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\RequestHandler.csˆäusing System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Security;
@@ -22693,7 +23099,8 @@ public partial class ProxyServer
         if (request.HasBody)
         {
             if (request.IsBodyRead)
-                await args.HttpClient.Connection.Stream.WriteBodyAsync(body!, request.IsChunked, cancellationToken);
+                await args.HttpClient.Connection.Stream.WriteBodyAsync(body!, request.IsChunked,
+                    request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
             else if (!request.ExpectationFailed)
                 // get the request body unless an unsuccessful 100 continue request was made
                 await args.CopyRequestBodyAsync(args.HttpClient.Connection.Stream, TransformationMode.None,
@@ -22767,8 +23174,8 @@ public partial class ProxyServer
             await OnRequestBodyWrite.InvokeAsync(this, args, ExceptionFunc);
         }
     }
-}ParseOptions.0.jsonÜB
-TD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\ResponseHandler.csòAusing System;
+}ParseOptions.0.jsonìK
+TD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\ResponseHandler.cs•Jusing System;
 using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -22795,10 +23202,22 @@ public partial class ProxyServer
         // read response & headers from server
         await args.HttpClient.ReceiveResponse(cancellationToken);
 
-        // Server may send expect-continue even if not asked for it in request.
-        // According to spec "the client can simply discard this interim response."
-        if (args.HttpClient.Response.StatusCode == (int)HttpStatusCode.Continue)
+        // Relay/consume every interim (1xx) response that precedes the final response on this connection.
+        // 100 Continue is discarded exactly as before - per spec, "the client can simply discard this
+        // interim response" (the proxy itself already consumed/acted on it, if at all, while sending the
+        // request body in HttpWebClient.SendRequest). Any other 1xx (e.g. 103 Early Hints) has no dedicated
+        // event yet, so it is relayed to the client verbatim - interim responses never carry a body
+        // (RFC 9110 ¬ß15.2) - and the proxy loops back onto the same connection for the next message.
+        // 101 Switching Protocols is excluded: it *is* the final message of this exchange (the connection
+        // becomes a raw tunnel immediately afterwards), so it must fall through to the normal
+        // response-handling path below instead of looping. Interim responses are not exposed through
+        // BeforeResponse; only the final response is.
+        while (args.HttpClient.Response.StatusCode is >= 100 and <= 199
+               and not (int)HttpStatusCode.SwitchingProtocols)
         {
+            if (args.HttpClient.Response.StatusCode != (int)HttpStatusCode.Continue)
+                await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+
             await args.ClearResponse(cancellationToken);
             await args.HttpClient.ReceiveResponse(cancellationToken);
         }
@@ -22852,7 +23271,8 @@ public partial class ProxyServer
             {
                 var bodyWriter = new BodyStreamWriter(clientStream, response.IsChunked);
                 await response.StreamBodyWriter(bodyWriter, cancellationToken);
-                await bodyWriter.CompleteAsync(cancellationToken);
+                await bodyWriter.CompleteAsync(response.HasTrailingHeaders ? response.TrailingHeaders : null,
+                    cancellationToken);
                 response.IsBodySent = true;
             }
 
@@ -23631,9 +24051,9 @@ public enum WebsocketOpCode : byte
     ConnectionClose = 8,
     Ping,
     Pong
-}ParseOptions.0.json¯
-áD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\obj\Release\net462\.NETFramework,Version=v4.6.2.AssemblyAttributes.cs÷// <autogenerated />
+}ParseOptions.0.jsonË
+ÖD:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\obj\Release\net10.0\.NETCoreApp,Version=v10.0.AssemblyAttributes.cs»// <autogenerated />
 using System;
 using System.Reflection;
-[assembly: global::System.Runtime.Versioning.TargetFrameworkAttribute(".NETFramework,Version=v4.6.2", FrameworkDisplayName = ".NET Framework 4.6.2")]
+[assembly: global::System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v10.0", FrameworkDisplayName = ".NET 10.0")]
 ParseOptions.0.json

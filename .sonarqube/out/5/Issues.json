@@ -12,18 +12,42 @@
       },
       "results": [
         {
-          "ruleId": "S112",
-          "level": "warning",
-          "message": "'System.Exception' should not be thrown by user code.",
+          "ruleId": "CA1861",
+          "level": "note",
+          "message": "Prefer 'static readonly' fields over constant array arguments if the called method is called repeatedly and is not mutating the passed array",
           "locations": [
             {
               "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.WindowsService/ProxyService.cs",
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
                 "region": {
-                  "startLine": 30,
-                  "startColumn": 23,
-                  "endLine": 30,
-                  "endColumn": 62
+                  "startLine": 79,
+                  "startColumn": 13,
+                  "endLine": 79,
+                  "endColumn": 72
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "paramName": "expected"
+            }
+          }
+        },
+        {
+          "ruleId": "MSTEST0039",
+          "level": "note",
+          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
+                "region": {
+                  "startLine": 100,
+                  "startColumn": 15,
+                  "endLine": 101,
+                  "endColumn": 96
                 }
               }
             }
@@ -33,31 +57,18 @@
           }
         },
         {
-          "ruleId": "S2696",
-          "level": "warning",
-          "message": "Remove this set, which updates a 'static' field from an instance method.",
+          "ruleId": "CA1861",
+          "level": "note",
+          "message": "Prefer 'static readonly' fields over constant array arguments if the called method is called repeatedly and is not mutating the passed array",
           "locations": [
             {
               "resultFile": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.WindowsService/ProxyService.cs",
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
                 "region": {
-                  "startLine": 26,
-                  "startColumn": 13,
-                  "endLine": 26,
-                  "endColumn": 35
-                }
-              }
-            }
-          ],
-          "relatedLocations": [
-            {
-              "physicalLocation": {
-                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/examples/Titanium.Web.Proxy.Examples.WindowsService/ProxyService.cs",
-                "region": {
-                  "startLine": 14,
-                  "startColumn": 36,
-                  "endLine": 14,
-                  "endColumn": 56
+                  "startLine": 91,
+                  "startColumn": 40,
+                  "endLine": 91,
+                  "endColumn": 62
                 }
               }
             }
@@ -65,40 +76,201 @@
           "properties": {
             "warningLevel": 1,
             "customProperties": {
-              "0": null
+              "paramName": "expected"
             }
+          }
+        },
+        {
+          "ruleId": "MSTEST0039",
+          "level": "note",
+          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/SystemProxyTest.cs",
+                "region": {
+                  "startLine": 171,
+                  "startColumn": 13,
+                  "endLine": 171,
+                  "endColumn": 81
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1822",
+          "level": "note",
+          "message": "Member 'Simple_Create_Win_Certificate_Test' does not access instance data and can be marked as static",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/CertificateManagerTests.cs",
+                "region": {
+                  "startLine": 51,
+                  "startColumn": 27,
+                  "endLine": 51,
+                  "endColumn": 61
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "MSTEST0039",
+          "level": "note",
+          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
+                "region": {
+                  "startLine": 115,
+                  "startColumn": 15,
+                  "endLine": 116,
+                  "endColumn": 96
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "MSTEST0039",
+          "level": "note",
+          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
+                "region": {
+                  "startLine": 126,
+                  "startColumn": 15,
+                  "endLine": 127,
+                  "endColumn": 96
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "CA1861",
+          "level": "note",
+          "message": "Prefer 'static readonly' fields over constant array arguments if the called method is called repeatedly and is not mutating the passed array",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/HeaderCollectionTests.cs",
+                "region": {
+                  "startLine": 27,
+                  "startColumn": 44,
+                  "endLine": 27,
+                  "endColumn": 62
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1,
+            "customProperties": {
+              "paramName": "expected"
+            }
+          }
+        },
+        {
+          "ruleId": "MSTEST0039",
+          "level": "note",
+          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/ChunkedTrailerTests.cs",
+                "region": {
+                  "startLine": 159,
+                  "startColumn": 15,
+                  "endLine": 160,
+                  "endColumn": 96
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
+          }
+        },
+        {
+          "ruleId": "MSTEST0039",
+          "level": "note",
+          "message": "Use 'Assert.ThrowsExactly' instead of 'Assert.ThrowsException'",
+          "locations": [
+            {
+              "resultFile": {
+                "uri": "file:///D:/a/titanium-web-proxy/titanium-web-proxy/tests/Titanium.Web.Proxy.UnitTests/HttpModelAndProxySocketTests.cs",
+                "region": {
+                  "startLine": 33,
+                  "startColumn": 33,
+                  "endLine": 34,
+                  "endColumn": 93
+                }
+              }
+            }
+          ],
+          "properties": {
+            "warningLevel": 1
           }
         }
       ],
       "rules": {
-        "S112": {
-          "id": "S112",
-          "shortDescription": "General or reserved exceptions should never be thrown",
-          "fullDescription": "This rule raises an issue when a general or reserved exception is thrown.",
-          "defaultLevel": "warning",
+        "CA1822": {
+          "id": "CA1822",
+          "shortDescription": "Mark members as static",
+          "fullDescription": "Members that do not access instance data or call instance methods can be marked as static. After you mark the methods as static, the compiler will emit nonvirtual call sites to these members. This can give you a measurable performance gain for performance-sensitive code.",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca1822",
           "properties": {
-            "category": "Major Code Smell",
+            "category": "Performance",
             "isEnabledByDefault": true,
             "tags": [
-              "C#",
-              "MainSourceScope",
-              "SonarWay"
+              "PortedFromFxCop",
+              "Telemetry",
+              "EnabledRuleInAggressiveMode"
             ]
           }
         },
-        "S2696": {
-          "id": "S2696",
-          "shortDescription": "Instance members should not write to \"static\" fields",
-          "fullDescription": "This rule raises an issue each time a static field is updated from a non-static method or property.",
-          "defaultLevel": "warning",
+        "CA1861": {
+          "id": "CA1861",
+          "shortDescription": "Avoid constant arrays as arguments",
+          "fullDescription": "Constant arrays passed as arguments are not reused when called repeatedly, which implies a new array is created each time. Consider extracting them to 'static readonly' fields to improve performance if the passed array is not mutated within the called method.",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca1861",
           "properties": {
-            "category": "Critical Code Smell",
+            "category": "Performance",
             "isEnabledByDefault": true,
             "tags": [
-              "C#",
-              "MainSourceScope",
-              "SonarWay"
+              "Telemetry",
+              "EnabledRuleInAggressiveMode"
             ]
+          }
+        },
+        "MSTEST0039": {
+          "id": "MSTEST0039",
+          "shortDescription": "Use newer methods to assert exceptions",
+          "defaultLevel": "note",
+          "helpUri": "https://learn.microsoft.com/dotnet/core/testing/mstest-analyzers/mstest0039",
+          "properties": {
+            "category": "Usage",
+            "isEnabledByDefault": true
           }
         }
       }

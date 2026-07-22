@@ -11,7 +11,7 @@
   <HasBeginStepCommandLineCredentials>true</HasBeginStepCommandLineCredentials>
   <HasBeginStepCommandLineTruststorePassword>false</HasBeginStepCommandLineTruststorePassword>
   <SonarQubeHostUrl>https://sonarcloud.io</SonarQubeHostUrl>
-  <SonarQubeVersion>8.0.0.97804</SonarQubeVersion>
+  <SonarQubeVersion>8.0.0.98270</SonarQubeVersion>
   <SonarProjectKey>justcoding121_titanium-web-proxy</SonarProjectKey>
   <AdditionalConfig>
     <ConfigSetting Id="BuildUri" />
@@ -176,16 +176,16 @@
     <Property Name="sonar.rust.clippy.enabled">true</Property>
     <Property Name="sonar.rust.clippy.offline">false</Property>
     <Property Name="sonaranalyzer.security.cs.pluginKey">securitycsharpfrontend</Property>
-    <Property Name="sonaranalyzer.security.cs.pluginVersion">11.38.0.47694</Property>
-    <Property Name="sonaranalyzer.security.cs.staticResourceName">SonarAnalyzer.Security.CSharp-11.38.0.47694.zip</Property>
+    <Property Name="sonaranalyzer.security.cs.pluginVersion">11.40.0.47873</Property>
+    <Property Name="sonaranalyzer.security.cs.staticResourceName">SonarAnalyzer.Security.CSharp-11.40.0.47873.zip</Property>
     <Property Name="sonaranalyzer.security.cs.analyzerId">SonarAnalyzer.Security.CSharp</Property>
     <Property Name="sonaranalyzer.security.cs.ruleNamespace">SonarAnalyzer.Security.CSharp</Property>
     <Property Name="sonar.cs.analyzer.security.pluginKey">securitycsharpfrontend</Property>
-    <Property Name="sonar.cs.analyzer.security.pluginVersion">11.38.0.47694</Property>
-    <Property Name="sonar.cs.analyzer.security.staticResourceName">SonarAnalyzer.Security.CSharp-11.38.0.47694.zip</Property>
+    <Property Name="sonar.cs.analyzer.security.pluginVersion">11.40.0.47873</Property>
+    <Property Name="sonar.cs.analyzer.security.staticResourceName">SonarAnalyzer.Security.CSharp-11.40.0.47873.zip</Property>
     <Property Name="sonar.vbnet.analyzer.security.pluginKey">securityvbnetfrontend</Property>
-    <Property Name="sonar.vbnet.analyzer.security.pluginVersion">11.38.0.47694</Property>
-    <Property Name="sonar.vbnet.analyzer.security.staticResourceName">SonarAnalyzer.Security.VisualBasic-11.38.0.47694.zip</Property>
+    <Property Name="sonar.vbnet.analyzer.security.pluginVersion">11.40.0.47873</Property>
+    <Property Name="sonar.vbnet.analyzer.security.staticResourceName">SonarAnalyzer.Security.VisualBasic-11.40.0.47873.zip</Property>
     <Property Name="sonar.apex.file.suffixes">.cls,.trigger</Property>
     <Property Name="sonar.scala.file.suffixes">.scala</Property>
     <Property Name="sonar.swift.file.suffixes">.swift</Property>
@@ -225,7 +225,7 @@ Automatic Analysis will not be available between 07:00 CET and 09:00 CET</Proper
     <Property Name="sonar.maintenance_mode.link">https://community.sonarsource.com/t/sonarcloud-autoscan-maintenance-september-28th-07-00-and-09-00-cet/101442</Property>
     <Property Name="sonar.maintenance_mode.start_date">2023-09-28T09:10:00:00.000+01:00</Property>
     <Property Name="sonar.sensor.cache.baseUrl">https://api.sonarcloud.io/analysis</Property>
-    <Property Name="sonar.core.startTime">7/21/2026 2:29:16 PM</Property>
+    <Property Name="sonar.core.startTime">7/22/2026 5:10:23 PM</Property>
   </ServerSettings>
   <LocalSettings>
     <Property Name="sonar.cs.vscoveragexml.reportsPaths">coverage/coverage.xml</Property>
@@ -257,7 +257,7 @@ Automatic Analysis will not be available between 07:00 CET and 09:00 CET</Proper
             <Path>C:\Users\runneradmin\AppData\Local\Temp\.sonarqube\resources\1\licenses\THIRD_PARTY_LICENSES\StyleCop.Analyzers-LICENSE.txt</Path>
           </AssemblyPaths>
         </AnalyzerPlugin>
-        <AnalyzerPlugin Key="securitycsharpfrontend" Version="11.38.0.47694" StaticResourceName="SonarAnalyzer.Security.CSharp-11.38.0.47694.zip">
+        <AnalyzerPlugin Key="securitycsharpfrontend" Version="11.40.0.47873" StaticResourceName="SonarAnalyzer.Security.CSharp-11.40.0.47873.zip">
           <AssemblyPaths>
             <Path>C:\Users\runneradmin\AppData\Local\Temp\.sonarqube\resources\2\Google.Protobuf.License.txt</Path>
             <Path>C:\Users\runneradmin\AppData\Local\Temp\.sonarqube\resources\2\SonarAnalyzer.Security.CSharp.dll</Path>
@@ -273,7 +273,7 @@ Automatic Analysis will not be available between 07:00 CET and 09:00 CET</Proper
       <RulesetPath>D:\a\titanium-web-proxy\titanium-web-proxy\.sonarqube\conf\Sonar-vbnet.ruleset</RulesetPath>
       <DeactivatedRulesetPath>D:\a\titanium-web-proxy\titanium-web-proxy\.sonarqube\conf\Sonar-vbnet-none.ruleset</DeactivatedRulesetPath>
       <AnalyzerPlugins>
-        <AnalyzerPlugin Key="securityvbnetfrontend" Version="11.38.0.47694" StaticResourceName="SonarAnalyzer.Security.VisualBasic-11.38.0.47694.zip">
+        <AnalyzerPlugin Key="securityvbnetfrontend" Version="11.40.0.47873" StaticResourceName="SonarAnalyzer.Security.VisualBasic-11.40.0.47873.zip">
           <AssemblyPaths>
             <Path>C:\Users\runneradmin\AppData\Local\Temp\.sonarqube\resources\3\Google.Protobuf.License.txt</Path>
             <Path>C:\Users\runneradmin\AppData\Local\Temp\.sonarqube\resources\3\SonarAnalyzer.Security.VisualBasic.dll</Path>
