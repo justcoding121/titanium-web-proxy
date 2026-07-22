@@ -202,6 +202,42 @@ public class StreamingBodyTests
     }
 
     [TestMethod]
+    public async Task OnResponseBodyWrite_Tls_Decrypted_Http11_Body_Relays_Correctly_But_Hook_Does_Not_Fire_Yet()
+    {
+        // Phase 0A characterization test: HttpStream.IsNetworkStream is false for the SslStream used to
+        // relay a TLS-decrypted HTTP/1.x connection, so the per-chunk body-write hook gate in
+        // HttpStream.CopyBodyAsync never invokes OnResponseBodyWrite for such connections today (see
+        // phase1-tls-hook). The body itself still relays byte-for-byte via the ordinary buffered/streamed
+        // copy path. Update this test once an internal transport-capability check replaces the
+        // IsNetworkStream gate and the hook starts firing for TLS as well.
+        using var testSuite = new TestSuite();
+
+        const string expected = "I am server. I received your greetings.";
+
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync(expected));
+
+        var proxy = testSuite.GetProxy();
+
+        var callbackCount = 0;
+        proxy.OnResponseBodyWrite += (sender, e) =>
+        {
+            callbackCount++;
+            return Task.CompletedTask;
+        };
+
+        var client = testSuite.GetClient(proxy);
+
+        var response = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(expected, body, "The body must still be relayed correctly even though the hook is skipped.");
+        Assert.AreEqual(0, callbackCount,
+            "Documents today's gap: the per-chunk body-write hook is not invoked for TLS-decrypted HTTP/1.x connections.");
+    }
+
+    [TestMethod]
     public async Task OnResponseBodyWrite_Http2_Can_Rewrite_Body()
     {
         using var testSuite = new TestSuite();
