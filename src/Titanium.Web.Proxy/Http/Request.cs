@@ -17,7 +17,7 @@ public class Request : RequestResponseBase
     /// <summary>
     ///     Request Method.
     /// </summary>
-    public string Method { get; set; }
+    public string Method { get; set; } = string.Empty;
 
     /// <summary>
     ///     Is Https?

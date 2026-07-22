@@ -31,6 +31,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
             Task.Run(() => ListenToConsole());
 
             proxyServer = new ProxyServer();
+            var certificateDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Titanium.Web.Proxy");
+            Directory.CreateDirectory(certificateDirectory);
+            proxyServer.CertificateManager.PfxFilePath = Path.Combine(certificateDirectory, "rootCert.pfx");
 
             //proxyServer.EnableHttp2 = true;
 
@@ -85,6 +90,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.BeforeResponse += OnResponse;
             proxyServer.AfterResponse += OnAfterResponse;
 
+            // Inspect/modify the response body chunk-by-chunk as it streams, without buffering it in memory.
+            // Do not combine with SessionEventArgs.GetResponseBody (which buffers the whole body).
+            //proxyServer.OnResponseBodyWrite += OnResponseBodyWrite;
+
             proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
             proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
 
@@ -108,7 +117,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //{
             //    // Generic Certificate hostname to use
             //    // When SNI is disabled by client
-            //    GenericCertificateName = "localhost"
+            //    GenericCertificateName = "localhost",
+            //
+            //    // Optionally forward all traffic on this endpoint to a fixed upstream server
+            //    // (e.g. a reverse proxy pointing at a fixed backend). Only the TCP connection
+            //    // target changes; the original hostname is still used for TLS SNI/certificate
+            //    // validation and the HTTP Host header.
+            //    ForwardHost = "198.51.100.1",
+            //    ForwardPort = 443
             //};
 
             //proxyServer.AddEndPoint(transparentEndPoint);
@@ -221,8 +237,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private void WebSocketDataSentReceived(SessionEventArgs args, DataEventArgs e, bool sent)
         {
             var color = sent ? ConsoleColor.Green : ConsoleColor.Blue;
+            var decoder = sent ? args.WebSocketDecoderSend : args.WebSocketDecoderReceive;
 
-            foreach (var frame in args.WebSocketDecoder.Decode(e.Buffer, e.Offset, e.Count))
+            foreach (var frame in decoder.Decode(e.Buffer, e.Offset, e.Count))
             {
                 if (frame.OpCode == WebsocketOpCode.Binary)
                 {
@@ -355,6 +372,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //        }
             //    }
             //}
+        }
+
+        // Called for each response body chunk as it streams to the client (no full-body buffering).
+        // Replace e.BodyBytes to modify the body on the fly.
+        private Task OnResponseBodyWrite(object sender, BeforeBodyWriteEventArgs e)
+        {
+            WriteToConsole($"Response body chunk: {e.BodyBytes.Length} bytes (last: {e.IsLastChunk})");
+            return Task.CompletedTask;
         }
 
         private async Task OnAfterResponse(object sender, SessionEventArgs e)

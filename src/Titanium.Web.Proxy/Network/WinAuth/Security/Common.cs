@@ -8,19 +8,12 @@ internal class Common
     internal static uint NewContextAttributes = 0;
     internal static SecurityInteger NewLifeTime = new(0);
 
-    #region Private constants
-
-    private const int IscReqReplayDetect = 0x00000004;
-    private const int IscReqSequenceDetect = 0x00000008;
-    private const int IscReqConfidentiality = 0x00000010;
-    private const int IscReqConnection = 0x00000800;
-
-    #endregion
-
     #region internal constants
 
-    internal const int StandardContextAttributes =
-        IscReqConfidentiality | IscReqReplayDetect | IscReqSequenceDetect | IscReqConnection;
+    internal const int IscReqReplayDetect = 0x00000004;
+    internal const int IscReqSequenceDetect = 0x00000008;
+    internal const int IscReqConfidentiality = 0x00000010;
+    internal const int IscReqConnection = 0x00000800;
 
     internal const int SecurityNativeDataRepresentation = 0x10;
     internal const int MaximumTokenSize = 12288;
@@ -160,13 +153,13 @@ internal class Common
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct SecurityBufferDesciption
+    internal struct SecurityBufferDescription
     {
         internal int ulVersion;
         internal int cBuffers;
         internal IntPtr pBuffers; // Point to SecBuffer
 
-        internal SecurityBufferDesciption(int bufferSize)
+        internal SecurityBufferDescription(int bufferSize)
         {
             ulVersion = (int)SecurityBufferType.SecbufferVersion;
             cBuffers = 1;
@@ -175,7 +168,7 @@ internal class Common
             Marshal.StructureToPtr(thisSecBuffer, pBuffers, false);
         }
 
-        internal SecurityBufferDesciption(byte[] secBufferBytes)
+        internal SecurityBufferDescription(byte[] secBufferBytes)
         {
             ulVersion = (int)SecurityBufferType.SecbufferVersion;
             cBuffers = 1;
@@ -193,7 +186,7 @@ internal class Common
 
             if (cBuffers == 1)
             {
-                var thisSecBuffer = (SecurityBuffer)Marshal.PtrToStructure(pBuffers, typeof(SecurityBuffer));
+                var thisSecBuffer = Marshal.PtrToStructure<SecurityBuffer>(pBuffers);
 
                 if (thisSecBuffer.cbBuffer > 0)
                 {
@@ -212,7 +205,7 @@ internal class Common
                     // int BufferType;
                     // pvBuffer;
                     // What we need to do here calculate the total number of bytes we need to copy...
-                    var currentOffset = index * Marshal.SizeOf(typeof(Buffer));
+                    var currentOffset = index * Marshal.SizeOf(typeof(SecurityBuffer));
                     bytesToAllocate += Marshal.ReadInt32(pBuffers, currentOffset);
                 }
 
@@ -226,7 +219,7 @@ internal class Common
                     // pvBuffer;
                     // Now iterate over the individual buffers and put them together into a
                     // byte array...
-                    var currentOffset = index * Marshal.SizeOf(typeof(Buffer));
+                    var currentOffset = index * Marshal.SizeOf(typeof(SecurityBuffer));
                     var bytesToCopy = Marshal.ReadInt32(pBuffers, currentOffset);
                     var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers,
                         currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));

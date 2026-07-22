@@ -15,7 +15,7 @@ public class NestedProxyTests
     [TestMethod]
     public async Task Smoke_Test_Nested_Proxy()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -40,7 +40,7 @@ public class NestedProxyTests
     [TestMethod]
     public async Task Smoke_Test_Nested_Proxy_UserData()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -76,12 +76,49 @@ public class NestedProxyTests
     }
 
     [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task Upstream_Proxy_Failure_Fails_Over_To_New_Proxy()
+    {
+        using var testSuite = new TestSuite();
+
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("failover ok"));
+
+        // a working upstream proxy the failover callback will switch to
+        var workingUpstream = testSuite.GetProxy();
+
+        var proxy = testSuite.GetProxy();
+        var failoverInvoked = false;
+
+        // initial upstream points at a closed port so the first connection attempt fails
+        proxy.GetCustomUpStreamProxyFunc = _ =>
+            Task.FromResult<IExternalProxy>(new ExternalProxy("localhost", 1) { ProxyType = ExternalProxyType.Http });
+
+        proxy.CustomUpStreamProxyFailureFunc = _ =>
+        {
+            failoverInvoked = true;
+            return Task.FromResult<IExternalProxy>(
+                new ExternalProxy("localhost", workingUpstream.ProxyEndPoints[0].Port)
+                    { ProxyType = ExternalProxyType.Http });
+        };
+
+        var client = testSuite.GetClient(proxy);
+
+        var response = await client.PostAsync(new Uri(server.ListeningHttpsUrl),
+            new StringContent("hello"));
+
+        Assert.IsTrue(failoverInvoked, "the failover callback should have been invoked");
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("failover ok", await response.Content.ReadAsStringAsync());
+    }
+
+    [TestMethod]
     [Timeout(2 * 60 * 1000)]
     public async Task Nested_Proxy_Farm_Without_Connection_Cache_Should_Not_Hang()
     {
         var rnd = new Random();
 
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -166,7 +203,7 @@ public class NestedProxyTests
     {
         var rnd = new Random();
 
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>

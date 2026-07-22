@@ -3,6 +3,7 @@ using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy;
@@ -38,13 +39,25 @@ public partial class ProxyServer
         args.ReRequest = false;
 
         // check for windows authentication
+        var serverWinAuthReRequest = false;
         if (args.EnableWinAuth)
         {
             if (response.StatusCode == (int)HttpStatusCode.Unauthorized)
+            {
                 await Handle401UnAuthorized(args);
-            else
+
+                // A 401 that triggers a re-request is a connection-oriented NTLM/Negotiate
+                // handshake leg (ISC_REQ_CONNECTION); it must continue on the SAME server connection.
+                serverWinAuthReRequest = args.ReRequest;
+            }
+            // don't mark the connection as authenticated on a 407, otherwise the
+            // upstream proxy authentication state below would be corrupted.
+            else if (response.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired)
                 WinAuthEndPoint.AuthenticatedResponse(args.HttpClient.Data);
         }
+
+        if (response.StatusCode == (int)HttpStatusCode.ProxyAuthenticationRequired)
+            await Handle407ProxyAuthorization(args);
 
         // save original values so that if user changes them
         // we can still use original values when syphoning out data from attached tcp connection.
@@ -64,6 +77,15 @@ public partial class ProxyServer
             // write custom user response with body and return.
             await clientStream.WriteResponseAsync(response, cancellationToken);
 
+            // if the user requested a streamed body, produce it now without buffering.
+            if (response.StreamBodyWriter != null && !response.IsBodySent)
+            {
+                var bodyWriter = new BodyStreamWriter(clientStream, response.IsChunked);
+                await response.StreamBodyWriter(bodyWriter, cancellationToken);
+                await bodyWriter.CompleteAsync(cancellationToken);
+                response.IsBodySent = true;
+            }
+
             if (args.HttpClient.HasConnection && !args.HttpClient.CloseServerConnection)
                 // syphon out the original response body from server connection
                 // so that connection will be good to be reused.
@@ -76,11 +98,30 @@ public partial class ProxyServer
         // likely after making modifications from User Response Handler
         if (args.ReRequest)
         {
-            if (args.HttpClient.HasConnection) await TcpConnectionFactory.Release(args.HttpClient.Connection);
+            var serverConnection = args.HttpClient.HasConnection ? args.HttpClient.Connection : null;
 
-            // clear current response
+            // Connection-oriented auth handshakes must reuse the SAME server connection for every leg:
+            //  - a 407 from an upstream proxy (proxy authentication), and
+            //  - a 401 from the origin server handled by NTLM/Negotiate (server authentication).
+            // Any other re-request (e.g. user-initiated from the response handler) may target a
+            // different destination, so it gets a fresh connection.
+            var keepConnectionForAuth = args.HttpClient.HasConnection &&
+                                        ShouldReuseConnectionForAuthReRequest(response.StatusCode,
+                                            serverWinAuthReRequest);
+
+            // Always drain the challenge response body from the current server connection first,
+            // so the connection is clean before it is reused or released.
+            // (Never release/pool a connection while its body is still on the wire.)
             await args.ClearResponse(cancellationToken);
-            var result = await HandleHttpSessionRequest(args, null, args.ClientConnection.NegotiatedApplicationProtocol,
+
+            if (args.HttpClient.HasConnection && !keepConnectionForAuth)
+            {
+                serverConnection = null;
+                await TcpConnectionFactory.Release(args.HttpClient.Connection);
+            }
+
+            var result = await HandleHttpSessionRequest(args, serverConnection,
+                args.ClientConnection.NegotiatedApplicationProtocol,
                 cancellationToken, args.CancellationTokenSource);
             if (result.LatestConnection != null) args.HttpClient.SetConnection(result.LatestConnection);
 
@@ -115,6 +156,16 @@ public partial class ProxyServer
     }
 
     /// <summary>
+    ///     Decides whether a re-request must reuse the same server connection.
+    ///     Connection-oriented authentication handshakes (proxy 407, or a server 401 handled by
+    ///     NTLM/Negotiate) require every leg to travel over the same TCP connection.
+    /// </summary>
+    internal static bool ShouldReuseConnectionForAuthReRequest(int responseStatusCode, bool serverWinAuthReRequest)
+    {
+        return responseStatusCode == (int)HttpStatusCode.ProxyAuthenticationRequired || serverWinAuthReRequest;
+    }
+
+    /// <summary>
     ///     Invoke before response if it is set.
     /// </summary>
     /// <param name="args"></param>
@@ -133,23 +184,16 @@ public partial class ProxyServer
     {
         if (AfterResponse != null) await AfterResponse.InvokeAsync(this, args, ExceptionFunc);
     }
-#if DEBUG
-        internal bool ShouldCallBeforeResponseBodyWrite()
-        {
-            if (OnResponseBodyWrite != null)
-            {
-                return true;
-            }
+    internal bool ShouldCallBeforeResponseBodyWrite()
+    {
+        return OnResponseBodyWrite != null;
+    }
 
-            return false;
-        }
-
-        internal async Task OnBeforeResponseBodyWrite(BeforeBodyWriteEventArgs args)
+    internal async Task OnBeforeResponseBodyWrite(BeforeBodyWriteEventArgs args)
+    {
+        if (OnResponseBodyWrite != null)
         {
-            if (OnResponseBodyWrite != null)
-            {
-                await OnResponseBodyWrite.InvokeAsync(this, args, ExceptionFunc);
-            }
+            await OnResponseBodyWrite.InvokeAsync(this, args, ExceptionFunc);
         }
-#endif
+    }
 }

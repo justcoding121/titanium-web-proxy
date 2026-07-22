@@ -66,7 +66,7 @@ internal static class StreamExtensions
         where T : struct
     {
         var tcs = new TaskCompletionSource<bool>();
-        using (cancellationToken.Register(s => ((TaskCompletionSource<bool>)s).TrySetResult(true), tcs))
+        using (cancellationToken.Register(() => tcs.TrySetResult(true)))
         {
             if (task != await Task.WhenAny(task, tcs.Task)) return default;
         }

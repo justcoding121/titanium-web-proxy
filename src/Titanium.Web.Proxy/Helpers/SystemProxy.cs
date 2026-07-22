@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Runtime.Versioning;
 using Microsoft.Win32;
 using Titanium.Web.Proxy.Models;
 
@@ -46,6 +47,9 @@ internal class HttpSystemProxyValue
 /// </summary>
 [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType",
     Justification = "Reviewed.")]
+#if !NETFRAMEWORK
+[SupportedOSPlatform("windows")]
+#endif
 internal class SystemProxyManager
 {
     private const string RegKeyInternetSettings = "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
@@ -86,6 +90,20 @@ internal class SystemProxyManager
     /// <param name="protocolType"></param>
     internal void SetProxy(string hostname, int port, ProxyProtocolType protocolType)
     {
+        SetProxy(hostname, port, protocolType, null);
+    }
+
+    /// <summary>
+    ///     Set the HTTP and/or HTTPS proxy server for current machine.
+    /// </summary>
+    /// <param name="hostname"></param>
+    /// <param name="port"></param>
+    /// <param name="protocolType"></param>
+    /// <param name="proxyOverride">
+    ///     The proxy bypass list to set, or <see langword="null"/> to preserve the current list.
+    /// </param>
+    internal void SetProxy(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
+    {
         using (var reg = OpenInternetSettingsKey())
         {
             if (reg == null) return;
@@ -106,6 +124,7 @@ internal class SystemProxyManager
             reg.SetValue(RegProxyEnable, 1);
             reg.SetValue(RegProxyServer,
                 string.Join(";", existingSystemProxyValues.Select(x => x.ToString()).ToArray()));
+            if (proxyOverride != null) reg.SetValue(RegProxyOverride, proxyOverride);
 
             Refresh();
         }
@@ -190,13 +209,13 @@ internal class SystemProxyManager
 
     internal void RestoreOriginalSettings()
     {
-        if (originalValues == null) return;
+        var ov = originalValues;
+        if (ov == null) return;
 
         using (var reg = Registry.CurrentUser.OpenSubKey(RegKeyInternetSettings, true))
         {
             if (reg == null) return;
 
-            var ov = originalValues;
             if (ov.AutoConfigUrl != null)
                 reg.SetValue(RegAutoConfigUrl, ov.AutoConfigUrl);
             else
@@ -246,9 +265,10 @@ internal class SystemProxyManager
 
     private ProxyInfo GetProxyInfoFromRegistry(RegistryKey reg)
     {
+        var proxyEnableValue = reg.GetValue(RegProxyEnable);
         var pi = new ProxyInfo(null,
             reg.GetValue(RegAutoConfigUrl) as string,
-            reg.GetValue(RegProxyEnable) as int?,
+            proxyEnableValue is int proxyEnable ? proxyEnable : null,
             reg.GetValue(RegProxyServer) as string,
             reg.GetValue(RegProxyOverride) as string);
 
@@ -270,7 +290,8 @@ internal class SystemProxyManager
     {
         if (reg.GetValue(RegProxyEnable) == null) reg.SetValue(RegProxyEnable, 0);
 
-        if (reg.GetValue(RegProxyServer) == null || reg.GetValue(RegProxyEnable) as int? == 0)
+        if (reg.GetValue(RegProxyServer) == null ||
+            reg.GetValue(RegProxyEnable) is int proxyEnable && proxyEnable == 0)
             reg.SetValue(RegProxyServer, string.Empty);
     }
 

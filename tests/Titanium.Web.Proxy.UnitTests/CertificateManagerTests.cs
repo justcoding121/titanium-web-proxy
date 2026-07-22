@@ -1,7 +1,11 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Network;
@@ -94,6 +98,45 @@ namespace Titanium.Web.Proxy.UnitTests
                 })));
 
             await Task.WhenAll(tasks.ToArray());
+        }
+
+        [TestMethod]
+        public async Task CreateServerCertificate_ExpiredCachedCertificate_IsRegenerated()
+        {
+            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => e =>
+                {
+                    Debug.WriteLine(e.ToString());
+                    Debug.WriteLine(e.InnerException?.ToString());
+                }).Value)
+                { CertificateEngine = CertificateEngine.BouncyCastleFast };
+
+            const string host = "expired.test";
+
+            // build an already-expired self-signed certificate and inject it into the in-memory cache
+            X509Certificate2 expiredCert;
+            using (var rsa = RSA.Create(2048))
+            {
+                var request = new CertificateRequest("CN=" + host, rsa, HashAlgorithmName.SHA256,
+                    RSASignaturePadding.Pkcs1);
+                expiredCert = request.CreateSelfSigned(
+                    DateTimeOffset.Now.AddDays(-10), DateTimeOffset.Now.AddDays(-1));
+            }
+
+            var cacheField = typeof(CertificateManager).GetField("cachedCertificates",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNotNull(cacheField);
+            var cache = (ConcurrentDictionary<string, CachedCertificate>)cacheField.GetValue(mgr);
+            cache[host] = new CachedCertificate(expiredCert) { LastAccess = DateTime.UtcNow };
+
+            // capture before the call: the expired cert is evicted and disposed by the fix
+            var expiredThumbprint = expiredCert.Thumbprint;
+
+            var result = await mgr.CreateServerCertificate(host);
+
+            Assert.IsNotNull(result);
+            Assert.IsTrue(result.NotAfter > DateTime.Now, "regenerated certificate should be valid");
+            Assert.AreNotEqual(expiredThumbprint, result.Thumbprint,
+                "expired cached certificate should have been replaced");
         }
     }
 }

@@ -89,10 +89,14 @@ public class ClientHelloInfo
             }
 
             if (major == 3 && minor == 2)
+#pragma warning disable SYSLIB0039 // Report the legacy protocol advertised by this ClientHello.
                 return SslProtocols.Tls11;
+#pragma warning restore SYSLIB0039
 
             if (major == 3 && minor == 1)
+#pragma warning disable SYSLIB0039 // Report the legacy protocol advertised by this ClientHello.
                 return SslProtocols.Tls;
+#pragma warning restore SYSLIB0039
 
 #pragma warning disable 618
             if (major == 3 && minor == 0)

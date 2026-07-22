@@ -28,15 +28,17 @@ internal class TcpClientConnection : IDisposable
         ProxyServer.UpdateClientConnectionCount(true);
     }
 
-    public object ClientUserData { get; set; }
+    public object? ClientUserData { get; set; }
 
     private ProxyServer ProxyServer { get; }
 
     public Guid Id { get; } = Guid.NewGuid();
 
-    public EndPoint LocalEndPoint => tcpClientSocket.LocalEndPoint;
+    public EndPoint LocalEndPoint => tcpClientSocket.LocalEndPoint
+                                     ?? throw new InvalidOperationException("Client socket has no local endpoint.");
 
-    public EndPoint RemoteEndPoint => tcpClientSocket.RemoteEndPoint;
+    public EndPoint RemoteEndPoint => tcpClientSocket.RemoteEndPoint
+                                      ?? throw new InvalidOperationException("Client socket has no remote endpoint.");
 
     internal SslProtocols SslProtocol { get; set; }
 

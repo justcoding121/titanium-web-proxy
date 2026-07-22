@@ -1,5 +1,8 @@
 ﻿using System;
 using System.ComponentModel;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
@@ -37,7 +40,14 @@ public class Response : RequestResponseBase
     /// </summary>
     public string StatusDescription { get; set; } = string.Empty;
 
-    internal string RequestMethod { get; set; }
+    internal string RequestMethod { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     When set via SessionEventArgs.RespondStreaming, this delegate is invoked to produce the response
+    ///     body as a live stream (without buffering it in memory). The provided stream frames writes as HTTP/1.1
+    ///     chunks when the response is chunked, or writes raw bytes when a Content-Length is set.
+    /// </summary>
+    internal Func<Stream, CancellationToken, Task>? StreamBodyWriter { get; set; }
 
     /// <summary>
     ///     Has response body?
@@ -76,9 +86,16 @@ public class Response : RequestResponseBase
         {
             var headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Connection);
 
-            if (headerValue != null)
-                if (headerValue.EqualsIgnoreCase(KnownHeaders.ConnectionClose.String))
-                    return false;
+            // HTTP/1.0 is non-persistent by default: the connection is only reusable when the
+            // response explicitly opts in with "Connection: keep-alive". Treating a plain HTTP/1.0
+            // response as keep-alive would let us pool a connection the server is about to close.
+            if (HttpVersion == HttpHeader.Version10)
+                return headerValue != null &&
+                       headerValue.EqualsIgnoreCase(KnownHeaders.ConnectionKeepAlive.String);
+
+            // HTTP/1.1 (and HTTP/2) are persistent by default unless the response asks to close.
+            if (headerValue != null && headerValue.EqualsIgnoreCase(KnownHeaders.ConnectionClose.String))
+                return false;
 
             return true;
         }

@@ -13,7 +13,7 @@ public static class RunTime
 {
     private static readonly Lazy<bool> isRunningOnMono = new(() => Type.GetType("Mono.Runtime") != null);
 
-#if NET461
+#if NETFRAMEWORK
     /// <summary>
     ///     cache for Windows platform check
     /// </summary>
@@ -58,8 +58,14 @@ public static class RunTime
 
     public static bool IsLinux => IsRunningOnLinux;
 
+#if !NETFRAMEWORK
+    [SupportedOSPlatformGuard("windows")]
+#endif
     public static bool IsWindows => IsRunningOnWindows;
 
+#if !NETFRAMEWORK
+    [SupportedOSPlatformGuard("windows")]
+#endif
     public static bool IsUwpOnWindows => IsWindows && UwpHelper.IsRunningAsUwp();
 
     public static bool IsMac => IsRunningOnMac;

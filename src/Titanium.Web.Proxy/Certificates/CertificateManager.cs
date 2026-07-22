@@ -20,16 +20,23 @@ public enum CertificateEngine
 {
     /// <summary>
     ///     Uses BouncyCastle 3rd party library.
-    ///     Default.
+    ///     Default. Generates a fresh RSA key pair for every leaf certificate.
     /// </summary>
     BouncyCastle = 0,
 
+    /// <summary>
+    ///     Faster BouncyCastle variant.
+    ///     Note: for performance it reuses a single pre-generated RSA key pair across ALL generated
+    ///     leaf certificates. This means every intercepted host's certificate shares the same public key.
+    ///     Prefer <see cref="BouncyCastle" /> if per-host key isolation matters for your threat model.
+    /// </summary>
     BouncyCastleFast = 2,
 
     /// <summary>
     ///     Uses Windows Certification Generation API and only valid in Windows OS.
     ///     Observed to be faster than BouncyCastle.
     ///     Bug #468 Reported.
+    ///     Note: this engine also reuses a shared private key across generated leaf certificates.
     /// </summary>
     DefaultWindows = 1
 }
@@ -127,11 +134,14 @@ public sealed class CertificateManager : IDisposable
                         break;
                     case CertificateEngine.DefaultWindows:
                     default:
+                        if (!RunTime.IsWindows)
+                            throw new PlatformNotSupportedException("The Windows certificate engine requires Windows.");
                         certEngineValue = new WinCertificateMaker(ExceptionFunc, CertificateValidDays);
                         break;
                 }
 
-            return certEngineValue;
+            return certEngineValue
+                   ?? throw new InvalidOperationException("The certificate engine could not be initialized.");
         }
     }
 
@@ -177,7 +187,7 @@ public sealed class CertificateManager : IDisposable
 
             if (value != engine)
             {
-                certEngineValue = null!;
+                certEngineValue = null;
                 engine = value;
             }
         }
@@ -292,22 +302,23 @@ public sealed class CertificateManager : IDisposable
     /// <returns></returns>
     private bool RootCertificateInstalled(StoreLocation storeLocation)
     {
-        if (RootCertificate == null) throw new Exception("Root certificate is null.");
+        var certificate = RootCertificate;
+        if (certificate == null) throw new Exception("Root certificate is null.");
 
-        var value = $"{RootCertificate.Issuer}";
-        return FindCertificates(StoreName.Root, storeLocation, value).Count > 0
+        var thumbprint = certificate.Thumbprint;
+        return FindCertificates(StoreName.Root, storeLocation, thumbprint).Count > 0
                && (CertificateEngine != CertificateEngine.DefaultWindows
-                   || FindCertificates(StoreName.My, storeLocation, value).Count > 0);
+                   || FindCertificates(StoreName.My, storeLocation, thumbprint).Count > 0);
     }
 
     private static X509Certificate2Collection FindCertificates(StoreName storeName, StoreLocation storeLocation,
-        string findValue)
+        string thumbprint)
     {
         var x509Store = new X509Store(storeName, storeLocation);
         try
         {
             x509Store.Open(OpenFlags.OpenExistingOnly);
-            return x509Store.Certificates.Find(X509FindType.FindBySubjectDistinguishedName, findValue, false);
+            return x509Store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false);
         }
         finally
         {
@@ -322,16 +333,17 @@ public sealed class CertificateManager : IDisposable
     /// <param name="storeLocation"></param>
     private void InstallCertificate(StoreName storeName, StoreLocation storeLocation)
     {
-        if (RootCertificate == null) throw new Exception("Could not install certificate as it is null or empty.");
+        var certificate = RootCertificate;
+        if (certificate == null) throw new Exception("Could not install certificate as it is null or empty.");
+
+        if (FindCertificates(storeName, storeLocation, certificate.Thumbprint).Count > 0) return;
 
         var x509Store = new X509Store(storeName, storeLocation);
 
-        // todo
-        // also it should do not duplicate if certificate already exists
         try
         {
             x509Store.Open(OpenFlags.ReadWrite);
-            x509Store.Add(RootCertificate);
+            x509Store.Add(certificate);
         }
         catch (Exception e)
         {
@@ -438,7 +450,8 @@ public sealed class CertificateManager : IDisposable
 
                 if (certificate == null)
                 {
-                    certificate = MakeCertificate(certificateName, false);
+                    var createdCertificate = MakeCertificate(certificateName, false);
+                    certificate = createdCertificate;
 
                     //Don't need to wait for save to complete
                     _ = Task.Run(() =>
@@ -453,7 +466,7 @@ public sealed class CertificateManager : IDisposable
                                 try
                                 {
                                     //no two tasks with same subject name should together enter here 
-                                    certificateCache.SaveCertificate(subjectName, certificate);
+                                    certificateCache.SaveCertificate(subjectName, createdCertificate);
                                 }
                                 finally
                                 {
@@ -484,6 +497,29 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
+    ///     Tries to get a still-valid certificate from the in-memory cache.
+    ///     Expired cached certificates are evicted and disposed so that a fresh one is generated.
+    /// </summary>
+    private bool TryGetValidCachedCertificate(string certificateName, out X509Certificate2? certificate)
+    {
+        certificate = null;
+
+        if (!cachedCertificates.TryGetValue(certificateName, out var cached)) return false;
+
+        // do not serve an expired (or not-yet-valid) certificate from the cache
+        var now = DateTime.Now;
+        if (cached.Certificate.NotAfter <= now || cached.Certificate.NotBefore > now)
+        {
+            if (cachedCertificates.TryRemove(certificateName, out var removed)) removed.Certificate.Dispose();
+            return false;
+        }
+
+        cached.LastAccess = DateTime.UtcNow;
+        certificate = cached.Certificate;
+        return true;
+    }
+
+    /// <summary>
     ///     Creates a server certificate signed by the root certificate.
     /// </summary>
     /// <param name="certificateName"></param>
@@ -491,11 +527,8 @@ public sealed class CertificateManager : IDisposable
     public async Task<X509Certificate2?> CreateServerCertificate(string certificateName)
     {
         // check in cache first
-        if (cachedCertificates.TryGetValue(certificateName, out var cached))
-        {
-            cached.LastAccess = DateTime.UtcNow;
-            return cached.Certificate;
-        }
+        if (TryGetValidCachedCertificate(certificateName, out var cachedCertificate))
+            return cachedCertificate;
 
         var createdTask = false;
         Task<X509Certificate2?> createCertificateTask;
@@ -503,27 +536,31 @@ public sealed class CertificateManager : IDisposable
         try
         {
             // check in cache first
-            if (cachedCertificates.TryGetValue(certificateName, out cached))
-            {
-                cached.LastAccess = DateTime.UtcNow;
-                return cached.Certificate;
-            }
+            if (TryGetValidCachedCertificate(certificateName, out cachedCertificate))
+                return cachedCertificate;
 
             // handle burst requests with same certificate name
             // by checking for existing task for same certificate name
-            if (!pendingCertificateCreationTasks.TryGetValue(certificateName, out createCertificateTask))
+            if (!pendingCertificateCreationTasks.TryGetValue(certificateName, out var existingTask)
+                || existingTask == null)
             {
                 // run certificate creation task & add it to pending tasks
                 createCertificateTask = Task.Run(() =>
                 {
                     var result = CreateCertificate(certificateName, false);
-                    if (result != null) cachedCertificates.TryAdd(certificateName, new CachedCertificate(result));
+                    if (result != null)
+                        cachedCertificates.TryAdd(certificateName,
+                            new CachedCertificate(result) { LastAccess = DateTime.UtcNow });
 
                     return result;
                 });
 
                 pendingCertificateCreationTasks[certificateName] = createCertificateTask;
                 createdTask = true;
+            }
+            else
+            {
+                createCertificateTask = existingTask;
             }
         }
         finally
@@ -558,11 +595,24 @@ public sealed class CertificateManager : IDisposable
         var cancellationToken = clearCertificatesTokenSource.Token;
         while (!cancellationToken.IsCancellationRequested)
         {
-            var cutOff = DateTime.UtcNow.AddMinutes(-CertificateCacheTimeOutMinutes);
+            // this runs on a fire-and-forget (async void) task, so any exception here would go
+            // unobserved and could crash the process; keep the sweep resilient.
+            try
+            {
+                var cutOff = DateTime.UtcNow.AddMinutes(-CertificateCacheTimeOutMinutes);
 
-            var outdated = cachedCertificates.Where(x => x.Value.LastAccess < cutOff).ToList();
+                var outdated = cachedCertificates.Where(x => x.Value.LastAccess < cutOff).ToList();
 
-            foreach (var cache in outdated) cachedCertificates.TryRemove(cache.Key, out _);
+                foreach (var cache in outdated)
+                    // dispose the evicted certificate so its native handle is released promptly
+                    // rather than waiting for finalization.
+                    if (cachedCertificates.TryRemove(cache.Key, out var removed))
+                        removed.Certificate.Dispose();
+            }
+            catch (Exception e)
+            {
+                OnException(e);
+            }
 
             // after a minute come back to check for outdated certificates in cache
             try
@@ -743,11 +793,14 @@ public sealed class CertificateManager : IDisposable
     {
         if (!RunTime.IsWindows) return false;
 
+        var certificate = RootCertificate;
+        if (certificate == null) return false;
+
         // currentUser\Personal
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
 
         var pfxFileName = Path.GetTempFileName();
-        File.WriteAllBytes(pfxFileName, RootCertificate!.Export(X509ContentType.Pkcs12, PfxPassword));
+        File.WriteAllBytes(pfxFileName, certificate.Export(X509ContentType.Pkcs12, PfxPassword));
 
         // currentUser\Root, currentMachine\Personal &  currentMachine\Root
         var info = new ProcessStartInfo

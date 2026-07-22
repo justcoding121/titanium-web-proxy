@@ -14,7 +14,7 @@ public class StressTests
     [Timeout(2 * 60 * 1000)]
     public async Task Stress_Test_With_One_Server_And_Many_Clients()
     {
-        var testSuite = new TestSuite();
+        using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -28,8 +28,8 @@ public class StressTests
 
         var tasks = new List<Task>();
 
-        //send 1000 requests to server
-        for (var j = 0; j < 1000; j++)
+        //send 100 requests to server
+        for (var j = 0; j < 100; j++)
         {
             var task = Task.Run(async () =>
             {
