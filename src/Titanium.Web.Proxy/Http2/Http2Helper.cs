@@ -313,8 +313,11 @@ namespace Titanium.Web.Proxy.Http2
                         request.ReadHttp2BeforeHandlerTaskCompletionSource = null;
                         tcs.SetResult(true);
 
-                        // Did the consumer request a synthetic streamed response during BeforeRequest?
-                        if (sessionArgs.HttpClient.Response.StreamBodyWriter != null)
+                        // Did the consumer answer this request synthetically during BeforeRequest (Ok,
+                        // GenericResponse, Redirect, buffered Respond, or RespondStreaming - all funnel
+                        // through Respond(), which is the single source of truth for "short-circuit this
+                        // request" and is what HTTP/1.x's RequestHandler already keys off of)?
+                        if (sessionArgs.HttpClient.Request.CancelRequest)
                         {
                             // do not forward the request upstream; answer the client directly. Run this in
                             // the background (rather than awaiting inline) so a slow synthetic body does not
@@ -392,8 +395,52 @@ namespace Titanium.Web.Proxy.Http2
                             response.ReadHttp2BeforeHandlerTaskCompletionSource = null;
                             tcs.SetResult(true);
 
+                            // BeforeResponse may have replaced HttpClient.Response outright - exactly what
+                            // Respond()/Ok()/Redirect() do when called after the real response was already
+                            // received (see SessionEventArgs.Respond, which both sets Request.CancelRequest
+                            // and swaps in a brand new Response object). `response` above was captured
+                            // *before* the handler ran, so dispatching it here would silently drop the
+                            // replacement and send the stale, original object instead.
+                            var finalResponse = (Response)sessionArgs.HttpClient.Response;
+
+                            if (sessionArgs.HttpClient.Request.CancelRequest)
+                            {
+                                // the real response's own body (if the server is still sending one) must
+                                // never reach the client now that a different response has been substituted;
+                                // suppress it exactly like an in-flight GetBody() wait does. Flow-control
+                                // credit for those bytes is still granted back to the server unconditionally
+                                // by the generic DATA-frame handling below, regardless of this flag.
+                                finalResponse.Http2IgnoreBodyFrames = true;
+                                finalResponse.Locked = true;
+
+                                connectionState.Streams.TryGetValue(hbStreamId, out var streamState);
+                                var streamToken = streamState != null
+                                    ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
+                                        streamState.Cancellation.Token).Token
+                                    : cancellationToken;
+                                // we are inside the isClient=false branch, so `output` is the client stream
+                                // here (see the isClient=false call in SendHttp2).
+                                var synthTask = EmitSyntheticResponseAsync(sessionArgs, hbStreamId, connectionState,
+                                        output, streamToken)
+                                    .ContinueWith(t =>
+                                    {
+                                        if (t.IsFaulted)
+                                        {
+                                            exceptionFunc?.Invoke(new ProxyHttpException(
+                                                "HTTP/2 synthetic response failed", t.Exception!.GetBaseException(),
+                                                sessionArgs));
+                                        }
+                                    }, TaskScheduler.Default);
+                                if (streamState != null) streamState.SyntheticTask = synthTask;
+                                pendingSynthetics.Add(synthTask);
+
+                                return false;
+                            }
+
                             await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
-                                response, endStreamFlag, output, isPromise));
+                                finalResponse, endStreamFlag, output, isPromise));
+                            finalResponse.Locked = true;
+                            return false;
                         }
                         else
                         {
@@ -1420,10 +1467,22 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         /// <summary>
-        ///     Emits a proxy-generated (synthetic) response to the client on the given stream without contacting
-        ///     the server. The response body is streamed from the consumer's RespondStreaming delegate as DATA
-        ///     frames, so it is never buffered. HTTP/2 frames the body with END_STREAM (Transfer-Encoding is not
-        ///     used), so the chunked header is stripped.
+        ///     Emits a proxy-generated (synthetic) response to the client on the given stream without relaying
+        ///     the corresponding server response - either because the request never reached the server (a
+        ///     BeforeRequest-time <c>Ok</c>/<c>GenericResponse</c>/<c>Redirect</c>/<c>Respond</c>/
+        ///     <c>RespondStreaming</c> call) or because a real response was received and then replaced (a
+        ///     BeforeResponse-time <c>Respond</c> call). Three body shapes are supported, mirroring the
+        ///     buffered/streamed distinction <c>SessionEventArgs</c> already exposes for HTTP/1.x:
+        ///     <list type="bullet">
+        ///         <item><c>StreamBodyWriter</c> set (<c>RespondStreaming</c>) - the body is produced on the fly
+        ///         and written as DATA frames without ever being buffered.</item>
+        ///         <item>otherwise, a buffered body (<c>Ok</c>/<c>GenericResponse</c>/<c>Redirect</c>/buffered
+        ///         <c>Respond</c>) - the already-in-memory bytes are compressed (if requested) and sent as DATA
+        ///         frames.</item>
+        ///         <item>otherwise, no body at all - <c>END_STREAM</c> is set directly on the HEADERS frame.</item>
+        ///     </list>
+        ///     HTTP/2 frames the body with DATA/END_STREAM (Transfer-Encoding is never used over h2), so the
+        ///     chunked header is always stripped regardless of which shape applies.
         /// </summary>
         private static async Task EmitSyntheticResponseAsync(SessionEventArgs args, int streamId,
             Http2ConnectionState connectionState, Stream clientStream, CancellationToken cancellationToken)
@@ -1444,24 +1503,57 @@ namespace Titanium.Web.Proxy.Http2
             var clientWriteLock = connectionState.ClientWriteLock;
             var clientSendFlow = connectionState.ClientSendFlow;
 
-            // send the response headers first; the body (if any) follows as DATA frames.
-            await clientWriteLock.WaitAsync(cancellationToken);
-            try
+            if (response.StreamBodyWriter != null)
             {
-                await SendHeader(connectionState.ClientSettings, frameHeader, frameHeaderBuffer, response, false,
-                    clientStream, false);
+                // send the headers first; the body follows as DATA frames produced by the consumer's
+                // delegate as it runs, so it is never buffered.
+                await clientWriteLock.WaitAsync(cancellationToken);
+                try
+                {
+                    await SendHeader(connectionState.ClientSettings, frameHeader, frameHeaderBuffer, response,
+                        false, clientStream, false);
+                }
+                finally
+                {
+                    clientWriteLock.Release();
+                }
+
+                var bodyWriter = new Http2BodyStreamWriter(streamId, clientStream, clientWriteLock, clientSendFlow,
+                    cancellationToken);
+
+                await response.StreamBodyWriter(bodyWriter, cancellationToken);
+
+                await bodyWriter.CompleteAsync();
             }
-            finally
+            else
             {
-                clientWriteLock.Release();
+                // buffered case (Ok/GenericResponse/Redirect/buffered Respond) - the whole body, if any, is
+                // already in memory. Note this deliberately checks the compressed body itself rather than
+                // response.IsBodyRead: that flag only means "the real server response's body was read off
+                // the wire", which is never true for a synthetic response that was never read from anywhere.
+                var body = response.CompressBodyAndUpdateContentLength();
+                var hasBody = body is { Length: > 0 };
+
+                await clientWriteLock.WaitAsync(cancellationToken);
+                try
+                {
+                    // no body at all: END_STREAM belongs on the HEADERS frame itself, there is no DATA frame
+                    // to carry it.
+                    await SendHeader(connectionState.ClientSettings, frameHeader, frameHeaderBuffer, response,
+                        !hasBody, clientStream, false);
+
+                    if (hasBody)
+                    {
+                        await SendData(frameHeader, frameHeaderBuffer, streamId, body!, true,
+                            connectionState.ClientSettings.MaxFrameSize, clientSendFlow, clientStream,
+                            cancellationToken);
+                    }
+                }
+                finally
+                {
+                    clientWriteLock.Release();
+                }
             }
-
-            var bodyWriter = new Http2BodyStreamWriter(streamId, clientStream, clientWriteLock, clientSendFlow,
-                cancellationToken);
-
-            if (response.StreamBodyWriter != null) await response.StreamBodyWriter(bodyWriter, cancellationToken);
-
-            await bodyWriter.CompleteAsync();
 
             response.IsBodySent = true;
         }
