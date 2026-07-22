@@ -91,6 +91,18 @@ internal sealed class Http2RawOriginServer : IDisposable
                     {
                         await currentHandler(connection);
                     }
+
+                    // The proxy may still be sending WINDOW_UPDATE/PING/etc. frames in reaction to
+                    // what we just wrote (e.g. credit grants for DATA frames the handler sent). A real
+                    // HTTP/2 server keeps reading from the socket for the lifetime of the connection; this
+                    // minimal test harness does not, so closing the socket immediately can leave those
+                    // bytes sitting unread in the OS receive buffer. Closing a socket with unread inbound
+                    // data queued triggers an abortive RST instead of a graceful FIN, and that RST can
+                    // cause the peer's OS to discard bytes it already received but had not yet handed to
+                    // user space - non-deterministically dropping frames (e.g. trailers) that were fully
+                    // sent over the wire. Drain any such pending bytes with a short bounded timeout before
+                    // disposing so the close is graceful.
+                    await DrainAsync(sslStream);
                 }
                 catch (Exception ex)
                 {
@@ -103,6 +115,38 @@ internal sealed class Http2RawOriginServer : IDisposable
                     client.Dispose();
                 }
             });
+        }
+    }
+
+    /// <summary>
+    ///     Reads and discards any bytes that arrive on <paramref name="stream" /> within a short grace
+    ///     period, so that closing the socket right afterwards does not abort a connection that still has
+    ///     unread inbound data queued (which the OS turns into an RST instead of a graceful FIN, and can
+    ///     make the peer lose bytes it already received but had not yet consumed).
+    /// </summary>
+    private static async Task DrainAsync(Stream stream)
+    {
+        var buffer = new byte[4096];
+        using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        try
+        {
+            while (true)
+            {
+                int read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
+                if (read <= 0)
+                {
+                    // graceful EOF from the peer - nothing more to drain.
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // grace period elapsed with no more data (or a read was in-flight) - proceed to close.
+        }
+        catch (Exception)
+        {
+            // any other read failure means the peer already went away; nothing left to drain.
         }
     }
 
