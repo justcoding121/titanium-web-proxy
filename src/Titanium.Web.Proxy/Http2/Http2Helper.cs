@@ -54,11 +54,13 @@ namespace Titanium.Web.Proxy.Http2
             var sendRelay =
                 CopyHttp2FrameAsync(clientStream, serverStream, clientSettings, serverSettings,
                     sessionFactory, sessions, onBeforeRequest,
-                    connectionId, true, clientWriteLock, serverSettingsRelayed, cancellationTokenSource.Token, exceptionFunc);
+                    connectionId, true, clientWriteLock, serverSettingsRelayed, cancellationTokenSource,
+                    cancellationTokenSource.Token, exceptionFunc);
             var receiveRelay =
                 CopyHttp2FrameAsync(serverStream, clientStream, serverSettings, clientSettings,
                     sessionFactory, sessions, onBeforeResponse,
-                    connectionId, false, clientWriteLock, serverSettingsRelayed, cancellationTokenSource.Token, exceptionFunc);
+                    connectionId, false, clientWriteLock, serverSettingsRelayed, cancellationTokenSource,
+                    cancellationTokenSource.Token, exceptionFunc);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             cancellationTokenSource.Cancel();
@@ -66,12 +68,19 @@ namespace Titanium.Web.Proxy.Http2
             await Task.WhenAll(sendRelay, receiveRelay);
         }
 
+        /// <summary>
+        ///     Upper bound on the total compressed bytes buffered for one in-progress HEADERS/CONTINUATION
+        ///     sequence, so a peer that never sends END_HEADERS cannot grow memory unboundedly.
+        /// </summary>
+        private const int MaxHeaderBlockBytes = 256 * 1024;
+
         private static async Task CopyHttp2FrameAsync(Stream input, Stream output,
             Http2Settings localSettings, Http2Settings remoteSettings,
             Func<SessionEventArgs> sessionFactory, ConcurrentDictionary<int, SessionEventArgs> sessions,
             Func<SessionEventArgs, Task> onBeforeRequestResponse,
             Guid connectionId, bool isClient, SemaphoreSlim clientWriteLock,
-            TaskCompletionSource<bool> serverSettingsRelayed, CancellationToken cancellationToken,
+            TaskCompletionSource<bool> serverSettingsRelayed, CancellationTokenSource cancellationTokenSource,
+            CancellationToken cancellationToken,
             ExceptionHandler? exceptionFunc)
         {
             int headerTableSize = 0;
@@ -80,6 +89,16 @@ namespace Titanium.Web.Proxy.Http2
             // stream ids that were answered with a synthetic (proxy-generated) response and therefore must not
             // be forwarded to the server. Only relevant on the client=>server relay.
             var syntheticStreams = new HashSet<int>();
+
+            // Synthetic responses (Ok/Respond/RespondStreaming during BeforeRequest) are no longer awaited
+            // inline in the frame loop below (see the HEADERS dispatch) so that a slow synthetic body does
+            // not stall every other multiplexed stream on the connection. Track them here so we can still
+            // observe/report failures and make sure they are fully drained before this relay direction's
+            // task completes.
+            var pendingSynthetics = new ConcurrentBag<Task>();
+
+            var frameHeader = new Http2FrameHeader();
+            var frameHeaderBuffer = new byte[9];
 
             // Writes toward the client must be serialized against the other relay.
             async Task lockedClientWrite(Func<Task> writeAction)
@@ -95,9 +114,232 @@ namespace Titanium.Web.Proxy.Http2
                 }
             }
 
-            var frameHeader = new Http2FrameHeader();
-            var frameHeaderBuffer = new byte[9];
+            // Decodes one fully-assembled HEADERS(+CONTINUATION...) block (already stripped of padding/
+            // priority bytes) and dispatches it. A HEADERS block on an already-established request/response
+            // (one that already carries pseudo-headers) is the *main* message; a further block without
+            // request/status pseudo-headers is trailers (RFC 7540 §8.1.2.1); a response block whose :status
+            // is 1xx is an interim informational response (RFC 9110 §15.2) and is relayed without invoking
+            // BeforeRequest/BeforeResponse and without ever touching/locking the final Request/Response.
+            // Returns true if this block was an interim (1xx) response, so the caller does not treat a
+            // (spec-invalid, but let's be defensive) END_STREAM flag on it as ending the stream.
+            async Task<bool> ProcessCompleteHeaderBlockAsync(int hbStreamId, SessionEventArgs sessionArgs,
+                RequestResponseBase headerRr, byte[] compressed, bool endStreamFlag, bool isPromise)
+            {
+                var collected = new HeaderCollection();
+                var headerListener = new MyHeaderListener(
+                    (name, value) => collected.AddHeader(new HttpHeader(name, value)));
+
+                try
+                {
+                    // recreate the decoder when new value is bigger
+                    // should we recreate when smaller, too?
+                    if (decoder == null || headerTableSize < localSettings.HeaderTableSize)
+                    {
+                        headerTableSize = localSettings.HeaderTableSize;
+                        decoder = new Decoder(8192, headerTableSize);
+                    }
+
+                    decoder.Decode(new BinaryReader(new MemoryStream(compressed, 0, compressed.Length)),
+                        headerListener);
+                    decoder.EndHeaderBlock();
+                }
+                catch (Exception ex)
+                {
+                    exceptionFunc?.Invoke(new ProxyHttpException("Failed to decode HTTP/2 headers", ex, sessionArgs));
+                    return false;
+                }
+
+                if (isClient)
+                {
+                    var method = headerListener.Method;
+                    var path = headerListener.Path;
+                    bool isMainHeaders = method.Length > 0 && path.Length > 0;
+
+                    if (!isMainHeaders)
+                    {
+                        // request trailers - never valid before any main request headers were seen.
+                        if (headerRr.HttpVersion < HttpHeader.Version20)
+                        {
+                            exceptionFunc?.Invoke(new ProxyHttpException(
+                                "HTTP/2 protocol error: trailer HEADERS received before request headers.", null,
+                                sessionArgs));
+                            return false;
+                        }
+
+                        foreach (var header in collected)
+                        {
+                            headerRr.TrailingHeaders.AddHeader(header);
+                        }
+
+                        // a request answered synthetically never reached the server - nothing to forward,
+                        // but the block above still had to be decoded to keep this connection's HPACK
+                        // decoder state in sync with the peer's encoder.
+                        if (!syntheticStreams.Contains(hbStreamId))
+                        {
+                            await SendTrailer(remoteSettings, frameHeader, frameHeaderBuffer, hbStreamId,
+                                headerRr.TrailingHeaders, endStreamFlag, output);
+                        }
+
+                        return false;
+                    }
+
+                    var request = (Request)headerRr;
+                    request.HttpVersion = HttpVersion.Version20;
+                    request.Method = method.GetString();
+                    request.IsHttps = headerListener.Scheme == ProxyServer.UriSchemeHttps;
+                    request.Authority = headerListener.Authority;
+                    request.RequestUriString8 = path;
+                    foreach (var header in collected)
+                    {
+                        request.Headers.AddHeader(header);
+                    }
+
+                    var tcs = new TaskCompletionSource<bool>();
+                    request.ReadHttp2BeforeHandlerTaskCompletionSource = tcs;
+
+                    var handler = onBeforeRequestResponse(sessionArgs);
+                    request.Http2BeforeHandlerTask = handler;
+
+                    if (handler == await Task.WhenAny(tcs.Task, handler))
+                    {
+                        request.ReadHttp2BeforeHandlerTaskCompletionSource = null;
+                        tcs.SetResult(true);
+
+                        // Did the consumer request a synthetic streamed response during BeforeRequest?
+                        if (sessionArgs.HttpClient.Response.StreamBodyWriter != null)
+                        {
+                            // do not forward the request upstream; answer the client directly. Run this in
+                            // the background (rather than awaiting inline) so a slow synthetic body does not
+                            // block reading/relaying frames for every other multiplexed stream on this
+                            // connection; failures are reported centrally instead of tearing down the whole
+                            // relay.
+                            syntheticStreams.Add(hbStreamId);
+                            var synthTask = EmitSyntheticResponseAsync(sessionArgs, hbStreamId, localSettings, input,
+                                    clientWriteLock, serverSettingsRelayed, cancellationToken)
+                                .ContinueWith(t =>
+                                {
+                                    if (t.IsFaulted)
+                                    {
+                                        exceptionFunc?.Invoke(new ProxyHttpException(
+                                            "HTTP/2 synthetic response failed", t.Exception!.GetBaseException(),
+                                            sessionArgs));
+                                    }
+                                }, TaskScheduler.Default);
+                            pendingSynthetics.Add(synthTask);
+                        }
+                        else
+                        {
+                            await SendHeader(remoteSettings, frameHeader, frameHeaderBuffer, request, endStreamFlag,
+                                output, isPromise);
+                        }
+                    }
+                    else
+                    {
+                        request.Http2IgnoreBodyFrames = true;
+                    }
+
+                    request.Locked = true;
+                    return false;
+                }
+                else
+                {
+                    bool hasStatus = headerListener.Status.Length > 0;
+                    int statusCode = 0;
+                    if (hasStatus)
+                    {
+                        // todo: avoid string conversion
+                        string statusHack = HttpHeader.Encoding.GetString(headerListener.Status.Span);
+                        int.TryParse(statusHack, out statusCode);
+                    }
+
+                    bool isInterim = hasStatus && statusCode is >= 100 and <= 199;
+
+                    if (hasStatus && !isInterim)
+                    {
+                        var response = (Response)headerRr;
+                        response.HttpVersion = HttpVersion.Version20;
+                        response.StatusCode = statusCode;
+                        response.StatusDescription = string.Empty;
+                        foreach (var header in collected)
+                        {
+                            response.Headers.AddHeader(header);
+                        }
+
+                        var tcs = new TaskCompletionSource<bool>();
+                        response.ReadHttp2BeforeHandlerTaskCompletionSource = tcs;
+
+                        var handler = onBeforeRequestResponse(sessionArgs);
+                        response.Http2BeforeHandlerTask = handler;
+
+                        if (handler == await Task.WhenAny(tcs.Task, handler))
+                        {
+                            response.ReadHttp2BeforeHandlerTaskCompletionSource = null;
+                            tcs.SetResult(true);
+
+                            await lockedClientWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
+                                response, endStreamFlag, output, isPromise));
+                        }
+                        else
+                        {
+                            response.Http2IgnoreBodyFrames = true;
+                        }
+
+                        response.Locked = true;
+                        return false;
+                    }
+
+                    if (isInterim)
+                    {
+                        // interim (1xx) response: relay verbatim on its own HEADERS frame, do not fire
+                        // BeforeResponse and do not touch the final Response object - mirrors how HTTP/1.x
+                        // interim responses are handled (see ResponseHandler.HandleHttpSessionResponse).
+                        var synthetic = new Response { StatusCode = statusCode, StatusDescription = string.Empty };
+                        foreach (var header in collected)
+                        {
+                            synthetic.Headers.AddHeader(header);
+                        }
+
+                        await lockedClientWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
+                            synthetic, false, output, false));
+                        return true;
+                    }
+
+                    // response trailers - never valid before any final response headers were seen.
+                    if (headerRr.HttpVersion < HttpHeader.Version20)
+                    {
+                        exceptionFunc?.Invoke(new ProxyHttpException(
+                            "HTTP/2 protocol error: trailer HEADERS received before response headers.", null,
+                            sessionArgs));
+                        return false;
+                    }
+
+                    foreach (var header in collected)
+                    {
+                        headerRr.TrailingHeaders.AddHeader(header);
+                    }
+
+                    await lockedClientWrite(() => SendTrailer(remoteSettings, frameHeader, frameHeaderBuffer,
+                        hbStreamId, headerRr.TrailingHeaders, endStreamFlag, output));
+                    return false;
+                }
+            }
+
             byte[]? buffer = null;
+
+            // Metadata for a HEADERS/PUSH_PROMISE block that has not yet been terminated by END_HEADERS and
+            // is being assembled from subsequent CONTINUATION frames (RFC 7540 §6.10). Only one such block
+            // may be in flight per connection direction at a time - a HEADERS/PUSH_PROMISE frame arriving
+            // while another block is still open, or a CONTINUATION frame for a different stream, is a
+            // connection-level PROTOCOL_ERROR.
+            MemoryStream? pendingHeaderBlock = null;
+            int pendingHeaderStreamId = -1;
+            SessionEventArgs? pendingHeaderArgs = null;
+            RequestResponseBase? pendingHeaderRr = null;
+            bool pendingHeaderEndStream = false;
+            bool pendingHeaderIsPromise = false;
+
+            try
+            {
             while (true)
             {
                 int read = await ForceRead(input, frameHeaderBuffer, 0, 9, cancellationToken);
@@ -155,7 +397,131 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 //System.Diagnostics.Debug.WriteLine("CONN: " + connectionId + ", CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
-                if (isClient && syntheticStreams.Contains(streamId))
+                // HEADERS/CONTINUATION must always be decoded - even for a stream already answered
+                // synthetically - because HPACK's dynamic table is connection-scoped: skipping the decode
+                // of any header block silently desyncs this connection's decoder from the peer's encoder
+                // for every subsequent stream. Suppressing the *forward* of a synthetic stream's trailers
+                // is handled inside ProcessCompleteHeaderBlockAsync instead of the blanket synthetic-stream
+                // gate used for other frame types below, so both are checked ahead of that gate.
+                if (type == Http2FrameType.Headers/* || type == Http2FrameType.PushPromise*/)
+                {
+                    bool endHeaders = (flags & Http2FrameFlag.EndHeaders) != 0;
+                    bool padded = (flags & Http2FrameFlag.Padded) != 0;
+                    bool priority = (flags & Http2FrameFlag.Priority) != 0;
+                    bool endStreamFlag = (flags & Http2FrameFlag.EndStream) != 0;
+
+                    int offset = 0;
+                    int padLength = 0;
+                    if (padded)
+                    {
+                        padLength = buffer[0];
+                        offset = 1;
+                    }
+
+                    if (!sessions.TryGetValue(streamId, out args))
+                    {
+                        args = sessionFactory();
+                        _ = sessions.TryAdd(streamId, args);
+                    }
+
+                    rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
+                    if (priority)
+                    {
+                        var priorityData = ((long)buffer[offset++] << 32) + ((long)buffer[offset++] << 24) +
+                                           (buffer[offset++] << 16) + (buffer[offset++] << 8) + buffer[offset++];
+                        rr.Priority = priorityData;
+                    }
+
+                    int fragmentLength = length - offset - padLength;
+                    if (fragmentLength < 0)
+                    {
+                        fragmentLength = 0;
+                    }
+
+                    if (pendingHeaderBlock != null)
+                    {
+                        // RFC 7540 §6.10: only a CONTINUATION frame for the same stream may follow a
+                        // HEADERS frame sent without END_HEADERS. Anything else while a block is still
+                        // open (including a new HEADERS frame) is a connection-level PROTOCOL_ERROR.
+                        exceptionFunc?.Invoke(new ProxyHttpException(
+                            "HTTP/2 protocol error: HEADERS frame received while a previous header block on this connection was still open.",
+                            null, args));
+                        return;
+                    }
+
+                    if (endHeaders)
+                    {
+                        var fragment = new byte[fragmentLength];
+                        Buffer.BlockCopy(buffer, offset, fragment, 0, fragmentLength);
+                        bool isInterim = await ProcessCompleteHeaderBlockAsync(streamId, args, rr, fragment,
+                            endStreamFlag, args.IsPromise);
+                        if (endStreamFlag && !isInterim)
+                        {
+                            endStream = true;
+                        }
+                    }
+                    else
+                    {
+                        // start of a multi-frame header block; buffer this fragment and wait for the
+                        // CONTINUATION frame(s) that must immediately follow on the same stream.
+                        pendingHeaderBlock = new MemoryStream();
+                        pendingHeaderBlock.Write(buffer, offset, fragmentLength);
+                        pendingHeaderStreamId = streamId;
+                        pendingHeaderArgs = args;
+                        pendingHeaderRr = rr;
+                        pendingHeaderEndStream = endStreamFlag;
+                        pendingHeaderIsPromise = args.IsPromise;
+                    }
+
+                    sendPacket = false;
+                }
+                else if (type == Http2FrameType.Continuation)
+                {
+                    if (pendingHeaderBlock == null || pendingHeaderStreamId != streamId)
+                    {
+                        exceptionFunc?.Invoke(new ProxyHttpException(
+                            "HTTP/2 protocol error: unexpected CONTINUATION frame.", null, args));
+                        return;
+                    }
+
+                    if (pendingHeaderBlock.Length + length > MaxHeaderBlockBytes)
+                    {
+                        exceptionFunc?.Invoke(new ProxyHttpException(
+                            "HTTP/2 header block exceeded the maximum allowed compressed size.", null,
+                            pendingHeaderArgs));
+                        return;
+                    }
+
+                    pendingHeaderBlock.Write(buffer, 0, length);
+
+                    if ((flags & Http2FrameFlag.EndHeaders) != 0)
+                    {
+                        var completeBlock = pendingHeaderBlock.ToArray();
+                        var pStreamId = pendingHeaderStreamId;
+                        var pArgs = pendingHeaderArgs!;
+                        var pRr = pendingHeaderRr!;
+                        var pEndStream = pendingHeaderEndStream;
+                        var pIsPromise = pendingHeaderIsPromise;
+
+                        pendingHeaderBlock = null;
+                        pendingHeaderArgs = null;
+                        pendingHeaderRr = null;
+                        pendingHeaderStreamId = -1;
+
+                        args = pArgs;
+                        rr = pRr;
+
+                        bool isInterim = await ProcessCompleteHeaderBlockAsync(pStreamId, pArgs, pRr, completeBlock,
+                            pEndStream, pIsPromise);
+                        if (pEndStream && !isInterim)
+                        {
+                            endStream = true;
+                        }
+                    }
+
+                    sendPacket = false;
+                }
+                else if (isClient && syntheticStreams.Contains(streamId))
                 {
                     // this stream was answered with a synthetic response; never forward its request frames upstream.
                     sendPacket = false;
@@ -236,180 +602,6 @@ namespace Titanium.Web.Proxy.Http2
                         // we have emitted our own (possibly re-sized) DATA frame(s); suppress the default relay
                         sendPacket = false;
                     }
-                }
-                else if (type == Http2FrameType.Headers/* || type == Http2FrameType.PushPromise*/)
-                {
-                    bool endHeaders = (flags & Http2FrameFlag.EndHeaders) != 0;
-                    bool padded = (flags & Http2FrameFlag.Padded) != 0;
-                    bool priority = (flags & Http2FrameFlag.Priority) != 0;
-                    bool endStreamFlag = (flags & Http2FrameFlag.EndStream) != 0;
-                    if (endStreamFlag)
-                    {
-                        endStream = true;
-                    }
-
-                    int offset = 0;
-                    if (padded)
-                    {
-                        offset = 1;
-                        Breakpoint();
-                    }
-
-                    if (type == Http2FrameType.PushPromise)
-                    {
-                        int promisedStreamId =
- (buffer[offset++] << 24) + (buffer[offset++] << 16) + (buffer[offset++] << 8) + buffer[offset++];
-                        if (!sessions.TryGetValue(streamId, out args))
-                        {
-                            args = sessionFactory();
-                            args.IsPromise = true;
-                            _ = sessions.TryAdd(streamId, args);
-                            _ = sessions.TryAdd(promisedStreamId, args);
-                        }
-
-                        System.Diagnostics.Debug.WriteLine("PROMISE STREAM: " + streamId + ", " + promisedStreamId +
-                                                           ", CONN: " + connectionId);
-                        rr = args.HttpClient.Request;
-
-                        if (isClient)
-                        {
-                            // push_promise from client???
-                            Breakpoint();
-                        }
-                    }
-                    else
-                    {
-                        if (!sessions.TryGetValue(streamId, out args))
-                        {
-                            args = sessionFactory();
-                            _ = sessions.TryAdd(streamId, args);
-                        }
-
-                        rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
-                        if (priority)
-                        {
-                            var priorityData = ((long)buffer[offset++] << 32) + ((long)buffer[offset++] << 24) +
-                                               (buffer[offset++] << 16) + (buffer[offset++] << 8) + buffer[offset++];
-                            rr.Priority = priorityData;
-                        }
-                    }
-
-
-                    int dataLength = length - offset;
-                    if (padded)
-                    {
-                        dataLength -= buffer[0];
-                    }
-
-                    var sessionArgs = args ??
-                                      throw new InvalidOperationException("An HTTP/2 header frame has no session.");
-                    var headerListener = new MyHeaderListener(
-                        (name, value) =>
-                        {
-                            var headers = isClient
-                                ? sessionArgs.HttpClient.Request.Headers
-                                : sessionArgs.HttpClient.Response.Headers;
-                            headers.AddHeader(new HttpHeader(name, value));
-                        });
-                    try
-                    {
-                        // recreate the decoder when new value is bigger
-                        // should we recreate when smaller, too?
-                        if (decoder == null || headerTableSize < localSettings.HeaderTableSize)
-                        {
-                            headerTableSize = localSettings.HeaderTableSize;
-                            decoder = new Decoder(8192, headerTableSize);
-                        }
-
-                        decoder.Decode(new BinaryReader(new MemoryStream(buffer, offset, dataLength)),
-                            headerListener);
-                        decoder.EndHeaderBlock();
-
-                        if (rr is Request request)
-                        {
-                            var method = headerListener.Method;
-                            var path = headerListener.Path;
-                            if (method.Length == 0 || path.Length == 0)
-                            {
-                                throw new Exception("HTTP/2 Missing method or path");
-                            }
-
-                            request.HttpVersion = HttpVersion.Version20;
-                            request.Method = method.GetString();
-                            request.IsHttps = headerListener.Scheme == ProxyServer.UriSchemeHttps;
-                            request.Authority = headerListener.Authority;
-                            request.RequestUriString8 = path;
-
-                            //request.RequestUri = headerListener.GetUri();
-                        }
-                        else
-                        {
-                            var response = (Response)rr;
-                            response.HttpVersion = HttpVersion.Version20;
-
-                            // todo: avoid string conversion
-                            string statusHack = HttpHeader.Encoding.GetString(headerListener.Status.Span);
-                            int.TryParse(statusHack, out int statusCode);
-                            response.StatusCode = statusCode;
-                            response.StatusDescription = string.Empty;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        exceptionFunc?.Invoke(new ProxyHttpException("Failed to decode HTTP/2 headers", ex, args));
-                    }
-
-                    if (!endHeaders)
-                    {
-                        Breakpoint();
-                    }
-
-                    if (endHeaders)
-                    {
-                        var tcs = new TaskCompletionSource<bool>();
-                        rr.ReadHttp2BeforeHandlerTaskCompletionSource = tcs;
-
-                        var handler = onBeforeRequestResponse(sessionArgs);
-                        rr.Http2BeforeHandlerTask = handler;
-
-                        if (handler == await Task.WhenAny(tcs.Task, handler))
-                        {
-                            rr.ReadHttp2BeforeHandlerTaskCompletionSource = null;
-                            tcs.SetResult(true);
-
-                            // Did the consumer request a synthetic streamed response during BeforeRequest?
-                            if (isClient && sessionArgs.HttpClient.Response.StreamBodyWriter != null)
-                            {
-                                // do not forward the request upstream; answer the client directly.
-                                syntheticStreams.Add(streamId);
-                                await EmitSyntheticResponseAsync(sessionArgs, streamId, localSettings, input,
-                                    clientWriteLock, serverSettingsRelayed, cancellationToken);
-                            }
-                            else if (isClient)
-                            {
-                                await SendHeader(remoteSettings, frameHeader, frameHeaderBuffer, rr, endStream, output,
-                                    sessionArgs.IsPromise);
-                            }
-                            else
-                            {
-                                await lockedClientWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
-                                    rr, endStream, output, sessionArgs.IsPromise));
-                            }
-                        }
-                        else
-                        {
-                            rr.Http2IgnoreBodyFrames = true;
-                        }
-
-                        rr.Locked = true;
-                    }
-
-                    sendPacket = false;
-                }
-                else if (type == Http2FrameType.Continuation)
-                {
-                    // todo: implementing this type is mandatory for multi-part headers
-                    Breakpoint();
                 }
                 else if (type == Http2FrameType.Settings)
                 {
@@ -566,6 +758,23 @@ namespace Titanium.Web.Proxy.Http2
                     fs.Write(buffer, 0, length);
                 }*/
             }
+            }
+            finally
+            {
+                // Ensure the other relay direction (and any synthetic task below still waiting on a
+                // cross-direction signal such as serverSettingsRelayed) is unblocked before this method
+                // awaits tracked synthetic tasks. SendHttp2 only cancels the shared token once one of the
+                // two CopyHttp2FrameAsync tasks has *already completed*; without cancelling here first, a
+                // synthetic task on this direction that is still waiting on a signal only the other,
+                // still-running relay task can deliver would never observe cancellation, and this method
+                // would never complete for SendHttp2 to observe in the first place - a deadlock.
+                cancellationTokenSource.Cancel();
+
+                if (!pendingSynthetics.IsEmpty)
+                {
+                    await Task.WhenAll(pendingSynthetics.ToArray());
+                }
+            }
         }
 
         [Conditional("DEBUG")]
@@ -632,31 +841,93 @@ namespace Titanium.Web.Proxy.Http2
             }
 
             var data = ms.ToArray();
-            int newLength = data.Length;
 
-            frameHeader.Length = newLength;
-            frameHeader.Type = pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers;
+            await WriteHeaderBlockAsync(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
+                pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
+                rr.Priority.HasValue, data, settings.MaxFrameSize, output);
+        }
 
-            var flags = Http2FrameFlag.EndHeaders;
-            if (endStream)
+        /// <summary>
+        ///     Encodes and sends the given trailing headers (RFC 7230 §4.1.2 / RFC 7540 §8.1.2.1) as a
+        ///     HEADERS frame carrying no pseudo-headers, using the same persistent per-direction HPACK
+        ///     encoder as <see cref="SendHeader" /> so the destination's dynamic table stays in sync
+        ///     regardless of whether trailers are actually present on a given message.
+        /// </summary>
+        private static async Task SendTrailer(Http2Settings settings, Http2FrameHeader frameHeader,
+            byte[] frameHeaderBuffer, int streamId, HeaderCollection trailingHeaders, bool endStream, Stream output)
+        {
+            var encoder = settings.Encoder;
+            if (encoder == null)
             {
-                flags |= Http2FrameFlag.EndStream;
+                encoder = new Encoder(settings.HeaderTableSize);
+                settings.Encoder = encoder;
             }
 
-            if (rr.Priority.HasValue)
+            var ms = new MemoryStream();
+            var writer = new BinaryWriter(ms);
+
+            if (encoder.MaxHeaderTableSize != settings.HeaderTableSize)
             {
-                flags |= Http2FrameFlag.Priority;
+                encoder.SetMaxHeaderTableSize(writer, settings.HeaderTableSize);
             }
 
-            frameHeader.Flags = flags;
+            foreach (var header in trailingHeaders)
+            {
+                encoder.EncodeHeader(writer, header.NameData, header.ValueData);
+            }
 
-            // clear the padding flag
-            //headerBuffer[4] = (byte)(flags & ~((int)Http2FrameFlag.Padded));
+            var data = ms.ToArray();
 
-            // send the header
-            frameHeader.CopyToBuffer(frameHeaderBuffer);
-            await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length/*, cancellationToken*/);
-            await output.WriteAsync(data, 0, data.Length /*, cancellationToken*/);
+            await WriteHeaderBlockAsync(frameHeader, frameHeaderBuffer, streamId, Http2FrameType.Headers,
+                endStream, false, data, settings.MaxFrameSize, output);
+        }
+
+        /// <summary>
+        ///     Writes one already-HPACK-encoded header block as a HEADERS (or PUSH_PROMISE) frame followed
+        ///     by as many CONTINUATION frames as needed so that no single frame's payload exceeds the
+        ///     destination's advertised SETTINGS_MAX_FRAME_SIZE (RFC 7540 §4.2/§6.10). END_HEADERS is set
+        ///     only on the last frame of the sequence; END_STREAM/PRIORITY (when applicable) are set only
+        ///     on the first, matching the semantics of the frame types they belong to.
+        /// </summary>
+        private static async Task WriteHeaderBlockAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
+            int streamId, Http2FrameType type, bool endStream, bool hasPriority, byte[] data, int maxFrameSize,
+            Stream output)
+        {
+            if (maxFrameSize <= 0) maxFrameSize = 16384;
+
+            frameHeader.StreamId = streamId;
+
+            var pos = 0;
+            var first = true;
+            do
+            {
+                var chunkLength = Math.Min(maxFrameSize, data.Length - pos);
+                var isLast = pos + chunkLength >= data.Length;
+
+                frameHeader.Type = first ? type : Http2FrameType.Continuation;
+                frameHeader.Length = chunkLength;
+
+                var flags = (Http2FrameFlag)0;
+                if (isLast)
+                {
+                    flags |= Http2FrameFlag.EndHeaders;
+                }
+
+                if (first)
+                {
+                    if (endStream) flags |= Http2FrameFlag.EndStream;
+                    if (hasPriority) flags |= Http2FrameFlag.Priority;
+                }
+
+                frameHeader.Flags = flags;
+
+                frameHeader.CopyToBuffer(frameHeaderBuffer);
+                await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length/*, cancellationToken*/);
+                await output.WriteAsync(data, pos, chunkLength /*, cancellationToken*/);
+
+                pos += chunkLength;
+                first = false;
+            } while (pos < data.Length);
         }
 
         private static async Task SendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, byte[] buffer, Stream output)

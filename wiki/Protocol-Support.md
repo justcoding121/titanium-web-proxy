@@ -6,8 +6,10 @@ best-effort, or not implemented yet. "Yes" means the proxy actively parses/enfor
 can observe/modify it via the public API where relevant); "Partial" means it works for the common case but
 has a known gap; "No" means it isn't implemented.
 
-This table reflects the `develop` branch as of the HTTP/1.x gap-closure work (chunked trailers, interim 1xx
-responses, and TLS body-write-hook parity). If you find something inaccurate, please open an issue.
+This table reflects the `develop` branch as of the HTTP/1.x and HTTP/2 gap-closure work (chunked trailers,
+interim 1xx responses, and TLS body-write-hook parity for HTTP/1.x; HPACK dynamic-table correctness/reuse,
+HEADERS/CONTINUATION reassembly and re-splitting, trailers, and interim 1xx responses for HTTP/2). If you
+find something inaccurate, please open an issue.
 
 ## Connections and framing
 
@@ -15,13 +17,14 @@ responses, and TLS body-write-hook parity). If you find something inaccurate, pl
 |---|---|---|---|---|
 | Persistent connections / keep-alive | Yes | Yes | Yes (inherent) | `Connection: keep-alive` (1.0) / default (1.1); HTTP/2 multiplexes over one connection. |
 | Chunked transfer-encoding | N/A (no chunked in 1.0) | Yes | N/A (HTTP/2 uses DATA frames, not chunking) | Read and write, both request and response, via `HttpStream`. |
-| Chunked trailers (trailing headers) | N/A | Yes | No | See `RequestResponseBase.TrailingHeaders`; forwarded/emitted for HTTP/1.x. HTTP/2 trailer HEADERS frames are not yet distinguished from the main header block. |
+| Chunked trailers (trailing headers) | N/A | Yes | Yes | See `RequestResponseBase.TrailingHeaders`; forwarded/emitted for HTTP/1.x. For HTTP/2, a second HEADERS block without request/status pseudo-headers is decoded as trailers and re-encoded/relayed without re-firing `BeforeRequest`/`BeforeResponse`. |
 | `Expect: 100-continue` | Yes | Yes | N/A (no equivalent frame flow) | `ProxyServer.Enable100ContinueBehaviour`. |
-| Other 1xx interim responses (e.g. 103 Early Hints) | N/A | Yes | No | Relayed to the client and looped past on the server connection; not yet exposed as a dedicated event. HTTP/2 has no interim-response handling. |
+| Other 1xx interim responses (e.g. 103 Early Hints) | N/A | Yes | Yes | Relayed to the client (looping past on the HTTP/1.x server connection, or on their own HEADERS frame for HTTP/2) without invoking `BeforeResponse`/locking the final `Response`; not yet exposed as a dedicated event. |
+| HEADERS/CONTINUATION reassembly and re-splitting | N/A | N/A | Yes | Multi-frame inbound header blocks are reassembled before HPACK decoding; outbound blocks larger than the peer's `SETTINGS_MAX_FRAME_SIZE` are split back across HEADERS + CONTINUATION. |
 | `Upgrade` / WebSocket (101 Switching Protocols) | N/A | Yes | N/A | Raw duplex relay once upgraded; see `RequestHandler.HandleWebSocketUpgrade`. |
 | `CONNECT` tunneling | Yes | Yes | Yes (via `ExplicitProxyEndPoint`) | Supports both decrypt-and-inspect and pass-through-as-opaque-tunnel. |
-| Stream multiplexing | N/A | N/A | Yes | Concurrent streams tracked per connection in `Http2Helper`. |
-| HPACK header compression | N/A | N/A | Partial | Decode reuses a persistent dynamic table; encode currently creates a fresh table per call, so repeated response headers aren't re-indexed on the encode side. |
+| Stream multiplexing | N/A | N/A | Yes | Concurrent streams tracked per connection in `Http2Helper`; a slow synthetic response on one stream no longer blocks frames for other streams. |
+| HPACK header compression | N/A | N/A | Yes | Both decode and encode reuse a persistent, connection-direction-scoped dynamic table, so repeated headers are indexed/re-indexed correctly on both sides. |
 | Flow control (`WINDOW_UPDATE`) | N/A | N/A | Partial | Frames are relayed but the proxy does no window accounting of its own. |
 | Server push (`PUSH_PROMISE`) | N/A | N/A | Partial | Frames are byte-relayed only; not parsed/exposed (push is deprecated in browsers, so low priority). |
 | `PING` / keepalive frames | N/A | N/A | Partial | Relayed passively; the proxy does not originate or respond to pings itself. |

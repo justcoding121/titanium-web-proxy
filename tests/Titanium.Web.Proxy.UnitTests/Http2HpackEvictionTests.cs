@@ -8,8 +8,15 @@ using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
+/// <summary>
+///     Regression coverage for HPACK dynamic-table eviction: a persistent encoder/decoder pair (as used per
+///     connection direction by <c>Http2Helper</c>) must keep producing correctly-decodable output as the
+///     dynamic table fills and entries get evicted, both for many distinct headers and for the
+///     Kestrel-shaped repeated-header case that originally exposed the encoder's <c>COMPRESSION_ERROR</c>
+///     bug (see the end-to-end coverage in <c>Titanium.Web.Proxy.IntegrationTests.Http2Tests</c>).
+/// </summary>
 [TestClass]
-public class Http2HpackEvictionScratchTests
+public class Http2HpackEvictionTests
 {
     [TestMethod]
     public void Encoder_ManyDistinctHeaders_ForcingEviction_StillDecodesCorrectly()
