@@ -94,22 +94,35 @@ internal sealed class Http2FlowController
     ///     Applies an inbound WINDOW_UPDATE increment (RFC 7540 §6.9.1) to the connection window
     ///     (<paramref name="streamId" /> == 0) or a stream window. An update for a stream that is not (or no
     ///     longer) tracked is ignored, matching the RFC's allowance for WINDOW_UPDATE racing a stream's
-    ///     closure.
+    ///     closure. Returns <c>true</c> if the increment would drive the affected window above
+    ///     <see cref="MaxWindow" /> (2^31-1) - a FLOW_CONTROL_ERROR the caller must terminate the stream (or
+    ///     connection, for <paramref name="streamId" /> == 0) for; the window itself is still updated in
+    ///     that case so it reflects a consistent (even if now-invalid) value if the connection is a
+    ///     stream-level error and the connection continues.
     /// </summary>
-    public void OnWindowUpdate(int streamId, int increment)
+    public bool OnWindowUpdate(int streamId, int increment)
     {
         lock (gate)
         {
+            bool overflow;
             if (streamId == 0)
             {
                 connectionWindow += increment;
+                overflow = connectionWindow > MaxWindow;
             }
             else if (streamWindows.TryGetValue(streamId, out var current))
             {
-                streamWindows[streamId] = current + increment;
+                var updated = current + increment;
+                streamWindows[streamId] = updated;
+                overflow = updated > MaxWindow;
+            }
+            else
+            {
+                overflow = false;
             }
 
             WakeWaitersNoLock();
+            return overflow;
         }
     }
 
