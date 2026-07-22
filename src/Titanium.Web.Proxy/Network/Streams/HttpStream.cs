@@ -603,7 +603,14 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// </summary>
     public bool FillBuffer()
     {
-        if (IsClosed) throw new Exception("Stream is already closed");
+        // Once EOF has already been observed, keep reporting it idempotently (like a normal Stream would
+        // on a repeat Read after EOF) instead of throwing. A caller composed underneath another stream -
+        // notably SslStream, which may issue more than one inner read while assembling a single TLS
+        // record (see SslStream.EnsureFullTlsFrameAsync) - can legitimately call this again after this
+        // stream already reported end-of-stream once; throwing here turned that benign, expected
+        // "still nothing more to read" case into an unhandled exception that bypassed the IsNetworkStream
+        // swallow-and-report-EOF handling below entirely.
+        if (IsClosed) return false;
 
         if (Available > 0)
             // normally we fill the buffer only when it is empty, but sometimes we need more data
@@ -647,7 +654,9 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// <returns></returns>
     public async ValueTask<bool> FillBufferAsync(CancellationToken cancellationToken = default)
     {
-        if (IsClosed) throw new Exception("Stream is already closed");
+        // See the remarks on the synchronous FillBuffer() above for why this is a graceful no-op rather
+        // than a thrown exception once EOF has already been observed.
+        if (IsClosed) return false;
 
         var bytesToRead = streamBuffer.Length - Available;
         if (bytesToRead == 0) return false;

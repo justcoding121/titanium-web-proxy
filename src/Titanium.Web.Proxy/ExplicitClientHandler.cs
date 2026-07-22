@@ -338,6 +338,12 @@ public partial class ProxyServer
                     {
                         await TcpConnectionFactory.Release(connection, true);
                     }
+
+                    // the entire connection was handed over to the HTTP/2 relay above; once it returns the
+                    // client connection is done (mirrors the `return;` after the CONNECT-tunnel branch
+                    // above) - falling through would otherwise try to parse a brand new HTTP/1.1 request
+                    // off the same, already-finished client socket.
+                    return;
                 }
             }
 
