@@ -13,10 +13,9 @@ using Titanium.Web.Proxy.StreamExtended.BufferPool;
 namespace Titanium.Web.Proxy.UnitTests;
 
 /// <summary>
-///     Phase 1 (phase1-trailers) unit tests for <see cref="ChunkedTrailerHelper" />, the strict,
-///     size-bounded reader/writer shared by every chunked-trailer read/write code path
-///     (<c>HttpStream.CopyBodyChunkedAsync</c>, <c>HttpStream.HandleBodyWrite</c>, <c>LimitedStream</c>,
-///     <c>BodyStreamWriter</c>).
+///     Unit tests for <see cref="ChunkedTrailerHelper" />, the strict, size-bounded reader/writer shared by
+///     every chunked-trailer read/write code path (<c>HttpStream.CopyBodyChunkedAsync</c>,
+///     <c>HttpStream.HandleBodyWrite</c>, <c>LimitedStream</c>, <c>BodyStreamWriter</c>).
 /// </summary>
 [TestClass]
 public class ChunkedTrailerTests

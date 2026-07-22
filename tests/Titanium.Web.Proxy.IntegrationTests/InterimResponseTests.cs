@@ -12,8 +12,8 @@ using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
-///     Phase 1 (phase1-interim) integration tests for interim (1xx) response handling in
-///     <c>ResponseHandler.HandleHttpSessionResponse</c>. Before Phase 1 only 100 Continue was recognized;
+///     Integration tests for interim (1xx) response handling in
+///     <c>ResponseHandler.HandleHttpSessionResponse</c>. Previously only 100 Continue was recognized;
 ///     any other 1xx (e.g. 103 Early Hints) was mistakenly treated as the final response - forwarded to the
 ///     client as-is, with the proxy then trying to read the *next* HTTP message on the connection as if it
 ///     were a brand new request/response pair. These tests assert the corrected behavior: every interim

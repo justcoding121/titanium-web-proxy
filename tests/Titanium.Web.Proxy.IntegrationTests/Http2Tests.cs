@@ -11,11 +11,11 @@ using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
-///     Phase 2 (HTTP/2 gap closure) integration tests. Complements the existing HTTP/2 coverage in
-///     <see cref="StreamingBodyTests" /> (body-write hooks, RespondStreaming) with tests for the HPACK
-///     encoder persistence fix: before Phase 2, <c>Http2Helper.SendHeader</c> constructed a brand-new
+///     HTTP/2 integration tests. Complements the existing HTTP/2 coverage in
+///     <see cref="StreamingBodyTests" /> (body-write hooks, RespondStreaming) with tests for HPACK
+///     encoder persistence: previously <c>Http2Helper.SendHeader</c> constructed a brand-new
 ///     <c>Encoder</c> (with an empty dynamic table) on every call, so repeated headers across streams/requests
-///     on the same HTTP/2 connection were never indexed - see the (now updated) characterization tests in
+///     on the same HTTP/2 connection were never indexed - see the characterization tests in
 ///     <c>Http2HpackEncoderTests</c>. The encoder is now persisted per connection direction, matching how the
 ///     decoder was already handled, so these tests exercise many requests over one HTTP/2 connection to prove
 ///     the dynamic table is actually being reused end-to-end without corrupting headers.

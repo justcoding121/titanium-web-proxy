@@ -14,14 +14,13 @@ using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
-///     Phase 1 (phase1-trailers) integration tests for HTTP/1.1 chunked trailer handling
-///     (RFC 9110 §6.5 / RFC 9112 §7.1.2). Before Phase 1 the proxy relayed a syntactically valid,
-///     trailer-less terminator ("0\r\n\r\n") to the client regardless of whether the upstream message
-///     actually carried trailers, silently dropping them (see the removed
-///     ChunkedTrailerCharacterizationTests). These tests assert the corrected behavior: trailers are
-///     forwarded byte-for-byte, and - critically - the source connection is always fully drained through
-///     the terminating blank line so a pooled connection is never left in a corrupt state for the next
-///     message, whether or not the caller cares about the trailer's contents.
+///     Integration tests for HTTP/1.1 chunked trailer handling (RFC 9110 §6.5 / RFC 9112 §7.1.2).
+///     Previously the proxy relayed a syntactically valid, trailer-less terminator ("0\r\n\r\n") to the
+///     client regardless of whether the upstream message actually carried trailers, silently dropping them.
+///     These tests assert the corrected behavior: trailers are forwarded byte-for-byte, and - critically -
+///     the source connection is always fully drained through the terminating blank line so a pooled
+///     connection is never left in a corrupt state for the next message, whether or not the caller cares
+///     about the trailer's contents.
 /// </summary>
 [TestClass]
 public class ChunkedTrailerTests
@@ -291,11 +290,11 @@ public class ChunkedTrailerTests
     [Timeout(30 * 1000)]
     public async Task BeforeResponse_Respond_With_Custom_Response_Drains_Original_Chunked_Body_Without_Throwing()
     {
-        // Regression test for a pre-Phase-1 bug: NullWriter.WriteLineAsync used to throw
-        // NotImplementedException. That method is invoked whenever SessionEventArgs.SyphonOutBodyAsync
-        // drains an unread *chunked* body/trailer - here triggered by a BeforeResponse handler that
-        // overrides a chunked upstream response with e.Ok(...) before the original body is read. Draining
-        // must succeed silently so the pooled proxy -> server connection is left clean for reuse.
+        // Regression test: NullWriter.WriteLineAsync used to throw NotImplementedException. That method is
+        // invoked whenever SessionEventArgs.SyphonOutBodyAsync drains an unread *chunked* body/trailer -
+        // here triggered by a BeforeResponse handler that overrides a chunked upstream response with
+        // e.Ok(...) before the original body is read. Draining must succeed silently so the pooled
+        // proxy -> server connection is left clean for reuse.
         using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();

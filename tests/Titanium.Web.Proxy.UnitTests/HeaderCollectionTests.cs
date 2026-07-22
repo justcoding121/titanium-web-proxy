@@ -4,9 +4,9 @@ using Titanium.Web.Proxy.Http;
 namespace Titanium.Web.Proxy.UnitTests
 {
     /// <summary>
-    ///     Phase 0A characterization tests for <see cref="HeaderCollection" />.
-    ///     HeaderCollection underpins the new Phase 1 <c>TrailingHeaders</c> property, so its core
-    ///     unique/non-unique/add/remove/set semantics need a documented baseline before it gains new callers.
+    ///     Unit tests for <see cref="HeaderCollection" />.
+    ///     HeaderCollection underpins the <c>TrailingHeaders</c> property, so its core
+    ///     unique/non-unique/add/remove/set semantics need a documented baseline.
     /// </summary>
     [TestClass]
     public class HeaderCollectionTests

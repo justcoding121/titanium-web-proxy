@@ -205,11 +205,11 @@ public class StreamingBodyTests
     [TestMethod]
     public async Task OnResponseBodyWrite_Tls_Decrypted_Http11_Body_Relays_Correctly_And_Hook_Fires()
     {
-        // Phase 1 (phase1-tls-hook): the per-chunk body-write hook gate in HttpStream.CopyBodyAsync now
-        // checks the internal ITransportCapableStream.SupportsBodyWriteHook capability instead of the old
-        // IsNetworkStream flag, and HttpStream reports that capability as true whenever its backing stream
-        // is either a plain NetworkStream or a decrypted SslStream. So OnResponseBodyWrite must fire with
-        // parity for a TLS-decrypted HTTP/1.x connection, exactly as it already does for plain HTTP.
+        // The per-chunk body-write hook gate in HttpStream.CopyBodyAsync checks the internal
+        // ITransportCapableStream.SupportsBodyWriteHook capability instead of the old IsNetworkStream flag,
+        // and HttpStream reports that capability as true whenever its backing stream is either a plain
+        // NetworkStream or a decrypted SslStream. So OnResponseBodyWrite must fire with parity for a
+        // TLS-decrypted HTTP/1.x connection, exactly as it already does for plain HTTP.
         using var testSuite = new TestSuite();
 
         const string expected = "I am server. I received your greetings.";

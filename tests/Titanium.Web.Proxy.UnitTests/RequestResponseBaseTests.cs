@@ -7,9 +7,9 @@ using Titanium.Web.Proxy.Http;
 namespace Titanium.Web.Proxy.UnitTests
 {
     /// <summary>
-    ///     Phase 0A characterization tests for <see cref="RequestResponseBase" /> (via <see cref="Response" />):
+    ///     Unit tests for <see cref="RequestResponseBase" /> (via <see cref="Response" />):
     ///     body assignment, chunked/content-length bookkeeping, and the compression helper used when relaying a
-    ///     buffered, modified body back onto the wire. No dedicated unit tests existed for this type before Phase 0A.
+    ///     buffered, modified body back onto the wire.
     /// </summary>
     [TestClass]
     public class RequestResponseBaseTests
