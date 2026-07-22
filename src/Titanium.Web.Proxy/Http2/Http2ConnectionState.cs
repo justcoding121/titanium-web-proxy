@@ -54,10 +54,10 @@ internal sealed class Http2ConnectionState
     public SemaphoreSlim ClientWriteLock { get; } = new(1, 1);
 
     /// <summary>
-    ///     Writes toward the server are currently only ever issued by the client->server relay task, but a
-    ///     lock is still kept (mirroring <see cref="ClientWriteLock" />) so a future writer on that leg
-    ///     (e.g. proxy-originated PING/WINDOW_UPDATE) cannot interleave with an in-progress HEADERS/
-    ///     CONTINUATION/DATA sequence.
+    ///     Writes toward the server can originate from the client->server relay's main dispatch/relay path
+    ///     as well as the server->client relay's own-leg control-frame replies (WINDOW_UPDATE receive-credit
+    ///     grants, RST_STREAM, PING ACK, GOAWAY); serialize them so frames never interleave, mirroring
+    ///     <see cref="ClientWriteLock" />.
     /// </summary>
     public SemaphoreSlim ServerWriteLock { get; } = new(1, 1);
 

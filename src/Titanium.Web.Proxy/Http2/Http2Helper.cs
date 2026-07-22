@@ -790,7 +790,25 @@ namespace Titanium.Web.Proxy.Http2
                         // consumed here as internal bookkeeping for the *other* relay task's writes toward
                         // that same peer, never forwarded onward as a frame itself.
                         var flow = isClient ? connectionState.ClientSendFlow : connectionState.ServerSendFlow;
-                        flow.OnWindowUpdate(streamId, increment);
+                        bool overflow = flow.OnWindowUpdate(streamId, increment);
+                        if (overflow)
+                        {
+                            // RFC 7540 §6.9.1: a WINDOW_UPDATE that drives a flow-control window above
+                            // 2^31-1 is a FLOW_CONTROL_ERROR - stream-level (RST_STREAM) for a stream
+                            // window, connection-level (GOAWAY) for the connection window.
+                            exceptionFunc?.Invoke(new ProxyHttpException(
+                                "HTTP/2 protocol error: WINDOW_UPDATE increment overflowed the flow-control window.",
+                                null, args));
+                            if (streamId == 0)
+                            {
+                                await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], 0,
+                                    Http2ErrorCode.FlowControlError, input));
+                                return;
+                            }
+
+                            await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                streamId, Http2ErrorCode.FlowControlError, input));
+                        }
                     }
                 }
                 else if (type == Http2FrameType.Ping)
