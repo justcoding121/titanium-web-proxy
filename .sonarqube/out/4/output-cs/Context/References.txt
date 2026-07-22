@@ -1,28 +1,169 @@
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\Accessibility.dll
 C:\Users\runneradmin\.nuget\packages\bouncycastle.cryptography\2.6.2\lib\net6.0\BouncyCastle.Cryptography.dll
 C:\Users\runneradmin\.nuget\packages\brotlisharplib\0.3.3\lib\netstandard2.0\BrotliSharpLib.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.applicationinsights\2.23.0\lib\netstandard2.0\Microsoft.ApplicationInsights.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Antiforgery.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Authentication.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Authentication.BearerToken.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.aspnetcore.authentication.certificate\10.0.10\lib\net10.0\Microsoft.AspNetCore.Authentication.Certificate.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Authentication.Cookies.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Authentication.Core.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Authentication.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Authentication.OAuth.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Authorization.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Authorization.Policy.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Components.Authorization.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Components.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Components.Endpoints.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Components.Forms.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Components.Server.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Components.Web.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Connections.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.CookiePolicy.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Cors.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Cryptography.Internal.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Cryptography.KeyDerivation.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.DataProtection.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.DataProtection.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.DataProtection.Extensions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Diagnostics.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Diagnostics.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Diagnostics.HealthChecks.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.HostFiltering.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Hosting.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Hosting.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Hosting.Server.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Html.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Http.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Http.Connections.Common.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Http.Connections.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Http.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Http.Extensions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Http.Features.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Http.Results.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.HttpLogging.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.HttpOverrides.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.HttpsPolicy.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Identity.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Localization.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Localization.Routing.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Metadata.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Mvc.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Mvc.ApiExplorer.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Mvc.Core.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Mvc.Cors.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Mvc.DataAnnotations.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Mvc.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Mvc.Formatters.Json.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Mvc.Formatters.Xml.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Mvc.Localization.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Mvc.Razor.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Mvc.RazorPages.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Mvc.TagHelpers.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Mvc.ViewFeatures.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.OutputCaching.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.RateLimiting.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Razor.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Razor.Runtime.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.RequestDecompression.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.ResponseCaching.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.ResponseCaching.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.ResponseCompression.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Rewrite.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Routing.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Routing.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Server.HttpSys.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Server.IIS.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Server.IISIntegration.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Server.Kestrel.Core.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Server.Kestrel.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Server.Kestrel.Transport.NamedPipes.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Server.Kestrel.Transport.Quic.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.Session.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.SignalR.Common.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.SignalR.Core.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.SignalR.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.SignalR.Protocols.Json.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.StaticAssets.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.StaticFiles.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.WebSockets.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.AspNetCore.WebUtilities.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Microsoft.CSharp.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Caching.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Caching.Memory.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Configuration.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Configuration.Binder.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Configuration.CommandLine.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Configuration.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Configuration.EnvironmentVariables.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Configuration.FileExtensions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Configuration.Ini.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Configuration.Json.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Configuration.KeyPerFile.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Configuration.UserSecrets.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Configuration.Xml.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.DependencyInjection.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Diagnostics.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Diagnostics.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Diagnostics.HealthChecks.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Features.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.FileProviders.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.FileProviders.Composite.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.FileProviders.Embedded.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.FileProviders.Physical.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.FileSystemGlobbing.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Hosting.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Hosting.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Http.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Identity.Core.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Identity.Stores.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Localization.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Localization.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Logging.Abstractions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Logging.Configuration.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Logging.Console.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Logging.Debug.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Logging.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Logging.EventLog.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Logging.EventSource.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Logging.TraceSource.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.ObjectPool.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Options.ConfigurationExtensions.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Options.DataAnnotations.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Options.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Primitives.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.Validation.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Extensions.WebEncoders.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.JSInterop.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Net.Http.Headers.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testing.platform.msbuild\1.7.3\lib\net9.0\Microsoft.Testing.Extensions.MSBuild.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testing.extensions.telemetry\1.7.3\lib\net9.0\Microsoft.Testing.Extensions.Telemetry.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testing.extensions.trxreport.abstractions\1.7.3\lib\net9.0\Microsoft.Testing.Extensions.TrxReport.Abstractions.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testing.extensions.vstestbridge\1.7.3\lib\net9.0\Microsoft.Testing.Extensions.VSTestBridge.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testing.platform\1.7.3\lib\net9.0\Microsoft.Testing.Platform.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testplatform.adapterutilities\17.13.0\lib\net9.0\Microsoft.TestPlatform.AdapterUtilities.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testplatform.testhost\17.14.1\lib\net8.0\Microsoft.TestPlatform.CommunicationUtilities.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testplatform.testhost\17.14.1\lib\net8.0\Microsoft.TestPlatform.CoreUtilities.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testplatform.testhost\17.14.1\lib\net8.0\Microsoft.TestPlatform.CrossPlatEngine.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testplatform.testhost\17.14.1\lib\net8.0\Microsoft.TestPlatform.PlatformAbstractions.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testplatform.testhost\17.14.1\lib\net8.0\Microsoft.TestPlatform.Utilities.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Microsoft.VisualBasic.Core.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Microsoft.VisualBasic.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.codecoverage\17.14.1\lib\net8.0\Microsoft.VisualStudio.CodeCoverage.Shim.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testplatform.testhost\17.14.1\lib\net8.0\Microsoft.VisualStudio.TestPlatform.Common.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testplatform.testhost\17.14.1\lib\net8.0\Microsoft.VisualStudio.TestPlatform.ObjectModel.dll
+C:\Users\runneradmin\.nuget\packages\mstest.testframework\3.9.3\lib\net9.0\Microsoft.VisualStudio.TestPlatform.TestFramework.dll
+C:\Users\runneradmin\.nuget\packages\mstest.testframework\3.9.3\buildTransitive\net9.0\Microsoft.VisualStudio.TestPlatform.TestFramework.Extensions.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Win32.Primitives.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\Microsoft.Win32.Registry.AccessControl.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Microsoft.Win32.Registry.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\Microsoft.Win32.SystemEvents.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\mscorlib.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\netstandard.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\PresentationCore.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\PresentationFramework.Aero.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\PresentationFramework.Aero2.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\PresentationFramework.AeroLite.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\PresentationFramework.Classic.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\PresentationFramework.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\PresentationFramework.Luna.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\PresentationFramework.Royale.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\PresentationUI.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\ReachFramework.dll
+C:\Users\runneradmin\.nuget\packages\newtonsoft.json\13.0.3\lib\net6.0\Newtonsoft.Json.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.AppContext.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Buffers.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.CodeDom.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Collections.Concurrent.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Collections.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Collections.Immutable.dll
@@ -34,7 +175,6 @@ C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Syst
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.ComponentModel.EventBasedAsync.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.ComponentModel.Primitives.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.ComponentModel.TypeConverter.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Configuration.ConfigurationManager.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Configuration.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Console.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Core.dll
@@ -44,23 +184,20 @@ C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Syst
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Diagnostics.Contracts.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Diagnostics.Debug.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Diagnostics.DiagnosticSource.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Diagnostics.EventLog.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\System.Diagnostics.EventLog.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Diagnostics.FileVersionInfo.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Diagnostics.PerformanceCounter.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Diagnostics.Process.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Diagnostics.StackTrace.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Diagnostics.TextWriterTraceListener.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Diagnostics.Tools.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Diagnostics.TraceSource.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Diagnostics.Tracing.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.DirectoryServices.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Drawing.Common.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Drawing.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Drawing.Primitives.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Dynamic.Runtime.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Formats.Asn1.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Formats.Nrbf.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\System.Formats.Cbor.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Formats.Tar.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Globalization.Calendars.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Globalization.dll
@@ -77,7 +214,6 @@ C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Syst
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.IO.FileSystem.Watcher.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.IO.IsolatedStorage.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.IO.MemoryMappedFiles.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.IO.Packaging.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.IO.Pipelines.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.IO.Pipes.AccessControl.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.IO.Pipes.dll
@@ -111,9 +247,6 @@ C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Syst
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Numerics.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Numerics.Vectors.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.ObjectModel.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Printing.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Private.Windows.Core.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Private.Windows.GdiPlus.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Reflection.DispatchProxy.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Reflection.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Reflection.Emit.dll
@@ -123,7 +256,6 @@ C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Syst
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Reflection.Metadata.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Reflection.Primitives.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Reflection.TypeExtensions.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Resources.Extensions.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Resources.Reader.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Resources.ResourceManager.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Resources.Writer.dll
@@ -151,13 +283,10 @@ C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Syst
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Security.Cryptography.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Security.Cryptography.Encoding.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Security.Cryptography.OpenSsl.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Security.Cryptography.Pkcs.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Security.Cryptography.Primitives.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Security.Cryptography.ProtectedData.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Security.Cryptography.X509Certificates.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Security.Cryptography.Xml.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\System.Security.Cryptography.Xml.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Security.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Security.Permissions.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Security.Principal.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Security.Principal.Windows.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Security.SecureString.dll
@@ -173,6 +302,7 @@ C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Syst
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Threading.Channels.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Threading.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Threading.Overlapped.dll
+C:\Program Files\dotnet\packs\Microsoft.AspNetCore.App.Ref\10.0.10\ref\net10.0\System.Threading.RateLimiting.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Threading.Tasks.Dataflow.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Threading.Tasks.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Threading.Tasks.Extensions.dll
@@ -185,13 +315,7 @@ C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Syst
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.ValueTuple.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Web.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Web.HttpUtility.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Windows.Controls.Ribbon.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Windows.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Windows.Extensions.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Windows.Input.Manipulations.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Windows.Presentation.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Windows.Primitives.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\System.Xaml.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Xml.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Xml.Linq.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Xml.ReaderWriter.dll
@@ -201,9 +325,6 @@ C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\Syst
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Xml.XmlSerializer.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Xml.XPath.dll
 C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\System.Xml.XPath.XDocument.dll
+C:\Users\runneradmin\.nuget\packages\microsoft.testplatform.testhost\17.14.1\lib\net8.0\testhost.dll
 D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\obj\Release\net10.0\ref\Titanium.Web.Proxy.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\UIAutomationClient.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\UIAutomationClientSideProviders.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\UIAutomationProvider.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\UIAutomationTypes.dll
-C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\10.0.10\ref\net10.0\WindowsBase.dll
+C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\WindowsBase.dll

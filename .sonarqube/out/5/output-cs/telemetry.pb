@@ -1,1 +1,1 @@
-üRêD:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.WindowsService\Titanium.Web.Proxy.Examples.WindowsService.csprojÚ	CSharp7_3
+~RqD:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.UnitTests\Titanium.Web.Proxy.UnitTests.csprojÚCSharp14

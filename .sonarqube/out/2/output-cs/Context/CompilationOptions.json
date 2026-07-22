@@ -5,7 +5,7 @@
   "outputKind": "ConsoleApplication",
   "scriptClassName": "Script",
   "usings": [],
-  "moduleName": "Titanium.Web.Proxy.Examples.Basic.dll",
+  "moduleName": "Titanium.Web.Proxy.Examples.WindowsService.dll",
   "optionCompareText": false,
   "optionExplicit": false,
   "optionInfer": false,

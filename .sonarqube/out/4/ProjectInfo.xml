@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ProjectInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://www.sonarsource.com/msbuild/integration/2015/1">
-  <ProjectName>Titanium.Web.Proxy.Examples.Wpf</ProjectName>
+  <ProjectName>Titanium.Web.Proxy.IntegrationTests</ProjectName>
   <ProjectLanguage>C#</ProjectLanguage>
-  <ProjectType>Product</ProjectType>
-  <ProjectGuid>4406ce17-9a39-4f28-8363-6169a4f799c1</ProjectGuid>
-  <FullPath>D:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.Wpf\Titanium.Web.Proxy.Examples.Wpf.csproj</FullPath>
+  <ProjectType>Test</ProjectType>
+  <ProjectGuid>1d053d72-dcb4-4517-acdd-d35adc186950</ProjectGuid>
+  <FullPath>D:\a\titanium-web-proxy\titanium-web-proxy\tests\Titanium.Web.Proxy.IntegrationTests\Titanium.Web.Proxy.IntegrationTests.csproj</FullPath>
   <IsExcluded>false</IsExcluded>
   <AnalysisResultFiles>
     <AnalysisResultFile Id="FilesToAnalyze" Location="D:\a\titanium-web-proxy\titanium-web-proxy\.sonarqube\conf\4\FilesToAnalyze.txt" />
@@ -16,5 +16,5 @@
   </AnalysisSettings>
   <Configuration>Release</Configuration>
   <Platform>AnyCPU</Platform>
-  <TargetFramework>net10.0-windows</TargetFramework>
+  <TargetFramework>net10.0</TargetFramework>
 </ProjectInfo>

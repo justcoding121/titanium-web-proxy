@@ -16,5 +16,5 @@
   </AnalysisSettings>
   <Configuration>Release</Configuration>
   <Platform>AnyCPU</Platform>
-  <TargetFramework>net462</TargetFramework>
+  <TargetFramework>net10.0</TargetFramework>
 </ProjectInfo>

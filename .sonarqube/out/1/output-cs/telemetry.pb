@@ -1,1 +1,1 @@
-hR[D:\a\titanium-web-proxy\titanium-web-proxy\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csprojòCSharp14
+‹R~D:\a\titanium-web-proxy\titanium-web-proxy\examples\Titanium.Web.Proxy.Examples.Basic\Titanium.Web.Proxy.Examples.Basic.csprojòCSharp14

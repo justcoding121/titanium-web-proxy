@@ -1,7 +1,7 @@
 {
   "language": "C#",
-  "targetFramework": "net10.0",
-  "assemblyName": "Titanium.Web.Proxy.IntegrationTests",
-  "projectType": "Test",
-  "projectPath": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\tests\\Titanium.Web.Proxy.IntegrationTests\\Titanium.Web.Proxy.IntegrationTests.csproj"
+  "targetFramework": "net10.0-windows",
+  "assemblyName": "Titanium.Web.Proxy.Examples.Wpf",
+  "projectType": "Product",
+  "projectPath": "D:\\a\\titanium-web-proxy\\titanium-web-proxy\\examples\\Titanium.Web.Proxy.Examples.Wpf\\Titanium.Web.Proxy.Examples.Wpf.csproj"
 }
