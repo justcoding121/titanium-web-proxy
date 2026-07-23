@@ -6,6 +6,7 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http2;
@@ -48,6 +49,18 @@ internal sealed class Http2RawOriginServer : IDisposable
     public string Url => $"https://localhost:{Port}/";
 
     /// <summary>
+    ///     The number of raw TCP connections this server has accepted so far, counted at the moment of
+    ///     accept - before the TLS/ALPN handshake and connection preface. This includes connections that
+    ///     never make it past the TLS handshake (e.g. the proxy's own "does the origin support HTTP/2"
+    ///     probe, which opens a connection purely to read the negotiated ALPN and then closes it without
+    ///     ever sending the HTTP/2 connection preface), so it can be used to assert on the total number of
+    ///     TLS handshakes a test scenario caused, independent of how many of those turned into real requests.
+    /// </summary>
+    public int AcceptedConnectionCount => acceptedConnectionCount;
+
+    private int acceptedConnectionCount;
+
+    /// <summary>
     ///     Sets the handler invoked for each accepted connection, after the TLS/ALPN handshake and the
     ///     client connection preface have already been consumed.
     /// </summary>
@@ -69,6 +82,8 @@ internal sealed class Http2RawOriginServer : IDisposable
             {
                 return;
             }
+
+            Interlocked.Increment(ref acceptedConnectionCount);
 
             _ = Task.Run(async () =>
             {
