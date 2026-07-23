@@ -43,7 +43,8 @@ namespace Titanium.Web.Proxy.Http2
         /// <returns></returns>
         internal static async Task SendHttp2(Stream clientStream, Stream serverStream,
             Func<SessionEventArgs> sessionFactory,
-            Func<SessionEventArgs, Task> onBeforeRequest, Func<SessionEventArgs, Task> onBeforeResponse,
+            Func<SessionEventArgs, Http2StreamContext, Task> onBeforeRequest,
+            Func<SessionEventArgs, Http2StreamContext, Task> onBeforeResponse,
             Func<SessionEventArgs, Task> onAfterResponse, Action<HeaderCollection> prepareRequestHeaders,
             CancellationTokenSource cancellationTokenSource, Guid connectionId,
             ExceptionHandler? exceptionFunc)
@@ -89,7 +90,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     path, RST_STREAM, and final connection-teardown cleanup all race to finalize the same stream)
         ///     never run it twice or race Dispose against a still-running AfterResponse.
         /// </summary>
-        private static async Task FinalizeStreamAsync(Http2StreamState state,
+        internal static async Task FinalizeStreamAsync(Http2StreamState state,
             Func<SessionEventArgs, Task> onAfterResponse, ExceptionHandler? exceptionFunc)
         {
             if (Interlocked.CompareExchange(ref state.FinalizedFlag, 1, 0) != 0)
@@ -126,7 +127,7 @@ namespace Titanium.Web.Proxy.Http2
         private static async Task CopyHttp2FrameAsync(Stream input, Stream output,
             Http2ConnectionState connectionState,
             Func<SessionEventArgs> sessionFactory,
-            Func<SessionEventArgs, Task> onBeforeRequestResponse,
+            Func<SessionEventArgs, Http2StreamContext, Task> onBeforeRequestResponse,
             Func<SessionEventArgs, Task> onAfterResponse,
             Action<HeaderCollection>? prepareRequestHeaders,
             bool isClient,
@@ -430,7 +431,9 @@ namespace Titanium.Web.Proxy.Http2
                     var tcs = new TaskCompletionSource<bool>();
                     request.ReadHttp2BeforeHandlerTaskCompletionSource = tcs;
 
-                    var handler = onBeforeRequestResponse(sessionArgs);
+                    var streamContext = new Http2StreamContext(hbStreamId, connectionState,
+                        isClient ? input : output, cancellationToken);
+                    var handler = onBeforeRequestResponse(sessionArgs, streamContext);
                     request.Http2BeforeHandlerTask = handler;
 
                     if (handler == await Task.WhenAny(tcs.Task, handler))
@@ -523,7 +526,9 @@ namespace Titanium.Web.Proxy.Http2
                         var tcs = new TaskCompletionSource<bool>();
                         response.ReadHttp2BeforeHandlerTaskCompletionSource = tcs;
 
-                        var handler = onBeforeRequestResponse(sessionArgs);
+                        var streamContext = new Http2StreamContext(hbStreamId, connectionState,
+                            isClient ? input : output, cancellationToken);
+                        var handler = onBeforeRequestResponse(sessionArgs, streamContext);
                         response.Http2BeforeHandlerTask = handler;
 
                         if (handler == await Task.WhenAny(tcs.Task, handler))
@@ -1431,7 +1436,7 @@ namespace Titanium.Web.Proxy.Http2
             // when this method is called something received which is not yet implemented
         }
 
-        private static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)
+        internal static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)
         {
             // Reuse one Encoder (and its HPACK dynamic table) per direction for the lifetime of the connection,
             // mirroring how the Decoder is persisted below - the dynamic table is connection-scoped, not
@@ -1501,7 +1506,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     encoder as <see cref="SendHeader" /> so the destination's dynamic table stays in sync
         ///     regardless of whether trailers are actually present on a given message.
         /// </summary>
-        private static async Task SendTrailer(Http2Settings settings, Http2FrameHeader frameHeader,
+        internal static async Task SendTrailer(Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, int streamId, HeaderCollection trailingHeaders, bool endStream, Stream output)
         {
             var encoder = settings.Encoder;
@@ -1656,7 +1661,7 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         /// <summary>Writes an RST_STREAM frame (RFC 7540 §6.4) resetting the given stream with the given error code.</summary>
-        private static async Task SendRstStreamAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
+        internal static async Task SendRstStreamAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int streamId, Http2ErrorCode errorCode, Stream output)
         {
             frameHeader.StreamId = streamId;
@@ -1724,7 +1729,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     HTTP/2 frames the body with DATA/END_STREAM (Transfer-Encoding is never used over h2), so the
         ///     chunked header is always stripped regardless of which shape applies.
         /// </summary>
-        private static async Task EmitSyntheticResponseAsync(SessionEventArgs args, int streamId,
+        internal static async Task EmitSyntheticResponseAsync(SessionEventArgs args, int streamId,
             Http2ConnectionState connectionState, Stream clientStream, CancellationToken cancellationToken)
         {
             var response = args.HttpClient.Response;

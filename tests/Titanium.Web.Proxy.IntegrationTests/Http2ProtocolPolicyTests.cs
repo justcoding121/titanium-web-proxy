@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
 using Titanium.Web.Proxy.Models;
@@ -19,11 +20,13 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Coverage for the connection-scoped <see cref="UpstreamHttpProtocol" />/<c>AllowHttpProtocolTranslation</c>
 ///     policy on <see cref="TunnelConnectSessionEventArgs" /> (explicit CONNECT tunnels) and
 ///     <see cref="BeforeSslAuthenticateEventArgs" /> (transparent endpoints), decoupling which HTTP version
-///     the proxy uses toward the origin from which version the client negotiates with the proxy. Actual
-///     protocol translation bridges (h2 client &lt;-&gt; HTTP/1.1 origin and vice versa) are a later
-///     milestone; until then, a policy that would require one either downgrades the client offer to avoid
-///     needing it (<see cref="UpstreamHttpProtocol.Http11" /> without translation) or fails the connection
-///     outright with a clear, documented exception.
+///     the proxy uses toward the origin from which version the client negotiates with the proxy. When a
+///     policy would otherwise require translation but <c>AllowHttpProtocolTranslation</c> is left disabled,
+///     the mismatch either downgrades the client offer to avoid needing it
+///     (<see cref="UpstreamHttpProtocol.Http11" /> without translation) or fails the connection outright with
+///     a clear, documented exception; when translation is explicitly enabled, the h2-client-to-HTTP/1.1-origin
+///     bridge (see <see cref="Http2ToHttp11BridgeHandler" />) is exercised instead - the HTTP/1.1-client-to-h2
+///     origin direction is a later milestone.
 /// </summary>
 [TestClass]
 public class Http2ProtocolPolicyTests
@@ -119,11 +122,15 @@ public class Http2ProtocolPolicyTests
 
     [TestMethod]
     [Timeout(30 * 1000)]
-    public async Task Explicit_Forced_Http11_With_Translation_And_Http2_Only_Client_Fails_Clearly()
+    public async Task Explicit_Forced_Http11_With_Translation_And_Http2_Only_Client_Succeeds_Via_Bridge()
     {
         using var testSuite = new TestSuite();
         var server = testSuite.GetServer();
-        server.HandleRequest(context => context.Response.WriteAsync("should-not-be-reached"));
+        server.HandleRequest(async context =>
+        {
+            context.Response.Headers["X-Origin-Protocol"] = context.Request.Protocol;
+            await context.Response.WriteAsync("h2-to-h11-bridge-ok");
+        });
 
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
@@ -139,32 +146,177 @@ public class Http2ProtocolPolicyTests
             return Task.CompletedTask;
         };
 
-        Exception? clientSideException = null;
-        try
+        using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, "localhost",
+            server.HttpsListeningPort);
+
+        var requestHeaders = rawClient.Connection.EncodeHeaders(
+            new[] { (":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/") },
+            Array.Empty<(string, string)>());
+        await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, true);
+
+        var (streamId, responseHeaders, endStream) = await rawClient.Connection.ReadHeaderBlockAsync();
+        Assert.AreEqual(1, streamId);
+        Assert.AreEqual("200", responseHeaders.Single(h => h.Name == ":status").Value,
+            "The h2 client should see a real translated response from the HTTP/1.1-only origin, not a failure.");
+        Assert.AreEqual("HTTP/1.1", responseHeaders.Single(h => h.Name == "x-origin-protocol").Value,
+            "The origin must have actually been spoken to over HTTP/1.1 even though the client used h2.");
+
+        var body = new MemoryStream();
+        if (!endStream)
         {
-            using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, "localhost",
-                server.HttpsListeningPort);
-
-            var requestHeaders = rawClient.Connection.EncodeHeaders(
-                new[] { (":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/") },
-                Array.Empty<(string, string)>());
-            await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, true);
-            await rawClient.Connection.ReadHeaderBlockAsync();
+            Http2RawFrame.Frame frame;
+            do
+            {
+                frame = await rawClient.Connection.ReadFrameAsync();
+                if (frame.Type == Http2FrameType.Data && frame.StreamId == streamId)
+                    body.Write(frame.Payload, 0, frame.Payload.Length);
+            } while (frame.Type != Http2FrameType.Data || (frame.Flags & Http2FrameFlag.EndStream) == 0);
         }
-        catch (Exception ex)
+
+        Assert.AreEqual("h2-to-h11-bridge-ok", Encoding.ASCII.GetString(body.ToArray()));
+        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Explicit_Forced_Http11_With_Translation_And_Http2_Client_Post_With_Body_Succeeds_Via_Bridge()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context =>
         {
-            clientSideException = ex;
+            using var reader = new StreamReader(context.Request.Body);
+            var receivedBody = await reader.ReadToEndAsync();
+            context.Response.Headers["X-Received-Content-Length"] = context.Request.ContentLength.ToString();
+            await context.Response.WriteAsync($"echo:{receivedBody}");
+        });
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        Exception? observedException = null;
+        proxy.ExceptionFunc = ex => observedException = ex;
+
+        var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, "localhost",
+            server.HttpsListeningPort);
+
+        const string requestBody = "hello from an h2 client being bridged to an h1.1-only origin";
+        var bodyBytes = Encoding.ASCII.GetBytes(requestBody);
+
+        var requestHeaders = rawClient.Connection.EncodeHeaders(
+            new[] { (":method", "POST"), (":scheme", "https"), (":authority", "localhost"), (":path", "/") },
+            new[] { ("content-length", bodyBytes.Length.ToString()) });
+        await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, false);
+        await rawClient.Connection.WriteFrameAsync(Http2FrameType.Data, 1, Http2FrameFlag.EndStream, bodyBytes);
+
+        var (streamId, responseHeaders, endStream) = await rawClient.Connection.ReadHeaderBlockAsync();
+        Assert.AreEqual(1, streamId);
+        Assert.AreEqual("200", responseHeaders.Single(h => h.Name == ":status").Value);
+        Assert.AreEqual(bodyBytes.Length.ToString(),
+            responseHeaders.Single(h => h.Name == "x-received-content-length").Value,
+            "The HTTP/1.1 origin must have received the whole request body the h2 client sent.");
+
+        var body = new MemoryStream();
+        if (!endStream)
+        {
+            Http2RawFrame.Frame frame;
+            do
+            {
+                frame = await rawClient.Connection.ReadFrameAsync();
+                if (frame.Type == Http2FrameType.Data && frame.StreamId == streamId)
+                    body.Write(frame.Payload, 0, frame.Payload.Length);
+            } while (frame.Type != Http2FrameType.Data || (frame.Flags & Http2FrameFlag.EndStream) == 0);
         }
 
-        Assert.IsTrue(clientSideException != null || observedException != null,
-            "A translation-required-but-unimplemented policy must not silently succeed.");
+        Assert.AreEqual($"echo:{requestBody}", Encoding.ASCII.GetString(body.ToArray()));
+        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+    }
 
-        for (var i = 0; i < 50 && observedException == null; i++)
-            await Task.Delay(20);
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task
+        Explicit_Forced_Http11_With_Translation_Concurrent_Http2_Streams_Get_Independent_Http11_Origin_Round_Trips()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context =>
+        {
+            // Both requests deliberately delay by the same amount: if the bridge serialized origin round
+            // trips (e.g. by sharing one TcpServerConnection across streams, which HTTP/1.1 cannot
+            // multiplex) rather than giving each h2 stream its own independent connection, the two
+            // requests would complete roughly 2x this delay apart instead of concurrently.
+            await Task.Delay(400);
+            await context.Response.WriteAsync($"response-for-{context.Request.Path}");
+        });
 
-        Assert.IsNotNull(observedException, "The proxy should have surfaced a clear exception via ExceptionFunc.");
-        Assert.IsTrue(observedException!.Message.Contains("not implemented", StringComparison.OrdinalIgnoreCase),
-            $"Expected a 'not implemented' translation message, got: '{observedException.Message}'.");
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        Exception? observedException = null;
+        proxy.ExceptionFunc = ex => observedException = ex;
+
+        var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, "localhost",
+            server.HttpsListeningPort);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        var firstRequestHeaders = rawClient.Connection.EncodeHeaders(
+            new[] { (":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/first") },
+            Array.Empty<(string, string)>());
+        await rawClient.Connection.WriteHeaderBlockAsync(1, firstRequestHeaders, true);
+
+        var secondRequestHeaders = rawClient.Connection.EncodeHeaders(
+            new[] { (":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/second") },
+            Array.Empty<(string, string)>());
+        await rawClient.Connection.WriteHeaderBlockAsync(3, secondRequestHeaders, true);
+
+        var pendingStatus = new Dictionary<int, string>();
+        var pendingBody = new Dictionary<int, MemoryStream>();
+        var finishedStreams = new HashSet<int>();
+
+        while (finishedStreams.Count < 2)
+        {
+            var frame = await rawClient.Connection.ReadFrameAsync();
+            if (frame.Type == Http2FrameType.Headers)
+            {
+                var headers = rawClient.Connection.DecodeHeaders(frame.Payload);
+                pendingStatus[frame.StreamId] = headers.Single(h => h.Name == ":status").Value;
+                pendingBody[frame.StreamId] = new MemoryStream();
+                if ((frame.Flags & Http2FrameFlag.EndStream) != 0) finishedStreams.Add(frame.StreamId);
+            }
+            else if (frame.Type == Http2FrameType.Data)
+            {
+                pendingBody[frame.StreamId].Write(frame.Payload, 0, frame.Payload.Length);
+                if ((frame.Flags & Http2FrameFlag.EndStream) != 0) finishedStreams.Add(frame.StreamId);
+            }
+        }
+
+        stopwatch.Stop();
+
+        Assert.AreEqual("200", pendingStatus[1]);
+        Assert.AreEqual("200", pendingStatus[3]);
+        Assert.AreEqual("response-for-/first", Encoding.ASCII.GetString(pendingBody[1].ToArray()));
+        Assert.AreEqual("response-for-/second", Encoding.ASCII.GetString(pendingBody[3].ToArray()));
+        Assert.IsTrue(stopwatch.ElapsedMilliseconds < 750,
+            "Two concurrent h2 streams bridged to an HTTP/1.1-only origin should get independent, concurrent " +
+            $"origin round trips rather than being serialized onto one shared connection; took {stopwatch.ElapsedMilliseconds}ms.");
+        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
     }
 
     [TestMethod]
