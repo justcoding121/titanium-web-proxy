@@ -243,6 +243,72 @@ public class LoggingTests
         StringAssert.DoesNotMatch(outWriter.ToString(), new System.Text.RegularExpressions.Regex("error goes to stderr"));
     }
 
+    [TestMethod]
+    [DataRow(LogLevel.Trace)]
+    [DataRow(LogLevel.Debug)]
+    [DataRow(LogLevel.Warning)]
+    [DataRow(LogLevel.Error)]
+    [DataRow(LogLevel.Critical)]
+    public void ConsoleLoggerProvider_AnsiColorFor_Returns_A_Code_For_Every_Level_Except_Information(LogLevel level)
+    {
+        var color = ConsoleLoggerProvider.AnsiColorFor(level);
+
+        Assert.IsNotNull(color, $"{level} should have a distinct color so it stands out from Information");
+        StringAssert.StartsWith(color, "\x1b[");
+    }
+
+    [TestMethod]
+    public void ConsoleLoggerProvider_AnsiColorFor_Information_Is_Null_ie_Default_Terminal_Color()
+    {
+        Assert.IsNull(ConsoleLoggerProvider.AnsiColorFor(LogLevel.Information));
+    }
+
+    [TestMethod]
+    public void ConsoleLoggerProvider_Colorize_Wraps_Line_With_Color_And_Reset_When_A_Color_Applies()
+    {
+        var colored = ConsoleLoggerProvider.Colorize(LogLevel.Error, "the line");
+
+        StringAssert.StartsWith(colored, "\x1b[31m");
+        StringAssert.EndsWith(colored, "\x1b[0m");
+        StringAssert.Contains(colored, "the line");
+    }
+
+    [TestMethod]
+    public void ConsoleLoggerProvider_Colorize_Leaves_Information_Line_Unchanged()
+    {
+        Assert.AreEqual("the line", ConsoleLoggerProvider.Colorize(LogLevel.Information, "the line"));
+    }
+
+    [TestMethod]
+    public void ConsoleLoggerProvider_ShouldColorize_Respects_EnableConsoleColors_Switch()
+    {
+        Assert.IsFalse(ConsoleLoggerProvider.ShouldColorize(false, streamIsRedirected: false, noColorEnvValue: null));
+        Assert.IsTrue(ConsoleLoggerProvider.ShouldColorize(true, streamIsRedirected: false, noColorEnvValue: null));
+    }
+
+    [TestMethod]
+    public void ConsoleLoggerProvider_ShouldColorize_Never_Colors_A_Redirected_Stream()
+    {
+        Assert.IsFalse(ConsoleLoggerProvider.ShouldColorize(true, streamIsRedirected: true, noColorEnvValue: null));
+    }
+
+    [TestMethod]
+    [DataRow("1")]
+    [DataRow("true")]
+    [DataRow("anything-non-empty")]
+    public void ConsoleLoggerProvider_ShouldColorize_Respects_NO_COLOR_Convention(string noColorValue)
+    {
+        Assert.IsFalse(ConsoleLoggerProvider.ShouldColorize(true, streamIsRedirected: false, noColorValue));
+    }
+
+    [TestMethod]
+    [DataRow(null)]
+    [DataRow("")]
+    public void ConsoleLoggerProvider_ShouldColorize_Allows_Color_When_NO_COLOR_Is_Unset_Or_Empty(string? noColorValue)
+    {
+        Assert.IsTrue(ConsoleLoggerProvider.ShouldColorize(true, streamIsRedirected: false, noColorValue));
+    }
+
     private sealed class CapturingProvider : ILoggerProvider
     {
         public readonly List<string> Messages = new();

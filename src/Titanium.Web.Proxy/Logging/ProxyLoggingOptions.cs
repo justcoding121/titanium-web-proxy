@@ -36,6 +36,18 @@ public sealed class ProxyLoggingOptions
     public bool EnableConsole { get; set; } = true;
 
     /// <summary>
+    ///     Whether the built-in console sink colors each line by <see cref="LogLevel" /> using ANSI escape
+    ///     codes (dim for <see cref="LogLevel.Trace" />/<see cref="LogLevel.Debug" />, default for
+    ///     <see cref="LogLevel.Information" />, yellow for <see cref="LogLevel.Warning" />, red for
+    ///     <see cref="LogLevel.Error" />, bold red for <see cref="LogLevel.Critical" />). Defaults to
+    ///     <see langword="true" />; automatically suppressed - regardless of this setting - for a stream
+    ///     (stdout/stderr) that is redirected (e.g. piped to a file), or entirely when the
+    ///     <c>NO_COLOR</c> environment variable (see <see href="https://no-color.org/" />) is set, so
+    ///     redirected output/log files never contain raw escape codes.
+    /// </summary>
+    public bool EnableConsoleColors { get; set; } = true;
+
+    /// <summary>
     ///     Whether the built-in rolling-file sink is active. Defaults to <see langword="false" />.
     ///     Ignored when <see cref="LoggerFactory" /> is set.
     /// </summary>
