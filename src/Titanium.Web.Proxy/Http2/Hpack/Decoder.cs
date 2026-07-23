@@ -313,7 +313,6 @@ internal class Decoder
 
                         if (valueLength == 0)
                         {
-                            //InsertHeader(headerListener, name, Net45Compatibility.EmptyArray, indexType);
                             name = Array.Empty<byte>();
                             state = State.ReadHeaderRepresentation;
                         }
