@@ -138,56 +138,28 @@ public partial class ProxyServer
                         var alpn = clientHelloInfo.GetAlpn();
                         if (alpn != null && alpn.Contains(SslApplicationProtocol.Http2))
                         {
-                            var connectTarget = requestLine.RequestUri.GetString();
-                            if (Http2OriginCapabilityCache.TryGet(connectTarget, out http2Supported))
-                            {
-                                HandshakeDebugLog.Http2ProbeResult(connectTarget, true, http2Supported, null);
-                            }
-                            else
-                                // Probe the origin to determine whether it supports HTTP/2 via ALPN.
-                                //
-                                // ALPN must be committed to before AuthenticateAsServerAsync completes the
-                                // TLS handshake with the browser — SslStream does not support changing the
-                                // application protocol on an established session. This means we must know
-                                // the origin's capability *before* we authenticate the browser side.
-                                //
-                                // The only proper alternative would be HTTP/2 ↔ HTTP/1.1 protocol
-                                // translation at the application layer (offer the browser the full ALPN list
-                                // regardless of origin, then translate between h2 frames and h1.1 when the
-                                // two sides negotiate different protocols). That is a substantial feature and
-                                // has not been implemented, so the probe approach is the correct design here.
-                                //
-                                // The probe connection is released back to the pool, so it is reusable by
-                                // the actual request that follows immediately. Cache hits pay zero overhead.
-                                try
-                                {
-                                    var connection = await TcpConnectionFactory.GetServerConnection(this, connectArgs,
-                                        true, SslExtensions.Http2ProtocolAsList,
-                                        true, true, cancellationToken);
-
-                                    if (connection != null)
-                                    {
-                                        http2Supported = connection.NegotiatedApplicationProtocol ==
-                                                         SslApplicationProtocol.Http2;
-
-                                        // release connection back to pool instead of closing when connection pool is enabled.
-                                        await TcpConnectionFactory.Release(connection, true);
-                                    }
-
-                                    Http2OriginCapabilityCache.Set(connectTarget, http2Supported);
-                                    HandshakeDebugLog.Http2ProbeResult(connectTarget, false, http2Supported, null);
-                                }
-                                catch (Exception ex)
-                                {
-                                    // Do not cache a failed probe: it may be a transient network/cert issue rather
-                                    // than a genuine lack of HTTP/2 support, and caching "false" here would pin
-                                    // every subsequent tunnel to this host to HTTP/1.1 for the full TTL.
-                                    HandshakeDebugLog.Http2ProbeResult(connectTarget, false, false, ex);
-                                }
+                            // Negotiate origin HTTP/2 capability and retain ownership of whatever
+                            // connection that negotiation opened (a mandatory discovery probe on a cold
+                            // cache, or an optional matching prefetch on a cache hit), so it can be adopted
+                            // below as the actual session connection instead of being discarded and
+                            // reopened. ALPN must be committed to before AuthenticateAsServerAsync
+                            // completes the TLS handshake with the browser - SslStream does not support
+                            // changing the application protocol on an established session - so the origin's
+                            // capability must be known *before* the browser side is authenticated.
+                            // Keyed on destination, forward target, local upstream endpoint, and effective
+                            // external proxy (the same dimensions used for connection pooling) rather than
+                            // just the hostname, so two routes to the same origin host through different
+                            // upstream proxies/local endpoints never share a capability result.
+                            var capabilityCacheKey =
+                                await TcpConnectionFactory.GetConnectionCacheKey(this, connectArgs, default);
+                            var negotiation = await NegotiateHttp2Async(connectArgs, capabilityCacheKey,
+                                EnableTcpServerConnectionPrefetch, cancellationToken);
+                            http2Supported = negotiation.OriginSupportsHttp2;
+                            prefetchConnectionTask = negotiation.RetainedConnectionTask;
                         }
                     }
 
-                    if (EnableTcpServerConnectionPrefetch)
+                    if (prefetchConnectionTask == null && EnableTcpServerConnectionPrefetch)
                         // don't pass cancellation token here
                         // it could cause floating server connections when client exits.
                         // Pass the ALPN that the actual request will use so the prefetched connection
@@ -372,7 +344,17 @@ public partial class ProxyServer
                     if (line != string.Empty)
                         throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
 
-                    var connection = (await TcpConnectionFactory.GetServerConnection(this, connectArgs,
+                    // Adopt the connection retained by NegotiateHttp2Async (the cold-cache discovery probe,
+                    // or a cache-hit prefetch) for this session instead of opening a brand new one, when it
+                    // is still a valid, healthy, correctly keyed h2 connection. This is what collapses the
+                    // previous up-to-three-connections cold h2 flow (probe + prefetch + session) into one.
+                    var expectedCacheKey = await TcpConnectionFactory.GetConnectionCacheKey(this, connectArgs,
+                        SslApplicationProtocol.Http2);
+                    var connection = await AdoptRetainedConnectionAsync(prefetchConnectionTask, expectedCacheKey,
+                        SslExtensions.Http2ProtocolAsList);
+                    prefetchConnectionTask = null;
+
+                    connection ??= (await TcpConnectionFactory.GetServerConnection(this, connectArgs,
                         true, SslExtensions.Http2ProtocolAsList,
                         true, false, cancellationToken))!;
                     try
@@ -396,15 +378,6 @@ public partial class ProxyServer
                     {
                         await TcpConnectionFactory.Release(connection, true);
                     }
-
-                    // The h2 relay above always opens and uses its own dedicated session connection (it
-                    // does not currently consume `prefetchConnectionTask` - unifying the two is a connection
-                    // orchestration change tracked separately); if a prefetch was started for this tunnel it
-                    // is now unused and must still be released here, otherwise its underlying TCP connection
-                    // is silently abandoned (never pooled, never closed) instead of being returned or torn
-                    // down like every other code path that owns a prefetch task does.
-                    await TcpConnectionFactory.Release(prefetchConnectionTask, true);
-                    prefetchConnectionTask = null;
 
                     // the entire connection was handed over to the HTTP/2 relay above; once it returns the
                     // client connection is done (mirrors the `return;` after the CONNECT-tunnel branch
