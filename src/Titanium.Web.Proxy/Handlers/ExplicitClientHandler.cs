@@ -135,24 +135,25 @@ public partial class ProxyServer
 
                     if (EnableHttp2)
                     {
-                        var alpn = clientHelloInfo.GetAlpn();
-                        if (alpn != null && alpn.Contains(SslApplicationProtocol.Http2))
-                        {
-                            // Negotiate origin HTTP/2 capability and retain ownership of whatever
-                            // connection that negotiation opened (a mandatory discovery probe on a cold
-                            // cache, or an optional matching prefetch on a cache hit), so it can be adopted
-                            // below as the actual session connection instead of being discarded and
-                            // reopened. ALPN must be committed to before AuthenticateAsServerAsync
-                            // completes the TLS handshake with the browser - SslStream does not support
-                            // changing the application protocol on an established session - so the origin's
-                            // capability must be known *before* the browser side is authenticated.
-                            var (connectHost, connectPort) =
-                                ParseHostAndPort(requestLine.RequestUri.GetString(), 443);
-                            var negotiation = await NegotiateHttp2Async(connectArgs, connectHost, connectPort,
-                                null, null, EnableTcpServerConnectionPrefetch, cancellationToken);
-                            http2Supported = negotiation.OriginSupportsHttp2;
-                            prefetchConnectionTask = negotiation.RetainedConnectionTask;
-                        }
+                        // Negotiate/resolve origin HTTP/2 per the connection-scoped UpstreamHttpProtocol
+                        // policy (set during BeforeTunnelConnectRequest, above), retaining ownership of
+                        // whatever connection that negotiation opened (a mandatory discovery probe on a cold
+                        // cache, or an optional matching prefetch on a cache hit), so it can be adopted below
+                        // as the actual session connection instead of being discarded and reopened. ALPN
+                        // must be committed to before AuthenticateAsServerAsync completes the TLS handshake
+                        // with the browser - SslStream does not support changing the application protocol on
+                        // an established session - so the origin's capability must be known *before* the
+                        // browser side is authenticated.
+                        var clientOffersHttp2 = clientHelloInfo.GetAlpn()?.Contains(SslApplicationProtocol.Http2)
+                                                 == true;
+                        var (connectHost, connectPort) =
+                            ParseHostAndPort(requestLine.RequestUri.GetString(), 443);
+                        var negotiation = await ResolveHttp2ForClientAsync(connectArgs, clientOffersHttp2,
+                            connectHost, connectPort, null, null, connectArgs.UpstreamHttpProtocol,
+                            connectArgs.AllowHttpProtocolTranslation, EnableTcpServerConnectionPrefetch,
+                            cancellationToken);
+                        http2Supported = negotiation.OriginSupportsHttp2;
+                        prefetchConnectionTask = negotiation.RetainedConnectionTask;
                     }
 
                     if (prefetchConnectionTask == null && EnableTcpServerConnectionPrefetch)

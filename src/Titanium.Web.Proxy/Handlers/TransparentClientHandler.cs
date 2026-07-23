@@ -88,27 +88,27 @@ public partial class ProxyServer
 
                     if (EnableHttp2)
                     {
-                        var alpn = clientHelloInfo.GetAlpn();
-                        if (alpn != null && alpn.Contains(SslApplicationProtocol.Http2))
-                        {
-                            http2ConnectHost = string.Equals(args.ForwardHttpsHostName, httpsHostName,
-                                StringComparison.OrdinalIgnoreCase)
-                                ? null
-                                : args.ForwardHttpsHostName;
-                            http2ConnectPort = http2ConnectHost != null ? args.ForwardHttpsPort : (int?)null;
+                        http2ConnectHost = string.Equals(args.ForwardHttpsHostName, httpsHostName,
+                            StringComparison.OrdinalIgnoreCase)
+                            ? null
+                            : args.ForwardHttpsHostName;
+                        http2ConnectPort = http2ConnectHost != null ? args.ForwardHttpsPort : (int?)null;
 
-                            var negotiationSession =
-                                new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
-                            var negotiation = await NegotiateHttp2Async(negotiationSession, httpsHostName,
-                                args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
-                                EnableTcpServerConnectionPrefetch, cancellationToken);
-                            http2Supported = negotiation.OriginSupportsHttp2;
-                            // Retained regardless of whether it turns out to be h2- or h1.1-keyed: if this
-                            // connection is not adopted by the h2 relay below, it still flows down to the
-                            // HTTP/1.1 pipeline's own prefetch-adoption/validation logic rather than being
-                            // discarded here.
-                            prefetchConnectionTask = negotiation.RetainedConnectionTask;
-                        }
+                        var clientOffersHttp2 = clientHelloInfo.GetAlpn()?.Contains(SslApplicationProtocol.Http2)
+                                                 == true;
+
+                        var negotiationSession =
+                            new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
+                        var negotiation = await ResolveHttp2ForClientAsync(negotiationSession, clientOffersHttp2,
+                            httpsHostName, args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
+                            args.UpstreamHttpProtocol, args.AllowHttpProtocolTranslation,
+                            EnableTcpServerConnectionPrefetch, cancellationToken);
+                        http2Supported = negotiation.OriginSupportsHttp2;
+                        // Retained regardless of whether it turns out to be h2- or h1.1-keyed: if this
+                        // connection is not adopted by the h2 relay below, it still flows down to the
+                        // HTTP/1.1 pipeline's own prefetch-adoption/validation logic rather than being
+                        // discarded here.
+                        prefetchConnectionTask = negotiation.RetainedConnectionTask;
                     }
 
                     // do client authentication using certificate
