@@ -30,6 +30,7 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET.
 - Upstream HTTP, HTTPS, and SOCKS proxies with automatic system proxy detection
 - Proxy authentication, mutual TLS, Kerberos, and NTLM support
 - Connection, certificate, and buffer pooling
+- Built-in, zero-overhead-when-disabled logging (every caught exception, optionally to console/file or your own `ILoggerFactory`) and opt-in structured request/connection timing — see [Logging and diagnostics](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#logging-and-diagnostics) in the wiki
 
 ## Installation
 
@@ -51,6 +52,11 @@ dotnet add package Titanium.Web.Proxy --prerelease
 
 > Versions prior to 4.0 also supported .NET Framework 4.6.2 and .NET 8; starting with 4.0, the package
 > targets .NET 10 only so the codebase can take full advantage of modern APIs.
+
+> **Breaking change:** `ProxyServer.ExceptionFunc` and `SessionEventArgsBase.TimeLine` were removed in
+> favor of the unified `ProxyServer.Logging`/`EnableRequestTimingCapture` APIs described in
+> [Logging and diagnostics](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#logging-and-diagnostics)
+> and [Breaking changes: unified logging and timing](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#breaking-changes-unified-logging-and-timing).
 
 ## Quick start
 
