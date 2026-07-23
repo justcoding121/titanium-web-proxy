@@ -202,11 +202,21 @@ namespace Titanium.Web.Proxy.Http2
 
                 try
                 {
+                    // The header block being decoded here was encoded by the peer this task reads from
+                    // (`localSettings`'s peer), but that peer's encoder is constrained by whatever *we*
+                    // told it its dynamic-table budget is - which, since SETTINGS frames are relayed
+                    // transparently between the two legs (see the Settings frame handling below), is the
+                    // value recorded in `remoteSettings` (the settings of the *other* peer, forwarded
+                    // verbatim to this one). Sizing the decoder from `localSettings` instead is wrong: it
+                    // uses the peer's own self-reported receive budget (irrelevant to what its encoder is
+                    // actually bounded by) and, once a real peer advertises a non-default value, causes
+                    // "invalid max dynamic table size" decode failures that permanently desync this
+                    // connection's HPACK state.
                     // recreate the decoder when new value is bigger
                     // should we recreate when smaller, too?
-                    if (decoder == null || headerTableSize < localSettings.HeaderTableSize)
+                    if (decoder == null || headerTableSize < remoteSettings.HeaderTableSize)
                     {
-                        headerTableSize = localSettings.HeaderTableSize;
+                        headerTableSize = remoteSettings.HeaderTableSize;
                         decoder = new Decoder(8192, headerTableSize);
                     }
 
@@ -216,8 +226,18 @@ namespace Titanium.Web.Proxy.Http2
                 }
                 catch (Exception ex)
                 {
+                    // RFC 7541 §7: "A decoding error in a header block MUST be treated as a connection
+                    // error of type COMPRESSION_ERROR." The dynamic table is connection-scoped, so once a
+                    // block fails to decode this decoder's state can no longer be trusted to stay in sync
+                    // with the peer's encoder for any later stream either - swallowing this and continuing
+                    // (as before) meant every subsequent header block on the connection failed too, each
+                    // one silently dropped with no reply, hanging every affected stream. Tear the whole
+                    // connection down instead so both sides observe a clean failure and can retry on a new
+                    // connection.
                     exceptionFunc?.Invoke(new ProxyHttpException("Failed to decode HTTP/2 headers", ex, sessionArgs));
-                    return false;
+                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
+                        Http2ErrorCode.CompressionError, input));
+                    throw;
                 }
 
                 if (headerListener.HasMalformedHeader)

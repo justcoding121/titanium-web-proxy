@@ -33,7 +33,25 @@ internal sealed class Http2RawClient : IDisposable
 
     public Http2RawFrame.Connection Connection { get; }
 
-    public static async Task<Http2RawClient> ConnectAsync(int proxyPort, string targetHost, int targetPort)
+    public static Task<Http2RawClient> ConnectAsync(int proxyPort, string targetHost, int targetPort)
+    {
+        return ConnectAsync(proxyPort, targetHost, targetPort, null);
+    }
+
+    /// <summary>
+    ///     Same as <see cref="ConnectAsync(int, string, int)" /> but declares
+    ///     <paramref name="headerTableSize" /> in the initial SETTINGS frame instead of omitting it (real
+    ///     browsers like Chrome advertise a value here) - see
+    ///     <see cref="Http2RawFrame.Connection.SendInitialSettingsAsync(int)" />.
+    /// </summary>
+    public static Task<Http2RawClient> ConnectAsync(int proxyPort, string targetHost, int targetPort,
+        int headerTableSize)
+    {
+        return ConnectAsync(proxyPort, targetHost, targetPort, (int?)headerTableSize);
+    }
+
+    private static async Task<Http2RawClient> ConnectAsync(int proxyPort, string targetHost, int targetPort,
+        int? headerTableSize)
     {
         var tcpClient = new TcpClient();
         await tcpClient.ConnectAsync("localhost", proxyPort);
@@ -58,7 +76,14 @@ internal sealed class Http2RawClient : IDisposable
         await sslStream.WriteAsync(Http2Helper.ConnectionPreface, 0, Http2Helper.ConnectionPreface.Length);
 
         var connection = new Http2RawFrame.Connection(sslStream);
-        await connection.SendInitialSettingsAsync();
+        if (headerTableSize.HasValue)
+        {
+            await connection.SendInitialSettingsAsync(headerTableSize.Value);
+        }
+        else
+        {
+            await connection.SendInitialSettingsAsync();
+        }
 
         return new Http2RawClient(tcpClient, connection);
     }
