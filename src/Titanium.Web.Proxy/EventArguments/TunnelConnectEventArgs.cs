@@ -79,8 +79,7 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
     ~TunnelConnectSessionEventArgs()
     {
 #if DEBUG
-            // Finalizer should not be called
-            System.Diagnostics.Debugger.Break();
+        Helpers.FinalizerGuard.ReportUndisposedFinalizer(nameof(TunnelConnectSessionEventArgs));
 #endif
 
         Dispose(false);

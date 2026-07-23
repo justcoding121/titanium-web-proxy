@@ -151,8 +151,7 @@ internal class TcpServerConnection : IDisposable
     ~TcpServerConnection()
     {
 #if DEBUG
-            // Finalizer should not be called
-            System.Diagnostics.Debugger.Break();
+        Helpers.FinalizerGuard.ReportUndisposedFinalizer(nameof(TcpServerConnection));
 #endif
 
         Dispose(false);

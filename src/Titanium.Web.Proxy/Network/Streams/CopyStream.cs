@@ -86,8 +86,7 @@ internal class CopyStream : ILineStream, IDisposable
     ~CopyStream()
     {
 #if DEBUG
-            // Finalizer should not be called
-            System.Diagnostics.Debugger.Break();
+        Helpers.FinalizerGuard.ReportUndisposedFinalizer(nameof(CopyStream));
 #endif
 
         Dispose(false);

@@ -185,8 +185,7 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     ~SessionEventArgsBase()
     {
 #if DEBUG
-            // Finalizer should not be called
-            System.Diagnostics.Debugger.Break();
+        Helpers.FinalizerGuard.ReportUndisposedFinalizer(nameof(SessionEventArgsBase));
 #endif
 
         Dispose(false);
