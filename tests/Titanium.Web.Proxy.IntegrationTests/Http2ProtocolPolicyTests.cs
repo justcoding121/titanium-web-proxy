@@ -761,4 +761,134 @@ public class Http2ProtocolPolicyTests
             "UpstreamHttpProtocol.Http11 without translation must never advertise h2 to the client, even " +
             "though the forward target is a real h2 origin.");
     }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Transparent_Forced_Http11_With_Translation_And_Http2_Client_Succeeds_Via_Bridge()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context =>
+        {
+            context.Response.Headers["X-Origin-Protocol"] = context.Request.Protocol;
+            await context.Response.WriteAsync("transparent-h2-to-h11-bridge-ok");
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.EnableHttp2 = true;
+
+        Exception? observedException = null;
+        proxy.ExceptionFunc = ex => observedException = ex;
+
+        var endpoint = proxy.ProxyEndPoints.OfType<Models.TransparentProxyEndPoint>().First();
+        endpoint.ForwardPort = server.HttpsListeningPort;
+        endpoint.BeforeSslAuthenticate += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var rawClient = await Http2RawClient.ConnectDirectAsync(proxy.ProxyEndPoints[0].Port, "localhost");
+
+        var requestHeaders = rawClient.Connection.EncodeHeaders(
+            new[] { (":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/") },
+            Array.Empty<(string, string)>());
+        await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, true);
+
+        var (streamId, responseHeaders, endStream) = await rawClient.Connection.ReadHeaderBlockAsync();
+        Assert.AreEqual(1, streamId);
+        Assert.AreEqual("200", responseHeaders.Single(h => h.Name == ":status").Value,
+            "The h2 client should see a real translated response from the HTTP/1.1-only origin, not a failure.");
+        Assert.AreEqual("HTTP/1.1", responseHeaders.Single(h => h.Name == "x-origin-protocol").Value,
+            "The origin must have actually been spoken to over HTTP/1.1 even though the transparent client used h2.");
+
+        var body = new MemoryStream();
+        if (!endStream)
+        {
+            Http2RawFrame.Frame frame;
+            do
+            {
+                frame = await rawClient.Connection.ReadFrameAsync();
+                if (frame.Type == Http2FrameType.Data && frame.StreamId == streamId)
+                    body.Write(frame.Payload, 0, frame.Payload.Length);
+            } while (frame.Type != Http2FrameType.Data || (frame.Flags & Http2FrameFlag.EndStream) == 0);
+        }
+
+        Assert.AreEqual("transparent-h2-to-h11-bridge-ok", Encoding.ASCII.GetString(body.ToArray()));
+        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Transparent_Forced_Http2_With_Translation_And_Http11_Client_Succeeds_Via_Bridge()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context =>
+        {
+            context.Response.Headers["X-Origin-Protocol"] = context.Request.Protocol;
+            await context.Response.WriteAsync("transparent-h11-to-h2-bridge-ok");
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.EnableHttp2 = true;
+
+        Exception? observedException = null;
+        proxy.ExceptionFunc = ex => observedException = ex;
+
+        var endpoint = proxy.ProxyEndPoints.OfType<Models.TransparentProxyEndPoint>().First();
+        endpoint.ForwardPort = server.HttpsListeningPort;
+        endpoint.BeforeSslAuthenticate += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        var tcpClient = new System.Net.Sockets.TcpClient();
+        await tcpClient.ConnectAsync("localhost", proxy.ProxyEndPoints[0].Port);
+        using var _ = tcpClient;
+
+        var sslStream = new SslStream(tcpClient.GetStream(), false,
+            (_, certificate, chain, errors) => TestCertificateAuthority.Validate(certificate, errors));
+        using var __ = sslStream;
+        await sslStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+        {
+            TargetHost = "localhost",
+            ApplicationProtocols = new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 },
+            EnabledSslProtocols = System.Security.Authentication.SslProtocols.None
+        });
+
+        Assert.AreNotEqual(SslApplicationProtocol.Http2, sslStream.NegotiatedApplicationProtocol,
+            "The client only offered http/1.1, so the proxy must never negotiate h2 with it even though the " +
+            "origin-facing connection is forced to HTTP/2.");
+
+        var requestBytes =
+            Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        await sslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+
+        using var reader = new StreamReader(sslStream, Encoding.ASCII, false, 4096, true);
+        var statusLine = await reader.ReadLineAsync();
+        Assert.IsTrue(statusLine != null && statusLine.StartsWith("HTTP/1.1 200"),
+            $"Expected an HTTP/1.1 200 response, got: '{statusLine}'.");
+
+        string? line;
+        var sawOriginProtocolHeader = false;
+        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
+        {
+            if (line.StartsWith("X-Origin-Protocol:", StringComparison.OrdinalIgnoreCase))
+            {
+                sawOriginProtocolHeader = true;
+                Assert.IsTrue(line.Contains("HTTP/2"),
+                    $"The origin must have actually been spoken to over HTTP/2: '{line}'.");
+            }
+        }
+
+        Assert.IsTrue(sawOriginProtocolHeader, "Expected to see the X-Origin-Protocol response header.");
+
+        var body = await reader.ReadToEndAsync();
+        Assert.AreEqual("transparent-h11-to-h2-bridge-ok", body);
+        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+    }
 }
