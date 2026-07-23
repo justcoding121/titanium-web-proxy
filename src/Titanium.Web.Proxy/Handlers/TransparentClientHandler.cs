@@ -84,6 +84,7 @@ public partial class ProxyServer
                     // target - static or event-set - is configured).
                     var http2Supported = false;
                     var requiresHttp11Bridge = false;
+                    var requiresH2OriginBridge = false;
                     string? http2ConnectHost = null;
                     int? http2ConnectPort = null;
 
@@ -105,9 +106,13 @@ public partial class ProxyServer
                             args.UpstreamHttpProtocol, args.AllowHttpProtocolTranslation,
                             EnableTcpServerConnectionPrefetch, cancellationToken);
                         requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
-                        // The client is offered "h2" both when the origin itself speaks it and when a
-                        // translation bridge will stand in for an HTTP/1.1-only origin.
-                        http2Supported = negotiation.OriginSupportsHttp2 || requiresHttp11Bridge;
+                        requiresH2OriginBridge = negotiation.RequiresH2OriginBridge;
+                        // The client is offered "h2" both when the origin itself speaks it (and no
+                        // client-facing bridge is needed) and when a translation bridge will stand in for an
+                        // HTTP/1.1-only origin. RequiresH2OriginBridge is the mirror image - the origin
+                        // speaks h2 but the client itself does not, so "h2" must never be offered to it.
+                        http2Supported = (negotiation.OriginSupportsHttp2 && !requiresH2OriginBridge)
+                                         || requiresHttp11Bridge;
                         // Retained regardless of whether it turns out to be h2- or h1.1-keyed: if this
                         // connection is not adopted by the h2 relay below, it still flows down to the
                         // HTTP/1.1 pipeline's own prefetch-adoption/validation logic rather than being
@@ -178,6 +183,24 @@ public partial class ProxyServer
                         var session = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
                         throw new ProxyConnectException(
                             $"Couldn't authenticate host '{httpsHostName}' with certificate '{certName}'.", e, session);
+                    }
+
+                    if (requiresH2OriginBridge)
+                    {
+#if NET6_0_OR_GREATER
+                        // UpstreamHttpProtocol.Http2 + AllowHttpProtocolTranslation: the client never offered
+                        // "h2" (see the http2Supported computation above, and options.ApplicationProtocols
+                        // pinned to http/1.1 just above), so it stays on the normal HTTP/1.1 wire format, but
+                        // every request must be translated onto the already-established h2 origin connection
+                        // carried in prefetchConnectionTask (never null when RequiresH2OriginBridge is true -
+                        // see Http2NegotiationResult) via the HTTP/1.1-client-to-h2-origin bridge instead of
+                        // the normal protocol-symmetric HandleHttpSessionRequest pipeline.
+                        await SendHttp11ToHttp2Bridge(clientStream, endPoint, null, null, httpsHostName,
+                            args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort, prefetchConnectionTask,
+                            cancellationTokenSource);
+                        prefetchConnectionTask = null;
+#endif
+                        return;
                     }
 
                     if (EnableHttp2 && http2Supported)

@@ -13,11 +13,12 @@ namespace Titanium.Web.Proxy.Http2;
 internal sealed class Http2NegotiationResult
 {
     internal Http2NegotiationResult(bool originSupportsHttp2, Task<TcpServerConnection?>? retainedConnectionTask,
-        bool requiresHttp11Bridge = false)
+        bool requiresHttp11Bridge = false, bool requiresH2OriginBridge = false)
     {
         OriginSupportsHttp2 = originSupportsHttp2;
         RetainedConnectionTask = retainedConnectionTask;
         RequiresHttp11Bridge = requiresHttp11Bridge;
+        RequiresH2OriginBridge = requiresH2OriginBridge;
     }
 
     /// <summary>
@@ -28,9 +29,10 @@ internal sealed class Http2NegotiationResult
 
     /// <summary>
     ///     A not-yet-consumed origin connection opened while negotiating, if any. Its application-protocol
-    ///     offer already matches <see cref="OriginSupportsHttp2" />. Null when no connection was opened
-    ///     (HTTP/2 not being considered for this route, prefetch disabled on a cache hit, or the discovery
-    ///     connection failed).
+    ///     offer already matches <see cref="OriginSupportsHttp2" /> (or, when <see cref="RequiresH2OriginBridge" />
+    ///     is true, is an already-established h2 connection to adopt for the bridge below). Null when no
+    ///     connection was opened (HTTP/2 not being considered for this route, prefetch disabled on a cache
+    ///     hit, the discovery connection failed, or <see cref="RequiresHttp11Bridge" /> is true).
     /// </summary>
     internal Task<TcpServerConnection?>? RetainedConnectionTask { get; }
 
@@ -45,4 +47,15 @@ internal sealed class Http2NegotiationResult
     ///     connection across the whole multiplexed client connection.
     /// </summary>
     internal bool RequiresHttp11Bridge { get; }
+
+    /// <summary>
+    ///     True when <see cref="UpstreamHttpProtocol.Http2" /> was required together with
+    ///     <c>AllowHttpProtocolTranslation</c> and the client does not offer "h2": the client-facing
+    ///     connection stays HTTP/1.1 (the client never offered "h2", so nothing changes about what is
+    ///     negotiated with it), but every request on it must be translated onto the already-established h2
+    ///     origin connection carried in <see cref="RetainedConnectionTask" /> (never null when this is true)
+    ///     via the HTTP/1.1-client-to-h2-origin bridge instead of the normal protocol-symmetric HTTP/1.1
+    ///     pipeline. <see cref="OriginSupportsHttp2" /> is always true when this is true.
+    /// </summary>
+    internal bool RequiresH2OriginBridge { get; }
 }

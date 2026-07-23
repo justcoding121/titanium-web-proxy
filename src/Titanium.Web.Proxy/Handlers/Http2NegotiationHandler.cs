@@ -219,13 +219,14 @@ public partial class ProxyServer
                             new NotSupportedException("Client does not support HTTP/2."), sessionArgs);
                     }
 
-                    await TcpConnectionFactory.Release(connection, true);
-                    throw new ProxyConnectException(
-                        "UpstreamHttpProtocol.Http2 with AllowHttpProtocolTranslation enabled would require " +
-                        "translating an HTTP/1.1 client connection onto an HTTP/2 origin connection, which is " +
-                        "not implemented in this version.",
-                        new NotSupportedException("HTTP/1.1-client-to-h2-origin translation is not implemented."),
-                        sessionArgs);
+                    // The client stays HTTP/1.1 (it never offered "h2", so nothing about what is negotiated
+                    // with it changes), but every request on this connection must be translated onto this
+                    // already-established h2 origin connection via the HTTP/1.1-client-to-h2-origin bridge
+                    // (SendHttp11ToHttp2Bridge) instead of the normal protocol-symmetric HTTP/1.1 pipeline.
+                    // The connection opened above becomes the bridge's origin connection - it is not probed
+                    // and discarded like the mandatory cold-cache discovery connection in NegotiateHttp2Async.
+                    return new Http2NegotiationResult(true, Task.FromResult<TcpServerConnection?>(connection),
+                        requiresH2OriginBridge: true);
                 }
 
                 return new Http2NegotiationResult(true, Task.FromResult<TcpServerConnection?>(connection));

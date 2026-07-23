@@ -1584,7 +1584,7 @@ namespace Titanium.Web.Proxy.Http2
             } while (pos < data.Length);
         }
 
-        private static async Task SendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader,
+        internal static async Task SendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, byte[] buffer, Http2FlowController flow, Stream output,
             CancellationToken cancellationToken)
         {
@@ -1623,7 +1623,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     Each frame's payload is reserved against <paramref name="flow" /> before being written, so
         ///     this never exceeds the destination's flow-control window (RFC 7540 §6.9).
         /// </summary>
-        private static async Task SendData(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, int streamId,
+        internal static async Task SendData(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, int streamId,
             byte[] data, bool endStream, int maxFrameSize, Http2FlowController flow, Stream output,
             CancellationToken cancellationToken)
         {
@@ -1677,7 +1677,7 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         /// <summary>Writes a GOAWAY frame (RFC 7540 §6.8) announcing connection-level shutdown with the given error code.</summary>
-        private static async Task SendGoAwayAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
+        internal static async Task SendGoAwayAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int lastStreamId, Http2ErrorCode errorCode, Stream output)
         {
             frameHeader.StreamId = 0;
@@ -1694,7 +1694,7 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         /// <summary>Writes a WINDOW_UPDATE frame (RFC 7540 §6.9) granting the given amount of flow-control credit.</summary>
-        private static async Task SendWindowUpdateAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
+        internal static async Task SendWindowUpdateAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int streamId, int increment, Stream output)
         {
             if (increment <= 0) return;
