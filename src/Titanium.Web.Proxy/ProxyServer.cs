@@ -202,6 +202,19 @@ public partial class ProxyServer : IDisposable
     public bool Enable100ContinueBehaviour { get; set; }
 
     /// <summary>
+    ///     Controls which HTTP version is declared to the origin server on the request line, independently of
+    ///     the version the client declared to the proxy. Defaults to
+    ///     <see cref="Models.OriginHttpVersionPolicy.PreserveClientVersion" />, which matches the proxy's
+    ///     historical pass-through behavior exactly. Set to
+    ///     <see cref="Models.OriginHttpVersionPolicy.NormalizeToHttp11" /> to let HTTP/1.0 clients share pooled,
+    ///     persistent origin connections the same way HTTP/1.1 clients already do. This only changes the wire
+    ///     version written to the origin request line - it never changes the client-facing
+    ///     <see cref="Http.Request.HttpVersion" /> that event handlers observe, nor the version/persistence used
+    ///     to write the response back to the client.
+    /// </summary>
+    public OriginHttpVersionPolicy OriginHttpVersionPolicy { get; set; } = OriginHttpVersionPolicy.PreserveClientVersion;
+
+    /// <summary>
     ///     Should we enable the server connection pool. Defaults to true.
     ///     When connection pooling is enabled, instead of creating a new TCP connection to the server for each client TCP
     ///     connection, we check if an idle server connection is available in our cached pool. If a compatible connection
