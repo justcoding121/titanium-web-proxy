@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             Directory.CreateDirectory(certificateDirectory);
             proxyServer.CertificateManager.PfxFilePath = Path.Combine(certificateDirectory, "rootCert.pfx");
 
-            //proxyServer.EnableHttp2 = true;
+            //proxyServer.EnableHttp2 = false;
 
             //proxyServer.CertificateManager.CertificateEngine = CertificateEngine.DefaultWindows;
 

@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             Directory.CreateDirectory(certificateDirectory);
             proxyServer.CertificateManager.PfxFilePath = Path.Combine(certificateDirectory, "rootCert.pfx");
 
-            //proxyServer.EnableHttp2 = true;
+            //proxyServer.EnableHttp2 = false;
 
             // generate root certificate without storing it in file system
             //proxyServer.CertificateManager.CreateRootCertificate(false);
