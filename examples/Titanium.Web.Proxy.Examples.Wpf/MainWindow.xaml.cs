@@ -10,6 +10,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -38,6 +39,11 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         public MainWindow()
         {
             proxyServer = new ProxyServer();
+
+            // Log Information and above (and everything the proxy catches, even when handled) to the
+            // console by default; set to LogLevel.Trace while diagnosing an issue for full detail.
+            proxyServer.Logging.MinimumLevel = LogLevel.Information;
+
             var certificateDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Titanium.Web.Proxy");
