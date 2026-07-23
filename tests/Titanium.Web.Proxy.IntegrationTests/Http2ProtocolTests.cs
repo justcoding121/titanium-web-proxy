@@ -1,7 +1,9 @@
 using System;
 using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
@@ -176,6 +178,67 @@ public class Http2ProtocolTests
 
         Assert.IsNotNull(refusal, "The proxy never sent a local RST_STREAM refusing the post-GOAWAY stream.");
         Assert.AreEqual((int)Http2ErrorCode.RefusedStream, BinaryPrimitives.ReadInt32BigEndian(refusal!.Value.Payload));
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Http2_GoAway_From_Client_As_First_Frame_Is_Not_Treated_As_ProtocolError()
+    {
+        using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
+        rawServer.HandleConnection(NoOpOriginHandler());
+
+        using var testSuite = new TestSuite();
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var uri = new Uri(rawServer.Url);
+        using var tunnel = await Http2RawClient.ConnectTunnelWithAlpnAsync(proxy.ProxyEndPoints[0].Port, uri.Host,
+            uri.Port, new List<SslApplicationProtocol> { SslApplicationProtocol.Http2 });
+        Assert.AreEqual(SslApplicationProtocol.Http2, tunnel.NegotiatedApplicationProtocol);
+
+        // Real browsers routinely open a pooled/speculative HTTP/2 connection and then decide they no
+        // longer need it, tearing it down by sending GOAWAY as literally the first frame after the
+        // connection preface - without ever sending SETTINGS. RFC 7540 §6.8 explicitly permits GOAWAY at
+        // any time, so the proxy must not treat this as a connection-level PROTOCOL_ERROR (regression test
+        // for the ERROR-level "expected a SETTINGS frame immediately after the connection preface, got
+        // GoAway" seen in production whenever this happened).
+        await tunnel.SslStream.WriteAsync(Http2Helper.ConnectionPreface, 0, Http2Helper.ConnectionPreface.Length);
+        var connection = new Http2RawFrame.Connection(tunnel.SslStream);
+        await connection.WriteFrameAsync(Http2FrameType.GoAway, 0, 0, new byte[8]);
+
+        // Whatever the proxy does next (relay the origin's own SETTINGS frame, send its own graceful
+        // GOAWAY, or simply close the connection) it must never respond with a GOAWAY carrying
+        // PROTOCOL_ERROR. Once the client has said it is going away and sends nothing further, the proxy
+        // has no reason to send anything more either (the relay just idles waiting for either leg to
+        // produce more data) - so unlike the other tests in this file, there is no frame guaranteed to
+        // eventually arrive here; each read below is bounded by a timeout, and a timeout is treated the
+        // same as a clean close: both are valid proof that the proxy never reacted with PROTOCOL_ERROR.
+        try
+        {
+            for (var i = 0; i < 5; i++)
+            {
+                var readTask = connection.ReadFrameAsync();
+                var completed = await Task.WhenAny(readTask, Task.Delay(TimeSpan.FromSeconds(2)));
+                if (completed != readTask)
+                {
+                    // Nothing more arrived within the timeout - the proxy is simply idling, which is fine.
+                    break;
+                }
+
+                var frame = await readTask;
+                if (frame.Type == Http2FrameType.GoAway)
+                {
+                    var errorCode = (Http2ErrorCode)BinaryPrimitives.ReadInt32BigEndian(frame.Payload.AsSpan(4, 4));
+                    Assert.AreNotEqual(Http2ErrorCode.ProtocolError, errorCode,
+                        "The proxy must not treat a client GOAWAY-as-first-frame as a protocol violation.");
+                }
+            }
+        }
+        catch (IOException)
+        {
+            // The connection simply closing (rather than the proxy sending anything further) is an
+            // equally valid outcome once the client has already said it is going away.
+        }
     }
 
     [TestMethod]
