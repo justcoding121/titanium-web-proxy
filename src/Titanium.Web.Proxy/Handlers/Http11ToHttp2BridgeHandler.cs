@@ -141,7 +141,7 @@ public partial class ProxyServer
                             if (!args.HttpClient.Response.Locked) await OnBeforeResponse(args);
                             await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
 
-                            if (!args.HttpClient.Response.KeepAlive) closeConnection = true;
+                            if (!args.HttpClient.Response.KeepAlive || clientRequestedClose) closeConnection = true;
                             keepGoing = false;
                         }
                         else if (keepGoing && request.UpgradeToWebSocket)
