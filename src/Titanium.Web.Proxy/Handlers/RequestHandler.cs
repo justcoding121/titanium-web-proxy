@@ -302,7 +302,7 @@ public partial class ProxyServer
         var body = request.CompressBodyAndUpdateContentLength();
 
         await args.HttpClient.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
-            cancellationToken);
+            OriginHttpVersionPolicy, cancellationToken);
 
         // If a successful 100 continue request was made, inform that to the client and reset response
         if (request.ExpectationSucceeded)

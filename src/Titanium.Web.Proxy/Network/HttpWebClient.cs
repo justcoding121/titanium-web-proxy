@@ -99,7 +99,7 @@ public class HttpWebClient
     /// </summary>
     /// <returns></returns>
     internal async Task SendRequest(bool enable100ContinueBehaviour, bool isTransparent,
-        CancellationToken cancellationToken)
+        OriginHttpVersionPolicy originHttpVersionPolicy, CancellationToken cancellationToken)
     {
         var upstreamProxy = Connection.UpStreamProxy;
 
@@ -138,9 +138,30 @@ public class HttpWebClient
 
         if (url == string.Empty) url = "/";
 
+        // The origin-bound wire version defaults to whatever the client itself declared (pass-through); it is
+        // never written back onto Request.HttpVersion itself, which stays the client-facing version that event
+        // handlers observe (see OriginHttpVersionPolicy).
+        var originHttpVersion = Request.HttpVersion;
+        if (originHttpVersionPolicy == OriginHttpVersionPolicy.NormalizeToHttp11 &&
+            originHttpVersion == HttpHeader.Version10)
+        {
+            originHttpVersion = HttpHeader.Version11;
+
+            // Some origins that are only conditionally HTTP/1.1-compliant still mirror the persistence implied
+            // by whatever version/headers they were sent rather than trusting HTTP/1.1's persistent-by-default
+            // rule; explicitly asking for "keep-alive" maximizes compatibility with that class of origin. An
+            // explicit client "Connection: close" is still honored verbatim - normalizing the origin-facing
+            // version never overrides an explicit request to close.
+            var connectionHeader = Request.Headers.GetHeaderValueOrNull(KnownHeaders.Connection);
+            if (connectionHeader == null ||
+                connectionHeader.EqualsIgnoreCase(KnownHeaders.ConnectionKeepAlive.String))
+                Request.Headers.SetOrAddHeaderValue(KnownHeaders.Connection,
+                    KnownHeaders.ConnectionKeepAlive.String);
+        }
+
         // prepare the request & headers
         var headerBuilder = new HeaderBuilder();
-        headerBuilder.WriteRequestLine(Request.Method, url, Request.HttpVersion);
+        headerBuilder.WriteRequestLine(Request.Method, url, originHttpVersion);
         headerBuilder.WriteHeaders(Request.Headers, !isTransparent, upstreamProxyUserName, upstreamProxyPassword);
 
         // write request headers
