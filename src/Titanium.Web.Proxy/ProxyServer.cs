@@ -167,9 +167,15 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Enable disable HTTP/2 support.
-    ///     Warning: HTTP/2 support is very limited
-    ///     - only enabled when both client and server supports it (no protocol changing in proxy)
-    ///     - cannot modify the request/response (e.g header modifications in BeforeRequest/Response events are ignored)
+    ///     HTTP/2 is only ever used when both the client and the server negotiate it via TLS ALPN; there is no
+    ///     cleartext (h2c) upgrade, and a client/server that does not support HTTP/2 transparently falls back to
+    ///     HTTP/1.1.
+    ///     Request/response header and body modification in BeforeRequest/BeforeResponse, chunked trailers,
+    ///     interim (1xx) responses, and the synthetic-response APIs (Ok/Respond/Redirect/GenericResponse/
+    ///     RespondStreaming) are all supported over HTTP/2, the same as over HTTP/1.x.
+    ///     Not supported: HTTP/2 server push (the wire frames are transcoded but there is no public API to
+    ///     originate a push) and cleartext h2c upgrade.
+    ///     See the protocol support matrix on the wiki for exact, up-to-date HTTP/1.x/HTTP/2 feature coverage.
     /// </summary>
     public bool EnableHttp2 { get; set; } = false;
 
