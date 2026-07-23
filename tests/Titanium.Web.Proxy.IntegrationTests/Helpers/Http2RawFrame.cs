@@ -151,6 +151,36 @@ internal static class Http2RawFrame
             return EncodeHeaderBlock(encoder, pseudoHeaders, headers);
         }
 
+        /// <summary>
+        ///     Same as <see cref="EncodeHeaders" /> but first emits an HPACK Dynamic Table Size Update
+        ///     (RFC 7541 §6.3) growing this connection's encoder to <paramref name="newMaxHeaderTableSize" />,
+        ///     as a real HTTP/2 stack does once it starts using more of the header-table budget the peer's
+        ///     SETTINGS_HEADER_TABLE_SIZE allows - used to deterministically reproduce/regress the proxy's
+        ///     HPACK decoder-sizing bug (it must size its decoder from what it forwarded to this peer as the
+        ///     *other* peer's declared table size, not from what this peer itself declared about its own
+        ///     receive budget).
+        /// </summary>
+        public byte[] EncodeHeadersWithTableSizeUpdate(int newMaxHeaderTableSize,
+            IEnumerable<(string Name, string Value)> pseudoHeaders, IEnumerable<(string Name, string Value)> headers)
+        {
+            var ms = new MemoryStream();
+            var writer = new BinaryWriter(ms);
+            encoder.SetMaxHeaderTableSize(writer, newMaxHeaderTableSize);
+
+            foreach (var (name, value) in pseudoHeaders)
+            {
+                encoder.EncodeHeader(writer, name.GetByteString(), value.GetByteString(), false,
+                    HpackUtil.IndexType.None, false);
+            }
+
+            foreach (var (name, value) in headers)
+            {
+                encoder.EncodeHeader(writer, name.GetByteString(), value.GetByteString());
+            }
+
+            return ms.ToArray();
+        }
+
         public List<(string Name, string Value)> DecodeHeaders(byte[] compressed)
         {
             return DecodeHeaderBlock(decoder, compressed);
@@ -164,6 +194,24 @@ internal static class Http2RawFrame
         public Task SendInitialSettingsAsync()
         {
             return WriteFrameAsync(Http2FrameType.Settings, 0, 0, Array.Empty<byte>());
+        }
+
+        /// <summary>
+        ///     Same as <see cref="SendInitialSettingsAsync()" /> but declares a specific
+        ///     SETTINGS_HEADER_TABLE_SIZE (RFC 7540 §6.5.2) instead of omitting it (i.e. relying on the
+        ///     protocol default of 4096) - real browsers (e.g. Chrome) advertise a larger value here, which
+        ///     the proxy must forward transparently to the other leg for that leg's HPACK decoder sizing.
+        /// </summary>
+        public Task SendInitialSettingsAsync(int headerTableSize)
+        {
+            var payload = new byte[6];
+            payload[0] = (byte)(((int)Http2SettingsId.HeaderTableSize >> 8) & 0xff);
+            payload[1] = (byte)((int)Http2SettingsId.HeaderTableSize & 0xff);
+            payload[2] = (byte)((headerTableSize >> 24) & 0xff);
+            payload[3] = (byte)((headerTableSize >> 16) & 0xff);
+            payload[4] = (byte)((headerTableSize >> 8) & 0xff);
+            payload[5] = (byte)(headerTableSize & 0xff);
+            return WriteFrameAsync(Http2FrameType.Settings, 0, 0, payload);
         }
 
         /// <summary>
