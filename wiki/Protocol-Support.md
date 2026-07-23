@@ -8,8 +8,10 @@ has a known gap; "No" means it isn't implemented.
 
 This table reflects the `develop` branch as of the HTTP/1.x and HTTP/2 gap-closure work (chunked trailers,
 interim 1xx responses, and TLS body-write-hook parity for HTTP/1.x; HPACK dynamic-table correctness/reuse,
-HEADERS/CONTINUATION reassembly and re-splitting, trailers, and interim 1xx responses for HTTP/2). If you
-find something inaccurate, please open an issue.
+HEADERS/CONTINUATION reassembly and re-splitting, trailers, interim 1xx responses, two-hop flow control,
+SETTINGS/PING/GOAWAY handling, and synthetic-response API parity for HTTP/2). HTTP/2 remains **opt-in**
+(`ProxyServer.EnableHttp2 = false` by default) until it has gone through the same full regression pass as
+HTTP/1.x. If you find something inaccurate, please open an issue.
 
 ## Connections and framing
 
@@ -25,11 +27,12 @@ find something inaccurate, please open an issue.
 | `CONNECT` tunneling | Yes | Yes | Yes (via `ExplicitProxyEndPoint`) | Supports both decrypt-and-inspect and pass-through-as-opaque-tunnel. |
 | Stream multiplexing | N/A | N/A | Yes | Concurrent streams tracked per connection in `Http2Helper`; a slow synthetic response on one stream no longer blocks frames for other streams. |
 | HPACK header compression | N/A | N/A | Yes | Both decode and encode reuse a persistent, connection-direction-scoped dynamic table, so repeated headers are indexed/re-indexed correctly on both sides. |
-| Flow control (`WINDOW_UPDATE`) | N/A | N/A | Partial | Frames are relayed but the proxy does no window accounting of its own. |
-| Server push (`PUSH_PROMISE`) | N/A | N/A | Partial | Frames are byte-relayed only; not parsed/exposed (push is deprecated in browsers, so low priority). |
-| `PING` / keepalive frames | N/A | N/A | Partial | Relayed passively; the proxy does not originate or respond to pings itself. |
-| `SETTINGS` negotiation | N/A | N/A | Partial | `HEADER_TABLE_SIZE` and `MAX_FRAME_SIZE` are read; other settings are relayed without being enforced. |
-| `RST_STREAM` / per-stream cancellation | N/A | N/A | Yes | Cleans up the corresponding session and relays the frame. |
+| Flow control (`WINDOW_UPDATE`) | N/A | N/A | Yes | Independent send-side window accounting per connection and per stream on each of the two TLS legs (client↔proxy, proxy↔server); validates length/increment/overflow and translates rather than blindly relays. |
+| Server push (`PUSH_PROMISE`) | N/A | N/A | No | Not decoded/transcoded; no public API to originate a push (push is deprecated in browsers, so low priority). |
+| `PING` / keepalive frames | N/A | N/A | Yes | ACKed locally by the proxy on each leg; not blindly relayed. |
+| `SETTINGS` negotiation | N/A | N/A | Yes | `HEADER_TABLE_SIZE`, `MAX_FRAME_SIZE`, and `INITIAL_WINDOW_SIZE` are validated (range-checked, malformed values rejected) and applied per leg; the proxy sends its own SETTINGS on each leg rather than relaying the peer's verbatim. |
+| `RST_STREAM` / per-stream cancellation | N/A | N/A | Yes | Cleans up the corresponding session/flow-control state and relays the error code. |
+| `GOAWAY` / connection shutdown | N/A | N/A | Yes | Parses `lastStreamId`/error code, stops admitting new streams above it, cancels in-flight work that can't complete, and relays to the other leg. |
 
 ## Body handling and streaming
 
@@ -41,6 +44,15 @@ find something inaccurate, please open an issue.
 | Synthetic streamed responses (`RespondStreaming`) | Yes | Yes | Yes | Chunked or fixed-length framing chosen automatically from the response headers you set. |
 | Automatic decompression for body inspection (gzip/deflate/brotli) | Yes | Yes | Yes | |
 | Multipart/form-data boundary-aware streaming | Yes | Yes | N/A (not multipart-aware over h2 yet) | |
+
+## Interception APIs
+
+| Feature | HTTP/1.0 | HTTP/1.1 | HTTP/2 | Notes |
+|---|---|---|---|---|
+| Header/body modification in `BeforeRequest`/`BeforeResponse` | Yes | Yes | Yes | Every HEADERS block is fully decoded/transcoded, so mutations made in the event handler are re-encoded and relayed rather than passed through opaquely. |
+| Synthetic responses (`Ok`, `Respond`, `Redirect`, `GenericResponse`) from `BeforeRequest` | Yes | Yes | Yes | The request is never forwarded upstream; any unfinished client request body already in flight is drained with flow-control credit returned. |
+| `Respond` replacing an already-received response from `BeforeResponse` | Yes | Yes | Yes | The origin's own response body, if still arriving, is discarded (with flow-control credit still returned) in favor of the replacement. |
+| `RespondStreaming` (synthetic streamed body) | Yes | Yes | Yes | See "Synthetic streamed responses" above for framing details. |
 
 ## Proxying, auth, and misc
 

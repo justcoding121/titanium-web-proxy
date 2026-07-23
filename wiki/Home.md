@@ -175,13 +175,16 @@ See the dedicated **[Streaming Bodies](Streaming-Bodies)** page for `OnRequestBo
 
 ## HTTP/2
 
-Enable HTTP/2 support (frames are relayed for decrypted h2 connections):
+Enable HTTP/2 support, opt-in and off by default (negotiated via TLS ALPN only — no cleartext h2c upgrade):
 
 ```csharp
 proxyServer.EnableHttp2 = true;
 ```
 
-The body-streaming and synthetic-streaming APIs work over HTTP/2 as well as HTTP/1.x — see [Streaming Bodies](Streaming-Bodies).
+Header/body modification in `BeforeRequest`/`BeforeResponse`, chunked trailers, interim (1xx) responses, and
+the synthetic-response APIs (`Ok`/`Respond`/`Redirect`/`GenericResponse`/`RespondStreaming`) all work over
+HTTP/2 the same as over HTTP/1.x — see [Streaming Bodies](Streaming-Bodies). Not supported: HTTP/2 server
+push and cleartext h2c upgrade. See [Protocol Feature Support](Protocol-Support) for the full breakdown.
 
 ## Tunnel (CONNECT) interception
 
