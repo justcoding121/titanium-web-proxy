@@ -16,7 +16,10 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents t
 - [Upstream proxies](#upstream-proxies)
 - [Authentication](#authentication)
 - [Performance and pooling](#performance-and-pooling)
+- [Logging and diagnostics](#logging-and-diagnostics)
+- [Request timing](#request-timing)
 - [Supported frameworks](#supported-frameworks)
+- [Breaking changes: unified logging and timing](#breaking-changes-unified-logging-and-timing)
 - [Protocol feature support](Protocol-Support)
 
 ## Getting started
@@ -248,12 +251,100 @@ proxyServer.ForwardToUpstreamGateway = true;
 - `BufferPool` / `BufferSize` — reuse I/O buffers.
 - `CertificateManager.SaveFakeCertificates` — cache generated certificates.
 
+## Logging and diagnostics
+
+Every exception the proxy catches — even one handled internally and never surfaced to your code — is
+reported through `ProxyServer.Logging`, a `Microsoft.Extensions.Logging`-based abstraction. This replaced
+the old `ExceptionFunc` callback; see
+[Breaking changes: unified logging and timing](#breaking-changes-unified-logging-and-timing) below if you
+are migrating.
+
+```csharp
+// Master switch: false gives zero logging overhead (no timestamps read, no strings formatted).
+proxyServer.Logging.Enabled = true;
+
+// Only entries at or above this level are actually written to a sink. Every caught exception is still
+// classified and reported to the gateway regardless - this only controls how much reaches a sink.
+// Defaults to LogLevel.Error so out-of-the-box behavior stays quiet.
+proxyServer.Logging.MinimumLevel = LogLevel.Information;
+
+// Built-in sinks, both asynchronous and best-effort so they never block proxy traffic:
+proxyServer.Logging.EnableConsole = true;          // default on
+proxyServer.Logging.EnableFile = true;             // default off
+proxyServer.Logging.FilePath = "logs/proxy.log";   // size-based rolling file
+proxyServer.Logging.MaxFileSizeBytes = 10 * 1024 * 1024;
+proxyServer.Logging.MaxRolledFiles = 5;
+
+// Changes to the Logging options above only take effect once you (re)apply them - Start() does this
+// automatically, but call it yourself to change configuration while already running:
+proxyServer.ApplyLoggingConfiguration();
+```
+
+To bridge into an existing logging pipeline (Serilog, NLog, an ASP.NET Core host's `ILoggerFactory`, etc.)
+instead of the built-in Console/File sinks, set `LoggerFactory` — this disables the built-in sinks entirely
+and hands every log record to your factory verbatim:
+
+```csharp
+proxyServer.Logging.LoggerFactory = hostLoggerFactory;
+proxyServer.ApplyLoggingConfiguration();
+```
+
+Exceptions the proxy considers expected/benign under normal operation (client disconnects, cancelled
+operations, expected socket resets, retries, and similar) are logged at `Debug`/`Trace` so they never
+contribute to `Error`-level noise in the default configuration, while genuinely unexpected failures are
+always logged at `Error` or `Critical`.
+
+## Request timing
+
+Set `EnableRequestTimingCapture` to populate structured timing objects for every session; when left
+`false` (the default) no timing object is ever allocated, so there is no cost at all when the feature is
+unused.
+
+```csharp
+proxyServer.EnableRequestTimingCapture = true;
+
+proxyServer.AfterResponse += (sender, e) =>
+{
+    var timing = e.Timing; // HttpRequestTiming, or null if capture is disabled
+    if (timing != null)
+    {
+        Console.WriteLine($"Time to first byte: {timing.TimeToFirstByte}");
+        Console.WriteLine($"Total duration: {timing.TotalDuration}");
+        Console.WriteLine($"Upstream connection reused: {timing.UpstreamConnectionReused}");
+    }
+
+    return Task.CompletedTask;
+};
+```
+
+- **`SessionEventArgsBase.Timing`** (`HttpRequestTiming`) — per-request milestones: when the client's
+  request headers were read, when an upstream connection became ready, when the request was sent, when
+  response headers arrived, and when the session completed — plus derived durations
+  (`ConnectionWaitDuration`, `TimeToFirstByte`, `ResponseDeliveryDuration`, `TotalDuration`) and retry
+  bookkeeping (`AttemptCount`, `UpstreamConnectionReused`).
+- **`SessionEventArgsBase.UpstreamConnectionTiming`** (`UpstreamConnectionTiming`) — timing of the
+  underlying upstream TCP/TLS connection itself (DNS resolution, TCP handshake, optional upstream-proxy
+  CONNECT tunnel, TLS handshake). Shared by every session that reuses the same pooled connection.
+- **`TunnelConnectSessionEventArgs.ClientTlsTiming`** (`ClientTlsTiming`) — duration of the client-facing
+  (browser-to-proxy) TLS handshake performed while decrypting an HTTPS `CONNECT` tunnel on an explicit
+  endpoint.
+
 ## Supported frameworks
 
 - .NET 10
 
 Versions prior to 4.0 also supported .NET Framework 4.6.2 and .NET 8; starting with 4.0, the package targets
 .NET 10 only.
+
+## Breaking changes: unified logging and timing
+
+- `ProxyServer.ExceptionFunc` and the `ExceptionHandler` delegate were removed. Use
+  [`ProxyServer.Logging`](#logging-and-diagnostics) instead — every exception the old callback would have
+  received is now reported through the logging gateway, classified by severity rather than delivered
+  uniformly to a single callback.
+- `SessionEventArgsBase.TimeLine` (the free-form `Dictionary<string, DateTime>` of named milestones) was
+  removed. Use [`Timing`/`UpstreamConnectionTiming`/`ClientTlsTiming`](#request-timing) instead, which are
+  strongly typed and only allocated when `EnableRequestTimingCapture` is set.
 
 ## Protocol feature support
 
