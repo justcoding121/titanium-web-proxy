@@ -175,10 +175,11 @@ See the dedicated **[Streaming Bodies](Streaming-Bodies)** page for `OnRequestBo
 
 ## HTTP/2
 
-Enable HTTP/2 support, opt-in and off by default (negotiated via TLS ALPN only — no cleartext h2c upgrade):
+HTTP/2 support is on by default (negotiated via TLS ALPN only — no cleartext h2c upgrade). To opt out and
+force HTTP/1.1 only:
 
 ```csharp
-proxyServer.EnableHttp2 = true;
+proxyServer.EnableHttp2 = false;
 ```
 
 Header/body modification in `BeforeRequest`/`BeforeResponse`, chunked trailers, interim (1xx) responses, and

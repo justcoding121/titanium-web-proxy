@@ -26,7 +26,7 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET.
 - Intercept, inspect, modify, redirect, or block HTTP and HTTPS traffic
 - Explicit, transparent, and SOCKS4/5 proxy endpoints
 - Request and response body streaming (see the [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support) for the plain vs. TLS hook distinction)
-- HTTP/2 support, opt-in via `ProxyServer.EnableHttp2` (see the [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support) for exact coverage)
+- HTTP/2 support, on by default, opt-out via `ProxyServer.EnableHttp2` (see the [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support) for exact coverage)
 - Upstream HTTP, HTTPS, and SOCKS proxies with automatic system proxy detection
 - Proxy authentication, mutual TLS, Kerberos, and NTLM support
 - Connection, certificate, and buffer pooling

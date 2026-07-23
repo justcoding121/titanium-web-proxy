@@ -9,9 +9,9 @@ has a known gap; "No" means it isn't implemented.
 This table reflects the `develop` branch as of the HTTP/1.x and HTTP/2 gap-closure work (chunked trailers,
 interim 1xx responses, and TLS body-write-hook parity for HTTP/1.x; HPACK dynamic-table correctness/reuse,
 HEADERS/CONTINUATION reassembly and re-splitting, trailers, interim 1xx responses, two-hop flow control,
-SETTINGS/PING/GOAWAY handling, and synthetic-response API parity for HTTP/2). HTTP/2 remains **opt-in**
-(`ProxyServer.EnableHttp2 = false` by default) until it has gone through the same full regression pass as
-HTTP/1.x. If you find something inaccurate, please open an issue.
+SETTINGS/PING/GOAWAY handling, and synthetic-response API parity for HTTP/2). HTTP/2 has gone through a full
+regression pass and is now **on by default** (`ProxyServer.EnableHttp2 = true`); set it to `false` to force
+HTTP/1.1 only. If you find something inaccurate, please open an issue.
 
 ## Connections and framing
 
