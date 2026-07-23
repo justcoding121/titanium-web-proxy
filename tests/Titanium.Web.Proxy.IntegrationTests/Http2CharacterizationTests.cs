@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -358,6 +359,44 @@ public class Http2CharacterizationTests
         Assert.AreEqual(1, beforeRequestCount);
         Assert.AreEqual(1, beforeResponseCount);
         Assert.AreEqual(1, afterResponseCount);
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Http2_Session_TimeLine_Has_Same_Milestones_As_Http11()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        Dictionary<string, DateTime>? capturedTimeLine = null;
+        var afterResponseTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        proxy.AfterResponse += (_, args) =>
+        {
+            capturedTimeLine = args.TimeLine;
+            afterResponseTcs.TrySetResult(true);
+            return Task.CompletedTask;
+        };
+
+        using var client = TestHelper.GetHttp2Client(proxy);
+        var response = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
+        await response.Content.ReadAsStringAsync();
+        Assert.AreEqual(new Version(2, 0), response.Version);
+
+        await Task.WhenAny(afterResponseTcs.Task, Task.Delay(2000));
+
+        Assert.IsNotNull(capturedTimeLine, "AfterResponse should have fired.");
+        // Parity with the HTTP/1.x pipeline (see RequestHandler/ResponseHandler), so that TimeLine-based
+        // latency diagnostics behave identically regardless of which protocol a session actually used.
+        Assert.IsTrue(capturedTimeLine!.ContainsKey("Request Sent"), "Missing 'Request Sent' TimeLine entry.");
+        Assert.IsTrue(capturedTimeLine.ContainsKey("Response Received"), "Missing 'Response Received' TimeLine entry.");
+        Assert.IsTrue(capturedTimeLine.ContainsKey("Response Sent"), "Missing 'Response Sent' TimeLine entry.");
+
+        Assert.IsTrue(capturedTimeLine["Response Received"] >= capturedTimeLine["Request Sent"]);
+        Assert.IsTrue(capturedTimeLine["Response Sent"] >= capturedTimeLine["Response Received"]);
     }
 
     [TestMethod]
