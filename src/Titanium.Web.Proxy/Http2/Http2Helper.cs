@@ -718,6 +718,11 @@ namespace Titanium.Web.Proxy.Http2
                         null, null));
                     await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
                         Http2ErrorCode.FrameSizeError, input));
+                    // Unlike every other rejection path here, this one fires before the frame's payload is
+                    // ever read (see the ForceRead call right below this block) - drain it now so the GOAWAY
+                    // just flushed above is not itself lost to an abortive close; see
+                    // DiscardRejectedFramePayloadAsync's remarks.
+                    await DiscardRejectedFramePayloadAsync(input, length, cancellationToken);
                     return;
                 }
 
@@ -1821,6 +1826,41 @@ namespace Titanium.Web.Proxy.Http2
             }
 
             return totalRead;
+        }
+
+        /// <summary>
+        ///     Best-effort drain of a rejected frame's still-incoming payload before this connection is torn down
+        ///     in response to it (e.g. a declared length over <see cref="MaxAcceptableFrameSize" /> - see the
+        ///     FRAME_SIZE_ERROR checks above). The peer typically has already written (or is still writing) that
+        ///     payload; if this leg's socket is closed while those bytes are still sitting unread in the OS
+        ///     receive buffer, some platforms/stacks perform an abortive RST close instead of a graceful one,
+        ///     which can also swallow the GOAWAY/RST_STREAM frame just flushed to the peer - turning an
+        ///     intentionally clean protocol-error response into what looks like an unrelated connection failure.
+        ///     Bounded by <paramref name="length" /> and a short timeout so a peer that declares a huge length and
+        ///     then stalls cannot use this to hang the relay.
+        /// </summary>
+        private static async Task DiscardRejectedFramePayloadAsync(Stream input, int length,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(2));
+
+                var remaining = Math.Min(length, 1024 * 1024);
+                var buffer = new byte[Math.Min(remaining, MaxAcceptableFrameSize)];
+                while (remaining > 0)
+                {
+                    var read = await ForceRead(input, buffer, 0, Math.Min(remaining, buffer.Length), cts.Token);
+                    if (read <= 0) break;
+                    remaining -= read;
+                }
+            }
+            catch
+            {
+                // best-effort only - if the peer is already gone or this times out, there is nothing further to
+                // do; the caller proceeds to tear down the connection either way.
+            }
         }
 
         /// <summary>
