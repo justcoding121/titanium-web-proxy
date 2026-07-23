@@ -25,14 +25,17 @@ HTTP/1.1 only. If you find something inaccurate, please open an issue.
 | HEADERS/CONTINUATION reassembly and re-splitting | N/A | N/A | Yes | Multi-frame inbound header blocks are reassembled before HPACK decoding; outbound blocks larger than the peer's `SETTINGS_MAX_FRAME_SIZE` are split back across HEADERS + CONTINUATION. |
 | `Upgrade` / WebSocket (101 Switching Protocols) | N/A | Yes | N/A | Raw duplex relay once upgraded; see `RequestHandler.HandleWebSocketUpgrade`. |
 | `CONNECT` tunneling | Yes | Yes | Yes (via `ExplicitProxyEndPoint`) | Supports both decrypt-and-inspect and pass-through-as-opaque-tunnel. |
+| ALPN-based protocol routing | N/A | N/A | Yes | A decrypted tunnel is only routed to the HTTP/2 relay when the TLS handshake actually negotiated `h2` via ALPN; an HTTP/2 connection-preface (`PRI * HTTP/2.0...`) received on a connection that negotiated `http/1.1` (or no ALPN at all - including cleartext h2c, not implemented) is rejected as a protocol violation rather than opportunistically switching protocols after the fact. |
 | Stream multiplexing | N/A | N/A | Yes | Concurrent streams tracked per connection in `Http2Helper`; a slow synthetic response on one stream no longer blocks frames for other streams. |
 | HPACK header compression | N/A | N/A | Yes | Both decode and encode reuse a persistent, connection-direction-scoped dynamic table, so repeated headers are indexed/re-indexed correctly on both sides. |
 | Flow control (`WINDOW_UPDATE`) | N/A | N/A | Yes | Independent send-side window accounting per connection and per stream on each of the two TLS legs (client↔proxy, proxy↔server); validates length/increment/overflow and translates rather than blindly relays. |
-| Server push (`PUSH_PROMISE`) | N/A | N/A | No | Not decoded/transcoded; no public API to originate a push (push is deprecated in browsers, so low priority). |
+| Server push (`PUSH_PROMISE`) | N/A | N/A | No | `SETTINGS_ENABLE_PUSH=0` is always forced toward the origin (overriding/appending it in the relayed client SETTINGS frame), and any PUSH_PROMISE received anyway (from either peer) is treated as a connection-level `PROTOCOL_ERROR` (`GOAWAY`) rather than decoded, relayed, or silently forwarded. Push is deprecated in browsers, so no public API originates one. |
 | `PING` / keepalive frames | N/A | N/A | Yes | ACKed locally by the proxy on each leg; not blindly relayed. |
-| `SETTINGS` negotiation | N/A | N/A | Yes | `HEADER_TABLE_SIZE`, `MAX_FRAME_SIZE`, and `INITIAL_WINDOW_SIZE` are validated (range-checked, malformed values rejected) and applied per leg; the proxy sends its own SETTINGS on each leg rather than relaying the peer's verbatim. |
-| `RST_STREAM` / per-stream cancellation | N/A | N/A | Yes | Cleans up the corresponding session/flow-control state and relays the error code. |
-| `GOAWAY` / connection shutdown | N/A | N/A | Yes | Parses `lastStreamId`/error code, stops admitting new streams above it, cancels in-flight work that can't complete, and relays to the other leg. |
+| `SETTINGS` negotiation | N/A | N/A | Yes | `HEADER_TABLE_SIZE`, `MAX_FRAME_SIZE`, `INITIAL_WINDOW_SIZE`, and `MAX_CONCURRENT_STREAMS` are validated/tracked and applied per leg. The proxy relays each peer's own SETTINGS frame to the other leg (rather than generating a fully independent proxy-authored SETTINGS frame per leg) except for the forced `ENABLE_PUSH=0` override above; the proxy also enforces that the first frame after the connection preface is SETTINGS on both legs, and that client-initiated stream ids are odd and strictly increasing (RFC 7540 §5.1.1/§3.5), rejecting violations with `GOAWAY`. |
+| `RST_STREAM` / per-stream cancellation | N/A | N/A | Yes | Cleans up the corresponding session/flow-control state, relays the error code, and still runs exactly one `AfterResponse`/dispose for the affected stream (see below). |
+| `GOAWAY` / connection shutdown | N/A | N/A | Yes | Parses `lastStreamId`/error code, stops admitting new streams above it, cancels in-flight work that can't complete, relays to the other leg, and the proxy itself sends a best-effort graceful `GOAWAY` to the other leg when either side of the relay disconnects. |
+| `MAX_CONCURRENT_STREAMS` admission | N/A | N/A | Yes | A new client-initiated stream that would exceed the origin's advertised limit is refused locally (`RST_STREAM`/`REFUSED_STREAM`) rather than forwarded. |
+| Flow-control reservation timeout | N/A | N/A | Yes | An outbound `DATA` write that cannot obtain flow-control credit within 60 seconds (peer stopped sending `WINDOW_UPDATE`) fails the stream instead of waiting indefinitely. |
 
 ## Body handling and streaming
 
@@ -53,6 +56,7 @@ HTTP/1.1 only. If you find something inaccurate, please open an issue.
 | Synthetic responses (`Ok`, `Respond`, `Redirect`, `GenericResponse`) from `BeforeRequest` | Yes | Yes | Yes | The request is never forwarded upstream; any unfinished client request body already in flight is drained with flow-control credit returned. |
 | `Respond` replacing an already-received response from `BeforeResponse` | Yes | Yes | Yes | The origin's own response body, if still arriving, is discarded (with flow-control credit still returned) in favor of the replacement. |
 | `RespondStreaming` (synthetic streamed body) | Yes | Yes | Yes | See "Synthetic streamed responses" above for framing details. |
+| `AfterResponse` / per-request disposal | Yes | Yes | Yes | Every h2 stream - whether it completes normally, is reset (`RST_STREAM`), or is still open when the connection itself tears down - gets exactly one `AfterResponse` invocation and one `SessionEventArgs.Dispose()`, matching the HTTP/1.x `finally` guarantee. Request-header preparation (`Accept-Encoding` filtering, hop-by-hop header stripping) also now runs for h2 requests before they are forwarded upstream, matching HTTP/1.x. |
 
 ## Proxying, auth, and misc
 

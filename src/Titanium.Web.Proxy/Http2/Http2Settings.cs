@@ -15,6 +15,13 @@ internal class Http2Settings
     public int MaxFrameSize { get; set; } = 16384;
 
     /// <summary>
+    ///     RFC 7540 §6.5.2: the maximum number of streams this peer is willing to have opened toward it
+    ///     concurrently. Absent a SETTINGS_MAX_CONCURRENT_STREAMS entry, the RFC-default meaning is
+    ///     "unlimited", represented here as <see cref="int.MaxValue" />.
+    /// </summary>
+    public int MaxConcurrentStreams { get; set; } = int.MaxValue;
+
+    /// <summary>
     ///     The HPACK encoder (and its dynamic table) used for header blocks sent in the direction this
     ///     settings instance represents the peer for. Lazily created and persisted for the life of the
     ///     connection - see the comment in <c>Http2Helper.SendHeader</c>.

@@ -71,6 +71,22 @@ internal sealed class Http2ConnectionState
     /// </summary>
     public ConcurrentBag<Task> PendingSynthetics { get; } = new();
 
+    /// <summary>
+    ///     Background tasks running each stream's <c>AfterResponse</c> + <c>Dispose</c> finalization (see
+    ///     <see cref="Http2StreamState.FinalizedFlag" />), tracked so a slow user <c>AfterResponse</c>
+    ///     handler for one stream never stalls frame processing for every other multiplexed stream, while
+    ///     still being awaited (in <c>Http2Helper.SendHttp2</c>) before the whole relay call returns.
+    /// </summary>
+    public ConcurrentBag<Task> PendingFinalizations { get; } = new();
+
+    /// <summary>
+    ///     The highest client-initiated stream id admitted so far on this connection, used to enforce RFC
+    ///     7540 §5.1.1: client-initiated stream ids must be odd and strictly increasing. 0 (no stream
+    ///     admitted yet) is even, so the first real stream id (1) always passes the "strictly increasing"
+    ///     check.
+    /// </summary>
+    public int LastClientStreamId;
+
     /// <summary>Cancels both relay directions; shared with the caller so either can trigger connection-wide teardown.</summary>
     public CancellationTokenSource CancellationTokenSource { get; }
 
