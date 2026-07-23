@@ -18,12 +18,11 @@ using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
-///     Baseline ("characterization") coverage for the existing explicit-proxy HTTP/2 implementation, added
-///     before any change to connection orchestration (shared negotiation/ownership, transparent routing,
-///     protocol translation). These tests lock in current, observable behavior - including known,
-///     intentionally not-yet-fixed inefficiencies such as the cold-cache three-connection tunnel below - so
-///     later milestones can be judged against a known-good/known-bad baseline instead of guessing what the
-///     pre-existing behavior was.
+///     Baseline ("characterization") coverage for the explicit-proxy HTTP/2 implementation, added before
+///     later milestones (transparent routing, protocol translation) change connection orchestration
+///     further. These tests lock in current, observable behavior - including connection-count and
+///     ownership guarantees added by the shared negotiation/ownership coordinator - so later milestones
+///     can be judged against a known-good baseline instead of guessing what the prior behavior was.
 /// </summary>
 [TestClass]
 public class Http2CharacterizationTests
@@ -80,13 +79,12 @@ public class Http2CharacterizationTests
 
     [TestMethod]
     [Timeout(30 * 1000)]
-    public async Task Http2_Cold_Cache_Explicit_Tunnel_With_Prefetch_Opens_Three_Origin_Connections_Baseline()
+    public async Task Http2_Cold_Cache_Explicit_Tunnel_With_Prefetch_Opens_One_Origin_Connection()
     {
-        // Documents the known, not-yet-fixed inefficiency described in the shared-negotiation milestone:
-        // a cold-cache h2 tunnel with prefetch enabled currently causes three separate origin
-        // connections for a single logical request - the origin-capability probe, the (unused, since
-        // the h2 relay opens its own dedicated session connection rather than consuming it) prefetch,
-        // and the real session connection. A future milestone is expected to collapse this to one.
+        // The shared negotiation/ownership coordinator collapses what used to be three separate origin
+        // connections (an origin-capability probe, an unused prefetch, and a freshly opened session
+        // connection) into a single discovery connection that is retained and adopted directly as the
+        // session connection once it is confirmed healthy and correctly keyed.
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
         rawServer.HandleConnection(async connection =>
         {
@@ -112,16 +110,69 @@ public class Http2CharacterizationTests
         var (_, responseHeaders, _) = await rawClient.Connection.ReadHeaderBlockAsync();
         Assert.AreEqual("200", System.Linq.Enumerable.Single(responseHeaders, h => h.Name == ":status").Value);
 
-        // give the fire-and-forget prefetch task a moment to actually reach the origin.
-        for (var i = 0; i < 100 && rawServer.AcceptedConnectionCount < 3; i++)
+        // give any unexpected extra connection attempt a moment to actually reach the origin before
+        // asserting the count stayed at one.
+        await Task.Delay(500);
+
+        Assert.AreEqual(1, rawServer.AcceptedConnectionCount,
+            "Expected exactly one origin connection (the discovery connection, retained and adopted as " +
+            "the session connection) for one prefetch-enabled, cold-cache explicit h2 tunnel.");
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Http2_Cache_Hit_Explicit_Tunnel_With_Prefetch_Adopts_Prefetched_Connection()
+    {
+        // On a cache hit, the correctly-keyed prefetch connection started while the client TLS handshake
+        // is still in progress must be adopted directly as the session connection instead of being left
+        // unused - one origin connection per tunnel, not two.
+        using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
+        rawServer.HandleConnection(async connection =>
         {
-            await Task.Delay(50);
+            await connection.SendInitialSettingsAsync();
+            var (streamId, _, _) = await connection.ReadRequestAsync();
+            var headers = connection.EncodeHeaders(new[] { (":status", "200") }, Array.Empty<(string, string)>());
+            await connection.WriteHeaderBlockAsync(streamId, headers, true);
+        });
+
+        using var testSuite = new TestSuite();
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableTcpServerConnectionPrefetch = true;
+
+        var uri = new Uri(rawServer.Url);
+
+        async Task<int> SendOneRequestOverANewTunnelAsync()
+        {
+            using var rawClient =
+                await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+
+            var requestHeaders = rawClient.Connection.EncodeHeaders(
+                new[]
+                {
+                    (":method", "GET"), (":scheme", "https"), (":authority", $"{uri.Host}:{uri.Port}"),
+                    (":path", "/")
+                },
+                Array.Empty<(string, string)>());
+            await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, true);
+
+            var (_, responseHeaders, _) = await rawClient.Connection.ReadHeaderBlockAsync();
+            return int.Parse(System.Linq.Enumerable.Single(responseHeaders, h => h.Name == ":status").Value);
         }
 
-        Assert.AreEqual(3, rawServer.AcceptedConnectionCount,
-            "Expected the known cold-cache baseline of 3 origin connections (probe + prefetch + session) " +
-            "for one prefetch-enabled explicit h2 tunnel; if this changed, either the baseline needs " +
-            "updating or a regression was introduced.");
+        // First tunnel: cold cache, one discovery connection adopted as the session connection.
+        Assert.AreEqual(200, await SendOneRequestOverANewTunnelAsync());
+
+        // Second tunnel: cache hit, prefetch enabled - the prefetched connection must be adopted rather
+        // than abandoned alongside a second, freshly opened session connection.
+        Assert.AreEqual(200, await SendOneRequestOverANewTunnelAsync());
+
+        await Task.Delay(500);
+
+        Assert.AreEqual(2, rawServer.AcceptedConnectionCount,
+            "Expected exactly one origin connection per tunnel (one adopted discovery connection for the " +
+            "cold-cache tunnel, one adopted prefetch connection for the cache-hit tunnel) - four would mean " +
+            "prefetched/discovery connections are being wastefully abandoned instead of adopted.");
     }
 
     [TestMethod]
@@ -320,11 +371,9 @@ public class Http2CharacterizationTests
             await connection.SendInitialSettingsAsync();
             try
             {
-                // Only the real session connection (of the probe/prefetch/session connections this cold
-                // h2 tunnel opens - see the baseline test above) ever receives a HEADERS frame; the other
-                // two are simply closed unused, so read frames (ignoring SETTINGS/etc.) until the request
-                // HEADERS for stream 1 arrives rather than waiting for a full (END_STREAM-terminated)
-                // request that this test deliberately never completes.
+                // Read frames (ignoring SETTINGS/etc.) until the request HEADERS for stream 1 arrives,
+                // rather than waiting for a full (END_STREAM-terminated) request that this test
+                // deliberately never completes.
                 while (true)
                 {
                     var frame = await connection.ReadFrameAsync();

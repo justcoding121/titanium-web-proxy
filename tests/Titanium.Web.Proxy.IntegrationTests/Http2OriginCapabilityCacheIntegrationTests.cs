@@ -75,10 +75,15 @@ public class Http2OriginCapabilityCacheIntegrationTests
         var secondStatus = await SendOneRequestOverANewTunnelAsync();
         Assert.AreEqual(200, secondStatus, "The second tunnel's real request did not complete successfully.");
 
-        // Exactly one probe connection (from the first tunnel) plus one real request connection per tunnel.
-        // Without the cache this would be 4 (a probe *and* a real connection for each of the two tunnels).
-        Assert.AreEqual(3, rawServer.AcceptedConnectionCount,
-            "Expected exactly one HTTP/2-capability probe connection across both tunnels; the second " +
-            "tunnel should have reused the first tunnel's cached result instead of probing the origin again.");
+        // The first tunnel's cold-cache discovery connection is retained and adopted directly as its
+        // session connection (one connection total), and the second tunnel's cache hit needs no discovery
+        // connection at all (prefetch is disabled here), so it opens its own single fresh session
+        // connection - two real origin connections across both tunnels. Without the cache this would be 3
+        // (the first tunnel's single adopted discovery connection, plus a probe *and* a real connection
+        // for the second tunnel).
+        Assert.AreEqual(2, rawServer.AcceptedConnectionCount,
+            "Expected exactly one HTTP/2-capability probe/session connection for the first tunnel and one " +
+            "session connection for the second; the second tunnel should have reused the first tunnel's " +
+            "cached capability result instead of probing the origin again.");
     }
 }
