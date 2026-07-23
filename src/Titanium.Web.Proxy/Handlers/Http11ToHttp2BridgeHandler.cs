@@ -305,11 +305,24 @@ public partial class ProxyServer
         var request = args.HttpClient.Request;
         var clientStream = args.ClientStream;
 
+        if (args.Timing != null)
+        {
+            var serverConnection = originConnection.ServerConnection;
+            args.Timing.MarkConnectionReady(serverConnection.Id, !serverConnection.ClaimFirstUse());
+        }
+
         try
         {
             if (request.HasBody) await args.GetRequestBody(cancellationToken);
 
             PrepareRequestForOrigin(request);
+
+            // Http2OriginConnection.SendAsync performs the whole request-send + response-receive round trip
+            // in one call rather than exposing separate phases, so - unlike the HTTP/1.1 and h2-to-HTTP/1.1
+            // paths - RequestSentAt and ResponseHeadersReceivedAt below are necessarily approximated as the
+            // instants immediately before/after that single call, rather than exactly bracketing only the
+            // request-send portion of it.
+            args.Timing?.MarkRequestSent();
 
             Http2OriginExchange exchange;
             try
@@ -324,8 +337,18 @@ public partial class ProxyServer
                 originConnection.Dispose();
                 originConnection = await AcquireHttp2OriginConnectionAsync(args, remoteHostName, remotePort,
                     connectHost, connectPort, null, cancellationToken);
+
+                if (args.Timing != null)
+                {
+                    var retriedConnection = originConnection.ServerConnection;
+                    args.Timing.MarkConnectionReady(retriedConnection.Id, !retriedConnection.ClaimFirstUse());
+                }
+
+                args.Timing?.MarkRequestSent();
                 exchange = await originConnection.SendAsync(request, cancellationToken);
             }
+
+            args.Timing?.MarkResponseHeadersReceived();
 
             await DeliverOriginExchangeAsync(args, exchange, cancellationToken);
         }

@@ -274,7 +274,8 @@ public partial class ProxyServer
             // set the connection and send request headers
             args.HttpClient.SetConnection(connection);
 
-            args.TimeLine["Connection Ready"] = DateTime.UtcNow;
+            if (args.Timing != null)
+                args.Timing.MarkConnectionReady(connection.Id, !connection.ClaimFirstUse());
 
             if (args.HttpClient.Request.UpgradeToWebSocket)
             {
@@ -330,7 +331,7 @@ public partial class ProxyServer
                     cancellationToken);
         }
 
-        args.TimeLine["Request Sent"] = DateTime.UtcNow;
+        args.Timing?.MarkRequestSent();
 
         // parse and send response
         await HandleHttpSessionResponse(args);
@@ -369,7 +370,7 @@ public partial class ProxyServer
     /// <returns></returns>
     private async Task OnBeforeRequest(SessionEventArgs args)
     {
-        args.TimeLine["Request Received"] = DateTime.UtcNow;
+        args.Timing?.MarkRequestHeadersReceived();
 
         if (BeforeRequest != null) await BeforeRequest.InvokeAsync(this, args, logger);
     }

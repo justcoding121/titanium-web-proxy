@@ -7,6 +7,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
@@ -225,9 +226,17 @@ public partial class ProxyServer
                         options.EnabledSslProtocols = SupportedSslProtocols;
                         options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;
 
+                        ClientTlsTiming? clientTlsTiming = null;
+                        if (EnableRequestTimingCapture)
+                        {
+                            clientTlsTiming = new ClientTlsTiming(DateTime.UtcNow);
+                            connectArgs.ClientTlsTiming = clientTlsTiming;
+                        }
+
                         ProxyLog.BrowserHandshakeStarting(logger, connectHostname, options.EnabledSslProtocols,
                             options.ApplicationProtocols);
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
+                        clientTlsTiming?.MarkCompleted();
                         ProxyLog.BrowserHandshakeSucceeded(logger, connectHostname,
                             sslStream.NegotiatedApplicationProtocol);
 
@@ -401,6 +410,13 @@ public partial class ProxyServer
                     connection ??= (await TcpConnectionFactory.GetServerConnection(this, connectArgs,
                         true, SslExtensions.Http2ProtocolAsList,
                         true, false, cancellationToken))!;
+
+                    // The whole h2 client connection multiplexes every request-carrying stream over this
+                    // one shared origin connection, so - unlike HTTP/1.1's per-request pool acquisition -
+                    // its establishment timing is attributed to the tunnel/CONNECT session rather than any
+                    // individual per-stream SessionEventArgs (which never itself acquires a connection).
+                    if (connectArgs.Timing != null)
+                        connectArgs.Timing.MarkConnectionReady(connection.Id, !connection.ClaimFirstUse());
                     try
                     {
 #if NET6_0_OR_GREATER

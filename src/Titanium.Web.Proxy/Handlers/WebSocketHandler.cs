@@ -28,10 +28,18 @@ public partial class ProxyServer
         await HeaderParser.ReadHeaders(serverConnection.Stream, response.Headers,
             cancellationToken);
 
+        args.Timing?.MarkResponseHeadersReceived();
+
         await clientStream.WriteResponseAsync(response, cancellationToken);
 
         // If user requested call back then do it
         if (!args.HttpClient.Response.Locked) await OnBeforeResponse(args);
+
+        // The upgrade handshake is what "request timing" means for a WebSocket session - mark it complete
+        // here rather than leaving it to the shared OnAfterResponse chokepoint (see its remarks), which
+        // only runs once the raw relay below returns and would otherwise make TotalDuration cover the
+        // entire (potentially very long-lived) WebSocket connection instead of just the HTTP upgrade.
+        args.Timing?.MarkComplete();
 
         await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool,
             args.OnDataSent, args.OnDataReceived, cancellationTokenSource, logger);

@@ -462,6 +462,27 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
+    ///     Enables structured request/connection timing capture. When <see langword="false" /> (the
+    ///     default) no timing objects are allocated and no <see cref="DateTime.UtcNow" /> calls are made
+    ///     for timing purposes anywhere in the proxy, so there is zero overhead on the hot path.
+    ///     <para>
+    ///         When enabled, every <see cref="SessionEventArgsBase" /> exposes a populated
+    ///         <see cref="SessionEventArgsBase.Timing" /> (per-request phases: client header read,
+    ///         connection wait, request send, time-to-first-byte, response delivery, total), every
+    ///         upstream connection exposes a populated <c>UpstreamConnectionTiming</c> (reachable from a
+    ///         session via <see cref="SessionEventArgsBase.UpstreamConnectionTiming" />, describing DNS,
+    ///         TCP connect, optional upstream-proxy CONNECT, and TLS handshake durations), and a decrypted
+    ///         <see cref="EventArguments.TunnelConnectSessionEventArgs" /> exposes the client-facing TLS
+    ///         handshake duration via <see cref="EventArguments.TunnelConnectSessionEventArgs.ClientTlsTiming" />.
+    ///     </para>
+    ///     <para>
+    ///         Can be toggled at any time; it only affects sessions/connections created after the change,
+    ///         never mutating timing objects already handed out. Defaults to <see langword="false" />.
+    ///     </para>
+    /// </summary>
+    public bool EnableRequestTimingCapture { get; set; }
+
+    /// <summary>
     ///     A callback to authenticate proxy clients via basic authentication.
     ///     Parameters are username and password as provided by client.
     ///     Should return true for successful authentication.

@@ -1,8 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using Microsoft.Extensions.Logging;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Logging;
@@ -36,7 +36,9 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
         CancellationTokenSource cancellationTokenSource) : base(server, clientStream.Connection)
     {
         BufferPool = server.BufferPool;
-        TimeLine["Session Created"] = DateTime.UtcNow;
+
+        var sessionCreatedAt = DateTime.UtcNow;
+        Timing = server.EnableRequestTimingCapture ? new HttpRequestTiming(sessionCreatedAt) : null;
 
         CancellationTokenSource = cancellationTokenSource;
 
@@ -63,9 +65,20 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public Guid ServerConnectionId => HttpClient.HasConnection ? ServerConnection.Id : Guid.Empty;
 
     /// <summary>
-    ///     Relative milliseconds for various events.
+    ///     Structured timing for this session's request/response exchange, populated only when
+    ///     <see cref="ProxyServer.EnableRequestTimingCapture" /> is enabled (otherwise <see langword="null" />
+    ///     and no timing overhead is incurred anywhere in the proxy). See <see cref="HttpRequestTiming" />.
     /// </summary>
-    public Dictionary<string, DateTime> TimeLine { get; } = new();
+    public HttpRequestTiming? Timing { get; }
+
+    /// <summary>
+    ///     Structured timing for the upstream connection currently used by this session, populated only
+    ///     when <see cref="ProxyServer.EnableRequestTimingCapture" /> is enabled. <see langword="null" />
+    ///     when timing capture is disabled or no upstream connection has been acquired yet (e.g. the
+    ///     request was answered synthetically). See <see cref="UpstreamConnectionTiming" />.
+    /// </summary>
+    public UpstreamConnectionTiming? UpstreamConnectionTiming =>
+        HttpClient.HasConnection ? ServerConnection.Timing : null;
 
     /// <summary>
     ///     Returns a user data for this request/response session which is
