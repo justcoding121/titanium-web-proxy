@@ -177,7 +177,7 @@ public partial class ProxyServer : IDisposable
     ///     originate a push) and cleartext h2c upgrade.
     ///     See the protocol support matrix on the wiki for exact, up-to-date HTTP/1.x/HTTP/2 feature coverage.
     /// </summary>
-    public bool EnableHttp2 { get; set; } = false;
+    public bool EnableHttp2 { get; set; } = true;
 
     /// <summary>
     ///     Should we check for certificate revocation during SSL authentication to servers
