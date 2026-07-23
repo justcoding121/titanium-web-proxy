@@ -89,35 +89,27 @@ public partial class ProxyServer
                             throw new InvalidOperationException(
                                 $"Could not create a server certificate for '{certName}'.");
 
-                        // Build options using the same pattern as the explicit CONNECT handler so that:
-                        //   - SupportedSslProtocols is respected (no hardcoded TLS 1.2)
-                        //   - The client's ALPN list is forwarded when HTTP/2 is enabled, allowing
-                        //     the client to negotiate h2 with the proxy just as it would in the
-                        //     explicit path. Because the transparent handler has no CONNECT target
-                        //     there is no h2 origin probe; the ALPN list is passed as-is so the
-                        //     client can at least negotiate the protocol it prefers.
+                        // Use SslServerAuthenticationOptions so that SupportedSslProtocols is
+                        // respected rather than being hardcoded to TLS 1.2.
+                        //
+                        // HTTP/2 is intentionally NOT offered here even though EnableHttp2 may be
+                        // true. The transparent handler routes all decrypted traffic through
+                        // HandleHttpSessionRequest, which is an HTTP/1.1-only pipeline. Advertising
+                        // h2 via ALPN would cause the browser to send HTTP/2 binary frames that
+                        // the HTTP/1.1 parser cannot handle. Full h2 support on the transparent
+                        // path would require the same PRI-preface detection and Http2Helper routing
+                        // that the explicit CONNECT handler uses, which has not been implemented.
                         var options = new SslServerAuthenticationOptions
                         {
                             ServerCertificate = certificate,
                             ClientCertificateRequired = false,
                             EnabledSslProtocols = SupportedSslProtocols,
-                            CertificateRevocationCheckMode = X509RevocationMode.NoCheck
+                            CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                            ApplicationProtocols = SslExtensions.Http11ProtocolAsList
                         };
-
-                        if (EnableHttp2)
-                        {
-                            var alpn = clientHelloInfo.GetAlpn();
-                            if (alpn != null && alpn.Count > 0)
-                                options.ApplicationProtocols = alpn;
-                        }
 
                         // Successfully managed to authenticate the client using the certificate
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
-
-#if NET6_0_OR_GREATER
-                        clientStream.Connection.NegotiatedApplicationProtocol =
-                            sslStream.NegotiatedApplicationProtocol;
-#endif
 
                         // HTTPS server created - we can now decrypt the client's traffic
                         clientStream = new HttpClientStream(this, clientStream.Connection, sslStream, BufferPool,
