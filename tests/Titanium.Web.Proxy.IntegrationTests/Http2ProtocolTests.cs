@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -194,9 +195,21 @@ public class Http2ProtocolTests
         // Larger than Http2Helper's fixed 16384-byte MaxAcceptableFrameSize - a connection-level
         // FRAME_SIZE_ERROR regardless of frame type or whether the stream id is in use.
         var oversizedPayload = new byte[16384 + 1];
-        await rawClient.Connection.WriteFrameAsync(Http2FrameType.Data, 1, 0, oversizedPayload);
+        try
+        {
+            await rawClient.Connection.WriteFrameAsync(Http2FrameType.Data, 1, 0, oversizedPayload);
+        }
+        catch (IOException)
+        {
+            // The proxy can detect the invalid declared length from the 9-byte frame header alone and react
+            // (GOAWAY + connection close) before this client finishes streaming the oversized payload it
+            // declared, which surfaces here as the write itself failing rather than a clean GOAWAY response
+            // being available to read afterwards. Either outcome equally proves the connection was torn down
+            // in response to the oversized frame, so there is nothing further to assert.
+            return;
+        }
 
-        var frame = await rawClient.Connection.ReadFrameAsync();
+        var frame = await ReadNonSettingsFrameAsync(rawClient);
         Assert.AreEqual(Http2FrameType.GoAway, frame.Type);
         Assert.AreEqual((int)Http2ErrorCode.FrameSizeError, BinaryPrimitives.ReadInt32BigEndian(frame.Payload.AsSpan(4, 4)));
     }
@@ -218,7 +231,7 @@ public class Http2ProtocolTests
         // RFC 7540 §6.5: a SETTINGS frame with the ACK flag set must have a zero-length payload.
         await rawClient.Connection.WriteFrameAsync(Http2FrameType.Settings, 0, Http2FrameFlag.Ack, new byte[6]);
 
-        var frame = await rawClient.Connection.ReadFrameAsync();
+        var frame = await ReadNonSettingsFrameAsync(rawClient);
         Assert.AreEqual(Http2FrameType.GoAway, frame.Type);
         Assert.AreEqual((int)Http2ErrorCode.FrameSizeError, BinaryPrimitives.ReadInt32BigEndian(frame.Payload.AsSpan(4, 4)));
     }
@@ -240,7 +253,7 @@ public class Http2ProtocolTests
         // RFC 7540 §6.9.1: a zero increment on a stream-level WINDOW_UPDATE is a stream PROTOCOL_ERROR.
         await rawClient.Connection.WriteFrameAsync(Http2FrameType.WindowUpdate, 1, 0, Encode32(0));
 
-        var frame = await rawClient.Connection.ReadFrameAsync();
+        var frame = await ReadNonSettingsFrameAsync(rawClient);
         Assert.AreEqual(Http2FrameType.RstStream, frame.Type);
         Assert.AreEqual(1, frame.StreamId);
         Assert.AreEqual((int)Http2ErrorCode.ProtocolError, BinaryPrimitives.ReadInt32BigEndian(frame.Payload));
@@ -264,7 +277,7 @@ public class Http2ProtocolTests
         // connection PROTOCOL_ERROR.
         await rawClient.Connection.WriteFrameAsync(Http2FrameType.WindowUpdate, 0, 0, Encode32(0));
 
-        var frame = await rawClient.Connection.ReadFrameAsync();
+        var frame = await ReadNonSettingsFrameAsync(rawClient);
         Assert.AreEqual(Http2FrameType.GoAway, frame.Type);
         Assert.AreEqual((int)Http2ErrorCode.ProtocolError, BinaryPrimitives.ReadInt32BigEndian(frame.Payload.AsSpan(4, 4)));
     }
@@ -274,6 +287,26 @@ public class Http2ProtocolTests
         var buffer = new byte[4];
         BinaryPrimitives.WriteInt32BigEndian(buffer, value);
         return buffer;
+    }
+
+    /// <summary>
+    ///     Reads frames off <paramref name="rawClient" />, discarding any leading SETTINGS frames, and returns
+    ///     the first non-SETTINGS one. The proxy always sends its own initial SETTINGS frame to the client
+    ///     independently of - and racing with - whatever error/reset frame a deliberately invalid client frame
+    ///     provokes (and may also ACK the client's own initial SETTINGS the same way), so a single unconditional
+    ///     <see cref="Http2RawFrame.Connection.ReadFrameAsync" /> call is not deterministic; see the identical
+    ///     reasoning already applied to <see cref="Http2_RstStream_From_Origin_Is_Relayed_And_Connection_Remains_Usable_For_Further_Streams" />
+    ///     and <see cref="Http2_GoAway_From_Origin_Causes_Local_Refusal_Of_New_Stream_Above_Last_Accepted_Id" />.
+    /// </summary>
+    private static async Task<Http2RawFrame.Frame> ReadNonSettingsFrameAsync(Http2RawClient rawClient)
+    {
+        Http2RawFrame.Frame frame;
+        do
+        {
+            frame = await rawClient.Connection.ReadFrameAsync();
+        } while (frame.Type == Http2FrameType.Settings);
+
+        return frame;
     }
 
     private static async Task SendGetRequestAsync(Http2RawClient rawClient, Uri uri, int streamId)
