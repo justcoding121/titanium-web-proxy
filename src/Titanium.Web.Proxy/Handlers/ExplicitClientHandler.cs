@@ -137,27 +137,35 @@ public partial class ProxyServer
                     {
                         var alpn = clientHelloInfo.GetAlpn();
                         if (alpn != null && alpn.Contains(SslApplicationProtocol.Http2))
-                            // test server HTTP/2 support
-                            try
-                            {
-                                // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
-                                var connection = await TcpConnectionFactory.GetServerConnection(this, connectArgs,
-                                    true, SslExtensions.Http2ProtocolAsList,
-                                    true, true, cancellationToken);
-
-                                if (connection != null)
+                        {
+                            var connectTarget = requestLine.RequestUri.GetString();
+                            if (!Http2OriginCapabilityCache.TryGet(connectTarget, out http2Supported))
+                                // test server HTTP/2 support
+                                try
                                 {
-                                    http2Supported = connection.NegotiatedApplicationProtocol ==
-                                                     SslApplicationProtocol.Http2;
+                                    // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
+                                    var connection = await TcpConnectionFactory.GetServerConnection(this, connectArgs,
+                                        true, SslExtensions.Http2ProtocolAsList,
+                                        true, true, cancellationToken);
 
-                                    // release connection back to pool instead of closing when connection pool is enabled.
-                                    await TcpConnectionFactory.Release(connection, true);
+                                    if (connection != null)
+                                    {
+                                        http2Supported = connection.NegotiatedApplicationProtocol ==
+                                                         SslApplicationProtocol.Http2;
+
+                                        // release connection back to pool instead of closing when connection pool is enabled.
+                                        await TcpConnectionFactory.Release(connection, true);
+                                    }
+
+                                    Http2OriginCapabilityCache.Set(connectTarget, http2Supported);
                                 }
-                            }
-                            catch (Exception)
-                            {
-                                // ignore
-                            }
+                                catch (Exception)
+                                {
+                                    // Do not cache a failed probe: it may be a transient network/cert issue rather
+                                    // than a genuine lack of HTTP/2 support, and caching "false" here would pin
+                                    // every subsequent tunnel to this host to HTTP/1.1 for the full TTL.
+                                }
+                        }
                     }
 
                     if (EnableTcpServerConnectionPrefetch)

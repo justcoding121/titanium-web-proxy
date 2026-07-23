@@ -12,6 +12,7 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -108,6 +109,14 @@ public partial class ProxyServer : IDisposable
     ///     An factory that creates tcp connection to server.
     /// </summary>
     private TcpConnectionFactory TcpConnectionFactory { get; }
+
+    /// <summary>
+    ///     Caches, per upstream host:port, whether the real origin negotiates HTTP/2 via TLS ALPN - so that
+    ///     repeat CONNECT tunnels to the same host (very common with real browsers) do not each pay for their
+    ///     own redundant probe TLS handshake. See <see cref="Http2OriginCapabilityCache" />.
+    /// </summary>
+    private Http2OriginCapabilityCache Http2OriginCapabilityCache { get; } =
+        new(TimeSpan.FromMinutes(5));
 
     /// <summary>
     ///     Manage system proxy settings.
