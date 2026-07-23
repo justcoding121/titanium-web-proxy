@@ -10,6 +10,7 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended.Network;
@@ -75,7 +76,7 @@ public partial class ProxyServer
             (sessionArgs, ctx) => Task.CompletedTask,
             async sessionArgs => { await OnAfterResponse(sessionArgs); },
             headers => PrepareRequestHeaders(headers),
-            cancellationTokenSource, clientStream.Connection.Id, ExceptionFunc);
+            cancellationTokenSource, clientStream.Connection.Id, logger);
     }
 
     /// <summary>
@@ -123,9 +124,11 @@ public partial class ProxyServer
             .ContinueWith(t =>
             {
                 if (t.IsFaulted)
-                    ExceptionFunc?.Invoke(new ProxyHttpException(
+                    ProxyDiagnostics.ReportUnexpected(logger,
                         $"HTTP/2-to-HTTP/1.1 bridge round trip failed for stream {ctx.StreamId}",
-                        t.Exception!.GetBaseException(), sessionArgs));
+                        new ProxyHttpException(
+                            $"HTTP/2-to-HTTP/1.1 bridge round trip failed for stream {ctx.StreamId}",
+                            t.Exception!.GetBaseException(), sessionArgs));
             }, TaskScheduler.Default);
         streamState.SyntheticTask = bridgeTask;
         ctx.ConnectionState.PendingSynthetics.Add(bridgeTask);
@@ -283,8 +286,11 @@ public partial class ProxyServer
             // in that case either. Only report and attempt to answer genuine origin-round-trip failures.
             if (!cancellationToken.IsCancellationRequested)
             {
-                ExceptionFunc?.Invoke(new ProxyHttpException(
-                    $"HTTP/2-to-HTTP/1.1 bridge origin round trip failed for stream {streamId}", ex, sessionArgs));
+                ProxyDiagnostics.ReportUnexpected(logger,
+                    $"HTTP/2-to-HTTP/1.1 bridge origin round trip failed for stream {streamId}",
+                    new ProxyHttpException(
+                        $"HTTP/2-to-HTTP/1.1 bridge origin round trip failed for stream {streamId}", ex,
+                        sessionArgs));
 
                 try
                 {
@@ -338,7 +344,7 @@ public partial class ProxyServer
                 connectionState.ClientSendFlow.RemoveStream(streamId);
                 connectionState.ServerSendFlow.RemoveStream(streamId);
                 await Http2Helper.FinalizeStreamAsync(finalStreamState,
-                    async args => { await OnAfterResponse(args); }, ExceptionFunc);
+                    async args => { await OnAfterResponse(args); }, logger);
             }
         }
     }

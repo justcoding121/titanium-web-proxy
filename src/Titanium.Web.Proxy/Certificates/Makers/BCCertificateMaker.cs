@@ -34,12 +34,9 @@ internal class BcCertificateMaker : ICertificateMaker
     private static bool _doNotSetFriendlyName;
     private readonly int certificateValidDays;
 
-    private readonly ExceptionHandler? exceptionFunc;
-
-    internal BcCertificateMaker(ExceptionHandler? exceptionFunc, int certificateValidDays)
+    internal BcCertificateMaker(int certificateValidDays)
     {
         this.certificateValidDays = certificateValidDays;
-        this.exceptionFunc = exceptionFunc;
     }
 
     /// <summary>

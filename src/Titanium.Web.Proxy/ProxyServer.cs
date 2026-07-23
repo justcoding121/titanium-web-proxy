@@ -7,12 +7,15 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -46,17 +49,36 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Backing field for exposed public property.
     /// </summary>
-    private ExceptionHandler? exceptionFunc;
-
-    /// <summary>
-    ///     Backing field for exposed public property.
-    /// </summary>
     private int serverConnectionCount;
 
     /// <summary>
     ///     Upstream proxy manager.
     /// </summary>
     private WinHttpWebProxyFinder? systemProxyResolver;
+
+    /// <summary>
+    ///     Backing field for <see cref="Logging" />.
+    /// </summary>
+    private ProxyLoggingOptions loggingOptions = new();
+
+    /// <summary>
+    ///     The currently active logger factory, built from <see cref="loggingOptions" />. Owned (and
+    ///     disposed) by this instance unless <see cref="ProxyLoggingOptions.LoggerFactory" /> was set, in
+    ///     which case it is a live reference to the user-supplied factory and is never disposed here.
+    /// </summary>
+    private ILoggerFactory activeLoggerFactory = NullLoggerFactory.Instance;
+
+    private bool ownsActiveLoggerFactory;
+
+    /// <summary>
+    ///     The shared logger used by every part of this proxy instance (all partial <c>ProxyServer</c>
+    ///     handler files, and handed down live to <see cref="CertificateManager" />,
+    ///     <see cref="TcpConnectionFactory" />, sessions, etc.). Rebuilt whenever <see cref="Logging" />
+    ///     is replaced or <see cref="ApplyLoggingConfiguration" /> is called, so certificate operations
+    ///     performed before <see cref="Start" /> are covered from the moment this instance is
+    ///     constructed.
+    /// </summary>
+    private ILogger logger = NullLogger.Instance;
 
 
     /// <inheritdoc />
@@ -96,13 +118,17 @@ public partial class ProxyServer : IDisposable
         bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
         bool trustRootCertificateAsAdmin = false)
     {
+        // Build the initial logger before creating CertificateManager/TcpConnectionFactory so that
+        // certificate operations performed before Start() (e.g. EnsureRootCertificate) are covered.
+        ApplyLoggingConfiguration();
+
         BufferPool = new DefaultBufferPool();
         ProxyEndPoints = new List<ProxyEndPoint>();
         TcpConnectionFactory = new TcpConnectionFactory(this);
         if (RunTime.IsWindows && !RunTime.IsUwpOnWindows) SystemProxySettingsManager = new SystemProxyManager();
 
         CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName,
-            userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, ExceptionFunc);
+            userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, logger);
     }
 
     /// <summary>
@@ -360,16 +386,79 @@ public partial class ProxyServer : IDisposable
     public Func<SessionEventArgsBase, Task<IExternalProxy?>>? CustomUpStreamProxyFailureFunc { get; set; }
 
     /// <summary>
-    ///     Callback for error events in this proxy instance.
+    ///     Configuration for this proxy instance's built-in diagnostic logging - the replacement for the
+    ///     removed <c>ExceptionFunc</c> callback. Every exception the proxy catches (even when handled
+    ///     internally and never surfaced to user code) is reported through this logger at an appropriate
+    ///     severity; see <see cref="ProxyLoggingOptions" /> for the console/file sinks, enable/disable
+    ///     switch, and minimum level.
+    ///     Mutate the returned instance (or assign a new one) at any point; each assignment/mutation you
+    ///     want to take effect must be followed by <see cref="ApplyLoggingConfiguration" /> (which
+    ///     <see cref="Start" /> also calls automatically, so the configuration active at the moment the
+    ///     proxy starts running is picked up for the run even if you never call it yourself). Calling it
+    ///     again later - including while the proxy is already running - immediately swaps in the new
+    ///     configuration; this is safe because logging never blocks or otherwise affects proxy traffic.
     /// </summary>
-    public ExceptionHandler? ExceptionFunc
+    public ProxyLoggingOptions Logging
     {
-        get => exceptionFunc;
-        set
+        get => loggingOptions;
+        set => loggingOptions = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    ///     The live, shared logger used throughout this proxy instance. Reflects the most recent call to
+    ///     <see cref="ApplyLoggingConfiguration" />.
+    /// </summary>
+    public ILogger Logger => logger;
+
+    /// <summary>
+    ///     Rebuilds the active logger/logger factory from the current <see cref="Logging" />
+    ///     configuration, disposing any previously owned built-in providers. Called automatically from
+    ///     the constructor (with the default configuration) and from <see cref="Start" />. Call this
+    ///     explicitly any time after changing <see cref="Logging" /> and you want the change to take
+    ///     effect immediately - whether the proxy is stopped (e.g. before using
+    ///     <see cref="CertificateManager" /> directly) or already running.
+    /// </summary>
+    public void ApplyLoggingConfiguration()
+    {
+        var options = loggingOptions;
+
+        var previousFactory = activeLoggerFactory;
+        var previousFactoryOwned = ownsActiveLoggerFactory;
+
+        if (!options.Enabled)
         {
-            exceptionFunc = value;
-            CertificateManager.ExceptionFunc = value;
+            activeLoggerFactory = NullLoggerFactory.Instance;
+            ownsActiveLoggerFactory = false;
         }
+        else if (options.LoggerFactory != null)
+        {
+            activeLoggerFactory = options.LoggerFactory;
+            ownsActiveLoggerFactory = false;
+        }
+        else
+        {
+            var factory = new global::Titanium.Web.Proxy.Logging.ProxyLoggerFactory(options.MinimumLevel);
+            if (options.EnableConsole) factory.AddProvider(new ConsoleLoggerProvider(options));
+            if (options.EnableFile) factory.AddProvider(new RollingFileLoggerProvider(options));
+            activeLoggerFactory = factory;
+            ownsActiveLoggerFactory = true;
+        }
+
+        logger = activeLoggerFactory.CreateLogger("Titanium.Web.Proxy");
+        ProxyDiagnostics.FallbackLogger = logger;
+
+        // CertificateManager may not exist yet on the very first call from the constructor.
+        if (CertificateManager != null) CertificateManager.Logger = logger;
+
+        if (previousFactoryOwned && previousFactory != activeLoggerFactory)
+            try
+            {
+                previousFactory.Dispose();
+            }
+            catch
+            {
+                // A misbehaving sink must never prevent the logger from being replaced.
+            }
     }
 
     /// <summary>
@@ -620,8 +709,8 @@ public partial class ProxyServer : IDisposable
         }
 
         if (protocolType != ProxyProtocolType.None)
-            Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System {2} Proxy", endPoint.IpAddress,
-                endPoint.Port, proxyType);
+            ProxyDiagnostics.ReportInformation(logger,
+                $"Set endpoint at Ip {endPoint.IpAddress} and port: {endPoint.Port} as System {proxyType} Proxy");
     }
 
     /// <summary>
@@ -686,6 +775,9 @@ public partial class ProxyServer : IDisposable
     public void Start(bool changeSystemProxySettings = true)
     {
         if (ProxyRunning) throw new Exception("Proxy is already running.");
+
+        // Freeze the active logging configuration for the duration of this run.
+        ApplyLoggingConfiguration();
 
         SetThreadPoolMinThread(ThreadPoolWorkerThread);
 
@@ -862,7 +954,20 @@ public partial class ProxyServer : IDisposable
                 }
 
                 var acceptedClient = tcpClient;
-                Task.Run(async () => { await HandleClient(acceptedClient, endPoint); });
+                Task.Run(async () =>
+                {
+                    // HandleClient runs detached (fire-and-forget); an unobserved exception here would
+                    // otherwise never surface anywhere and, depending on the .NET unobserved-task-
+                    // exception policy, could tear down the process. Always report it instead.
+                    try
+                    {
+                        await HandleClient(acceptedClient, endPoint);
+                    }
+                    catch (Exception ex)
+                    {
+                        ProxyDiagnostics.ReportException(logger, "Unhandled exception while handling a client connection", ex);
+                    }
+                });
             }
             else
                 tcpClient.Dispose();
@@ -951,7 +1056,7 @@ public partial class ProxyServer : IDisposable
     /// <param name="exception">The exception.</param>
     private void OnException(HttpClientStream? clientStream, Exception exception)
     {
-        ExceptionFunc?.Invoke(exception);
+        ProxyDiagnostics.ReportException(logger, "Unhandled exception in proxy", exception);
     }
 
     /// <summary>
@@ -1017,7 +1122,7 @@ public partial class ProxyServer : IDisposable
     {
         // client connection created
         if (OnClientConnectionCreate != null)
-            await OnClientConnectionCreate.InvokeAsync(this, clientSocket, ExceptionFunc);
+            await OnClientConnectionCreate.InvokeAsync(this, clientSocket, logger);
     }
 
     /// <summary>
@@ -1029,7 +1134,7 @@ public partial class ProxyServer : IDisposable
     {
         // server connection created
         if (OnServerConnectionCreate != null)
-            await OnServerConnectionCreate.InvokeAsync(this, serverSocket, ExceptionFunc);
+            await OnServerConnectionCreate.InvokeAsync(this, serverSocket, logger);
     }
 
     /// <summary>
@@ -1062,6 +1167,16 @@ public partial class ProxyServer : IDisposable
         {
             CertificateManager?.Dispose();
             BufferPool?.Dispose();
+
+            if (ownsActiveLoggerFactory)
+                try
+                {
+                    activeLoggerFactory.Dispose();
+                }
+                catch
+                {
+                    // A misbehaving sink must never prevent proxy disposal from completing.
+                }
         }
     }
 

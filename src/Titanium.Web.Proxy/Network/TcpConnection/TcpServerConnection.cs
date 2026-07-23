@@ -138,9 +138,10 @@ internal class TcpServerConnection : IDisposable
                 {
                     TcpSocket.Close();
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // ignore
+                    Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
+                        "Failed to close a server socket during disposal.", ex);
                 }
             }
         });
@@ -150,9 +151,7 @@ internal class TcpServerConnection : IDisposable
 
     ~TcpServerConnection()
     {
-#if DEBUG
-        Helpers.FinalizerGuard.ReportUndisposedFinalizer(nameof(TcpServerConnection));
-#endif
+        Logging.ProxyDiagnostics.ReportUndisposedFinalizer(ProxyServer.Logger, nameof(TcpServerConnection));
 
         Dispose(false);
     }

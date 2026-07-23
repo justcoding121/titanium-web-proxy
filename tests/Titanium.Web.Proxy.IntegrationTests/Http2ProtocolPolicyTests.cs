@@ -135,8 +135,9 @@ public class Http2ProtocolPolicyTests
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
-        Exception? observedException = null;
-        proxy.ExceptionFunc = ex => observedException = ex;
+        var exceptionCapture = new TestExceptionCapture();
+        proxy.Logging.LoggerFactory = exceptionCapture;
+        proxy.ApplyLoggingConfiguration();
 
         var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
         endpoint.BeforeTunnelConnectRequest += (_, e) =>
@@ -174,7 +175,7 @@ public class Http2ProtocolPolicyTests
         }
 
         Assert.AreEqual("h2-to-h11-bridge-ok", Encoding.ASCII.GetString(body.ToArray()));
-        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+        Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
     }
 
     [TestMethod]
@@ -194,8 +195,9 @@ public class Http2ProtocolPolicyTests
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
-        Exception? observedException = null;
-        proxy.ExceptionFunc = ex => observedException = ex;
+        var exceptionCapture = new TestExceptionCapture();
+        proxy.Logging.LoggerFactory = exceptionCapture;
+        proxy.ApplyLoggingConfiguration();
 
         var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
         endpoint.BeforeTunnelConnectRequest += (_, e) =>
@@ -237,7 +239,7 @@ public class Http2ProtocolPolicyTests
         }
 
         Assert.AreEqual($"echo:{requestBody}", Encoding.ASCII.GetString(body.ToArray()));
-        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+        Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
     }
 
     [TestMethod]
@@ -260,8 +262,9 @@ public class Http2ProtocolPolicyTests
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
-        Exception? observedException = null;
-        proxy.ExceptionFunc = ex => observedException = ex;
+        var exceptionCapture = new TestExceptionCapture();
+        proxy.Logging.LoggerFactory = exceptionCapture;
+        proxy.ApplyLoggingConfiguration();
 
         var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
         endpoint.BeforeTunnelConnectRequest += (_, e) =>
@@ -316,7 +319,7 @@ public class Http2ProtocolPolicyTests
         Assert.IsTrue(stopwatch.ElapsedMilliseconds < 750,
             "Two concurrent h2 streams bridged to an HTTP/1.1-only origin should get independent, concurrent " +
             $"origin round trips rather than being serialized onto one shared connection; took {stopwatch.ElapsedMilliseconds}ms.");
-        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+        Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
     }
 
     [TestMethod]
@@ -365,8 +368,9 @@ public class Http2ProtocolPolicyTests
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
-        Exception? observedException = null;
-        proxy.ExceptionFunc = ex => observedException = ex;
+        var exceptionCapture = new TestExceptionCapture();
+        proxy.Logging.LoggerFactory = exceptionCapture;
+        proxy.ApplyLoggingConfiguration();
 
         var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
         endpoint.BeforeTunnelConnectRequest += (_, e) =>
@@ -391,14 +395,14 @@ public class Http2ProtocolPolicyTests
             // expected - the tunnel should fail rather than silently downgrade or hang.
         }
 
-        for (var i = 0; i < 50 && observedException == null; i++)
+        for (var i = 0; i < 50 && exceptionCapture.LastException == null; i++)
             await Task.Delay(20);
 
-        Assert.IsNotNull(observedException,
+        Assert.IsNotNull(exceptionCapture.LastException,
             "UpstreamHttpProtocol.Http2 against a non-h2 origin must surface a clear exception.");
         Assert.IsTrue(
-            observedException!.Message.Contains("did not negotiate HTTP/2", StringComparison.OrdinalIgnoreCase),
-            $"Expected an explicit 'did not negotiate HTTP/2' message, got: '{observedException.Message}'.");
+            exceptionCapture.LastException!.Message.Contains("did not negotiate HTTP/2", StringComparison.OrdinalIgnoreCase),
+            $"Expected an explicit 'did not negotiate HTTP/2' message, got: '{exceptionCapture.LastException.Message}'.");
     }
 
     [TestMethod]
@@ -412,8 +416,9 @@ public class Http2ProtocolPolicyTests
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
-        Exception? observedException = null;
-        proxy.ExceptionFunc = ex => observedException = ex;
+        var exceptionCapture = new TestExceptionCapture();
+        proxy.Logging.LoggerFactory = exceptionCapture;
+        proxy.ApplyLoggingConfiguration();
 
         var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
         endpoint.BeforeTunnelConnectRequest += (_, e) =>
@@ -442,14 +447,14 @@ public class Http2ProtocolPolicyTests
             // also acceptable - the tunnel connection itself may be torn down instead.
         }
 
-        for (var i = 0; i < 50 && observedException == null; i++)
+        for (var i = 0; i < 50 && exceptionCapture.LastException == null; i++)
             await Task.Delay(20);
 
-        Assert.IsNotNull(observedException,
+        Assert.IsNotNull(exceptionCapture.LastException,
             "UpstreamHttpProtocol.Http2 with an h1.1-only client and no translation must surface a clear exception.");
         Assert.IsTrue(
-            observedException!.Message.Contains("does not support HTTP/2", StringComparison.OrdinalIgnoreCase),
-            $"Expected a 'client does not support HTTP/2' message, got: '{observedException.Message}'.");
+            exceptionCapture.LastException!.Message.Contains("does not support HTTP/2", StringComparison.OrdinalIgnoreCase),
+            $"Expected a 'client does not support HTTP/2' message, got: '{exceptionCapture.LastException.Message}'.");
     }
 
     [TestMethod]
@@ -467,8 +472,9 @@ public class Http2ProtocolPolicyTests
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
-        Exception? observedException = null;
-        proxy.ExceptionFunc = ex => observedException = ex;
+        var exceptionCapture = new TestExceptionCapture();
+        proxy.Logging.LoggerFactory = exceptionCapture;
+        proxy.ApplyLoggingConfiguration();
 
         var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
         endpoint.BeforeTunnelConnectRequest += (_, e) =>
@@ -510,7 +516,7 @@ public class Http2ProtocolPolicyTests
 
         var body = await reader.ReadToEndAsync();
         Assert.AreEqual("h11-to-h2-bridge-ok", body);
-        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+        Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
     }
 
     [TestMethod]
@@ -529,8 +535,9 @@ public class Http2ProtocolPolicyTests
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
-        Exception? observedException = null;
-        proxy.ExceptionFunc = ex => observedException = ex;
+        var exceptionCapture = new TestExceptionCapture();
+        proxy.Logging.LoggerFactory = exceptionCapture;
+        proxy.ApplyLoggingConfiguration();
 
         var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
         endpoint.BeforeTunnelConnectRequest += (_, e) =>
@@ -564,7 +571,7 @@ public class Http2ProtocolPolicyTests
 
         var responseBody = await reader.ReadToEndAsync();
         Assert.AreEqual($"echo:{requestBody}", responseBody);
-        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+        Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
     }
 
     [TestMethod]
@@ -591,8 +598,9 @@ public class Http2ProtocolPolicyTests
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
-        Exception? observedException = null;
-        proxy.ExceptionFunc = ex => observedException = ex;
+        var exceptionCapture = new TestExceptionCapture();
+        proxy.Logging.LoggerFactory = exceptionCapture;
+        proxy.ApplyLoggingConfiguration();
 
         var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
         endpoint.BeforeTunnelConnectRequest += (_, e) =>
@@ -624,7 +632,7 @@ public class Http2ProtocolPolicyTests
         Assert.AreEqual(1, rawServer.AcceptedConnectionCount,
             "Two sequential HTTP/1.1 requests on the same bridged client connection should reuse one " +
             "persistent h2 origin connection rather than opening a new one per request.");
-        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+        Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
     }
 
     /// <summary>
@@ -777,8 +785,9 @@ public class Http2ProtocolPolicyTests
         var proxy = testSuite.GetReverseProxy();
         proxy.EnableHttp2 = true;
 
-        Exception? observedException = null;
-        proxy.ExceptionFunc = ex => observedException = ex;
+        var exceptionCapture = new TestExceptionCapture();
+        proxy.Logging.LoggerFactory = exceptionCapture;
+        proxy.ApplyLoggingConfiguration();
 
         var endpoint = proxy.ProxyEndPoints.OfType<Models.TransparentProxyEndPoint>().First();
         endpoint.ForwardPort = server.HttpsListeningPort;
@@ -816,7 +825,7 @@ public class Http2ProtocolPolicyTests
         }
 
         Assert.AreEqual("transparent-h2-to-h11-bridge-ok", Encoding.ASCII.GetString(body.ToArray()));
-        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+        Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
     }
 
     [TestMethod]
@@ -834,8 +843,9 @@ public class Http2ProtocolPolicyTests
         var proxy = testSuite.GetReverseProxy();
         proxy.EnableHttp2 = true;
 
-        Exception? observedException = null;
-        proxy.ExceptionFunc = ex => observedException = ex;
+        var exceptionCapture = new TestExceptionCapture();
+        proxy.Logging.LoggerFactory = exceptionCapture;
+        proxy.ApplyLoggingConfiguration();
 
         var endpoint = proxy.ProxyEndPoints.OfType<Models.TransparentProxyEndPoint>().First();
         endpoint.ForwardPort = server.HttpsListeningPort;
@@ -889,6 +899,6 @@ public class Http2ProtocolPolicyTests
 
         var body = await reader.ReadToEndAsync();
         Assert.AreEqual("transparent-h11-to-h2-bridge-ok", body);
-        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+        Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
     }
 }

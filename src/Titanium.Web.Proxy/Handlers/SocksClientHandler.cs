@@ -109,11 +109,6 @@ public partial class ProxyServer
                     case 3:
                         // Domainname
                         portIdx = buffer[4] + 5;
-
-#if DEBUG
-                            var hostname = new ByteString(buffer.AsMemory(5, buffer[4]));
-                            string hostnameStr = hostname.GetString();
-#endif
                         break;
                     case 4:
                         // IPv6

@@ -1,4 +1,4 @@
-﻿using System.Threading;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
@@ -34,6 +34,6 @@ public partial class ProxyServer
         if (!args.HttpClient.Response.Locked) await OnBeforeResponse(args);
 
         await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool,
-            args.OnDataSent, args.OnDataReceived, cancellationTokenSource, ExceptionFunc);
+            args.OnDataSent, args.OnDataReceived, cancellationTokenSource, logger);
     }
 }

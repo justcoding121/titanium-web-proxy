@@ -18,8 +18,6 @@ namespace Titanium.Web.Proxy.Network.Certificate;
 #endif
 internal class WinCertificateMaker : ICertificateMaker
 {
-    private readonly ExceptionHandler? exceptionFunc;
-
     private readonly string sProviderName = "Microsoft Enhanced Cryptographic Provider v1.0";
 
     private readonly Type typeAltNamesCollection;
@@ -57,10 +55,9 @@ internal class WinCertificateMaker : ICertificateMaker
     /// <summary>
     ///     Constructor.
     /// </summary>
-    internal WinCertificateMaker(ExceptionHandler? exceptionFunc, int certificateValidDays)
+    internal WinCertificateMaker(int certificateValidDays)
     {
         this.certificateValidDays = certificateValidDays;
-        this.exceptionFunc = exceptionFunc;
 
         typeX500Dn = GetComType("X509Enrollment.CX500DistinguishedName");
         typeX509PrivateKey = GetComType("X509Enrollment.CX509PrivateKey");

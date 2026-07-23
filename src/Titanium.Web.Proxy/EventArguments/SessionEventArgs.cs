@@ -696,9 +696,7 @@ public class SessionEventArgs : SessionEventArgsBase
 
     ~SessionEventArgs()
     {
-#if DEBUG
-        Helpers.FinalizerGuard.ReportUndisposedFinalizer(nameof(SessionEventArgs));
-#endif
+        Logging.ProxyDiagnostics.ReportUndisposedFinalizer(Server.Logger, nameof(SessionEventArgs));
 
         Dispose(false);
     }

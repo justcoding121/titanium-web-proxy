@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -14,6 +14,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
@@ -112,6 +113,21 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     }
 
     /// <summary>
+    ///     Reports a read/write failure on the underlying transport that this stream is deliberately
+    ///     suppressing (rather than rethrowing) because <see cref="IsNetworkStream" /> is
+    ///     <see langword="true" /> - i.e. a real socket/TLS connection where the remote endpoint closing
+    ///     or resetting the connection mid-operation is an expected, benign occurrence, not a bug. This
+    ///     class has no owning <see cref="ProxyServer" /> reference to source a live logger from, so it
+    ///     always reports through the process-wide fallback gateway logger.
+    /// </summary>
+    private static void ReportSuppressedFailure(Exception ex)
+    {
+        ProxyDiagnostics.ReportBenign(ProxyDiagnostics.FallbackLogger,
+            "Suppressed a network stream read/write failure (expected when the remote endpoint closed or reset the connection).",
+            ex);
+    }
+
+    /// <summary>
     ///     When overridden in a derived class, clears all buffers for this stream and causes any buffered data to be written
     ///     to the underlying device.
     /// </summary>
@@ -123,11 +139,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             BaseStream.Flush();
         }
-        catch
+        catch (Exception ex)
         {
             closedWrite = true;
             if (!IsNetworkStream)
                 throw;
+            ReportSuppressedFailure(ex);
         }
     }
 
@@ -209,11 +226,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             BaseStream.Write(buffer, offset, count);
         }
-        catch
+        catch (Exception ex)
         {
             closedWrite = true;
             if (!IsNetworkStream)
                 throw;
+            ReportSuppressedFailure(ex);
         }
     }
 
@@ -264,11 +282,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             await BaseStream.FlushAsync(cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
             closedWrite = true;
             if (!IsNetworkStream)
                 throw;
+            ReportSuppressedFailure(ex);
         }
     }
 
@@ -466,11 +485,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             await BaseStream.WriteAsync(buffer, offset, count, cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
             closedWrite = true;
             if (!IsNetworkStream)
                 throw;
+            ReportSuppressedFailure(ex);
         }
     }
 
@@ -489,11 +509,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             OnDataWrite(buffer, 0, 1);
             BaseStream.Write(buffer, 0, 1);
         }
-        catch
+        catch (Exception ex)
         {
             closedWrite = true;
             if (!IsNetworkStream)
                 throw;
+            ReportSuppressedFailure(ex);
         }
         finally
         {
@@ -630,10 +651,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 Available += readBytes;
             }
         }
-        catch
+        catch (Exception ex)
         {
             if (!IsNetworkStream)
                 throw;
+            ReportSuppressedFailure(ex);
         }
         finally
         {
@@ -682,10 +704,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 Available += readBytes;
             }
         }
-        catch
+        catch (Exception ex)
         {
             if (!IsNetworkStream)
                 throw;
+            ReportSuppressedFailure(ex);
         }
         finally
         {
@@ -855,11 +878,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
                 await BaseStream.WriteAsync(buffer, 0, idx, cancellationToken);
             }
-            catch
+            catch (Exception ex)
             {
                 closedWrite = true;
                 if (!IsNetworkStream)
                     throw;
+                ReportSuppressedFailure(ex);
             }
             finally
             {
@@ -880,11 +904,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             {
                 await BaseStream.WriteAsync(buffer, 0, idx, cancellationToken);
             }
-            catch
+            catch (Exception ex)
             {
                 closedWrite = true;
                 if (!IsNetworkStream)
                     throw;
+                ReportSuppressedFailure(ex);
             }
         }
     }
@@ -936,11 +961,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             await BaseStream.WriteAsync(data, 0, data.Length, cancellationToken);
             if (flush) await BaseStream.FlushAsync(cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
             closedWrite = true;
             if (!IsNetworkStream)
                 throw;
+            ReportSuppressedFailure(ex);
         }
     }
 
@@ -954,11 +980,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             await BaseStream.WriteAsync(data, offset, count, cancellationToken);
             if (flush) await BaseStream.FlushAsync(cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
             closedWrite = true;
             if (!IsNetworkStream)
                 throw;
+            ReportSuppressedFailure(ex);
         }
     }
 
@@ -1425,11 +1452,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             {
                 await BaseStream.WriteAsync(buffer, cancellationToken);
             }
-            catch
+            catch (Exception ex)
             {
                 closedWrite = true;
                 if (!IsNetworkStream)
                     throw;
+                ReportSuppressedFailure(ex);
             }
         }
 #else
@@ -1451,10 +1479,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             buffer.CopyTo(buf);
             await BaseStream.WriteAsync(buf, 0, buffer.Length, cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
             if (!IsNetworkStream)
                 throw;
+            ReportSuppressedFailure(ex);
         }
         finally
         {

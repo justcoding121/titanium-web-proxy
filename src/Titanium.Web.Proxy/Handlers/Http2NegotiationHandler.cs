@@ -10,6 +10,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using SslExtensions = Titanium.Web.Proxy.Extensions.SslExtensions;
@@ -73,7 +74,7 @@ public partial class ProxyServer
 
         if (Http2OriginCapabilityCache.TryGet(capabilityCacheKey, out var cachedSupport))
         {
-            HandshakeDebugLog.Http2ProbeResult(capabilityCacheKey, true, cachedSupport, null);
+            ProxyLog.Http2ProbeResult(logger, capabilityCacheKey, true, cachedSupport, null);
 
             Task<TcpServerConnection?>? retained = null;
             if (enablePrefetch)
@@ -104,7 +105,7 @@ public partial class ProxyServer
                              connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
 
             Http2OriginCapabilityCache.Set(capabilityCacheKey, supported);
-            HandshakeDebugLog.Http2ProbeResult(capabilityCacheKey, false, supported, null);
+            ProxyLog.Http2ProbeResult(logger, capabilityCacheKey, false, supported, null);
 
             return new Http2NegotiationResult(supported, Task.FromResult(connection));
         }
@@ -113,7 +114,7 @@ public partial class ProxyServer
             // Do not cache a failed probe: it may be a transient network/cert issue rather than a genuine
             // lack of HTTP/2 support, and caching "false" here would pin every subsequent tunnel to this
             // host to HTTP/1.1 for the full TTL.
-            HandshakeDebugLog.Http2ProbeResult(capabilityCacheKey, false, false, ex);
+            ProxyLog.Http2ProbeResult(logger, capabilityCacheKey, false, false, ex);
             return new Http2NegotiationResult(false, null);
         }
     }

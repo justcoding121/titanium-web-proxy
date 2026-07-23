@@ -18,6 +18,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.ProxySocket;
 
@@ -712,12 +713,12 @@ internal class TcpConnectionFactory : IDisposable
                     CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                 };
 
-                HandshakeDebugLog.OriginHandshakeStarting(remoteHostName, remotePort, applicationProtocols);
+                ProxyLog.OriginHandshakeStarting(proxyServer.Logger, remoteHostName, remotePort, applicationProtocols);
                 await sslStream.AuthenticateAsClientAsync(options, cancellationToken);
 #if NET6_0_OR_GREATER
                 negotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
 #endif
-                HandshakeDebugLog.OriginHandshakeSucceeded(remoteHostName, remotePort, negotiatedApplicationProtocol);
+                ProxyLog.OriginHandshakeSucceeded(proxyServer.Logger, remoteHostName, remotePort, negotiatedApplicationProtocol);
 
                 if (sessionArgs != null) sessionArgs.TimeLine["HTTPS Established"] = DateTime.UtcNow;
             }
@@ -758,7 +759,7 @@ internal class TcpConnectionFactory : IDisposable
         {
             stream?.Dispose();
             tcpServerSocket?.Close();
-            HandshakeDebugLog.OriginConnectionFailed(remoteHostName, remotePort, ex);
+            ProxyLog.OriginConnectionFailed(proxyServer.Logger, remoteHostName, remotePort, ex);
             throw;
         }
 
@@ -981,7 +982,8 @@ internal class TcpConnectionFactory : IDisposable
             }
             catch (Exception e)
             {
-                Server.ExceptionFunc?.Invoke(new Exception("An error occurred when disposing server connections.", e));
+                ProxyDiagnostics.ReportException(Server.Logger, "An error occurred when disposing server connections",
+                    e);
             }
             finally
             {

@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Network.Certificate;
 
 namespace Titanium.Web.Proxy.Network;
@@ -69,9 +70,11 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
             {
                 if (File.Exists(tempPath)) File.Delete(tempPath);
             }
-            catch
+            catch (Exception cleanupEx)
             {
-                // ignore
+                ProxyDiagnostics.ReportBenign(ProxyDiagnostics.FallbackLogger,
+                    $"Failed to clean up temp certificate file '{tempPath}' after a failed atomic write.",
+                    cleanupEx);
             }
 
             throw;
@@ -85,9 +88,10 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
             var path = GetCertificatePath(false);
             if (Directory.Exists(path)) Directory.Delete(path, true);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // do nothing
+            ProxyDiagnostics.ReportBenign(ProxyDiagnostics.FallbackLogger,
+                "Failed to clear the on-disk certificate cache directory.", ex);
         }
     }
 

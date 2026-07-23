@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Net.Security;
@@ -13,6 +13,7 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended;
@@ -81,7 +82,7 @@ public partial class ProxyServer
                 clientStream.DataRead += (o, args) => connectArgs.OnDataSent(args.Buffer, args.Offset, args.Count);
                 clientStream.DataWrite += (o, args) => connectArgs.OnDataReceived(args.Buffer, args.Offset, args.Count);
 
-                await endPoint.InvokeBeforeTunnelConnectRequest(this, connectArgs, ExceptionFunc);
+                await endPoint.InvokeBeforeTunnelConnectRequest(this, connectArgs, logger);
 
                 // filter out excluded host names
                 var decryptSsl = endPoint.DecryptSsl && connectArgs.DecryptSsl;
@@ -104,7 +105,7 @@ public partial class ProxyServer
 
                 if (await CheckAuthorization(connectArgs) == false)
                 {
-                    await endPoint.InvokeBeforeTunnelConnectResponse(this, connectArgs, ExceptionFunc);
+                    await endPoint.InvokeBeforeTunnelConnectResponse(this, connectArgs, logger);
 
                     // send the response
                     await clientStream.WriteResponseAsync(connectArgs.HttpClient.Response, cancellationToken);
@@ -131,7 +132,7 @@ public partial class ProxyServer
                     connectRequest.ClientHelloInfo = clientHelloInfo;
                 }
 
-                await endPoint.InvokeBeforeTunnelConnectResponse(this, connectArgs, ExceptionFunc, isClientHello);
+                await endPoint.InvokeBeforeTunnelConnectResponse(this, connectArgs, logger, isClientHello);
 
                 if (decryptSsl && clientHelloInfo != null)
                 {
@@ -224,10 +225,10 @@ public partial class ProxyServer
                         options.EnabledSslProtocols = SupportedSslProtocols;
                         options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;
 
-                        HandshakeDebugLog.BrowserHandshakeStarting(connectHostname, options.EnabledSslProtocols,
+                        ProxyLog.BrowserHandshakeStarting(logger, connectHostname, options.EnabledSslProtocols,
                             options.ApplicationProtocols);
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
-                        HandshakeDebugLog.BrowserHandshakeSucceeded(connectHostname,
+                        ProxyLog.BrowserHandshakeSucceeded(logger, connectHostname,
                             sslStream.NegotiatedApplicationProtocol);
 
 #if NET6_0_OR_GREATER
@@ -249,7 +250,7 @@ public partial class ProxyServer
                     {
                         sslStream?.Dispose();
 
-                        HandshakeDebugLog.BrowserHandshakeFailed(connectHostname, e);
+                        ProxyLog.BrowserHandshakeFailed(logger, connectHostname, e);
 
                         var certName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
                         throw new ProxyConnectException(
@@ -319,7 +320,7 @@ public partial class ProxyServer
 
                         if (!clientStream.IsClosed && !connection.Stream.IsClosed)
                             await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool,
-                                null, null, connectArgs.CancellationTokenSource, ExceptionFunc);
+                                null, null, connectArgs.CancellationTokenSource, logger);
                     }
                     finally
                     {
@@ -414,7 +415,7 @@ public partial class ProxyServer
                                 async (args, ctx) => { await OnBeforeResponse(args); },
                                 async args => { await OnAfterResponse(args); },
                                 headers => PrepareRequestHeaders(headers),
-                                connectArgs.CancellationTokenSource, clientStream.Connection.Id, ExceptionFunc);
+                                connectArgs.CancellationTokenSource, clientStream.Connection.Id, logger);
 #endif
                     }
                     finally

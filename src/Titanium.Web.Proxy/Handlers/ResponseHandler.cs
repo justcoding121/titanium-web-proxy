@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -30,7 +30,7 @@ public partial class ProxyServer
         // interim response" (the proxy itself already consumed/acted on it, if at all, while sending the
         // request body in HttpWebClient.SendRequest). Any other 1xx (e.g. 103 Early Hints) has no dedicated
         // event yet, so it is relayed to the client verbatim - interim responses never carry a body
-        // (RFC 9110 §15.2) - and the proxy loops back onto the same connection for the next message.
+        // (RFC 9110 �15.2) - and the proxy loops back onto the same connection for the next message.
         // 101 Switching Protocols is excluded: it *is* the final message of this exchange (the connection
         // becomes a raw tunnel immediately afterwards), so it must fall through to the normal
         // response-handling path below instead of looping. Interim responses are not exposed through
@@ -185,7 +185,7 @@ public partial class ProxyServer
     /// <returns></returns>
     private async Task OnBeforeResponse(SessionEventArgs args)
     {
-        if (BeforeResponse != null) await BeforeResponse.InvokeAsync(this, args, ExceptionFunc);
+        if (BeforeResponse != null) await BeforeResponse.InvokeAsync(this, args, logger);
     }
 
     /// <summary>
@@ -195,7 +195,7 @@ public partial class ProxyServer
     /// <returns></returns>
     private async Task OnAfterResponse(SessionEventArgs args)
     {
-        if (AfterResponse != null) await AfterResponse.InvokeAsync(this, args, ExceptionFunc);
+        if (AfterResponse != null) await AfterResponse.InvokeAsync(this, args, logger);
     }
     internal bool ShouldCallBeforeResponseBodyWrite()
     {
@@ -206,7 +206,7 @@ public partial class ProxyServer
     {
         if (OnResponseBodyWrite != null)
         {
-            await OnResponseBodyWrite.InvokeAsync(this, args, ExceptionFunc);
+            await OnResponseBodyWrite.InvokeAsync(this, args, logger);
         }
     }
 }

@@ -104,9 +104,8 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
 
     ~TunnelConnectSessionEventArgs()
     {
-#if DEBUG
-        Helpers.FinalizerGuard.ReportUndisposedFinalizer(nameof(TunnelConnectSessionEventArgs));
-#endif
+        Titanium.Web.Proxy.Logging.ProxyDiagnostics.ReportUndisposedFinalizer(Server.Logger,
+            nameof(TunnelConnectSessionEventArgs));
 
         Dispose(false);
     }

@@ -6,7 +6,9 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
@@ -56,7 +58,7 @@ internal sealed class Http2OriginConnection
 
     private readonly TcpServerConnection connection;
     private readonly Stream stream;
-    private readonly ExceptionHandler? exceptionFunc;
+    private readonly ILogger logger;
     private readonly SemaphoreSlim writeLock = new(1, 1);
     private readonly Http2FlowController sendFlow = new();
     private readonly Http2Settings originSettings = new();
@@ -73,11 +75,11 @@ internal sealed class Http2OriginConnection
     private int goAwayLastStreamId = int.MaxValue;
     private Task? readLoopTask;
 
-    private Http2OriginConnection(TcpServerConnection connection, ExceptionHandler? exceptionFunc)
+    private Http2OriginConnection(TcpServerConnection connection, ILogger logger)
     {
         this.connection = connection;
         stream = connection.Stream;
-        this.exceptionFunc = exceptionFunc;
+        this.logger = logger;
     }
 
     /// <summary>True while this connection may still be leased for a new request.</summary>
@@ -91,9 +93,9 @@ internal sealed class Http2OriginConnection
     ///     <see cref="SendAsync" /> always has a real <c>MAX_CONCURRENT_STREAMS</c>/frame-size budget to honor.
     /// </summary>
     internal static async Task<Http2OriginConnection> CreateAsync(TcpServerConnection connection,
-        ExceptionHandler? exceptionFunc, CancellationToken cancellationToken)
+        ILogger logger, CancellationToken cancellationToken)
     {
-                var instance = new Http2OriginConnection(connection, exceptionFunc);
+                var instance = new Http2OriginConnection(connection, logger);
 
                 var preface = Http2Helper.ConnectionPreface;
                 await instance.stream.WriteAsync(preface, 0, preface.Length, cancellationToken);
@@ -555,7 +557,7 @@ internal sealed class Http2OriginConnection
     /// <param name="ex">The failure to fault every in-flight/future stream with.</param>
     /// <param name="report">
     ///     Whether this is a genuine, previously-unobserved origin failure that should be surfaced via
-    ///     <see cref="exceptionFunc" /> (I/O errors, protocol violations, HPACK decode failures encountered by the
+    ///     the logging gateway (I/O errors, protocol violations, HPACK decode failures encountered by the
     ///     read loop). Pass <c>false</c> for an expected, caller-initiated teardown (see <see cref="Dispose" />) -
     ///     that is not itself a failure worth reporting; any request that was genuinely in flight when it happened
     ///     still surfaces its own failure through the normal per-request exception handling in
@@ -567,7 +569,7 @@ internal sealed class Http2OriginConnection
         faulted = true;
 
         if (report)
-            exceptionFunc?.Invoke(
+            ProxyDiagnostics.ReportUnexpected(logger, "The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", 
                 new ProxyHttpException("The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", ex, null));
 
         foreach (var kvp in streams) kvp.Value.Completion.TrySetException(ex);
@@ -578,7 +580,7 @@ internal sealed class Http2OriginConnection
     ///     Closes this origin connection. Any streams still awaiting a response are failed. This is a normal,
     ///     expected part of the bridge's connection lifecycle (e.g. the HTTP/1.1 client connection ended, the
     ///     bridge is replacing this connection after a GOAWAY, or the user asked to discard it via
-    ///     <c>CloseServerConnection</c>) and must not, by itself, be reported through <see cref="exceptionFunc" />
+    ///     <c>CloseServerConnection</c>) and must not, by itself, be reported through the logging gateway
     ///     - see <see cref="Fail" />.
     /// </summary>
     internal void Dispose()
