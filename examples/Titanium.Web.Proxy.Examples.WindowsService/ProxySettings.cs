@@ -34,7 +34,7 @@ internal sealed class ProxySettings
 
     public bool SaveFakeCertificates { get; set; } = true;
 
-    public bool EnableHttp2 { get; set; }
+    public bool EnableHttp2 { get; set; } = true;
 
     public bool NoDelay { get; set; } = true;
 
