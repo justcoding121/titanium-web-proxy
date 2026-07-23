@@ -44,6 +44,7 @@ namespace Titanium.Web.Proxy.Http2
         internal static async Task SendHttp2(Stream clientStream, Stream serverStream,
             Func<SessionEventArgs> sessionFactory,
             Func<SessionEventArgs, Task> onBeforeRequest, Func<SessionEventArgs, Task> onBeforeResponse,
+            Func<SessionEventArgs, Task> onAfterResponse, Action<HeaderCollection> prepareRequestHeaders,
             CancellationTokenSource cancellationTokenSource, Guid connectionId,
             ExceptionHandler? exceptionFunc)
         {
@@ -52,15 +53,63 @@ namespace Titanium.Web.Proxy.Http2
             // Now async relay all server=>client & client=>server data
             var sendRelay =
                 CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
-                    sessionFactory, onBeforeRequest, true, cancellationTokenSource.Token, exceptionFunc);
+                    sessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
+                    cancellationTokenSource.Token, exceptionFunc);
             var receiveRelay =
                 CopyHttp2FrameAsync(serverStream, clientStream, connectionState,
-                    sessionFactory, onBeforeResponse, false, cancellationTokenSource.Token, exceptionFunc);
+                    sessionFactory, onBeforeResponse, onAfterResponse, null, false, cancellationTokenSource.Token,
+                    exceptionFunc);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             cancellationTokenSource.Cancel();
 
             await Task.WhenAll(sendRelay, receiveRelay);
+
+            // Both relay directions have stopped (client/server disconnect, cancellation, or an
+            // unrecoverable protocol error); any stream that never reached a normal end-stream/RST_STREAM
+            // completion (e.g. the connection was torn down mid-request) must still get exactly one
+            // AfterResponse + Dispose, matching HTTP/1.x's `finally { OnAfterResponse(args); args.Dispose(); }`
+            // for every session regardless of how it ended.
+            foreach (var leftover in connectionState.Streams.Values)
+            {
+                connectionState.PendingFinalizations.Add(
+                    FinalizeStreamAsync(leftover, onAfterResponse, exceptionFunc));
+            }
+
+            if (!connectionState.PendingFinalizations.IsEmpty)
+            {
+                await Task.WhenAll(connectionState.PendingFinalizations.ToArray());
+            }
+        }
+
+        /// <summary>
+        ///     Runs <paramref name="onAfterResponse" /> and disposes <paramref name="state" />'s
+        ///     <see cref="Http2StreamState.SessionArgs" /> exactly once, guarded by
+        ///     <see cref="Http2StreamState.FinalizedFlag" /> so concurrent callers (the normal end-stream
+        ///     path, RST_STREAM, and final connection-teardown cleanup all race to finalize the same stream)
+        ///     never run it twice or race Dispose against a still-running AfterResponse.
+        /// </summary>
+        private static async Task FinalizeStreamAsync(Http2StreamState state,
+            Func<SessionEventArgs, Task> onAfterResponse, ExceptionHandler? exceptionFunc)
+        {
+            if (Interlocked.CompareExchange(ref state.FinalizedFlag, 1, 0) != 0)
+            {
+                return;
+            }
+
+            try
+            {
+                await onAfterResponse(state.SessionArgs);
+            }
+            catch (Exception ex)
+            {
+                exceptionFunc?.Invoke(new ProxyHttpException("HTTP/2 AfterResponse handler failed", ex,
+                    state.SessionArgs));
+            }
+            finally
+            {
+                state.SessionArgs.Dispose();
+            }
         }
 
         /// <summary>
@@ -78,6 +127,8 @@ namespace Titanium.Web.Proxy.Http2
             Http2ConnectionState connectionState,
             Func<SessionEventArgs> sessionFactory,
             Func<SessionEventArgs, Task> onBeforeRequestResponse,
+            Func<SessionEventArgs, Task> onAfterResponse,
+            Action<HeaderCollection>? prepareRequestHeaders,
             bool isClient,
             CancellationToken cancellationToken,
             ExceptionHandler? exceptionFunc)
@@ -184,6 +235,21 @@ namespace Titanium.Web.Proxy.Http2
                 });
             }
 
+            // Removes a stream's bookkeeping (registry + both flow-control windows) and schedules its
+            // AfterResponse + Dispose (see FinalizeStreamAsync) without blocking the caller - used wherever
+            // a stream is refused/closed and will never receive a normal end-stream or RST_STREAM of its
+            // own to trigger that cleanup through the main loop below.
+            void RemoveAndFinalizeStream(int removeStreamId)
+            {
+                if (connectionState.Streams.TryRemove(removeStreamId, out var removedState))
+                {
+                    connectionState.ClientSendFlow.RemoveStream(removeStreamId);
+                    connectionState.ServerSendFlow.RemoveStream(removeStreamId);
+                    connectionState.PendingFinalizations.Add(
+                        FinalizeStreamAsync(removedState, onAfterResponse, exceptionFunc));
+                }
+            }
+
             // Decodes one fully-assembled HEADERS(+CONTINUATION...) block (already stripped of padding/
             // priority bytes) and dispatches it. A HEADERS block on an already-established request/response
             // (one that already carries pseudo-headers) is the *main* message; a further block without
@@ -272,12 +338,51 @@ namespace Titanium.Web.Proxy.Http2
                     var path = headerListener.Path;
                     bool isMainHeaders = method.Length > 0 && path.Length > 0;
 
+                    if (isMainHeaders)
+                    {
+                        // RFC 7540 §5.1.1: client-initiated stream ids must be odd and strictly increasing
+                        // on a given connection. An even id (reserved for server-initiated streams, which
+                        // this proxy never admits - see the PUSH_PROMISE rejection in the main frame loop)
+                        // or an id that does not exceed one already seen (reuse, or the client's own
+                        // ids arriving out of order) is a connection-level PROTOCOL_ERROR: continuing would
+                        // risk colliding with flow-control/session state for a stream id already in use or
+                        // already torn down.
+                        if (hbStreamId % 2 == 0 || hbStreamId <= connectionState.LastClientStreamId)
+                        {
+                            exceptionFunc?.Invoke(new ProxyHttpException(
+                                $"HTTP/2 protocol error: invalid client-initiated stream id {hbStreamId}.", null,
+                                sessionArgs));
+                            RemoveAndFinalizeStream(hbStreamId);
+                            await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                                connectionState.LastClientStreamId, Http2ErrorCode.ProtocolError, input));
+                            return false;
+                        }
+
+                        connectionState.LastClientStreamId = hbStreamId;
+                    }
+
                     if (isMainHeaders && connectionState.ServerGoingAway &&
                         hbStreamId > connectionState.ServerLastStreamId)
                     {
                         // the server has already told us (via GOAWAY) it will not process any new stream
                         // above its last-accepted id - refuse this one locally instead of forwarding a
                         // request we already know will never be answered.
+                        RemoveAndFinalizeStream(hbStreamId);
+                        await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
+                            Http2ErrorCode.RefusedStream, input));
+                        return false;
+                    }
+
+                    if (isMainHeaders && connectionState.Streams.Count > remoteSettings.MaxConcurrentStreams)
+                    {
+                        // Streams.Count already includes this stream (registered by the caller before
+                        // decoding, so HPACK state stays in sync regardless of admission) - so ">" (not
+                        // ">=") here correctly means "admitting this one would exceed the limit the server
+                        // (this stream's ultimate destination) advertised it will tolerate concurrently"
+                        // (RFC 7540 §6.5.2 SETTINGS_MAX_CONCURRENT_STREAMS).
+                        exceptionFunc?.Invoke(new ProxyHttpException(
+                            "HTTP/2 stream refused: maximum concurrent streams exceeded.", null, sessionArgs));
+                        RemoveAndFinalizeStream(hbStreamId);
                         await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
                             Http2ErrorCode.RefusedStream, input));
                         return false;
@@ -368,6 +473,12 @@ namespace Titanium.Web.Proxy.Http2
                         }
                         else
                         {
+                            // Same per-request header preparation HTTP/1.x applies before forwarding
+                            // upstream (allowed Accept-Encoding filtering, hop-by-hop/proxy-header
+                            // stripping via FixProxyHeaders) - previously skipped entirely for h2,
+                            // forwarding whatever the client (or BeforeRequest) set verbatim.
+                            prepareRequestHeaders?.Invoke(request.Headers);
+
                             await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                 request, endStreamFlag, output, isPromise));
                         }
@@ -524,13 +635,41 @@ namespace Titanium.Web.Proxy.Http2
             bool pendingHeaderEndStream = false;
             bool pendingHeaderIsPromise = false;
 
+            // RFC 7540 §3.5: "each endpoint is required to send a connection preface... this sequence MUST
+            // be followed by a SETTINGS frame". The connection preface itself (the literal
+            // "PRI * HTTP/2.0..." bytes) is already validated before this relay starts (see the explicit
+            // handler's preface check); this tracks the second half of that requirement, that the first
+            // frame this task ever reads from `input` is SETTINGS, for both directions (a server's first
+            // frame is required to be SETTINGS too, even though it has no separate textual preface).
+            bool isFirstFrame = true;
+
             try
             {
+            // Best-effort graceful shutdown notice sent to `output` (the *other* leg) when this task's own
+            // `input` peer disconnects or the connection is otherwise ending on this side - so that peer
+            // learns the connection is going away (and which streams were actually seen) via GOAWAY instead
+            // of only ever observing an abrupt socket close. Exceptions are swallowed: by the time this
+            // fires, `output` may already be broken too (e.g. both legs disconnecting around the same
+            // time), and a failed shutdown notice must never turn a clean teardown into a fault.
+            async Task TrySendGracefulGoAwayAsync()
+            {
+                try
+                {
+                    await lockedOutputWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                        connectionState.LastClientStreamId, Http2ErrorCode.NoError, output));
+                }
+                catch
+                {
+                    // best-effort only - see remarks above.
+                }
+            }
+
             while (true)
             {
                 int read = await ForceRead(input, frameHeaderBuffer, 0, 9, cancellationToken);
                 if (read != 9)
                 {
+                    await TrySendGracefulGoAwayAsync();
                     return;
                 }
 
@@ -544,6 +683,20 @@ namespace Titanium.Web.Proxy.Http2
                 frameHeader.Type = type;
                 frameHeader.Flags = flags;
                 frameHeader.StreamId = streamId;
+
+                if (isFirstFrame)
+                {
+                    isFirstFrame = false;
+                    if (type != Http2FrameType.Settings)
+                    {
+                        exceptionFunc?.Invoke(new ProxyHttpException(
+                            $"HTTP/2 protocol error: expected a SETTINGS frame immediately after the connection preface, got {type}.",
+                            null, null));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], 0,
+                            Http2ErrorCode.ProtocolError, input));
+                        return;
+                    }
+                }
 
                 if (length > MaxAcceptableFrameSize)
                 {
@@ -573,6 +726,26 @@ namespace Titanium.Web.Proxy.Http2
                 read = await ForceRead(input, buffer, 0, length, cancellationToken);
                 if (read != length)
                 {
+                    await TrySendGracefulGoAwayAsync();
+                    return;
+                }
+
+                if (type == Http2FrameType.PushPromise)
+                {
+                    // This proxy always advertises SETTINGS_ENABLE_PUSH=0 toward the server (see the
+                    // SETTINGS handling below), so a PUSH_PROMISE is never valid in either direction: from
+                    // the client it is always meaningless (clients don't push), and from the server it is a
+                    // direct violation of the value we declared (RFC 7540 §6.6: "PUSH_PROMISE MUST NOT be
+                    // sent if SETTINGS_ENABLE_PUSH... is 0"). Reject as a connection-level PROTOCOL_ERROR
+                    // rather than attempting to decode/relay it: this relay's decoder for this direction
+                    // never observes the encode event a forwarded-but-undecoded push header block would
+                    // represent, which would otherwise permanently desync HPACK for every later header
+                    // block from the same peer. Tearing down the whole connection avoids that risk entirely.
+                    exceptionFunc?.Invoke(new ProxyHttpException(
+                        $"HTTP/2 protocol error: unexpected PUSH_PROMISE frame from the {(isClient ? "client" : "server")}.",
+                        null, null));
+                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                        Http2ErrorCode.ProtocolError, input));
                     return;
                 }
 
@@ -581,29 +754,11 @@ namespace Titanium.Web.Proxy.Http2
 
                 SessionEventArgs? args = null;
                 RequestResponseBase? rr = null;
-                if (type == Http2FrameType.Data || type == Http2FrameType.Headers/* || type == Http2FrameType.PushPromise*/)
+                if (type == Http2FrameType.Data || type == Http2FrameType.Headers)
                 {
                     if (connectionState.Streams.TryGetValue(streamId, out var existingStreamState))
                     {
                         args = existingStreamState.SessionArgs;
-                    }
-
-                    if (args == null)
-                    {
-                        //if (type == Http2FrameType.Data)
-                        //{
-                        //    throw new ProxyHttpException("HTTP Body data received before any header frame.", null, args);
-                        //}
-
-                        //if (type == Http2FrameType.Headers && !isClient)
-                        //{
-                        //    throw new ProxyHttpException("HTTP Response received before any Request header frame.", null, args);
-                        //}
-
-                        if (type == Http2FrameType.PushPromise && isClient)
-                        {
-                            throw new ProxyHttpException("HTTP Push promise received from the client.", null, args);
-                        }
                     }
                 }
 
@@ -614,7 +769,7 @@ namespace Titanium.Web.Proxy.Http2
                 // for every subsequent stream. Suppressing the *forward* of a synthetic stream's trailers
                 // is handled inside ProcessCompleteHeaderBlockAsync instead of the blanket synthetic-stream
                 // gate used for other frame types below, so both are checked ahead of that gate.
-                if (type == Http2FrameType.Headers/* || type == Http2FrameType.PushPromise*/)
+                if (type == Http2FrameType.Headers)
                 {
                     bool endHeaders = (flags & Http2FrameFlag.EndHeaders) != 0;
                     bool padded = (flags & Http2FrameFlag.Padded) != 0;
@@ -974,13 +1129,16 @@ namespace Titanium.Web.Proxy.Http2
 
                     bool invalidSettings = false;
                     Http2ErrorCode invalidSettingsError = Http2ErrorCode.ProtocolError;
+                    bool sawEnablePush = false;
 
                     int pos = 0;
                     while (pos < length)
                     {
-                        int identifier = (buffer[pos++] << 8) + buffer[pos++];
-                        long value =
-                            ((long)buffer[pos++] << 24) + (buffer[pos++] << 16) + (buffer[pos++] << 8) + buffer[pos++];
+                        int identifier = (buffer[pos] << 8) + buffer[pos + 1];
+                        int valueOffset = pos + 2;
+                        long value = ((long)buffer[valueOffset] << 24) + (buffer[valueOffset + 1] << 16) +
+                                     (buffer[valueOffset + 2] << 8) + buffer[valueOffset + 3];
+                        pos += 6;
 
                         if (identifier == (int)Http2SettingsId.HeaderTableSize)
                         {
@@ -1017,6 +1175,26 @@ namespace Titanium.Web.Proxy.Http2
                                 flow.OnInitialWindowSizeChanged((int)value);
                             }
                         }
+                        else if (identifier == (int)Http2SettingsId.MaxConcurrentStreams)
+                        {
+                            localSettings.MaxConcurrentStreams = value > int.MaxValue ? int.MaxValue : (int)value;
+                        }
+                        else if (identifier == (int)Http2SettingsId.EnablePush)
+                        {
+                            sawEnablePush = true;
+                            if (isClient)
+                            {
+                                // This relay never implements server push translation, so the proxy must
+                                // never let the server believe push is welcome on this connection -
+                                // regardless of what the real client declared (most modern clients already
+                                // send 0 here, but this must not depend on that). Overwrite in place before
+                                // this frame is forwarded to the server below.
+                                buffer[valueOffset] = 0;
+                                buffer[valueOffset + 1] = 0;
+                                buffer[valueOffset + 2] = 0;
+                                buffer[valueOffset + 3] = 0;
+                            }
+                        }
                     }
 
                     if (invalidSettings)
@@ -1026,6 +1204,22 @@ namespace Titanium.Web.Proxy.Http2
                         await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
                             invalidSettingsError, input));
                         return;
+                    }
+
+                    if (isClient && !sawEnablePush && (flags & Http2FrameFlag.Ack) == 0 &&
+                        length + 6 <= buffer.Length)
+                    {
+                        // The client's SETTINGS frame did not declare SETTINGS_ENABLE_PUSH at all (its RFC
+                        // default, 1, would otherwise apply) - append an explicit "disabled" entry before
+                        // relaying this frame to the server, for the same reason as the override above.
+                        buffer[length] = (byte)(((int)Http2SettingsId.EnablePush >> 8) & 0xff);
+                        buffer[length + 1] = (byte)((int)Http2SettingsId.EnablePush & 0xff);
+                        buffer[length + 2] = 0;
+                        buffer[length + 3] = 0;
+                        buffer[length + 4] = 0;
+                        buffer[length + 5] = 0;
+                        length += 6;
+                        frameHeader.Length = length;
                     }
                 }
 
@@ -1050,6 +1244,8 @@ namespace Titanium.Web.Proxy.Http2
                         resetStream.Cancellation.Cancel();
                         connectionState.ClientSendFlow.RemoveStream(streamId);
                         connectionState.ServerSendFlow.RemoveStream(streamId);
+                        connectionState.PendingFinalizations.Add(
+                            FinalizeStreamAsync(resetStream, onAfterResponse, exceptionFunc));
 
                         var resetRr = isClient
                             ? (RequestResponseBase)resetStream.SessionArgs.HttpClient.Request
@@ -1149,6 +1345,8 @@ namespace Titanium.Web.Proxy.Http2
                         if (closingStream.IsClosed)
                         {
                             connectionState.RemoveStream(streamId);
+                            connectionState.PendingFinalizations.Add(
+                                FinalizeStreamAsync(closingStream, onAfterResponse, exceptionFunc));
                         }
                     }
                 }

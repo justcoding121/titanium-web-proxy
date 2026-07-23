@@ -339,6 +339,24 @@ public partial class ProxyServer
                 var httpCmd = await clientStream.ReadLineAsync(cancellationToken);
                 if (httpCmd == "PRI * HTTP/2.0")
                 {
+                    // Route strictly by what TLS actually negotiated via ALPN, not by which literal bytes
+                    // the client happened to send afterwards. SslStream never allows an application
+                    // protocol to change after the handshake completes, so a client that negotiated
+                    // "http/1.1" (or no ALPN at all - e.g. it never offered one, or this is a plaintext
+                    // connection with no TLS handshake at all, such as cleartext h2c, which this proxy does
+                    // not implement) has no standards-compliant way to then switch this same connection to
+                    // HTTP/2. Accepting the literal preface bytes anyway would open the door to protocol
+                    // confusion between what the proxy and any TLS-aware middlebox believe this connection
+                    // is. See also the ALPN h1.1 offer in the TLS options above, which never advertises "h2"
+                    // unless the origin capability probe already confirmed it - this check is what actually
+                    // enforces that decision on the wire rather than merely hoping the client respects it.
+                    if (clientStream.Connection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
+                    {
+                        throw new Exception("HTTP/2 Protocol violation. Received the HTTP/2 connection preface " +
+                            $"on a connection that negotiated '{clientStream.Connection.NegotiatedApplicationProtocol}' " +
+                            "via ALPN instead of 'h2'.");
+                    }
+
                     connectArgs.HttpClient.ConnectRequest!.TunnelType = TunnelType.Http2;
 
                     // HTTP/2 Connection Preface
@@ -369,6 +387,8 @@ public partial class ProxyServer
                                 },
                                 async args => { await OnBeforeRequest(args); },
                                 async args => { await OnBeforeResponse(args); },
+                                async args => { await OnAfterResponse(args); },
+                                headers => PrepareRequestHeaders(headers),
                                 connectArgs.CancellationTokenSource, clientStream.Connection.Id, ExceptionFunc);
 #endif
                     }
@@ -376,6 +396,15 @@ public partial class ProxyServer
                     {
                         await TcpConnectionFactory.Release(connection, true);
                     }
+
+                    // The h2 relay above always opens and uses its own dedicated session connection (it
+                    // does not currently consume `prefetchConnectionTask` - unifying the two is a connection
+                    // orchestration change tracked separately); if a prefetch was started for this tunnel it
+                    // is now unused and must still be released here, otherwise its underlying TCP connection
+                    // is silently abandoned (never pooled, never closed) instead of being returned or torn
+                    // down like every other code path that owns a prefetch task does.
+                    await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                    prefetchConnectionTask = null;
 
                     // the entire connection was handed over to the HTTP/2 relay above; once it returns the
                     // client connection is done (mirrors the `return;` after the CONNECT-tunnel branch

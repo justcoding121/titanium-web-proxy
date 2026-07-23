@@ -1,4 +1,5 @@
 #if NET6_0_OR_GREATER
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,6 +43,14 @@ internal sealed class Http2FlowController
 
     /// <summary>RFC 7540 §6.9.1 - a flow-control window (connection or stream) must never exceed this value.</summary>
     internal const long MaxWindow = int.MaxValue; // 2^31 - 1
+
+    /// <summary>
+    ///     Upper bound on how long <see cref="ReserveAsync" /> will wait for flow-control credit before
+    ///     giving up. Without this, a peer that stops sending WINDOW_UPDATE (deliberately, or because it
+    ///     has itself stalled/died in a way that never reaches this relay's disconnect detection) leaves the
+    ///     writer task - and the stream it belongs to - suspended for the lifetime of the connection.
+    /// </summary>
+    internal static readonly TimeSpan ReservationTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>
     ///     Begins tracking a per-stream send window, initialized to the peer's current
@@ -159,7 +168,16 @@ internal sealed class Http2FlowController
                 wait = creditAvailable.Task;
             }
 
-            await wait.WaitAsync(cancellationToken);
+            try
+            {
+                await wait.WaitAsync(ReservationTimeout, cancellationToken);
+            }
+            catch (TimeoutException)
+            {
+                throw new TimeoutException(
+                    $"HTTP/2 flow-control reservation for stream {streamId} timed out after {ReservationTimeout} " +
+                    "waiting for WINDOW_UPDATE credit from the peer.");
+            }
         }
     }
 

@@ -47,5 +47,14 @@ internal sealed class Http2StreamState
     public Task? SyntheticTask { get; set; }
 
     public bool IsClosed => RequestClosed && ResponseClosed;
+
+    /// <summary>
+    ///     Guards <c>AfterResponse</c> + <c>Dispose</c> so they run exactly once for this stream's
+    ///     <see cref="SessionArgs" /> regardless of which of the three possible termination paths
+    ///     (normal end-stream on both directions, RST_STREAM, or connection teardown with the stream still
+    ///     open) observes completion first. 0 = not yet finalized, 1 = finalized. Mutated only via
+    ///     <see cref="System.Threading.Interlocked.CompareExchange(ref int, int, int)" />.
+    /// </summary>
+    public int FinalizedFlag;
 }
 #endif
