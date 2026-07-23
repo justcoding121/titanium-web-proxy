@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading;
@@ -8,6 +9,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using SslExtensions = Titanium.Web.Proxy.Extensions.SslExtensions;
 
@@ -21,8 +23,20 @@ public partial class ProxyServer
     ///     ownership of any origin connection opened while doing so, so the caller can adopt that same
     ///     connection for the session instead of opening a second one right after it.
     /// </summary>
-    /// <param name="session">The in-flight tunnel/session event args used to key and open the connection.</param>
-    /// <param name="capabilityCacheKey">The origin capability cache key for the effective route.</param>
+    /// <param name="sessionArgs">
+    ///     The in-flight tunnel/session event args used for TLS certificate-validation context, custom
+    ///     upstream proxy resolution, and timeline tracking while opening the connection.
+    /// </param>
+    /// <param name="remoteHostName">
+    ///     The origin identity used for TLS SNI/certificate validation (the CONNECT target for explicit
+    ///     tunnels, or the client's SNI/generic-certificate hostname for transparent connections).
+    /// </param>
+    /// <param name="remotePort">The origin identity port, paired with <paramref name="remoteHostName" />.</param>
+    /// <param name="connectHost">
+    ///     The actual TCP connect destination, when a fixed forward target overrides
+    ///     <paramref name="remoteHostName" />; null when the TCP destination is the same as the identity.
+    /// </param>
+    /// <param name="connectPort">The actual TCP connect destination port, paired with <paramref name="connectHost" />.</param>
     /// <param name="enablePrefetch">
     ///     Whether a cache hit should speculatively open the correctly-keyed connection ahead of the
     ///     client TLS handshake completing. A cold cache always opens (and awaits) exactly one discovery
@@ -33,9 +47,29 @@ public partial class ProxyServer
     ///     prefetch intentionally never observes cancellation so a client disconnecting mid-handshake
     ///     cannot leave a half-started connect racing a torn-down session.
     /// </param>
-    private async Task<Http2NegotiationResult> NegotiateHttp2Async(SessionEventArgsBase session,
-        string capabilityCacheKey, bool enablePrefetch, CancellationToken cancellationToken)
+    private async Task<Http2NegotiationResult> NegotiateHttp2Async(SessionEventArgsBase sessionArgs,
+        string remoteHostName, int remotePort, string? connectHost, int? connectPort, bool enablePrefetch,
+        CancellationToken cancellationToken)
     {
+        var customUpStreamProxy = sessionArgs.CustomUpStreamProxy;
+        if (customUpStreamProxy == null && GetCustomUpStreamProxyFunc != null)
+            customUpStreamProxy = await GetCustomUpStreamProxyFunc(sessionArgs);
+        sessionArgs.CustomUpStreamProxyUsed = customUpStreamProxy;
+
+        // resolve the effective proxy (post-bypass) so the key matches the connection's actual route, the
+        // same way TcpConnectionFactory itself resolves it before opening or keying a connection.
+        var externalProxy = TcpConnectionFactory.GetEffectiveUpstreamProxy(
+            customUpStreamProxy ?? UpStreamHttpsProxy, remoteHostName, remotePort);
+        var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint;
+
+        // Keyed on the same destination, forward target, local upstream endpoint, and effective external
+        // proxy dimensions used for connection pooling (but never on ALPN, which is what this negotiation
+        // itself decides), so two routes to the same origin host through different upstream
+        // proxies/local endpoints/fixed forward targets never share a capability result, and the exact
+        // same key is used to both look up and later pool the adopted connection.
+        var capabilityCacheKey = TcpConnectionFactory.GetConnectionCacheKey(remoteHostName, remotePort, true,
+            null, upStreamEndPoint, externalProxy, connectHost, connectPort);
+
         if (Http2OriginCapabilityCache.TryGet(capabilityCacheKey, out var cachedSupport))
         {
             HandshakeDebugLog.Http2ProbeResult(capabilityCacheKey, true, cachedSupport, null);
@@ -47,8 +81,10 @@ public partial class ProxyServer
                 // instead of being opened, checked, and then wastefully discarded.
                 // Don't pass cancellationToken here - it could leave a floating server connection if the
                 // client disconnects before this completes.
-                retained = TcpConnectionFactory.GetServerConnection(this, session, true,
-                    cachedSupport ? SslExtensions.Http2ProtocolAsList : null, false, true, CancellationToken.None);
+                retained = TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
+                    HttpHeader.Version20, true, cachedSupport ? SslExtensions.Http2ProtocolAsList : null, true,
+                    sessionArgs, upStreamEndPoint, externalProxy, false, true, CancellationToken.None,
+                    connectHost, connectPort);
 
             return new Http2NegotiationResult(cachedSupport, retained);
         }
@@ -59,8 +95,9 @@ public partial class ProxyServer
         // what used to be up to three separate origin connections (probe, prefetch, session) with one.
         try
         {
-            var connection = await TcpConnectionFactory.GetServerConnection(this, session, true,
-                SslExtensions.Http2ProtocolAsList, true, true, cancellationToken);
+            var connection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
+                HttpHeader.Version20, true, SslExtensions.Http2ProtocolAsList, true, sessionArgs, upStreamEndPoint,
+                externalProxy, true, true, cancellationToken, connectHost, connectPort);
 
             var supported = connection != null &&
                              connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
@@ -78,6 +115,22 @@ public partial class ProxyServer
             HandshakeDebugLog.Http2ProbeResult(capabilityCacheKey, false, false, ex);
             return new Http2NegotiationResult(false, null);
         }
+    }
+
+    /// <summary>
+    ///     Computes the same connection-pool cache key that <see cref="NegotiateHttp2Async" /> and the
+    ///     eventual h2 session connection use, so callers can validate a retained/prefetched connection
+    ///     against it before adopting that connection.
+    /// </summary>
+    private string GetHttp2ConnectionCacheKey(SessionEventArgsBase sessionArgs, string remoteHostName,
+        int remotePort, string? connectHost, int? connectPort)
+    {
+        var externalProxy = TcpConnectionFactory.GetEffectiveUpstreamProxy(
+            sessionArgs.CustomUpStreamProxyUsed ?? UpStreamHttpsProxy, remoteHostName, remotePort);
+        var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint;
+
+        return TcpConnectionFactory.GetConnectionCacheKey(remoteHostName, remotePort, true,
+            SslExtensions.Http2ProtocolAsList, upStreamEndPoint, externalProxy, connectHost, connectPort);
     }
 
     /// <summary>
@@ -132,5 +185,17 @@ public partial class ProxyServer
         if (negotiated == default) return true;
 
         return requestedProtocols.Contains(negotiated);
+    }
+
+    /// <summary>
+    ///     Splits a "host" or "host:port" authority string (e.g. an explicit CONNECT target) into its
+    ///     host and port parts, defaulting the port to <paramref name="defaultPort" /> when absent.
+    /// </summary>
+    private static (string Host, int Port) ParseHostAndPort(string authority, int defaultPort)
+    {
+        var idx = authority.LastIndexOf(':');
+        return idx < 0
+            ? (authority, defaultPort)
+            : (authority.Substring(0, idx), int.Parse(authority.Substring(idx + 1)));
     }
 }
