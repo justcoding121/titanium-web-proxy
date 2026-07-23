@@ -454,6 +454,273 @@ public class Http2ProtocolPolicyTests
 
     [TestMethod]
     [Timeout(30 * 1000)]
+    public async Task Explicit_Forced_Http2_With_Translation_And_Http11_Only_Client_Succeeds_Via_Bridge()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context =>
+        {
+            context.Response.Headers["X-Origin-Protocol"] = context.Request.Protocol;
+            await context.Response.WriteAsync("h11-to-h2-bridge-ok");
+        });
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        Exception? observedException = null;
+        proxy.ExceptionFunc = ex => observedException = ex;
+
+        var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var tunnel = await Http2RawClient.ConnectTunnelWithAlpnAsync(proxy.ProxyEndPoints[0].Port, "localhost",
+            server.HttpsListeningPort, new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 });
+
+        Assert.AreNotEqual(SslApplicationProtocol.Http2, tunnel.NegotiatedApplicationProtocol,
+            "The client only offered http/1.1, so the proxy must never negotiate h2 with it even though the " +
+            "origin-facing connection is forced to HTTP/2.");
+
+        var requestBytes =
+            Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        await tunnel.SslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+
+        using var reader = new StreamReader(tunnel.SslStream, Encoding.ASCII, false, 4096, true);
+        var statusLine = await reader.ReadLineAsync();
+        Assert.IsTrue(statusLine != null && statusLine.StartsWith("HTTP/1.1 200"),
+            $"Expected an HTTP/1.1 200 response, got: '{statusLine}'.");
+
+        string? line;
+        var sawOriginProtocolHeader = false;
+        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
+        {
+            if (line.StartsWith("X-Origin-Protocol:", StringComparison.OrdinalIgnoreCase))
+            {
+                sawOriginProtocolHeader = true;
+                Assert.IsTrue(line.Contains("HTTP/2"),
+                    $"The origin must have actually been spoken to over HTTP/2: '{line}'.");
+            }
+        }
+
+        Assert.IsTrue(sawOriginProtocolHeader, "Expected to see the X-Origin-Protocol response header.");
+
+        var body = await reader.ReadToEndAsync();
+        Assert.AreEqual("h11-to-h2-bridge-ok", body);
+        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Explicit_Forced_Http2_With_Translation_And_Http11_Client_Post_With_Body_Succeeds_Via_Bridge()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+        server.HandleRequest(async context =>
+        {
+            using var bodyReader = new StreamReader(context.Request.Body);
+            var receivedBody = await bodyReader.ReadToEndAsync();
+            await context.Response.WriteAsync($"echo:{receivedBody}");
+        });
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        Exception? observedException = null;
+        proxy.ExceptionFunc = ex => observedException = ex;
+
+        var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var tunnel = await Http2RawClient.ConnectTunnelWithAlpnAsync(proxy.ProxyEndPoints[0].Port, "localhost",
+            server.HttpsListeningPort, new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 });
+
+        const string requestBody = "hello from an h1.1 client being bridged to an h2-only origin";
+        var bodyBytes = Encoding.ASCII.GetBytes(requestBody);
+        var requestText = "POST / HTTP/1.1\r\n" +
+                           "Host: localhost\r\n" +
+                           $"Content-Length: {bodyBytes.Length}\r\n" +
+                           "Connection: close\r\n\r\n" + requestBody;
+        var requestBytes = Encoding.ASCII.GetBytes(requestText);
+        await tunnel.SslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+
+        using var reader = new StreamReader(tunnel.SslStream, Encoding.ASCII, false, 4096, true);
+        var statusLine = await reader.ReadLineAsync();
+        Assert.IsTrue(statusLine != null && statusLine.StartsWith("HTTP/1.1 200"),
+            $"Expected an HTTP/1.1 200 response, got: '{statusLine}'.");
+
+        while (!string.IsNullOrEmpty(await reader.ReadLineAsync()))
+        {
+            // skip headers
+        }
+
+        var responseBody = await reader.ReadToEndAsync();
+        Assert.AreEqual($"echo:{requestBody}", responseBody);
+        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task
+        Explicit_Forced_Http2_With_Translation_Sequential_Http11_Requests_Reuse_Persistent_Http2_Origin_Connection()
+    {
+        using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+
+            for (var i = 0; i < 2; i++)
+            {
+                var (streamId, _, _) = await connection.ReadRequestAsync();
+                var headers = connection.EncodeHeaders(new[] { (":status", "200") }, Array.Empty<(string, string)>());
+                await connection.WriteHeaderBlockAsync(streamId, headers, false);
+                var payload = Encoding.ASCII.GetBytes($"response-{i}");
+                await connection.WriteFrameAsync(Http2FrameType.Data, streamId, Http2FrameFlag.EndStream, payload);
+            }
+        });
+
+        using var testSuite = new TestSuite();
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        Exception? observedException = null;
+        proxy.ExceptionFunc = ex => observedException = ex;
+
+        var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var tunnel = await Http2RawClient.ConnectTunnelWithAlpnAsync(proxy.ProxyEndPoints[0].Port, "localhost",
+            rawServer.Port, new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 });
+
+        var networkStream = tunnel.SslStream;
+
+        for (var i = 0; i < 2; i++)
+        {
+            var requestBytes = Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            await networkStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+
+            var (statusLine, headerLines, body) = await ReadHttp11ResponseAsync(networkStream);
+            Assert.IsTrue(statusLine.StartsWith("HTTP/1.1 200"), $"Request {i}: got '{statusLine}'.");
+            Assert.AreEqual($"response-{i}", body, $"Request {i}: unexpected body.");
+            _ = headerLines;
+        }
+
+        for (var i = 0; i < 50 && rawServer.AcceptedConnectionCount < 1; i++)
+            await Task.Delay(20);
+
+        Assert.AreEqual(1, rawServer.AcceptedConnectionCount,
+            "Two sequential HTTP/1.1 requests on the same bridged client connection should reuse one " +
+            "persistent h2 origin connection rather than opening a new one per request.");
+        Assert.IsNull(observedException, $"No exception should be raised on a successful bridge: {observedException}");
+    }
+
+    /// <summary>
+    ///     Reads one full HTTP/1.1 response (status line, headers, and a Content-Length or chunked body) off
+    ///     <paramref name="stream" /> without closing it, so the same keep-alive connection can be reused to
+    ///     read a second response afterwards.
+    /// </summary>
+    private static async Task<(string StatusLine, List<string> Headers, string Body)> ReadHttp11ResponseAsync(
+        Stream stream)
+    {
+        var lineBuffer = new StringBuilder();
+
+        async Task<string> ReadLineAsync()
+        {
+            lineBuffer.Clear();
+            int b;
+            var prevWasCr = false;
+            while ((b = stream.ReadByte()) != -1)
+            {
+                if (prevWasCr && b == '\n') return lineBuffer.ToString(0, lineBuffer.Length - 1);
+
+                lineBuffer.Append((char)b);
+                prevWasCr = b == '\r';
+            }
+
+            return lineBuffer.ToString();
+        }
+
+        var statusLine = await ReadLineAsync();
+        var headers = new List<string>();
+        var contentLength = -1;
+        var isChunked = false;
+
+        string headerLine;
+        while (!string.IsNullOrEmpty(headerLine = await ReadLineAsync()))
+        {
+            headers.Add(headerLine);
+            if (headerLine.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+                contentLength = int.Parse(headerLine.Substring(headerLine.IndexOf(':') + 1).Trim());
+            else if (headerLine.StartsWith("Transfer-Encoding:", StringComparison.OrdinalIgnoreCase)
+                     && headerLine.Contains("chunked", StringComparison.OrdinalIgnoreCase))
+                isChunked = true;
+        }
+
+        if (isChunked)
+        {
+            var body = new StringBuilder();
+            while (true)
+            {
+                var sizeLine = await ReadLineAsync();
+                var size = Convert.ToInt32(sizeLine.Trim(), 16);
+                if (size == 0)
+                {
+                    // consume trailing headers (if any) up to the final blank line.
+                    while (!string.IsNullOrEmpty(await ReadLineAsync()))
+                    {
+                    }
+
+                    break;
+                }
+
+                var chunkBytes = new byte[size];
+                var read = 0;
+                while (read < size)
+                {
+                    var r = stream.Read(chunkBytes, read, size - read);
+                    if (r == 0) break;
+                    read += r;
+                }
+
+                body.Append(Encoding.ASCII.GetString(chunkBytes, 0, read));
+                await ReadLineAsync(); // trailing CRLF after the chunk data
+            }
+
+            return (statusLine, headers, body.ToString());
+        }
+
+        if (contentLength >= 0)
+        {
+            var bodyBytes = new byte[contentLength];
+            var totalRead = 0;
+            while (totalRead < contentLength)
+            {
+                var r = stream.Read(bodyBytes, totalRead, contentLength - totalRead);
+                if (r == 0) break;
+                totalRead += r;
+            }
+
+            return (statusLine, headers, Encoding.ASCII.GetString(bodyBytes, 0, totalRead));
+        }
+
+        return (statusLine, headers, string.Empty);
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
     public async Task Transparent_Forced_Http11_Without_Translation_Never_Offers_Http2_To_Dual_Alpn_Client()
     {
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());

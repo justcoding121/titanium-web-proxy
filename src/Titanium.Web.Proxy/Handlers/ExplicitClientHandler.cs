@@ -49,6 +49,13 @@ public partial class ProxyServer
         // normal protocol-symmetric Http2Helper.SendHttp2 relay.
         var requiresHttp11Bridge = false;
 
+        // Set when ResolveHttp2ForClientAsync determined the origin-facing connection must stay HTTP/2
+        // (UpstreamHttpProtocol.Http2 + AllowHttpProtocolTranslation) even though the client does not offer
+        // "h2" itself. Read once the CONNECT tunnel falls through to the normal HTTP/1.1 request path below,
+        // to route that connection through SendHttp11ToHttp2Bridge instead of the normal protocol-symmetric
+        // HandleHttpSessionRequest pipeline.
+        var requiresH2OriginBridge = false;
+
         try
         {
             var method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
@@ -160,9 +167,13 @@ public partial class ProxyServer
                             connectArgs.AllowHttpProtocolTranslation, EnableTcpServerConnectionPrefetch,
                             cancellationToken);
                         requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
-                        // The client is offered "h2" both when the origin itself speaks it and when a
-                        // translation bridge will stand in for an HTTP/1.1-only origin.
-                        http2Supported = negotiation.OriginSupportsHttp2 || requiresHttp11Bridge;
+                        requiresH2OriginBridge = negotiation.RequiresH2OriginBridge;
+                        // The client is offered "h2" both when the origin itself speaks it (and no
+                        // client-facing bridge is needed) and when a translation bridge will stand in for an
+                        // HTTP/1.1-only origin. RequiresH2OriginBridge is the mirror image - the origin
+                        // speaks h2 but the client itself does not, so "h2" must never be offered to it.
+                        http2Supported = (negotiation.OriginSupportsHttp2 && !requiresH2OriginBridge)
+                                         || requiresHttp11Bridge;
                         prefetchConnectionTask = negotiation.RetainedConnectionTask;
                     }
 
@@ -421,6 +432,24 @@ public partial class ProxyServer
 
             var prefetchTask = prefetchConnectionTask;
             prefetchConnectionTask = null;
+
+            if (requiresH2OriginBridge)
+            {
+#if NET6_0_OR_GREATER
+                // UpstreamHttpProtocol.Http2 + AllowHttpProtocolTranslation: the client never offered "h2"
+                // (see the http2Supported computation above), so it stays on the normal HTTP/1.1 wire format,
+                // but every request must be translated onto the already-established h2 origin connection
+                // carried in prefetchTask (never null when RequiresH2OriginBridge is true - see
+                // Http2NegotiationResult) via the HTTP/1.1-client-to-h2-origin bridge instead of the normal
+                // protocol-symmetric HandleHttpSessionRequest pipeline.
+                var (bridgeHost, bridgePort) =
+                    ParseHostAndPort(connectArgs!.HttpClient.ConnectRequest!.Authority.GetString(), 443);
+                await SendHttp11ToHttp2Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
+                    connectArgs.UserData, bridgeHost, bridgePort, null, null, prefetchTask,
+                    connectArgs.CancellationTokenSource);
+#endif
+                return;
+            }
 
             // Now create the request
             await HandleHttpSessionRequest(endPoint, clientStream, cancellationTokenSource, connectArgs, prefetchTask);
