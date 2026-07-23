@@ -270,6 +270,7 @@ proxyServer.Logging.MinimumLevel = LogLevel.Information;
 
 // Built-in sinks, both asynchronous and best-effort so they never block proxy traffic:
 proxyServer.Logging.EnableConsole = true;          // default on
+proxyServer.Logging.EnableConsoleColors = true;    // default on; colors each line by level
 proxyServer.Logging.EnableFile = true;             // default off
 proxyServer.Logging.FilePath = "logs/proxy.log";   // size-based rolling file
 proxyServer.Logging.MaxFileSizeBytes = 10 * 1024 * 1024;
@@ -293,6 +294,13 @@ Exceptions the proxy considers expected/benign under normal operation (client di
 operations, expected socket resets, retries, and similar) are logged at `Debug`/`Trace` so they never
 contribute to `Error`-level noise in the default configuration, while genuinely unexpected failures are
 always logged at `Error` or `Critical`.
+
+The built-in console sink colors each line by level (dim `Trace`/`Debug`, default `Information`, yellow
+`Warning`, red `Error`, bold red `Critical`) so failures stand out while scrolling through busy output.
+Colors are automatically suppressed for a stream that is redirected (e.g. `proxy.exe > out.log`) or when
+the [`NO_COLOR`](https://no-color.org/) environment variable is set, regardless of
+`EnableConsoleColors` — so redirected output and log files never end up with raw escape codes. The
+rolling-file sink is always plain text.
 
 ## Request timing
 
