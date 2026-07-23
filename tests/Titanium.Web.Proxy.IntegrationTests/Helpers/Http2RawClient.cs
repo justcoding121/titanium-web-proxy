@@ -63,6 +63,26 @@ internal sealed class Http2RawClient : IDisposable
 
         await ReadUntilBlankLineAsync(networkStream);
 
+        return await FromTcpAndTlsAsync(tcpClient, networkStream, targetHost, headerTableSize);
+    }
+
+    /// <summary>
+    ///     Connects directly to a transparent/reverse-proxy endpoint (no CONNECT tunnel) and performs a
+    ///     real TLS/ALPN "h2" handshake using <paramref name="sniHost" /> as the SNI/target host - the same
+    ///     way a real HTTP/2 browser talking to a transparent proxy would, with no prior knowledge that a
+    ///     proxy is even present.
+    /// </summary>
+    public static async Task<Http2RawClient> ConnectDirectAsync(int proxyPort, string sniHost)
+    {
+        var tcpClient = new TcpClient();
+        await tcpClient.ConnectAsync("localhost", proxyPort);
+
+        return await FromTcpAndTlsAsync(tcpClient, tcpClient.GetStream(), sniHost, null);
+    }
+
+    private static async Task<Http2RawClient> FromTcpAndTlsAsync(TcpClient tcpClient, Stream networkStream,
+        string targetHost, int? headerTableSize)
+    {
         var sslStream = new SslStream(networkStream, false,
             (_, certificate, chain, errors) => TestCertificateAuthority.Validate(certificate, errors));
         await sslStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions

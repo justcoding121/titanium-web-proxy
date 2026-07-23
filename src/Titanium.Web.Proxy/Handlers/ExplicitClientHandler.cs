@@ -146,14 +146,10 @@ public partial class ProxyServer
                             // completes the TLS handshake with the browser - SslStream does not support
                             // changing the application protocol on an established session - so the origin's
                             // capability must be known *before* the browser side is authenticated.
-                            // Keyed on destination, forward target, local upstream endpoint, and effective
-                            // external proxy (the same dimensions used for connection pooling) rather than
-                            // just the hostname, so two routes to the same origin host through different
-                            // upstream proxies/local endpoints never share a capability result.
-                            var capabilityCacheKey =
-                                await TcpConnectionFactory.GetConnectionCacheKey(this, connectArgs, default);
-                            var negotiation = await NegotiateHttp2Async(connectArgs, capabilityCacheKey,
-                                EnableTcpServerConnectionPrefetch, cancellationToken);
+                            var (connectHost, connectPort) =
+                                ParseHostAndPort(requestLine.RequestUri.GetString(), 443);
+                            var negotiation = await NegotiateHttp2Async(connectArgs, connectHost, connectPort,
+                                null, null, EnableTcpServerConnectionPrefetch, cancellationToken);
                             http2Supported = negotiation.OriginSupportsHttp2;
                             prefetchConnectionTask = negotiation.RetainedConnectionTask;
                         }
@@ -348,8 +344,10 @@ public partial class ProxyServer
                     // or a cache-hit prefetch) for this session instead of opening a brand new one, when it
                     // is still a valid, healthy, correctly keyed h2 connection. This is what collapses the
                     // previous up-to-three-connections cold h2 flow (probe + prefetch + session) into one.
-                    var expectedCacheKey = await TcpConnectionFactory.GetConnectionCacheKey(this, connectArgs,
-                        SslApplicationProtocol.Http2);
+                    var (sessionConnectHost, sessionConnectPort) =
+                        ParseHostAndPort(connectArgs.HttpClient.ConnectRequest!.Authority.GetString(), 443);
+                    var expectedCacheKey = GetHttp2ConnectionCacheKey(connectArgs, sessionConnectHost,
+                        sessionConnectPort, null, null);
                     var connection = await AdoptRetainedConnectionAsync(prefetchConnectionTask, expectedCacheKey,
                         SslExtensions.Http2ProtocolAsList);
                     prefetchConnectionTask = null;

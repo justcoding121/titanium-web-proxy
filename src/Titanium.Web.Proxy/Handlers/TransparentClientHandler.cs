@@ -10,6 +10,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended;
@@ -37,6 +38,7 @@ public partial class ProxyServer
         int port, CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
     {
         var isHttps = false;
+        Task<TcpServerConnection?>? prefetchConnectionTask = null;
         var clientStream = new HttpClientStream(this, clientConnection, clientConnection.GetStream(), BufferPool,
             cancellationToken);
 
@@ -74,6 +76,41 @@ public partial class ProxyServer
 
                     clientStream.Connection.SslProtocol = sslProtocol;
 
+                    // Route h2 through the same shared negotiation coordinator the explicit handler uses,
+                    // rather than duplicating its probe/adopt logic: the origin's identity is the SNI/
+                    // generic-certificate hostname resolved above, while the actual TCP destination
+                    // follows BeforeSslAuthenticate's final ForwardHttpsHostName/ForwardHttpsPort (its
+                    // default already mirrors the identity, so this only diverges when a fixed forward
+                    // target - static or event-set - is configured).
+                    var http2Supported = false;
+                    string? http2ConnectHost = null;
+                    int? http2ConnectPort = null;
+
+                    if (EnableHttp2)
+                    {
+                        var alpn = clientHelloInfo.GetAlpn();
+                        if (alpn != null && alpn.Contains(SslApplicationProtocol.Http2))
+                        {
+                            http2ConnectHost = string.Equals(args.ForwardHttpsHostName, httpsHostName,
+                                StringComparison.OrdinalIgnoreCase)
+                                ? null
+                                : args.ForwardHttpsHostName;
+                            http2ConnectPort = http2ConnectHost != null ? args.ForwardHttpsPort : (int?)null;
+
+                            var negotiationSession =
+                                new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
+                            var negotiation = await NegotiateHttp2Async(negotiationSession, httpsHostName,
+                                args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
+                                EnableTcpServerConnectionPrefetch, cancellationToken);
+                            http2Supported = negotiation.OriginSupportsHttp2;
+                            // Retained regardless of whether it turns out to be h2- or h1.1-keyed: if this
+                            // connection is not adopted by the h2 relay below, it still flows down to the
+                            // HTTP/1.1 pipeline's own prefetch-adoption/validation logic rather than being
+                            // discarded here.
+                            prefetchConnectionTask = negotiation.RetainedConnectionTask;
+                        }
+                    }
+
                     // do client authentication using certificate
                     X509Certificate2? certificate = null;
                     SslStream? sslStream = null;
@@ -90,26 +127,35 @@ public partial class ProxyServer
                                 $"Could not create a server certificate for '{certName}'.");
 
                         // Use SslServerAuthenticationOptions so that SupportedSslProtocols is
-                        // respected rather than being hardcoded to TLS 1.2.
-                        //
-                        // HTTP/2 is intentionally NOT offered here even though EnableHttp2 may be
-                        // true. The transparent handler routes all decrypted traffic through
-                        // HandleHttpSessionRequest, which is an HTTP/1.1-only pipeline. Advertising
-                        // h2 via ALPN would cause the browser to send HTTP/2 binary frames that
-                        // the HTTP/1.1 parser cannot handle. Full h2 support on the transparent
-                        // path would require the same PRI-preface detection and Http2Helper routing
-                        // that the explicit CONNECT handler uses, which has not been implemented.
+                        // respected rather than being hardcoded to TLS 1.2. h2 is only offered to the
+                        // client when the negotiation above confirmed the actual origin supports it -
+                        // ALPN cannot be changed after this handshake completes, so the origin's
+                        // capability must already be known.
                         var options = new SslServerAuthenticationOptions
                         {
                             ServerCertificate = certificate,
                             ClientCertificateRequired = false,
                             EnabledSslProtocols = SupportedSslProtocols,
-                            CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-                            ApplicationProtocols = SslExtensions.Http11ProtocolAsList
+                            CertificateRevocationCheckMode = X509RevocationMode.NoCheck
                         };
+
+                        if (EnableHttp2 && http2Supported)
+                        {
+                            options.ApplicationProtocols = clientHelloInfo.GetAlpn();
+                            if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)
+                                options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
+                        }
+                        else
+                        {
+                            options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
+                        }
 
                         // Successfully managed to authenticate the client using the certificate
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
+
+#if NET6_0_OR_GREATER
+                        clientStream.Connection.NegotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
+#endif
 
                         // HTTPS server created - we can now decrypt the client's traffic
                         clientStream = new HttpClientStream(this, clientStream.Connection, sslStream, BufferPool,
@@ -120,11 +166,107 @@ public partial class ProxyServer
                     catch (Exception e)
                     {
                         sslStream?.Dispose();
+                        await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                        prefetchConnectionTask = null;
 
                         var certName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
                         var session = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
                         throw new ProxyConnectException(
                             $"Couldn't authenticate host '{httpsHostName}' with certificate '{certName}'.", e, session);
+                    }
+
+                    if (EnableHttp2 && http2Supported)
+                    {
+                        var method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
+                        if (clientStream.IsClosed)
+                        {
+                            await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                            return;
+                        }
+
+                        if (method == KnownMethod.Pri)
+                        {
+                            var httpCmd = await clientStream.ReadLineAsync(cancellationToken);
+                            if (httpCmd == "PRI * HTTP/2.0")
+                            {
+                                // Route strictly by what TLS actually negotiated via ALPN - see the matching
+                                // check/rationale in the explicit CONNECT handler.
+                                if (clientStream.Connection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
+                                {
+                                    await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                                    throw new Exception(
+                                        "HTTP/2 Protocol violation. Received the HTTP/2 connection preface on a " +
+                                        $"connection that negotiated '{clientStream.Connection.NegotiatedApplicationProtocol}' " +
+                                        "via ALPN instead of 'h2'.");
+                                }
+
+                                // HTTP/2 Connection Preface
+                                var line = await clientStream.ReadLineAsync(cancellationToken);
+                                if (line != string.Empty)
+                                {
+                                    await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                                    throw new Exception(
+                                        $"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+                                }
+
+                                line = await clientStream.ReadLineAsync(cancellationToken);
+                                if (line != "SM")
+                                {
+                                    await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                                    throw new Exception($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
+                                }
+
+                                line = await clientStream.ReadLineAsync(cancellationToken);
+                                if (line != string.Empty)
+                                {
+                                    await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                                    throw new Exception(
+                                        $"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+                                }
+
+                                // Adopt the connection retained by NegotiateHttp2Async for this session
+                                // instead of opening a brand new one, when it is still valid/healthy/
+                                // correctly keyed - identical adoption logic to the explicit handler.
+                                var sessionForCacheKey =
+                                    new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
+                                var expectedCacheKey = GetHttp2ConnectionCacheKey(sessionForCacheKey, httpsHostName,
+                                    args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort);
+                                var connection = await AdoptRetainedConnectionAsync(prefetchConnectionTask,
+                                    expectedCacheKey, SslExtensions.Http2ProtocolAsList);
+                                prefetchConnectionTask = null;
+
+                                connection ??= (await TcpConnectionFactory.GetServerConnection(this, httpsHostName,
+                                    args.ForwardHttpsPort, HttpHeader.Version20, true, SslExtensions.Http2ProtocolAsList,
+                                    true, sessionForCacheKey, UpStreamEndPoint, UpStreamHttpsProxy, true, false,
+                                    cancellationToken, http2ConnectHost, http2ConnectPort))!;
+
+                                try
+                                {
+#if NET6_0_OR_GREATER
+                                    var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
+                                    await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
+                                    await Http2Helper.SendHttp2(clientStream, connection.Stream,
+                                        () => new SessionEventArgs(this, endPoint, clientStream, null,
+                                            cancellationTokenSource),
+                                        async sessionArgs => { await OnBeforeRequest(sessionArgs); },
+                                        async sessionArgs => { await OnBeforeResponse(sessionArgs); },
+                                        async sessionArgs => { await OnAfterResponse(sessionArgs); },
+                                        headers => PrepareRequestHeaders(headers),
+                                        cancellationTokenSource, clientStream.Connection.Id, ExceptionFunc);
+#endif
+                                }
+                                finally
+                                {
+                                    await TcpConnectionFactory.Release(connection, true);
+                                }
+
+                                return;
+                            }
+
+                            // "PRI" was peeked as the method but the full preface line did not match; the
+                            // line has now been consumed. This mirrors the explicit CONNECT handler's
+                            // handling of the same (never expected from a compliant client) edge case.
+                        }
                     }
                 }
                 else
@@ -180,7 +322,10 @@ public partial class ProxyServer
 
             // HTTPS server created - we can now decrypt the client's traffic
             // Now create the request
-            await HandleHttpSessionRequest(endPoint, clientStream, cancellationTokenSource, isHttps: isHttps);
+            var prefetchTask = prefetchConnectionTask;
+            prefetchConnectionTask = null;
+            await HandleHttpSessionRequest(endPoint, clientStream, cancellationTokenSource,
+                prefetchConnectionTask: prefetchTask, isHttps: isHttps);
         }
         catch (ProxyException e)
         {
@@ -200,6 +345,7 @@ public partial class ProxyServer
         }
         finally
         {
+            await TcpConnectionFactory.Release(prefetchConnectionTask, true);
             clientStream.Dispose();
         }
     }
