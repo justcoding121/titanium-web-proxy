@@ -530,10 +530,10 @@ namespace Titanium.Web.Proxy.Http2
                             response.Headers.AddHeader(header);
                         }
 
-                        // Matches HTTP/1.x's "Response Received" TimeLine stamp (see
+                        // Matches HTTP/1.x's ResponseHeadersReceivedAt timing mark (see
                         // ResponseHandler.HandleHttpSessionResponse), stamped here at the same logical point:
                         // right after the final (non-interim) response headers are parsed, before BeforeResponse runs.
-                        sessionArgs.TimeLine["Response Received"] = DateTime.UtcNow;
+                        sessionArgs.Timing?.MarkResponseHeadersReceived();
 
                         var tcs = new TaskCompletionSource<bool>();
                         response.ReadHttp2BeforeHandlerTaskCompletionSource = tcs;
@@ -853,9 +853,13 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             endStream = true;
 
-                            // Matches HTTP/1.x's "Request Sent"/"Response Sent" TimeLine stamps for the
-                            // common single-frame (no CONTINUATION needed) no-body/trailer-terminated case.
-                            args.TimeLine[isClient ? "Request Sent" : "Response Sent"] = DateTime.UtcNow;
+                            // Matches HTTP/1.x's RequestSentAt timing mark for the client leg, and finalizes
+                            // timing for the response leg (see MarkComplete's remarks on OnAfterResponse -
+                            // this is normally called again there too, but the guard there makes that a
+                            // no-op, so CompletedAt reflects this earlier, more precise instant instead) for
+                            // the common single-frame (no CONTINUATION needed) no-body/trailer-terminated case.
+                            if (isClient) args.Timing?.MarkRequestSent();
+                            else args.Timing?.MarkComplete();
                         }
                     }
                     else
@@ -919,11 +923,12 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             endStream = true;
 
-                            // Matches HTTP/1.x's "Request Sent"/"Response Sent" TimeLine stamps (see
-                            // RequestHandler.HandleHttpSessionRequest / ResponseHandler.HandleHttpSessionResponse)
+                            // Matches HTTP/1.x's RequestSentAt/MarkComplete timing marks (see
+                            // RequestHandler.HandleHttpSessionRequest / ResponseHandler.OnAfterResponse)
                             // for the no-body (headers-only END_STREAM, or trailer-terminated) case; the
                             // with-body case is stamped where the terminating DATA frame is handled below.
-                            pArgs.TimeLine[isClient ? "Request Sent" : "Response Sent"] = DateTime.UtcNow;
+                            if (isClient) pArgs.Timing?.MarkRequestSent();
+                            else pArgs.Timing?.MarkComplete();
                         }
                     }
 
@@ -959,9 +964,10 @@ namespace Titanium.Web.Proxy.Http2
                     {
                         endStream = true;
 
-                        // Matches HTTP/1.x's "Request Sent"/"Response Sent" TimeLine stamps for the with-body
-                        // case (the headers-only/trailer-terminated case is stamped above).
-                        args.TimeLine[isClient ? "Request Sent" : "Response Sent"] = DateTime.UtcNow;
+                        // Matches HTTP/1.x's RequestSentAt/MarkComplete timing marks for the with-body case
+                        // (the headers-only/trailer-terminated case is stamped above).
+                        if (isClient) args.Timing?.MarkRequestSent();
+                        else args.Timing?.MarkComplete();
                     }
 
                     if (rr.Http2IgnoreBodyFrames)

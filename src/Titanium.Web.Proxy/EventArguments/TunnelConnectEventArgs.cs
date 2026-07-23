@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -56,6 +57,14 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
     ///     fails the connection outright if the client does not also support HTTP/2.
     /// </summary>
     public bool AllowHttpProtocolTranslation { get; set; }
+
+    /// <summary>
+    ///     Timing of the client-facing (browser-to-proxy) TLS handshake performed while decrypting this
+    ///     tunnel, populated only when <see cref="ProxyServer.EnableRequestTimingCapture" /> is enabled and
+    ///     <see cref="DecryptSsl" /> is <see langword="true" />; <see langword="null" /> otherwise (including
+    ///     for a plain, non-HTTPS CONNECT tunnel that is never TLS-decrypted at all).
+    /// </summary>
+    public ClientTlsTiming? ClientTlsTiming { get; internal set; }
 
     /// <summary>
     ///     Is this a connect request to secure HTTP server? Or is it to some other protocol.

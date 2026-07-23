@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
@@ -363,7 +364,7 @@ public class Http2CharacterizationTests
 
     [TestMethod]
     [Timeout(30 * 1000)]
-    public async Task Http2_Session_TimeLine_Has_Same_Milestones_As_Http11()
+    public async Task Http2_Session_Timing_Has_Same_Milestones_As_Http11()
     {
         using var testSuite = new TestSuite();
         var server = testSuite.GetServer();
@@ -371,12 +372,13 @@ public class Http2CharacterizationTests
 
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
+        proxy.EnableRequestTimingCapture = true;
 
-        Dictionary<string, DateTime>? capturedTimeLine = null;
+        HttpRequestTiming? capturedTiming = null;
         var afterResponseTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         proxy.AfterResponse += (_, args) =>
         {
-            capturedTimeLine = args.TimeLine;
+            capturedTiming = args.Timing;
             afterResponseTcs.TrySetResult(true);
             return Task.CompletedTask;
         };
@@ -388,15 +390,16 @@ public class Http2CharacterizationTests
 
         await Task.WhenAny(afterResponseTcs.Task, Task.Delay(2000));
 
-        Assert.IsNotNull(capturedTimeLine, "AfterResponse should have fired.");
-        // Parity with the HTTP/1.x pipeline (see RequestHandler/ResponseHandler), so that TimeLine-based
+        Assert.IsNotNull(capturedTiming, "AfterResponse should have fired.");
+        // Parity with the HTTP/1.x pipeline (see RequestHandler/ResponseHandler), so that Timing-based
         // latency diagnostics behave identically regardless of which protocol a session actually used.
-        Assert.IsTrue(capturedTimeLine!.ContainsKey("Request Sent"), "Missing 'Request Sent' TimeLine entry.");
-        Assert.IsTrue(capturedTimeLine.ContainsKey("Response Received"), "Missing 'Response Received' TimeLine entry.");
-        Assert.IsTrue(capturedTimeLine.ContainsKey("Response Sent"), "Missing 'Response Sent' TimeLine entry.");
+        // CompletedAt is not asserted here: it is only set once OnAfterResponse's own MarkComplete call
+        // runs *after* this AfterResponse handler returns (see its remarks), so it is deliberately still
+        // null at the point this handler captures the timing object.
+        Assert.IsNotNull(capturedTiming!.RequestSentAt, "Missing RequestSentAt.");
+        Assert.IsNotNull(capturedTiming.ResponseHeadersReceivedAt, "Missing ResponseHeadersReceivedAt.");
 
-        Assert.IsTrue(capturedTimeLine["Response Received"] >= capturedTimeLine["Request Sent"]);
-        Assert.IsTrue(capturedTimeLine["Response Sent"] >= capturedTimeLine["Response Received"]);
+        Assert.IsTrue(capturedTiming.ResponseHeadersReceivedAt >= capturedTiming.RequestSentAt);
     }
 
     [TestMethod]

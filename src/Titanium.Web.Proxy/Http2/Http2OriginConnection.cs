@@ -86,6 +86,13 @@ internal sealed class Http2OriginConnection
     internal bool IsUsable => !faulted && !goingAway && !connection.IsClosed;
 
     /// <summary>
+    ///     The underlying TCP connection, exposed so callers can attribute
+    ///     <see cref="ProxyServer.EnableRequestTimingCapture" /> timing (connection id, reuse, and
+    ///     establishment timing) to each request leased from this shared, persistent origin connection.
+    /// </summary>
+    internal TcpServerConnection ServerConnection => connection;
+
+    /// <summary>
     ///     Establishes a new origin h2 connection over an already TLS/ALPN=h2-negotiated <see cref="TcpServerConnection" />:
     ///     writes the client connection preface and this proxy's own SETTINGS (advertising
     ///     <c>SETTINGS_ENABLE_PUSH=0</c>, since this bridge never generates or forwards server push), starts the

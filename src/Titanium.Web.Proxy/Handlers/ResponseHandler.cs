@@ -30,7 +30,7 @@ public partial class ProxyServer
         // interim response" (the proxy itself already consumed/acted on it, if at all, while sending the
         // request body in HttpWebClient.SendRequest). Any other 1xx (e.g. 103 Early Hints) has no dedicated
         // event yet, so it is relayed to the client verbatim - interim responses never carry a body
-        // (RFC 9110 §15.2) - and the proxy loops back onto the same connection for the next message.
+        // (RFC 9110 ï¿½15.2) - and the proxy loops back onto the same connection for the next message.
         // 101 Switching Protocols is excluded: it *is* the final message of this exchange (the connection
         // becomes a raw tunnel immediately afterwards), so it must fall through to the normal
         // response-handling path below instead of looping. Interim responses are not exposed through
@@ -45,7 +45,7 @@ public partial class ProxyServer
             await args.HttpClient.ReceiveResponse(cancellationToken);
         }
 
-        args.TimeLine["Response Received"] = DateTime.UtcNow;
+        args.Timing?.MarkResponseHeadersReceived();
 
         var response = args.HttpClient.Response;
         args.ReRequest = false;
@@ -164,8 +164,6 @@ public partial class ProxyServer
 
             response.IsBodyReceived = true;
         }
-
-        args.TimeLine["Response Sent"] = DateTime.UtcNow;
     }
 
     /// <summary>
@@ -189,13 +187,21 @@ public partial class ProxyServer
     }
 
     /// <summary>
-    ///     Invoke after response if it is set.
+    ///     Invoke after response if it is set. This is the single chokepoint every protocol path (HTTP/1.1,
+    ///     native HTTP/2, and both HTTP-version-translation bridges) funnels through exactly once per
+    ///     session - on the success path, on an early return (e.g. a denied/synthetic response), and on an
+    ///     unhandled exception alike - so it doubles as the one place that finalizes
+    ///     <see cref="SessionEventArgsBase.Timing" /> for every session, regardless of how it ended.
     /// </summary>
     /// <param name="args"></param>
     /// <returns></returns>
     private async Task OnAfterResponse(SessionEventArgs args)
     {
         if (AfterResponse != null) await AfterResponse.InvokeAsync(this, args, logger);
+
+        // Marked after the user event (rather than before) so that TotalDuration/ResponseDeliveryDuration
+        // include any time spent in an AfterResponse handler, matching what a caller actually experienced.
+        args.Timing?.MarkComplete();
     }
     internal bool ShouldCallBeforeResponseBodyWrite()
     {

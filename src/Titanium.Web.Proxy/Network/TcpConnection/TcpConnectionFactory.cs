@@ -14,6 +14,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -445,6 +446,11 @@ internal class TcpConnectionFactory : IDisposable
         var retry = true;
         var enabledSslProtocols = sslProtocol;
 
+        // Populated once (if enabled) and shared across a TLS-downgrade retry (see the `goto retry;` below,
+        // which re-runs DNS/TCP-connect from scratch): every Mark* call just overwrites with the current
+        // instant, so the final values always reflect the attempt that actually succeeded.
+        var timing = proxyServer.EnableRequestTimingCapture ? new UpstreamConnectionTiming(DateTime.UtcNow) : null;
+
         retry:
         try
         {
@@ -466,7 +472,7 @@ internal class TcpConnectionFactory : IDisposable
                 throw new Exception($"Could not resolve the hostname {hostname}");
             }
 
-            if (sessionArgs != null) sessionArgs.TimeLine["Dns Resolved"] = DateTime.UtcNow;
+            timing?.MarkDnsResolved();
 
             Array.Sort(ipAddresses, (x, y) => x.AddressFamily.CompareTo(y.AddressFamily));
 
@@ -581,6 +587,7 @@ internal class TcpConnectionFactory : IDisposable
                     lastException = e;
                     tcpServerSocket?.Dispose();
                     tcpServerSocket = null;
+                    if (timing != null) timing.FailedAddressAttempts++;
                 }
 
             if (tcpServerSocket == null)
@@ -591,7 +598,6 @@ internal class TcpConnectionFactory : IDisposable
                     if (newUpstreamProxy != null)
                     {
                         sessionArgs.CustomUpStreamProxyUsed = newUpstreamProxy;
-                        sessionArgs.TimeLine["Retrying Upstream Proxy Connection"] = DateTime.UtcNow;
 
                         // retry with the NEW proxy: resolve its effective form (bypass rules) and
                         // recompute the cache key so the retried connection is created via, and cached
@@ -611,7 +617,7 @@ internal class TcpConnectionFactory : IDisposable
                 throw new Exception($"Could not establish connection to {hostname}", lastException);
             }
 
-            if (sessionArgs != null) sessionArgs.TimeLine["Connection Established"] = DateTime.UtcNow;
+            timing?.MarkTcpConnected();
 
             await proxyServer.InvokeServerConnectionCreateEvent(tcpServerSocket);
 
@@ -684,6 +690,8 @@ internal class TcpConnectionFactory : IDisposable
                         KnownHeaders.ConnectionKeepAlive.String);
                     authenticationAttempts++;
                 }
+
+                timing?.MarkUpstreamProxyConnected();
             }
 
             if (isHttps)
@@ -720,7 +728,7 @@ internal class TcpConnectionFactory : IDisposable
 #endif
                 ProxyLog.OriginHandshakeSucceeded(proxyServer.Logger, remoteHostName, remotePort, negotiatedApplicationProtocol);
 
-                if (sessionArgs != null) sessionArgs.TimeLine["HTTPS Established"] = DateTime.UtcNow;
+                timing?.MarkTlsHandshakeCompleted();
             }
         }
 #pragma warning disable SYSLIB0039 // TLS 1.0/1.1 are intentionally retained for legacy upstream compatibility fallback.
@@ -763,11 +771,14 @@ internal class TcpConnectionFactory : IDisposable
             throw;
         }
 
+        timing?.MarkEstablished();
+
         return new TcpServerConnection(proxyServer, tcpServerSocket, stream, remoteHostName, remotePort, isHttps,
             negotiatedApplicationProtocol, httpVersion, externalProxy, upStreamEndPoint, cacheKey)
         {
             IsWinAuthenticated = upstreamProxyWinAuthenticated,
-            UsedClientCertificate = usedClientCertificate
+            UsedClientCertificate = usedClientCertificate,
+            Timing = timing
         };
     }
 

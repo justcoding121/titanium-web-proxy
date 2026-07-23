@@ -190,7 +190,8 @@ public partial class ProxyServer
             connection = newConnection;
 
             sessionArgs.HttpClient.SetConnection(newConnection);
-            sessionArgs.TimeLine["Connection Ready"] = DateTime.UtcNow;
+            if (sessionArgs.Timing != null)
+                sessionArgs.Timing.MarkConnectionReady(newConnection.Id, !newConnection.ClaimFirstUse());
 
             // Matches HandleHttpSessionRequest's HTTP/1.1 send sequence: compute the (possibly re-compressed)
             // body and its Content-Length *before* SendRequest writes the request line/headers, then stream
@@ -205,10 +206,10 @@ public partial class ProxyServer
                 await connection.Stream.WriteBodyAsync(body ?? Array.Empty<byte>(), request.IsChunked,
                     request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
 
-            sessionArgs.TimeLine["Request Sent"] = DateTime.UtcNow;
+            sessionArgs.Timing?.MarkRequestSent();
 
             await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
-            sessionArgs.TimeLine["Response Received"] = DateTime.UtcNow;
+            sessionArgs.Timing?.MarkResponseHeadersReceived();
 
             sessionArgs.HttpClient.Response.SetOriginalHeaders();
 

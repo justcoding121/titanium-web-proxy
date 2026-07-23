@@ -4,6 +4,7 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
@@ -17,6 +18,8 @@ internal class TcpServerConnection : IDisposable
     private bool disposed;
 
     private int disposalScheduled;
+
+    private int firstUseClaimed;
 
     internal TcpServerConnection(ProxyServer proxyServer, Socket tcpSocket, HttpServerStream stream,
         string hostName, int port, bool isHttps, SslApplicationProtocol negotiatedApplicationProtocol,
@@ -39,6 +42,16 @@ internal class TcpServerConnection : IDisposable
     }
 
     public Guid Id { get; } = Guid.NewGuid();
+
+    /// <summary>
+    ///     Structured establishment timing for this connection (DNS/TCP/upstream-proxy/TLS), populated only
+    ///     when <see cref="ProxyServer.EnableRequestTimingCapture" /> was enabled at the moment this
+    ///     connection was created. Set once by <see cref="Tcp.TcpConnectionFactory" /> right after
+    ///     construction and never mutated afterwards; shared by every session that later reuses this
+    ///     connection from the pool. Exposed publicly via
+    ///     <see cref="EventArguments.SessionEventArgsBase.UpstreamConnectionTiming" />.
+    /// </summary>
+    internal UpstreamConnectionTiming? Timing { get; set; }
 
     private ProxyServer ProxyServer { get; }
 
@@ -109,6 +122,20 @@ internal class TcpServerConnection : IDisposable
     internal bool TryScheduleDisposal()
     {
         return Interlocked.CompareExchange(ref disposalScheduled, 1, 0) == 0;
+    }
+
+    /// <summary>
+    ///     Claims this connection for use by a session, for <see cref="ProxyServer.EnableRequestTimingCapture" />'s
+    ///     "was the upstream connection reused" bookkeeping. Returns <see langword="true" /> only the very
+    ///     first time it is called for this connection's entire lifetime (i.e. the caller is establishing it
+    ///     fresh); every subsequent call returns <see langword="false" /> (i.e. the caller is reusing an
+    ///     already-claimed connection - whether pooled-and-reacquired, retried, or a multiplexed HTTP/2
+    ///     stream sharing a connection another stream already claimed). Cheap and side-effect-free to call
+    ///     even when timing capture is disabled.
+    /// </summary>
+    internal bool ClaimFirstUse()
+    {
+        return Interlocked.CompareExchange(ref firstUseClaimed, 1, 0) == 0;
     }
 
     public void Dispose()
