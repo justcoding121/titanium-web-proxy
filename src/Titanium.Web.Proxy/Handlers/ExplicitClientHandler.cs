@@ -139,7 +139,11 @@ public partial class ProxyServer
                         if (alpn != null && alpn.Contains(SslApplicationProtocol.Http2))
                         {
                             var connectTarget = requestLine.RequestUri.GetString();
-                            if (!Http2OriginCapabilityCache.TryGet(connectTarget, out http2Supported))
+                            if (Http2OriginCapabilityCache.TryGet(connectTarget, out http2Supported))
+                            {
+                                HandshakeDebugLog.Http2ProbeResult(connectTarget, true, http2Supported, null);
+                            }
+                            else
                                 // test server HTTP/2 support
                                 try
                                 {
@@ -158,12 +162,14 @@ public partial class ProxyServer
                                     }
 
                                     Http2OriginCapabilityCache.Set(connectTarget, http2Supported);
+                                    HandshakeDebugLog.Http2ProbeResult(connectTarget, false, http2Supported, null);
                                 }
-                                catch (Exception)
+                                catch (Exception ex)
                                 {
                                     // Do not cache a failed probe: it may be a transient network/cert issue rather
                                     // than a genuine lack of HTTP/2 support, and caching "false" here would pin
                                     // every subsequent tunnel to this host to HTTP/1.1 for the full TTL.
+                                    HandshakeDebugLog.Http2ProbeResult(connectTarget, false, false, ex);
                                 }
                         }
                     }
@@ -203,7 +209,12 @@ public partial class ProxyServer
                         options.ClientCertificateRequired = false;
                         options.EnabledSslProtocols = SupportedSslProtocols;
                         options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;
+
+                        HandshakeDebugLog.BrowserHandshakeStarting(connectHostname, options.EnabledSslProtocols,
+                            options.ApplicationProtocols);
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
+                        HandshakeDebugLog.BrowserHandshakeSucceeded(connectHostname,
+                            sslStream.NegotiatedApplicationProtocol);
 
 #if NET6_0_OR_GREATER
                             clientStream.Connection.NegotiatedApplicationProtocol =
@@ -223,6 +234,8 @@ public partial class ProxyServer
                     catch (Exception e)
                     {
                         sslStream?.Dispose();
+
+                        HandshakeDebugLog.BrowserHandshakeFailed(connectHostname, e);
 
                         var certName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
                         throw new ProxyConnectException(

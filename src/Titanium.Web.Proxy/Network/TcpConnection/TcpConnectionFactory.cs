@@ -711,10 +711,13 @@ internal class TcpConnectionFactory : IDisposable
                     EnabledSslProtocols = enabledSslProtocols,
                     CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                 };
+
+                HandshakeDebugLog.OriginHandshakeStarting(remoteHostName, remotePort, applicationProtocols);
                 await sslStream.AuthenticateAsClientAsync(options, cancellationToken);
 #if NET6_0_OR_GREATER
                 negotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
 #endif
+                HandshakeDebugLog.OriginHandshakeSucceeded(remoteHostName, remotePort, negotiatedApplicationProtocol);
 
                 if (sessionArgs != null) sessionArgs.TimeLine["HTTPS Established"] = DateTime.UtcNow;
             }
@@ -751,10 +754,11 @@ internal class TcpConnectionFactory : IDisposable
             goto retry;
         }
 #pragma warning restore SYSLIB0039
-        catch (Exception)
+        catch (Exception ex)
         {
             stream?.Dispose();
             tcpServerSocket?.Close();
+            HandshakeDebugLog.OriginConnectionFailed(remoteHostName, remotePort, ex);
             throw;
         }
 
