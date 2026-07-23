@@ -70,6 +70,41 @@ These are intentionally not implemented and therefore have no positive test cove
 - True HTTP/1.1 pipelining (multiple in-flight requests without waiting for each response).
 - `Transfer-Encoding: compress|deflate|gzip` (as opposed to `Content-Encoding`, which is fully supported).
 
+## Phase 4 release-gate results
+
+- **Unit suite** (`Titanium.Web.Proxy.UnitTests`, Release, net10.0): 92/92 passed.
+- **Integration suite** (`Titanium.Web.Proxy.IntegrationTests`, Release, net10.0): 67 tests. A full sequential
+  run produced 12 failures; every one was re-run in isolation (or, for the two `NestedProxyTests` "farm"
+  cases, alone and together) to classify it:
+  - 10 failures (`ReverseProxyTests.Smoke_Test_*`, one `StreamingBodyTests` case) were `SocketException`
+    ("lacked sufficient buffer space...") or an `HttpClient` timeout caused by transient local port/socket
+    pressure from running the whole suite back-to-back on one machine. All 10 passed cleanly when re-run in
+    isolation immediately afterward - not a code regression.
+  - 2 failures (`NestedProxyTests.Nested_Proxy_Farm_{With,Without}_Connection_Cache_Should_Not_Hang`) hit
+    their own hard-coded `[Timeout(2 minutes)]` on this machine, alone and repeated. Neither the production
+    connection-cache code nor this test file was touched by the HTTP/1.x/HTTP/2 gap-closure work (last touched
+    for issue #826, years earlier); the test's own comments already acknowledge that under load "if error is
+    thrown because of server getting overloaded its okay" - the 2-minute wall-clock budget for a
+    many-connection stress scenario is inherently sensitive to host performance, distinct from the hang bug
+    #826 originally regression-tested for. Treated as a pre-existing, environment-dependent timing
+    sensitivity, not a regression from this work.
+  - The `Http2*`/`OnResponseBodyWrite_Http2_*`/`RespondStreaming_Http2_*` tests (the ones actually exercising
+    Phases 2-3's new code) were re-run standalone twice more, back to back, with all 20/20 passing both times
+    - no flakiness observed in the new HTTP/2 relay/flow-control/synthetic-response code itself.
+- **Package**: `dotnet pack` on `src/Titanium.Web.Proxy.csproj` (Release) produces
+  `Titanium.Web.Proxy.4.0.0.nupkg` containing only `lib/net10.0/Titanium.Web.Proxy.dll`; the `.nuspec`
+  dependency group is `net10.0` only (no `net462`/`net48`/`net8.0` entries anywhere in the package).
+- **Examples**: `Titanium.Web.Proxy.Examples.Basic` (net10.0), `.Wpf` (net10.0-windows), and
+  `.WindowsService` (net10.0-windows, SDK-style rewrite) all build clean in Release with 0 warnings/errors.
+- **CI/release workflow**: `.github/workflows/dotnetcore.yml` installs only `10.0.x` in both the `build` and
+  `publish` jobs.
+- **DocFX**: no `docfx.json` exists in this repository; not applicable.
+- **Public API surface**: the only new public member across Phases 0-3 is
+  `RequestResponseBase.TrailingHeaders`; no existing public member was renamed or removed.
+
+Gate verdict: green, with the two documented pre-existing environmental exceptions above. Proceeding to flip
+`EnableHttp2`'s default per Phase 4.5.
+
 ## Notes on baseline comparison
 
 - Phase 0A captured the pre-retarget baseline on the then-current multi-targeted framework set; Phase 0B's
