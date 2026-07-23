@@ -90,5 +90,13 @@ namespace Titanium.Web.Proxy.UnitTests
             // Assert
             Assert.AreEqual(2, proxy.ProxyEndPoints.Count);
         }
+
+        [TestMethod]
+        public void EnableHttp2_DefaultsToTrue_AfterFullHttp2QualificationPass()
+        {
+            var proxy = new ProxyServer();
+
+            Assert.IsTrue(proxy.EnableHttp2);
+        }
     }
 }
