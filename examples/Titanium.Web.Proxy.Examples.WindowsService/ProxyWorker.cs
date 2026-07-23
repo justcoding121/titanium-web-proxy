@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Examples.WindowsService;
@@ -18,12 +17,14 @@ internal sealed class ProxyWorker : BackgroundService
 {
     private readonly ProxySettings settings;
     private readonly ILogger<ProxyWorker> logger;
+    private readonly ILoggerFactory loggerFactory;
     private ProxyServer? proxyServer;
 
-    public ProxyWorker(IOptions<ProxySettings> settings, ILogger<ProxyWorker> logger)
+    public ProxyWorker(IOptions<ProxySettings> settings, ILogger<ProxyWorker> logger, ILoggerFactory loggerFactory)
     {
         this.settings = settings.Value;
         this.logger = logger;
+        this.loggerFactory = loggerFactory;
     }
 
     public override Task StartAsync(CancellationToken cancellationToken)
@@ -68,8 +69,10 @@ internal sealed class ProxyWorker : BackgroundService
             proxyServer.AddEndPoint(explicitEndPointV6);
         }
 
-        if (settings.LogErrors)
-            proxyServer.ExceptionFunc = OnProxyException;
+        // Bridge the proxy's diagnostic logging into the host's own ILoggerFactory (e.g. configured via
+        // appsettings.json's Logging.LogLevel.Default), rather than using the built-in Console/File sinks.
+        proxyServer.Logging.Enabled = settings.LogErrors;
+        proxyServer.Logging.LoggerFactory = loggerFactory;
 
         proxyServer.Start();
 
@@ -99,15 +102,5 @@ internal sealed class ProxyWorker : BackgroundService
         proxyServer = null;
 
         return base.StopAsync(cancellationToken);
-    }
-
-    private void OnProxyException(Exception exception)
-    {
-        if (exception is ProxyHttpException pEx)
-            logger.LogError(exception,
-                "Unhandled Proxy Exception in ProxyServer, UserData = {UserData}, URL = {Url}",
-                pEx.Session?.UserData, pEx.Session?.HttpClient.Request.RequestUri);
-        else
-            logger.LogError(exception, "Unhandled Exception in ProxyServer");
     }
 }

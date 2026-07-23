@@ -473,8 +473,9 @@ public class Http2CharacterizationTests
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
-        var exceptionsSeen = new ConcurrentBag<Exception>();
-        proxy.ExceptionFunc = ex => exceptionsSeen.Add(ex);
+        var exceptionCapture = new TestExceptionCapture();
+        proxy.Logging.LoggerFactory = exceptionCapture;
+        proxy.ApplyLoggingConfiguration();
         proxy.BeforeRequest += (_, _) => throw new InvalidOperationException("intentional test failure");
 
         using var client = TestHelper.GetHttp2Client(proxy);
@@ -493,6 +494,7 @@ public class Http2CharacterizationTests
 
         var secondResponse = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
         Assert.AreEqual(HttpStatusCode.OK, secondResponse.StatusCode);
-        Assert.IsTrue(exceptionsSeen.Count >= 1, "The BeforeRequest exception should have been reported via ExceptionFunc.");
+        Assert.IsTrue(exceptionCapture.Exceptions.Count >= 1,
+            "The BeforeRequest exception should have been reported via the logging gateway.");
     }
 }

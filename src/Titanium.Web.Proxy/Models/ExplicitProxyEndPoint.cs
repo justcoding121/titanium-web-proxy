@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Net;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 
@@ -43,19 +44,19 @@ public class ExplicitProxyEndPoint : ProxyEndPoint
     public event AsyncEventHandler<TunnelConnectSessionEventArgs>? BeforeTunnelConnectResponse;
 
     internal async Task InvokeBeforeTunnelConnectRequest(ProxyServer proxyServer,
-        TunnelConnectSessionEventArgs connectArgs, ExceptionHandler? exceptionFunc)
+        TunnelConnectSessionEventArgs connectArgs, ILogger logger)
     {
         if (BeforeTunnelConnectRequest != null)
-            await BeforeTunnelConnectRequest.InvokeAsync(proxyServer, connectArgs, exceptionFunc);
+            await BeforeTunnelConnectRequest.InvokeAsync(proxyServer, connectArgs, logger);
     }
 
     internal async Task InvokeBeforeTunnelConnectResponse(ProxyServer proxyServer,
-        TunnelConnectSessionEventArgs connectArgs, ExceptionHandler? exceptionFunc, bool isClientHello = false)
+        TunnelConnectSessionEventArgs connectArgs, ILogger logger, bool isClientHello = false)
     {
         if (BeforeTunnelConnectResponse != null)
         {
             connectArgs.IsHttpsConnect = isClientHello;
-            await BeforeTunnelConnectResponse.InvokeAsync(proxyServer, connectArgs, exceptionFunc);
+            await BeforeTunnelConnectResponse.InvokeAsync(proxyServer, connectArgs, logger);
         }
     }
 }

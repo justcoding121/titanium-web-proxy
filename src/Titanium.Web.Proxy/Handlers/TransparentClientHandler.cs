@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -61,7 +61,7 @@ public partial class ProxyServer
                 if (endPoint.ForwardPort is int forwardPort)
                     args.ForwardHttpsPort = forwardPort;
 
-                await endPoint.InvokeBeforeSslAuthenticate(this, args, ExceptionFunc);
+                await endPoint.InvokeBeforeSslAuthenticate(this, args, logger);
 
                 if (cancellationTokenSource.IsCancellationRequested)
                     throw new Exception("Session was terminated by user.");
@@ -294,7 +294,7 @@ public partial class ProxyServer
                                         async (sessionArgs, ctx) => { await OnBeforeResponse(sessionArgs); },
                                         async sessionArgs => { await OnAfterResponse(sessionArgs); },
                                         headers => PrepareRequestHeaders(headers),
-                                        cancellationTokenSource, clientStream.Connection.Id, ExceptionFunc);
+                                        cancellationTokenSource, clientStream.Connection.Id, logger);
 #endif
                                 }
                                 finally
@@ -351,7 +351,7 @@ public partial class ProxyServer
 
                         if (!clientStream.IsClosed && !connection.Stream.IsClosed)
                             await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool,
-                                null, null, cancellationTokenSource, ExceptionFunc);
+                                null, null, cancellationTokenSource, logger);
                     }
                     finally
                     {

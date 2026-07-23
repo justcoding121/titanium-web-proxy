@@ -10,6 +10,7 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 
@@ -245,7 +246,7 @@ public partial class ProxyServer
         seedConnection ??= await EstablishHttp2OriginTcpConnectionAsync(args, remoteHostName, remotePort,
             connectHost, connectPort, cancellationToken);
 
-        return await Http2OriginConnection.CreateAsync(seedConnection, ExceptionFunc, cancellationToken);
+        return await Http2OriginConnection.CreateAsync(seedConnection, logger, cancellationToken);
     }
 
     /// <summary>
@@ -332,8 +333,8 @@ public partial class ProxyServer
         {
             if (!cancellationToken.IsCancellationRequested)
             {
-                ExceptionFunc?.Invoke(new ProxyHttpException(
-                    "HTTP/1.1-to-HTTP/2 bridge origin exchange failed", ex, args));
+                ProxyDiagnostics.ReportUnexpected(logger, "HTTP/1.1-to-HTTP/2 bridge origin exchange failed",
+                    new ProxyHttpException("HTTP/1.1-to-HTTP/2 bridge origin exchange failed", ex, args));
             }
 
             if (!args.HttpClient.Response.Locked)

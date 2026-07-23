@@ -33,13 +33,11 @@ internal class BcCertificateMakerFast : ICertificateMaker
     // Set this flag to true when exception detected to avoid further exceptions
     private static bool _doNotSetFriendlyName;
 
-    private readonly ExceptionHandler? exceptionFunc;
     private readonly int certificateValidDays;
 
-    internal BcCertificateMakerFast(ExceptionHandler? exceptionFunc, int certificateValidDays)
+    internal BcCertificateMakerFast(int certificateValidDays)
     {
         this.certificateValidDays = certificateValidDays;
-        this.exceptionFunc = exceptionFunc;
         KeyPair = GenerateKeyPair();
     }
 

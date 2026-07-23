@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Security;
@@ -371,7 +371,7 @@ public partial class ProxyServer
     {
         args.TimeLine["Request Received"] = DateTime.UtcNow;
 
-        if (BeforeRequest != null) await BeforeRequest.InvokeAsync(this, args, ExceptionFunc);
+        if (BeforeRequest != null) await BeforeRequest.InvokeAsync(this, args, logger);
     }
 
     /// <summary>
@@ -382,7 +382,7 @@ public partial class ProxyServer
     internal async Task OnBeforeUpStreamConnectRequest(ConnectRequest request)
     {
         if (BeforeUpStreamConnectRequest != null)
-            await BeforeUpStreamConnectRequest.InvokeAsync(this, request, ExceptionFunc);
+            await BeforeUpStreamConnectRequest.InvokeAsync(this, request, logger);
     }
 
     internal bool ShouldCallBeforeRequestBodyWrite()
@@ -394,7 +394,7 @@ public partial class ProxyServer
     {
         if (OnRequestBodyWrite != null)
         {
-            await OnRequestBodyWrite.InvokeAsync(this, args, ExceptionFunc);
+            await OnRequestBodyWrite.InvokeAsync(this, args, logger);
         }
     }
 }

@@ -85,9 +85,7 @@ internal class CopyStream : ILineStream, IDisposable
 
     ~CopyStream()
     {
-#if DEBUG
-        Helpers.FinalizerGuard.ReportUndisposedFinalizer(nameof(CopyStream));
-#endif
+        Logging.ProxyDiagnostics.ReportUndisposedFinalizer(null, nameof(CopyStream));
 
         Dispose(false);
     }

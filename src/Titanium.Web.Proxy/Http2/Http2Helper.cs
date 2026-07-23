@@ -1,4 +1,4 @@
-﻿#if NET6_0_OR_GREATER
+#if NET6_0_OR_GREATER
 using System;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
@@ -9,12 +9,14 @@ using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
 using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
@@ -35,6 +37,16 @@ namespace Titanium.Web.Proxy.Http2
         private const int MaxAcceptableFrameSize = 16384;
 
         /// <summary>
+        ///     Reports an HTTP/2 protocol/relay failure through the centralized logging gateway. Every
+        ///     <c>ProxyHttpException</c> raised anywhere in this class goes through here (the previous
+        ///     behavior invoked <c>ExceptionFunc</c> directly at each of the ~30 call sites below).
+        /// </summary>
+        private static void ReportException(ILogger logger, ProxyHttpException ex)
+        {
+            ProxyDiagnostics.ReportUnexpected(logger, ex.Message, ex);
+        }
+
+        /// <summary>
         ///     relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers
         ///     as prefix
         ///     Useful for websocket requests
@@ -47,7 +59,7 @@ namespace Titanium.Web.Proxy.Http2
             Func<SessionEventArgs, Http2StreamContext, Task> onBeforeResponse,
             Func<SessionEventArgs, Task> onAfterResponse, Action<HeaderCollection> prepareRequestHeaders,
             CancellationTokenSource cancellationTokenSource, Guid connectionId,
-            ExceptionHandler? exceptionFunc)
+            ILogger logger)
         {
             var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource);
 
@@ -55,11 +67,11 @@ namespace Titanium.Web.Proxy.Http2
             var sendRelay =
                 CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
                     sessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
-                    cancellationTokenSource.Token, exceptionFunc);
+                    cancellationTokenSource.Token, logger);
             var receiveRelay =
                 CopyHttp2FrameAsync(serverStream, clientStream, connectionState,
                     sessionFactory, onBeforeResponse, onAfterResponse, null, false, cancellationTokenSource.Token,
-                    exceptionFunc);
+                    logger);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             cancellationTokenSource.Cancel();
@@ -74,7 +86,7 @@ namespace Titanium.Web.Proxy.Http2
             foreach (var leftover in connectionState.Streams.Values)
             {
                 connectionState.PendingFinalizations.Add(
-                    FinalizeStreamAsync(leftover, onAfterResponse, exceptionFunc));
+                    FinalizeStreamAsync(leftover, onAfterResponse, logger));
             }
 
             if (!connectionState.PendingFinalizations.IsEmpty)
@@ -91,7 +103,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     never run it twice or race Dispose against a still-running AfterResponse.
         /// </summary>
         internal static async Task FinalizeStreamAsync(Http2StreamState state,
-            Func<SessionEventArgs, Task> onAfterResponse, ExceptionHandler? exceptionFunc)
+            Func<SessionEventArgs, Task> onAfterResponse, ILogger logger)
         {
             if (Interlocked.CompareExchange(ref state.FinalizedFlag, 1, 0) != 0)
             {
@@ -104,7 +116,7 @@ namespace Titanium.Web.Proxy.Http2
             }
             catch (Exception ex)
             {
-                exceptionFunc?.Invoke(new ProxyHttpException("HTTP/2 AfterResponse handler failed", ex,
+                ReportException(logger, new ProxyHttpException("HTTP/2 AfterResponse handler failed", ex,
                     state.SessionArgs));
             }
             finally
@@ -132,7 +144,7 @@ namespace Titanium.Web.Proxy.Http2
             Action<HeaderCollection>? prepareRequestHeaders,
             bool isClient,
             CancellationToken cancellationToken,
-            ExceptionHandler? exceptionFunc)
+            ILogger logger)
         {
             var connectionId = connectionState.ConnectionId;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
@@ -247,15 +259,15 @@ namespace Titanium.Web.Proxy.Http2
                     connectionState.ClientSendFlow.RemoveStream(removeStreamId);
                     connectionState.ServerSendFlow.RemoveStream(removeStreamId);
                     connectionState.PendingFinalizations.Add(
-                        FinalizeStreamAsync(removedState, onAfterResponse, exceptionFunc));
+                        FinalizeStreamAsync(removedState, onAfterResponse, logger));
                 }
             }
 
             // Decodes one fully-assembled HEADERS(+CONTINUATION...) block (already stripped of padding/
             // priority bytes) and dispatches it. A HEADERS block on an already-established request/response
             // (one that already carries pseudo-headers) is the *main* message; a further block without
-            // request/status pseudo-headers is trailers (RFC 7230 §4.1.2 / RFC 7540 §8.1.2.1); a response
-            // block whose :status is 1xx is an interim informational response (RFC 9110 §15.2) and is
+            // request/status pseudo-headers is trailers (RFC 7230 ?4.1.2 / RFC 7540 ?8.1.2.1); a response
+            // block whose :status is 1xx is an interim informational response (RFC 9110 ?15.2) and is
             // relayed without invoking BeforeRequest/BeforeResponse and without ever touching/locking the
             // final Request/Response. Returns true if this block was an interim (1xx) response, so the
             // caller does not treat a (spec-invalid, but let's be defensive) END_STREAM flag on it as ending
@@ -293,7 +305,7 @@ namespace Titanium.Web.Proxy.Http2
                 }
                 catch (Exception ex)
                 {
-                    // RFC 7541 §7: "A decoding error in a header block MUST be treated as a connection
+                    // RFC 7541 ?7: "A decoding error in a header block MUST be treated as a connection
                     // error of type COMPRESSION_ERROR." The dynamic table is connection-scoped, so once a
                     // block fails to decode this decoder's state can no longer be trusted to stay in sync
                     // with the peer's encoder for any later stream either - swallowing this and continuing
@@ -301,7 +313,7 @@ namespace Titanium.Web.Proxy.Http2
                     // one silently dropped with no reply, hanging every affected stream. Tear the whole
                     // connection down instead so both sides observe a clean failure and can retry on a new
                     // connection.
-                    exceptionFunc?.Invoke(new ProxyHttpException("Failed to decode HTTP/2 headers", ex, sessionArgs));
+                    ReportException(logger, new ProxyHttpException("Failed to decode HTTP/2 headers", ex, sessionArgs));
                     await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
                         Http2ErrorCode.CompressionError, input));
                     throw;
@@ -309,11 +321,11 @@ namespace Titanium.Web.Proxy.Http2
 
                 if (headerListener.HasMalformedHeader)
                 {
-                    // RFC 7540 §8.1.2/§8.1.2.1: unknown pseudo-header fields, uppercase field names, and
+                    // RFC 7540 ?8.1.2/?8.1.2.1: unknown pseudo-header fields, uppercase field names, and
                     // (checked just below) connection-specific header fields are malformed - a stream-level
                     // PROTOCOL_ERROR that must not tear down the rest of the connection, whose HPACK decoder
                     // state has already been kept in sync by the decode above.
-                    exceptionFunc?.Invoke(new ProxyHttpException(
+                    ReportException(logger, new ProxyHttpException(
                         "HTTP/2 protocol error: " + headerListener.MalformedReason, null, sessionArgs));
                     await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
                         Http2ErrorCode.ProtocolError, input));
@@ -324,7 +336,7 @@ namespace Titanium.Web.Proxy.Http2
                 {
                     if (ForbiddenConnectionSpecificHeaders.Contains(header.Name))
                     {
-                        exceptionFunc?.Invoke(new ProxyHttpException(
+                        ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: connection-specific header field '" + header.Name +
                             "' is forbidden.", null, sessionArgs));
                         await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
@@ -341,7 +353,7 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (isMainHeaders)
                     {
-                        // RFC 7540 §5.1.1: client-initiated stream ids must be odd and strictly increasing
+                        // RFC 7540 ?5.1.1: client-initiated stream ids must be odd and strictly increasing
                         // on a given connection. An even id (reserved for server-initiated streams, which
                         // this proxy never admits - see the PUSH_PROMISE rejection in the main frame loop)
                         // or an id that does not exceed one already seen (reuse, or the client's own
@@ -350,7 +362,7 @@ namespace Titanium.Web.Proxy.Http2
                         // already torn down.
                         if (hbStreamId % 2 == 0 || hbStreamId <= connectionState.LastClientStreamId)
                         {
-                            exceptionFunc?.Invoke(new ProxyHttpException(
+                            ReportException(logger, new ProxyHttpException(
                                 $"HTTP/2 protocol error: invalid client-initiated stream id {hbStreamId}.", null,
                                 sessionArgs));
                             RemoveAndFinalizeStream(hbStreamId);
@@ -380,8 +392,8 @@ namespace Titanium.Web.Proxy.Http2
                         // decoding, so HPACK state stays in sync regardless of admission) - so ">" (not
                         // ">=") here correctly means "admitting this one would exceed the limit the server
                         // (this stream's ultimate destination) advertised it will tolerate concurrently"
-                        // (RFC 7540 §6.5.2 SETTINGS_MAX_CONCURRENT_STREAMS).
-                        exceptionFunc?.Invoke(new ProxyHttpException(
+                        // (RFC 7540 ?6.5.2 SETTINGS_MAX_CONCURRENT_STREAMS).
+                        ReportException(logger, new ProxyHttpException(
                             "HTTP/2 stream refused: maximum concurrent streams exceeded.", null, sessionArgs));
                         RemoveAndFinalizeStream(hbStreamId);
                         await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
@@ -394,7 +406,7 @@ namespace Titanium.Web.Proxy.Http2
                         // request trailers - never valid before any main request headers were seen.
                         if (headerRr.HttpVersion < HttpHeader.Version20)
                         {
-                            exceptionFunc?.Invoke(new ProxyHttpException(
+                            ReportException(logger, new ProxyHttpException(
                                 "HTTP/2 protocol error: trailer HEADERS received before request headers.", null,
                                 sessionArgs));
                             return false;
@@ -466,7 +478,7 @@ namespace Titanium.Web.Proxy.Http2
                                 {
                                     if (t.IsFaulted)
                                     {
-                                        exceptionFunc?.Invoke(new ProxyHttpException(
+                                        ReportException(logger, new ProxyHttpException(
                                             "HTTP/2 synthetic response failed", t.Exception!.GetBaseException(),
                                             sessionArgs));
                                     }
@@ -570,7 +582,7 @@ namespace Titanium.Web.Proxy.Http2
                                     {
                                         if (t.IsFaulted)
                                         {
-                                            exceptionFunc?.Invoke(new ProxyHttpException(
+                                            ReportException(logger, new ProxyHttpException(
                                                 "HTTP/2 synthetic response failed", t.Exception!.GetBaseException(),
                                                 sessionArgs));
                                         }
@@ -614,7 +626,7 @@ namespace Titanium.Web.Proxy.Http2
                     // response trailers - never valid before any final response headers were seen.
                     if (headerRr.HttpVersion < HttpHeader.Version20)
                     {
-                        exceptionFunc?.Invoke(new ProxyHttpException(
+                        ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: trailer HEADERS received before response headers.", null,
                             sessionArgs));
                         return false;
@@ -634,7 +646,7 @@ namespace Titanium.Web.Proxy.Http2
             byte[] buffer = new byte[MaxAcceptableFrameSize];
 
             // Metadata for a HEADERS/PUSH_PROMISE block that has not yet been terminated by END_HEADERS and
-            // is being assembled from subsequent CONTINUATION frames (RFC 7540 §6.10). Only one such block
+            // is being assembled from subsequent CONTINUATION frames (RFC 7540 ?6.10). Only one such block
             // may be in flight per connection direction at a time - a HEADERS/PUSH_PROMISE frame arriving
             // while another block is still open, or a CONTINUATION frame for a different stream, is a
             // connection-level PROTOCOL_ERROR.
@@ -645,7 +657,7 @@ namespace Titanium.Web.Proxy.Http2
             bool pendingHeaderEndStream = false;
             bool pendingHeaderIsPromise = false;
 
-            // RFC 7540 §3.5: "each endpoint is required to send a connection preface... this sequence MUST
+            // RFC 7540 ?3.5: "each endpoint is required to send a connection preface... this sequence MUST
             // be followed by a SETTINGS frame". The connection preface itself (the literal
             // "PRI * HTTP/2.0..." bytes) is already validated before this relay starts (see the explicit
             // handler's preface check); this tracks the second half of that requirement, that the first
@@ -699,7 +711,7 @@ namespace Titanium.Web.Proxy.Http2
                     isFirstFrame = false;
                     if (type != Http2FrameType.Settings)
                     {
-                        exceptionFunc?.Invoke(new ProxyHttpException(
+                        ReportException(logger, new ProxyHttpException(
                             $"HTTP/2 protocol error: expected a SETTINGS frame immediately after the connection preface, got {type}.",
                             null, null));
                         await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], 0,
@@ -710,10 +722,10 @@ namespace Titanium.Web.Proxy.Http2
 
                 if (length > MaxAcceptableFrameSize)
                 {
-                    // RFC 7540 §4.2: a frame larger than what we (implicitly, by never advertising anything
+                    // RFC 7540 ?4.2: a frame larger than what we (implicitly, by never advertising anything
                     // else) declared we would accept is a connection-level FRAME_SIZE_ERROR. Reject before
                     // attempting to buffer/read the (potentially huge, up to 2^24-1 byte) payload.
-                    exceptionFunc?.Invoke(new ProxyHttpException(
+                    ReportException(logger, new ProxyHttpException(
                         $"HTTP/2 protocol error: frame of type {type} exceeded the maximum accepted frame size.",
                         null, null));
                     await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
@@ -729,9 +741,9 @@ namespace Titanium.Web.Proxy.Http2
                 if ((type == Http2FrameType.Data || type == Http2FrameType.Headers ||
                      type == Http2FrameType.RstStream || type == Http2FrameType.Priority) && streamId == 0)
                 {
-                    // RFC 7540 §5.1.1 / relevant frame definitions: these frame types are always
+                    // RFC 7540 ?5.1.1 / relevant frame definitions: these frame types are always
                     // stream-specific; stream id 0 on any of them is a connection-level PROTOCOL_ERROR.
-                    exceptionFunc?.Invoke(new ProxyHttpException(
+                    ReportException(logger, new ProxyHttpException(
                         $"HTTP/2 protocol error: frame of type {type} received with stream id 0.", null, null));
                     await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], 0,
                         Http2ErrorCode.ProtocolError, input));
@@ -750,13 +762,13 @@ namespace Titanium.Web.Proxy.Http2
                     // This proxy always advertises SETTINGS_ENABLE_PUSH=0 toward the server (see the
                     // SETTINGS handling below), so a PUSH_PROMISE is never valid in either direction: from
                     // the client it is always meaningless (clients don't push), and from the server it is a
-                    // direct violation of the value we declared (RFC 7540 §6.6: "PUSH_PROMISE MUST NOT be
+                    // direct violation of the value we declared (RFC 7540 ?6.6: "PUSH_PROMISE MUST NOT be
                     // sent if SETTINGS_ENABLE_PUSH... is 0"). Reject as a connection-level PROTOCOL_ERROR
                     // rather than attempting to decode/relay it: this relay's decoder for this direction
                     // never observes the encode event a forwarded-but-undecoded push header block would
                     // represent, which would otherwise permanently desync HPACK for every later header
                     // block from the same peer. Tearing down the whole connection avoids that risk entirely.
-                    exceptionFunc?.Invoke(new ProxyHttpException(
+                    ReportException(logger, new ProxyHttpException(
                         $"HTTP/2 protocol error: unexpected PUSH_PROMISE frame from the {(isClient ? "client" : "server")}.",
                         null, null));
                     await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
@@ -777,7 +789,6 @@ namespace Titanium.Web.Proxy.Http2
                     }
                 }
 
-                //System.Diagnostics.Debug.WriteLine("CONN: " + connectionId + ", CLIENT: " + isClient + ", STREAM: " + streamId + ", TYPE: " + type);
                 // HEADERS/CONTINUATION must always be decoded - even for a stream already answered
                 // synthetically - because HPACK's dynamic table is connection-scoped: skipping the decode
                 // of any header block silently desyncs this connection's decoder from the peer's encoder
@@ -821,10 +832,10 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (pendingHeaderBlock != null)
                     {
-                        // RFC 7540 §6.10: only a CONTINUATION frame for the same stream may follow a
+                        // RFC 7540 ?6.10: only a CONTINUATION frame for the same stream may follow a
                         // HEADERS frame sent without END_HEADERS. Anything else while a block is still
                         // open (including a new HEADERS frame) is a connection-level PROTOCOL_ERROR.
-                        exceptionFunc?.Invoke(new ProxyHttpException(
+                        ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: HEADERS frame received while a previous header block on this connection was still open.",
                             null, args));
                         await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
@@ -866,7 +877,7 @@ namespace Titanium.Web.Proxy.Http2
                 {
                     if (pendingHeaderBlock == null || pendingHeaderStreamId != streamId)
                     {
-                        exceptionFunc?.Invoke(new ProxyHttpException(
+                        ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: unexpected CONTINUATION frame.", null, args));
                         await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
                             Http2ErrorCode.ProtocolError, input));
@@ -875,7 +886,7 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (pendingHeaderBlock.Length + length > MaxHeaderBlockBytes)
                     {
-                        exceptionFunc?.Invoke(new ProxyHttpException(
+                        ReportException(logger, new ProxyHttpException(
                             "HTTP/2 header block exceeded the maximum allowed compressed size.", null,
                             pendingHeaderArgs));
                         await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
@@ -1016,7 +1027,7 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (length != 4)
                     {
-                        exceptionFunc?.Invoke(new ProxyHttpException(
+                        ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: WINDOW_UPDATE frame with invalid length.", null, args));
                         await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
                             Http2ErrorCode.FrameSizeError, input));
@@ -1026,7 +1037,7 @@ namespace Titanium.Web.Proxy.Http2
                     int increment = ((buffer[0] & 0x7f) << 24) + (buffer[1] << 16) + (buffer[2] << 8) + buffer[3];
                     if (increment == 0)
                     {
-                        // RFC 7540 §6.9.1: a zero increment is a stream error (or connection error if
+                        // RFC 7540 ?6.9.1: a zero increment is a stream error (or connection error if
                         // stream id 0) of type PROTOCOL_ERROR.
                         if (streamId == 0)
                         {
@@ -1047,10 +1058,10 @@ namespace Titanium.Web.Proxy.Http2
                         bool overflow = flow.OnWindowUpdate(streamId, increment);
                         if (overflow)
                         {
-                            // RFC 7540 §6.9.1: a WINDOW_UPDATE that drives a flow-control window above
+                            // RFC 7540 ?6.9.1: a WINDOW_UPDATE that drives a flow-control window above
                             // 2^31-1 is a FLOW_CONTROL_ERROR - stream-level (RST_STREAM) for a stream
                             // window, connection-level (GOAWAY) for the connection window.
-                            exceptionFunc?.Invoke(new ProxyHttpException(
+                            ReportException(logger, new ProxyHttpException(
                                 "HTTP/2 protocol error: WINDOW_UPDATE increment overflowed the flow-control window.",
                                 null, args));
                             if (streamId == 0)
@@ -1071,7 +1082,7 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (length != 8)
                     {
-                        exceptionFunc?.Invoke(new ProxyHttpException(
+                        ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: PING frame with invalid length.", null, args));
                         await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
                             Http2ErrorCode.FrameSizeError, input));
@@ -1138,7 +1149,7 @@ namespace Titanium.Web.Proxy.Http2
                         // https://httpwg.org/specs/rfc7540.html#SETTINGS
                         // 6.5. SETTINGS
                         // A SETTINGS frame with a length other than a multiple of 6 octets MUST be treated as a connection error (Section 5.4.1) of type FRAME_SIZE_ERROR
-                        exceptionFunc?.Invoke(new ProxyHttpException("Invalid settings length", null, null));
+                        ReportException(logger, new ProxyHttpException("Invalid settings length", null, null));
                         await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
                             Http2ErrorCode.FrameSizeError, input));
                         return;
@@ -1146,10 +1157,10 @@ namespace Titanium.Web.Proxy.Http2
 
                     if ((flags & Http2FrameFlag.Ack) != 0 && length != 0)
                     {
-                        // RFC 7540 §6.5: "Receipt of a SETTINGS frame with the ACK flag set and a length
+                        // RFC 7540 ?6.5: "Receipt of a SETTINGS frame with the ACK flag set and a length
                         // field value other than 0 MUST be treated as a connection error of type
                         // FRAME_SIZE_ERROR."
-                        exceptionFunc?.Invoke(new ProxyHttpException(
+                        ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: SETTINGS ACK frame with non-zero length.", null, null));
                         await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
                             Http2ErrorCode.FrameSizeError, input));
@@ -1175,7 +1186,7 @@ namespace Titanium.Web.Proxy.Http2
                         }
                         else if (identifier == (int)Http2SettingsId.MaxFrameSize)
                         {
-                            // RFC 7540 §6.5.2: valid range is [2^14, 2^24-1]; below the minimum every
+                            // RFC 7540 ?6.5.2: valid range is [2^14, 2^24-1]; below the minimum every
                             // implementation must support is a PROTOCOL_ERROR.
                             if (value < 16384 || value > 16777215)
                             {
@@ -1189,7 +1200,7 @@ namespace Titanium.Web.Proxy.Http2
                         }
                         else if (identifier == (int)Http2SettingsId.InitialWindowSize)
                         {
-                            // RFC 7540 §6.5.2: valid range is [0, 2^31-1]; above that is a FLOW_CONTROL_ERROR.
+                            // RFC 7540 ?6.5.2: valid range is [0, 2^31-1]; above that is a FLOW_CONTROL_ERROR.
                             if (value > Http2FlowController.MaxWindow)
                             {
                                 invalidSettings = true;
@@ -1228,7 +1239,7 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (invalidSettings)
                     {
-                        exceptionFunc?.Invoke(new ProxyHttpException(
+                        ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: SETTINGS frame contained an out-of-range value.", null, null));
                         await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
                             invalidSettingsError, input));
@@ -1256,7 +1267,7 @@ namespace Titanium.Web.Proxy.Http2
                 {
                     if (length != 4)
                     {
-                        exceptionFunc?.Invoke(new ProxyHttpException(
+                        ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: RST_STREAM frame with invalid length.", null, args));
                         await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
                             Http2ErrorCode.FrameSizeError, input));
@@ -1274,7 +1285,7 @@ namespace Titanium.Web.Proxy.Http2
                         connectionState.ClientSendFlow.RemoveStream(streamId);
                         connectionState.ServerSendFlow.RemoveStream(streamId);
                         connectionState.PendingFinalizations.Add(
-                            FinalizeStreamAsync(resetStream, onAfterResponse, exceptionFunc));
+                            FinalizeStreamAsync(resetStream, onAfterResponse, logger));
 
                         var resetRr = isClient
                             ? (RequestResponseBase)resetStream.SessionArgs.HttpClient.Request
@@ -1294,7 +1305,7 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (errorCode != (int)Http2ErrorCode.Cancel)
                     {
-                        exceptionFunc?.Invoke(new ProxyHttpException("HTTP/2 stream error. Error code: " + errorCode, null, args));
+                        ReportException(logger, new ProxyHttpException("HTTP/2 stream error. Error code: " + errorCode, null, args));
                     }
                 }
 
@@ -1375,7 +1386,7 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             connectionState.RemoveStream(streamId);
                             connectionState.PendingFinalizations.Add(
-                                FinalizeStreamAsync(closingStream, onAfterResponse, exceptionFunc));
+                                FinalizeStreamAsync(closingStream, onAfterResponse, logger));
                         }
                     }
                 }
@@ -1461,7 +1472,7 @@ namespace Titanium.Web.Proxy.Http2
             var writer = new BinaryWriter(ms);
 
             // If the peer's advertised header table size changed since our last encode, emit a Dynamic Table
-            // Size Update (RFC 7541 §6.3) at the start of this header block so the peer's decoder resizes in
+            // Size Update (RFC 7541 ?6.3) at the start of this header block so the peer's decoder resizes in
             // lockstep before any indexed reference relying on the new size is used.
             if (encoder.MaxHeaderTableSize != settings.HeaderTableSize)
             {
@@ -1506,7 +1517,7 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         /// <summary>
-        ///     Encodes and sends the given trailing headers (RFC 7230 §4.1.2 / RFC 7540 §8.1.2.1) as a
+        ///     Encodes and sends the given trailing headers (RFC 7230 ?4.1.2 / RFC 7540 ?8.1.2.1) as a
         ///     HEADERS frame carrying no pseudo-headers, using the same persistent per-direction HPACK
         ///     encoder as <see cref="SendHeader" /> so the destination's dynamic table stays in sync
         ///     regardless of whether trailers are actually present on a given message.
@@ -1543,10 +1554,10 @@ namespace Titanium.Web.Proxy.Http2
         /// <summary>
         ///     Writes one already-HPACK-encoded header block as a HEADERS (or PUSH_PROMISE) frame followed
         ///     by as many CONTINUATION frames as needed so that no single frame's payload exceeds the
-        ///     destination's advertised SETTINGS_MAX_FRAME_SIZE (RFC 7540 §4.2/§6.10). END_HEADERS is set
+        ///     destination's advertised SETTINGS_MAX_FRAME_SIZE (RFC 7540 ?4.2/?6.10). END_HEADERS is set
         ///     only on the last frame of the sequence; END_STREAM/PRIORITY (when applicable) are set only
         ///     on the first, matching the semantics of the frame types they belong to. HEADERS/CONTINUATION
-        ///     frames are not subject to flow control (RFC 7540 §6.9), so no reservation is made here.
+        ///     frames are not subject to flow control (RFC 7540 ?6.9), so no reservation is made here.
         /// </summary>
         private static async Task WriteHeaderBlockAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int streamId, Http2FrameType type, bool endStream, bool hasPriority, byte[] data, int maxFrameSize,
@@ -1626,7 +1637,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     Sends the given bytes as one or more HTTP/2 DATA frames on the specified stream, splitting on
         ///     the peer's max frame size. An END_STREAM flag is set on the final frame when endStream is true.
         ///     Each frame's payload is reserved against <paramref name="flow" /> before being written, so
-        ///     this never exceeds the destination's flow-control window (RFC 7540 §6.9).
+        ///     this never exceeds the destination's flow-control window (RFC 7540 ?6.9).
         /// </summary>
         internal static async Task SendData(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, int streamId,
             byte[] data, bool endStream, int maxFrameSize, Http2FlowController flow, Stream output,
@@ -1665,7 +1676,7 @@ namespace Titanium.Web.Proxy.Http2
             }
         }
 
-        /// <summary>Writes an RST_STREAM frame (RFC 7540 §6.4) resetting the given stream with the given error code.</summary>
+        /// <summary>Writes an RST_STREAM frame (RFC 7540 ?6.4) resetting the given stream with the given error code.</summary>
         internal static async Task SendRstStreamAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int streamId, Http2ErrorCode errorCode, Stream output)
         {
@@ -1681,7 +1692,7 @@ namespace Titanium.Web.Proxy.Http2
             await output.WriteAsync(payload, 0, 4);
         }
 
-        /// <summary>Writes a GOAWAY frame (RFC 7540 §6.8) announcing connection-level shutdown with the given error code.</summary>
+        /// <summary>Writes a GOAWAY frame (RFC 7540 ?6.8) announcing connection-level shutdown with the given error code.</summary>
         internal static async Task SendGoAwayAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int lastStreamId, Http2ErrorCode errorCode, Stream output)
         {
@@ -1698,7 +1709,7 @@ namespace Titanium.Web.Proxy.Http2
             await output.WriteAsync(payload, 0, 8);
         }
 
-        /// <summary>Writes a WINDOW_UPDATE frame (RFC 7540 §6.9) granting the given amount of flow-control credit.</summary>
+        /// <summary>Writes a WINDOW_UPDATE frame (RFC 7540 ?6.9) granting the given amount of flow-control credit.</summary>
         internal static async Task SendWindowUpdateAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int streamId, int increment, Stream output)
         {
@@ -2003,7 +2014,7 @@ namespace Titanium.Web.Proxy.Http2
 
             /// <summary>
             ///     Set when this header block contained an unknown pseudo-header field or a field name with
-            ///     uppercase characters (RFC 7540 §8.1.2/§8.1.2.1) - both are malformed and the block's stream
+            ///     uppercase characters (RFC 7540 ?8.1.2/?8.1.2.1) - both are malformed and the block's stream
             ///     must be reset rather than acted upon.
             /// </summary>
             public bool HasMalformedHeader { get; private set; }

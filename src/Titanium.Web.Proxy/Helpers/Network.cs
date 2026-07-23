@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using Titanium.Web.Proxy.Logging;
 
 namespace Titanium.Web.Proxy.Helpers;
 
@@ -49,8 +50,12 @@ internal class NetworkHelper
                     || hostEntry.AddressList.Any(hostIp => localhostEntry.AddressList.Contains(hostIp)))
                     return true;
             }
-            catch (SocketException)
+            catch (SocketException ex)
             {
+                // A failed reverse-DNS lookup just means "not resolvable as local" - expected and common
+                // (e.g. no PTR record, or the resolver is unreachable), not a proxy fault.
+                ProxyDiagnostics.ReportTrace(ProxyDiagnostics.FallbackLogger,
+                    $"Reverse DNS lookup for '{hostName}' failed while checking whether it is a local address: {ex.Message}");
             }
 
         return false;

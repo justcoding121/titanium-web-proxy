@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
@@ -118,12 +119,12 @@ internal class TcpHelper
     /// <param name="onDataSend"></param>
     /// <param name="onDataReceive"></param>
     /// <param name="cancellationTokenSource"></param>
-    /// <param name="exceptionFunc"></param>
+    /// <param name="logger">The logger to report relay failures through.</param>
     /// <returns></returns>
     internal static Task SendRaw(Stream clientStream, Stream serverStream, IBufferPool bufferPool,
         Action<byte[], int, int>? onDataSend, Action<byte[], int, int>? onDataReceive,
         CancellationTokenSource cancellationTokenSource,
-        ExceptionHandler? exceptionFunc)
+        ILogger logger)
     {
         // todo: fix APM mode
         return SendRawTap(clientStream, serverStream, bufferPool, onDataSend, onDataReceive,

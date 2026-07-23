@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
+using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
@@ -22,7 +24,6 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     protected readonly IBufferPool BufferPool;
 
     internal readonly CancellationTokenSource CancellationTokenSource;
-    protected readonly ExceptionHandler? ExceptionFunc;
 
     private bool disposed;
     private bool enableWinAuth;
@@ -35,7 +36,6 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
         CancellationTokenSource cancellationTokenSource) : base(server, clientStream.Connection)
     {
         BufferPool = server.BufferPool;
-        ExceptionFunc = server.ExceptionFunc;
         TimeLine["Session Created"] = DateTime.UtcNow;
 
         CancellationTokenSource = cancellationTokenSource;
@@ -153,6 +153,13 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// </summary>
     public Exception? Exception { get; internal set; }
 
+    /// <summary>
+    ///     The live logger for the <see cref="ProxyServer" /> that owns this session. Always reads the
+    ///     server's current logger rather than a value snapshotted at session creation, so a logger
+    ///     replaced via <see cref="ProxyServer.ApplyLoggingConfiguration" /> is picked up immediately.
+    /// </summary>
+    protected ILogger Logger => Server.Logger;
+
     public void Dispose()
     {
         Dispose(true);
@@ -161,7 +168,7 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 
     protected void OnException(Exception exception)
     {
-        ExceptionFunc?.Invoke(exception);
+        ProxyDiagnostics.ReportException(Logger, "Unhandled exception in proxy session", exception);
     }
 
     protected virtual void Dispose(bool disposing)
@@ -184,9 +191,7 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 
     ~SessionEventArgsBase()
     {
-#if DEBUG
-        Helpers.FinalizerGuard.ReportUndisposedFinalizer(nameof(SessionEventArgsBase));
-#endif
+        ProxyDiagnostics.ReportUndisposedFinalizer(Server.Logger, nameof(SessionEventArgsBase));
 
         Dispose(false);
     }
