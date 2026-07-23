@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http2;
@@ -114,6 +115,135 @@ public partial class ProxyServer
             // host to HTTP/1.1 for the full TTL.
             HandshakeDebugLog.Http2ProbeResult(capabilityCacheKey, false, false, ex);
             return new Http2NegotiationResult(false, null);
+        }
+    }
+
+    /// <summary>
+    ///     Resolves whether HTTP/2 should be offered to the client for this connection, honoring the
+    ///     connection-scoped <paramref name="upstreamHttpProtocol" />/<paramref name="allowHttpProtocolTranslation" />
+    ///     policy (see <see cref="UpstreamHttpProtocol" />) instead of always coupling the client offer 1:1 to
+    ///     the origin's actual capability. Shared by the explicit and transparent handlers so the policy
+    ///     rules are enforced identically for both.
+    /// </summary>
+    /// <param name="sessionArgs">Forwarded to <see cref="NegotiateHttp2Async" /> for the <see cref="UpstreamHttpProtocol.Auto" /> case.</param>
+    /// <param name="clientOffersHttp2">Whether the client's TLS ClientHello ALPN extension includes "h2".</param>
+    /// <param name="remoteHostName">The origin identity; see <see cref="NegotiateHttp2Async" />.</param>
+    /// <param name="remotePort">The origin identity port; see <see cref="NegotiateHttp2Async" />.</param>
+    /// <param name="connectHost">The actual TCP connect destination override; see <see cref="NegotiateHttp2Async" />.</param>
+    /// <param name="connectPort">The actual TCP connect destination override port; see <see cref="NegotiateHttp2Async" />.</param>
+    /// <param name="upstreamHttpProtocol">The connection-scoped upstream protocol policy.</param>
+    /// <param name="allowHttpProtocolTranslation">Whether a client/origin protocol mismatch may be bridged.</param>
+    /// <param name="enablePrefetch">Forwarded to <see cref="NegotiateHttp2Async" /> for the <see cref="UpstreamHttpProtocol.Auto" /> case.</param>
+    /// <param name="cancellationToken">Forwarded to <see cref="NegotiateHttp2Async" /> for the <see cref="UpstreamHttpProtocol.Auto" /> case.</param>
+    /// <exception cref="ProxyConnectException">
+    ///     The policy is unsatisfiable without a translation bridge that either is disabled
+    ///     (<paramref name="allowHttpProtocolTranslation" /> is <c>false</c>) or does not exist yet in this
+    ///     version, or <see cref="UpstreamHttpProtocol.Http2" /> was required but the origin does not support
+    ///     HTTP/2.
+    /// </exception>
+    private async Task<Http2NegotiationResult> ResolveHttp2ForClientAsync(SessionEventArgsBase sessionArgs,
+        bool clientOffersHttp2, string remoteHostName, int remotePort, string? connectHost, int? connectPort,
+        UpstreamHttpProtocol upstreamHttpProtocol, bool allowHttpProtocolTranslation, bool enablePrefetch,
+        CancellationToken cancellationToken)
+    {
+        switch (upstreamHttpProtocol)
+        {
+            case UpstreamHttpProtocol.Http11:
+                // The origin-facing protocol is pinned to HTTP/1.1: never probed, never cached, and the
+                // capability decision never bleeds into the shared Http2OriginCapabilityCache that Auto-mode
+                // routes to the same host rely on. A client that also only supports HTTP/1.1 needs nothing
+                // further. A client that supports HTTP/2 would need an h2-client-to-HTTP/1.1-origin bridge
+                // (see Milestone 5 of the HTTP/2 proxy support plan), which does not exist yet.
+                if (clientOffersHttp2 && allowHttpProtocolTranslation)
+                    throw new ProxyConnectException(
+                        "UpstreamHttpProtocol.Http11 with AllowHttpProtocolTranslation enabled would require " +
+                        "translating an HTTP/2 client connection onto an HTTP/1.1 origin connection, which is " +
+                        "not implemented in this version.",
+                        new NotSupportedException("h2-client-to-HTTP/1.1-origin translation is not implemented."),
+                        sessionArgs);
+
+                // AllowHttpProtocolTranslation == false (the default): rather than fail, simply never offer
+                // "h2" to the client either, so it transparently negotiates HTTP/1.1 too and no mismatch -
+                // and therefore no translation - is ever needed.
+                return new Http2NegotiationResult(false, null);
+
+            case UpstreamHttpProtocol.Http2:
+            {
+                // The origin-facing protocol is pinned to HTTP/2. This bypasses the shared capability cache
+                // (both read and write) and always performs a live, uncached probe, because Auto-mode's
+                // cached "does this host support h2" answer is not sufficient here - this policy additionally
+                // requires the connection to actually succeed as h2, every time, unconditionally.
+                var customUpStreamProxy = sessionArgs.CustomUpStreamProxy;
+                if (customUpStreamProxy == null && GetCustomUpStreamProxyFunc != null)
+                    customUpStreamProxy = await GetCustomUpStreamProxyFunc(sessionArgs);
+                sessionArgs.CustomUpStreamProxyUsed = customUpStreamProxy;
+
+                var externalProxy = TcpConnectionFactory.GetEffectiveUpstreamProxy(
+                    customUpStreamProxy ?? UpStreamHttpsProxy, remoteHostName, remotePort);
+                var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint;
+
+                TcpServerConnection? connection;
+                try
+                {
+                    connection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
+                        HttpHeader.Version20, true, SslExtensions.Http2ProtocolAsList, true, sessionArgs,
+                        upStreamEndPoint, externalProxy, true, true, cancellationToken, connectHost, connectPort);
+                }
+                catch (Exception ex)
+                {
+                    // Some non-h2 origins actively reject an ALPN offer with no mutually acceptable protocol
+                    // (a TLS-level AuthenticationException) instead of just completing the handshake without
+                    // selecting one; either way the actionable fact for this policy is the same, so both
+                    // failure modes are reported with the same "did not negotiate HTTP/2" message.
+                    throw new ProxyConnectException(
+                        $"UpstreamHttpProtocol.Http2 was required for '{remoteHostName}:{remotePort}' but the " +
+                        "origin server did not negotiate HTTP/2 via ALPN (the connection attempt itself failed). " +
+                        "A translation bridge cannot fabricate HTTP/2 support at an origin that does not have it.",
+                        ex, sessionArgs);
+                }
+
+                if (connection == null || connection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
+                {
+                    await TcpConnectionFactory.Release(connection, true);
+                    throw new ProxyConnectException(
+                        $"UpstreamHttpProtocol.Http2 was required for '{remoteHostName}:{remotePort}' but the " +
+                        "origin server did not negotiate HTTP/2 via ALPN. A translation bridge cannot fabricate " +
+                        "HTTP/2 support at an origin that does not have it.",
+                        new NotSupportedException("Origin does not support HTTP/2."), sessionArgs);
+                }
+
+                if (!clientOffersHttp2)
+                {
+                    if (!allowHttpProtocolTranslation)
+                    {
+                        await TcpConnectionFactory.Release(connection, true);
+                        throw new ProxyConnectException(
+                            "UpstreamHttpProtocol.Http2 requires an HTTP/2 origin connection, but the client " +
+                            "does not support HTTP/2 and AllowHttpProtocolTranslation is disabled.",
+                            new NotSupportedException("Client does not support HTTP/2."), sessionArgs);
+                    }
+
+                    await TcpConnectionFactory.Release(connection, true);
+                    throw new ProxyConnectException(
+                        "UpstreamHttpProtocol.Http2 with AllowHttpProtocolTranslation enabled would require " +
+                        "translating an HTTP/1.1 client connection onto an HTTP/2 origin connection, which is " +
+                        "not implemented in this version.",
+                        new NotSupportedException("HTTP/1.1-client-to-h2-origin translation is not implemented."),
+                        sessionArgs);
+                }
+
+                return new Http2NegotiationResult(true, Task.FromResult(connection));
+            }
+
+            default:
+                // Auto (and any other unvalidated value, defensively - the public setters already reject
+                // unknown enum values): existing coupled behavior, unchanged. Skip origin negotiation
+                // entirely (and thus never touch the capability cache) when the client did not even offer
+                // "h2", exactly like before this policy API existed.
+                if (!clientOffersHttp2) return new Http2NegotiationResult(false, null);
+
+                return await NegotiateHttp2Async(sessionArgs, remoteHostName, remotePort, connectHost, connectPort,
+                    enablePrefetch, cancellationToken);
         }
     }
 

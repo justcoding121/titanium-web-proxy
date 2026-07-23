@@ -69,6 +69,7 @@ HTTP/1.1 only. If you find something inaccurate, please open an issue.
 | Windows authentication (Kerberos/NTLM) to upstream servers | Yes | `EnableWinAuth`. |
 | Mutual TLS to upstream servers | Yes | `ClientCertificateSelectionCallback` / `ServerCertificateValidationCallback`. |
 | Upstream connection pooling | Yes | `EnableConnectionPool` (default on). |
+| Per-connection upstream HTTP version policy | Partial | `UpstreamHttpProtocol`/`AllowHttpProtocolTranslation` on `TunnelConnectSessionEventArgs`/`BeforeSslAuthenticateEventArgs` decouple which HTTP version the proxy uses toward the origin from which version the client negotiates with the proxy. `Auto` (default) preserves existing coupled behavior. `Http11`/`Http2` pin the origin-facing protocol; without `AllowHttpProtocolTranslation`, `Http11` simply never offers "h2" to the client (so no mismatch is possible) and `Http2` fails the connection outright if the client or origin cannot also do HTTP/2. Setting `AllowHttpProtocolTranslation` acknowledges a client/origin protocol mismatch but does not yet bridge it - the connection still fails with a clear "not implemented" exception - because the actual h2⇄HTTP/1.1 translation bridge is a separate, larger piece of work not yet built. |
 
 ## Where to look for more detail
 
