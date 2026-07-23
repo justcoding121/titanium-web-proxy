@@ -697,8 +697,7 @@ public class SessionEventArgs : SessionEventArgsBase
     ~SessionEventArgs()
     {
 #if DEBUG
-            // Finalizer should not be called
-            System.Diagnostics.Debugger.Break();
+        Helpers.FinalizerGuard.ReportUndisposedFinalizer(nameof(SessionEventArgs));
 #endif
 
         Dispose(false);
