@@ -144,10 +144,23 @@ public partial class ProxyServer
                                 HandshakeDebugLog.Http2ProbeResult(connectTarget, true, http2Supported, null);
                             }
                             else
-                                // test server HTTP/2 support
+                                // Probe the origin to determine whether it supports HTTP/2 via ALPN.
+                                //
+                                // ALPN must be committed to before AuthenticateAsServerAsync completes the
+                                // TLS handshake with the browser — SslStream does not support changing the
+                                // application protocol on an established session. This means we must know
+                                // the origin's capability *before* we authenticate the browser side.
+                                //
+                                // The only proper alternative would be HTTP/2 ↔ HTTP/1.1 protocol
+                                // translation at the application layer (offer the browser the full ALPN list
+                                // regardless of origin, then translate between h2 frames and h1.1 when the
+                                // two sides negotiate different protocols). That is a substantial feature and
+                                // has not been implemented, so the probe approach is the correct design here.
+                                //
+                                // The probe connection is released back to the pool, so it is reusable by
+                                // the actual request that follows immediately. Cache hits pay zero overhead.
                                 try
                                 {
-                                    // todo: this is a hack, because Titanium does not support HTTP protocol changing currently
                                     var connection = await TcpConnectionFactory.GetServerConnection(this, connectArgs,
                                         true, SslExtensions.Http2ProtocolAsList,
                                         true, true, cancellationToken);
@@ -176,9 +189,13 @@ public partial class ProxyServer
 
                     if (EnableTcpServerConnectionPrefetch)
                         // don't pass cancellation token here
-                        // it could cause floating server connections when client exits
+                        // it could cause floating server connections when client exits.
+                        // Pass the ALPN that the actual request will use so the prefetched connection
+                        // lands in the same pool bucket and can be reused. Passing null when h2 is
+                        // expected would result in an h1.1-keyed connection that the h2 request
+                        // cannot pick up, wasting the prefetch entirely.
                         prefetchConnectionTask = TcpConnectionFactory.GetServerConnection(this, connectArgs,
-                            true, null, false, true,
+                            true, http2Supported ? SslExtensions.Http2ProtocolAsList : null, false, true,
                             CancellationToken.None);
 
                     var connectHostname = requestLine.RequestUri.GetString();

@@ -13,6 +13,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended;
+using SslExtensions = Titanium.Web.Proxy.Extensions.SslExtensions;
 
 namespace Titanium.Web.Proxy;
 
@@ -88,8 +89,35 @@ public partial class ProxyServer
                             throw new InvalidOperationException(
                                 $"Could not create a server certificate for '{certName}'.");
 
+                        // Build options using the same pattern as the explicit CONNECT handler so that:
+                        //   - SupportedSslProtocols is respected (no hardcoded TLS 1.2)
+                        //   - The client's ALPN list is forwarded when HTTP/2 is enabled, allowing
+                        //     the client to negotiate h2 with the proxy just as it would in the
+                        //     explicit path. Because the transparent handler has no CONNECT target
+                        //     there is no h2 origin probe; the ALPN list is passed as-is so the
+                        //     client can at least negotiate the protocol it prefers.
+                        var options = new SslServerAuthenticationOptions
+                        {
+                            ServerCertificate = certificate,
+                            ClientCertificateRequired = false,
+                            EnabledSslProtocols = SupportedSslProtocols,
+                            CertificateRevocationCheckMode = X509RevocationMode.NoCheck
+                        };
+
+                        if (EnableHttp2)
+                        {
+                            var alpn = clientHelloInfo.GetAlpn();
+                            if (alpn != null && alpn.Count > 0)
+                                options.ApplicationProtocols = alpn;
+                        }
+
                         // Successfully managed to authenticate the client using the certificate
-                        await sslStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls12, false);
+                        await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
+
+#if NET6_0_OR_GREATER
+                        clientStream.Connection.NegotiatedApplicationProtocol =
+                            sslStream.NegotiatedApplicationProtocol;
+#endif
 
                         // HTTPS server created - we can now decrypt the client's traffic
                         clientStream = new HttpClientStream(this, clientStream.Connection, sslStream, BufferPool,
