@@ -397,13 +397,16 @@ namespace Titanium.Web.Proxy.Http2
 
                             // BeforeResponse may have replaced HttpClient.Response outright - exactly what
                             // Respond()/Ok()/Redirect() do when called after the real response was already
-                            // received (see SessionEventArgs.Respond, which both sets Request.CancelRequest
-                            // and swaps in a brand new Response object). `response` above was captured
-                            // *before* the handler ran, so dispatching it here would silently drop the
-                            // replacement and send the stale, original object instead.
+                            // received. Note that this is the *one* Respond() call site that does not set
+                            // Request.CancelRequest (see SessionEventArgs.Respond: that flag only means
+                            // "never forward the request", which is meaningless once the request has already
+                            // gone out) - so the only reliable signal that a replacement happened is whether
+                            // HttpClient.Response is no longer the same object `response` above was captured
+                            // from *before* the handler ran. Dispatching the stale `response` here would
+                            // silently drop the replacement and send the original object instead.
                             var finalResponse = (Response)sessionArgs.HttpClient.Response;
 
-                            if (sessionArgs.HttpClient.Request.CancelRequest)
+                            if (!ReferenceEquals(finalResponse, response))
                             {
                                 // the real response's own body (if the server is still sending one) must
                                 // never reach the client now that a different response has been substituted;
