@@ -42,6 +42,13 @@ public partial class ProxyServer
 
         TunnelConnectSessionEventArgs? connectArgs = null;
 
+        // Set when ResolveHttp2ForClientAsync determined the client may be offered "h2" even though the
+        // origin-facing connection must stay HTTP/1.1 (UpstreamHttpProtocol.Http11 + AllowHttpProtocolTranslation).
+        // Read once the client's actual HTTP/2 connection preface arrives, well after the negotiation call
+        // itself falls out of scope, to route that connection through SendHttp2ToHttp11Bridge instead of the
+        // normal protocol-symmetric Http2Helper.SendHttp2 relay.
+        var requiresHttp11Bridge = false;
+
         try
         {
             var method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
@@ -152,11 +159,21 @@ public partial class ProxyServer
                             connectHost, connectPort, null, null, connectArgs.UpstreamHttpProtocol,
                             connectArgs.AllowHttpProtocolTranslation, EnableTcpServerConnectionPrefetch,
                             cancellationToken);
-                        http2Supported = negotiation.OriginSupportsHttp2;
+                        requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
+                        // The client is offered "h2" both when the origin itself speaks it and when a
+                        // translation bridge will stand in for an HTTP/1.1-only origin.
+                        http2Supported = negotiation.OriginSupportsHttp2 || requiresHttp11Bridge;
                         prefetchConnectionTask = negotiation.RetainedConnectionTask;
                     }
 
-                    if (prefetchConnectionTask == null && EnableTcpServerConnectionPrefetch)
+                    // Skip the generic single-connection prefetch entirely when the session will be routed
+                    // through the h2-to-HTTP/1.1 bridge: the bridge never adopts this shared
+                    // prefetchConnectionTask at all (it opens/pools its own connection independently per h2
+                    // stream, see SendHttp2ToHttp11Bridge), so prefetching one here would be pure waste - and
+                    // worse, using http2Supported (true in the bridge case, so the client can be offered
+                    // "h2") to pick the prefetch's ALPN offer would incorrectly probe the origin - which this
+                    // policy pins to HTTP/1.1 - with "h2" too.
+                    if (prefetchConnectionTask == null && EnableTcpServerConnectionPrefetch && !requiresHttp11Bridge)
                         // don't pass cancellation token here
                         // it could cause floating server connections when client exits.
                         // Pass the ALPN that the actual request will use so the prefetched connection
@@ -341,6 +358,22 @@ public partial class ProxyServer
                     if (line != string.Empty)
                         throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
 
+                    if (requiresHttp11Bridge)
+                    {
+#if NET6_0_OR_GREATER
+                        // UpstreamHttpProtocol.Http11 + AllowHttpProtocolTranslation: no origin connection was
+                        // negotiated/retained above (RequiresHttp11Bridge implies OriginSupportsHttp2 is false
+                        // and RetainedConnectionTask is null) - every h2 stream on this connection instead gets
+                        // its own independently managed HTTP/1.1 origin connection from SendHttp2ToHttp11Bridge.
+                        var (bridgeHost, bridgePort) =
+                            ParseHostAndPort(connectArgs.HttpClient.ConnectRequest!.Authority.GetString(), 443);
+                        await SendHttp2ToHttp11Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
+                            connectArgs.UserData, bridgeHost, bridgePort, null, null,
+                            connectArgs.CancellationTokenSource);
+#endif
+                        return;
+                    }
+
                     // Adopt the connection retained by NegotiateHttp2Async (the cold-cache discovery probe,
                     // or a cache-hit prefetch) for this session instead of opening a brand new one, when it
                     // is still a valid, healthy, correctly keyed h2 connection. This is what collapses the
@@ -366,8 +399,8 @@ public partial class ProxyServer
                                 {
                                     UserData = connectArgs?.UserData
                                 },
-                                async args => { await OnBeforeRequest(args); },
-                                async args => { await OnBeforeResponse(args); },
+                                async (args, ctx) => { await OnBeforeRequest(args); },
+                                async (args, ctx) => { await OnBeforeResponse(args); },
                                 async args => { await OnAfterResponse(args); },
                                 headers => PrepareRequestHeaders(headers),
                                 connectArgs.CancellationTokenSource, clientStream.Connection.Id, ExceptionFunc);

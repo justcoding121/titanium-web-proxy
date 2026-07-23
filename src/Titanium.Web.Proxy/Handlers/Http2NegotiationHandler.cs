@@ -152,15 +152,11 @@ public partial class ProxyServer
                 // The origin-facing protocol is pinned to HTTP/1.1: never probed, never cached, and the
                 // capability decision never bleeds into the shared Http2OriginCapabilityCache that Auto-mode
                 // routes to the same host rely on. A client that also only supports HTTP/1.1 needs nothing
-                // further. A client that supports HTTP/2 would need an h2-client-to-HTTP/1.1-origin bridge
-                // (see Milestone 5 of the HTTP/2 proxy support plan), which does not exist yet.
+                // further. A client that supports HTTP/2 is routed through the h2-client-to-HTTP/1.1
+                // translation bridge (SendHttp2ToHttp11Bridge) instead of the normal protocol-symmetric relay -
+                // the caller is told this via RequiresHttp11Bridge rather than an origin connection to adopt.
                 if (clientOffersHttp2 && allowHttpProtocolTranslation)
-                    throw new ProxyConnectException(
-                        "UpstreamHttpProtocol.Http11 with AllowHttpProtocolTranslation enabled would require " +
-                        "translating an HTTP/2 client connection onto an HTTP/1.1 origin connection, which is " +
-                        "not implemented in this version.",
-                        new NotSupportedException("h2-client-to-HTTP/1.1-origin translation is not implemented."),
-                        sessionArgs);
+                    return new Http2NegotiationResult(false, null, true);
 
                 // AllowHttpProtocolTranslation == false (the default): rather than fail, simply never offer
                 // "h2" to the client either, so it transparently negotiates HTTP/1.1 too and no mismatch -
@@ -232,7 +228,7 @@ public partial class ProxyServer
                         sessionArgs);
                 }
 
-                return new Http2NegotiationResult(true, Task.FromResult(connection));
+                return new Http2NegotiationResult(true, Task.FromResult<TcpServerConnection?>(connection));
             }
 
             default:

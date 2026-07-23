@@ -83,6 +83,7 @@ public partial class ProxyServer
                     // default already mirrors the identity, so this only diverges when a fixed forward
                     // target - static or event-set - is configured).
                     var http2Supported = false;
+                    var requiresHttp11Bridge = false;
                     string? http2ConnectHost = null;
                     int? http2ConnectPort = null;
 
@@ -103,11 +104,15 @@ public partial class ProxyServer
                             httpsHostName, args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
                             args.UpstreamHttpProtocol, args.AllowHttpProtocolTranslation,
                             EnableTcpServerConnectionPrefetch, cancellationToken);
-                        http2Supported = negotiation.OriginSupportsHttp2;
+                        requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
+                        // The client is offered "h2" both when the origin itself speaks it and when a
+                        // translation bridge will stand in for an HTTP/1.1-only origin.
+                        http2Supported = negotiation.OriginSupportsHttp2 || requiresHttp11Bridge;
                         // Retained regardless of whether it turns out to be h2- or h1.1-keyed: if this
                         // connection is not adopted by the h2 relay below, it still flows down to the
                         // HTTP/1.1 pipeline's own prefetch-adoption/validation logic rather than being
-                        // discarded here.
+                        // discarded here. Always null when requiresHttp11Bridge (nothing to adopt/flow down -
+                        // the bridge opens its own per-h2-stream HTTP/1.1 connections instead).
                         prefetchConnectionTask = negotiation.RetainedConnectionTask;
                     }
 
@@ -224,6 +229,20 @@ public partial class ProxyServer
                                         $"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
                                 }
 
+                                if (requiresHttp11Bridge)
+                                {
+#if NET6_0_OR_GREATER
+                                    // UpstreamHttpProtocol.Http11 + AllowHttpProtocolTranslation: no origin
+                                    // connection was negotiated/retained above - every h2 stream on this
+                                    // connection instead gets its own independently managed HTTP/1.1 origin
+                                    // connection from SendHttp2ToHttp11Bridge, identical to the explicit handler.
+                                    await SendHttp2ToHttp11Bridge(clientStream, endPoint, null, null, httpsHostName,
+                                        args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
+                                        cancellationTokenSource);
+#endif
+                                    return;
+                                }
+
                                 // Adopt the connection retained by NegotiateHttp2Async for this session
                                 // instead of opening a brand new one, when it is still valid/healthy/
                                 // correctly keyed - identical adoption logic to the explicit handler.
@@ -248,8 +267,8 @@ public partial class ProxyServer
                                     await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                         () => new SessionEventArgs(this, endPoint, clientStream, null,
                                             cancellationTokenSource),
-                                        async sessionArgs => { await OnBeforeRequest(sessionArgs); },
-                                        async sessionArgs => { await OnBeforeResponse(sessionArgs); },
+                                        async (sessionArgs, ctx) => { await OnBeforeRequest(sessionArgs); },
+                                        async (sessionArgs, ctx) => { await OnBeforeResponse(sessionArgs); },
                                         async sessionArgs => { await OnAfterResponse(sessionArgs); },
                                         headers => PrepareRequestHeaders(headers),
                                         cancellationTokenSource, clientStream.Connection.Id, ExceptionFunc);
