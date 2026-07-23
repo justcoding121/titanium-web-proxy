@@ -291,12 +291,27 @@ namespace Titanium.Web.Proxy.Http2
                     // actually bounded by) and, once a real peer advertises a non-default value, causes
                     // "invalid max dynamic table size" decode failures that permanently desync this
                     // connection's HPACK state.
-                    // recreate the decoder when new value is bigger
-                    // should we recreate when smaller, too?
-                    if (decoder == null || headerTableSize < remoteSettings.HeaderTableSize)
+                    // The dynamic table is connection-scoped (RFC 7541 §2.3.2), so the decoder itself must be
+                    // created exactly once per direction and kept for the connection's lifetime - never
+                    // recreated. A previous version of this code recreated the Decoder outright whenever
+                    // `remoteSettings.HeaderTableSize` grew, which silently discarded every entry the peer's
+                    // encoder had already inserted (and which that encoder still believes is indexable).
+                    // The very next indexed reference into one of those now-missing entries then either threw
+                    // (decoded as garbage/out-of-range) or resolved to the wrong slot, permanently desyncing
+                    // this connection's HPACK state - observable as intermittent net::ERR_HTTP2_COMPRESSION_ERROR
+                    // failures in the browser once a real peer advertised a table-size change mid-connection.
+                    // Resizing the *existing* decoder's dynamic table (which evicts oldest entries only if the
+                    // new size is smaller, per RFC 7541 §4.3) is the correct, entry-preserving way to react to
+                    // a table-size change instead.
+                    if (decoder == null)
                     {
                         headerTableSize = remoteSettings.HeaderTableSize;
                         decoder = new Decoder(8192, headerTableSize);
+                    }
+                    else if (headerTableSize != remoteSettings.HeaderTableSize)
+                    {
+                        headerTableSize = remoteSettings.HeaderTableSize;
+                        decoder.SetMaxHeaderTableSize(headerTableSize);
                     }
 
                     decoder.Decode(new BinaryReader(new MemoryStream(compressed, 0, compressed.Length)),
@@ -709,7 +724,15 @@ namespace Titanium.Web.Proxy.Http2
                 if (isFirstFrame)
                 {
                     isFirstFrame = false;
-                    if (type != Http2FrameType.Settings)
+
+                    // RFC 7540 §6.8: an endpoint may send GOAWAY at any time, including immediately
+                    // after the connection preface and before ever sending SETTINGS - e.g. a browser
+                    // gracefully tearing down a freshly-opened (often speculative/pooled) HTTP/2
+                    // connection it decided it no longer needs. That is normal, expected behavior, not
+                    // a protocol violation, so let it fall through to the ordinary GOAWAY handling
+                    // below (which relays it and records the going-away state) instead of treating
+                    // "first frame wasn't SETTINGS" as fatal.
+                    if (type != Http2FrameType.Settings && type != Http2FrameType.GoAway)
                     {
                         ReportException(logger, new ProxyHttpException(
                             $"HTTP/2 protocol error: expected a SETTINGS frame immediately after the connection preface, got {type}.",
