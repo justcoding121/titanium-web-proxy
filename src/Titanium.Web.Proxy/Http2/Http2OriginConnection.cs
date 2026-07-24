@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Exceptions;
@@ -137,7 +138,17 @@ internal sealed class Http2OriginConnection
     ///     received. The caller must have already buffered the request body (if any) via
     ///     <c>SessionEventArgs.GetRequestBody</c> so <c>request.IsBodyRead</c> is true.
     /// </summary>
-    internal async Task<Http2OriginExchange> SendAsync(Request request, CancellationToken cancellationToken)
+    /// <param name="request">The HTTP request to send.</param>
+    /// <param name="on1xx">
+    ///     Optional async callback invoked (in order) for each 1xx interim response received before the
+    ///     final response headers arrive. When non-null, the caller can relay these interim responses to the
+    ///     connected HTTP/1.1 client while the exchange is still in flight. Invoked from the <c>SendAsync</c>
+    ///     continuation (not the background read loop), so it is safe to write to the client stream.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation for the whole request/response exchange.</param>
+    internal async Task<Http2OriginExchange> SendAsync(Request request,
+        Func<int, HeaderCollection, CancellationToken, Task>? on1xx,
+        CancellationToken cancellationToken)
     {
         if (!IsUsable) throw new Http2OriginGoAwayException("The origin h2 connection is no longer usable.");
 
@@ -195,6 +206,14 @@ internal sealed class Http2OriginConnection
             // Register cancellation: complete the pipe writer so CopyToAsync below unblocks and throws.
             await using var registration = cancellationToken.Register(() =>
                 pending.BodyPipe.CompleteWriter(new OperationCanceledException(cancellationToken)));
+
+            // Relay 1xx interim responses (e.g. 103 Early Hints) to the HTTP/1.1 client before reading
+            // the body. ReadLoopAsync writes each interim into pending.InterimChannel and completes the
+            // writer as soon as final response headers arrive, so this loop exits cleanly before
+            // CopyToAsync below even begins to drain body DATA frames.
+            if (on1xx != null)
+                await foreach (var interim in pending.InterimChannel.Reader.ReadAllAsync(cancellationToken))
+                    await on1xx(interim.StatusCode, interim.Headers, cancellationToken);
 
             // Concurrently drain the pipe while ReadLoopAsync writes DATA frames into it.
             // CopyToAsync returns when the writer is completed (END_STREAM) or throws when
@@ -524,9 +543,17 @@ internal sealed class Http2OriginConnection
                             goAwayLastStreamId = lastId;
                             goingAway = true;
                             foreach (var kvp in streams)
+                            {
                                 if (kvp.Key > lastId)
-                                    kvp.Value.BodyPipe.CompleteWriter(new Http2OriginGoAwayException(
-                                        $"The origin sent GOAWAY before stream {kvp.Key} was processed; it is safe to retry."));
+                                {
+                                    var goAwayEx = new Http2OriginGoAwayException(
+                                        $"The origin sent GOAWAY before stream {kvp.Key} was processed; it is safe to retry.");
+                                    kvp.Value.BodyPipe.CompleteWriter(goAwayEx);
+                                    // Also unblock any SendAsync that is awaiting the interim channel,
+                                    // since no response frames (including 1xx) will ever arrive for this stream.
+                                    kvp.Value.InterimChannel.Writer.TryComplete(goAwayEx);
+                                }
+                            }
                         }
 
                         break;
@@ -657,15 +684,22 @@ internal sealed class Http2OriginConnection
         {
             var statusCode = int.TryParse(status.GetString(), out var parsed) ? parsed : 502;
 
-            // Informational (1xx) responses are not relayed to the HTTP/1.1 client by this bridge; wait for
-            // the final response HEADERS block that must still follow on the same stream.
-            if (statusCode is >= 100 and <= 199) return;
+            if (statusCode is >= 100 and <= 199)
+            {
+                // Queue this interim response for relay to the HTTP/1.1 client via SendAsync's on1xx callback.
+                // The channel writer is completed when the final response headers arrive (below), so SendAsync's
+                // ReadAllAsync loop exits naturally and proceeds to drain the body pipe.
+                pending.InterimChannel.Writer.TryWrite((statusCode, collected));
+                return;
+            }
 
             if (pending.Response == null)
             {
                 var response = new Response { StatusCode = statusCode, StatusDescription = string.Empty, HttpVersion = HttpHeader.Version11 };
                 foreach (var header in collected) response.Headers.AddHeader(header);
                 pending.Response = response;
+                // Signal that no more interim responses will arrive; unblocks SendAsync's interim drain loop.
+                pending.InterimChannel.Writer.TryComplete();
             }
         }
         else
@@ -689,7 +723,12 @@ internal sealed class Http2OriginConnection
     private void FailStream(int streamId, Exception ex)
     {
         // Use TryRemove so subsequent DATA frames for this stream are ignored in the read loop.
-        if (streams.TryRemove(streamId, out var pending)) pending.BodyPipe.CompleteWriter(ex);
+        if (streams.TryRemove(streamId, out var pending))
+        {
+            pending.BodyPipe.CompleteWriter(ex);
+            // Unblock any SendAsync that is awaiting interim responses (e.g. RST_STREAM while draining 1xx).
+            pending.InterimChannel.Writer.TryComplete(ex);
+        }
     }
 
     /// <param name="ex">The failure to fault every in-flight/future stream with.</param>
@@ -710,7 +749,13 @@ internal sealed class Http2OriginConnection
             ProxyDiagnostics.ReportUnexpected(logger, "The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", 
                 new ProxyHttpException("The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", ex, null));
 
-        foreach (var kvp in streams) kvp.Value.BodyPipe.CompleteWriter(ex);
+        foreach (var kvp in streams)
+        {
+            kvp.Value.BodyPipe.CompleteWriter(ex);
+            // Unblock any SendAsync that is awaiting interim responses; no more frames will ever arrive.
+            kvp.Value.InterimChannel.Writer.TryComplete(ex);
+        }
+
         initialSettingsReceived.TrySetException(ex);
     }
 
@@ -747,12 +792,28 @@ internal sealed class Http2OriginConnection
     private sealed class PendingStream : IDisposable
     {
         internal readonly BoundedBodyPipe BodyPipe;
+
+        /// <summary>
+        ///     Queue of 1xx interim responses written by <see cref="ProcessHeaderBlock" /> as they arrive from
+        ///     the origin, and drained by <see cref="SendAsync" />'s <c>on1xx</c> callback relay loop.
+        ///     The writer is completed (without exception) when the final response headers are processed,
+        ///     or completed with an exception when the stream or connection fails.
+        /// </summary>
+        internal readonly Channel<(int StatusCode, HeaderCollection Headers)> InterimChannel =
+            Channel.CreateUnbounded<(int, HeaderCollection)>(
+                new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+
         internal Response? Response;
         internal HeaderCollection? TrailingHeaders;
 
         internal PendingStream(long maxBodyBytes = 0) => BodyPipe = new BoundedBodyPipe(maxBodyBytes);
 
-        public void Dispose() => BodyPipe.Dispose();
+        public void Dispose()
+        {
+            BodyPipe.Dispose();
+            // Release any reader blocking on WaitToReadAsync if Dispose is called without a prior Complete.
+            InterimChannel.Writer.TryComplete();
+        }
     }
 
     private sealed class HeaderCollectorListener : IHeaderListener

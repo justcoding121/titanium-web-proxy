@@ -40,6 +40,17 @@ namespace Titanium.Web.Proxy;
 ///         is connection-oriented and, per RFC 7540 §9.2.3, not meaningful for an h2 client in the first place
 ///         (see the WinAuth remarks in wiki/Protocol-Support.md).
 ///     </para>
+///     <para>
+///         Auth constraint (per-stream connection binding): each h2 stream gets its own dedicated TCP
+///         connection to the HTTP/1.1 origin, opened and closed within
+///         <see cref="RunHttp2ToHttp11BridgeRoundTripAsync" />. NTLM/Kerberos authentication is
+///         connection-bound — the full challenge-response handshake must complete within this single
+///         per-stream connection and authenticated connections must not enter the shared pool (enforced by
+///         <c>closeConnection = true</c> when <c>response.KeepAlive</c> is false and by the bridge never
+///         pooling connections at all in the current implementation). The
+///         The <c>MaxAuthChallengeRounds</c> cap in <c>WinAuthHandler</c> prevents infinite retry loops
+///         should a misbehaving origin continuously re-challenge a successfully authenticated connection.
+///     </para>
 /// </remarks>
 public partial class ProxyServer
 {
