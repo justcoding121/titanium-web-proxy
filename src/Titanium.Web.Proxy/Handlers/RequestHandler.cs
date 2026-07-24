@@ -87,6 +87,20 @@ public partial class ProxyServer
                         // we need this to syphon out data from connection if API user changes them.
                         request.SetOriginalHeaders();
 
+                        // Fill in a default Host header BEFORE BeforeRequest fires so that handlers
+                        // can read it and optionally override it.  The value is derived from the raw
+                        // RequestUriString8 bytes (not from System.Uri, which may normalise the host)
+                        // to stay consistent with the #931 raw-target-preservation fix.
+                        if (!args.IsTransparent && !args.IsSocks && request.Host == null)
+                        {
+                            var rawAuthority = UriExtensions.GetRawAuthority(request.RequestUriString8)
+                                               ?? (request.Authority.Length > 0
+                                                   ? request.Authority.GetString()
+                                                   : null);
+                            if (rawAuthority != null)
+                                request.Host = rawAuthority;
+                        }
+
                         // If user requested interception do it
                         await OnBeforeRequest(args);
 
@@ -103,7 +117,8 @@ public partial class ProxyServer
                             }
 
                             PrepareRequestHeaders(request.Headers);
-                            request.Host = request.RequestUri.Authority;
+                            // Do NOT overwrite Host here — any value set by the BeforeRequest handler
+                            // must be preserved.  The default was already filled in above.
                         }
 
                         // if win auth is enabled

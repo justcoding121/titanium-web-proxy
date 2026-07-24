@@ -72,6 +72,23 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         /// <summary>
+        /// Regression test for issue #839: UriExtensions.GetRawAuthority must extract the host[:port]
+        /// from an absolute-form URI without going through System.Uri.
+        /// </summary>
+        [DataTestMethod]
+        [DataRow("http://example.com/path", "example.com")]
+        [DataRow("https://example.com:8443/path?q=1", "example.com:8443")]
+        [DataRow("http://example.com", "example.com")]
+        [DataRow("/path?q=1", null)]                        // origin-form → no authority
+        [DataRow("http://example.com/", "example.com")]
+        public void UriExtensions_GetRawAuthority_ExtractsCorrectly(string uri, string? expected)
+        {
+            var byteStr = (Titanium.Web.Proxy.Models.ByteString)uri;
+            var actual = Titanium.Web.Proxy.Extensions.UriExtensions.GetRawAuthority(byteStr);
+            Assert.AreEqual(expected, actual);
+        }
+
+        /// <summary>
         /// Regression test for issue #931: the request target forwarded to an upstream HTTP proxy
         /// must be the verbatim raw bytes from the original request line, not the output of
         /// System.Uri.ToString() which normalises percent-encoding and may alter non-ASCII sequences.

@@ -103,6 +103,17 @@ public partial class ProxyServer
                         request.HttpVersion = requestLine.Version;
                         request.SetOriginalHeaders();
 
+                        // Fill default Host before BeforeRequest so handlers can read or override it.
+                        if (!args.IsTransparent && !args.IsSocks && request.Host == null)
+                        {
+                            var rawAuthority = UriExtensions.GetRawAuthority(request.RequestUriString8)
+                                               ?? (request.Authority.Length > 0
+                                                   ? request.Authority.GetString()
+                                                   : null);
+                            if (rawAuthority != null)
+                                request.Host = rawAuthority;
+                        }
+
                         await OnBeforeRequest(args);
 
                         var keepGoing = true;
@@ -119,7 +130,7 @@ public partial class ProxyServer
                             else
                             {
                                 PrepareRequestHeaders(request.Headers);
-                                request.Host = request.RequestUri.Authority;
+                                // Do NOT overwrite Host — the default was filled above and user overrides preserved.
                             }
                         }
 
