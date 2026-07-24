@@ -802,7 +802,11 @@ public partial class ProxyServer : IDisposable
 
         SetThreadPoolMinThread(ThreadPoolWorkerThread);
 
-        if (ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.GenericCertificate == null))
+        // Only create the root certificate when at least one endpoint will actually perform
+        // TLS decryption and does not already have a custom GenericCertificate.  Endpoints
+        // whose DecryptSsl is false never need to generate leaf certificates, so creating a
+        // root PFX for them is unnecessary I/O and key-generation work.
+        if (ProxyEndPoints.Any(x => x.DecryptSsl && x.GenericCertificate == null))
             CertificateManager.EnsureRootCertificate();
 
         if (changeSystemProxySettings && SystemProxySettingsManager != null && RunTime.IsWindows &&

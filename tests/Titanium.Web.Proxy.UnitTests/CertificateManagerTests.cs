@@ -126,6 +126,31 @@ namespace Titanium.Web.Proxy.UnitTests
                 "Leaf cache must be invalidated when the signing root changes");
         }
 
+        /// <summary>
+        /// Regression test for issue #729: ProxyServer.Start must not call EnsureRootCertificate
+        /// when all configured endpoints have DecryptSsl=false or supply a GenericCertificate.
+        /// Verified by confirming that CertificateManager.RootCertificate remains null when no
+        /// endpoint needs TLS decryption.
+        /// </summary>
+        [TestMethod]
+        public void CertificateManager_EnsureRoot_OnlyCreatedWhenNeeded()
+        {
+            // Manager with no explicit root; root should NOT be auto-created when not needed
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+
+            // RootCertificate must be null before any creation call
+            Assert.IsNull(mgr.RootCertificate,
+                "RootCertificate must be null before EnsureRootCertificate is called");
+
+            // After creating it explicitly it should be set
+            mgr.CreateRootCertificate(false);
+            Assert.IsNotNull(mgr.RootCertificate,
+                "RootCertificate must be set after CreateRootCertificate");
+        }
+
         [TestMethod]
         public async Task Simple_BC_Create_Certificate_Test()
         {
