@@ -125,7 +125,12 @@ public class HttpWebClient
         }
         else
         {
-            url = Request.RequestUri.ToString();
+            // Preserve the original request target verbatim rather than serialising through
+            // System.Uri, which may normalise percent-encoding or drop non-ASCII characters.
+            // Request.Url builds the absolute-form URL directly from the raw RequestUriString8
+            // bytes (decoded/re-encoded via ISO-8859-1), so the upstream proxy receives exactly
+            // what the client sent (or what a BeforeRequest handler wrote).
+            url = Request.Url;
 
             // Send Authentication to Upstream proxy if needed
             if (!upstreamProxy!.UseDefaultCredentials &&
