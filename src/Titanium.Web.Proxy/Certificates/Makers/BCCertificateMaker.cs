@@ -27,16 +27,16 @@ namespace Titanium.Web.Proxy.Network.Certificate;
 /// </summary>
 internal class BcCertificateMaker : ICertificateMaker
 {
-    private const int CertificateGraceDays = 366;
-
     // The FriendlyName value cannot be set on Unix.
     // Set this flag to true when exception detected to avoid further exceptions
     private static bool _doNotSetFriendlyName;
     private readonly int certificateValidDays;
+    private readonly int certificateGraceDays;
 
-    internal BcCertificateMaker(int certificateValidDays)
+    internal BcCertificateMaker(int certificateValidDays, int certificateGraceDays)
     {
         this.certificateValidDays = certificateValidDays;
+        this.certificateGraceDays = certificateGraceDays;
     }
 
     /// <summary>
@@ -219,7 +219,7 @@ internal class BcCertificateMaker : ICertificateMaker
         bool switchToMtaIfNeeded, X509Certificate2? signingCert = null)
     {
         return MakeCertificateInternal(subject, $"CN={subject}",
-            DateTime.UtcNow.AddDays(-CertificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays),
+            DateTime.UtcNow.AddDays(-certificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays),
             signingCert);
     }
 }

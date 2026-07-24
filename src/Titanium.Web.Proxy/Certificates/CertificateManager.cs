@@ -130,16 +130,16 @@ public sealed class CertificateManager : IDisposable
                 switch (engine)
                 {
                     case CertificateEngine.BouncyCastle:
-                        certEngineValue = new BcCertificateMaker(CertificateValidDays);
+                        certEngineValue = new BcCertificateMaker(CertificateValidDays, CertificateGraceDays);
                         break;
                     case CertificateEngine.BouncyCastleFast:
-                        certEngineValue = new BcCertificateMakerFast(CertificateValidDays);
+                        certEngineValue = new BcCertificateMakerFast(CertificateValidDays, CertificateGraceDays);
                         break;
                     case CertificateEngine.DefaultWindows:
                     default:
                         if (!RunTime.IsWindows)
                             throw new PlatformNotSupportedException("The Windows certificate engine requires Windows.");
-                        certEngineValue = new WinCertificateMaker(CertificateValidDays);
+                        certEngineValue = new WinCertificateMaker(CertificateValidDays, CertificateGraceDays);
                         break;
                 }
 
@@ -225,10 +225,28 @@ public sealed class CertificateManager : IDisposable
     public string PfxFilePath { get; set; } = string.Empty;
 
     /// <summary>
-    ///     Number of Days generated HTTPS certificates are valid for.
-    ///     Maximum allowed on iOS 13 is 825 days and it is the default.
+    ///     Number of days generated HTTPS leaf certificates are valid for, measured forward from the
+    ///     moment of creation.  The certificate's <c>NotBefore</c> is set to
+    ///     <c>UtcNow - <see cref="CertificateGraceDays" /></c>, so the effective total validity window
+    ///     (NotAfter − NotBefore) equals <c>CertificateValidDays + CertificateGraceDays</c>.
+    ///     <para>
+    ///         Chrome 70+ and iOS 14+ reject certificates whose total validity window exceeds 398 days.
+    ///         To stay within that limit, keep <c>CertificateValidDays + CertificateGraceDays &lt;= 398</c>.
+    ///         The default value of 396, combined with the default grace of 2, equals exactly 398 days total.
+    ///     </para>
     /// </summary>
-    public int CertificateValidDays { get; set; } = 825;
+    public int CertificateValidDays { get; set; } = 396;
+
+    /// <summary>
+    ///     Number of days by which the certificate's <c>NotBefore</c> timestamp is backdated relative to
+    ///     the current UTC time.  A small backdate (the default is 2 days) compensates for minor clock-skew
+    ///     between the proxy machine and clients; it is not necessary to backdate by a year.
+    ///     <para>
+    ///         The total certificate lifetime is <c>CertificateValidDays + CertificateGraceDays</c>.
+    ///         Chrome 70+ and iOS 14+ cap this at 398 days for TLS leaf certificates.
+    ///     </para>
+    /// </summary>
+    public int CertificateGraceDays { get; set; } = 2;
 
     /// <summary>
     ///     Name of the root certificate issuer.

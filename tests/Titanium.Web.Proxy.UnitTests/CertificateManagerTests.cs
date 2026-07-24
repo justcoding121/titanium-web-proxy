@@ -21,6 +21,43 @@ namespace Titanium.Web.Proxy.UnitTests
             = { "facebook.com", "youtube.com", "google.com", "bing.com", "yahoo.com" };
 
 
+        /// <summary>
+        /// Regression test for issue #878: certificate NotBefore must only be backdated by the configured
+        /// grace days (default 2), not the hard-coded 366 days.  Total validity
+        /// (NotAfter - NotBefore) must equal validDays + graceDays so it stays within the
+        /// Chrome/Apple 398-day limit.
+        /// </summary>
+        [DataTestMethod]
+        [DataRow(CertificateEngine.BouncyCastle)]
+        [DataRow(CertificateEngine.BouncyCastleFast)]
+        public void Certificate_Lifetime_Respects_GraceDays_And_ValidDays(CertificateEngine engineType)
+        {
+            const int validDays = 395;
+            const int graceDays = 2;
+
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = engineType,
+                CertificateValidDays = validDays,
+                CertificateGraceDays = graceDays
+            };
+
+            var cert = mgr.CreateCertificate("lifetime-test.example", false);
+            Assert.IsNotNull(cert);
+
+            var totalDays = (cert.NotAfter - cert.NotBefore).TotalDays;
+            Assert.AreEqual(validDays + graceDays, (int)Math.Round(totalDays), 1,
+                $"Total lifetime should be {validDays + graceDays} days, got {totalDays:F1}");
+
+            // NotBefore must be close to now - graceDays (allow ±1 minute for test execution lag)
+            var expectedNotBefore = DateTime.UtcNow.AddDays(-graceDays);
+            Assert.IsTrue(
+                Math.Abs((cert.NotBefore.ToUniversalTime() - expectedNotBefore).TotalMinutes) < 2,
+                $"NotBefore {cert.NotBefore:u} should be ~{expectedNotBefore:u}");
+
+            cert.Dispose();
+        }
+
         [TestMethod]
         public async Task Simple_BC_Create_Certificate_Test()
         {
@@ -115,13 +152,13 @@ namespace Titanium.Web.Proxy.UnitTests
             var expectedIssuerRaw = customRoot.SubjectName.RawData;
 
             // Test BcCertificateMaker
-            var maker = new BcCertificateMaker(certificateValidDays: 365);
+            var maker = new BcCertificateMaker(certificateValidDays: 365, certificateGraceDays: 2);
             var leaf = maker.MakeCertificate("example.com", customRoot);
             CollectionAssert.AreEqual(expectedIssuerRaw, leaf.IssuerName.RawData,
                 "BcCertificateMaker: leaf IssuerName.RawData must equal signing root SubjectName.RawData");
 
             // Test BcCertificateMakerFast
-            var makerFast = new BcCertificateMakerFast(certificateValidDays: 365);
+            var makerFast = new BcCertificateMakerFast(certificateValidDays: 365, certificateGraceDays: 2);
             var leafFast = makerFast.MakeCertificate("example.com", customRoot);
             CollectionAssert.AreEqual(expectedIssuerRaw, leafFast.IssuerName.RawData,
                 "BcCertificateMakerFast: leaf IssuerName.RawData must equal signing root SubjectName.RawData");
