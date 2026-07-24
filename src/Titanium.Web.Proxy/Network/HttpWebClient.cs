@@ -114,19 +114,13 @@ public class HttpWebClient
         string? upstreamProxyPassword = null;
 
         string url;
-        if (isTransparent)
+        if (useUpstreamProxy)
         {
-            url = Request.RequestUriString;
-        }
-        else if (!useUpstreamProxy)
-        {
-            if (UriExtensions.GetScheme(Request.RequestUriString8).Length == 0)
-                url = Request.RequestUriString;
-            else
-                url = Request.RequestUri.GetOriginalPathAndQuery();
-        }
-        else
-        {
+            // Upstream HTTP proxies require absolute-form targets and may need Proxy-Authorization.
+            // This applies to both explicit and transparent client-facing endpoints (#964): previously
+            // the transparent branch skipped credential injection, so Basic-auth upstream proxies
+            // returned 407 for plain HTTP even when UserName/Password were configured.
+            //
             // Preserve the original request target verbatim rather than serialising through
             // System.Uri, which may normalise percent-encoding or drop non-ASCII characters.
             // Request.Url builds the absolute-form URL directly from the raw RequestUriString8
@@ -134,13 +128,23 @@ public class HttpWebClient
             // what the client sent (or what a BeforeRequest handler wrote).
             url = Request.Url;
 
-            // Send Authentication to Upstream proxy if needed
             if (!upstreamProxy!.UseDefaultCredentials &&
                 !string.IsNullOrEmpty(upstreamProxy.UserName) && upstreamProxy.Password != null)
             {
                 upstreamProxyUserName = upstreamProxy.UserName;
                 upstreamProxyPassword = upstreamProxy.Password;
             }
+        }
+        else if (isTransparent)
+        {
+            url = Request.RequestUriString;
+        }
+        else
+        {
+            if (UriExtensions.GetScheme(Request.RequestUriString8).Length == 0)
+                url = Request.RequestUriString;
+            else
+                url = Request.RequestUri.GetOriginalPathAndQuery();
         }
 
         if (url == string.Empty) url = "/";
