@@ -135,6 +135,9 @@ internal static class Http2RawFrame
             this.stream = stream;
         }
 
+        /// <summary>Exposes the underlying stream for tests that need to write raw, malformed bytes.</summary>
+        public Stream GetStream() => stream;
+
         public Task WriteFrameAsync(Http2FrameType type, int streamId, Http2FrameFlag flags, byte[] payload)
         {
             return WriteAsync(stream, type, streamId, flags, payload);
