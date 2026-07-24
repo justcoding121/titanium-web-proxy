@@ -297,25 +297,29 @@ public partial class ProxyServer : IDisposable
     ///     Default is 0 (disabled). WebSocket upgrades, Server-Sent Events, raw tunnels, and sessions
     ///     that already wrote a response status to the client are exempt; those waits use
     ///     <see cref="IdleReadTimeoutSeconds" /> when configured.
+    ///     Per-session override: <see cref="EventArguments.SessionEventArgs.ResponseHeaderTimeout" />.
     /// </summary>
     public int ResponseHeaderTimeoutSeconds { get; set; }
 
     /// <summary>
     ///     Seconds of idle time allowed while reading from the origin (stalled header/body waits).
     ///     Applied via <c>CancelAfter</c> on the active read operation. Default is 0 (disabled).
+    ///     Per-session override: <see cref="EventArguments.SessionEventArgs.IdleReadTimeout" />.
     /// </summary>
     public int IdleReadTimeoutSeconds { get; set; }
 
     /// <summary>
     ///     Seconds of idle time allowed while writing to the origin (stalled header/body waits).
     ///     Applied via <c>CancelAfter</c> on the active write operation. Default is 0 (disabled).
+    ///     Per-session override: <see cref="EventArguments.SessionEventArgs.IdleWriteTimeout" />.
     /// </summary>
     public int IdleWriteTimeoutSeconds { get; set; }
 
     /// <summary>
     ///     Total seconds allowed for a single request/response exchange after
     ///     <see cref="BeforeRequest" /> returns (connect, send, wait for headers, and body copy).
-    ///     Default is 0 (disabled).
+    ///     Default is 0 (disabled). Per-session override:
+    ///     <see cref="EventArguments.SessionEventArgs.RequestTimeout" />.
     /// </summary>
     public int RequestTimeoutSeconds { get; set; }
 
