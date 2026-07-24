@@ -158,7 +158,12 @@ public partial class ProxyServer
 
         response.Locked = true;
 
-        if (!args.IsTransparent && !args.IsSocks) response.Headers.FixProxyHeaders();
+        // Framing normalize applies to every endpoint mode (CL+TE smuggling guard). Proxy-Connection
+        // rewriting remains explicit-proxy-only.
+        if (!args.IsTransparent && !args.IsSocks)
+            response.Headers.FixProxyHeaders();
+        else
+            response.Headers.NormalizeMessageFraming();
 
         await clientStream.WriteResponseAsync(response, cancellationToken);
         args.IsClientResponseCommitted = true;

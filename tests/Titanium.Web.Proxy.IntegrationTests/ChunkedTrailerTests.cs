@@ -342,6 +342,71 @@ public class ChunkedTrailerTests
             "the pooled upstream connection should have been safely drained and reused");
     }
 
+    /// <summary>
+    ///     Characterization for issue #547: when an origin response carries both Content-Length and
+    ///     Transfer-Encoding, the proxy must not forward both (RFC 9112 §6.3). Content-Length is stripped.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Response_With_ContentLength_And_TransferEncoding_DoesNotForwardBoth()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+
+        server.HandleTcpRequest(async context =>
+        {
+            await DrainRequestHeaders(context);
+
+            var response = MsgEncoding.GetBytes(
+                "HTTP/1.1 200 OK\r\n" +
+                "Content-Length: 5\r\n" +
+                "Transfer-Encoding: chunked\r\n" +
+                "\r\n" +
+                "5\r\nhello\r\n" +
+                "0\r\n\r\n");
+            await context.Transport.Output.WriteAsync(response);
+            context.Transport.Output.Complete();
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.Url = server.ListeningTcpUrl;
+            return Task.CompletedTask;
+        };
+
+        using var tcpClient = new TcpClient();
+        await tcpClient.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
+        var stream = tcpClient.GetStream();
+        await stream.WriteAsync(Encoding.ASCII.GetBytes(
+            "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var ms = new System.IO.MemoryStream();
+        var buffer = new byte[4096];
+        try
+        {
+            int read;
+            while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token)) > 0)
+                ms.Write(buffer, 0, read);
+        }
+        catch (OperationCanceledException)
+        {
+            // partial response is enough for header assertions
+        }
+
+        var text = MsgEncoding.GetString(ms.ToArray());
+        Assert.IsTrue(text.StartsWith("HTTP/1.1 200", StringComparison.Ordinal),
+            $"Expected 200. Got:\n{text}");
+        Assert.IsTrue(text.Contains("Transfer-Encoding: chunked", StringComparison.OrdinalIgnoreCase),
+            "Transfer-Encoding must be preserved.");
+        Assert.IsFalse(
+            text.Contains("Content-Length:", StringComparison.OrdinalIgnoreCase),
+            "Content-Length must be stripped when Transfer-Encoding is also present.");
+        Assert.IsTrue(text.Contains("hello", StringComparison.Ordinal),
+            "Chunked body must still be delivered.");
+    }
+
     private static async Task DrainRequestHeaders(Microsoft.AspNetCore.Connections.ConnectionContext context)
     {
         // Drains the (headers-only, bodyless GET) request so the write below completes cleanly.
