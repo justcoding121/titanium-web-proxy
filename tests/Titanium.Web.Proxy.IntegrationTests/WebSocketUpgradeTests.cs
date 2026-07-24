@@ -261,6 +261,149 @@ public class WebSocketUpgradeTests
         Assert.IsTrue(responseText.Contains("Upgrade denied by policy", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    ///     Characterization for issue #572: rewriting a WebSocket upgrade RequestUri to a new host/scheme/path
+    ///     that embeds the original absolute URI (including its query) as a nested query value must preserve
+    ///     host, scheme, path, and the nested query on the origin request line and Host header.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task WebSocketUpgrade_RequestUriRewrite_PreservesHostSchemePathAndNestedQuery()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+
+        string capturedRequest = null;
+        var requestReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        server.HandleTcpRequest(async context =>
+        {
+            var requestText = string.Empty;
+            while (!requestText.Contains("\r\n\r\n", StringComparison.Ordinal))
+            {
+                var result = await context.Transport.Input.ReadAsync();
+                foreach (var seg in result.Buffer) requestText += AsciiEncoding.GetString(seg.Span);
+                context.Transport.Input.AdvanceTo(result.Buffer.End);
+            }
+
+            capturedRequest = requestText;
+            requestReady.TrySetResult(true);
+
+            var handshake = AsciiEncoding.GetBytes(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n");
+            await context.Transport.Output.WriteAsync(handshake);
+            context.Transport.Output.Complete();
+        });
+
+        // Mirror the issue report: nest the original absolute URI (with its own query) inside a new query.
+        const string originalAbsoluteUri = "https://echo.websocket.org/?encoding=text";
+        var originBase = new Uri(server.ListeningTcpUrl);
+        var rewrittenAbsolute =
+            $"http://{originBase.Host}:{originBase.Port}/?socket={originalAbsoluteUri}";
+        var rewrittenUri = new Uri(rewrittenAbsolute);
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.RequestUri = rewrittenUri;
+            e.HttpClient.Request.Host = rewrittenUri.Authority;
+            return Task.CompletedTask;
+        };
+
+        using var tcpClient = new TcpClient();
+        await tcpClient.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
+        var stream = tcpClient.GetStream();
+
+        await stream.WriteAsync(AsciiEncoding.GetBytes(
+            "GET /?encoding=text HTTP/1.1\r\nHost: echo.websocket.org\r\nUpgrade: websocket\r\n" +
+            "Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" +
+            "Sec-WebSocket-Version: 13\r\n\r\n"));
+
+        Assert.IsTrue(await requestReady.Task.WaitAsync(TimeSpan.FromSeconds(10)),
+            "Origin never received the rewritten WebSocket upgrade request.");
+        Assert.IsNotNull(capturedRequest);
+
+        var expectedNestedQuery = "/?socket=https://echo.websocket.org/?encoding=text";
+        Assert.IsTrue(
+            capturedRequest.Contains(expectedNestedQuery, StringComparison.Ordinal),
+            $"Expected nested query '{expectedNestedQuery}' on the origin request. Got:\n{capturedRequest}");
+        Assert.IsTrue(
+            capturedRequest.Contains($"Host: {rewrittenUri.Authority}", StringComparison.OrdinalIgnoreCase)
+            || capturedRequest.Contains($"Host: {rewrittenUri.Host}", StringComparison.OrdinalIgnoreCase),
+            $"Expected Host rewritten to the new authority. Got:\n{capturedRequest}");
+        Assert.IsFalse(
+            capturedRequest.Contains("Host: echo.websocket.org", StringComparison.OrdinalIgnoreCase),
+            "Original Host must not be forwarded after rewrite.");
+        // Must not collapse to the pre-rewrite query alone.
+        Assert.IsFalse(
+            capturedRequest.Contains("GET /?encoding=text HTTP/1.1", StringComparison.Ordinal),
+            "Original path/query must not be forwarded unchanged.");
+    }
+
+    /// <summary>
+    ///     Same nested-query rewrite through an upstream HTTP proxy (issue #572 upstream path).
+    /// </summary>
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task WebSocketUpgrade_RequestUriRewrite_ThroughUpstreamProxy_PreservesNestedQuery()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+
+        string capturedRequest = null;
+        var requestReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        server.HandleTcpRequest(async context =>
+        {
+            var requestText = string.Empty;
+            while (!requestText.Contains("\r\n\r\n", StringComparison.Ordinal))
+            {
+                var result = await context.Transport.Input.ReadAsync();
+                foreach (var seg in result.Buffer) requestText += AsciiEncoding.GetString(seg.Span);
+                context.Transport.Input.AdvanceTo(result.Buffer.End);
+            }
+
+            capturedRequest = requestText;
+            requestReady.TrySetResult(true);
+
+            var handshake = AsciiEncoding.GetBytes(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n");
+            await context.Transport.Output.WriteAsync(handshake);
+            context.Transport.Output.Complete();
+        });
+
+        var upstream = testSuite.GetProxy();
+        var proxy = testSuite.GetReverseProxy(upstream);
+
+        const string originalAbsoluteUri = "https://echo.websocket.org/?encoding=text";
+        var originBase = new Uri(server.ListeningTcpUrl);
+        var rewrittenUri = new Uri(
+            $"http://{originBase.Host}:{originBase.Port}/?socket={originalAbsoluteUri}");
+
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.RequestUri = rewrittenUri;
+            e.HttpClient.Request.Host = rewrittenUri.Authority;
+            return Task.CompletedTask;
+        };
+
+        using var tcpClient = new TcpClient();
+        await tcpClient.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
+        var stream = tcpClient.GetStream();
+
+        await stream.WriteAsync(AsciiEncoding.GetBytes(
+            "GET /?encoding=text HTTP/1.1\r\nHost: echo.websocket.org\r\nUpgrade: websocket\r\n" +
+            "Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" +
+            "Sec-WebSocket-Version: 13\r\n\r\n"));
+
+        Assert.IsTrue(await requestReady.Task.WaitAsync(TimeSpan.FromSeconds(15)),
+            "Origin never received the rewritten WebSocket upgrade through the upstream proxy.");
+        Assert.IsNotNull(capturedRequest);
+        Assert.IsTrue(
+            capturedRequest.Contains("socket=https://echo.websocket.org/?encoding=text", StringComparison.Ordinal),
+            $"Nested query must survive the upstream-proxy path. Got:\n{capturedRequest}");
+    }
+
     private static void WaitForCondition(Func<bool> condition, TimeSpan timeout, string failureMessage)
     {
         var deadline = DateTime.UtcNow + timeout;
