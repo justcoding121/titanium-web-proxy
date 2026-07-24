@@ -5,7 +5,7 @@ using Titanium.Web.Proxy.Http;
 namespace Titanium.Web.Proxy;
 
 /// <summary>
-///     Resolves effective timeout values from server defaults (and session overrides when present).
+///     Resolves effective per-session timeout values from server defaults and session overrides.
 /// </summary>
 public partial class ProxyServer
 {
@@ -16,7 +16,7 @@ public partial class ProxyServer
     internal TimeSpan? ResolveResponseHeaderTimeout(SessionEventArgs args)
     {
         if (!ShouldApplyResponseHeaderTimeout(args)) return null;
-        return SecondsToTimeout(ResponseHeaderTimeoutSeconds);
+        return ResolveTimeout(args.ResponseHeaderTimeout, ResponseHeaderTimeoutSeconds);
     }
 
     /// <summary>
@@ -24,7 +24,7 @@ public partial class ProxyServer
     /// </summary>
     internal TimeSpan? ResolveIdleReadTimeout(SessionEventArgs args)
     {
-        return SecondsToTimeout(IdleReadTimeoutSeconds);
+        return ResolveTimeout(args.IdleReadTimeout, IdleReadTimeoutSeconds);
     }
 
     /// <summary>
@@ -32,7 +32,7 @@ public partial class ProxyServer
     /// </summary>
     internal TimeSpan? ResolveIdleWriteTimeout(SessionEventArgs args)
     {
-        return SecondsToTimeout(IdleWriteTimeoutSeconds);
+        return ResolveTimeout(args.IdleWriteTimeout, IdleWriteTimeoutSeconds);
     }
 
     /// <summary>
@@ -40,7 +40,7 @@ public partial class ProxyServer
     /// </summary>
     internal TimeSpan? ResolveRequestTimeout(SessionEventArgs args)
     {
-        return SecondsToTimeout(RequestTimeoutSeconds);
+        return ResolveTimeout(args.RequestTimeout, RequestTimeoutSeconds);
     }
 
     /// <summary>
@@ -60,8 +60,14 @@ public partial class ProxyServer
         return true;
     }
 
-    private static TimeSpan? SecondsToTimeout(int serverSeconds)
+    /// <summary>
+    ///     <paramref name="sessionOverride"/> null → server seconds; non-positive override or seconds → disabled.
+    /// </summary>
+    private static TimeSpan? ResolveTimeout(TimeSpan? sessionOverride, int serverSeconds)
     {
+        if (sessionOverride.HasValue)
+            return sessionOverride.Value > TimeSpan.Zero ? sessionOverride.Value : null;
+
         return serverSeconds > 0 ? TimeSpan.FromSeconds(serverSeconds) : null;
     }
 }

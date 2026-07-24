@@ -44,6 +44,30 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     public bool IsPromise { get; internal set; }
 
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.ResponseHeaderTimeoutSeconds" />.
+    ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative disables.
+    /// </summary>
+    public TimeSpan? ResponseHeaderTimeout { get; set; }
+
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.IdleReadTimeoutSeconds" />.
+    ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative disables.
+    /// </summary>
+    public TimeSpan? IdleReadTimeout { get; set; }
+
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.IdleWriteTimeoutSeconds" />.
+    ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative disables.
+    /// </summary>
+    public TimeSpan? IdleWriteTimeout { get; set; }
+
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.RequestTimeoutSeconds" />.
+    ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative disables.
+    /// </summary>
+    public TimeSpan? RequestTimeout { get; set; }
+
     private bool HasMulipartEventSubscribers => MultipartRequestPartSent != null;
 
     /// <summary>
