@@ -8,7 +8,9 @@ namespace Titanium.Web.Proxy.Exceptions;
 ///     Thrown when an HTTP upstream proxy rejects a CONNECT tunnel (or otherwise fails to
 ///     establish one) with a non-success response. Carries the upstream status, headers, and a
 ///     bounded body snapshot for diagnostics. Relaying that response to the client is only safe
-///     before the client-facing CONNECT 200 has been committed.
+///     before the client-facing CONNECT 200 has been committed — enable
+///     <see cref="EventArguments.TunnelConnectSessionEventArgs.EstablishServerConnectionBeforeResponse" />
+///     and handle <see cref="Models.ExplicitProxyEndPoint.BeforeTunnelConnectFailure" /> (issue #768).
 /// </summary>
 public class UpstreamProxyConnectException : ProxyException
 {
