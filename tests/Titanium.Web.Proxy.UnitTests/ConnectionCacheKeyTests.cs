@@ -160,5 +160,88 @@ namespace Titanium.Web.Proxy.UnitTests
                 TcpConnectionFactory.GetCredentialFingerprint("ab", "c"),
                 TcpConnectionFactory.GetCredentialFingerprint("a", "bc"));
         }
+
+        // --- ForwardHost / connectHost tests (Bug 1 fix) ---
+
+        /// <summary>
+        /// A fixed-forward endpoint changes the actual TCP destination while keeping the original
+        /// host for TLS. The cache key must include connectHost so that connections forwarded to
+        /// different back-ends are never mistakenly pooled together.
+        /// </summary>
+        [TestMethod]
+        public void CacheKey_WithConnectHost_DiffersFromWithout()
+        {
+            var factory = CreateFactory();
+            try
+            {
+                var direct    = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null);
+                var forwarded = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                    connectHost: "forward.example.com", connectPort: 443);
+
+                Assert.AreNotEqual(direct, forwarded,
+                    "A key with connectHost must differ from a key without one.");
+            }
+            finally
+            {
+                factory.Dispose();
+            }
+        }
+
+        [TestMethod]
+        public void CacheKey_SameConnectHost_ProducesSameKey()
+        {
+            var factory = CreateFactory();
+            try
+            {
+                var key1 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                    connectHost: "forward.example.com", connectPort: 443);
+                var key2 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                    connectHost: "forward.example.com", connectPort: 443);
+
+                Assert.AreEqual(key1, key2, "Identical connectHost/Port must produce identical keys.");
+            }
+            finally
+            {
+                factory.Dispose();
+            }
+        }
+
+        [TestMethod]
+        public void CacheKey_DifferentConnectHosts_ProduceDifferentKeys()
+        {
+            var factory = CreateFactory();
+            try
+            {
+                var key1 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                    connectHost: "forward1.example.com", connectPort: 443);
+                var key2 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                    connectHost: "forward2.example.com", connectPort: 443);
+
+                Assert.AreNotEqual(key1, key2, "Different connectHost values must produce different keys.");
+            }
+            finally
+            {
+                factory.Dispose();
+            }
+        }
+
+        [TestMethod]
+        public void CacheKey_DifferentConnectPorts_ProduceDifferentKeys()
+        {
+            var factory = CreateFactory();
+            try
+            {
+                var key1 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                    connectHost: "forward.example.com", connectPort: 8443);
+                var key2 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                    connectHost: "forward.example.com", connectPort: 9443);
+
+                Assert.AreNotEqual(key1, key2, "Different connectPort values must produce different keys.");
+            }
+            finally
+            {
+                factory.Dispose();
+            }
+        }
     }
 }
