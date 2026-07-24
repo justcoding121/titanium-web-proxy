@@ -218,8 +218,19 @@ internal class TcpConnectionFactory : IDisposable
         // resolve the effective proxy (post-bypass) so the key matches the connection's actual route
         upStreamProxy = GetEffectiveUpstreamProxy(upStreamProxy, uri.Host, uri.Port);
 
+        // Mirror the connectHost/connectPort logic from GetServerConnection so that the key
+        // computed here is identical to the key stored on connections created by that method.
+        string? connectHost = null;
+        int? connectPort = null;
+        if (session.ProxyEndPoint is TransparentBaseProxyEndPoint transparentEndPoint
+            && !string.IsNullOrEmpty(transparentEndPoint.ForwardHost))
+        {
+            connectHost = transparentEndPoint.ForwardHost;
+            connectPort = transparentEndPoint.ForwardPort;
+        }
+
         return GetConnectionCacheKey(uri.Host, uri.Port, isHttps, applicationProtocols, upStreamEndPoint,
-            upStreamProxy);
+            upStreamProxy, connectHost, connectPort);
     }
 
 

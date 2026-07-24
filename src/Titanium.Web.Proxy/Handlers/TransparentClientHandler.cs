@@ -382,7 +382,7 @@ public partial class ProxyServer
                     var connection = (await TcpConnectionFactory.GetServerConnection(this, socksTargetHost, port,
                         HttpHeader.VersionUnknown, false, null,
                         false, session, UpStreamEndPoint,
-                        UpStreamHttpProxy, true, false, cancellationToken))!;
+                        UpStreamHttpProxy ?? UpStreamHttpsProxy, true, false, cancellationToken))!;
                     try
                     {
                         await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool,
