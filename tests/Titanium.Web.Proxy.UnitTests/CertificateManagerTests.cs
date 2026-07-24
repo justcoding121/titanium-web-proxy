@@ -58,6 +58,74 @@ namespace Titanium.Web.Proxy.UnitTests
             cert.Dispose();
         }
 
+        /// <summary>
+        /// Regression test for issue #765: setting RootCertificate to the same certificate instance
+        /// (same thumbprint) must NOT clear the in-memory leaf cache, so cached leaves survive a
+        /// simulated restart where the same persisted root is reloaded.
+        /// </summary>
+        [TestMethod]
+        public async Task RootCertificate_Reload_With_Same_Thumbprint_Preserves_Cache()
+        {
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+
+            mgr.CreateRootCertificate(false);
+            var root = mgr.RootCertificate;
+            Assert.IsNotNull(root);
+
+            // Generate a leaf via CreateServerCertificate which populates the in-memory cache
+            var leaf = await mgr.CreateServerCertificate("cache-reload.example");
+            Assert.IsNotNull(leaf);
+            var expectedThumbprint = leaf.Thumbprint;
+
+            // Simulate restart: reassign the same root certificate (same thumbprint)
+            mgr.RootCertificate = root;
+
+            // The in-memory cache should still contain the leaf
+            var leafAfterReload = await mgr.CreateServerCertificate("cache-reload.example");
+            Assert.IsNotNull(leafAfterReload);
+            Assert.AreEqual(expectedThumbprint, leafAfterReload.Thumbprint,
+                "Cached leaf cert should be reused when the same root is reloaded");
+        }
+
+        /// <summary>
+        /// Regression test for issue #765 (rotation path): setting a DIFFERENT root certificate
+        /// must clear the in-memory leaf cache so stale leaves are not served.
+        /// </summary>
+        [TestMethod]
+        public async Task RootCertificate_Changed_Clears_Cache()
+        {
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+
+            mgr.CreateRootCertificate(false);
+            var leaf = await mgr.CreateServerCertificate("cache-rotation.example");
+            Assert.IsNotNull(leaf);
+            var originalThumbprint = leaf.Thumbprint;
+
+            // Create a second manager with a different root
+            var mgr2 = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+            mgr2.CreateRootCertificate(false);
+            var newRoot = mgr2.RootCertificate;
+            Assert.IsNotNull(newRoot);
+            Assert.AreNotEqual(mgr.RootCertificate!.Thumbprint, newRoot.Thumbprint);
+
+            mgr.RootCertificate = newRoot;
+
+            // Cache must have been cleared; fresh leaf (different thumbprint) is created
+            var newLeaf = await mgr.CreateServerCertificate("cache-rotation.example");
+            Assert.IsNotNull(newLeaf);
+            Assert.AreNotEqual(originalThumbprint, newLeaf.Thumbprint,
+                "Leaf cache must be invalidated when the signing root changes");
+        }
+
         [TestMethod]
         public async Task Simple_BC_Create_Certificate_Test()
         {
