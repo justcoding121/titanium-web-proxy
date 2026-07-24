@@ -288,6 +288,12 @@ public class SessionEventArgs : SessionEventArgsBase
         var contentLength = request.ContentLength;
 
         // send the request body bytes to server
+        // Integration point for MultipartStreamObserver: the observer can be created here and
+        // used alongside the existing CopyStream/ReadUntilBoundaryAsync pipeline for
+        // protocol-neutral, observational multipart streaming (e.g. HTTP/2 reuse).
+        // Example:
+        //   var observer = MultipartStreamObserver.TryCreate(request.ContentType,
+        //       headers => { /* callback */ }, () => { /* part complete */ });
         if (contentLength > 0 && HasMulipartEventSubscribers && request.IsMultipartFormData)
         {
             var boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
