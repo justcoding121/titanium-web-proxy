@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Net;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 
@@ -37,9 +38,9 @@ public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint
     public event AsyncEventHandler<BeforeSslAuthenticateEventArgs>? BeforeSslAuthenticate;
 
     internal override async Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
-        BeforeSslAuthenticateEventArgs connectArgs, ExceptionHandler? exceptionFunc)
+        BeforeSslAuthenticateEventArgs connectArgs, ILogger logger)
     {
         if (BeforeSslAuthenticate != null)
-            await BeforeSslAuthenticate.InvokeAsync(proxyServer, connectArgs, exceptionFunc);
+            await BeforeSslAuthenticate.InvokeAsync(proxyServer, connectArgs, logger);
     }
 }

@@ -1,7 +1,0 @@
-organization=justcoding121
-projectKey=justcoding121_titanium-web-proxy
-serverUrl=https://sonarcloud.io
-serverVersion=8.0.0.97804
-dashboardUrl=https://sonarcloud.io/dashboard?id=justcoding121_titanium-web-proxy&branch=develop
-ceTaskId=AZ-GoiFb9s-lbH9Isqq9
-ceTaskUrl=https://sonarcloud.io/api/ce/task?id=AZ-GoiFb9s-lbH9Isqq9

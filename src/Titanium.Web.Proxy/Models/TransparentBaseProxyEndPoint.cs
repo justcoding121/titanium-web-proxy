@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 
 namespace Titanium.Web.Proxy.Models;
@@ -31,5 +32,5 @@ public abstract class TransparentBaseProxyEndPoint : ProxyEndPoint
     public int? ForwardPort { get; set; }
 
     internal abstract Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
-        BeforeSslAuthenticateEventArgs connectArgs, ExceptionHandler? exceptionFunc);
+        BeforeSslAuthenticateEventArgs connectArgs, ILogger logger);
 }

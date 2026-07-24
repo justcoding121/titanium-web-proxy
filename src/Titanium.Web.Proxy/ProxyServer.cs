@@ -7,11 +7,15 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -45,17 +49,36 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Backing field for exposed public property.
     /// </summary>
-    private ExceptionHandler? exceptionFunc;
-
-    /// <summary>
-    ///     Backing field for exposed public property.
-    /// </summary>
     private int serverConnectionCount;
 
     /// <summary>
     ///     Upstream proxy manager.
     /// </summary>
     private WinHttpWebProxyFinder? systemProxyResolver;
+
+    /// <summary>
+    ///     Backing field for <see cref="Logging" />.
+    /// </summary>
+    private ProxyLoggingOptions loggingOptions = new();
+
+    /// <summary>
+    ///     The currently active logger factory, built from <see cref="loggingOptions" />. Owned (and
+    ///     disposed) by this instance unless <see cref="ProxyLoggingOptions.LoggerFactory" /> was set, in
+    ///     which case it is a live reference to the user-supplied factory and is never disposed here.
+    /// </summary>
+    private ILoggerFactory activeLoggerFactory = NullLoggerFactory.Instance;
+
+    private bool ownsActiveLoggerFactory;
+
+    /// <summary>
+    ///     The shared logger used by every part of this proxy instance (all partial <c>ProxyServer</c>
+    ///     handler files, and handed down live to <see cref="CertificateManager" />,
+    ///     <see cref="TcpConnectionFactory" />, sessions, etc.). Rebuilt whenever <see cref="Logging" />
+    ///     is replaced or <see cref="ApplyLoggingConfiguration" /> is called, so certificate operations
+    ///     performed before <see cref="Start" /> are covered from the moment this instance is
+    ///     constructed.
+    /// </summary>
+    private ILogger logger = NullLogger.Instance;
 
 
     /// <inheritdoc />
@@ -95,19 +118,31 @@ public partial class ProxyServer : IDisposable
         bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
         bool trustRootCertificateAsAdmin = false)
     {
+        // Build the initial logger before creating CertificateManager/TcpConnectionFactory so that
+        // certificate operations performed before Start() (e.g. EnsureRootCertificate) are covered.
+        ApplyLoggingConfiguration();
+
         BufferPool = new DefaultBufferPool();
         ProxyEndPoints = new List<ProxyEndPoint>();
         TcpConnectionFactory = new TcpConnectionFactory(this);
         if (RunTime.IsWindows && !RunTime.IsUwpOnWindows) SystemProxySettingsManager = new SystemProxyManager();
 
         CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName,
-            userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, ExceptionFunc);
+            userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, logger);
     }
 
     /// <summary>
     ///     An factory that creates tcp connection to server.
     /// </summary>
     private TcpConnectionFactory TcpConnectionFactory { get; }
+
+    /// <summary>
+    ///     Caches, per upstream host:port, whether the real origin negotiates HTTP/2 via TLS ALPN - so that
+    ///     repeat CONNECT tunnels to the same host (very common with real browsers) do not each pay for their
+    ///     own redundant probe TLS handshake. See <see cref="Http2OriginCapabilityCache" />.
+    /// </summary>
+    private Http2OriginCapabilityCache Http2OriginCapabilityCache { get; } =
+        new(TimeSpan.FromMinutes(5));
 
     /// <summary>
     ///     Manage system proxy settings.
@@ -167,11 +202,17 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Enable disable HTTP/2 support.
-    ///     Warning: HTTP/2 support is very limited
-    ///     - only enabled when both client and server supports it (no protocol changing in proxy)
-    ///     - cannot modify the request/response (e.g header modifications in BeforeRequest/Response events are ignored)
+    ///     HTTP/2 is only ever used when both the client and the server negotiate it via TLS ALPN; there is no
+    ///     cleartext (h2c) upgrade, and a client/server that does not support HTTP/2 transparently falls back to
+    ///     HTTP/1.1.
+    ///     Request/response header and body modification in BeforeRequest/BeforeResponse, chunked trailers,
+    ///     interim (1xx) responses, and the synthetic-response APIs (Ok/Respond/Redirect/GenericResponse/
+    ///     RespondStreaming) are all supported over HTTP/2, the same as over HTTP/1.x.
+    ///     Not supported: HTTP/2 server push (the wire frames are transcoded but there is no public API to
+    ///     originate a push) and cleartext h2c upgrade.
+    ///     See the protocol support matrix on the wiki for exact, up-to-date HTTP/1.x/HTTP/2 feature coverage.
     /// </summary>
-    public bool EnableHttp2 { get; set; } = false;
+    public bool EnableHttp2 { get; set; } = true;
 
     /// <summary>
     ///     Should we check for certificate revocation during SSL authentication to servers
@@ -185,6 +226,19 @@ public partial class ProxyServer : IDisposable
     ///     Defaults to false.
     /// </summary>
     public bool Enable100ContinueBehaviour { get; set; }
+
+    /// <summary>
+    ///     Controls which HTTP version is declared to the origin server on the request line, independently of
+    ///     the version the client declared to the proxy. Defaults to
+    ///     <see cref="Models.OriginHttpVersionPolicy.PreserveClientVersion" />, which matches the proxy's
+    ///     historical pass-through behavior exactly. Set to
+    ///     <see cref="Models.OriginHttpVersionPolicy.NormalizeToHttp11" /> to let HTTP/1.0 clients share pooled,
+    ///     persistent origin connections the same way HTTP/1.1 clients already do. This only changes the wire
+    ///     version written to the origin request line - it never changes the client-facing
+    ///     <see cref="Http.Request.HttpVersion" /> that event handlers observe, nor the version/persistence used
+    ///     to write the response back to the client.
+    /// </summary>
+    public OriginHttpVersionPolicy OriginHttpVersionPolicy { get; set; } = OriginHttpVersionPolicy.PreserveClientVersion;
 
     /// <summary>
     ///     Should we enable the server connection pool. Defaults to true.
@@ -332,17 +386,101 @@ public partial class ProxyServer : IDisposable
     public Func<SessionEventArgsBase, Task<IExternalProxy?>>? CustomUpStreamProxyFailureFunc { get; set; }
 
     /// <summary>
-    ///     Callback for error events in this proxy instance.
+    ///     Configuration for this proxy instance's built-in diagnostic logging - the replacement for the
+    ///     removed <c>ExceptionFunc</c> callback. Every exception the proxy catches (even when handled
+    ///     internally and never surfaced to user code) is reported through this logger at an appropriate
+    ///     severity; see <see cref="ProxyLoggingOptions" /> for the console/file sinks, enable/disable
+    ///     switch, and minimum level.
+    ///     Mutate the returned instance (or assign a new one) at any point; each assignment/mutation you
+    ///     want to take effect must be followed by <see cref="ApplyLoggingConfiguration" /> (which
+    ///     <see cref="Start" /> also calls automatically, so the configuration active at the moment the
+    ///     proxy starts running is picked up for the run even if you never call it yourself). Calling it
+    ///     again later - including while the proxy is already running - immediately swaps in the new
+    ///     configuration; this is safe because logging never blocks or otherwise affects proxy traffic.
     /// </summary>
-    public ExceptionHandler? ExceptionFunc
+    public ProxyLoggingOptions Logging
     {
-        get => exceptionFunc;
-        set
-        {
-            exceptionFunc = value;
-            CertificateManager.ExceptionFunc = value;
-        }
+        get => loggingOptions;
+        set => loggingOptions = value ?? throw new ArgumentNullException(nameof(value));
     }
+
+    /// <summary>
+    ///     The live, shared logger used throughout this proxy instance. Reflects the most recent call to
+    ///     <see cref="ApplyLoggingConfiguration" />.
+    /// </summary>
+    public ILogger Logger => logger;
+
+    /// <summary>
+    ///     Rebuilds the active logger/logger factory from the current <see cref="Logging" />
+    ///     configuration, disposing any previously owned built-in providers. Called automatically from
+    ///     the constructor (with the default configuration) and from <see cref="Start" />. Call this
+    ///     explicitly any time after changing <see cref="Logging" /> and you want the change to take
+    ///     effect immediately - whether the proxy is stopped (e.g. before using
+    ///     <see cref="CertificateManager" /> directly) or already running.
+    /// </summary>
+    public void ApplyLoggingConfiguration()
+    {
+        var options = loggingOptions;
+
+        var previousFactory = activeLoggerFactory;
+        var previousFactoryOwned = ownsActiveLoggerFactory;
+
+        if (!options.Enabled)
+        {
+            activeLoggerFactory = NullLoggerFactory.Instance;
+            ownsActiveLoggerFactory = false;
+        }
+        else if (options.LoggerFactory != null)
+        {
+            activeLoggerFactory = options.LoggerFactory;
+            ownsActiveLoggerFactory = false;
+        }
+        else
+        {
+            var factory = new global::Titanium.Web.Proxy.Logging.ProxyLoggerFactory(options.MinimumLevel);
+            if (options.EnableConsole) factory.AddProvider(new ConsoleLoggerProvider(options));
+            if (options.EnableFile) factory.AddProvider(new RollingFileLoggerProvider(options));
+            activeLoggerFactory = factory;
+            ownsActiveLoggerFactory = true;
+        }
+
+        logger = activeLoggerFactory.CreateLogger("Titanium.Web.Proxy");
+        ProxyDiagnostics.FallbackLogger = logger;
+
+        // CertificateManager may not exist yet on the very first call from the constructor.
+        if (CertificateManager != null) CertificateManager.Logger = logger;
+
+        if (previousFactoryOwned && previousFactory != activeLoggerFactory)
+            try
+            {
+                previousFactory.Dispose();
+            }
+            catch
+            {
+                // A misbehaving sink must never prevent the logger from being replaced.
+            }
+    }
+
+    /// <summary>
+    ///     Enables structured request/connection timing capture. When <see langword="false" /> (the
+    ///     default) no timing objects are allocated and no <see cref="DateTime.UtcNow" /> calls are made
+    ///     for timing purposes anywhere in the proxy, so there is zero overhead on the hot path.
+    ///     <para>
+    ///         When enabled, every <see cref="SessionEventArgsBase" /> exposes a populated
+    ///         <see cref="SessionEventArgsBase.Timing" /> (per-request phases: client header read,
+    ///         connection wait, request send, time-to-first-byte, response delivery, total), every
+    ///         upstream connection exposes a populated <c>UpstreamConnectionTiming</c> (reachable from a
+    ///         session via <see cref="SessionEventArgsBase.UpstreamConnectionTiming" />, describing DNS,
+    ///         TCP connect, optional upstream-proxy CONNECT, and TLS handshake durations), and a decrypted
+    ///         <see cref="EventArguments.TunnelConnectSessionEventArgs" /> exposes the client-facing TLS
+    ///         handshake duration via <see cref="EventArguments.TunnelConnectSessionEventArgs.ClientTlsTiming" />.
+    ///     </para>
+    ///     <para>
+    ///         Can be toggled at any time; it only affects sessions/connections created after the change,
+    ///         never mutating timing objects already handed out. Defaults to <see langword="false" />.
+    ///     </para>
+    /// </summary>
+    public bool EnableRequestTimingCapture { get; set; }
 
     /// <summary>
     ///     A callback to authenticate proxy clients via basic authentication.
@@ -592,8 +730,8 @@ public partial class ProxyServer : IDisposable
         }
 
         if (protocolType != ProxyProtocolType.None)
-            Console.WriteLine("Set endpoint at Ip {0} and port: {1} as System {2} Proxy", endPoint.IpAddress,
-                endPoint.Port, proxyType);
+            ProxyDiagnostics.ReportInformation(logger,
+                $"Set endpoint at Ip {endPoint.IpAddress} and port: {endPoint.Port} as System {proxyType} Proxy");
     }
 
     /// <summary>
@@ -658,6 +796,9 @@ public partial class ProxyServer : IDisposable
     public void Start(bool changeSystemProxySettings = true)
     {
         if (ProxyRunning) throw new Exception("Proxy is already running.");
+
+        // Freeze the active logging configuration for the duration of this run.
+        ApplyLoggingConfiguration();
 
         SetThreadPoolMinThread(ThreadPoolWorkerThread);
 
@@ -834,7 +975,20 @@ public partial class ProxyServer : IDisposable
                 }
 
                 var acceptedClient = tcpClient;
-                Task.Run(async () => { await HandleClient(acceptedClient, endPoint); });
+                Task.Run(async () =>
+                {
+                    // HandleClient runs detached (fire-and-forget); an unobserved exception here would
+                    // otherwise never surface anywhere and, depending on the .NET unobserved-task-
+                    // exception policy, could tear down the process. Always report it instead.
+                    try
+                    {
+                        await HandleClient(acceptedClient, endPoint);
+                    }
+                    catch (Exception ex)
+                    {
+                        ProxyDiagnostics.ReportException(logger, "Unhandled exception while handling a client connection", ex);
+                    }
+                });
             }
             else
                 tcpClient.Dispose();
@@ -923,7 +1077,7 @@ public partial class ProxyServer : IDisposable
     /// <param name="exception">The exception.</param>
     private void OnException(HttpClientStream? clientStream, Exception exception)
     {
-        ExceptionFunc?.Invoke(exception);
+        ProxyDiagnostics.ReportException(logger, "Unhandled exception in proxy", exception);
     }
 
     /// <summary>
@@ -989,7 +1143,7 @@ public partial class ProxyServer : IDisposable
     {
         // client connection created
         if (OnClientConnectionCreate != null)
-            await OnClientConnectionCreate.InvokeAsync(this, clientSocket, ExceptionFunc);
+            await OnClientConnectionCreate.InvokeAsync(this, clientSocket, logger);
     }
 
     /// <summary>
@@ -1001,7 +1155,7 @@ public partial class ProxyServer : IDisposable
     {
         // server connection created
         if (OnServerConnectionCreate != null)
-            await OnServerConnectionCreate.InvokeAsync(this, serverSocket, ExceptionFunc);
+            await OnServerConnectionCreate.InvokeAsync(this, serverSocket, logger);
     }
 
     /// <summary>
@@ -1034,6 +1188,16 @@ public partial class ProxyServer : IDisposable
         {
             CertificateManager?.Dispose();
             BufferPool?.Dispose();
+
+            if (ownsActiveLoggerFactory)
+                try
+                {
+                    activeLoggerFactory.Dispose();
+                }
+                catch
+                {
+                    // A misbehaving sink must never prevent proxy disposal from completing.
+                }
         }
     }
 

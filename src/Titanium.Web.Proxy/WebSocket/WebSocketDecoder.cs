@@ -5,6 +5,14 @@ using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy;
 
+/// <summary>
+///     Reassembles raw bytes relayed after a WebSocket upgrade (see
+///     <c>SessionEventArgs.WebSocketDecoderSend</c>/<c>WebSocketDecoderReceive</c>, fed from the session's
+///     <c>DataSent</c>/<c>DataReceived</c> events) into individual <see cref="WebSocketFrame" />s, handling
+///     frames split across multiple reads and unmasking masked (client-to-server) payloads. Use one
+///     instance per direction of a single connection - frames may span calls, so state from one call feeds
+///     the next.
+/// </summary>
 public class WebSocketDecoder
 {
     private byte[] buffer;
@@ -16,6 +24,16 @@ public class WebSocketDecoder
         buffer = new byte[bufferPool.BufferSize];
     }
 
+    /// <summary>
+    ///     Decodes as many complete frames as <paramref name="data" /> currently contains (0 or more - any
+    ///     trailing partial frame is buffered internally and completed by a later call).
+    /// </summary>
+    /// <remarks>
+    ///     Every yielded <see cref="WebSocketFrame" />'s <see cref="WebSocketFrame.Data" /> is a zero-copy
+    ///     slice of either <paramref name="data" /> itself or this decoder's internal reassembly buffer -
+    ///     see the remarks on <see cref="WebSocketFrame" />. In particular, do not retain frames across
+    ///     separate calls to this method on the same decoder instance without first copying out their data.
+    /// </remarks>
     public IEnumerable<WebSocketFrame> Decode(byte[] data, int offset, int count)
     {
         var buffer = data.AsMemory(offset, count);
@@ -59,7 +77,12 @@ public class WebSocketDecoder
                 }
             }
 
-            if (data1.Length < idx + size) break;
+            // The completeness check must also account for the 4-byte masking key (present right before
+            // the payload whenever the mask bit is set) - otherwise, once just enough bytes have arrived
+            // to cover the header/extended-length/payload but not yet the mask key, the slice below would
+            // read past the end of the currently available data.
+            var maskKeyLength = masked ? 4 : 0;
+            if (data1.Length < idx + size + maskKeyLength) break;
 
             if (masked)
             {
@@ -115,7 +138,7 @@ public class WebSocketDecoder
     private Memory<byte> CopyToBuffer(ReadOnlyMemory<byte> data)
     {
         var requiredLength = bufferLength + data.Length;
-        if (requiredLength > buffer.Length) Array.Resize(ref buffer, (int)Math.Min(requiredLength, buffer.Length * 2));
+        if (requiredLength > buffer.Length) Array.Resize(ref buffer, (int)Math.Max(requiredLength, buffer.Length * 2));
 
         data.CopyTo(buffer.AsMemory((int)bufferLength));
         bufferLength += data.Length;

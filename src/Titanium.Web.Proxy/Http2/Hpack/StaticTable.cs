@@ -171,6 +171,17 @@ internal static class StaticTable
     private static void Create(ByteString name, string value)
     {
         staticTable.Add(new HttpHeader(name, (ByteString)value));
-        staticIndexByName[name] = staticTable.Count;
+
+        // GetIndex(name) is documented to return the *lowest* index for a name (RFC 7541 Appendix A has
+        // several names - :status, :method, :path, :scheme - repeated across multiple entries with
+        // different values). Only record the first (lowest) index per name; overwriting it on later
+        // Create() calls for the same name (e.g. ":status" appears 7 times, for 200/204/206/304/400/404/500)
+        // would make a name-only lookup resolve to some arbitrary *other* value's index instead of the
+        // canonical lowest one - still a "valid" static index, but the wrong one, silently corrupting which
+        // name a decoder resolves it to only by coincidence rather than by contract.
+        if (!staticIndexByName.ContainsKey(name))
+        {
+            staticIndexByName[name] = staticTable.Count;
+        }
     }
 }

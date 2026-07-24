@@ -31,7 +31,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Titanium.Web.Proxy.Examples
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Titanium.Web.Proxy.IntegrationTests", "..\tests\Titanium.Web.Proxy.IntegrationTests\Titanium.Web.Proxy.IntegrationTests.csproj", "{1D053D72-DCB4-4517-ACDD-D35ADC186950}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Proxy.Examples.WindowsService", "..\examples\Titanium.Web.Proxy.Examples.WindowsService\Titanium.Web.Proxy.Examples.WindowsService.csproj", "{63635F50-7D6F-4A93-84C6-04CF9D2754C5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Titanium.Web.Proxy.Examples.WindowsService", "..\examples\Titanium.Web.Proxy.Examples.WindowsService\Titanium.Web.Proxy.Examples.WindowsService.csproj", "{63635F50-7D6F-4A93-84C6-04CF9D2754C5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

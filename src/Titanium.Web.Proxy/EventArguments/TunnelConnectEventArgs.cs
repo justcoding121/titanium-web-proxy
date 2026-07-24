@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -13,6 +14,7 @@ namespace Titanium.Web.Proxy.EventArguments;
 public class TunnelConnectSessionEventArgs : SessionEventArgsBase
 {
     private bool? isHttpsConnect;
+    private UpstreamHttpProtocol upstreamHttpProtocol = UpstreamHttpProtocol.Auto;
 
     internal TunnelConnectSessionEventArgs(ProxyServer server, ProxyEndPoint endPoint, ConnectRequest connectRequest,
         HttpClientStream clientStream, CancellationTokenSource cancellationTokenSource)
@@ -30,6 +32,39 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
     ///     When set to true it denies the connect request with a Forbidden status.
     /// </summary>
     public bool DenyConnect { get; set; }
+
+    /// <summary>
+    ///     Controls which HTTP version the proxy uses on its own connection to the origin server for this
+    ///     tunnel, independent of the HTTP version the client itself negotiates with the proxy. Must be set
+    ///     during <c>BeforeTunnelConnectRequest</c> - it is read before the client TLS handshake, and the
+    ///     client's own ALPN offer/negotiation cannot change afterward. See <see cref="UpstreamHttpProtocol" />.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is not a defined <see cref="UpstreamHttpProtocol" /> member.</exception>
+    public UpstreamHttpProtocol UpstreamHttpProtocol
+    {
+        get => upstreamHttpProtocol;
+        set => upstreamHttpProtocol = Enum.IsDefined(typeof(UpstreamHttpProtocol), value)
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(value), value,
+                "Unknown UpstreamHttpProtocol value.");
+    }
+
+    /// <summary>
+    ///     Whether the proxy may bridge a mismatch between the client's negotiated HTTP version and the
+    ///     origin's HTTP version implied by <see cref="UpstreamHttpProtocol" />. Defaults to <c>false</c>, in
+    ///     which case <see cref="UpstreamHttpProtocol.Http11" /> instead simply never offers "h2" to the
+    ///     client (so no mismatch, and no translation, is ever needed) and <see cref="UpstreamHttpProtocol.Http2" />
+    ///     fails the connection outright if the client does not also support HTTP/2.
+    /// </summary>
+    public bool AllowHttpProtocolTranslation { get; set; }
+
+    /// <summary>
+    ///     Timing of the client-facing (browser-to-proxy) TLS handshake performed while decrypting this
+    ///     tunnel, populated only when <see cref="ProxyServer.EnableRequestTimingCapture" /> is enabled and
+    ///     <see cref="DecryptSsl" /> is <see langword="true" />; <see langword="null" /> otherwise (including
+    ///     for a plain, non-HTTPS CONNECT tunnel that is never TLS-decrypted at all).
+    /// </summary>
+    public ClientTlsTiming? ClientTlsTiming { get; internal set; }
 
     /// <summary>
     ///     Is this a connect request to secure HTTP server? Or is it to some other protocol.
@@ -78,10 +113,8 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
 
     ~TunnelConnectSessionEventArgs()
     {
-#if DEBUG
-            // Finalizer should not be called
-            System.Diagnostics.Debugger.Break();
-#endif
+        Titanium.Web.Proxy.Logging.ProxyDiagnostics.ReportUndisposedFinalizer(Server.Logger,
+            nameof(TunnelConnectSessionEventArgs));
 
         Dispose(false);
     }

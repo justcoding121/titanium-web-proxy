@@ -4,6 +4,18 @@
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyOriginatorKeyFile>StrongNameKey.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>true</SignAssembly>
+    <!--
+      This project intentionally does not enable full nullable reference-type flow analysis
+      (see Nullable enable) project-wide: many pre-existing test files use "?" purely as inline
+      documentation on individual locals/parameters without opting the whole project into the
+      compiler's flow analysis, which the C# compiler otherwise flags as CS8632 ("annotation
+      ... should only be used ... within a '#nullable' annotations context"). CI builds with the
+      warnaserror switch, which escalates that warning to a build-breaking error; suppress just
+      that one diagnostic here so existing and future "?" annotations keep compiling without
+      forcing a project-wide, unrelated pass fixing every legitimate nullable-flow warning full
+      nullable-enable would otherwise surface across this large test project.
+    -->
+    <WarningsNotAsErrors>CS8632</WarningsNotAsErrors>
   </PropertyGroup>
 
   <ItemGroup>

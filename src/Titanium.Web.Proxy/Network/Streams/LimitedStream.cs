@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
@@ -14,16 +15,27 @@ internal class LimitedStream : Stream
     private readonly IHttpStreamReader baseReader;
     private readonly IBufferPool bufferPool;
     private readonly bool isChunked;
+    private readonly HeaderCollection? trailingHeaders;
     private long bytesRemaining;
 
     private bool readChunkTrail;
 
+    /// <param name="baseStream"></param>
+    /// <param name="bufferPool"></param>
+    /// <param name="isChunked"></param>
+    /// <param name="contentLength"></param>
+    /// <param name="trailingHeaders">
+    ///     Optional collection to populate with the chunked body's trailer headers, if any (ignored when
+    ///     <paramref name="isChunked" /> is false). Used so buffered/decompressing whole-body reads still
+    ///     populate a request/response's trailing headers the same way the pass-through relay path does.
+    /// </param>
     internal LimitedStream(IHttpStreamReader baseStream, IBufferPool bufferPool, bool isChunked,
-        long contentLength)
+        long contentLength, HeaderCollection? trailingHeaders = null)
     {
         baseReader = baseStream;
         this.bufferPool = bufferPool;
         this.isChunked = isChunked;
+        this.trailingHeaders = trailingHeaders;
         bytesRemaining = isChunked
             ? 0
             : contentLength == -1
@@ -79,10 +91,11 @@ internal class LimitedStream : Stream
         {
             bytesRemaining = -1;
 
-            // chunk trail
-            var task = baseReader.ReadLineAsync();
-            if (!task.IsCompleted)
-                task.AsTask().Wait();
+            // Trailer header block, strictly through the terminating blank line (see ChunkedTrailerHelper) -
+            // reading only a single line here (as before) left any additional trailer lines unread on the
+            // source, corrupting a pooled keep-alive connection's next message.
+            ChunkedTrailerHelper.ReadTrailingHeaders(baseReader, trailingHeaders ?? new HeaderCollection(), null)
+                .AsTask().GetAwaiter().GetResult();
         }
     }
 
@@ -120,8 +133,11 @@ internal class LimitedStream : Stream
         {
             bytesRemaining = -1;
 
-            // chunk trail
-            await baseReader.ReadLineAsync();
+            // Trailer header block, strictly through the terminating blank line (see ChunkedTrailerHelper) -
+            // reading only a single line here (as before) left any additional trailer lines unread on the
+            // source, corrupting a pooled keep-alive connection's next message.
+            await ChunkedTrailerHelper.ReadTrailingHeaders(baseReader, trailingHeaders ?? new HeaderCollection(),
+                null);
         }
     }
 

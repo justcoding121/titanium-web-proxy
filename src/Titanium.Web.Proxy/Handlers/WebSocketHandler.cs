@@ -1,4 +1,4 @@
-﻿using System.Threading;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
@@ -28,12 +28,37 @@ public partial class ProxyServer
         await HeaderParser.ReadHeaders(serverConnection.Stream, response.Headers,
             cancellationToken);
 
-        await clientStream.WriteResponseAsync(response, cancellationToken);
+        args.Timing?.MarkResponseHeadersReceived();
 
-        // If user requested call back then do it
+        // If user requested call back then do it - before the response is written to the client, matching
+        // every other response path (see ResponseHandler.HandleHttpSessionResponse's OnBeforeResponse call).
+        // This lets a subscriber inspect/modify the upgrade response, or deny the upgrade entirely via
+        // args.Respond(...), before anything reaches the wire. Previously this fired only after the
+        // original server response had already been written to the client, so any change made here was
+        // silently lost and a denied upgrade would still fall through to the raw relay below.
         if (!args.HttpClient.Response.Locked) await OnBeforeResponse(args);
 
+        // it may have changed in the user event
+        response = args.HttpClient.Response;
+        var userReplacedResponse = response.Locked;
+        response.Locked = true;
+
+        await clientStream.WriteResponseAsync(response, cancellationToken);
+
+        // The upgrade handshake is what "request timing" means for a WebSocket session - mark it complete
+        // here rather than leaving it to the shared OnAfterResponse chokepoint (see its remarks), which
+        // only runs once the raw relay below returns and would otherwise make TotalDuration cover the
+        // entire (potentially very long-lived) WebSocket connection instead of just the HTTP upgrade.
+        args.Timing?.MarkComplete();
+
+        // A BeforeResponse handler that replaced the response (e.g. to deny the upgrade) has taken full
+        // control of the exchange - same as the normal HTTP response path, there is nothing left to relay:
+        // the server connection is being torn down by the caller regardless (WebSocket sessions are never
+        // pooled), so any unread bytes left over from the original server response are simply discarded
+        // along with it.
+        if (userReplacedResponse) return;
+
         await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool,
-            args.OnDataSent, args.OnDataReceived, cancellationTokenSource, ExceptionFunc);
+            args.OnDataSent, args.OnDataReceived, cancellationTokenSource, logger);
     }
 }

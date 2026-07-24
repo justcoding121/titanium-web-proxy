@@ -313,8 +313,15 @@ internal class Decoder
 
                         if (valueLength == 0)
                         {
-                            //InsertHeader(headerListener, name, Net45Compatibility.EmptyArray, indexType);
-                            name = Array.Empty<byte>();
+                            // Empty value: there are no value bytes to wait for, so the field is
+                            // already complete here. It still MUST be emitted and, for incremental
+                            // indexing, inserted into the dynamic table exactly like any other field -
+                            // skipping InsertHeader() here (as this branch previously did by jumping
+                            // straight back to ReadHeaderRepresentation) silently drops the header from
+                            // the decoded list AND desyncs the dynamic table from the encoder's, which
+                            // then causes "illegal index" failures on any later reference to this or any
+                            // subsequently-inserted entry.
+                            InsertHeader(headerListener, name, ByteString.Empty, indexType);
                             state = State.ReadHeaderRepresentation;
                         }
                         else

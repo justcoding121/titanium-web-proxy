@@ -1,4 +1,0 @@
-﻿{"dotnetenterprise.s4net.build.target_framework_moniker":".NETFramework,Version=v4.8"}
-{"dotnetenterprise.s4net.build.deterministic.cnt":"true"}
-{"dotnetenterprise.s4net.build.nuget_project_style.cnt":"PackageReference"}
-{"dotnetenterprise.s4net.build.netcore_sdk_version.cnt":"NotSet"}

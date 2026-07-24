@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
@@ -44,10 +45,12 @@ internal static class HttpHelper
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // parsing errors
-            // ignored
+            // A malformed Content-Type header charset parameter just falls back to the default encoding
+            // below - expected for the many real-world servers that send slightly invalid headers.
+            ProxyDiagnostics.ReportTrace(ProxyDiagnostics.FallbackLogger,
+                $"Failed to parse the charset from Content-Type header '{contentType}': {ex.Message}");
         }
 
         // return default if not specified

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -199,6 +200,74 @@ public class StreamingBodyTests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         CollectionAssert.AreEqual(payload, body);
         Assert.AreEqual(payload.Length, response.Content.Headers.ContentLength);
+    }
+
+    [TestMethod]
+    public async Task OnResponseBodyWrite_Tls_Decrypted_Http11_Body_Relays_Correctly_And_Hook_Fires()
+    {
+        // The per-chunk body-write hook gate in HttpStream.CopyBodyAsync checks the internal
+        // ITransportCapableStream.SupportsBodyWriteHook capability instead of the old IsNetworkStream flag,
+        // and HttpStream reports that capability as true whenever its backing stream is either a plain
+        // NetworkStream or a decrypted SslStream. So OnResponseBodyWrite must fire with parity for a
+        // TLS-decrypted HTTP/1.x connection, exactly as it already does for plain HTTP.
+        using var testSuite = new TestSuite();
+
+        const string expected = "I am server. I received your greetings.";
+
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync(expected));
+
+        var proxy = testSuite.GetProxy();
+
+        var callbackCount = 0;
+        var observedBytes = new List<byte>();
+        proxy.OnResponseBodyWrite += (sender, e) =>
+        {
+            callbackCount++;
+            observedBytes.AddRange(e.BodyBytes);
+            return Task.CompletedTask;
+        };
+
+        var client = testSuite.GetClient(proxy);
+
+        var response = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(expected, body);
+        Assert.IsTrue(callbackCount > 0,
+            "The response body write hook should now fire for TLS-decrypted HTTP/1.x connections too.");
+        Assert.AreEqual(expected, Encoding.ASCII.GetString(observedBytes.ToArray()),
+            "The hook should observe the same bytes that were relayed to the client.");
+    }
+
+    [TestMethod]
+    public async Task OnResponseBodyWrite_Tls_Decrypted_Http11_Can_Rewrite_Body()
+    {
+        // Companion to the read-only test above: proves the hook is not just invoked but its mutation of
+        // e.BodyBytes is actually relayed to the client for a TLS-decrypted HTTP/1.x connection, matching
+        // the plain-HTTP behavior in OnResponseBodyWrite_Can_Rewrite_Body.
+        using var testSuite = new TestSuite();
+
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("hello world"));
+
+        var proxy = testSuite.GetProxy();
+
+        proxy.OnResponseBodyWrite += (sender, e) =>
+        {
+            var text = Encoding.ASCII.GetString(e.BodyBytes);
+            e.BodyBytes = Encoding.ASCII.GetBytes(text.ToUpperInvariant());
+            return Task.CompletedTask;
+        };
+
+        var client = testSuite.GetClient(proxy);
+
+        var response = await client.GetAsync(new Uri(server.ListeningHttpsUrl));
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("HELLO WORLD", body);
     }
 
     [TestMethod]

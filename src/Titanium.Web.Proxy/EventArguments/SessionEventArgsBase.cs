@@ -1,9 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Threading;
+using Microsoft.Extensions.Logging;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
@@ -22,7 +24,6 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     protected readonly IBufferPool BufferPool;
 
     internal readonly CancellationTokenSource CancellationTokenSource;
-    protected readonly ExceptionHandler? ExceptionFunc;
 
     private bool disposed;
     private bool enableWinAuth;
@@ -35,8 +36,9 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
         CancellationTokenSource cancellationTokenSource) : base(server, clientStream.Connection)
     {
         BufferPool = server.BufferPool;
-        ExceptionFunc = server.ExceptionFunc;
-        TimeLine["Session Created"] = DateTime.UtcNow;
+
+        var sessionCreatedAt = DateTime.UtcNow;
+        Timing = server.EnableRequestTimingCapture ? new HttpRequestTiming(sessionCreatedAt) : null;
 
         CancellationTokenSource = cancellationTokenSource;
 
@@ -63,9 +65,20 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public Guid ServerConnectionId => HttpClient.HasConnection ? ServerConnection.Id : Guid.Empty;
 
     /// <summary>
-    ///     Relative milliseconds for various events.
+    ///     Structured timing for this session's request/response exchange, populated only when
+    ///     <see cref="ProxyServer.EnableRequestTimingCapture" /> is enabled (otherwise <see langword="null" />
+    ///     and no timing overhead is incurred anywhere in the proxy). See <see cref="HttpRequestTiming" />.
     /// </summary>
-    public Dictionary<string, DateTime> TimeLine { get; } = new();
+    public HttpRequestTiming? Timing { get; }
+
+    /// <summary>
+    ///     Structured timing for the upstream connection currently used by this session, populated only
+    ///     when <see cref="ProxyServer.EnableRequestTimingCapture" /> is enabled. <see langword="null" />
+    ///     when timing capture is disabled or no upstream connection has been acquired yet (e.g. the
+    ///     request was answered synthetically). See <see cref="UpstreamConnectionTiming" />.
+    /// </summary>
+    public UpstreamConnectionTiming? UpstreamConnectionTiming =>
+        HttpClient.HasConnection ? ServerConnection.Timing : null;
 
     /// <summary>
     ///     Returns a user data for this request/response session which is
@@ -153,6 +166,13 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// </summary>
     public Exception? Exception { get; internal set; }
 
+    /// <summary>
+    ///     The live logger for the <see cref="ProxyServer" /> that owns this session. Always reads the
+    ///     server's current logger rather than a value snapshotted at session creation, so a logger
+    ///     replaced via <see cref="ProxyServer.ApplyLoggingConfiguration" /> is picked up immediately.
+    /// </summary>
+    protected ILogger Logger => Server.Logger;
+
     public void Dispose()
     {
         Dispose(true);
@@ -161,7 +181,7 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 
     protected void OnException(Exception exception)
     {
-        ExceptionFunc?.Invoke(exception);
+        ProxyDiagnostics.ReportException(Logger, "Unhandled exception in proxy session", exception);
     }
 
     protected virtual void Dispose(bool disposing)
@@ -184,10 +204,7 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 
     ~SessionEventArgsBase()
     {
-#if DEBUG
-            // Finalizer should not be called
-            System.Diagnostics.Debugger.Break();
-#endif
+        ProxyDiagnostics.ReportUndisposedFinalizer(Server.Logger, nameof(SessionEventArgsBase));
 
         Dispose(false);
     }

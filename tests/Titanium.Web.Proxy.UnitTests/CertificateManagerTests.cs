@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Network;
 
@@ -24,11 +25,7 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => e =>
-            {
-                Debug.WriteLine(e.ToString());
-                Debug.WriteLine(e.InnerException?.ToString());
-            }).Value)
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
@@ -52,11 +49,7 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => e =>
-                {
-                    Debug.WriteLine(e.ToString());
-                    Debug.WriteLine(e.InnerException?.ToString());
-                }).Value)
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
                 { CertificateEngine = CertificateEngine.DefaultWindows };
 
             mgr.CreateRootCertificate();
@@ -81,11 +74,7 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => e =>
-                {
-                    Debug.WriteLine(e.ToString());
-                    Debug.WriteLine(e.InnerException?.ToString());
-                }).Value)
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
                 { CertificateEngine = CertificateEngine.BouncyCastleFast };
 
             mgr.SaveFakeCertificates = true;
@@ -103,11 +92,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public async Task CreateServerCertificate_ExpiredCachedCertificate_IsRegenerated()
         {
-            var mgr = new CertificateManager(null, null, false, false, false, new Lazy<ExceptionHandler>(() => e =>
-                {
-                    Debug.WriteLine(e.ToString());
-                    Debug.WriteLine(e.InnerException?.ToString());
-                }).Value)
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
                 { CertificateEngine = CertificateEngine.BouncyCastleFast };
 
             const string host = "expired.test";

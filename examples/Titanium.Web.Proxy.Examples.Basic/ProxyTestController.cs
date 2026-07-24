@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
@@ -37,7 +38,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             Directory.CreateDirectory(certificateDirectory);
             proxyServer.CertificateManager.PfxFilePath = Path.Combine(certificateDirectory, "rootCert.pfx");
 
-            //proxyServer.EnableHttp2 = true;
+            //proxyServer.EnableHttp2 = false;
 
             // generate root certificate without storing it in file system
             //proxyServer.CertificateManager.CreateRootCertificate(false);
@@ -45,13 +46,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.CertificateManager.TrustRootCertificate();
             //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
 
-            proxyServer.ExceptionFunc = async exception =>
-            {
-                if (exception is ProxyHttpException phex)
-                    WriteToConsole(exception.Message + ": " + phex.InnerException?.Message, ConsoleColor.Red);
-                else
-                    WriteToConsole(exception.Message, ConsoleColor.Red);
-            };
+#if DEBUG
+            proxyServer.Logging.MinimumLevel = LogLevel.Trace;
+#else
+            proxyServer.Logging.MinimumLevel = LogLevel.Information;
+#endif
 
             proxyServer.TcpTimeWaitSeconds = 10;
             proxyServer.ConnectionTimeOutSeconds = 15;

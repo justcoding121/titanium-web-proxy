@@ -7,7 +7,10 @@ using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Network.Certificate;
 using Titanium.Web.Proxy.Shared;
 
@@ -100,12 +103,12 @@ public sealed class CertificateManager : IDisposable
     ///     Should we attempt to trust certificates with elevated permissions by
     ///     prompting for UAC if required?
     /// </param>
-    /// <param name="exceptionFunc"></param>
+    /// <param name="logger">The initial logger to report certificate operations through.</param>
     internal CertificateManager(string? rootCertificateName, string? rootCertificateIssuerName,
         bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin,
-        ExceptionHandler? exceptionFunc)
+        ILogger logger)
     {
-        ExceptionFunc = exceptionFunc;
+        Logger = logger;
 
         UserTrustRoot = userTrustRootCertificate || machineTrustRootCertificate;
 
@@ -127,16 +130,16 @@ public sealed class CertificateManager : IDisposable
                 switch (engine)
                 {
                     case CertificateEngine.BouncyCastle:
-                        certEngineValue = new BcCertificateMaker(ExceptionFunc, CertificateValidDays);
+                        certEngineValue = new BcCertificateMaker(CertificateValidDays);
                         break;
                     case CertificateEngine.BouncyCastleFast:
-                        certEngineValue = new BcCertificateMakerFast(ExceptionFunc, CertificateValidDays);
+                        certEngineValue = new BcCertificateMakerFast(CertificateValidDays);
                         break;
                     case CertificateEngine.DefaultWindows:
                     default:
                         if (!RunTime.IsWindows)
                             throw new PlatformNotSupportedException("The Windows certificate engine requires Windows.");
-                        certEngineValue = new WinCertificateMaker(ExceptionFunc, CertificateValidDays);
+                        certEngineValue = new WinCertificateMaker(CertificateValidDays);
                         break;
                 }
 
@@ -168,9 +171,22 @@ public sealed class CertificateManager : IDisposable
     internal bool TrustRootAsAdministrator { get; set; }
 
     /// <summary>
-    ///     Exception handler
+    ///     The logger used to report certificate operation failures. Kept as a live-swappable reference
+    ///     (rather than snapshotted once) so that changing <see cref="ProxyServer.Logging" /> is
+    ///     reflected here without recreating this <see cref="CertificateManager" />; resets the cached
+    ///     certificate engine so a lazily-created maker also picks up the new logger.
     /// </summary>
-    internal ExceptionHandler? ExceptionFunc { get; set; }
+    internal ILogger Logger
+    {
+        get => loggerField;
+        set
+        {
+            loggerField = value;
+            certEngineValue = null;
+        }
+    }
+
+    private ILogger loggerField = NullLogger.Instance;
 
     /// <summary>
     ///     Select Certificate Engine.
@@ -412,7 +428,7 @@ public sealed class CertificateManager : IDisposable
 
     private void OnException(Exception exception)
     {
-        ExceptionFunc?.Invoke(exception);
+        ProxyDiagnostics.ReportException(Logger, "Certificate operation failed", exception);
     }
 
     /// <summary>

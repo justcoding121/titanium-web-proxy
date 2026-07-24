@@ -25,11 +25,12 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET.
 
 - Intercept, inspect, modify, redirect, or block HTTP and HTTPS traffic
 - Explicit, transparent, and SOCKS4/5 proxy endpoints
-- Request and response body streaming
-- HTTP/2 support
+- Request and response body streaming (see the [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support) for the plain vs. TLS hook distinction)
+- HTTP/2 support, on by default, opt-out via `ProxyServer.EnableHttp2` (see the [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support) for exact coverage)
 - Upstream HTTP, HTTPS, and SOCKS proxies with automatic system proxy detection
 - Proxy authentication, mutual TLS, Kerberos, and NTLM support
 - Connection, certificate, and buffer pooling
+- Built-in, zero-overhead-when-disabled logging (every caught exception, optionally to console/file or your own `ILoggerFactory`) and opt-in structured request/connection timing — see [Logging and diagnostics](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#logging-and-diagnostics) in the wiki
 
 ## Installation
 
@@ -47,9 +48,15 @@ dotnet add package Titanium.Web.Proxy --prerelease
 
 ## Supported frameworks
 
-- .NET Framework 4.6.2
-- .NET 8
 - .NET 10
+
+> Versions prior to 4.0 also supported .NET Framework 4.6.2 and .NET 8; starting with 4.0, the package
+> targets .NET 10 only so the codebase can take full advantage of modern APIs.
+
+> **Breaking change:** `ProxyServer.ExceptionFunc` and `SessionEventArgsBase.TimeLine` were removed in
+> favor of the unified `ProxyServer.Logging`/`EnableRequestTimingCapture` APIs described in
+> [Logging and diagnostics](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#logging-and-diagnostics)
+> and [Breaking changes: unified logging and timing](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#breaking-changes-unified-logging-and-timing).
 
 ## Quick start
 
@@ -91,7 +98,7 @@ Configure your client to use `127.0.0.1:8000` as its HTTP and HTTPS proxy. Trust
 
 ## Examples and documentation
 
-- [Wiki](https://github.com/justcoding121/titanium-web-proxy/wiki) — feature guides, including [streaming request/response bodies](https://github.com/justcoding121/titanium-web-proxy/wiki/Streaming-Bodies)
+- [Wiki](https://github.com/justcoding121/titanium-web-proxy/wiki) — feature guides, including [streaming request/response bodies](https://github.com/justcoding121/titanium-web-proxy/wiki/Streaming-Bodies) and a [protocol feature support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support) (what's supported for HTTP/1.x vs HTTP/2)
 - [Basic console proxy](examples/Titanium.Web.Proxy.Examples.Basic)
 - [WPF proxy application](examples/Titanium.Web.Proxy.Examples.Wpf)
 - [Windows service](examples/Titanium.Web.Proxy.Examples.WindowsService)
@@ -108,6 +115,9 @@ Configure your client to use `127.0.0.1:8000` as its HTTP and HTTPS proxy. Trust
 This project is actively maintained by:
 
 - [justcoding121](https://github.com/justcoding121)
+
+Past contributors:
+
 - [honfika](https://github.com/honfika)
 
 ## License

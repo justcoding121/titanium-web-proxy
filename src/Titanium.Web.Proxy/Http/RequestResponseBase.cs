@@ -1,6 +1,7 @@
 ﻿using System;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Compression;
@@ -19,6 +20,12 @@ public abstract class RequestResponseBase
     ///     Cached body as string.
     /// </summary>
     private string? bodyString;
+
+    /// <summary>
+    ///     Backing field for <see cref="TrailingHeaders" />, lazily allocated so the common case (a message
+    ///     with no trailers) does not pay for an empty <see cref="HeaderCollection" /> on every request/response.
+    /// </summary>
+    private HeaderCollection? trailingHeaders;
 
     internal Task? Http2BeforeHandlerTask;
 
@@ -78,6 +85,33 @@ public abstract class RequestResponseBase
     ///     Collection of all headers.
     /// </summary>
     public HeaderCollection Headers { get; } = new();
+
+    /// <summary>
+    ///     Trailing headers ("trailers") carried after a chunked body, per RFC 9110 §6.5 / RFC 7230 §4.1.2.
+    ///     Empty by default (lazily allocated on first access). Only meaningful for chunked bodies -
+    ///     trailers are not defined for, and are always ignored on, fixed <c>Content-Length</c> bodies.
+    ///     <para>
+    ///         On the read side, this is populated once the body has actually been consumed (streamed,
+    ///         buffered, or drained) - it is <b>not</b> guaranteed to be populated yet during
+    ///         <c>BeforeRequest</c>/<c>BeforeResponse</c>. It is reliably observable in <c>AfterResponse</c>
+    ///         for streaming pass-through, or earlier only when the body was explicitly buffered
+    ///         (e.g. via <c>GetResponseBody</c>/<c>GetRequestBody</c>).
+    ///     </para>
+    ///     <para>
+    ///         On the write side, entries added here before the body finishes writing are emitted as the
+    ///         trailer block following the terminating zero-length chunk. A small set of framing/routing
+    ///         header fields (e.g. <c>Transfer-Encoding</c>, <c>Content-Length</c>, <c>Trailer</c>,
+    ///         <c>Host</c>) are forbidden in a trailer and will fail with a clear exception rather than
+    ///         being silently dropped.
+    ///     </para>
+    /// </summary>
+    public HeaderCollection TrailingHeaders => trailingHeaders ??= new HeaderCollection();
+
+    /// <summary>
+    ///     True if any trailing headers have been recorded, without forcing the lazy allocation that the
+    ///     public <see cref="TrailingHeaders" /> getter performs.
+    /// </summary>
+    internal bool HasTrailingHeaders => trailingHeaders != null && trailingHeaders.Any();
 
     /// <summary>
     ///     Length of the body.
