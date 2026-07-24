@@ -279,7 +279,16 @@ public sealed class CertificateManager : IDisposable
         get => rootCertificate;
         set
         {
-            ClearRootCertificate();
+            // Only invalidate cached leaf certificates when the signing root's identity actually
+            // changes.  Reloading the same persisted root certificate on startup should not discard
+            // valid cached leaves that were signed by that root — the leaves remain trustworthy as
+            // long as the signing root is the same.  Compare by thumbprint because thumbprint is a
+            // hash of the entire DER-encoded certificate (identity + public key + validity + chain).
+            var isSameRoot = rootCertificate != null && value != null &&
+                             string.Equals(rootCertificate.Thumbprint, value.Thumbprint,
+                                 StringComparison.OrdinalIgnoreCase);
+            if (!isSameRoot)
+                ClearRootCertificate();
             rootCertificate = value;
         }
     }
