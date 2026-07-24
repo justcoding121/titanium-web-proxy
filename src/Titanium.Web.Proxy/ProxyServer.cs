@@ -241,6 +241,43 @@ public partial class ProxyServer : IDisposable
     public bool Enable100ContinueBehaviour { get; set; }
 
     /// <summary>
+    ///     Maximum decoded HTTP/2 header list size in bytes, using RFC 7541 accounting
+    ///     (name.Length + value.Length + 32 per field). Requests or responses with a decoded
+    ///     header list exceeding this limit will be refused with RST_STREAM(ENHANCE_YOUR_CALM)
+    ///     (code 0xb). Set to 0 to disable the limit (not recommended).
+    ///     Default: 65,536 (64 KiB). Advertised via SETTINGS_MAX_HEADER_LIST_SIZE.
+    /// </summary>
+    public int MaxDecodedHeaderListBytes { get; set; } = 64 * 1024;
+
+    /// <summary>
+    ///     Maximum bytes the proxy will buffer for a single request or response body when
+    ///     body buffering is required (body-read hooks, authentication retry, etc.). Bodies
+    ///     larger than this limit are rejected with 413 (upstream request) or connection teardown
+    ///     (upstream response). Set to 0 to disable the limit (not recommended).
+    ///     Default: 4,194,304 (4 MiB).
+    /// </summary>
+    public int MaxBufferedBodyBytes { get; set; } = 4 * 1024 * 1024;
+
+    /// <summary>
+    ///     Maximum WebSocket frame payload size in bytes that the proxy will accept for
+    ///     frame-level interception. Frames larger than this limit are forwarded as raw relay
+    ///     (interception bypassed) or the connection is closed if a frame-level callback is
+    ///     registered and the payload cannot safely be decoded. Payloads above
+    ///     <see cref="int.MaxValue"/> are always rejected.
+    ///     Default: 16,777,216 (16 MiB).
+    /// </summary>
+    public int MaxWebSocketFramePayloadBytes { get; set; } = 16 * 1024 * 1024;
+
+    /// <summary>
+    ///     Pseudonym used in Via header fields appended to forwarded requests and responses
+    ///     (RFC 9110 §7.6.3). An empty string disables Via header injection entirely (default).
+    ///     Set to a non-empty token (e.g. "titanium-proxy") to enable. Loop detection uses
+    ///     this value: a request arriving with this pseudonym already present in Via is refused
+    ///     with 508 Loop Detected.
+    /// </summary>
+    public string ViaHeaderPseudonym { get; set; } = string.Empty;
+
+    /// <summary>
     ///     Controls which HTTP version is declared to the origin server on the request line, independently of
     ///     the version the client declared to the proxy. Defaults to
     ///     <see cref="Models.OriginHttpVersionPolicy.PreserveClientVersion" />, which matches the proxy's
