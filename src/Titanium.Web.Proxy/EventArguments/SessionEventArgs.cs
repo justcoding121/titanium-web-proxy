@@ -688,16 +688,10 @@ public class SessionEventArgs : SessionEventArgsBase
     {
         if (disposed) return;
 
-        MultipartRequestPartSent = null;
+        if (disposing) MultipartRequestPartSent = null;
+
         disposed = true;
 
         base.Dispose(disposing);
-    }
-
-    ~SessionEventArgs()
-    {
-        Logging.ProxyDiagnostics.ReportUndisposedFinalizer(Server.Logger, nameof(SessionEventArgs));
-
-        Dispose(false);
     }
 }

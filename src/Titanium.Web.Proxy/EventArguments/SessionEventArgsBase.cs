@@ -176,7 +176,6 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public void Dispose()
     {
         Dispose(true);
-        GC.SuppressFinalize(this);
     }
 
     protected void OnException(Exception exception)
@@ -188,25 +187,20 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     {
         if (disposed) return;
 
+        // No finalizer: session objects only own managed state. Explicit Dispose clears
+        // handlers and finishes the HTTP client; omitting Dispose leaves no unmanaged leak.
         if (disposing)
         {
             CustomUpStreamProxyUsed = null;
 
             HttpClient.FinishSession();
+
+            DataSent = null;
+            DataReceived = null;
+            Exception = null;
         }
 
-        DataSent = null;
-        DataReceived = null;
-        Exception = null;
-
         disposed = true;
-    }
-
-    ~SessionEventArgsBase()
-    {
-        ProxyDiagnostics.ReportUndisposedFinalizer(Server.Logger, nameof(SessionEventArgsBase));
-
-        Dispose(false);
     }
 
     /// <summary>

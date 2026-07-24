@@ -35,8 +35,12 @@ internal class CopyStream : ILineStream, IDisposable
 
     public void Dispose()
     {
-        Dispose(true);
-        GC.SuppressFinalize(this);
+        if (disposed) return;
+
+        // Only return pooled buffers on the explicit Dispose path. There is no finalizer:
+        // ArrayPool.Return from a finalizer would touch managed objects after an undefined GC order.
+        bufferPool.ReturnBuffer(buffer);
+        disposed = true;
     }
 
     public bool DataAvailable => reader.DataAvailable;
@@ -68,25 +72,5 @@ internal class CopyStream : ILineStream, IDisposable
             await writer.WriteAsync(buffer, 0, bufferLength, cancellationToken);
             bufferLength = 0;
         }
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (disposed) return;
-
-        // Return the pooled buffer on both the normal Dispose and the finalizer path.
-        // ArrayPool.Return is thread-safe, and the buffer/bufferPool references remain
-        // reachable via this instance until it is collected, so this is safe from a finalizer.
-        // This prevents leaking a rented buffer if the stream is ever finalized without disposal.
-        bufferPool.ReturnBuffer(buffer);
-
-        disposed = true;
-    }
-
-    ~CopyStream()
-    {
-        Logging.ProxyDiagnostics.ReportUndisposedFinalizer(null, nameof(CopyStream));
-
-        Dispose(false);
     }
 }

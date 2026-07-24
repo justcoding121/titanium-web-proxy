@@ -346,7 +346,6 @@ public sealed class CertificateManager : IDisposable
     public void Dispose()
     {
         Dispose(true);
-        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -1084,10 +1083,5 @@ public sealed class CertificateManager : IDisposable
         if (disposing) clearCertificatesTokenSource.Dispose();
 
         disposed = true;
-    }
-
-    ~CertificateManager()
-    {
-        Dispose(false);
     }
 }
