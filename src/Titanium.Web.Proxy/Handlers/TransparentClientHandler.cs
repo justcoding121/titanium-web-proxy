@@ -298,7 +298,8 @@ public partial class ProxyServer
                                         async (sessionArgs, ctx) => { await OnBeforeResponse(sessionArgs); },
                                         async sessionArgs => { await OnAfterResponse(sessionArgs); },
                                         headers => PrepareRequestHeaders(headers),
-                                        cancellationTokenSource, clientStream.Connection.Id, logger);
+                                        cancellationTokenSource, clientStream.Connection.Id, logger,
+                                        MaxDecodedHeaderListBytes);
 #endif
                                 }
                                 finally

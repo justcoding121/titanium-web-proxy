@@ -76,7 +76,8 @@ public partial class ProxyServer
             (sessionArgs, ctx) => Task.CompletedTask,
             async sessionArgs => { await OnAfterResponse(sessionArgs); },
             headers => PrepareRequestHeaders(headers),
-            cancellationTokenSource, clientStream.Connection.Id, logger);
+            cancellationTokenSource, clientStream.Connection.Id, logger,
+            MaxDecodedHeaderListBytes);
     }
 
     /// <summary>
