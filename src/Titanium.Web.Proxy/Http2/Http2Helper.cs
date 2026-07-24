@@ -37,6 +37,33 @@ namespace Titanium.Web.Proxy.Http2
         private const int MaxAcceptableFrameSize = 16384;
 
         /// <summary>
+        ///     RFC 7541 §4.2 / the HTTP/2bis clarification of it: regardless of what a peer's
+        ///     SETTINGS_HEADER_TABLE_SIZE advertises as the *ceiling* it will allow, both that peer's decoder
+        ///     and our own encoder targeting it are defined to start with a dynamic table size of exactly
+        ///     4096 bytes - growing (or shrinking) beyond that requires an explicit HPACK Dynamic Table Size
+        ///     Update instruction (see <see cref="Hpack.Encoder.SetMaxHeaderTableSize" />) at the start of a
+        ///     header block, it is never implied just by the peer having advertised a larger ceiling. A real
+        ///     client's SETTINGS_HEADER_TABLE_SIZE is routinely larger than 4096 (e.g. Chrome sends 65536),
+        ///     and by the time the first response here is encoded, that SETTINGS frame has typically already
+        ///     been parsed into <see cref="Http2Settings.HeaderTableSize" /> - so constructing a brand new
+        ///     Encoder with `settings.HeaderTableSize` as its *initial* size (as this used to) makes the
+        ///     encoder start already believing it has the full ceiling to itself, with no update instruction
+        ///     ever emitted (since the "did the size change?" check below then compares the ceiling against
+        ///     itself). The peer's real decoder, having received no such instruction, stays at the spec's
+        ///     4096-byte default for the entire connection while our encoder keeps entries alive - and
+        ///     computes indices - as if up to 65536 bytes of history were still resolvable. The two
+        ///     dynamic tables silently diverge from the very first response, and the *first* indexed
+        ///     reference that lands on an entry the real decoder already evicted (or a slot it renumbered
+        ///     differently) is decoded as the wrong header or rejected outright - observed as an
+        ///     intermittent net::ERR_HTTP2_COMPRESSION_ERROR that gets worse the longer the connection lives
+        ///     and the more distinct headers flow over it. Always starting the encoder at the RFC default
+        ///     instead means the size-change check on the very first call correctly detects the gap and
+        ///     emits the one legitimate Dynamic Table Size Update needed to bring the real decoder up to the
+        ///     ceiling in lockstep.
+        /// </summary>
+        private const int RfcDefaultHeaderTableSize = 4096;
+
+        /// <summary>
         ///     Reports an HTTP/2 protocol/relay failure through the centralized logging gateway. Every
         ///     <c>ProxyHttpException</c> raised anywhere in this class goes through here (the previous
         ///     behavior invoked <c>ExceptionFunc</c> directly at each of the ~30 call sites below).
@@ -1493,21 +1520,23 @@ namespace Titanium.Web.Proxy.Http2
             var encoder = settings.Encoder;
             if (encoder == null)
             {
-                encoder = new Encoder(settings.HeaderTableSize);
+                encoder = new Encoder(RfcDefaultHeaderTableSize);
                 settings.Encoder = encoder;
             }
 
             var ms = new MemoryStream();
             var writer = new BinaryWriter(ms);
 
-            // If the peer's advertised header table size changed since our last encode, emit a Dynamic Table
-            // Size Update (RFC 7541 ?6.3) at the start of this header block so the peer's decoder resizes in
-            // lockstep before any indexed reference relying on the new size is used.
-            if (encoder.MaxHeaderTableSize != settings.HeaderTableSize)
-            {
-                encoder.SetMaxHeaderTableSize(writer, settings.HeaderTableSize);
-            }
-
+            // RFC 7540 ?6.2: the HEADERS frame payload is [Pad Length?] [E + Stream Dependency + Weight, if
+            // PRIORITY] [Header Block Fragment] [Padding?] - the priority fields (when present) are a
+            // frame-level prefix that comes strictly *before* the header block fragment, which is the HPACK
+            // byte sequence built below (dynamic table size update, if any, followed by the encoded
+            // pseudo-headers/headers). Writing the priority bytes after the size-update instruction (as a
+            // previous version of this code did) shifted every subsequent byte by 5, so the peer tried to
+            // HPACK-decode a header block that actually started with garbage priority bytes - corrupting
+            // this connection's HPACK state and manifesting as an intermittent, hard-to-reproduce
+            // net::ERR_HTTP2_COMPRESSION_ERROR in the browser whenever a priority-bearing request happened
+            // to coincide with a table-size change.
             if (rr.Priority.HasValue)
             {
                 long p = rr.Priority.Value;
@@ -1516,6 +1545,14 @@ namespace Titanium.Web.Proxy.Http2
                 writer.Write((byte)((p >> 16) & 0xff));
                 writer.Write((byte)((p >> 8) & 0xff));
                 writer.Write((byte)(p & 0xff));
+            }
+
+            // If the peer's advertised header table size changed since our last encode, emit a Dynamic Table
+            // Size Update (RFC 7541 ?6.3) at the start of the header block fragment so the peer's decoder
+            // resizes in lockstep before any indexed reference relying on the new size is used.
+            if (encoder.MaxHeaderTableSize != settings.HeaderTableSize)
+            {
+                encoder.SetMaxHeaderTableSize(writer, settings.HeaderTableSize);
             }
 
             if (rr is Request request)
@@ -1557,7 +1594,7 @@ namespace Titanium.Web.Proxy.Http2
             var encoder = settings.Encoder;
             if (encoder == null)
             {
-                encoder = new Encoder(settings.HeaderTableSize);
+                encoder = new Encoder(RfcDefaultHeaderTableSize);
                 settings.Encoder = encoder;
             }
 
