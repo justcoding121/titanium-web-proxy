@@ -135,6 +135,21 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public IPEndPoint ClientEndPoint => ClientRemoteEndPoint;
 
     /// <summary>
+    ///     Physical peer of the established upstream TCP connection (no second DNS lookup).
+    ///     Available after the server connection is established (for example in
+    ///     <see cref="ProxyServer.BeforeResponse" />). When an upstream HTTP/SOCKS proxy is used,
+    ///     this is the proxy hop endpoint, not the origin server. <see langword="null" /> when no
+    ///     upstream connection exists (for example a synthetic local response).
+    /// </summary>
+    public IPEndPoint? ServerRemoteEndPoint =>
+        HttpClient.HasConnection ? ServerConnection.RemoteEndPoint : null;
+
+    /// <summary>
+    ///     IP address of <see cref="ServerRemoteEndPoint" />.
+    /// </summary>
+    public IPAddress? ServerIpAddress => ServerRemoteEndPoint?.Address;
+
+    /// <summary>
     ///     The web client used to communicate with server for this session.
     /// </summary>
     public HttpWebClient HttpClient { get; }
