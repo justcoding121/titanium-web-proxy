@@ -54,6 +54,9 @@ internal sealed class Http2OriginConnection
     /// <summary>Every HTTP/2 endpoint must accept frames up to this size (RFC 7540 §4.2), so it is always safe to send.</summary>
     private const int SafeMaxFrameSize = 16384;
 
+    /// <summary>Maximum total header block (HEADERS + CONTINUATION fragments) we accept from origin before treating it as a protocol violation.</summary>
+    private const int MaxHeaderBlockBytes = 256 * 1024;
+
     private const int DefaultConcurrencyCap = 100;
 
     private readonly TcpServerConnection connection;
@@ -320,6 +323,15 @@ internal sealed class Http2OriginConnection
                     }
                 }
 
+                // RFC 7540 §4.2: we never advertised a SETTINGS_MAX_FRAME_SIZE above the default 16,384,
+                // so any frame larger than that is a protocol violation. Reject before allocating.
+                if (length > SafeMaxFrameSize)
+                {
+                    Fail(new IOException(
+                        $"HTTP/2 protocol error: origin sent a {length}-byte frame payload, exceeding the {SafeMaxFrameSize}-byte limit this proxy advertised."));
+                    return;
+                }
+
                 var payload = length == 0 ? Array.Empty<byte>() : new byte[length];
                 if (length > 0)
                 {
@@ -334,26 +346,60 @@ internal sealed class Http2OriginConnection
                 switch (type)
                 {
                     case Http2FrameType.Settings:
-                        if ((flags & Http2FrameFlag.Ack) == 0)
+                        if (streamId != 0)
                         {
-                            ApplySettings(payload);
-                            await SendSettingsAckAsync(cancellationToken);
-                            if (!initialSettingsReceived.Task.IsCompleted)
+                            Fail(new IOException("HTTP/2 protocol error: SETTINGS frame must have stream ID 0."));
+                            return;
+                        }
+
+                        if ((flags & Http2FrameFlag.Ack) != 0)
+                        {
+                            if (payload.Length != 0)
                             {
-                                var cap = originSettings.MaxConcurrentStreams == int.MaxValue
-                                    ? DefaultConcurrencyCap
-                                    : Math.Max(1, Math.Min(originSettings.MaxConcurrentStreams, DefaultConcurrencyCap * 4));
-                                concurrencyGate = new SemaphoreSlim(cap, cap);
-                                initialSettingsReceived.TrySetResult(true);
+                                Fail(new IOException("HTTP/2 protocol error: SETTINGS ACK must have empty payload."));
+                                return;
                             }
+
+                            break;
+                        }
+
+                        if (payload.Length % 6 != 0)
+                        {
+                            Fail(new IOException(
+                                $"HTTP/2 protocol error: SETTINGS payload must be a multiple of 6 bytes, got {payload.Length}."));
+                            return;
+                        }
+
+                        ApplySettings(payload);
+                        if (faulted) return;
+                        await SendSettingsAckAsync(cancellationToken);
+                        if (!initialSettingsReceived.Task.IsCompleted)
+                        {
+                            var cap = originSettings.MaxConcurrentStreams == int.MaxValue
+                                ? DefaultConcurrencyCap
+                                : Math.Max(1, Math.Min(originSettings.MaxConcurrentStreams, DefaultConcurrencyCap * 4));
+                            concurrencyGate = new SemaphoreSlim(cap, cap);
+                            initialSettingsReceived.TrySetResult(true);
                         }
 
                         break;
 
                     case Http2FrameType.WindowUpdate:
-                        if (payload.Length == 4)
+                        if (payload.Length != 4)
+                        {
+                            Fail(new IOException("HTTP/2 protocol error: WINDOW_UPDATE frame must be exactly 4 bytes."));
+                            return;
+                        }
+
                         {
                             var increment = (int)(BinaryPrimitives.ReadUInt32BigEndian(payload) & 0x7fffffff);
+                            if (increment == 0)
+                            {
+                                // RFC 7540 §6.9.1: a zero-increment WINDOW_UPDATE is a connection error PROTOCOL_ERROR.
+                                Fail(new IOException("HTTP/2 protocol error: WINDOW_UPDATE increment must not be zero."));
+                                return;
+                            }
+
                             sendFlow.OnWindowUpdate(streamId, increment);
                         }
 
@@ -365,6 +411,13 @@ internal sealed class Http2OriginConnection
                         headerBlockBuffer.SetLength(0);
                         headerBlockEndStream = (flags & Http2FrameFlag.EndStream) != 0;
                         var data = StripHeadersFraming(payload, flags);
+                        if (data.Length > MaxHeaderBlockBytes)
+                        {
+                            Fail(new IOException(
+                                $"HTTP/2 protocol error: origin header block exceeded {MaxHeaderBlockBytes} bytes."));
+                            return;
+                        }
+
                         headerBlockBuffer.Write(data, 0, data.Length);
                         if ((flags & Http2FrameFlag.EndHeaders) != 0)
                         {
@@ -376,14 +429,31 @@ internal sealed class Http2OriginConnection
                     }
 
                     case Http2FrameType.Continuation:
-                        if (headerBlockStreamId == streamId)
+                        if (headerBlockStreamId == null)
                         {
-                            headerBlockBuffer.Write(payload, 0, payload.Length);
-                            if ((flags & Http2FrameFlag.EndHeaders) != 0)
-                            {
-                                ProcessHeaderBlock(streamId, headerBlockBuffer.ToArray(), headerBlockEndStream);
-                                headerBlockStreamId = null;
-                            }
+                            Fail(new IOException("HTTP/2 protocol error: received CONTINUATION frame outside a header block."));
+                            return;
+                        }
+
+                        if (headerBlockStreamId != streamId)
+                        {
+                            Fail(new IOException(
+                                $"HTTP/2 protocol error: CONTINUATION frame stream ID {streamId} does not match open header block stream {headerBlockStreamId}."));
+                            return;
+                        }
+
+                        if (headerBlockBuffer.Length + payload.Length > MaxHeaderBlockBytes)
+                        {
+                            Fail(new IOException(
+                                $"HTTP/2 protocol error: origin CONTINUATION block exceeded {MaxHeaderBlockBytes} bytes."));
+                            return;
+                        }
+
+                        headerBlockBuffer.Write(payload, 0, payload.Length);
+                        if ((flags & Http2FrameFlag.EndHeaders) != 0)
+                        {
+                            ProcessHeaderBlock(streamId, headerBlockBuffer.ToArray(), headerBlockEndStream);
+                            headerBlockStreamId = null;
                         }
 
                         break;
@@ -406,6 +476,12 @@ internal sealed class Http2OriginConnection
                         break;
 
                     case Http2FrameType.GoAway:
+                        if (streamId != 0)
+                        {
+                            Fail(new IOException("HTTP/2 protocol error: GOAWAY frame must have stream ID 0."));
+                            return;
+                        }
+
                         if (payload.Length >= 8)
                         {
                             var lastId = (int)(BinaryPrimitives.ReadUInt32BigEndian(payload.AsSpan(0, 4)) & 0x7fffffff);
@@ -452,9 +528,30 @@ internal sealed class Http2OriginConnection
             if (identifier == (int)Http2SettingsId.HeaderTableSize)
                 originSettings.HeaderTableSize = value;
             else if (identifier == (int)Http2SettingsId.MaxFrameSize)
+            {
+                // RFC 7540 §6.5.2: values outside [16384, 16777215] are a connection-level PROTOCOL_ERROR.
+                if (value < 16384 || value > 16777215)
+                {
+                    Fail(new IOException(
+                        $"HTTP/2 protocol error: SETTINGS_MAX_FRAME_SIZE value {value} is out of range [16384, 16777215]."));
+                    return;
+                }
+
                 originSettings.MaxFrameSize = value;
+            }
             else if (identifier == (int)Http2SettingsId.InitialWindowSize)
+            {
+                // RFC 7540 §6.5.2: values above 2^31-1 are a connection-level FLOW_CONTROL_ERROR.
+                // A wire value > 2^31-1 wraps to a negative int when cast; checking < 0 catches that.
+                if (value < 0)
+                {
+                    Fail(new IOException(
+                        $"HTTP/2 protocol error: SETTINGS_INITIAL_WINDOW_SIZE value exceeds the maximum of 2,147,483,647."));
+                    return;
+                }
+
                 sendFlow.OnInitialWindowSizeChanged(value);
+            }
             else if (identifier == (int)Http2SettingsId.MaxConcurrentStreams)
                 originSettings.MaxConcurrentStreams = value;
         }
