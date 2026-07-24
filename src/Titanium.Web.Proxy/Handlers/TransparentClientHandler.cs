@@ -39,6 +39,7 @@ public partial class ProxyServer
         int port, CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken,
         string? socksTargetHost = null)
     {
+        RegisterSessionCancellation(cancellationTokenSource);
         var isHttps = false;
         Task<TcpServerConnection?>? prefetchConnectionTask = null;
         var clientStream = new HttpClientStream(this, clientConnection, clientConnection.GetStream(), BufferPool,
@@ -430,6 +431,8 @@ public partial class ProxyServer
         }
         finally
         {
+            if (!cancellationTokenSource.IsCancellationRequested) cancellationTokenSource.Cancel();
+            UnregisterSessionCancellation(cancellationTokenSource);
             await TcpConnectionFactory.Release(prefetchConnectionTask, true);
             clientStream.Dispose();
         }
