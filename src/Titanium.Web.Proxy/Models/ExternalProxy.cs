@@ -101,12 +101,18 @@ public class ExternalProxy : IExternalProxy
     public int Port { get; set; }
 
     /// <summary>
+    ///     Optional next hop for an ordered two-hop HTTP upstream chain.
+    ///     See <see cref="IExternalProxy.NextHop" />.
+    /// </summary>
+    public IExternalProxy? NextHop { get; set; }
+
+    /// <summary>
     ///     returns data in Hostname:port format.
     /// </summary>
     /// <returns></returns>
     public override string ToString()
     {
-        return $"{HostName}:{Port}";
+        return NextHop == null ? $"{HostName}:{Port}" : $"{HostName}:{Port}->{NextHop}";
     }
 }
 

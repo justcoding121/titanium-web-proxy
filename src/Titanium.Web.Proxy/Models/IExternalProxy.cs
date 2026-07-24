@@ -36,5 +36,13 @@ public interface IExternalProxy
     /// </summary>
     int Port { get; set; }
 
+    /// <summary>
+    ///     Optional next hop for an ordered two-hop HTTP upstream chain (issue #909).
+    ///     When set, the proxy TCP-connects to this proxy, CONNECTs to
+    ///     <c>NextHop.HostName:NextHop.Port</c>, then CONNECTs to the origin through that tunnel.
+    ///     Only HTTP hops are supported; SOCKS chaining is not implemented.
+    /// </summary>
+    IExternalProxy? NextHop { get; set; }
+
     string ToString();
 }
