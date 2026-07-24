@@ -66,6 +66,36 @@ internal class TcpConnectionFactory : IDisposable
         Dispose(true);
     }
 
+    /// <summary>
+    ///     Drains the connection pool and disposal bag without shutting down the factory.
+    ///     Used by <see cref="ProxyServer.Stop" /> / <see cref="ProxyServer.StopAsync" /> so the same
+    ///     <see cref="ProxyServer" /> instance can be started again afterwards.
+    /// </summary>
+    internal void ClearPools()
+    {
+        if (disposed) return;
+
+        try
+        {
+            @lock.Wait();
+
+            foreach (var queue in cache.Select(x => x.Value).ToList())
+                while (!queue.IsEmpty)
+                    if (queue.TryDequeue(out var connection))
+                        disposalBag.Add(connection);
+
+            cache.Clear();
+        }
+        finally
+        {
+            @lock.Release();
+        }
+
+        while (!disposalBag.IsEmpty)
+            if (disposalBag.TryTake(out var connection))
+                connection?.Dispose();
+    }
+
     internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
         bool isHttps, List<SslApplicationProtocol>? applicationProtocols,
         IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,

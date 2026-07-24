@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -45,6 +46,12 @@ public partial class ProxyServer : IDisposable
     ///     Backing field for exposed public property.
     /// </summary>
     private int clientConnectionCount;
+
+    /// <summary>
+    ///     Per-session cancellation tokens for in-flight client handlers. Cancelled on Stop/StopAsync
+    ///     so active relays do not outlive the listener (issues #919 / #799 / #809).
+    /// </summary>
+    private readonly ConcurrentDictionary<CancellationTokenSource, byte> activeSessionCancellations = new();
 
     /// <summary>
     ///     Backing field for exposed public property.
@@ -331,8 +338,11 @@ public partial class ProxyServer : IDisposable
     public int MaxCachedConnections { get; set; } = 4;
 
     /// <summary>
-    ///     Number of seconds to linger when Tcp connection is in TIME_WAIT state.
-    ///     Default value is 30.
+    ///     SO_LINGER timeout in seconds applied to client and upstream sockets via
+    ///     <see cref="LingerOption" /> (enabled with this timeout).
+    ///     This is <b>not</b> the kernel TCP TIME_WAIT duration — TIME_WAIT is controlled by the OS.
+    ///     A positive value means <c>Close</c> may block up to that many seconds flushing send buffers;
+    ///     use 0 for an abortive close (RST). Default is 30.
     /// </summary>
     public int TcpTimeWaitSeconds { get; set; } = 30;
 
@@ -885,8 +895,38 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Stop this proxy server instance.
+    ///     Endpoints remain registered so <see cref="Start" /> can re-listen on the same ports.
+    ///     In-flight sessions are cancelled; pooled upstream connections are cleared. The connection
+    ///     factory itself stays usable for a subsequent Start (it is only disposed with the proxy).
     /// </summary>
     public void Stop()
+    {
+        StopCore(cancelSessions: true, clearPools: true);
+    }
+
+    /// <summary>
+    ///     Asynchronously stop this proxy server, cancel in-flight sessions, and wait briefly for
+    ///     client connection count to drain before clearing the upstream pool.
+    /// </summary>
+    /// <param name="drainTimeout">
+    ///     Maximum time to wait for active client handlers to exit after cancellation.
+    ///     Defaults to 5 seconds.
+    /// </param>
+    public async Task StopAsync(TimeSpan? drainTimeout = null)
+    {
+        if (!ProxyRunning) throw new Exception("Proxy is not running.");
+
+        StopCore(cancelSessions: true, clearPools: false);
+
+        var timeout = drainTimeout ?? TimeSpan.FromSeconds(5);
+        var deadline = DateTime.UtcNow + timeout;
+        while (ClientConnectionCount > 0 && DateTime.UtcNow < deadline)
+            await Task.Delay(50).ConfigureAwait(false);
+
+        TcpConnectionFactory.ClearPools();
+    }
+
+    private void StopCore(bool cancelSessions, bool clearPools)
     {
         if (!ProxyRunning) throw new Exception("Proxy is not running.");
 
@@ -901,13 +941,38 @@ public partial class ProxyServer : IDisposable
         // Prevent accept callbacks from scheduling another accept while listeners are stopping.
         ProxyRunning = false;
 
+        if (cancelSessions) CancelActiveSessions();
+
         foreach (var endPoint in ProxyEndPoints) QuitListen(endPoint);
 
-        ProxyEndPoints.Clear();
+        // Keep ProxyEndPoints so Start() can re-bind the same listeners (issue #799).
 
         CertificateManager?.StopClearIdleCertificates();
-        TcpConnectionFactory.Dispose();
 
+        if (clearPools) TcpConnectionFactory.ClearPools();
+    }
+
+    internal void RegisterSessionCancellation(CancellationTokenSource cancellationTokenSource)
+    {
+        activeSessionCancellations.TryAdd(cancellationTokenSource, 0);
+    }
+
+    internal void UnregisterSessionCancellation(CancellationTokenSource cancellationTokenSource)
+    {
+        activeSessionCancellations.TryRemove(cancellationTokenSource, out _);
+    }
+
+    private void CancelActiveSessions()
+    {
+        foreach (var cts in activeSessionCancellations.Keys)
+            try
+            {
+                if (!cts.IsCancellationRequested) cts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Session already tore down its CTS.
+            }
     }
 
     /// <summary>
@@ -1225,6 +1290,15 @@ public partial class ProxyServer : IDisposable
             {
                 // ignore
             }
+
+        try
+        {
+            TcpConnectionFactory.Dispose();
+        }
+        catch
+        {
+            // ignore
+        }
 
         CertificateManager?.Dispose();
         BufferPool?.Dispose();
