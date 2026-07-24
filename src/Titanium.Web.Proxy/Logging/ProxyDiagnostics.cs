@@ -128,7 +128,12 @@ internal static class ProxyDiagnostics
 
     private static ILogger fallbackLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
 
-    private static bool IsExpected(Exception exception)
+    /// <summary>
+    ///     True when <paramref name="exception" /> (or a nested inner exception) is a normal part of
+    ///     proxy operation: cancellation (including user <c>TerminateSession</c>), client/server
+    ///     disconnects, retries after a stale pooled connection, and configured timeouts.
+    /// </summary>
+    internal static bool IsExpected(Exception exception)
     {
         return exception switch
         {
@@ -137,6 +142,7 @@ internal static class ProxyDiagnostics
             System.IO.IOException => true,
             System.Net.Sockets.SocketException => true,
             Exceptions.ProxyTimeoutException => true,
+            Exceptions.RetryableServerConnectionException => true,
             _ => exception.InnerException != null && IsExpected(exception.InnerException)
         };
     }

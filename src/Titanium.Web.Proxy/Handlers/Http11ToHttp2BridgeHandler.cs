@@ -195,9 +195,10 @@ public partial class ProxyServer
                         }
 
                         if (cancellationTokenSource.IsCancellationRequested)
-                            throw new Exception("Session was terminated by user.");
+                            throw new OperationCanceledException("Session was terminated by user.",
+                                cancellationTokenSource.Token);
                     }
-                    catch (Exception e) when (!(e is ProxyHttpException))
+                    catch (Exception e) when (!(e is ProxyHttpException) && !(e is OperationCanceledException))
                     {
                         throw new ProxyHttpException(
                             "Error occured whilst handling HTTP/1.1-to-HTTP/2 bridge session request", e, args);

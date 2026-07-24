@@ -1,7 +1,9 @@
 ﻿using System;
+using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -196,9 +198,21 @@ public class HttpWebClient
         Response.RequestMethod = Request.Method;
 
         var httpStatus = await Connection.Stream.ReadResponseStatus(cancellationToken);
-        Response.HttpVersion = httpStatus.Version;
-        Response.StatusCode = httpStatus.StatusCode;
-        Response.StatusDescription = httpStatus.Description;
+        if (httpStatus == null)
+        {
+            // EOF before any response bytes: typically a stale pooled keep-alive connection.
+            // RetryPolicy re-runs the whole exchange; only safe when there is no body or the
+            // body is buffered in memory (IsBodyRead). A streamed body cannot be replayed.
+            if (!Request.HasBody || Request.IsBodyRead)
+                throw new RetryableServerConnectionException(
+                    "Server connection was closed before any response was received.");
+
+            throw new IOException("Server closed the connection before sending a response.");
+        }
+
+        Response.HttpVersion = httpStatus.Value.Version;
+        Response.StatusCode = httpStatus.Value.StatusCode;
+        Response.StatusDescription = httpStatus.Value.Description;
 
         // Read the response headers in to unique and non-unique header collections
         await HeaderParser.ReadHeaders(Connection.Stream, Response.Headers, cancellationToken);
