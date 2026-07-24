@@ -139,25 +139,13 @@ internal class TcpConnectionFactory : IDisposable
 
         if (externalProxy != null)
         {
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(externalProxy.HostName);
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(externalProxy.Port);
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(externalProxy.ProxyType);
-
-            // SOCKS remote-DNS toggle changes how the connection is established, so it must
-            // separate otherwise-identical connections.
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(externalProxy.ProxyDnsRequests);
-
-            // Different credentials (or default-credential mode) must never share a pooled
-            // connection to the same proxy. Include a fingerprint of the credentials, regardless
-            // of UseDefaultCredentials, without storing the plaintext password in the key.
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(externalProxy.UseDefaultCredentials);
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(GetCredentialFingerprint(externalProxy.UserName, externalProxy.Password));
+            AppendExternalProxyToCacheKey(cacheKeyBuilder, externalProxy);
+            // Ordered chain: next hop identity must separate pool buckets (issue #909).
+            if (externalProxy.NextHop != null)
+            {
+                cacheKeyBuilder.Append("-next-");
+                AppendExternalProxyToCacheKey(cacheKeyBuilder, externalProxy.NextHop);
+            }
         }
 
         return cacheKeyBuilder.ToString();
@@ -178,6 +166,22 @@ internal class TcpConnectionFactory : IDisposable
         using var sha = SHA256.Create();
         var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(material));
         return Convert.ToBase64String(hash);
+    }
+
+    private static void AppendExternalProxyToCacheKey(StringBuilder cacheKeyBuilder, IExternalProxy externalProxy)
+    {
+        cacheKeyBuilder.Append('-');
+        cacheKeyBuilder.Append(externalProxy.HostName);
+        cacheKeyBuilder.Append('-');
+        cacheKeyBuilder.Append(externalProxy.Port);
+        cacheKeyBuilder.Append('-');
+        cacheKeyBuilder.Append(externalProxy.ProxyType);
+        cacheKeyBuilder.Append('-');
+        cacheKeyBuilder.Append(externalProxy.ProxyDnsRequests);
+        cacheKeyBuilder.Append('-');
+        cacheKeyBuilder.Append(externalProxy.UseDefaultCredentials);
+        cacheKeyBuilder.Append('-');
+        cacheKeyBuilder.Append(GetCredentialFingerprint(externalProxy.UserName, externalProxy.Password));
     }
 
     /// <summary>
@@ -721,76 +725,27 @@ internal class TcpConnectionFactory : IDisposable
 
             if (externalProxy != null && externalProxy.ProxyType == ExternalProxyType.Http && (isConnect || isHttps))
             {
-                var authority = $"{connectHostName}:{connectPortNumber}";
-                var authorityBytes = authority.GetByteString();
-                var connectRequest = new ConnectRequest(authorityBytes)
+                // Ordered two-hop chain (issue #909): CONNECT to NextHop through the first proxy,
+                // then CONNECT to the origin through that tunnel. Only HTTP hops are supported.
+                if (externalProxy.NextHop != null)
                 {
-                    IsHttps = isHttps,
-                    RequestUriString8 = authorityBytes,
-                    HttpVersion = httpVersion
-                };
+                    if (externalProxy.NextHop.ProxyType != ExternalProxyType.Http)
+                        throw new NotSupportedException(
+                            "Upstream proxy chaining currently supports HTTP hops only (SOCKS NextHop is not implemented).");
 
-                connectRequest.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionKeepAlive);
-                connectRequest.Headers.AddHeader(KnownHeaders.Host, authority);
-
-                if (!externalProxy.UseDefaultCredentials &&
-                    !string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
-                {
-                    connectRequest.Headers.AddHeader(HttpHeader.ProxyConnectionKeepAlive);
-                    connectRequest.Headers.AddHeader(
-                        HttpHeader.GetProxyAuthorizationHeader(externalProxy.UserName, externalProxy.Password));
+                    var nextAuthority = $"{externalProxy.NextHop.HostName}:{externalProxy.NextHop.Port}";
+                    var hop1WinAuth = await EstablishHttpUpstreamConnectAsync(proxyServer, stream, externalProxy,
+                        nextAuthority, isHttps, httpVersion, cancellationToken);
+                    var originAuthority = $"{connectHostName}:{connectPortNumber}";
+                    var hop2WinAuth = await EstablishHttpUpstreamConnectAsync(proxyServer, stream,
+                        externalProxy.NextHop, originAuthority, isHttps, httpVersion, cancellationToken);
+                    upstreamProxyWinAuthenticated = hop1WinAuth || hop2WinAuth;
                 }
-
-                var authenticationData = new InternalDataStore();
-                var authenticationAttempts = 0;
-
-                while (true)
+                else
                 {
-                    await proxyServer.OnBeforeUpStreamConnectRequest(connectRequest);
-                    await stream.WriteRequestAsync(connectRequest, cancellationToken);
-
-                    var httpStatus = await stream.ReadResponseStatus(cancellationToken)
-                                     ?? throw new IOException(
-                                         "Upstream proxy closed the connection before sending a CONNECT response.");
-                    var headers = new HeaderCollection();
-                    await HeaderParser.ReadHeaders(stream, headers, cancellationToken);
-
-                    if (httpStatus.StatusCode == (int)HttpStatusCode.OK ||
-                        httpStatus.Description.EqualsIgnoreCase("Connection Established"))
-                    {
-                        upstreamProxyWinAuthenticated = authenticationAttempts > 0;
-                        break;
-                    }
-
-                    var bodyPreview = await DrainUpstreamProxyResponseBody(stream, headers, cancellationToken);
-
-                    if (httpStatus.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired ||
-                        !externalProxy.UseDefaultCredentials ||
-                        authenticationAttempts >= MaximumUpstreamProxyAuthenticationAttempts ||
-                        !TryGetUpstreamProxyAuthenticationChallenge(headers, out var scheme, out var challenge))
-                    {
-                        throw CreateUpstreamProxyConnectException(httpStatus, headers, bodyPreview);
-                    }
-
-                    if (headers.GetHeaderValueOrNull(KnownHeaders.Connection)
-                            ?.EqualsIgnoreCase(KnownHeaders.ConnectionClose.String) == true ||
-                        headers.GetHeaderValueOrNull(KnownHeaders.ProxyConnection)
-                            ?.EqualsIgnoreCase(KnownHeaders.ProxyConnectionClose.String) == true)
-                    {
-                        throw CreateUpstreamProxyConnectException(httpStatus, headers, bodyPreview,
-                            "Upstream proxy closed the connection during authentication");
-                    }
-
-                    var token = proxyServer.GenerateUpstreamProxyWinAuthToken(externalProxy, scheme!, challenge,
-                        authenticationData);
-                    if (string.IsNullOrEmpty(token))
-                        throw new Exception("Failed to generate an upstream proxy authentication token");
-
-                    connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyAuthorization,
-                        string.Concat(scheme, token));
-                    connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyConnection,
-                        KnownHeaders.ConnectionKeepAlive.String);
-                    authenticationAttempts++;
+                    var authority = $"{connectHostName}:{connectPortNumber}";
+                    upstreamProxyWinAuthenticated = await EstablishHttpUpstreamConnectAsync(proxyServer, stream,
+                        externalProxy, authority, isHttps, httpVersion, cancellationToken);
                 }
 
                 timing?.MarkUpstreamProxyConnected();
@@ -882,6 +837,84 @@ internal class TcpConnectionFactory : IDisposable
             UsedClientCertificate = usedClientCertificate,
             Timing = timing
         };
+    }
+
+    /// <summary>
+    ///     Sends an HTTP CONNECT for <paramref name="authority" /> through an already-open stream to
+    ///     <paramref name="proxy" />, handling Basic and WinAuth 407 challenges. Returns whether WinAuth
+    ///     was used successfully.
+    /// </summary>
+    private async Task<bool> EstablishHttpUpstreamConnectAsync(ProxyServer proxyServer, HttpServerStream stream,
+        IExternalProxy proxy, string authority, bool isHttps, Version httpVersion,
+        CancellationToken cancellationToken)
+    {
+        var authorityBytes = authority.GetByteString();
+        var connectRequest = new ConnectRequest(authorityBytes)
+        {
+            IsHttps = isHttps,
+            RequestUriString8 = authorityBytes,
+            HttpVersion = httpVersion
+        };
+
+        connectRequest.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionKeepAlive);
+        connectRequest.Headers.AddHeader(KnownHeaders.Host, authority);
+
+        if (!proxy.UseDefaultCredentials &&
+            !string.IsNullOrEmpty(proxy.UserName) && proxy.Password != null)
+        {
+            connectRequest.Headers.AddHeader(HttpHeader.ProxyConnectionKeepAlive);
+            connectRequest.Headers.AddHeader(
+                HttpHeader.GetProxyAuthorizationHeader(proxy.UserName, proxy.Password));
+        }
+
+        var authenticationData = new InternalDataStore();
+        var authenticationAttempts = 0;
+
+        while (true)
+        {
+            await proxyServer.OnBeforeUpStreamConnectRequest(connectRequest);
+            await stream.WriteRequestAsync(connectRequest, cancellationToken);
+
+            var httpStatus = await stream.ReadResponseStatus(cancellationToken)
+                             ?? throw new IOException(
+                                 "Upstream proxy closed the connection before sending a CONNECT response.");
+            var headers = new HeaderCollection();
+            await HeaderParser.ReadHeaders(stream, headers, cancellationToken);
+
+            if (httpStatus.StatusCode == (int)HttpStatusCode.OK ||
+                httpStatus.Description.EqualsIgnoreCase("Connection Established"))
+                return authenticationAttempts > 0;
+
+            var bodyPreview = await DrainUpstreamProxyResponseBody(stream, headers, cancellationToken);
+
+            if (httpStatus.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired ||
+                !proxy.UseDefaultCredentials ||
+                authenticationAttempts >= MaximumUpstreamProxyAuthenticationAttempts ||
+                !TryGetUpstreamProxyAuthenticationChallenge(headers, out var scheme, out var challenge))
+            {
+                throw CreateUpstreamProxyConnectException(httpStatus, headers, bodyPreview);
+            }
+
+            if (headers.GetHeaderValueOrNull(KnownHeaders.Connection)
+                    ?.EqualsIgnoreCase(KnownHeaders.ConnectionClose.String) == true ||
+                headers.GetHeaderValueOrNull(KnownHeaders.ProxyConnection)
+                    ?.EqualsIgnoreCase(KnownHeaders.ProxyConnectionClose.String) == true)
+            {
+                throw CreateUpstreamProxyConnectException(httpStatus, headers, bodyPreview,
+                    "Upstream proxy closed the connection during authentication");
+            }
+
+            var token = proxyServer.GenerateUpstreamProxyWinAuthToken(proxy, scheme!, challenge,
+                authenticationData);
+            if (string.IsNullOrEmpty(token))
+                throw new Exception("Failed to generate an upstream proxy authentication token");
+
+            connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyAuthorization,
+                string.Concat(scheme, token));
+            connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyConnection,
+                KnownHeaders.ConnectionKeepAlive.String);
+            authenticationAttempts++;
+        }
     }
 
     private static bool TryGetUpstreamProxyAuthenticationChallenge(HeaderCollection headers, out string? scheme,
