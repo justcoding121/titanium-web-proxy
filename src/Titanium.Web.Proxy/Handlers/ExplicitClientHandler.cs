@@ -114,10 +114,10 @@ public partial class ProxyServer
                 }
 
                 // write back successful CONNECT response
+                // Successful CONNECT 2xx responses must not carry Content-Length or Transfer-Encoding
+                // (RFC 9110 §9.3.6 / RFC 9112): tunnel bytes follow the header terminator immediately.
                 var response = ConnectResponse.CreateSuccessfulConnectResponse(connectRequest.HttpVersion);
 
-                // Set ContentLength explicitly to properly handle HTTP 1.0
-                response.ContentLength = 0;
                 response.Headers.FixProxyHeaders();
                 connectArgs.HttpClient.Response = response;
 
