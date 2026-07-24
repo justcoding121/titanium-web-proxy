@@ -25,6 +25,17 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 
     internal readonly CancellationTokenSource CancellationTokenSource;
 
+    /// <summary>
+    ///     Optional per-request token (e.g. linked request-timeout deadline). When set, handlers should
+    ///     prefer <see cref="CancellationToken" /> over <see cref="CancellationTokenSource" />.Token alone.
+    /// </summary>
+    internal CancellationToken? OperationCancellationToken { get; set; }
+
+    /// <summary>
+    ///     Effective cancellation token for the current request exchange.
+    /// </summary>
+    internal CancellationToken CancellationToken => OperationCancellationToken ?? CancellationTokenSource.Token;
+
     private bool disposed;
     private bool enableWinAuth;
 
@@ -165,6 +176,12 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     ///     The last exception that happened.
     /// </summary>
     public Exception? Exception { get; internal set; }
+
+    /// <summary>
+    ///     True once any HTTP response status/headers have been written to the client for this session.
+    ///     Used to decide whether a timeout may still safely inject HTTP 504.
+    /// </summary>
+    internal bool IsClientResponseCommitted { get; set; }
 
     /// <summary>
     ///     The live logger for the <see cref="ProxyServer" /> that owns this session. Always reads the

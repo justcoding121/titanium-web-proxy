@@ -570,6 +570,12 @@ internal class TcpConnectionFactory : IDisposable
                         Task.Delay(proxyServer.ConnectTimeOutSeconds * 1000, cancellationToken));
                     if (!connectTask.IsCompleted || !tcpServerSocket.Connected)
                     {
+                        // Connect race lost to ConnectTimeOutSeconds — surface a typed timeout so
+                        // diagnostics / callers can distinguish it from other connect failures.
+                        lastException = new ProxyTimeoutException(
+                            $"Timed out connecting to {hostname}:{port} after {proxyServer.ConnectTimeOutSeconds}s.",
+                            ProxyTimeoutKind.Connect);
+
                         // here we can just do some cleanup and let the loop continue since
                         // we will either get a connection or wind up with a null tcpClient
                         // which will throw
@@ -629,6 +635,9 @@ internal class TcpConnectionFactory : IDisposable
                 }
 
                 if (prefetch) return null;
+
+                if (lastException is ProxyTimeoutException timeoutException)
+                    throw timeoutException;
 
                 throw new Exception($"Could not establish connection to {hostname}", lastException);
             }

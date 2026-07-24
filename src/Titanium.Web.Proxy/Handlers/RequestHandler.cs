@@ -104,135 +104,164 @@ public partial class ProxyServer
                         // If user requested interception do it
                         await OnBeforeRequest(args);
 
-                        if (!args.IsTransparent && !args.IsSocks)
-                        {
-                            // proxy authorization check
-                            if (connectRequest == null && await CheckAuthorization(args) == false)
-                            {
-                                await OnBeforeResponse(args);
+                        // Total per-request deadline starts after BeforeRequest so session overrides apply.
+                        using var requestTimeoutScope = ProxyTimeoutScope.Create(cancellationToken,
+                            ResolveRequestTimeout(args), ProxyTimeoutKind.Request);
+                        var requestToken = requestTimeoutScope.Token;
+                        args.OperationCancellationToken = requestToken;
 
-                                // send the response
-                                await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                        try
+                        {
+                            if (!args.IsTransparent && !args.IsSocks)
+                            {
+                                // proxy authorization check
+                                if (connectRequest == null && await CheckAuthorization(args) == false)
+                                {
+                                    await OnBeforeResponse(args);
+
+                                    // send the response
+                                    await clientStream.WriteResponseAsync(args.HttpClient.Response, requestToken);
+                                    args.IsClientResponseCommitted = true;
+                                    return;
+                                }
+
+                                PrepareRequestHeaders(request.Headers);
+                                // Do NOT overwrite Host here — any value set by the BeforeRequest handler
+                                // must be preserved.  The default was already filled in above.
+                            }
+
+                            // if win auth is enabled
+                            // we need a cache of request body
+                            // so that we can send it after authentication in WinAuthHandler.cs
+                            if (args.EnableWinAuth && request.HasBody) await args.GetRequestBody(requestToken);
+
+                            var response = args.HttpClient.Response;
+
+                            if (request.CancelRequest)
+                            {
+                                if (!(Enable100ContinueBehaviour && request.ExpectContinue))
+                                    // syphon out the request body from client before setting the new body
+                                    await args.SyphonOutBodyAsync(true, requestToken);
+
+                                await HandleHttpSessionResponse(args);
+
+                                if (!response.KeepAlive) return;
+
+                                continue;
+                            }
+
+                            // If prefetch task is available.
+                            if (connection == null && prefetchTask != null)
+                            {
+                                try
+                                {
+                                    connection = await prefetchTask;
+                                }
+                                catch (SocketException e)
+                                {
+                                    if (e.SocketErrorCode != SocketError.HostNotFound) throw;
+                                }
+
+                                prefetchTask = null;
+                            }
+
+                            if (connection != null)
+                            {
+                                var socket = connection.TcpSocket;
+                                var part1 = socket.Poll(1000, SelectMode.SelectRead);
+                                var part2 = socket.Available == 0;
+                                if (part1 & part2)
+                                {
+                                    //connection is closed
+                                    await TcpConnectionFactory.Release(connection, true);
+                                    connection = null;
+                                }
+                            }
+
+                            // create a new connection if cache key changes.
+                            // only gets hit when connection pool is disabled.
+                            // or when prefetch task has a unexpectedly different connection.
+                            if (connection != null
+                                && await TcpConnectionFactory.GetConnectionCacheKey(this, args,
+                                    clientStream.Connection.NegotiatedApplicationProtocol)
+                                != connection.CacheKey)
+                            {
+                                await TcpConnectionFactory.Release(connection);
+                                connection = null;
+                            }
+
+                            var result = await HandleHttpSessionRequest(args, connection,
+                                clientStream.Connection.NegotiatedApplicationProtocol,
+                                requestToken, cancellationTokenSource);
+
+                            var newConnection = result.LatestConnection;
+                            if (connection != newConnection && connection != null)
+                                await TcpConnectionFactory.Release(connection);
+
+                            // update connection to latest used
+                            connection = result.LatestConnection;
+
+                            closeServerConnection = !result.Continue;
+
+                            // throw if exception happened
+                            if (result.Exception != null) throw result.Exception;
+
+                            if (!result.Continue) return;
+
+                            // user requested
+                            if (args.HttpClient.CloseServerConnection)
+                            {
+                                closeServerConnection = true;
                                 return;
                             }
 
-                            PrepareRequestHeaders(request.Headers);
-                            // Do NOT overwrite Host here — any value set by the BeforeRequest handler
-                            // must be preserved.  The default was already filled in above.
-                        }
-
-                        // if win auth is enabled
-                        // we need a cache of request body
-                        // so that we can send it after authentication in WinAuthHandler.cs
-                        if (args.EnableWinAuth && request.HasBody) await args.GetRequestBody(cancellationToken);
-
-                        var response = args.HttpClient.Response;
-
-                        if (request.CancelRequest)
-                        {
-                            if (!(Enable100ContinueBehaviour && request.ExpectContinue))
-                                // syphon out the request body from client before setting the new body
-                                await args.SyphonOutBodyAsync(true, cancellationToken);
-
-                            await HandleHttpSessionResponse(args);
-
-                            if (!response.KeepAlive) return;
-
-                            continue;
-                        }
-
-                        // If prefetch task is available.
-                        if (connection == null && prefetchTask != null)
-                        {
-                            try
+                            // if connection is closing exit
+                            if (!response.KeepAlive)
                             {
-                                connection = await prefetchTask;
-                            }
-                            catch (SocketException e)
-                            {
-                                if (e.SocketErrorCode != SocketError.HostNotFound) throw;
+                                closeServerConnection = true;
+                                return;
                             }
 
-                            prefetchTask = null;
-                        }
+                            if (cancellationTokenSource.IsCancellationRequested)
+                                throw new Exception("Session was terminated by user.");
 
-                        if (connection != null)
-                        {
-                            var socket = connection.TcpSocket;
-                            var part1 = socket.Poll(1000, SelectMode.SelectRead);
-                            var part2 = socket.Available == 0;
-                            if (part1 & part2)
+                            // Release the server connection back to the shared pool after each HTTP session
+                            // (rather than holding it for the whole client connection). This is more efficient
+                            // when a client idly holds a server connection between sessions without using it.
+                            // We only get here when the response was persistent (response.KeepAlive above) and its
+                            // body was fully received, so the connection is at a clean message boundary and safe to reuse.
+                            // WinAuth (NTLM/Negotiate) connections are deliberately NOT returned to the shared pool:
+                            // they are authenticated to a specific identity and are connection-oriented, so they stay
+                            // bound to this client session (reused for its subsequent requests) and are closed when
+                            // the client connection ends, never shared with another client.
+                            if (EnableConnectionPool && connection != null
+                                                     && !connection.IsWinAuthenticated)
                             {
-                                //connection is closed
-                                await TcpConnectionFactory.Release(connection, true);
+                                await TcpConnectionFactory.Release(connection);
                                 connection = null;
                             }
                         }
-
-                        // create a new connection if cache key changes.
-                        // only gets hit when connection pool is disabled.
-                        // or when prefetch task has a unexpectedly different connection.
-                        if (connection != null
-                            && await TcpConnectionFactory.GetConnectionCacheKey(this, args,
-                                clientStream.Connection.NegotiatedApplicationProtocol)
-                            != connection.CacheKey)
+                        catch (ProxyTimeoutException timeoutEx)
                         {
-                            await TcpConnectionFactory.Release(connection);
-                            connection = null;
-                        }
-
-                        var result = await HandleHttpSessionRequest(args, connection,
-                            clientStream.Connection.NegotiatedApplicationProtocol,
-                            cancellationToken, cancellationTokenSource);
-
-                        var newConnection = result.LatestConnection;
-                        if (connection != newConnection && connection != null)
-                            await TcpConnectionFactory.Release(connection);
-
-                        // update connection to latest used
-                        connection = result.LatestConnection;
-
-                        closeServerConnection = !result.Continue;
-
-                        // throw if exception happened
-                        if (result.Exception != null) throw result.Exception;
-
-                        if (!result.Continue) return;
-
-                        // user requested
-                        if (args.HttpClient.CloseServerConnection)
-                        {
+                            await HandleProxyTimeoutAsync(args, timeoutEx, cancellationToken);
                             closeServerConnection = true;
                             return;
                         }
-
-                        // if connection is closing exit
-                        if (!response.KeepAlive)
+                        catch (Exception ex) when (ex is OperationCanceledException || requestTimeoutScope.IsTimedOut())
                         {
-                            closeServerConnection = true;
-                            return;
-                        }
+                            if (requestTimeoutScope.IsTimedOut())
+                            {
+                                var timeoutEx = new ProxyTimeoutException(
+                                    "Proxy request timeout elapsed.", ProxyTimeoutKind.Request, ex);
+                                await HandleProxyTimeoutAsync(args, timeoutEx, cancellationToken);
+                                closeServerConnection = true;
+                                return;
+                            }
 
-                        if (cancellationTokenSource.IsCancellationRequested)
-                            throw new Exception("Session was terminated by user.");
-
-                        // Release the server connection back to the shared pool after each HTTP session
-                        // (rather than holding it for the whole client connection). This is more efficient
-                        // when a client idly holds a server connection between sessions without using it.
-                        // We only get here when the response was persistent (response.KeepAlive above) and its
-                        // body was fully received, so the connection is at a clean message boundary and safe to reuse.
-                        // WinAuth (NTLM/Negotiate) connections are deliberately NOT returned to the shared pool:
-                        // they are authenticated to a specific identity and are connection-oriented, so they stay
-                        // bound to this client session (reused for its subsequent requests) and are closed when the
-                        // client connection ends, never shared with another client.
-                        if (EnableConnectionPool && connection != null
-                                                 && !connection.IsWinAuthenticated)
-                        {
-                            await TcpConnectionFactory.Release(connection);
-                            connection = null;
+                            throw;
                         }
                     }
-                    catch (Exception e) when (!(e is ProxyHttpException))
+                    catch (Exception e) when (!(e is ProxyHttpException) && !(e is ProxyTimeoutException))
                     {
                         throw new ProxyHttpException("Error occured whilst handling session request", e, args);
                     }
@@ -312,7 +341,7 @@ public partial class ProxyServer
 
     private async Task HandleHttpSessionRequest(SessionEventArgs args)
     {
-        var cancellationToken = args.CancellationTokenSource.Token;
+        var cancellationToken = args.CancellationToken;
         var request = args.HttpClient.Request;
 
         var body = request.CompressBodyAndUpdateContentLength();
@@ -330,20 +359,31 @@ public partial class ProxyServer
             headerBuilder.WriteResponseLine(response.HttpVersion, response.StatusCode, response.StatusDescription);
             headerBuilder.WriteHeaders(response.Headers);
             await writer.WriteHeadersAsync(headerBuilder, cancellationToken);
+            args.IsClientResponseCommitted = true;
 
             await args.ClearResponse(cancellationToken);
         }
 
-        // send body to server if available
+        // send body to server if available (idle-write window on stalled transfers)
         if (request.HasBody)
         {
-            if (request.IsBodyRead)
-                await args.HttpClient.Connection.Stream.WriteBodyAsync(body!, request.IsChunked,
-                    request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
-            else if (!request.ExpectationFailed)
-                // get the request body unless an unsuccessful 100 continue request was made
-                await args.CopyRequestBodyAsync(args.HttpClient.Connection.Stream, TransformationMode.None,
-                    cancellationToken);
+            using var idleWriteScope = ProxyTimeoutScope.Create(cancellationToken,
+                ResolveIdleWriteTimeout(args), ProxyTimeoutKind.IdleWrite);
+            try
+            {
+                if (request.IsBodyRead)
+                    await args.HttpClient.Connection.Stream.WriteBodyAsync(body!, request.IsChunked,
+                        request.HasTrailingHeaders ? request.TrailingHeaders : null, idleWriteScope.Token);
+                else if (!request.ExpectationFailed)
+                    // get the request body unless an unsuccessful 100 continue request was made
+                    await args.CopyRequestBodyAsync(args.HttpClient.Connection.Stream, TransformationMode.None,
+                        idleWriteScope.Token);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException || idleWriteScope.IsTimedOut())
+            {
+                idleWriteScope.ThrowIfTimedOut(ex);
+                throw;
+            }
         }
 
         args.Timing?.MarkRequestSent();

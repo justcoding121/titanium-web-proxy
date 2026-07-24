@@ -288,6 +288,38 @@ public partial class ProxyServer : IDisposable
     public int ConnectTimeOutSeconds { get; set; } = 20;
 
     /// <summary>
+    ///     Seconds to wait for the origin to send the response status line and headers after the
+    ///     request has been sent. Enforced with a linked <see cref="System.Threading.CancellationTokenSource" />
+    ///     (not Socket receive timeout alone). When the deadline elapses a
+    ///     <see cref="Exceptions.ProxyTimeoutException" /> with
+    ///     <see cref="Exceptions.ProxyTimeoutKind.ResponseHeader" /> is raised (and may be converted to
+    ///     HTTP 504 before any response bytes have been committed to the client).
+    ///     Default is 0 (disabled). WebSocket upgrades, Server-Sent Events, raw tunnels, and sessions
+    ///     that already wrote a response status to the client are exempt; those waits use
+    ///     <see cref="IdleReadTimeoutSeconds" /> when configured.
+    /// </summary>
+    public int ResponseHeaderTimeoutSeconds { get; set; }
+
+    /// <summary>
+    ///     Seconds of idle time allowed while reading from the origin (stalled header/body waits).
+    ///     Applied via <c>CancelAfter</c> on the active read operation. Default is 0 (disabled).
+    /// </summary>
+    public int IdleReadTimeoutSeconds { get; set; }
+
+    /// <summary>
+    ///     Seconds of idle time allowed while writing to the origin (stalled header/body waits).
+    ///     Applied via <c>CancelAfter</c> on the active write operation. Default is 0 (disabled).
+    /// </summary>
+    public int IdleWriteTimeoutSeconds { get; set; }
+
+    /// <summary>
+    ///     Total seconds allowed for a single request/response exchange after
+    ///     <see cref="BeforeRequest" /> returns (connect, send, wait for headers, and body copy).
+    ///     Default is 0 (disabled).
+    /// </summary>
+    public int RequestTimeoutSeconds { get; set; }
+
+    /// <summary>
     ///     Maximum number of concurrent connections per remote host in cache.
     ///     Only valid when connection pooling is enabled.
     ///     Default value is 4.
