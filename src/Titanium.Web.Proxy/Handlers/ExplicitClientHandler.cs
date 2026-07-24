@@ -284,7 +284,8 @@ public partial class ProxyServer
                 }
 
                 if (cancellationTokenSource.IsCancellationRequested)
-                    throw new Exception("Session was terminated by user.");
+                    throw new OperationCanceledException("Session was terminated by user.",
+                        cancellationTokenSource.Token);
 
                 if (method == KnownMethod.Invalid) sendRawData = true;
 
@@ -485,6 +486,12 @@ public partial class ProxyServer
         {
             closeServerConnection = true;
             OnException(clientStream, new Exception("Could not connect", e));
+        }
+        catch (OperationCanceledException e)
+        {
+            // User TerminateSession / linked cancellation: expected, do not wrap or elevate to Error.
+            closeServerConnection = true;
+            ProxyDiagnostics.ReportException(logger, "Client session cancelled", e);
         }
         catch (Exception e)
         {

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -26,7 +27,9 @@ public partial class ProxyServer
         {
             try
             {
-                var httpStatus = await serverConnection.Stream.ReadResponseStatus(idleScope.Token);
+                var httpStatus = await serverConnection.Stream.ReadResponseStatus(idleScope.Token)
+                                 ?? throw new IOException(
+                                     "Server closed the connection before sending a WebSocket upgrade response.");
 
                 var upgradeResponse = args.HttpClient.Response;
                 upgradeResponse.HttpVersion = httpStatus.Version;

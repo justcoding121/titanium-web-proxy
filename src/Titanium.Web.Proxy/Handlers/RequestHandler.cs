@@ -223,7 +223,8 @@ public partial class ProxyServer
                             }
 
                             if (cancellationTokenSource.IsCancellationRequested)
-                                throw new Exception("Session was terminated by user.");
+                                throw new OperationCanceledException("Session was terminated by user.",
+                                    cancellationTokenSource.Token);
 
                             // Release the server connection back to the shared pool after each HTTP session
                             // (rather than holding it for the whole client connection). This is more efficient
@@ -261,7 +262,13 @@ public partial class ProxyServer
                             throw;
                         }
                     }
-                    catch (Exception e) when (!(e is ProxyHttpException) && !(e is ProxyTimeoutException))
+                    // Do not wrap cancellation or retryable connection failures: they are expected
+                    // control-flow outcomes (or already typed) and wrapping them as ProxyHttpException
+                    // only adds allocations and can elevate severity in diagnostics.
+                    catch (Exception e) when (!(e is ProxyHttpException)
+                                              && !(e is ProxyTimeoutException)
+                                              && !(e is OperationCanceledException)
+                                              && !(e is RetryableServerConnectionException))
                     {
                         throw new ProxyHttpException("Error occured whilst handling session request", e, args);
                     }
