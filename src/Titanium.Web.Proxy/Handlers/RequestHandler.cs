@@ -128,6 +128,28 @@ public partial class ProxyServer
                                 PrepareRequestHeaders(request.Headers);
                                 // Do NOT overwrite Host here — any value set by the BeforeRequest handler
                                 // must be preserved.  The default was already filled in above.
+
+                                // Via loop detection and injection (RFC 9110 §7.6.3).
+                                if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+                                {
+                                    if (HasLoopedVia(request.Headers, ViaHeaderPseudonym))
+                                    {
+                                        args.HttpClient.Response = new Response
+                                        {
+                                            HttpVersion = request.HttpVersion,
+                                            StatusCode = 508,
+                                            StatusDescription = "Loop Detected"
+                                        };
+                                        // Drain any request body first so the client stream is clean.
+                                        if (!(Enable100ContinueBehaviour && request.ExpectContinue))
+                                            await args.SyphonOutBodyAsync(true, requestToken);
+                                        await clientStream.WriteResponseAsync(args.HttpClient.Response, requestToken);
+                                        args.IsClientResponseCommitted = true;
+                                        return;
+                                    }
+
+                                    AddViaHeader(request.Headers, request.HttpVersion, ViaHeaderPseudonym);
+                                }
                             }
 
                             // if win auth is enabled
@@ -473,5 +495,36 @@ public partial class ProxyServer
         {
             await OnRequestBodyWrite.InvokeAsync(this, args, logger);
         }
+    }
+
+    /// <summary>
+    ///     Appends a Via header entry to <paramref name="headers" /> per RFC 9110 §7.6.3.
+    ///     If a Via header already exists its value is extended with a comma-separated suffix.
+    /// </summary>
+    private static void AddViaHeader(HeaderCollection headers, Version httpVersion, string pseudonym)
+    {
+        var protocol = httpVersion.Major == 2 ? "2" : $"1.{httpVersion.Minor}";
+        var entry = $"{protocol} {pseudonym}";
+
+        var existing = headers.GetFirstHeader("Via");
+        if (existing != null)
+            existing.SetValue($"{existing.Value}, {entry}");
+        else
+            headers.AddHeader("Via", entry);
+    }
+
+    /// <summary>
+    ///     Returns true if any component of the Via header already names <paramref name="pseudonym" />,
+    ///     indicating a proxy loop.
+    /// </summary>
+    private static bool HasLoopedVia(HeaderCollection headers, string pseudonym)
+    {
+        var via = headers.GetFirstHeader("Via")?.Value;
+        if (via == null) return false;
+
+        return via.Split(',')
+            .Select(v => v.Trim())
+            .Any(v => v.EndsWith(" " + pseudonym, StringComparison.OrdinalIgnoreCase) ||
+                      v.Contains(" " + pseudonym + " ", StringComparison.OrdinalIgnoreCase));
     }
 }

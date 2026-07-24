@@ -162,9 +162,16 @@ public partial class ProxyServer
         // Framing normalize applies to every endpoint mode (CL+TE smuggling guard). Proxy-Connection
         // rewriting remains explicit-proxy-only.
         if (!args.IsTransparent && !args.IsSocks)
+        {
             response.Headers.FixProxyHeaders();
+            // Via injection on outgoing response (RFC 9110 §7.6.3).
+            if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+                AddViaHeader(response.Headers, args.HttpClient.Request.HttpVersion, ViaHeaderPseudonym);
+        }
         else
+        {
             response.Headers.NormalizeMessageFraming();
+        }
 
         // HTTP/1.0 clients do not support chunked transfer encoding (RFC 7230 §4.1 / RFC 1945).
         // Buffer the body so it can be reframed with a Content-Length header instead.
