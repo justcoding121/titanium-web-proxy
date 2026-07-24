@@ -144,7 +144,7 @@ public partial class ProxyServer
                         // capability must already be known.
                         var options = new SslServerAuthenticationOptions
                         {
-                            ServerCertificate = certificate,
+                            ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate),
                             ClientCertificateRequired = false,
                             EnabledSslProtocols = SupportedSslProtocols,
                             CertificateRevocationCheckMode = X509RevocationMode.NoCheck

@@ -267,6 +267,17 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
+    ///     Additional certificates to send to clients as part of the TLS certificate chain.
+    ///     Use this when <see cref="RootCertificate" /> is an intermediate CA rather than the trust anchor:
+    ///     set this to the ordered list of intermediate certificates between the signing certificate
+    ///     and the client-trusted root so that clients can build a complete verified chain.
+    ///     When <see cref="RootCertificate" /> is not self-signed it is automatically included in the
+    ///     chain even if this collection is empty; any certificates in this collection are appended
+    ///     after it.
+    /// </summary>
+    public X509Certificate2Collection? IntermediateCertificates { get; set; }
+
+    /// <summary>
     ///     Save all fake certificates using <seealso cref="CertificateStorage" />.
     ///     <para>for can load the certificate and not make new certificate every time. </para>
     /// </summary>
@@ -649,6 +660,34 @@ public sealed class CertificateManager : IDisposable
     {
         clearCertificatesTokenSource.Cancel();
     }
+
+    /// <summary>
+    ///     Creates an <see cref="System.Net.Security.SslStreamCertificateContext" /> for the given leaf certificate,
+    ///     including any intermediate CA certificates that the client needs to build a verified chain.
+    ///     <para>
+    ///         When <see cref="RootCertificate" /> is not self-signed (i.e. it is an intermediate CA), it is
+    ///         automatically added to the chain so that clients trust-anchored at the root CA can still verify
+    ///         generated leaf certificates. Additional certificates from <see cref="IntermediateCertificates" />
+    ///         are appended after it.
+    ///     </para>
+    /// </summary>
+    internal System.Net.Security.SslStreamCertificateContext CreateSslCertificateContext(X509Certificate2 leaf)
+    {
+        var extras = new X509Certificate2Collection();
+
+        if (rootCertificate != null && !IsSelfSigned(rootCertificate))
+            extras.Add(rootCertificate);
+
+        if (IntermediateCertificates != null)
+            foreach (X509Certificate2 cert in IntermediateCertificates)
+                extras.Add(cert);
+
+        return System.Net.Security.SslStreamCertificateContext.Create(
+            leaf, extras.Count > 0 ? extras : null, offline: false);
+    }
+
+    private static bool IsSelfSigned(X509Certificate2 cert) =>
+        cert.SubjectName.RawData.SequenceEqual(cert.IssuerName.RawData);
 
     /// <summary>
     ///     Attempts to create a RootCertificate.

@@ -221,7 +221,7 @@ public partial class ProxyServer
                                 options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
                         }
 
-                        options.ServerCertificate = certificate;
+                        options.ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate);
                         options.ClientCertificateRequired = false;
                         options.EnabledSslProtocols = SupportedSslProtocols;
                         options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;
