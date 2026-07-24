@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Network.WinAuth.Security;
 
@@ -13,6 +14,7 @@ using static Common;
 internal class WinAuthEndPoint
 {
     private const string AuthStateKey = "AuthState";
+    private const int SecWinntAuthIdentityUnicode = 0x2;
 
     /// <summary>
     ///     Acquire the intial client token to send
@@ -22,7 +24,7 @@ internal class WinAuthEndPoint
     /// <param name="data"></param>
     /// <returns></returns>
     internal static byte[]? AcquireInitialSecurityToken(string hostname, string authScheme, InternalDataStore data,
-        int attributes)
+        int attributes, WinAuthCredentials? credentials = null)
     {
         if (!RunTime.IsWindows) return null;
 
@@ -32,17 +34,21 @@ internal class WinAuthEndPoint
         var serverToken = new SecurityBufferDescription();
 
         var clientToken = new SecurityBufferDescription(MaximumTokenSize);
+        var authDataPtr = IntPtr.Zero;
 
         try
         {
             var state = new State();
 
+            if (credentials != null)
+                authDataPtr = MarshalAuthIdentity(credentials);
+
             var result = AcquireCredentialsHandle(
-                WindowsIdentity.GetCurrent().Name,
+                credentials == null ? WindowsIdentity.GetCurrent().Name : null!,
                 authScheme,
                 SecurityCredentialsOutbound,
                 IntPtr.Zero,
-                IntPtr.Zero,
+                authDataPtr,
                 0,
                 IntPtr.Zero,
                 ref state.Credentials,
@@ -73,11 +79,33 @@ internal class WinAuthEndPoint
         }
         finally
         {
+            if (authDataPtr != IntPtr.Zero) Marshal.FreeHGlobal(authDataPtr);
             DisposeToken(clientToken);
             DisposeToken(serverToken);
         }
 
         return token;
+    }
+
+    private static IntPtr MarshalAuthIdentity(WinAuthCredentials credentials)
+    {
+        var user = credentials.UserName ?? string.Empty;
+        var domain = credentials.Domain ?? string.Empty;
+        var password = credentials.Password ?? string.Empty;
+        var identity = new SecWinntAuthIdentity
+        {
+            User = user,
+            UserLength = user.Length,
+            Domain = domain,
+            DomainLength = domain.Length,
+            Password = password,
+            PasswordLength = password.Length,
+            Flags = SecWinntAuthIdentityUnicode
+        };
+
+        var ptr = Marshal.AllocHGlobal(Marshal.SizeOf<SecWinntAuthIdentity>());
+        Marshal.StructureToPtr(identity, ptr, false);
+        return ptr;
     }
 
     /// <summary>
@@ -252,7 +280,7 @@ internal class WinAuthEndPoint
 
     [DllImport("secur32.dll", CharSet = CharSet.Auto, SetLastError = false)]
     private static extern int AcquireCredentialsHandle(
-        string pszPrincipal, // SEC_CHAR*
+        string? pszPrincipal, // SEC_CHAR*
         string pszPackage, // SEC_CHAR* // "Kerberos","NTLM","Negotiative"
         int fCredentialUse,
         IntPtr pAuthenticationId, // _LUID AuthenticationID,//pvLogonID, // PLUID
@@ -261,6 +289,18 @@ internal class WinAuthEndPoint
         IntPtr pvGetKeyArgument, // PVOID
         ref SecurityHandle phCredential, // SecHandle // PCtxtHandle ref
         ref SecurityInteger ptsExpiry); // PTimeStamp // TimeStamp ref
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct SecWinntAuthIdentity
+    {
+        public string User;
+        public int UserLength;
+        public string Domain;
+        public int DomainLength;
+        public string Password;
+        public int PasswordLength;
+        public int Flags;
+    }
 
     #endregion
 }

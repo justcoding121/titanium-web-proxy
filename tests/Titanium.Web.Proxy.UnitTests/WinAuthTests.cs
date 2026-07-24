@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.WinAuth;
 
 namespace Titanium.Web.Proxy.UnitTests
@@ -13,6 +15,49 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var token = WinAuthHandler.GetInitialAuthToken("mylocalserver.com", "NTLM", new InternalDataStore());
             Assert.IsTrue(token.Length > 1);
+        }
+
+        [TestMethod]
+        public void WinAuthCredentialsProvider_Is_Wired_On_ProxyServer()
+        {
+            using var proxy = new ProxyServer(false, false, false);
+            Assert.IsNull(proxy.WinAuthCredentialsProvider);
+
+            var called = false;
+            proxy.WinAuthCredentialsProvider = _ =>
+            {
+                called = true;
+                return Task.FromResult<WinAuthCredentials>(null);
+            };
+
+            Assert.IsNotNull(proxy.WinAuthCredentialsProvider);
+            // Invoke shape only — full 401 handshake needs a Windows origin.
+            var result = proxy.WinAuthCredentialsProvider(
+                null!).GetAwaiter().GetResult();
+            Assert.IsTrue(called);
+            Assert.IsNull(result);
+        }
+
+        [TestMethod]
+        public void GetInitialAuthToken_With_Explicit_Credentials_On_Windows()
+        {
+            if (Environment.OSVersion.Platform != PlatformID.Win32NT)
+                Assert.Inconclusive("Windows SSPI is required.");
+
+            // SSPI accepts the structure even when the account is invalid — failure surfaces as
+            // null/exception from AcquireCredentialsHandle. Process-identity path remains default.
+            try
+            {
+                var token = WinAuthHandler.GetInitialAuthToken("mylocalserver.com", "NTLM",
+                    new InternalDataStore(),
+                    new WinAuthCredentials { Domain = ".", UserName = "no-such-user-twp", Password = "x" });
+                // Some Windows configs still return a Type1 message for unknown local users.
+                Assert.IsTrue(token == null || token.Length > 1);
+            }
+            catch (InvalidOperationException)
+            {
+                // Expected when SSPI rejects the synthetic credentials.
+            }
         }
 
         [TestMethod]

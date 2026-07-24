@@ -8,6 +8,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.WinAuth;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
+using WinAuthHandler = Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler;
 
 namespace Titanium.Web.Proxy;
 
@@ -106,7 +107,12 @@ public partial class ProxyServer
             // initial value will match exactly any of the schemes
             if (scheme != null)
             {
-                var clientToken = WinAuthHandler.GetInitialAuthToken(request.Host!, scheme, args.HttpClient.Data);
+                WinAuthCredentials? credentials = null;
+                if (WinAuthCredentialsProvider != null)
+                    credentials = await WinAuthCredentialsProvider(args);
+
+                var clientToken = WinAuthHandler.GetInitialAuthToken(request.Host!, scheme, args.HttpClient.Data,
+                    credentials);
 
                 var auth = string.Concat(scheme, clientToken);
 

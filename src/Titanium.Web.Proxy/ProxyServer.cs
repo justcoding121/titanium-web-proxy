@@ -179,12 +179,18 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Enable disable Windows Authentication (NTLM/Kerberos).
-    ///     Note: NTLM/Kerberos will always send local credentials of current user
-    ///     running the proxy process. This is because a man
-    ///     in middle attack with Windows domain authentication is not currently supported.
-    ///     Defaults to false.
+    ///     By default SSPI uses the process identity. To authenticate as another user, set
+    ///     <see cref="WinAuthCredentialsProvider" /> (issue #461). Defaults to false.
     /// </summary>
     public bool EnableWinAuth { get; set; }
+
+    /// <summary>
+    ///     Optional per-session credential provider for server 401 WinAuth (NTLM/Negotiate/Kerberos).
+    ///     Return <see langword="null" /> to use the current process identity (legacy behavior).
+    ///     Do not put plaintext passwords on <see cref="SessionEventArgs" /> — use this callback instead.
+    ///     Windows SSPI only; ignored on non-Windows platforms.
+    /// </summary>
+    public Func<SessionEventArgs, Task<WinAuthCredentials?>>? WinAuthCredentialsProvider { get; set; }
 
     /// <summary>
     ///     Overrides upstream proxy Windows authentication token generation.
