@@ -1,5 +1,6 @@
 ﻿using System;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy.Network.WinAuth;
@@ -14,17 +15,20 @@ using static Common;
 internal static class WinAuthHandler
 {
     /// <summary>
-    ///     Get the initial client token for server
-    ///     using credentials of user running the proxy server process
+    ///     Get the initial client token for server.
+    ///     When <paramref name="credentials" /> is null, uses the process identity; otherwise SSPI
+    ///     acquires a handle for the supplied credentials (Windows only).
     /// </summary>
     /// <param name="serverHostname"></param>
     /// <param name="authScheme"></param>
     /// <param name="data"></param>
+    /// <param name="credentials">Optional alternate credentials from <c>WinAuthCredentialsProvider</c>.</param>
     /// <returns></returns>
-    internal static string GetInitialAuthToken(string serverHostname, string authScheme, InternalDataStore data)
+    internal static string GetInitialAuthToken(string serverHostname, string authScheme, InternalDataStore data,
+        WinAuthCredentials? credentials = null)
     {
         var tokenBytes = WinAuthEndPoint.AcquireInitialSecurityToken(serverHostname, authScheme, data,
-            IscReqConfidentiality | IscReqReplayDetect | IscReqSequenceDetect | IscReqConnection);
+            IscReqConfidentiality | IscReqReplayDetect | IscReqSequenceDetect | IscReqConnection, credentials);
         if (tokenBytes == null) throw new InvalidOperationException("Failed to acquire the initial authentication token.");
 
         return string.Concat(" ", Convert.ToBase64String(tokenBytes));
