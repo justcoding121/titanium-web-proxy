@@ -111,11 +111,4 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
         }
     }
 
-    ~TunnelConnectSessionEventArgs()
-    {
-        Titanium.Web.Proxy.Logging.ProxyDiagnostics.ReportUndisposedFinalizer(Server.Logger,
-            nameof(TunnelConnectSessionEventArgs));
-
-        Dispose(false);
-    }
 }

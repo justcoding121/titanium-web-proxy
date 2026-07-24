@@ -1172,12 +1172,14 @@ public partial class ProxyServer : IDisposable
 
     private bool disposed;
 
-    protected virtual void Dispose(bool disposing)
+    public void Dispose()
     {
         if (disposed) return;
 
         disposed = true;
 
+        // No finalizer: Stop()/certificate/buffer disposal must only run on the explicit
+        // Dispose path. Callers that omit Dispose leave OS sockets to safe-handle cleanup.
         if (ProxyRunning)
             try
             {
@@ -1188,31 +1190,17 @@ public partial class ProxyServer : IDisposable
                 // ignore
             }
 
-        if (disposing)
-        {
-            CertificateManager?.Dispose();
-            BufferPool?.Dispose();
+        CertificateManager?.Dispose();
+        BufferPool?.Dispose();
 
-            if (ownsActiveLoggerFactory)
-                try
-                {
-                    activeLoggerFactory.Dispose();
-                }
-                catch
-                {
-                    // A misbehaving sink must never prevent proxy disposal from completing.
-                }
-        }
-    }
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    ~ProxyServer()
-    {
-        Dispose(false);
+        if (ownsActiveLoggerFactory)
+            try
+            {
+                activeLoggerFactory.Dispose();
+            }
+            catch
+            {
+                // A misbehaving sink must never prevent proxy disposal from completing.
+            }
     }
 }

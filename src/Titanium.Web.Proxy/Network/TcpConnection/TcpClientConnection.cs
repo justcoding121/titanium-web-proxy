@@ -46,8 +46,30 @@ internal class TcpClientConnection : IDisposable
 
     public void Dispose()
     {
-        Dispose(true);
-        GC.SuppressFinalize(this);
+        if (disposed) return;
+
+        disposed = true;
+
+        // No finalizer: sockets already have safe-handle finalization, and scheduling
+        // Task.Run / logging from a finalizer thread is unsafe.
+        Task.Run(async () =>
+        {
+            // delay calling tcp connection close()
+            // so that client have enough time to call close first.
+            // This way we can push tcp Time_Wait to client side when possible.
+            await Task.Delay(1000);
+            ProxyServer.UpdateClientConnectionCount(false);
+
+            try
+            {
+                tcpClientSocket.Close();
+            }
+            catch (Exception ex)
+            {
+                Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
+                    "Failed to close a client socket during disposal.", ex);
+            }
+        });
     }
 
     public Stream GetStream()
@@ -74,39 +96,5 @@ internal class TcpClientConnection : IDisposable
         }
 
         throw new PlatformNotSupportedException();
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (disposed) return;
-
-        Task.Run(async () =>
-        {
-            // delay calling tcp connection close()
-            // so that client have enough time to call close first.
-            // This way we can push tcp Time_Wait to client side when possible.
-            await Task.Delay(1000);
-            ProxyServer.UpdateClientConnectionCount(false);
-
-            if (disposing)
-                try
-                {
-                    tcpClientSocket.Close();
-                }
-                catch (Exception ex)
-                {
-                    Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
-                        "Failed to close a client socket during disposal.", ex);
-                }
-        });
-
-        disposed = true;
-    }
-
-    ~TcpClientConnection()
-    {
-        Logging.ProxyDiagnostics.ReportUndisposedFinalizer(ProxyServer.Logger, nameof(TcpClientConnection));
-
-        Dispose(false);
     }
 }

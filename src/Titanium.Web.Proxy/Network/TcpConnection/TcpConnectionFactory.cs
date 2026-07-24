@@ -58,7 +58,6 @@ internal class TcpConnectionFactory : IDisposable
     public void Dispose()
     {
         Dispose(true);
-        GC.SuppressFinalize(this);
     }
 
     internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
@@ -1044,11 +1043,6 @@ internal class TcpConnectionFactory : IDisposable
         }
 
         disposed = true;
-    }
-
-    ~TcpConnectionFactory()
-    {
-        Dispose(false);
     }
 
     private static class SocketConnectionTaskFactory
