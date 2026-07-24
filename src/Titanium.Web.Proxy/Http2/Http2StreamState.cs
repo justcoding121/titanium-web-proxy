@@ -56,5 +56,18 @@ internal sealed class Http2StreamState
     ///     <see cref="System.Threading.Interlocked.CompareExchange(ref int, int, int)" />.
     /// </summary>
     public int FinalizedFlag;
+
+    /// <summary>
+    ///     RFC 8441: set to <see langword="true"/> when this stream was opened as an extended CONNECT
+    ///     request (i.e. <c>:method = CONNECT</c> with a <c>:protocol</c> pseudo-header). The relay
+    ///     uses this flag to switch DATA frame handling to the appropriate WebSocket-tunnel path.
+    /// </summary>
+    public bool IsExtendedConnect { get; set; }
+
+    /// <summary>
+    ///     RFC 8441: the value of the <c>:protocol</c> pseudo-header for this extended CONNECT stream
+    ///     (e.g. <c>"websocket"</c>). Only meaningful when <see cref="IsExtendedConnect"/> is true.
+    /// </summary>
+    public string? ExtendedConnectProtocol { get; set; }
 }
 #endif

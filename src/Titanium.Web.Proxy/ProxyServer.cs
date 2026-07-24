@@ -228,6 +228,16 @@ public partial class ProxyServer : IDisposable
     public bool EnableHttp2 { get; set; } = true;
 
     /// <summary>
+    ///     When <see langword="true"/>, the proxy accepts WebSocket-over-HTTP/2 connections from
+    ///     clients (RFC 8441 extended CONNECT with <c>:protocol = websocket</c>) and advertises
+    ///     <c>SETTINGS_ENABLE_CONNECT_PROTOCOL=1</c> to h2 clients. The proxy independently
+    ///     negotiates with each origin: if the origin supports RFC 8441 the DATA frames are
+    ///     relayed directly; otherwise a new HTTP/1.1 WebSocket upgrade is performed.
+    ///     Default: <see langword="false"/> (must opt-in; demand measurement pending).
+    /// </summary>
+    public bool EnableRfc8441 { get; set; } = false;
+
+    /// <summary>
     ///     Should we check for certificate revocation during SSL authentication to servers
     ///     Note: If enabled can reduce performance. Defaults to false.
     /// </summary>
