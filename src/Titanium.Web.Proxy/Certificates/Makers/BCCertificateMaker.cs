@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Pkcs;
@@ -158,6 +159,17 @@ internal class BcCertificateMaker : ICertificateMaker
 
     private static X509Certificate2 WithPrivateKey(X509Certificate certificate, AsymmetricKeyParameter privateKey)
     {
+        // On non-Windows (notably macOS), importing a PKCS#12 blob with X509KeyStorageFlags.Exportable
+        // throws PlatformNotSupportedException. Attach the private key in-memory instead.
+        // Use ToRSAParameters + RSA.Create (not DotNetUtilities.ToRSA) — ToRSA is Windows-only via CAPI.
+        if (!RunTime.IsWindows)
+        {
+            var publicOnly = CertificateLoader.LoadCertificate(certificate.GetEncoded());
+            var rsa = RSA.Create();
+            rsa.ImportParameters(DotNetUtilities.ToRSAParameters((RsaPrivateCrtKeyParameters)privateKey));
+            return publicOnly.CopyWithPrivateKey(rsa);
+        }
+
         const string password = "password";
 
         var builder = new Pkcs12StoreBuilder();
@@ -166,7 +178,8 @@ internal class BcCertificateMaker : ICertificateMaker
             builder.SetUseDerEncoding(true);
         }
 
-        var store = builder.Build(); var entry = new X509CertificateEntry(certificate);
+        var store = builder.Build();
+        var entry = new X509CertificateEntry(certificate);
         store.SetCertificateEntry(certificate.SubjectDN.ToString(), entry);
 
         store.SetKeyEntry(certificate.SubjectDN.ToString(), new AsymmetricKeyEntry(privateKey), new[] { entry });
