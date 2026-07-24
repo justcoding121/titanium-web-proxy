@@ -469,7 +469,7 @@ public partial class ProxyServer
                                 async args => { await OnAfterResponse(args); },
                                 headers => PrepareRequestHeaders(headers),
                                 connectArgs.CancellationTokenSource, clientStream.Connection.Id, logger,
-                                MaxDecodedHeaderListBytes);
+                                MaxDecodedHeaderListBytes, EnableRfc8441);
 #endif
                     }
                     finally

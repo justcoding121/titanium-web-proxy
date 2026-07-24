@@ -97,7 +97,7 @@ namespace Titanium.Web.Proxy.Http2
             Func<SessionEventArgs, Http2StreamContext, Task> onBeforeResponse,
             Func<SessionEventArgs, Task> onAfterResponse, Action<HeaderCollection> prepareRequestHeaders,
             CancellationTokenSource cancellationTokenSource, Guid connectionId,
-            ILogger logger, int maxDecodedHeaderListBytes = 64 * 1024)
+            ILogger logger, int maxDecodedHeaderListBytes = 64 * 1024, bool enableRfc8441 = false)
         {
             var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource);
 
@@ -105,11 +105,11 @@ namespace Titanium.Web.Proxy.Http2
             var sendRelay =
                 CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
                     sessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
-                    cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes);
+                    cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, enableRfc8441);
             var receiveRelay =
                 CopyHttp2FrameAsync(serverStream, clientStream, connectionState,
                     sessionFactory, onBeforeResponse, onAfterResponse, null, false, cancellationTokenSource.Token,
-                    logger, maxDecodedHeaderListBytes);
+                    logger, maxDecodedHeaderListBytes, enableRfc8441);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             cancellationTokenSource.Cancel();
@@ -191,7 +191,8 @@ namespace Titanium.Web.Proxy.Http2
             bool isClient,
             CancellationToken cancellationToken,
             ILogger logger,
-            int maxDecodedHeaderListBytes = 64 * 1024)
+            int maxDecodedHeaderListBytes = 64 * 1024,
+            bool enableRfc8441 = false)
         {
             var connectionId = connectionState.ConnectionId;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
@@ -431,15 +432,62 @@ namespace Titanium.Web.Proxy.Http2
                     var path = headerListener.Path;
                     // RFC 7540 §8.1.2.3: CONNECT requests have :method + :authority but no :path or :scheme.
                     // All other requests require :method, :path, and :scheme.
+                    // RFC 8441 §5: extended CONNECT has :method=CONNECT + :protocol + :scheme + :path + :authority.
                     bool isConnect = method.Length > 0 &&
                         method.Span.SequenceEqual(System.Text.Encoding.ASCII.GetBytes("CONNECT"));
+                    bool isExtendedConnect = isConnect && headerListener.Protocol.Length > 0;
                     bool isMainHeaders = (method.Length > 0 && path.Length > 0) ||
                         (isConnect && headerListener.Authority.Length > 0);
+
+                    // RFC 8441 §5: :protocol is only valid on CONNECT requests.
+                    if (!isConnect && headerListener.Protocol.Length > 0)
+                    {
+                        ReportException(logger, new ProxyHttpException(
+                            "HTTP/2 protocol error: :protocol pseudo-header is only allowed on CONNECT requests.",
+                            null, sessionArgs));
+                        RemoveAndFinalizeStream(hbStreamId);
+                        await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                            hbStreamId, Http2ErrorCode.ProtocolError, input));
+                        return false;
+                    }
 
                     if (isMainHeaders)
                     {
                         // Validate required pseudo-fields for initial request HEADERS.
-                        if (!isConnect && headerListener.Scheme == string.Empty)
+                        if (isExtendedConnect)
+                        {
+                            // RFC 8441 §5: extended CONNECT requires :scheme and :path (unlike plain CONNECT).
+                            if (!enableRfc8441)
+                            {
+                                ReportException(logger, new ProxyHttpException(
+                                    "HTTP/2 extended CONNECT (RFC 8441) is not enabled on this proxy.",
+                                    null, sessionArgs));
+                                RemoveAndFinalizeStream(hbStreamId);
+                                await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                    hbStreamId, Http2ErrorCode.RefusedStream, input));
+                                return false;
+                            }
+
+                            if (headerListener.Scheme == string.Empty)
+                            {
+                                ReportException(logger, new ProxyHttpException(
+                                    "HTTP/2 protocol error: extended CONNECT HEADERS missing required :scheme pseudo-header.",
+                                    null, sessionArgs));
+                                RemoveAndFinalizeStream(hbStreamId);
+                                await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                    hbStreamId, Http2ErrorCode.ProtocolError, input));
+                                return false;
+                            }
+
+                            // Mark the stream as extended CONNECT so the relay can handle DATA frames appropriately.
+                            if (connectionState.Streams.TryGetValue(hbStreamId, out var extStreamState))
+                            {
+                                extStreamState.IsExtendedConnect = true;
+                                extStreamState.ExtendedConnectProtocol =
+                                    Encoding.ASCII.GetString(headerListener.Protocol.Span);
+                            }
+                        }
+                        else if (!isConnect && headerListener.Scheme == string.Empty)
                         {
                             // RFC 7540 §8.1.2.3: non-CONNECT requests must include :scheme.
                             ReportException(logger, new ProxyHttpException(
@@ -513,7 +561,7 @@ namespace Titanium.Web.Proxy.Http2
                         // RFC 7540 §8.1.2.1: trailer HEADERS MUST NOT contain pseudo-header fields.
                         if (headerListener.Method.Length > 0 || headerListener.Path.Length > 0 ||
                             headerListener.Status.Length > 0 || headerListener.Authority.Length > 0 ||
-                            headerListener.Scheme != string.Empty)
+                            headerListener.Scheme != string.Empty || headerListener.Protocol.Length > 0)
                         {
                             ReportException(logger, new ProxyHttpException(
                                 "HTTP/2 protocol error: request trailer HEADERS contains pseudo-header fields.",
@@ -1340,6 +1388,7 @@ namespace Titanium.Web.Proxy.Http2
                     bool invalidSettings = false;
                     Http2ErrorCode invalidSettingsError = Http2ErrorCode.ProtocolError;
                     bool sawEnablePush = false;
+                    bool sawEnableConnectProtocol = false;
 
                     int pos = 0;
                     while (pos < length)
@@ -1411,6 +1460,30 @@ namespace Titanium.Web.Proxy.Http2
                             // to receive. Store it so outbound header encoding can respect the peer's limit.
                             localSettings.MaxHeaderListSize = value > int.MaxValue ? int.MaxValue : (int)value;
                         }
+                        else if (identifier == (int)Http2SettingsId.EnableConnectProtocol)
+                        {
+                            // RFC 8441 §3: the proxy manages ENABLE_CONNECT_PROTOCOL independently per leg.
+                            sawEnableConnectProtocol = true;
+                            if (isClient)
+                            {
+                                // Suppress the client's ENABLE_CONNECT_PROTOCOL preference - do not relay
+                                // it to the server; the proxy negotiates RFC 8441 with each leg independently.
+                                buffer[valueOffset] = 0;
+                                buffer[valueOffset + 1] = 0;
+                                buffer[valueOffset + 2] = 0;
+                                buffer[valueOffset + 3] = 0;
+                            }
+                            else
+                            {
+                                // Server advertises its RFC 8441 support - record it.
+                                localSettings.EnableConnectProtocol = (value == 1);
+                                // Overwrite with what the proxy chooses to advertise to the client.
+                                buffer[valueOffset] = 0;
+                                buffer[valueOffset + 1] = 0;
+                                buffer[valueOffset + 2] = 0;
+                                buffer[valueOffset + 3] = (byte)(enableRfc8441 ? 1 : 0);
+                            }
+                        }
                     }
 
                     if (invalidSettings)
@@ -1434,6 +1507,22 @@ namespace Titanium.Web.Proxy.Http2
                         buffer[length + 3] = 0;
                         buffer[length + 4] = 0;
                         buffer[length + 5] = 0;
+                        length += 6;
+                        frameHeader.Length = length;
+                    }
+
+                    if (!isClient && enableRfc8441 && !sawEnableConnectProtocol &&
+                        (flags & Http2FrameFlag.Ack) == 0 && length + 6 <= buffer.Length)
+                    {
+                        // The server's SETTINGS frame did not include ENABLE_CONNECT_PROTOCOL but the proxy
+                        // is configured to accept RFC 8441 extended CONNECT from clients - inject
+                        // SETTINGS_ENABLE_CONNECT_PROTOCOL=1 so the client knows extended CONNECT is available.
+                        buffer[length] = (byte)(((int)Http2SettingsId.EnableConnectProtocol >> 8) & 0xff);
+                        buffer[length + 1] = (byte)((int)Http2SettingsId.EnableConnectProtocol & 0xff);
+                        buffer[length + 2] = 0;
+                        buffer[length + 3] = 0;
+                        buffer[length + 4] = 0;
+                        buffer[length + 5] = 1;
                         length += 6;
                         frameHeader.Length = length;
                     }
@@ -2198,6 +2287,9 @@ namespace Titanium.Web.Proxy.Http2
 
             public ByteString Path { get; private set; }
 
+            /// <summary>RFC 8441 §5: the :protocol pseudo-header value for an extended CONNECT request.</summary>
+            public ByteString Protocol { get; private set; }
+
             /// <summary>
             ///     Set when this header block contained an unknown pseudo-header field or a field name with
             ///     uppercase characters (RFC 7540 ?8.1.2/?8.1.2.1) - both are malformed and the block's stream
@@ -2251,6 +2343,10 @@ namespace Titanium.Web.Proxy.Http2
                             return;
                         case ":status":
                             Status = value;
+                            return;
+                        case ":protocol":
+                            // RFC 8441 §5: valid only on CONNECT requests; validated in ProcessCompleteHeaderBlockAsync.
+                            Protocol = value;
                             return;
                     }
 

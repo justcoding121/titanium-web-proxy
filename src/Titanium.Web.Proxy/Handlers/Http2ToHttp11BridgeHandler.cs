@@ -88,7 +88,7 @@ public partial class ProxyServer
             async sessionArgs => { await OnAfterResponse(sessionArgs); },
             headers => PrepareRequestHeaders(headers),
             cancellationTokenSource, clientStream.Connection.Id, logger,
-            MaxDecodedHeaderListBytes);
+            MaxDecodedHeaderListBytes, EnableRfc8441);
     }
 
     /// <summary>
@@ -111,6 +111,19 @@ public partial class ProxyServer
             // answered synthetically (Ok/GenericResponse/Redirect/RespondStreaming) during BeforeRequest -
             // Http2Helper's own ProcessCompleteHeaderBlockAsync dispatches this exactly like it would for a
             // real h2-to-h2/h1.1 relay; there is nothing to bridge.
+            return;
+        }
+
+        // RFC 8441 extended CONNECT detection: if the stream was opened as an extended CONNECT
+        // (e.g. WebSocket-over-HTTP/2), the DATA frames are tunnel payload, not a normal HTTP body.
+        // Full translation is a future deliverable; return 501 so the client can retry over HTTP/1.1.
+        if (ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var extStreamState) &&
+            extStreamState.IsExtendedConnect)
+        {
+            sessionArgs.GenericResponse(
+                $"RFC 8441 extended CONNECT (protocol: {extStreamState.ExtendedConnectProtocol ?? "unknown"}) " +
+                "is not yet fully implemented in this proxy. Retry the WebSocket upgrade over HTTP/1.1.",
+                System.Net.HttpStatusCode.NotImplemented);
             return;
         }
 
