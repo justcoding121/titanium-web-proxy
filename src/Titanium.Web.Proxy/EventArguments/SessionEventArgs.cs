@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
@@ -90,6 +91,37 @@ public class SessionEventArgs : SessionEventArgsBase
     public WebSocketDecoder WebSocketDecoderSend => webSocketDecoderSend ??= new WebSocketDecoder(BufferPool);
 
     public WebSocketDecoder WebSocketDecoderReceive => webSocketDecoderReceive ??= new WebSocketDecoder(BufferPool);
+
+    /// <summary>
+    ///     Fired for each WebSocket frame after upgrade when at least one handler is subscribed.
+    ///     Handlers may <see cref="WebSocketFrameInterceptAction.Forward" />,
+    ///     <see cref="WebSocketFrameInterceptAction.Drop" />, or
+    ///     <see cref="WebSocketFrameInterceptAction.Replace" /> the frame, optionally with a
+    ///     <see cref="WebSocketFrameInterceptEventArgs.Delay" />. Observational
+    ///     <see cref="SessionEventArgsBase.DataSent" /> / <see cref="SessionEventArgsBase.DataReceived" />
+    ///     still fire for bytes actually written to the peer.
+    /// </summary>
+    public event AsyncEventHandler<WebSocketFrameInterceptEventArgs>? BeforeWebSocketFrame;
+
+    /// <summary>
+    ///     Inject frames toward the remote server (client→server direction, masked).
+    ///     Available only while an intercepted WebSocket relay is active.
+    /// </summary>
+    public WebSocketFrameWriter? WebSocketServerWriter { get; internal set; }
+
+    /// <summary>
+    ///     Inject frames toward the local client (server→client direction, unmasked).
+    ///     Available only while an intercepted WebSocket relay is active.
+    /// </summary>
+    public WebSocketFrameWriter? WebSocketClientWriter { get; internal set; }
+
+    internal bool HasWebSocketFrameInterceptHandler => BeforeWebSocketFrame != null;
+
+    internal async Task InvokeBeforeWebSocketFrame(WebSocketFrameInterceptEventArgs args)
+    {
+        if (BeforeWebSocketFrame != null)
+            await BeforeWebSocketFrame.InvokeAsync(Server, args, Logger);
+    }
 
     /// <summary>
     /// Occurs when multipart request part sent.

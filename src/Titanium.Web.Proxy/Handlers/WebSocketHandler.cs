@@ -76,7 +76,17 @@ public partial class ProxyServer
         // along with it.
         if (userReplacedResponse) return;
 
-        await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool,
-            args.OnDataSent, args.OnDataReceived, cancellationTokenSource, logger);
+        // Frame-level interception when BeforeWebSocketFrame is subscribed; otherwise keep the
+        // zero-overhead raw byte relay. DataSent/DataReceived still fire for written bytes.
+        if (args.HasWebSocketFrameInterceptHandler)
+        {
+            await WebSocketInterceptRelay.RelayAsync(clientStream, serverConnection.Stream, BufferPool,
+                args, cancellationTokenSource);
+        }
+        else
+        {
+            await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool,
+                args.OnDataSent, args.OnDataReceived, cancellationTokenSource, logger);
+        }
     }
 }
