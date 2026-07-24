@@ -16,6 +16,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -31,6 +32,11 @@ namespace Titanium.Web.Proxy.Network.Tcp;
 internal class TcpConnectionFactory : IDisposable
 {
     private const int MaximumUpstreamProxyAuthenticationAttempts = 5;
+
+    /// <summary>
+    ///     Maximum number of upstream CONNECT rejection body bytes retained for diagnostics.
+    /// </summary>
+    private const int UpstreamProxyRejectionBodyPreviewLimit = 4096;
 
     private static readonly string[] UpstreamProxyAuthenticationSchemes = { "Negotiate", "NTLM", "Kerberos" };
 
@@ -675,19 +681,24 @@ internal class TcpConnectionFactory : IDisposable
                         break;
                     }
 
-                    await DrainUpstreamProxyResponseBody(stream, headers, cancellationToken);
+                    var bodyPreview = await DrainUpstreamProxyResponseBody(stream, headers, cancellationToken);
 
                     if (httpStatus.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired ||
                         !externalProxy.UseDefaultCredentials ||
                         authenticationAttempts >= MaximumUpstreamProxyAuthenticationAttempts ||
                         !TryGetUpstreamProxyAuthenticationChallenge(headers, out var scheme, out var challenge))
-                        throw new Exception("Upstream proxy failed to create a secure tunnel");
+                    {
+                        throw CreateUpstreamProxyConnectException(httpStatus, headers, bodyPreview);
+                    }
 
                     if (headers.GetHeaderValueOrNull(KnownHeaders.Connection)
                             ?.EqualsIgnoreCase(KnownHeaders.ConnectionClose.String) == true ||
                         headers.GetHeaderValueOrNull(KnownHeaders.ProxyConnection)
                             ?.EqualsIgnoreCase(KnownHeaders.ProxyConnectionClose.String) == true)
-                        throw new Exception("Upstream proxy closed the connection during authentication");
+                    {
+                        throw CreateUpstreamProxyConnectException(httpStatus, headers, bodyPreview,
+                            "Upstream proxy closed the connection during authentication");
+                    }
 
                     var token = proxyServer.GenerateUpstreamProxyWinAuthToken(externalProxy, scheme!, challenge,
                         authenticationData);
@@ -818,23 +829,50 @@ internal class TcpConnectionFactory : IDisposable
         return false;
     }
 
-    private static async Task DrainUpstreamProxyResponseBody(HttpServerStream stream, HeaderCollection headers,
-        CancellationToken cancellationToken)
+    private static UpstreamProxyConnectException CreateUpstreamProxyConnectException(
+        ResponseStatusInfo httpStatus, HeaderCollection headers, string? bodyPreview, string? message = null)
     {
+        var headerSnapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var header in headers)
+        {
+            if (!headerSnapshot.ContainsKey(header.Name))
+                headerSnapshot[header.Name] = header.Value;
+        }
+
+        var effectiveMessage = message ??
+                               $"Upstream proxy failed to create a secure tunnel (HTTP {httpStatus.StatusCode} {httpStatus.Description}).";
+
+        return new UpstreamProxyConnectException(effectiveMessage, httpStatus.StatusCode, httpStatus.Description,
+            headerSnapshot, bodyPreview);
+    }
+
+    private static async Task<string?> DrainUpstreamProxyResponseBody(HttpServerStream stream,
+        HeaderCollection headers, CancellationToken cancellationToken)
+    {
+        var preview = new MemoryStream();
+
         var transferEncoding = headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
         if (transferEncoding != null && transferEncoding.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked.String))
         {
-            await DrainChunkedBody(stream, cancellationToken);
-            return;
+            await DrainChunkedBody(stream, preview, cancellationToken);
+            return PreviewToString(preview);
         }
 
         var contentLengthValue = headers.GetHeaderValueOrNull(KnownHeaders.ContentLength);
-        if (!long.TryParse(contentLengthValue, out var remaining) || remaining <= 0) return;
+        if (!long.TryParse(contentLengthValue, out var remaining) || remaining <= 0) return null;
 
-        await DrainBytes(stream, remaining, cancellationToken);
+        await DrainBytes(stream, remaining, preview, cancellationToken);
+        return PreviewToString(preview);
     }
 
-    private static async Task DrainChunkedBody(HttpServerStream stream, CancellationToken cancellationToken)
+    private static string? PreviewToString(MemoryStream preview)
+    {
+        if (preview.Length == 0) return null;
+        return Encoding.UTF8.GetString(preview.GetBuffer(), 0, (int)preview.Length);
+    }
+
+    private static async Task DrainChunkedBody(HttpServerStream stream, MemoryStream preview,
+        CancellationToken cancellationToken)
     {
         while (true)
         {
@@ -859,11 +897,13 @@ internal class TcpConnectionFactory : IDisposable
             }
 
             // chunk data followed by its trailing CRLF
-            await DrainBytes(stream, chunkSize + 2, cancellationToken);
+            await DrainBytes(stream, chunkSize, preview, cancellationToken);
+            await DrainBytes(stream, 2, null, cancellationToken);
         }
     }
 
-    private static async Task DrainBytes(HttpServerStream stream, long count, CancellationToken cancellationToken)
+    private static async Task DrainBytes(HttpServerStream stream, long count, MemoryStream? preview,
+        CancellationToken cancellationToken)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(8192);
         try
@@ -873,6 +913,13 @@ internal class TcpConnectionFactory : IDisposable
                 var read = await stream.ReadAsync(buffer, 0, (int)Math.Min(buffer.Length, count), cancellationToken);
                 if (read <= 0)
                     throw new IOException("Upstream proxy closed the connection while sending a response body");
+
+                if (preview != null && preview.Length < UpstreamProxyRejectionBodyPreviewLimit)
+                {
+                    var toCopy = Math.Min(read, UpstreamProxyRejectionBodyPreviewLimit - (int)preview.Length);
+                    preview.Write(buffer, 0, toCopy);
+                }
+
                 count -= read;
             }
         }
