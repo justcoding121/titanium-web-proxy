@@ -35,7 +35,8 @@ public partial class ProxyServer
     }
 
     private async Task HandleClient(TransparentBaseProxyEndPoint endPoint, TcpClientConnection clientConnection,
-        int port, CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
+        int port, CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken,
+        string? socksTargetHost = null)
     {
         var isHttps = false;
         Task<TcpServerConnection?>? prefetchConnectionTask = null;
@@ -366,6 +367,36 @@ public partial class ProxyServer
             // Now create the request
             var prefetchTask = prefetchConnectionTask;
             prefetchConnectionTask = null;
+
+            // For SOCKS endpoints: if the plaintext traffic does not start with a recognised HTTP method
+            // (e.g. a raw TCP protocol tunnelled over SOCKS), relay it opaquely to the SOCKS target
+            // instead of attempting HTTP parsing, which would fail and close the connection.
+            if (socksTargetHost != null && !isHttps)
+            {
+                var method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
+                if (method == KnownMethod.Invalid)
+                {
+                    await TcpConnectionFactory.Release(prefetchTask, true);
+                    prefetchTask = null;
+                    var session = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
+                    var connection = (await TcpConnectionFactory.GetServerConnection(this, socksTargetHost, port,
+                        HttpHeader.VersionUnknown, false, null,
+                        false, session, UpStreamEndPoint,
+                        UpStreamHttpProxy, true, false, cancellationToken))!;
+                    try
+                    {
+                        await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool,
+                            null, null, cancellationTokenSource, logger);
+                    }
+                    finally
+                    {
+                        await TcpConnectionFactory.Release(connection, true);
+                    }
+
+                    return;
+                }
+            }
+
             await HandleHttpSessionRequest(endPoint, clientStream, cancellationTokenSource,
                 prefetchConnectionTask: prefetchTask, isHttps: isHttps);
         }

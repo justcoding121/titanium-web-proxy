@@ -72,7 +72,7 @@ Add one or more endpoints before calling `Start()`:
 
 - **`ExplicitProxyEndPoint`** — the client is configured to use the proxy (standard `HTTP_PROXY` / system proxy setup). Supports `CONNECT` tunneling.
 - **`TransparentProxyEndPoint`** — traffic is redirected to the proxy without the client knowing (e.g. via routing/NAT). Set `GenericCertificateName` for the server name to present.
-- **`SocksProxyEndPoint`** — SOCKS4/SOCKS5 endpoint.
+- **`SocksProxyEndPoint`** — SOCKS4/SOCKS5 endpoint. See [SOCKS endpoint](#socks-endpoint) for protocol handling details.
 
 ```csharp
 proxyServer.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 8000));
@@ -81,6 +81,33 @@ proxyServer.AddEndPoint(new TransparentProxyEndPoint(IPAddress.Loopback, 8001, d
     GenericCertificateName = "example.com"
 });
 proxyServer.AddEndPoint(new SocksProxyEndPoint(IPAddress.Loopback, 1080));
+```
+
+## SOCKS endpoint
+
+`SocksProxyEndPoint` accepts SOCKS4 and SOCKS5 connections. The client is unaware it is communicating with a proxy; traffic is typically redirected here via a local application configuration or system-level routing.
+
+**Protocol routing after the SOCKS handshake:**
+
+| Traffic | `decryptSsl: true` (default) | `decryptSsl: false` |
+|---|---|---|
+| HTTPS (TLS ClientHello detected) | MITM-decrypted; HTTP(S) interception pipeline runs (`BeforeRequest`/`BeforeResponse`/`AfterResponse`) | Opaque TCP relay to the SOCKS destination — no inspection |
+| Plain HTTP | HTTP interception pipeline runs | HTTP interception pipeline runs |
+| Non-HTTP, non-TLS (e.g. SMTP, custom TCP protocol) | Opaque TCP relay to the SOCKS destination | Opaque TCP relay to the SOCKS destination |
+
+Non-HTTP plain traffic is detected by peeking the first bytes. When the opening bytes do not match any known HTTP method, the connection is relayed transparently to the target host and port negotiated during the SOCKS handshake — no HTTP parsing is attempted and no proxy events fire.
+
+To opt individual HTTPS connections out of decryption at runtime, subscribe to `BeforeSslAuthenticate` on the endpoint:
+
+```csharp
+var socksEndPoint = new SocksProxyEndPoint(IPAddress.Loopback, 1080, decryptSsl: true);
+socksEndPoint.BeforeSslAuthenticate += (sender, e) =>
+{
+    if (e.SniHostName.EndsWith(".internal", StringComparison.OrdinalIgnoreCase))
+        e.DecryptSsl = false; // relay opaquely without decrypting
+    return Task.CompletedTask;
+};
+proxyServer.AddEndPoint(socksEndPoint);
 ```
 
 ## Decrypting HTTPS
