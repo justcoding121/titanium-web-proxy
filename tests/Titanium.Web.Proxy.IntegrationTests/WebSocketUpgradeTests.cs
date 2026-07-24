@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
@@ -148,6 +149,113 @@ public class WebSocketUpgradeTests
         WaitForCondition(() => proxySentTexts.Count >= 1, timeout,
             "Expected the proxy to observe the client's outgoing ping as a 'sent' frame.");
         Assert.AreEqual(ClientPingText, proxySentTexts[0]);
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task WebSocketUpgrade_FrameIntercept_CanDropAndReplace_WhileDataEventsStillFire()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+
+        server.HandleTcpRequest(async context =>
+        {
+            await DrainRequestHeaders(context);
+            var handshake = AsciiEncoding.GetBytes(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n");
+            await context.Transport.Output.WriteAsync(handshake);
+
+            // Echo each inbound chunk (post-intercept wire bytes) back to the client.
+            while (true)
+            {
+                var result = await context.Transport.Input.ReadAsync();
+                if (result.Buffer.IsEmpty && result.IsCompleted)
+                {
+                    context.Transport.Input.AdvanceTo(result.Buffer.End);
+                    break;
+                }
+
+                if (!result.Buffer.IsEmpty)
+                    foreach (var segment in result.Buffer)
+                        await context.Transport.Output.WriteAsync(segment.ToArray());
+
+                context.Transport.Input.AdvanceTo(result.Buffer.End);
+                if (result.IsCompleted) break;
+            }
+
+            context.Transport.Output.Complete();
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.Url = server.ListeningTcpUrl;
+            return Task.CompletedTask;
+        };
+
+        var observedSent = new List<string>();
+        proxy.BeforeResponse += (_, e) =>
+        {
+            e.BeforeWebSocketFrame += async (_, frame) =>
+            {
+                if (frame.Direction != WebSocketFrameDirection.ClientToServer)
+                    return;
+
+                var text = Encoding.UTF8.GetString(frame.Data);
+                if (text == "drop-me")
+                {
+                    frame.Drop();
+                    return;
+                }
+
+                if (text == "replace-me")
+                {
+                    frame.Replace(Encoding.UTF8.GetBytes("replaced"));
+                    return;
+                }
+
+                await Task.CompletedTask;
+            };
+
+            e.DataSent += (_, dataArgs) =>
+            {
+                foreach (var frame in e.WebSocketDecoderSend.Decode(dataArgs.Buffer, dataArgs.Offset, dataArgs.Count))
+                    observedSent.Add(frame.GetText());
+            };
+            return Task.CompletedTask;
+        };
+
+        using var tcpClient = new TcpClient();
+        await tcpClient.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
+        var stream = tcpClient.GetStream();
+        var timeout = TimeSpan.FromSeconds(10);
+
+        await stream.WriteAsync(AsciiEncoding.GetBytes(
+            "GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" +
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"));
+
+        var reader = new RawWebSocketStreamReader(stream);
+        await reader.ReadHeadersAsync(timeout);
+
+        await stream.WriteAsync(BuildFrame(WebsocketOpCode.Text, Encoding.UTF8.GetBytes("drop-me"), mask: true));
+        await stream.WriteAsync(BuildFrame(WebsocketOpCode.Text, Encoding.UTF8.GetBytes("replace-me"), mask: true));
+        await stream.WriteAsync(BuildFrame(WebsocketOpCode.Ping, Encoding.UTF8.GetBytes("ctl"), mask: true));
+
+        var clientDecoder = new WebSocketDecoder(new DefaultBufferPool());
+        // Copy payloads immediately — WebSocketFrame.Data aliases the decoder buffer.
+        var frames = await reader.ReadFramesAsync(clientDecoder, 2, timeout);
+        var captured = frames.Select(f => (Op: f.OpCode, Payload: f.Data.ToArray())).ToList();
+
+        tcpClient.Close();
+
+        Assert.AreEqual(2, captured.Count, "Dropped frame must not be echoed; replace + ping should arrive.");
+        Assert.AreEqual("replaced", Encoding.UTF8.GetString(captured[0].Payload));
+        Assert.AreEqual(WebsocketOpCode.Ping, captured[1].Op);
+        CollectionAssert.AreEqual(Encoding.UTF8.GetBytes("ctl"), captured[1].Payload);
+
+        WaitForCondition(() => observedSent.Contains("replaced"), timeout,
+            "DataSent must still observe the replaced frame on the wire.");
+        Assert.IsFalse(observedSent.Contains("drop-me"), "Dropped frames must not appear in DataSent.");
     }
 
     [TestMethod]
@@ -510,11 +618,23 @@ public class WebSocketUpgradeTests
         {
             var frames = new List<WebSocketFrame>();
 
+            void Capture(IEnumerable<WebSocketFrame> decoded)
+            {
+                // Copy payload immediately — Data aliases decoder/read buffers.
+                foreach (var frame in decoded)
+                    frames.Add(new WebSocketFrame
+                    {
+                        IsFinal = frame.IsFinal,
+                        OpCode = frame.OpCode,
+                        Data = frame.Data.ToArray()
+                    });
+            }
+
             if (pending.Count > 0)
             {
                 var leftover = pending.ToArray();
                 pending.Clear();
-                frames.AddRange(decoder.Decode(leftover, 0, leftover.Length));
+                Capture(decoder.Decode(leftover, 0, leftover.Length));
             }
 
             using var cts = new CancellationTokenSource(timeout);
@@ -523,7 +643,7 @@ public class WebSocketUpgradeTests
             {
                 var read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
                 if (read == 0) throw new IOException("Connection closed before enough frames arrived.");
-                frames.AddRange(decoder.Decode(buffer, 0, read));
+                Capture(decoder.Decode(buffer, 0, read));
             }
 
             return frames;
