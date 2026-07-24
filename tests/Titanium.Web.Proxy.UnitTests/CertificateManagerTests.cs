@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Network;
+using Titanium.Web.Proxy.Network.Certificate;
 
 namespace Titanium.Web.Proxy.UnitTests
 {
@@ -87,6 +88,47 @@ namespace Titanium.Web.Proxy.UnitTests
                 })));
 
             await Task.WhenAll(tasks.ToArray());
+        }
+
+        /// <summary>
+        /// Regression test for issue #965: issuer DN of generated leaf certificates must exactly
+        /// match the subject DN of the custom signing root (preserving RDN order, C/O/L/CN attributes,
+        /// and escaping) rather than being round-tripped through a display-string representation.
+        /// Covers both BcCertificateMaker and BcCertificateMakerFast.
+        /// </summary>
+        [TestMethod]
+        public void BC_Leaf_IssuerDN_Matches_Root_SubjectDN_RawBytes()
+        {
+            // Build a custom root certificate with multiple RDN attributes so that any string
+            // round-trip would produce a different ordering or encoding.
+            X509Certificate2 customRoot;
+            using (var rsa = RSA.Create(2048))
+            {
+                var req = new CertificateRequest(
+                    "C=AU, ST=Victoria, L=Melbourne, O=Acme Corp, OU=Proxy, CN=Acme Root CA",
+                    rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                req.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+                req.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+                customRoot = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(365));
+            }
+
+            var expectedIssuerRaw = customRoot.SubjectName.RawData;
+
+            // Test BcCertificateMaker
+            var maker = new BcCertificateMaker(certificateValidDays: 365);
+            var leaf = maker.MakeCertificate("example.com", customRoot);
+            CollectionAssert.AreEqual(expectedIssuerRaw, leaf.IssuerName.RawData,
+                "BcCertificateMaker: leaf IssuerName.RawData must equal signing root SubjectName.RawData");
+
+            // Test BcCertificateMakerFast
+            var makerFast = new BcCertificateMakerFast(certificateValidDays: 365);
+            var leafFast = makerFast.MakeCertificate("example.com", customRoot);
+            CollectionAssert.AreEqual(expectedIssuerRaw, leafFast.IssuerName.RawData,
+                "BcCertificateMakerFast: leaf IssuerName.RawData must equal signing root SubjectName.RawData");
+
+            customRoot.Dispose();
+            leaf.Dispose();
+            leafFast.Dispose();
         }
 
         [TestMethod]

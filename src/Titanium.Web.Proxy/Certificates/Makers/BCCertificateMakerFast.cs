@@ -58,7 +58,10 @@ internal class BcCertificateMakerFast : ICertificateMaker
     ///     Generates the certificate.
     /// </summary>
     /// <param name="subjectName">Name of the subject.</param>
-    /// <param name="issuerName">Name of the issuer.</param>
+    /// <param name="issuerDn">
+    ///     The issuer distinguished name. Pass a value derived from the signing certificate's
+    ///     <c>SubjectName.RawData</c> to preserve exact DER encoding, RDN order, and non-ASCII characters.
+    /// </param>
     /// <param name="validFrom">The valid from.</param>
     /// <param name="validTo">The valid to.</param>
     /// <param name="subjectKeyPair">The key pair.</param>
@@ -69,7 +72,7 @@ internal class BcCertificateMakerFast : ICertificateMaker
     /// <exception cref="PemException">Malformed sequence in RSA private key</exception>
     private static X509Certificate2 GenerateCertificate(string? hostName,
         string subjectName,
-        string issuerName, DateTime validFrom,
+        X509Name issuerDn, DateTime validFrom,
         DateTime validTo, AsymmetricCipherKeyPair subjectKeyPair,
         string signatureAlgorithm = "SHA256WithRSA",
         AsymmetricKeyParameter? issuerPrivateKey = null)
@@ -86,9 +89,10 @@ internal class BcCertificateMakerFast : ICertificateMaker
             BigIntegers.CreateRandomInRange(BigInteger.One, BigInteger.ValueOf(long.MaxValue), secureRandom);
         certificateGenerator.SetSerialNumber(serialNumber);
 
-        // Issuer and Subject Name
+        // Issuer and Subject Name — issuerDn is passed directly so that custom roots with C/O/L/CN
+        // or escaped RDN values are reproduced exactly from their DER encoding rather than being
+        // round-tripped through a display-string representation.
         var subjectDn = new X509Name(subjectName);
-        var issuerDn = new X509Name(issuerName);
         certificateGenerator.SetIssuerDN(issuerDn);
         certificateGenerator.SetSubjectDN(subjectDn);
 
@@ -201,12 +205,16 @@ internal class BcCertificateMakerFast : ICertificateMaker
         DateTime validFrom, DateTime validTo, X509Certificate2? signingCertificate)
     {
         if (signingCertificate == null)
-            return GenerateCertificate(null, subjectName, subjectName, validFrom, validTo, KeyPair);
+            return GenerateCertificate(null, subjectName, new X509Name(subjectName), validFrom, validTo, KeyPair);
+
+        // Derive the issuer DN directly from the signing certificate's raw DER-encoded subject so that
+        // RDN order, multi-valued RDNs, escaped characters, and non-ASCII values are preserved exactly.
+        var issuerDn = X509Name.GetInstance(Asn1Object.FromByteArray(signingCertificate.SubjectName.RawData));
 
         using var privateKey = signingCertificate.GetRSAPrivateKey()
                                ?? throw new InvalidOperationException("The signing certificate has no RSA private key.");
         var kp = DotNetUtilities.GetKeyPair(privateKey);
-        return GenerateCertificate(hostName, subjectName, signingCertificate.Subject, validFrom, validTo, KeyPair,
+        return GenerateCertificate(hostName, subjectName, issuerDn, validFrom, validTo, KeyPair,
             issuerPrivateKey: kp.Private);
     }
 
