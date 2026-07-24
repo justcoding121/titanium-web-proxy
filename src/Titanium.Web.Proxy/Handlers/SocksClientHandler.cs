@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,6 +26,7 @@ public partial class ProxyServer
         var stream = clientConnection.GetStream();
         var buffer = BufferPool.GetBuffer();
         var port = 0;
+        string? targetHost = null;
         try
         {
             var read = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
@@ -37,6 +39,7 @@ public partial class ProxyServer
                     return;
 
                 port = (buffer[2] << 8) + buffer[3];
+                targetHost = new IPAddress(new[] { buffer[4], buffer[5], buffer[6], buffer[7] }).ToString();
 
                 buffer[0] = 0;
                 buffer[1] = 90; // request granted
@@ -105,14 +108,20 @@ public partial class ProxyServer
                     case 1:
                         // IPv4
                         portIdx = 8;
+                        targetHost = new IPAddress(new[] { buffer[4], buffer[5], buffer[6], buffer[7] }).ToString();
                         break;
                     case 3:
                         // Domainname
-                        portIdx = buffer[4] + 5;
+                        var nameLength = buffer[4];
+                        portIdx = nameLength + 5;
+                        targetHost = Encoding.ASCII.GetString(buffer, 5, nameLength);
                         break;
                     case 4:
                         // IPv6
                         portIdx = 20;
+                        var ipv6Bytes = new byte[16];
+                        Array.Copy(buffer, 4, ipv6Bytes, 0, 16);
+                        targetHost = new IPAddress(ipv6Bytes).ToString();
                         break;
                     default:
                         return;
@@ -134,6 +143,7 @@ public partial class ProxyServer
             BufferPool.ReturnBuffer(buffer);
         }
 
-        await HandleClient(endPoint, clientConnection, port, cancellationTokenSource, cancellationToken);
+        await HandleClient(endPoint, clientConnection, port, cancellationTokenSource, cancellationToken,
+            targetHost);
     }
 }
