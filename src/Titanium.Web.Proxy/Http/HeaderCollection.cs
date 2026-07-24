@@ -308,12 +308,38 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     ///     Recipients must either reject the message or remove Content-Length and honour TE.
     ///     Stripping Content-Length closes the request-smuggling ambiguity while remaining
     ///     interoperable with origins that incorrectly send both.
+    ///     Also validates that "chunked" is the final Transfer-Encoding coding when present.
     /// </summary>
     internal void NormalizeMessageFraming()
     {
+        // RFC 9112 §6.3: CL + TE conflict → strip CL (request-smuggling defence).
         if (HeaderExists(KnownHeaders.TransferEncoding.String) &&
             HeaderExists(KnownHeaders.ContentLength.String))
             RemoveHeader(KnownHeaders.ContentLength);
+
+        // Validate Transfer-Encoding chain: chunked must be the final coding if present.
+        var teHeader = GetHeaderValueOrNull(KnownHeaders.TransferEncoding.String);
+        if (teHeader != null)
+        {
+            var codings = teHeader.Split(',')
+                .Select(s => s.Trim().ToLowerInvariant())
+                .Where(s => s.Length > 0)
+                .ToList();
+
+            if (codings.Count > 1)
+            {
+                // If "chunked" appears in a non-final position, normalize to just "chunked"
+                // to remove the framing ambiguity.
+                for (var i = 0; i < codings.Count - 1; i++)
+                {
+                    if (codings[i] == "chunked")
+                    {
+                        SetOrAddHeaderValue(KnownHeaders.TransferEncoding.String, "chunked");
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>

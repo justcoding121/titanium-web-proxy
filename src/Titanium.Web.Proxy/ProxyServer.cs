@@ -241,6 +241,18 @@ public partial class ProxyServer : IDisposable
     public bool Enable100ContinueBehaviour { get; set; }
 
     /// <summary>
+    ///     When <see langword="true" />, the proxy immediately responds with a synthetic
+    ///     <c>100 Continue</c> to any client request carrying <c>Expect: 100-continue</c>,
+    ///     before forwarding the headers to the origin and without waiting for the origin
+    ///     to respond. This breaks the strict handshake (client → proxy 100 → client body
+    ///     → origin body) but prevents the deadlock that occurs with strict clients when
+    ///     <see cref="Enable100ContinueBehaviour" /> is <see langword="false" /> (the default).
+    ///     Has no effect when <see cref="Enable100ContinueBehaviour" /> is <see langword="true" />.
+    ///     Default: <see langword="false" />.
+    /// </summary>
+    public bool CompatibilityMode100Continue { get; set; } = false;
+
+    /// <summary>
     ///     Maximum decoded HTTP/2 header list size in bytes, using RFC 7541 accounting
     ///     (name.Length + value.Length + 32 per field). Requests or responses with a decoded
     ///     header list exceeding this limit will be refused with RST_STREAM(ENHANCE_YOUR_CALM)
