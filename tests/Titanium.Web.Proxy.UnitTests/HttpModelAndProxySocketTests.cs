@@ -72,6 +72,23 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         /// <summary>
+        /// Regression test for issue #744: a successful (2xx) CONNECT response must not carry
+        /// Content-Length or Transfer-Encoding headers — those would be interpreted as belonging
+        /// to the tunnelled byte stream rather than the response body.
+        /// </summary>
+        [TestMethod]
+        public void ConnectResponse_Success_HasNoContentLengthOrTransferEncoding()
+        {
+            var response = ConnectResponse.CreateSuccessfulConnectResponse(new Version(1, 1));
+
+            Assert.IsNull(response.Headers.GetHeaderValueOrNull("Content-Length"),
+                "Successful CONNECT response must not have Content-Length");
+            Assert.IsNull(response.Headers.GetHeaderValueOrNull("Transfer-Encoding"),
+                "Successful CONNECT response must not have Transfer-Encoding");
+            Assert.AreEqual(200, response.StatusCode);
+        }
+
+        /// <summary>
         /// Regression test for issue #839: UriExtensions.GetRawAuthority must extract the host[:port]
         /// from an absolute-form URI without going through System.Uri.
         /// </summary>
