@@ -114,6 +114,39 @@ public partial class ProxyServer
                     return;
                 }
 
+                // Optional pre-200 upstream connectivity check (issue #768). Default off — zero latency.
+                if (connectArgs.EstablishServerConnectionBeforeResponse)
+                {
+                    // Match the post-ClientHello decrypt path for upstream proxy selection: CONNECT
+                    // tunnels that will be decrypted are treated as HTTPS so UpStreamHttpsProxy is used.
+                    var restoredHttps = connectRequest.IsHttps;
+                    if (decryptSsl) connectRequest.IsHttps = true;
+
+                    try
+                    {
+                        var preConnection = await TcpConnectionFactory.GetServerConnection(this, connectArgs,
+                            true, null, false, false, cancellationToken);
+                        prefetchConnectionTask = Task.FromResult<TcpServerConnection?>(preConnection);
+                    }
+                    catch (Exception ex)
+                    {
+                        connectRequest.IsHttps = restoredHttps;
+                        var failureArgs = new TunnelConnectFailureEventArgs(this, clientConnection, connectArgs, ex);
+                        await endPoint.InvokeBeforeTunnelConnectFailure(this, failureArgs, logger);
+                        failureArgs.Response.Headers.FixProxyHeaders();
+                        connectArgs.HttpClient.Response = failureArgs.Response;
+                        await clientStream.WriteResponseAsync(failureArgs.Response, cancellationToken);
+                        closeServerConnection = true;
+                        OnException(clientStream, ex is ProxyException proxyEx
+                            ? proxyEx
+                            : new ProxyConnectException(
+                                "Upstream connectivity verification failed before CONNECT 200.", ex, connectArgs));
+                        return;
+                    }
+
+                    if (!decryptSsl) connectRequest.IsHttps = restoredHttps;
+                }
+
                 // write back successful CONNECT response
                 // Successful CONNECT 2xx responses must not carry Content-Length or Transfer-Encoding
                 // (RFC 9110 §9.3.6 / RFC 9112): tunnel bytes follow the header terminator immediately.
