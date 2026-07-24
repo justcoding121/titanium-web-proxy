@@ -271,11 +271,12 @@ public partial class ProxyServer : IDisposable
     public int MaxBufferedBodyBytes { get; set; } = 4 * 1024 * 1024;
 
     /// <summary>
-    ///     Maximum WebSocket frame payload size in bytes that the proxy will accept for
-    ///     frame-level interception. Frames larger than this limit are forwarded as raw relay
-    ///     (interception bypassed) or the connection is closed if a frame-level callback is
-    ///     registered and the payload cannot safely be decoded. Payloads above
-    ///     <see cref="int.MaxValue"/> are always rejected.
+    ///     Maximum WebSocket frame payload size in bytes that the proxy will accept during
+    ///     frame-level interception (i.e. when <c>BeforeWebSocketFrame</c> has at least one
+    ///     subscriber). Frames whose decoded payload exceeds this limit cause the WebSocket
+    ///     connection to be closed with Close code 1009 (Message Too Big).
+    ///     Raw-relay sessions (no <c>BeforeWebSocketFrame</c> subscriber) bypass this check
+    ///     entirely and pass all frames through unvalidated.
     ///     Default: 16,777,216 (16 MiB).
     /// </summary>
     public int MaxWebSocketFramePayloadBytes { get; set; } = 16 * 1024 * 1024;

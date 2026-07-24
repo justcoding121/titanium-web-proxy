@@ -19,6 +19,13 @@ public partial class ProxyServer
         HttpClientStream clientStream, TcpServerConnection serverConnection,
         CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
     {
+        // When frame-level interception is active, strip extensions that produce RSV-flagged frames
+        // (e.g. permessage-deflate sets RSV1=1) because the proxy cannot decode or re-encode them.
+        // The server will therefore not negotiate any extension, keeping the wire format plain.
+        // Phase 6 will add permessage-deflate support and relax this restriction.
+        if (args.HasWebSocketFrameInterceptHandler)
+            args.HttpClient.Request.Headers.RemoveHeader("Sec-WebSocket-Extensions");
+
         await serverConnection.Stream.WriteRequestAsync(args.HttpClient.Request, cancellationToken);
 
         // WebSocket upgrades are exempt from short response-header deadlines; use idle-read if configured.

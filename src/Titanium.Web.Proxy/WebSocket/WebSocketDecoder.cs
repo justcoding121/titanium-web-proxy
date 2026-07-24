@@ -56,7 +56,11 @@ public class WebSocketDecoder
             var b = data1[1];
             long size = b & 0x7f;
 
-            // todo: size > int.Max??
+            // TODO: size > int.MaxValue is structurally possible with a 64-bit length field but is
+            // rejected upstream anyway: WebSocketInterceptRelay.ValidateWebSocketFrame enforces
+            // MaxWebSocketFramePayloadBytes for intercepted sessions; raw-relay sessions forward frames
+            // without decoding and therefore cannot enforce a per-frame limit here without threading
+            // ProxyServer through the decoder. Wiring that in is deferred to a future phase.
 
             var masked = (b & 0x80) != 0;
 
