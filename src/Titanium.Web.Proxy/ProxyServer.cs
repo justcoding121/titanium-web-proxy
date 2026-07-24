@@ -411,8 +411,23 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Local adapter/NIC endpoint where proxy makes request via.
     ///     Defaults via any IP addresses of this machine.
+    ///     When the resolved destination address family does not match this endpoint, it is
+    ///     ignored so dual-stack destinations can still connect (see
+    ///     <see cref="UpStreamEndPointIPv4" /> / <see cref="UpStreamEndPointIPv6" />).
     /// </summary>
     public IPEndPoint? UpStreamEndPoint { get; set; }
+
+    /// <summary>
+    ///     Local bind endpoint used when the resolved upstream destination is IPv4.
+    ///     Takes precedence over <see cref="UpStreamEndPoint" /> for IPv4 destinations.
+    /// </summary>
+    public IPEndPoint? UpStreamEndPointIPv4 { get; set; }
+
+    /// <summary>
+    ///     Local bind endpoint used when the resolved upstream destination is IPv6.
+    ///     Takes precedence over <see cref="UpStreamEndPoint" /> for IPv6 destinations.
+    /// </summary>
+    public IPEndPoint? UpStreamEndPointIPv6 { get; set; }
 
     /// <summary>
     ///     A list of IpAddress and port this proxy is listening to.

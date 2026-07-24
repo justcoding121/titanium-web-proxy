@@ -99,7 +99,8 @@ internal class TcpConnectionFactory : IDisposable
     internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
         bool isHttps, List<SslApplicationProtocol>? applicationProtocols,
         IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
-        string? connectHost = null, int? connectPort = null)
+        string? connectHost = null, int? connectPort = null,
+        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null)
     {
         // http version is ignored since its an application level decision b/w HTTP 1.0/1.1
         // also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
@@ -131,13 +132,10 @@ internal class TcpConnectionFactory : IDisposable
                 cacheKeyBuilder.Append(protocol);
             }
 
-        if (upStreamEndPoint != null)
-        {
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(upStreamEndPoint.Address);
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(upStreamEndPoint.Port);
-        }
+        // Include generic + family-specific bind endpoints so dual-stack adapter selection
+        // never shares pool buckets across different local NICs (issue #951).
+        UpStreamEndPointSelector.AppendToCacheKey(cacheKeyBuilder, upStreamEndPoint,
+            upStreamEndPointIPv4, upStreamEndPointIPv6);
 
         if (externalProxy != null)
         {
@@ -247,7 +245,8 @@ internal class TcpConnectionFactory : IDisposable
         session.CustomUpStreamProxyUsed = customUpStreamProxy;
 
         var uri = session.HttpClient.Request.RequestUri;
-        var upStreamEndPoint = session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint;
+        var (upStreamEndPoint, upStreamEndPointIPv4, upStreamEndPointIPv6) =
+            ResolveConfiguredUpStreamEndPoints(session, server);
         var upStreamProxy = customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
 
         // resolve the effective proxy (post-bypass) so the key matches the connection's actual route
@@ -265,7 +264,16 @@ internal class TcpConnectionFactory : IDisposable
         }
 
         return GetConnectionCacheKey(uri.Host, uri.Port, isHttps, applicationProtocols, upStreamEndPoint,
-            upStreamProxy, connectHost, connectPort);
+            upStreamProxy, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
+    }
+
+    private static (IPEndPoint? Generic, IPEndPoint? IPv4, IPEndPoint? IPv6) ResolveConfiguredUpStreamEndPoints(
+        SessionEventArgsBase session, ProxyServer server)
+    {
+        return (
+            session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
+            session.HttpClient.UpStreamEndPointIPv4 ?? server.UpStreamEndPointIPv4,
+            session.HttpClient.UpStreamEndPointIPv6 ?? server.UpStreamEndPointIPv6);
     }
 
 
@@ -340,7 +348,8 @@ internal class TcpConnectionFactory : IDisposable
             port = uri.Port;
         }
 
-        var upStreamEndPoint = session.HttpClient.UpStreamEndPoint ?? proxyServer.UpStreamEndPoint;
+        var (upStreamEndPoint, upStreamEndPointIPv4, upStreamEndPointIPv6) =
+            ResolveConfiguredUpStreamEndPoints(session, proxyServer);
         var upStreamProxy = customUpStreamProxy ??
                             (isHttps ? proxyServer.UpStreamHttpsProxy : proxyServer.UpStreamHttpProxy);
 
@@ -357,7 +366,7 @@ internal class TcpConnectionFactory : IDisposable
 
         return await GetServerConnection(proxyServer, host, port, session.HttpClient.Request.HttpVersion, isHttps,
             applicationProtocols, isConnect, session, upStreamEndPoint, upStreamProxy, noCache, prefetch,
-            cancellationToken, connectHost, connectPort);
+            cancellationToken, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
     }
 
     /// <summary>
@@ -382,16 +391,24 @@ internal class TcpConnectionFactory : IDisposable
         Version httpVersion, bool isHttps, List<SslApplicationProtocol>? applicationProtocols, bool isConnect,
         SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
         bool noCache, bool prefetch, CancellationToken cancellationToken,
-        string? connectHost = null, int? connectPort = null)
+        string? connectHost = null, int? connectPort = null,
+        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null)
     {
         var sslProtocol = sessionArgs.ClientConnection.SslProtocol;
+
+        // Prefer explicitly passed family endpoints; otherwise take session/server configuration.
+        var configured = ResolveConfiguredUpStreamEndPoints(sessionArgs, proxyServer);
+        upStreamEndPoint ??= configured.Generic;
+        upStreamEndPointIPv4 ??= configured.IPv4;
+        upStreamEndPointIPv6 ??= configured.IPv6;
 
         // resolve the effective proxy (post-bypass) so that direct and proxied connections to the
         // same destination don't collide in the pool, and so the connection's stored key matches.
         externalProxy = GetEffectiveUpstreamProxy(externalProxy, remoteHostName, remotePort);
 
         var cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
-            isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort);
+            isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort,
+            upStreamEndPointIPv4, upStreamEndPointIPv6);
 
         if (proxyServer.EnableConnectionPool && !noCache)
             if (cache.TryGetValue(cacheKey, out var existingConnections))
@@ -414,7 +431,7 @@ internal class TcpConnectionFactory : IDisposable
 
         var connection = await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
             applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
-            prefetch, cancellationToken, connectHost, connectPort);
+            prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
 
         return connection;
     }
@@ -443,7 +460,8 @@ internal class TcpConnectionFactory : IDisposable
         ProxyServer proxyServer, SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint,
         IExternalProxy? externalProxy, string cacheKey,
         bool prefetch, CancellationToken cancellationToken,
-        string? connectHost = null, int? connectPort = null)
+        string? connectHost = null, int? connectPort = null,
+        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null)
     {
         // The actual destination we open the TCP connection to. When a fixed forward target
         // is configured, this differs from remoteHostName/remotePort which are kept for
@@ -496,6 +514,7 @@ internal class TcpConnectionFactory : IDisposable
         // which re-runs DNS/TCP-connect from scratch): every Mark* call just overwrites with the current
         // instant, so the final values always reflect the attempt that actually succeeded.
         var timing = proxyServer.EnableRequestTimingCapture ? new UpstreamConnectionTiming(DateTime.UtcNow) : null;
+        IPEndPoint? boundEndPoint = null;
 
         retry:
         try
@@ -527,7 +546,24 @@ internal class TcpConnectionFactory : IDisposable
                 try
                 {
                     var ipAddress = ipAddresses[i];
-                    var addressFamily = upStreamEndPoint?.AddressFamily ?? ipAddress.AddressFamily;
+                    // Select local bind after destination resolution so IPv4/IPv6 adapters can coexist (#951).
+                    var resolvedBind = UpStreamEndPointSelector.Resolve(ipAddress.AddressFamily,
+                        sessionArgs.HttpClient.UpStreamEndPoint, sessionArgs.HttpClient.UpStreamEndPointIPv4,
+                        sessionArgs.HttpClient.UpStreamEndPointIPv6,
+                        proxyServer.UpStreamEndPoint, proxyServer.UpStreamEndPointIPv4,
+                        proxyServer.UpStreamEndPointIPv6);
+                    // Prefer selector result; fall back to the legacy single endpoint only when families match.
+                    if (resolvedBind == null && upStreamEndPoint != null &&
+                        upStreamEndPoint.AddressFamily == ipAddress.AddressFamily)
+                        resolvedBind = upStreamEndPoint;
+                    if (resolvedBind == null && upStreamEndPointIPv4 != null &&
+                        ipAddress.AddressFamily == AddressFamily.InterNetwork)
+                        resolvedBind = upStreamEndPointIPv4;
+                    if (resolvedBind == null && upStreamEndPointIPv6 != null &&
+                        ipAddress.AddressFamily == AddressFamily.InterNetworkV6)
+                        resolvedBind = upStreamEndPointIPv6;
+
+                    var addressFamily = resolvedBind?.AddressFamily ?? ipAddress.AddressFamily;
 
                     if (socks)
                     {
@@ -556,7 +592,7 @@ internal class TcpConnectionFactory : IDisposable
                         tcpServerSocket = new Socket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
                     }
 
-                    if (upStreamEndPoint != null) tcpServerSocket.Bind(upStreamEndPoint);
+                    if (resolvedBind != null) tcpServerSocket.Bind(resolvedBind);
 
                     tcpServerSocket.NoDelay = proxyServer.NoDelay;
                     tcpServerSocket.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
@@ -632,6 +668,7 @@ internal class TcpConnectionFactory : IDisposable
                         continue;
                     }
 
+                    boundEndPoint = resolvedBind;
                     break;
                 }
                 catch (Exception e)
@@ -657,11 +694,13 @@ internal class TcpConnectionFactory : IDisposable
                         // under, the new proxy rather than the one that just failed.
                         var retryProxy = GetEffectiveUpstreamProxy(newUpstreamProxy, remoteHostName, remotePort);
                         var retryCacheKey = GetConnectionCacheKey(remoteHostName, remotePort, isHttps,
-                            applicationProtocols, upStreamEndPoint, retryProxy, connectHost, connectPort);
+                            applicationProtocols, upStreamEndPoint, retryProxy, connectHost, connectPort,
+                            upStreamEndPointIPv4, upStreamEndPointIPv6);
 
                         return await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps,
                             sslProtocol, applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint,
-                            retryProxy, retryCacheKey, prefetch, cancellationToken, connectHost, connectPort);
+                            retryProxy, retryCacheKey, prefetch, cancellationToken, connectHost, connectPort,
+                            upStreamEndPointIPv4, upStreamEndPointIPv6);
                     }
                 }
 
@@ -837,7 +876,7 @@ internal class TcpConnectionFactory : IDisposable
         timing?.MarkEstablished();
 
         return new TcpServerConnection(proxyServer, tcpServerSocket, stream, remoteHostName, remotePort, isHttps,
-            negotiatedApplicationProtocol, httpVersion, externalProxy, upStreamEndPoint, cacheKey)
+            negotiatedApplicationProtocol, httpVersion, externalProxy, boundEndPoint ?? upStreamEndPoint, cacheKey)
         {
             IsWinAuthenticated = upstreamProxyWinAuthenticated,
             UsedClientCertificate = usedClientCertificate,

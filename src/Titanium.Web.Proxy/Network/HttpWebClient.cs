@@ -56,9 +56,23 @@ public class HttpWebClient
     public object? UserData { get; set; }
 
     /// <summary>
-    ///     Override UpStreamEndPoint for this request; Local NIC via request is made
+    ///     Override UpStreamEndPoint for this request; Local NIC via request is made.
+    ///     Ignored for a destination whose address family does not match; prefer
+    ///     <see cref="UpStreamEndPointIPv4" /> / <see cref="UpStreamEndPointIPv6" /> for dual-stack.
     /// </summary>
     public IPEndPoint? UpStreamEndPoint { get; set; }
+
+    /// <summary>
+    ///     Per-request local bind for IPv4 upstream destinations (overrides server
+    ///     <c>UpStreamEndPointIPv4</c>).
+    /// </summary>
+    public IPEndPoint? UpStreamEndPointIPv4 { get; set; }
+
+    /// <summary>
+    ///     Per-request local bind for IPv6 upstream destinations (overrides server
+    ///     <c>UpStreamEndPointIPv6</c>).
+    /// </summary>
+    public IPEndPoint? UpStreamEndPointIPv6 { get; set; }
 
     /// <summary>
     ///     Headers passed with Connect.
