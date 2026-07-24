@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -9,6 +10,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Certificate;
 
@@ -316,6 +318,96 @@ namespace Titanium.Web.Proxy.UnitTests
 
             rootCa.Dispose();
             intermediateCa.Dispose();
+            leaf.Dispose();
+        }
+
+        /// <summary>
+        /// Characterization for issue #776: first manager persists a root PFX; a second manager lifetime
+        /// loads that PFX and must still mint usable leaf certificates (the "examples fail on second run" case).
+        /// </summary>
+        [TestMethod]
+        public void TwoManagerLifetimes_LoadSamePfx_CanIssueLeafCertificates()
+        {
+            var pfxPath = Path.Combine(Path.GetTempPath(), $"twp-lifetime-{Guid.NewGuid():N}.pfx");
+            const string password = "";
+
+            try
+            {
+                string rootThumbprint;
+                using (var first = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+                       {
+                           CertificateEngine = CertificateEngine.BouncyCastle
+                       })
+                {
+                    Assert.IsTrue(first.CreateRootCertificate(false));
+                    Assert.IsNotNull(first.RootCertificate);
+                    rootThumbprint = first.RootCertificate.Thumbprint;
+                    File.WriteAllBytes(pfxPath,
+                        first.RootCertificate.Export(X509ContentType.Pkcs12, password));
+                }
+
+                using var second = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+                {
+                    CertificateEngine = CertificateEngine.BouncyCastle
+                };
+                Assert.IsTrue(second.LoadRootCertificate(pfxPath, password, overwritePfXFile: false));
+                Assert.IsNotNull(second.RootCertificate);
+                Assert.AreEqual(rootThumbprint, second.RootCertificate.Thumbprint);
+
+                var leaf = second.CreateCertificate("second-run.example", false);
+                Assert.IsNotNull(leaf);
+                Assert.IsTrue(leaf.HasPrivateKey);
+                Assert.IsTrue(leaf.NotAfter > DateTime.Now);
+                leaf.Dispose();
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(pfxPath)) File.Delete(pfxPath);
+                }
+                catch
+                {
+                    // best-effort
+                }
+            }
+        }
+
+        /// <summary>
+        /// Regression test for issue #923: BouncyCastle makers must produce a usable private-key
+        /// certificate on every platform. On non-Windows this uses CopyWithPrivateKey (avoiding the
+        /// macOS PKCS#12 Exportable import failure); on Windows the PKCS#12 Exportable path is preserved
+        /// so disk-cache export continues to work.
+        /// </summary>
+        [DataTestMethod]
+        [DataRow(CertificateEngine.BouncyCastle)]
+        [DataRow(CertificateEngine.BouncyCastleFast)]
+        public void BC_Leaf_HasPrivateKey_And_IsSslUsable_OnCurrentPlatform(CertificateEngine engineType)
+        {
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = engineType
+            };
+            mgr.CreateRootCertificate(false);
+
+            var leaf = mgr.CreateCertificate("macos-exportable.example", false);
+            Assert.IsNotNull(leaf);
+            Assert.IsTrue(leaf.HasPrivateKey, "Generated leaf must have a private key");
+
+            using var rsa = leaf.GetRSAPrivateKey();
+            Assert.IsNotNull(rsa, "Leaf private key must be accessible as RSA");
+
+            // SslStreamCertificateContext construction is the practical usability gate for MITM.
+            var ctx = mgr.CreateSslCertificateContext(leaf);
+            Assert.IsNotNull(ctx);
+
+            if (RunTime.IsWindows)
+            {
+                // Windows path must remain PKCS#12-exportable for DefaultCertificateDiskCache.
+                var exported = leaf.Export(X509ContentType.Pkcs12);
+                Assert.IsTrue(exported.Length > 0, "Windows leaf must remain PKCS#12 exportable");
+            }
+
             leaf.Dispose();
         }
 
