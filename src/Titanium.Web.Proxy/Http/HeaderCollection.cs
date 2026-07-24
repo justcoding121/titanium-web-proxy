@@ -304,6 +304,19 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     }
 
     /// <summary>
+    ///     RFC 9112 §6.3: a message MUST NOT carry both Transfer-Encoding and Content-Length.
+    ///     Recipients must either reject the message or remove Content-Length and honour TE.
+    ///     Stripping Content-Length closes the request-smuggling ambiguity while remaining
+    ///     interoperable with origins that incorrectly send both.
+    /// </summary>
+    internal void NormalizeMessageFraming()
+    {
+        if (HeaderExists(KnownHeaders.TransferEncoding.String) &&
+            HeaderExists(KnownHeaders.ContentLength.String))
+            RemoveHeader(KnownHeaders.ContentLength);
+    }
+
+    /// <summary>
     ///     Fix proxy specific headers
     /// </summary>
     internal void FixProxyHeaders()
@@ -313,5 +326,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         RemoveHeader(KnownHeaders.ProxyConnection);
 
         if (proxyHeader != null) SetOrAddHeaderValue(KnownHeaders.Connection, proxyHeader);
+
+        NormalizeMessageFraming();
     }
 }

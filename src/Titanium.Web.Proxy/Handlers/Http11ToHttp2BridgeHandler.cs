@@ -423,7 +423,10 @@ public partial class ProxyServer
         }
 
         response.Locked = true;
-        if (!args.IsTransparent && !args.IsSocks) response.Headers.FixProxyHeaders();
+        if (!args.IsTransparent && !args.IsSocks)
+            response.Headers.FixProxyHeaders();
+        else
+            response.Headers.NormalizeMessageFraming();
 
         var body = exchange.Body;
 
