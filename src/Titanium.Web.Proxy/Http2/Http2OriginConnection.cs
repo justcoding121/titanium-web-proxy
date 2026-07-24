@@ -13,6 +13,7 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Streams;
 using Titanium.Web.Proxy.Network.Tcp;
 using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
 
@@ -44,9 +45,10 @@ internal sealed class Http2OriginGoAwayException : IOException
 ///         auth/cancellation/fairness/pool stress tests exist for it.
 ///     </para>
 ///     <para>
-///         Known simplification: response bodies are fully buffered in memory before being handed back to the
-///         caller (mirroring the h2-to-HTTP/1.1 bridge's request-body buffering), rather than streamed
-///         incrementally to the HTTP/1.1 client as DATA frames arrive.
+///         Response bodies are streamed through a <see cref="BoundedBodyPipe" /> to enforce
+///         <c>MaxBufferedBodyBytes</c> and propagate RST_STREAM/GOAWAY cancellation promptly; the body is
+///         fully materialized into a <c>byte[]</c> before being handed to the caller (full streaming delivery
+///         to the HTTP/1.1 client is a future phase).
 ///     </para>
 /// </summary>
 internal sealed class Http2OriginConnection
@@ -62,6 +64,7 @@ internal sealed class Http2OriginConnection
     private readonly TcpServerConnection connection;
     private readonly Stream stream;
     private readonly ILogger logger;
+    private readonly long maxBufferedBodyBytes;
     private readonly SemaphoreSlim writeLock = new(1, 1);
     private readonly Http2FlowController sendFlow = new();
     private readonly Http2Settings originSettings = new();
@@ -78,11 +81,12 @@ internal sealed class Http2OriginConnection
     private int goAwayLastStreamId = int.MaxValue;
     private Task? readLoopTask;
 
-    private Http2OriginConnection(TcpServerConnection connection, ILogger logger)
+    private Http2OriginConnection(TcpServerConnection connection, ILogger logger, long maxBufferedBodyBytes)
     {
         this.connection = connection;
         stream = connection.Stream;
         this.logger = logger;
+        this.maxBufferedBodyBytes = maxBufferedBodyBytes;
     }
 
     /// <summary>True while this connection may still be leased for a new request.</summary>
@@ -103,9 +107,9 @@ internal sealed class Http2OriginConnection
     ///     <see cref="SendAsync" /> always has a real <c>MAX_CONCURRENT_STREAMS</c>/frame-size budget to honor.
     /// </summary>
     internal static async Task<Http2OriginConnection> CreateAsync(TcpServerConnection connection,
-        ILogger logger, CancellationToken cancellationToken)
+        ILogger logger, long maxBufferedBodyBytes, CancellationToken cancellationToken)
     {
-                var instance = new Http2OriginConnection(connection, logger);
+                var instance = new Http2OriginConnection(connection, logger, maxBufferedBodyBytes);
 
                 var preface = Http2Helper.ConnectionPreface;
                 await instance.stream.WriteAsync(preface, 0, preface.Length, cancellationToken);
@@ -143,11 +147,12 @@ internal sealed class Http2OriginConnection
         await gate.WaitAsync(cancellationToken);
 
         var streamId = Interlocked.Add(ref lastStreamId, 2);
-        var pending = new PendingStream();
+        var pending = new PendingStream(maxBufferedBodyBytes);
 
         if (goingAway && streamId > goAwayLastStreamId)
         {
             gate.Release();
+            pending.Dispose();
             throw new Http2OriginGoAwayException(
                 $"The origin sent GOAWAY before stream {streamId} could be opened; it was never processed.");
         }
@@ -179,6 +184,7 @@ internal sealed class Http2OriginConnection
         catch
         {
             streams.TryRemove(streamId, out _);
+            pending.Dispose();
             sendFlow.RemoveStream(streamId);
             gate.Release();
             throw;
@@ -186,13 +192,28 @@ internal sealed class Http2OriginConnection
 
         try
         {
-            await using var registration = cancellationToken.Register(
-                () => pending.Completion.TrySetCanceled(cancellationToken));
-            return await pending.Completion.Task;
+            // Register cancellation: complete the pipe writer so CopyToAsync below unblocks and throws.
+            await using var registration = cancellationToken.Register(() =>
+                pending.BodyPipe.CompleteWriter(new OperationCanceledException(cancellationToken)));
+
+            // Concurrently drain the pipe while ReadLoopAsync writes DATA frames into it.
+            // CopyToAsync returns when the writer is completed (END_STREAM) or throws when
+            // the writer is completed with an exception (RST_STREAM, GOAWAY, cancellation, limit).
+            using var bodyMs = new MemoryStream();
+            await pending.BodyPipe.CopyToAsync(bodyMs, cancellationToken);
+
+            var response = pending.Response ??
+                           new Response
+                           {
+                               StatusCode = 502, StatusDescription = string.Empty,
+                               HttpVersion = HttpHeader.Version11
+                           };
+            return new Http2OriginExchange(response, bodyMs.ToArray(), pending.TrailingHeaders);
         }
         finally
         {
             streams.TryRemove(streamId, out _);
+            pending.Dispose();
             sendFlow.RemoveStream(streamId);
             gate.Release();
         }
@@ -461,7 +482,22 @@ internal sealed class Http2OriginConnection
                     case Http2FrameType.Data:
                     {
                         var data = StripDataFraming(payload, flags);
-                        if (streams.TryGetValue(streamId, out var pending)) pending.Body.Write(data, 0, data.Length);
+                        if (data.Length > 0 && streams.TryGetValue(streamId, out var pendingData))
+                        {
+                            try
+                            {
+                                await pendingData.BodyPipe.WriteAsync(data.AsMemory(), cancellationToken);
+                            }
+                            catch (BodySizeLimitExceededException)
+                            {
+                                // WriteAsync already faulted the pipe writer; CopyToAsync in SendAsync will
+                                // propagate the exception. Continue the read loop for other streams.
+                            }
+                            catch (InvalidOperationException)
+                            {
+                                // Writer already completed (cancelled or stream failed); ignore stale frames.
+                            }
+                        }
 
                         await GrantReceiveCreditAsync(streamId, length, cancellationToken);
 
@@ -489,7 +525,7 @@ internal sealed class Http2OriginConnection
                             goingAway = true;
                             foreach (var kvp in streams)
                                 if (kvp.Key > lastId)
-                                    kvp.Value.Completion.TrySetException(new Http2OriginGoAwayException(
+                                    kvp.Value.BodyPipe.CompleteWriter(new Http2OriginGoAwayException(
                                         $"The origin sent GOAWAY before stream {kvp.Key} was processed; it is safe to retry."));
                         }
 
@@ -645,17 +681,15 @@ internal sealed class Http2OriginConnection
 
     private void CompleteStream(int streamId)
     {
-        if (!streams.TryGetValue(streamId, out var pending)) return;
-
-        var response = pending.Response ??
-                        new Response { StatusCode = 502, StatusDescription = string.Empty, HttpVersion = HttpHeader.Version11 };
-        var exchange = new Http2OriginExchange(response, pending.Body.ToArray(), pending.TrailingHeaders);
-        pending.Completion.TrySetResult(exchange);
+        // Use TryRemove so subsequent DATA frames for this stream-id are ignored in the read loop.
+        if (!streams.TryRemove(streamId, out var pending)) return;
+        pending.BodyPipe.CompleteWriter();
     }
 
     private void FailStream(int streamId, Exception ex)
     {
-        if (streams.TryGetValue(streamId, out var pending)) pending.Completion.TrySetException(ex);
+        // Use TryRemove so subsequent DATA frames for this stream are ignored in the read loop.
+        if (streams.TryRemove(streamId, out var pending)) pending.BodyPipe.CompleteWriter(ex);
     }
 
     /// <param name="ex">The failure to fault every in-flight/future stream with.</param>
@@ -676,7 +710,7 @@ internal sealed class Http2OriginConnection
             ProxyDiagnostics.ReportUnexpected(logger, "The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", 
                 new ProxyHttpException("The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", ex, null));
 
-        foreach (var kvp in streams) kvp.Value.Completion.TrySetException(ex);
+        foreach (var kvp in streams) kvp.Value.BodyPipe.CompleteWriter(ex);
         initialSettingsReceived.TrySetException(ex);
     }
 
@@ -710,14 +744,15 @@ internal sealed class Http2OriginConnection
         return totalRead;
     }
 
-    private sealed class PendingStream
+    private sealed class PendingStream : IDisposable
     {
-        internal readonly TaskCompletionSource<Http2OriginExchange> Completion =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        internal readonly MemoryStream Body = new();
+        internal readonly BoundedBodyPipe BodyPipe;
         internal Response? Response;
         internal HeaderCollection? TrailingHeaders;
+
+        internal PendingStream(long maxBodyBytes = 0) => BodyPipe = new BoundedBodyPipe(maxBodyBytes);
+
+        public void Dispose() => BodyPipe.Dispose();
     }
 
     private sealed class HeaderCollectorListener : IHeaderListener
