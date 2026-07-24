@@ -174,17 +174,38 @@ internal sealed class Socks5Handler : SocksHandler
         if (remoteEp == null)
             throw new ArgumentNullException();
 
-        if (buffer.Length < 10)
-            throw new ArgumentException(nameof(buffer));
-
         var connect = buffer.Span;
         connect[0] = 5;
         connect[1] = 1;
         connect[2] = 0; // reserved
-        connect[3] = 1;
-        remoteEp.Address.GetAddressBytes().CopyTo(connect.Slice(4));
-        PortToBytes(remoteEp.Port, connect.Slice(8));
-        return 10;
+
+        var addressBytes = remoteEp.Address.GetAddressBytes();
+        if (addressBytes.Length == 4)
+        {
+            // ATYP = IPv4
+            if (buffer.Length < 10)
+                throw new ArgumentException(nameof(buffer));
+
+            connect[3] = 1;
+            addressBytes.CopyTo(connect.Slice(4));
+            PortToBytes(remoteEp.Port, connect.Slice(8));
+            return 10;
+        }
+
+        if (addressBytes.Length == 16)
+        {
+            // ATYP = IPv6 — previously this path incorrectly used ATYP=IPv4 with a 10-byte
+            // request, which truncated ::1 to 0.0.0.0 and broke HTTPS-via-SOCKS to localhost.
+            if (buffer.Length < 22)
+                throw new ArgumentException(nameof(buffer));
+
+            connect[3] = 4;
+            addressBytes.CopyTo(connect.Slice(4));
+            PortToBytes(remoteEp.Port, connect.Slice(20));
+            return 22;
+        }
+
+        throw new ArgumentException("SOCKS5 CONNECT requires an IPv4 or IPv6 address.", nameof(remoteEp));
     }
 
     /// <summary>

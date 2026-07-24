@@ -11,6 +11,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended;
@@ -65,7 +66,8 @@ public partial class ProxyServer
                 await endPoint.InvokeBeforeSslAuthenticate(this, args, logger);
 
                 if (cancellationTokenSource.IsCancellationRequested)
-                    throw new Exception("Session was terminated by user.");
+                    throw new OperationCanceledException("Session was terminated by user.",
+                        cancellationTokenSource.Token);
 
                 if (endPoint.DecryptSsl && args.DecryptSsl)
                 {
@@ -315,10 +317,16 @@ public partial class ProxyServer
                 else
                 {
                     var sessionArgs = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
-                    var forwardHttpsHostName = args.ForwardHttpsHostName ??
-                                               throw new InvalidOperationException("Forward HTTPS host is not set.");
+                    // SOCKS CONNECT already named the TCP target. Prefer that over SNI+443 defaults:
+                    // SNI hostname with ForwardHttpsPort=443 is wrong when the SOCKS request used a
+                    // non-443 port (e.g. a local test origin, or any explicit non-standard HTTPS port).
+                    var forwardHttpsHostName = socksTargetHost
+                                               ?? args.ForwardHttpsHostName
+                                               ?? throw new InvalidOperationException(
+                                                   "Forward HTTPS host is not set.");
+                    var forwardHttpsPort = socksTargetHost != null ? port : args.ForwardHttpsPort;
                     var connection = (await TcpConnectionFactory.GetServerConnection(this, forwardHttpsHostName,
-                        args.ForwardHttpsPort,
+                        forwardHttpsPort,
                         HttpHeader.VersionUnknown, false, null,
                         true, sessionArgs, UpStreamEndPoint,
                         UpStreamHttpsProxy, true, false, cancellationToken))!;
@@ -411,6 +419,10 @@ public partial class ProxyServer
         catch (SocketException e)
         {
             OnException(clientStream, new Exception("Could not connect", e));
+        }
+        catch (OperationCanceledException e)
+        {
+            ProxyDiagnostics.ReportException(logger, "Client session cancelled", e);
         }
         catch (Exception e)
         {

@@ -552,11 +552,12 @@ internal class TcpConnectionFactory : IDisposable
                             if (remoteIpAddresses == null || remoteIpAddresses.Length == 0)
                                 throw new Exception($"Could not resolve the SOCKS remote hostname {connectHostName}");
 
-                            // Known limitation: when the proxy resolves the remote host to multiple
-                            // addresses we only attempt the first. Per-remote-address failover would
-                            // require restructuring the shared connect/timeout loop below (which iterates
-                            // over the PROXY addresses, not the remote target addresses) and is left as a
-                            // future improvement to avoid destabilizing the connection path.
+                            // Prefer IPv4 when both families are returned so SOCKS ATYP selection is
+                            // predictable on dual-stack hosts (e.g. localhost → 127.0.0.1 before ::1).
+                            // Known limitation: when multiple addresses remain we still only attempt the
+                            // first. Per-remote-address failover would require restructuring the shared
+                            // connect/timeout loop below and is left as a future improvement.
+                            Array.Sort(remoteIpAddresses, (x, y) => x.AddressFamily.CompareTo(y.AddressFamily));
                             connectTask = ProxySocketConnectionTaskFactory.CreateTask(
                                 (ProxySocket.ProxySocket)tcpServerSocket, remoteIpAddresses[0], connectPortNumber);
                         }
@@ -679,7 +680,9 @@ internal class TcpConnectionFactory : IDisposable
                     await proxyServer.OnBeforeUpStreamConnectRequest(connectRequest);
                     await stream.WriteRequestAsync(connectRequest, cancellationToken);
 
-                    var httpStatus = await stream.ReadResponseStatus(cancellationToken);
+                    var httpStatus = await stream.ReadResponseStatus(cancellationToken)
+                                     ?? throw new IOException(
+                                         "Upstream proxy closed the connection before sending a CONNECT response.");
                     var headers = new HeaderCollection();
                     await HeaderParser.ReadHeaders(stream, headers, cancellationToken);
 
