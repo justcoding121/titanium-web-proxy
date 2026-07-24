@@ -83,6 +83,12 @@ internal class TcpServerConnection : IDisposable
     internal Socket TcpSocket { get; }
 
     /// <summary>
+    ///     Physical peer of the established upstream TCP socket.
+    ///     When an upstream proxy is used this is the proxy hop, not the origin.
+    /// </summary>
+    internal IPEndPoint? RemoteEndPoint => TcpSocket.RemoteEndPoint as IPEndPoint;
+
+    /// <summary>
     ///     Used to write lines to server
     /// </summary>
     internal HttpServerStream Stream { get; }
