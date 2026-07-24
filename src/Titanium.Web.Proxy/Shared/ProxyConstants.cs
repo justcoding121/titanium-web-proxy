@@ -21,6 +21,11 @@ internal class ProxyConstants
             KnownHeaders.ContentEncodingGzip.String,
             KnownHeaders.ContentEncodingDeflate.String,
             KnownHeaders.ContentEncodingBrotli.String
+            // Note: "zstd" is intentionally excluded from ProxySupportedCompressions until a
+            // strong-name-compatible .NET managed zstd library is approved for this assembly.
+            // See Phase 6 / evaluate-zstd in the implementation plan.
+            // To add zstd: install ZstdSharp.Port or equivalent, add "zstd" here, and wire
+            // decompression through DecompressionFactory.
         };
 
     internal static readonly Regex CnRemoverRegex =

@@ -61,6 +61,7 @@ internal static class WebSocketInterceptRelay
     {
         var cancellationToken = cancellationTokenSource.Token;
         var decoder = new WebSocketDecoder(bufferPool);
+        var messageTracker = new WebSocketMessageTracker();
         var buffer = bufferPool.GetBuffer();
         try
         {
@@ -79,9 +80,15 @@ internal static class WebSocketInterceptRelay
                     {
                         // RFC 6455 §7.2: a protocol error requires closing the connection.
                         // Cancel both relay directions so the connection tears down cleanly.
+                        messageTracker.Reset();
                         cancellationTokenSource.Cancel();
                         return;
                     }
+
+                    // Track message boundaries and compression state per RFC 6455 §5.4.
+                    // isCompressed will be true only when permessage-deflate is negotiated and RSV1
+                    // is set on the opening frame; currently always false (extension stripped in Phase 1.4).
+                    messageTracker.OnFrame(frame, out _);
 
                     var args = new WebSocketFrameInterceptEventArgs(session.Server, session.ClientConnection,
                         session, direction, frame);
