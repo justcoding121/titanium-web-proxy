@@ -374,6 +374,20 @@ public partial class ProxyServer
         // send body to server if available (idle-write window on stalled transfers)
         if (request.HasBody)
         {
+            // In compatibility mode, send a synthetic 100 Continue to the client before reading
+            // the body so that a strict Expect: 100-continue client does not deadlock waiting
+            // for a 100 that the proxy would never send (because Enable100ContinueBehaviour=false).
+            if (CompatibilityMode100Continue && !Enable100ContinueBehaviour && request.ExpectContinue
+                && !request.IsBodyRead && !request.ExpectationFailed)
+            {
+                var continueBuilder = new HeaderBuilder();
+                continueBuilder.WriteResponseLine(request.HttpVersion, 100, "Continue");
+                // WriteHeaders writes the empty terminator line; with no actual headers, this emits
+                // just the final \r\n that completes a valid 100 Continue response.
+                continueBuilder.WriteHeaders(new HeaderCollection());
+                await args.ClientStream.WriteHeadersAsync(continueBuilder, cancellationToken);
+            }
+
             using var idleWriteScope = ProxyTimeoutScope.Create(cancellationToken,
                 ResolveIdleWriteTimeout(args), ProxyTimeoutKind.IdleWrite);
             try
