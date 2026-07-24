@@ -7,6 +7,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Logging;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy;
@@ -164,6 +165,15 @@ public partial class ProxyServer
             response.Headers.FixProxyHeaders();
         else
             response.Headers.NormalizeMessageFraming();
+
+        // HTTP/1.0 clients do not support chunked transfer encoding (RFC 7230 §4.1 / RFC 1945).
+        // Buffer the body so it can be reframed with a Content-Length header instead.
+        if (args.HttpClient.Request.HttpVersion == HttpHeader.Version10 && response.IsChunked)
+        {
+            await args.GetResponseBody(cancellationToken);
+            // ContentLength setter also removes Transfer-Encoding: chunked via IsChunked = false.
+            response.ContentLength = response.Body.Length;
+        }
 
         await clientStream.WriteResponseAsync(response, cancellationToken);
         args.IsClientResponseCommitted = true;
