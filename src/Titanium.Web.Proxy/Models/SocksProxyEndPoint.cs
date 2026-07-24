@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -31,6 +32,16 @@ public class SocksProxyEndPoint : TransparentBaseProxyEndPoint
     ///     This is valid only when UseServerNameIndication is set to false.
     /// </summary>
     public override string GenericCertificateName { get; set; }
+
+    /// <summary>
+    ///     Endpoint-scoped SOCKS5 username/password authenticator (RFC 1929).
+    ///     When set, this takes precedence over <see cref="ProxyServer.ProxyBasicAuthenticateFunc" />
+    ///     for clients on this endpoint. Username/password method is only offered during the SOCKS5
+    ///     greeting when this callback or the global <see cref="ProxyServer.ProxyBasicAuthenticateFunc" />
+    ///     is configured. SOCKS4 has no password authentication; when either callback is configured,
+    ///     SOCKS4 CONNECT is rejected.
+    /// </summary>
+    public Func<SocksAuthenticateEventArgs, Task<bool>>? AuthenticateUserFunc { get; set; }
 
     /// <summary>
     ///     Before Ssl authentication this event is fired.
