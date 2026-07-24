@@ -1,6 +1,8 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -18,15 +20,27 @@ public partial class ProxyServer
     {
         await serverConnection.Stream.WriteRequestAsync(args.HttpClient.Request, cancellationToken);
 
-        var httpStatus = await serverConnection.Stream.ReadResponseStatus(cancellationToken);
+        // WebSocket upgrades are exempt from short response-header deadlines; use idle-read if configured.
+        using (var idleScope = ProxyTimeoutScope.Create(cancellationToken,
+                   ResolveIdleReadTimeout(args), ProxyTimeoutKind.IdleRead))
+        {
+            try
+            {
+                var httpStatus = await serverConnection.Stream.ReadResponseStatus(idleScope.Token);
 
-        var response = args.HttpClient.Response;
-        response.HttpVersion = httpStatus.Version;
-        response.StatusCode = httpStatus.StatusCode;
-        response.StatusDescription = httpStatus.Description;
+                var upgradeResponse = args.HttpClient.Response;
+                upgradeResponse.HttpVersion = httpStatus.Version;
+                upgradeResponse.StatusCode = httpStatus.StatusCode;
+                upgradeResponse.StatusDescription = httpStatus.Description;
 
-        await HeaderParser.ReadHeaders(serverConnection.Stream, response.Headers,
-            cancellationToken);
+                await HeaderParser.ReadHeaders(serverConnection.Stream, upgradeResponse.Headers, idleScope.Token);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException || idleScope.IsTimedOut())
+            {
+                idleScope.ThrowIfTimedOut(ex);
+                throw;
+            }
+        }
 
         args.Timing?.MarkResponseHeadersReceived();
 
@@ -39,11 +53,12 @@ public partial class ProxyServer
         if (!args.HttpClient.Response.Locked) await OnBeforeResponse(args);
 
         // it may have changed in the user event
-        response = args.HttpClient.Response;
+        var response = args.HttpClient.Response;
         var userReplacedResponse = response.Locked;
         response.Locked = true;
 
         await clientStream.WriteResponseAsync(response, cancellationToken);
+        args.IsClientResponseCommitted = true;
 
         // The upgrade handshake is what "request timing" means for a WebSocket session - mark it complete
         // here rather than leaving it to the shared OnAfterResponse chokepoint (see its remarks), which

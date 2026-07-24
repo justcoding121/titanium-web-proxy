@@ -136,6 +136,7 @@ internal static class ProxyDiagnostics
             ObjectDisposedException => true,
             System.IO.IOException => true,
             System.Net.Sockets.SocketException => true,
+            Exceptions.ProxyTimeoutException => true,
             _ => exception.InnerException != null && IsExpected(exception.InnerException)
         };
     }
