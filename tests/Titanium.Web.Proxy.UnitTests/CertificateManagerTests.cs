@@ -131,6 +131,64 @@ namespace Titanium.Web.Proxy.UnitTests
             leafFast.Dispose();
         }
 
+        /// <summary>
+        /// Regression test for issue #904: when the proxy is configured with an intermediate CA
+        /// as its signing root, CreateSslCertificateContext must include the intermediate CA in
+        /// the returned SslStreamCertificateContext so that clients trust-anchored at the root CA
+        /// can verify the generated leaf certificate chain.
+        /// </summary>
+        [TestMethod]
+        public void BC_IntermediateCA_SslContext_IncludesIntermediateInChain()
+        {
+            // Build root CA → intermediate CA → leaf chain
+            X509Certificate2 rootCa;
+            using (var rsa = RSA.Create(2048))
+            {
+                var req = new CertificateRequest("CN=Test Root CA", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                req.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+                rootCa = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(365));
+            }
+
+            X509Certificate2 intermediateCa;
+            using (var rsa = RSA.Create(2048))
+            {
+                var req = new CertificateRequest("CN=Test Intermediate CA", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                req.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+                req.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign, true));
+                intermediateCa = req.Create(rootCa, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(300), new byte[] { 1 })
+                    .CopyWithPrivateKey(rsa);
+            }
+
+            // Configure the proxy manager to use the intermediate CA as the signing certificate
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+            mgr.RootCertificate = intermediateCa;
+
+            var leaf = mgr.CreateCertificate("example.com", false);
+            Assert.IsNotNull(leaf);
+
+            // SslStreamCertificateContext creation should succeed and include the intermediate
+            var ctx = mgr.CreateSslCertificateContext(leaf);
+            Assert.IsNotNull(ctx);
+
+            // Verify the chain: leaf should chain up to the rootCa when intermediate is provided
+            using var chain = new X509Chain();
+            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority;
+            chain.ChainPolicy.ExtraStore.Add(intermediateCa);
+            chain.ChainPolicy.ExtraStore.Add(rootCa);
+            chain.Build(leaf);
+            // Chain should contain: leaf → intermediate → root (3 elements)
+            Assert.IsTrue(chain.ChainElements.Count >= 2,
+                "Certificate chain should contain at least leaf and intermediate");
+
+            rootCa.Dispose();
+            intermediateCa.Dispose();
+            leaf.Dispose();
+        }
+
         [TestMethod]
         public async Task CreateServerCertificate_ExpiredCachedCertificate_IsRegenerated()
         {
