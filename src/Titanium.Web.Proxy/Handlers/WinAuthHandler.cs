@@ -15,6 +15,18 @@ namespace Titanium.Web.Proxy;
 public partial class ProxyServer
 {
     /// <summary>
+    ///     Maximum number of NTLM/Kerberos/Negotiate challenge-response rounds the proxy will perform for a
+    ///     single request. The standard NTLM handshake completes in two rounds (initial token + challenge
+    ///     response). A cap of three rounds provides one extra margin for servers that re-challenge after
+    ///     the connection is marked authenticated (RFC-conformant but still bounded) while preventing an
+    ///     infinite retry loop when credentials are persistently rejected.
+    /// </summary>
+    private const int MaxAuthChallengeRounds = 3;
+
+    /// <summary>Key used to store the per-request auth challenge round counter in <see cref="HttpClient.Data" />.</summary>
+    private const string WinAuthRoundCountKey = "WinAuthRoundCount";
+
+    /// <summary>
     ///     possible header names.
     /// </summary>
     private static readonly HashSet<string> authHeaderNames = new(StringComparer.OrdinalIgnoreCase)
@@ -87,6 +99,22 @@ public partial class ProxyServer
 
         if (authHeader != null)
         {
+            // Bound the total number of auth challenge rounds to prevent infinite retry loops when
+            // credentials are persistently rejected or the server continuously re-challenges after the
+            // connection is marked authenticated.  ValidateWinAuthState catches most state-machine
+            // violations, but allowing Authorized→re-challenge cycles (per its own comment) means a
+            // misbehaving server could still loop unboundedly without this additional cap.
+            var currentRound = args.HttpClient.Data.TryGetValueAs(WinAuthRoundCountKey, out int storedRound)
+                ? storedRound
+                : 0;
+            if (currentRound >= MaxAuthChallengeRounds)
+            {
+                await RewriteUnauthorizedResponse(args);
+                return;
+            }
+
+            args.HttpClient.Data[WinAuthRoundCountKey] = currentRound + 1;
+
             var scheme = authSchemes.Contains(authHeader.Value) ? authHeader.Value : null;
 
             var expectedAuthState =
@@ -168,6 +196,18 @@ public partial class ProxyServer
                 x.Value.Equals(y, StringComparison.OrdinalIgnoreCase) ||
                 x.Value.StartsWith(y + " ", StringComparison.OrdinalIgnoreCase)));
         if (authHeader == null) return;
+
+        // Apply the same per-request round cap as Handle401UnAuthorized — see MaxAuthChallengeRounds.
+        var currentRound407 = args.HttpClient.Data.TryGetValueAs(WinAuthRoundCountKey, out int stored407)
+            ? stored407
+            : 0;
+        if (currentRound407 >= MaxAuthChallengeRounds)
+        {
+            await RewriteUnauthorizedResponse(args);
+            return;
+        }
+
+        args.HttpClient.Data[WinAuthRoundCountKey] = currentRound407 + 1;
 
         var scheme = authSchemes.Contains(authHeader.Value) ? authHeader.Value : null;
         var expectedAuthState =

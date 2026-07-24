@@ -336,10 +336,28 @@ public partial class ProxyServer
             // request-send portion of it.
             args.Timing?.MarkRequestSent();
 
+            // Relay any 1xx interim responses (e.g. 103 Early Hints) from the h2 origin to the HTTP/1.1
+            // client as they arrive, before the final response is written via DeliverOriginExchangeAsync.
+            // This callback is invoked from SendAsync on the current (caller) task - not from the background
+            // read loop - so it is safe to write to clientStream without additional synchronization.
+            var capturedClientStream = clientStream;
+            Func<int, HeaderCollection, CancellationToken, Task> relayInterim =
+                async (statusCode, headers, ct) =>
+                {
+                    var interim = new Response
+                    {
+                        StatusCode = statusCode,
+                        StatusDescription = string.Empty,
+                        HttpVersion = HttpHeader.Version11
+                    };
+                    foreach (var h in headers) interim.Headers.AddHeader(h);
+                    await capturedClientStream.WriteResponseAsync(interim, ct);
+                };
+
             Http2OriginExchange exchange;
             try
             {
-                exchange = await originConnection.SendAsync(request, cancellationToken);
+                exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken);
             }
             catch (Http2OriginGoAwayException)
             {
@@ -357,7 +375,7 @@ public partial class ProxyServer
                 }
 
                 args.Timing?.MarkRequestSent();
-                exchange = await originConnection.SendAsync(request, cancellationToken);
+                exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken);
             }
 
             args.Timing?.MarkResponseHeadersReceived();
