@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -9,14 +9,29 @@ using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+[DoNotParallelize]
 [TestClass]
 public class UpstreamProxyChainTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     [Timeout(60 * 1000)]
     public async Task TwoHop_Http_Upstream_Chain_Reaches_Https_Origin()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("chained-ok"));
 
@@ -39,7 +54,7 @@ public class UpstreamProxyChainTests
     [Timeout(60 * 1000)]
     public async Task TwoHop_Http_Upstream_Chain_With_Basic_Auth_On_Each_Hop()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("auth-chain-ok"));
 

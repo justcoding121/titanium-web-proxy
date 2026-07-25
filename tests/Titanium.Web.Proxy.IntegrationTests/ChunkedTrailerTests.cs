@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Net;
@@ -22,15 +22,30 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     connection is never left in a corrupt state for the next message, whether or not the caller cares
 ///     about the trailer's contents.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class ChunkedTrailerTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private static readonly Encoding MsgEncoding = HttpHelper.GetEncodingFromContentType(null);
 
     [TestMethod]
     public async Task Chunked_Response_Trailer_Is_Forwarded_To_Client()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -73,7 +88,7 @@ public class ChunkedTrailerTests
     [TestMethod]
     public async Task Chunked_Response_With_Multiple_Trailers_Are_All_Forwarded()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -116,7 +131,7 @@ public class ChunkedTrailerTests
     {
         // Regression guard for the common case (no trailers at all): the terminating blank line must
         // still be written so chunked framing stays valid even when there is nothing to forward.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -159,7 +174,7 @@ public class ChunkedTrailerTests
         // Mirrors the response-side test above but for the client -> proxy -> server direction, which goes
         // through the same HttpStream.HandleBodyWrite path. HttpClient has no public API for setting request
         // trailers, so a raw socket is used to send a hand-built chunked request with a trailer.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         var receivedRequestText = string.Empty;
@@ -226,7 +241,7 @@ public class ChunkedTrailerTests
         // zero-length chunk) by reusing the SAME raw upstream TCP connection for two sequential requests:
         // if any trailer bytes were left unconsumed on the wire, the second request's response would be
         // parsed starting mid-trailer and the test would fail well before reaching the final assertion.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         var connectionCount = 0;
@@ -295,7 +310,7 @@ public class ChunkedTrailerTests
         // here triggered by a BeforeResponse handler that overrides a chunked upstream response with
         // e.Ok(...) before the original body is read. Draining must succeed silently so the pooled
         // proxy -> server connection is left clean for reuse.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         var connectionIds = new ConcurrentBag<string>();
@@ -350,7 +365,7 @@ public class ChunkedTrailerTests
     [Timeout(30 * 1000)]
     public async Task Response_With_ContentLength_And_TransferEncoding_DoesNotForwardBoth()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>

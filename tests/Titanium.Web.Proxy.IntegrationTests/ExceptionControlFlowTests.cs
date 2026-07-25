@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http;
@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Logging;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
@@ -17,14 +18,29 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     user cancellation should not log as Error, disposal still runs, and stale pooled
 ///     connections still succeed via a single safe retry.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class ExceptionControlFlowTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     [Timeout(60 * 1000)]
     public async Task KeepAliveHappyPath_DoesNotRaiseFirstChanceExceptions()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
 
@@ -64,7 +80,7 @@ public class ExceptionControlFlowTests
     [Timeout(60 * 1000)]
     public async Task TerminateSession_IsNotLoggedAsError_AndSessionIsDisposed()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context =>
         {
@@ -123,7 +139,7 @@ public class ExceptionControlFlowTests
     [Timeout(60 * 1000)]
     public async Task ClientDisconnect_MidRequest_DoesNotLogError()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var serverEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         server.HandleRequest(async context =>

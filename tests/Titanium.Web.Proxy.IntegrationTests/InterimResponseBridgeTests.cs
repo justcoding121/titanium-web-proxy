@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -12,15 +12,31 @@ using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.Models;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
 ///     Tests for the HTTP/1.1-to-HTTP/2 origin bridge: 1xx interim-response relay infrastructure and
 ///     bounded NTLM/Kerberos auth retry rounds.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class InterimResponseBridgeTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private static readonly Encoding Ascii = Encoding.ASCII;
 
     /// <summary>
@@ -30,7 +46,7 @@ public class InterimResponseBridgeTests
     [Timeout(30_000)]
     public async Task H11ToH2Bridge_Final_Response_Is_Delivered_Correctly()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context => await context.Response.WriteAsync("ok"));
 
@@ -74,7 +90,7 @@ public class InterimResponseBridgeTests
     [Timeout(30_000)]
     public async Task H11ToH2Bridge_Multiple_Sequential_Requests_All_Complete()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context => await context.Response.WriteAsync("pong"));
 
@@ -137,7 +153,7 @@ public class InterimResponseBridgeTests
     [Timeout(30_000)]
     public async Task Auth_Challenge_With_Basic_Scheme_Is_Relayed_Without_Retry()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var hitCount = 0;
         server.HandleRequest(context =>

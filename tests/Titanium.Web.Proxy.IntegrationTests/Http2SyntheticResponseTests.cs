@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -17,14 +17,29 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     stale, pre-handler response object instead of the replacement). See
 ///     <see cref="Http2Helper.EmitSyntheticResponseAsync" />/<c>ProcessCompleteHeaderBlockAsync</c>.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class Http2SyntheticResponseTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     [Timeout(30 * 1000)]
     public async Task Http2_Ok_From_BeforeRequest_Answers_Client_And_Origin_Never_Sees_Request()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var originContacted = false;
         server.HandleRequest(context =>
@@ -55,7 +70,7 @@ public class Http2SyntheticResponseTests
     [Timeout(30 * 1000)]
     public async Task Http2_GenericResponse_From_BeforeRequest_Answers_Client_With_Given_Status()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var originContacted = false;
         server.HandleRequest(context =>
@@ -86,7 +101,7 @@ public class Http2SyntheticResponseTests
     [Timeout(30 * 1000)]
     public async Task Http2_Redirect_From_BeforeRequest_Answers_Client_With_Location_Header()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var originContacted = false;
         server.HandleRequest(context =>
@@ -132,7 +147,7 @@ public class Http2SyntheticResponseTests
     [Timeout(30 * 1000)]
     public async Task Http2_Buffered_Respond_From_BeforeRequest_Answers_Client_Without_Body()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var originContacted = false;
         server.HandleRequest(context =>
@@ -171,7 +186,7 @@ public class Http2SyntheticResponseTests
     [Timeout(30 * 1000)]
     public async Task Http2_BeforeResponse_Respond_Replaces_Already_Received_Response()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
         {

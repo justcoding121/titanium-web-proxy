@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -9,6 +9,7 @@ using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.Models;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
@@ -19,14 +20,29 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     already covers the basic success/failure matrix and sequential connection reuse; this file focuses on
 ///     the interception-API and body-size edge cases called out as acceptance gates.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class Http2TranslationBridgeAcceptanceTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     [Timeout(30 * 1000)]
     public async Task H2ToH11Bridge_Ok_From_BeforeRequest_Short_Circuits_Without_Contacting_Origin()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var originWasContacted = false;
         server.HandleRequest(context =>
@@ -91,7 +107,7 @@ public class Http2TranslationBridgeAcceptanceTests
     [Timeout(30 * 1000)]
     public async Task H11ToH2Bridge_Ok_From_BeforeRequest_Short_Circuits_Without_Contacting_Origin()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var originWasContacted = false;
         server.HandleRequest(context =>
@@ -151,7 +167,7 @@ public class Http2TranslationBridgeAcceptanceTests
     [Timeout(30 * 1000)]
     public async Task H2ToH11Bridge_Large_Response_Body_Is_Relayed_Correctly()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         // Kept comfortably under the default 65535-byte h2 flow-control window (both stream- and connection-
         // level) so this test can validate multi-DATA-frame relay through the bridge without needing the
@@ -206,7 +222,7 @@ public class Http2TranslationBridgeAcceptanceTests
     [Timeout(30 * 1000)]
     public async Task H11ToH2Bridge_Large_Request_Body_Is_Relayed_Correctly()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var expectedBody = new string('y', 500_000);
         server.HandleRequest(async context =>
@@ -272,7 +288,7 @@ public class Http2TranslationBridgeAcceptanceTests
     [Timeout(30 * 1000)]
     public async Task H11ToH2Bridge_BeforeResponse_Header_Mutation_Is_Applied()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
         {
@@ -337,7 +353,7 @@ public class Http2TranslationBridgeAcceptanceTests
     [Timeout(30 * 1000)]
     public async Task H2ToH11Bridge_RstStream_From_Client_Mid_Response_Still_Fires_AfterResponse_Exactly_Once()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var responseHeadersSent = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         server.HandleRequest(async context =>

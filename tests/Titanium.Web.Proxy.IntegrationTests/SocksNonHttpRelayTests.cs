@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -18,9 +18,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     <see cref="SocksProxyEndPoint" /> is relayed opaquely to the SOCKS destination
 ///     rather than failing with a parse error.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class SocksNonHttpRelayTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     // All bytes are below 0x80 so PeekClientHello's SSL-2 heuristic (high-bit test) is not
     // triggered, which would otherwise block waiting for more header bytes.
     private static readonly byte[] BinaryPayload = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
@@ -33,7 +48,7 @@ public class SocksNonHttpRelayTests
     [Timeout(30 * 1000)]
     public async Task Socks5_DomainName_NonHttpBinaryTraffic_IsRelayedOpaquely()
     {
-        using var suite = new TestSuite();
+        using var suite = new TestSuite(sharedServer);
         var server = suite.GetServer();
 
         // Echo server: read all bytes sent by the client, write them back verbatim, then close.
@@ -79,7 +94,7 @@ public class SocksNonHttpRelayTests
     [Timeout(30 * 1000)]
     public async Task Socks5_IPv4_NonHttpBinaryTraffic_IsRelayedOpaquely()
     {
-        using var suite = new TestSuite();
+        using var suite = new TestSuite(sharedServer);
         var server = suite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -118,7 +133,7 @@ public class SocksNonHttpRelayTests
     [Timeout(30 * 1000)]
     public async Task Socks4_IPv4_NonHttpBinaryTraffic_IsRelayedOpaquely()
     {
-        using var suite = new TestSuite();
+        using var suite = new TestSuite(sharedServer);
         var server = suite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -158,7 +173,7 @@ public class SocksNonHttpRelayTests
     [Timeout(30 * 1000)]
     public async Task Socks5_PlainHttpTraffic_IsIntercepted()
     {
-        using var suite = new TestSuite();
+        using var suite = new TestSuite(sharedServer);
         var server = suite.GetServer();
 
         server.HandleRequest(async ctx =>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
@@ -15,9 +15,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Separate characterizations for issues #919 (shutdown cleanup), #799 (restart same port),
 ///     and #809 (aborted TLS must not leave a spinning handler). These are not treated as duplicates.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class ProxyLifecycleTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     /// <summary>
     ///     #919: after StopAsync, active client count drains and pooled upstream sockets are cleared.
     /// </summary>
@@ -25,7 +40,7 @@ public class ProxyLifecycleTests
     [Timeout(60 * 1000)]
     public async Task StopAsync_DrainsActiveSessions_AndClearsServerConnectionCount()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context =>
         {
@@ -73,7 +88,7 @@ public class ProxyLifecycleTests
     [Timeout(60 * 1000)]
     public async Task Stop_Then_Start_SamePort_ServesTrafficAgain()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("after-restart"));
 
@@ -119,7 +134,7 @@ public class ProxyLifecycleTests
     [Timeout(60 * 1000)]
     public async Task AbortedTlsHandshake_ReleasesClientConnection_WithoutSpin()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         var port = proxy.ProxyEndPoints[0].Port;
 

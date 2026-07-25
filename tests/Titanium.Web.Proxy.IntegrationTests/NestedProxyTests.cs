@@ -7,15 +7,31 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Models;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+[DoNotParallelize]
 [TestClass]
 public class NestedProxyTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     public async Task Smoke_Test_Nested_Proxy()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -42,7 +58,7 @@ public class NestedProxyTests
     [TestMethod]
     public async Task Smoke_Test_Nested_Proxy_UserData()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -83,7 +99,7 @@ public class NestedProxyTests
     [Timeout(60 * 1000)]
     public async Task Upstream_Proxy_Failure_Fails_Over_To_New_Proxy()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("failover ok"));
@@ -122,7 +138,7 @@ public class NestedProxyTests
     [TestCategory("Slow")]
     public async Task Nested_Proxy_Farm_Without_Connection_Cache_Should_Not_Hang()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -206,7 +222,7 @@ public class NestedProxyTests
     [TestCategory("Slow")]
     public async Task Nested_Proxy_Farm_With_Connection_Cache_Should_Not_Hang()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>

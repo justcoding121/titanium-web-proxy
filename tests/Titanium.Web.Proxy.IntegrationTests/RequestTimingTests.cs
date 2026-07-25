@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -6,6 +6,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
@@ -14,14 +15,29 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     <see cref="SessionEventArgsBase.Timing" />, <see cref="SessionEventArgsBase.UpstreamConnectionTiming" />,
 ///     and <see cref="TunnelConnectSessionEventArgs.ClientTlsTiming" />.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class RequestTimingTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     [Timeout(30 * 1000)]
     public async Task Request_Timing_Is_Null_By_Default()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
@@ -50,7 +66,7 @@ public class RequestTimingTests
     [Timeout(30 * 1000)]
     public async Task Request_Timing_Captures_Http11_Milestones_In_Order()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
@@ -111,7 +127,7 @@ public class RequestTimingTests
     [Timeout(30 * 1000)]
     public async Task Request_Timing_Marks_Upstream_Connection_Reused_On_Second_Request()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
@@ -156,7 +172,7 @@ public class RequestTimingTests
     [Timeout(30 * 1000)]
     public async Task Upstream_Connection_Timing_Includes_Tls_Handshake_For_Https_Origin()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
@@ -190,7 +206,7 @@ public class RequestTimingTests
     [Timeout(30 * 1000)]
     public async Task Client_Tls_Timing_Is_Captured_For_Decrypted_Tunnel()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));

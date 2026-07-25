@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -6,15 +6,31 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Models;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+[DoNotParallelize]
 [TestClass]
 public class ServerRemoteEndPointTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     public async Task BeforeResponse_Exposes_Connected_Server_Remote_EndPoint()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
@@ -43,7 +59,7 @@ public class ServerRemoteEndPointTests
     [TestMethod]
     public async Task BeforeResponse_With_Upstream_Proxy_Reports_Proxy_Hop()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
@@ -73,7 +89,7 @@ public class ServerRemoteEndPointTests
     [TestMethod]
     public async Task BeforeRequest_Has_No_Server_Remote_EndPoint_Yet()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));

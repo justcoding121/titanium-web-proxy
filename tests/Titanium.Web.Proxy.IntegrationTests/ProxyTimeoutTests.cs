@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -19,16 +19,31 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Integration coverage for Issues #852 / #945: response-header deadlines, typed
 ///     <see cref="ProxyTimeoutException" />, 504 before commit, and per-session overrides.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class ProxyTimeoutTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private static readonly Encoding MsgEncoding = HttpHelper.GetEncodingFromContentType(null);
 
     [TestMethod]
     [Timeout(30 * 1000)]
     public async Task Stalled_Origin_Response_Headers_Times_Out_With_Typed_Reason_And_504()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -81,7 +96,7 @@ public class ProxyTimeoutTests
     [Timeout(30 * 1000)]
     public async Task Active_Transfer_Is_Not_Killed_By_Short_Header_Deadline_After_Headers_Arrive()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -125,7 +140,7 @@ public class ProxyTimeoutTests
     [Timeout(30 * 1000)]
     public async Task Server_RequestTimeoutSeconds_Returns_504_When_Exchange_Exceeds_Deadline()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>

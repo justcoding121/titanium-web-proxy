@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
@@ -14,9 +14,24 @@ using Titanium.Web.Proxy.IntegrationTests.Setup;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+[DoNotParallelize]
 [TestClass]
 public class Http2MultipartTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     /// <summary>
     ///     Builds a minimal multipart/form-data body with the given boundary and one field.
     ///     Kept well under the HTTP/2 default 65,535-byte flow-control window so the test
@@ -40,7 +55,7 @@ public class Http2MultipartTests
     {
         // Verify that multipart/form-data requests over HTTP/2 fire the same
         // OnMultipartRequestPartSent events as HTTP/1.x does.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
 
@@ -104,7 +119,7 @@ public class Http2MultipartTests
     public async Task Http11_Multipart_Request_PartSent_Still_Works()
     {
         // Regression: HTTP/1.1 multipart must still fire events after the h2 changes.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context =>
         {
@@ -137,7 +152,7 @@ public class Http2MultipartTests
     public async Task Http2_Non_Multipart_Request_No_Events()
     {
         // Non-multipart h2 requests must not create observers or fire events.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
 

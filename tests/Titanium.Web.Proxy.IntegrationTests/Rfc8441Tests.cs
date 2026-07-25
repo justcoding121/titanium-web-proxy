@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -12,9 +12,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     These tests verify the opt-in configuration flag, SETTINGS negotiation, and that
 ///     normal HTTP/2 traffic is unaffected when RFC 8441 support is enabled.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class Rfc8441Tests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     public void ProxyServer_EnableRfc8441_Defaults_To_False()
     {
@@ -45,7 +60,7 @@ public class Rfc8441Tests
     public async Task Normal_Http2_Request_Unaffected_By_Rfc8441_Disabled()
     {
         // Baseline: RFC 8441 disabled (default) must not affect normal h2 requests.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context => await context.Response.WriteAsync("ok"));
 
@@ -65,7 +80,7 @@ public class Rfc8441Tests
     public async Task Normal_Http2_Request_Unaffected_By_Rfc8441_Enabled()
     {
         // Enabling RFC 8441 must not break normal h2 requests.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context => await context.Response.WriteAsync("ok"));
 
@@ -85,7 +100,7 @@ public class Rfc8441Tests
     public async Task Normal_Http2_Multiple_Requests_Unaffected_By_Rfc8441_Enabled()
     {
         // Multiple requests over the same h2 connection must succeed with RFC 8441 enabled.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var requestCount = 0;
         server.HandleRequest(async context =>

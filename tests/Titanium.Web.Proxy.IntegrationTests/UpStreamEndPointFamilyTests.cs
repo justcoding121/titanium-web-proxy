@@ -1,19 +1,35 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+[DoNotParallelize]
 [TestClass]
 public class UpStreamEndPointFamilyTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     public async Task IPv4_Only_Bind_Works_For_IPv4_Localhost()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("v4-ok"));
 
@@ -30,7 +46,7 @@ public class UpStreamEndPointFamilyTests
     [TestMethod]
     public async Task Legacy_IPv4_Bind_Does_Not_Block_When_Dual_Family_Configured()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("dual-ok"));
 
@@ -49,7 +65,7 @@ public class UpStreamEndPointFamilyTests
     [TestMethod]
     public async Task Per_Session_IPv4_Bind_Override_Works()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("session-ok"));
 

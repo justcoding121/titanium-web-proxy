@@ -1,21 +1,37 @@
-using System.Net;
+﻿using System.Net;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+[DoNotParallelize]
 [TestClass]
 public class Http1FramingSafetyTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     [Timeout(15_000)]
     public async Task CompatibilityMode100Continue_Resolves_DeadlockWithStrictClient()
     {
         // With CompatibilityMode100Continue=true, a strict client gets a synthetic 100
         // immediately, allowing the body to be sent without waiting for origin.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var continueServer = new HttpContinueServer
         {
@@ -46,7 +62,7 @@ public class Http1FramingSafetyTests
     public async Task Default_Mode_StrictClient_Still_Times_Out()
     {
         // Verify that with CompatibilityMode disabled the deadlock baseline still holds.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var continueServer = new HttpContinueServer
         {

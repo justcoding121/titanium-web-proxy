@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -7,15 +7,31 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.Models;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+[DoNotParallelize]
 [TestClass]
 public class UpstreamProxyAuthTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     public async Task Authenticates_Https_Connect_To_Upstream_Proxy()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("secure target response"));
 
@@ -33,7 +49,7 @@ public class UpstreamProxyAuthTests
     [TestMethod]
     public async Task Authenticates_Plain_Http_Request_To_Upstream_Proxy()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         using var upstreamProxy = new FakeUpstreamProxy(server.HttpsListeningPort);
@@ -58,7 +74,7 @@ public class UpstreamProxyAuthTests
     [TestMethod]
     public async Task Rejected_Upstream_Connect_Surfaces_Typed_Status_Headers_And_Body()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("should not reach"));
 

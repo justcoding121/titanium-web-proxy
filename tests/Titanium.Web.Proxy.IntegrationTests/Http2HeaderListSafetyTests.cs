@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -13,9 +13,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     HPACK decoded-header-list size limiting, trailer pseudo-field rejection, and
 ///     required pseudo-field validation for initial HEADERS blocks.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class Http2HeaderListSafetyTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     [Timeout(15_000)]
     public async Task Proxy_MaxDecodedHeaderListBytes_Default_Is_64KiB()
@@ -28,7 +43,7 @@ public class Http2HeaderListSafetyTests
     [Timeout(15_000)]
     public async Task Normal_Request_With_Small_Headers_Succeeds()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context => await context.Response.WriteAsync("ok"));
 
