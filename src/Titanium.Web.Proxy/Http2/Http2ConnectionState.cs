@@ -98,6 +98,13 @@ internal sealed class Http2ConnectionState
     /// <summary>Cancels both relay directions; shared with the caller so either can trigger connection-wide teardown.</summary>
     public CancellationTokenSource CancellationTokenSource { get; }
 
+    /// <summary>
+    ///     Set to <see langword="true"/> once the proxy has actually written SETTINGS_ENABLE_CONNECT_PROTOCOL=1
+    ///     to the client (either relayed from the server or injected).  Extended CONNECT requests received
+    ///     before this flag is set are rejected with RST_STREAM(PROTOCOL_ERROR) per RFC 8441 §3.
+    /// </summary>
+    public volatile bool DownstreamAdvertisedEnableConnect;
+
     /// <summary>Set once a GOAWAY has been received from the client; no new client-initiated streams above the recorded id should be admitted.</summary>
     public volatile bool ClientGoingAway;
 

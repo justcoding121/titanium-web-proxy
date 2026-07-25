@@ -30,8 +30,16 @@ internal class Http2Settings
     /// <summary>
     ///     RFC 8441: whether the endpoint supports extended CONNECT (WebSocket-over-HTTP/2).
     ///     Set to <see langword="true"/> when the peer sends SETTINGS_ENABLE_CONNECT_PROTOCOL=1.
+    ///     Once set to <see langword="true"/>, it MUST NOT be set back to <see langword="false"/>:
+    ///     RFC 8441 §3 forbids the 1→0 transition.
     /// </summary>
     public bool EnableConnectProtocol { get; set; } = false;
+
+    /// <summary>
+    ///     <see langword="true"/> once this peer has ever sent SETTINGS_ENABLE_CONNECT_PROTOCOL=1.
+    ///     Used to detect the forbidden 1→0 downgrade (RFC 8441 §3).
+    /// </summary>
+    public bool EnableConnectProtocolEverSet { get; set; } = false;
 
     /// <summary>
     ///     The HPACK encoder (and its dynamic table) used for header blocks sent in the direction this
