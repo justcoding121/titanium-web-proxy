@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -19,9 +19,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     active, RFC 6455 frame validation in the intercepted relay path, and that raw relay continues
 ///     to work without any frame-level handlers.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class WebSocketInterceptionSafetyTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private static readonly Encoding Ascii = Encoding.ASCII;
 
     // -------------------------------------------------------------------------
@@ -33,7 +48,7 @@ public class WebSocketInterceptionSafetyTests
     [Timeout(30_000)]
     public async Task WebSocket_ExtensionOfferStripped_WhenInterceptionActive()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         // Capture the raw upgrade request the origin server actually receives.
@@ -116,7 +131,7 @@ public class WebSocketInterceptionSafetyTests
     [Timeout(30_000)]
     public async Task WebSocket_ExtensionOffer_NotStripped_WhenNoInterceptionHandler()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         string? capturedRequest = null;
@@ -192,7 +207,7 @@ public class WebSocketInterceptionSafetyTests
     [Timeout(30_000)]
     public async Task WebSocket_InterceptRelay_ValidFrames_ForwardedSuccessfully()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         const string serverMessage = "hello-intercepted";
@@ -294,7 +309,7 @@ public class WebSocketInterceptionSafetyTests
     [Timeout(30_000)]
     public async Task WebSocket_InterceptRelay_ReservedOpcode_ClosesConnection()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>

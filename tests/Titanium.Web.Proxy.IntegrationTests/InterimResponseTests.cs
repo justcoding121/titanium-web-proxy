@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -27,16 +27,31 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///         100/101, which it has dedicated handling for) to application code.
 ///     </para>
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class InterimResponseTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private static readonly Encoding MsgEncoding = HttpHelper.GetEncodingFromContentType(null);
 
     [TestMethod]
     [Timeout(30 * 1000)]
     public async Task Interim_103_EarlyHints_Response_Is_Relayed_Before_Final_Response()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -83,7 +98,7 @@ public class InterimResponseTests
     [Timeout(30 * 1000)]
     public async Task Interim_Multiple_1xx_Responses_Are_All_Relayed_In_Order_Before_Final_Response()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -122,7 +137,7 @@ public class InterimResponseTests
     [Timeout(30 * 1000)]
     public async Task Interim_100Continue_From_Server_Is_Discarded_Not_Relayed_To_Client()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -160,7 +175,7 @@ public class InterimResponseTests
         // Regression guard for the loop's exclusion of 101: 100-199 broadly includes 101, so a naive
         // interim-response loop would incorrectly try to read yet another response after it (hanging, since
         // the "connection" is about to become a raw tunnel and nothing else will arrive framed as HTTP).
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>

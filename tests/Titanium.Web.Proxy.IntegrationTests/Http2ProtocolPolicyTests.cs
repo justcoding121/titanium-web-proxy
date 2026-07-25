@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -28,9 +28,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     bridge (see <see cref="Http2ToHttp11BridgeHandler" />) is exercised instead - the HTTP/1.1-client-to-h2
 ///     origin direction is a later milestone.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class Http2ProtocolPolicyTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private static X509Certificate2 CreateOriginCertificate()
     {
         return TestCertificateAuthority.ServerCertificate;
@@ -40,7 +55,7 @@ public class Http2ProtocolPolicyTests
     [Timeout(15 * 1000)]
     public async Task UpstreamHttpProtocol_Setter_Rejects_Undefined_Enum_Values()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var proxy = testSuite.GetReverseProxy();
         proxy.EnableHttp2 = true;
@@ -87,7 +102,7 @@ public class Http2ProtocolPolicyTests
     [Timeout(30 * 1000)]
     public async Task Explicit_Forced_Http11_Without_Translation_Never_Offers_Http2_To_Dual_Alpn_Client()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("h1-forced-ok"));
 
@@ -122,7 +137,7 @@ public class Http2ProtocolPolicyTests
     [Timeout(30 * 1000)]
     public async Task Explicit_Forced_Http11_With_Translation_And_Http2_Only_Client_Succeeds_Via_Bridge()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context =>
         {
@@ -180,7 +195,7 @@ public class Http2ProtocolPolicyTests
     [Timeout(30 * 1000)]
     public async Task Explicit_Forced_Http11_With_Translation_And_Http2_Client_Post_With_Body_Succeeds_Via_Bridge()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context =>
         {
@@ -245,7 +260,7 @@ public class Http2ProtocolPolicyTests
     public async Task
         Explicit_Forced_Http11_With_Translation_Concurrent_Http2_Streams_Get_Independent_Http11_Origin_Round_Trips()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context =>
         {
@@ -333,7 +348,7 @@ public class Http2ProtocolPolicyTests
             await connection.WriteHeaderBlockAsync(streamId, headers, true);
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -362,7 +377,7 @@ public class Http2ProtocolPolicyTests
     {
         using var h11Server = new Http11OnlyOriginServer(CreateOriginCertificate());
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -407,7 +422,7 @@ public class Http2ProtocolPolicyTests
     [Timeout(30 * 1000)]
     public async Task Explicit_Forced_Http2_With_Http11_Only_Client_And_No_Translation_Fails_Clearly()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("should-not-be-reached"));
 
@@ -459,7 +474,7 @@ public class Http2ProtocolPolicyTests
     [Timeout(30 * 1000)]
     public async Task Explicit_Forced_Http2_With_Translation_And_Http11_Only_Client_Succeeds_Via_Bridge()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context =>
         {
@@ -521,7 +536,7 @@ public class Http2ProtocolPolicyTests
     [Timeout(30 * 1000)]
     public async Task Explicit_Forced_Http2_With_Translation_And_Http11_Client_Post_With_Body_Succeeds_Via_Bridge()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context =>
         {
@@ -592,7 +607,7 @@ public class Http2ProtocolPolicyTests
             }
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -736,7 +751,7 @@ public class Http2ProtocolPolicyTests
             await connection.ReadRequestAsync();
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetReverseProxy();
         proxy.EnableHttp2 = true;
 
@@ -772,7 +787,7 @@ public class Http2ProtocolPolicyTests
     [Timeout(30 * 1000)]
     public async Task Transparent_Forced_Http11_With_Translation_And_Http2_Client_Succeeds_Via_Bridge()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context =>
         {
@@ -830,7 +845,7 @@ public class Http2ProtocolPolicyTests
     [Timeout(30 * 1000)]
     public async Task Transparent_Forced_Http2_With_Translation_And_Http11_Client_Succeeds_Via_Bridge()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context =>
         {

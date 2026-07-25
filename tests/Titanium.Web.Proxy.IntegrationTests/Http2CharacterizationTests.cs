@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -26,9 +26,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     ownership guarantees added by the shared negotiation/ownership coordinator - so later milestones
 ///     can be judged against a known-good baseline instead of guessing what the prior behavior was.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class Http2CharacterizationTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private static X509Certificate2 CreateOriginCertificate()
     {
         return TestCertificateAuthority.ServerCertificate;
@@ -94,7 +109,7 @@ public class Http2CharacterizationTests
             await connection.WriteHeaderBlockAsync(streamId, headers, true);
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
         proxy.EnableTcpServerConnectionPrefetch = true;
@@ -135,7 +150,7 @@ public class Http2CharacterizationTests
             await connection.WriteHeaderBlockAsync(streamId, headers, true);
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
         proxy.EnableTcpServerConnectionPrefetch = true;
@@ -193,7 +208,7 @@ public class Http2CharacterizationTests
             }
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -239,7 +254,7 @@ public class Http2CharacterizationTests
             }
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -297,7 +312,7 @@ public class Http2CharacterizationTests
     [Timeout(30 * 1000)]
     public async Task Http2_No_Alpn_Client_Negotiates_Http11_And_Request_Succeeds()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("h1-ok"));
 
@@ -328,7 +343,7 @@ public class Http2CharacterizationTests
     [Timeout(30 * 1000)]
     public async Task Http2_Completed_Stream_Fires_BeforeRequest_BeforeResponse_AfterResponse_Exactly_Once()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
 
@@ -364,7 +379,7 @@ public class Http2CharacterizationTests
     [Timeout(30 * 1000)]
     public async Task Http2_Session_Timing_Has_Same_Milestones_As_Http11()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
 
@@ -432,7 +447,7 @@ public class Http2CharacterizationTests
             }
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -467,7 +482,7 @@ public class Http2CharacterizationTests
     [Timeout(30 * 1000)]
     public async Task Http2_Exception_In_BeforeRequest_Does_Not_Hang_Connection_And_Other_Streams_Still_Complete()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
 

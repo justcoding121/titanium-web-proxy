@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -17,9 +17,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     sends a malformed frame, then routes a real request through the proxy and asserts that the request
 ///     fails promptly (within the per-test timeout) rather than deadlocking.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class Http2OriginFrameValidationTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private static X509Certificate2 CreateOriginCertificate()
     {
         return TestCertificateAuthority.ServerCertificate;
@@ -80,7 +95,7 @@ public class Http2OriginFrameValidationTests
             try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -131,7 +146,7 @@ public class Http2OriginFrameValidationTests
             try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -170,7 +185,7 @@ public class Http2OriginFrameValidationTests
             try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -220,7 +235,7 @@ public class Http2OriginFrameValidationTests
             try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -269,7 +284,7 @@ public class Http2OriginFrameValidationTests
             try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 

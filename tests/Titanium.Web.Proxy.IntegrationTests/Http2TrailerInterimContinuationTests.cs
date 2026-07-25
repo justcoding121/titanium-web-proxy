@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
@@ -23,9 +23,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Complements the HPACK dynamic-table-reuse coverage in <see cref="Http2Tests" /> and the trailer/interim
 ///     coverage already in <see cref="ChunkedTrailerTests" />/<see cref="InterimResponseTests" /> for HTTP/1.x.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class Http2TrailerInterimContinuationTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private static X509Certificate2 CreateOriginCertificate()
     {
         return TestCertificateAuthority.ServerCertificate;
@@ -53,7 +68,7 @@ public class Http2TrailerInterimContinuationTests
             await connection.WriteHeaderBlockAsync(streamId, trailers, true);
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -123,7 +138,7 @@ public class Http2TrailerInterimContinuationTests
             await connection.WriteHeaderBlockAsync(streamId, responseHeaders, true);
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -180,7 +195,7 @@ public class Http2TrailerInterimContinuationTests
             await connection.WriteFrameAsync(Http2FrameType.Data, streamId, Http2FrameFlag.EndStream, body);
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -236,7 +251,7 @@ public class Http2TrailerInterimContinuationTests
             await connection.WriteHeaderBlockAsync(streamId, headers, true, 1024);
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 

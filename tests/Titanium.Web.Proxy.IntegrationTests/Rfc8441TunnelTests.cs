@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -22,9 +22,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     (via the h2-to-h1 translation bridge) so the full extended-CONNECT path is exercised
 ///     without requiring a dedicated h2 WebSocket client library.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class Rfc8441TunnelTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private static readonly Encoding Ascii = Encoding.ASCII;
 
     /// <summary>
@@ -36,7 +51,7 @@ public class Rfc8441TunnelTests
     [Timeout(30_000)]
     public async Task ExtendedConnect_Rfc8441Disabled_DoesNotReturn200()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("not-a-websocket"));
 
@@ -103,7 +118,7 @@ public class Rfc8441TunnelTests
     [Timeout(30_000)]
     public async Task ExtendedConnect_Rfc8441Enabled_H2ToH1_TunnelOpensAndEchoesData()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         // Minimal TCP origin: reads the WebSocket upgrade request, sends 101, then echoes raw bytes.
@@ -209,7 +224,7 @@ public class Rfc8441TunnelTests
     [Timeout(30_000)]
     public async Task ExtendedConnect_UnknownProtocol_Returns501()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
 

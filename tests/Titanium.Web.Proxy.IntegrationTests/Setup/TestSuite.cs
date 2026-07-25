@@ -10,6 +10,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 public class TestSuite : IDisposable
 {
     private readonly TestServer server;
+    private readonly bool ownsServer;
     private readonly ConcurrentBag<HttpClient> clients = new();
     private readonly List<ProxyServer> proxyServers = new();
     private bool disposed;
@@ -17,6 +18,19 @@ public class TestSuite : IDisposable
     public TestSuite(bool requireMutualTls = false)
     {
         server = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls);
+        ownsServer = true;
+    }
+
+    /// <summary>
+    /// Constructs a <see cref="TestSuite"/> that borrows an externally-owned <see cref="TestServer"/>.
+    /// The server will NOT be disposed when this suite is disposed; only proxies and clients are.
+    /// Intended for class-level fixture sharing where the server lifetime is managed by
+    /// <c>[ClassInitialize]</c>/<c>[ClassCleanup]</c>.
+    /// </summary>
+    public TestSuite(TestServer sharedServer)
+    {
+        server = sharedServer;
+        ownsServer = false;
     }
 
     public TestServer GetServer()
@@ -68,6 +82,9 @@ public class TestSuite : IDisposable
             proxyServers[i].Dispose();
         }
 
-        server.Dispose();
+        if (ownsServer)
+        {
+            server.Dispose();
+        }
     }
 }

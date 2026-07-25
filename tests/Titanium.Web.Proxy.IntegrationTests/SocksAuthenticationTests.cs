@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -12,14 +12,29 @@ using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+[DoNotParallelize]
 [TestClass]
 public class SocksAuthenticationTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     [Timeout(30 * 1000)]
     public async Task Socks5_EndpointAuth_Succeeds_With_Valid_Credentials()
     {
-        using var suite = new TestSuite();
+        using var suite = new TestSuite(sharedServer);
         var server = suite.GetServer();
         server.HandleRequest(ctx => ctx.Response.WriteAsync("ok"));
 
@@ -87,7 +102,7 @@ public class SocksAuthenticationTests
         var globalCalled = false;
         var endpointCalled = false;
 
-        using var suite = new TestSuite();
+        using var suite = new TestSuite(sharedServer);
         var server = suite.GetServer();
         server.HandleRequest(ctx => ctx.Response.WriteAsync("ok"));
 
@@ -142,7 +157,7 @@ public class SocksAuthenticationTests
     [Timeout(30 * 1000)]
     public async Task Socks5_Auth_Handles_Fragmented_Packets()
     {
-        using var suite = new TestSuite();
+        using var suite = new TestSuite(sharedServer);
         var server = suite.GetServer();
         server.HandleRequest(ctx => ctx.Response.WriteAsync("ok"));
 
@@ -242,7 +257,7 @@ public class SocksAuthenticationTests
     [Timeout(30 * 1000)]
     public async Task Socks4_Still_Works_Without_Auth()
     {
-        using var suite = new TestSuite();
+        using var suite = new TestSuite(sharedServer);
         var server = suite.GetServer();
         server.HandleTcpRequest(async context =>
         {
@@ -278,7 +293,7 @@ public class SocksAuthenticationTests
     [Timeout(30 * 1000)]
     public async Task Socks5_Global_ProxyBasicAuthenticateFunc_Works_For_Socks()
     {
-        using var suite = new TestSuite();
+        using var suite = new TestSuite(sharedServer);
         var server = suite.GetServer();
         server.HandleRequest(ctx => ctx.Response.WriteAsync("ok"));
 

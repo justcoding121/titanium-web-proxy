@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -22,9 +22,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     negotiation coordinator (<c>NegotiateHttp2Async</c>/<c>AdoptRetainedConnectionAsync</c>) the explicit
 ///     CONNECT handler uses, rather than a separate, duplicated implementation.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class Http2TransparentTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private static X509Certificate2 CreateOriginCertificate()
     {
         return TestCertificateAuthority.ServerCertificate;
@@ -61,7 +76,7 @@ public class Http2TransparentTests
             await connection.WriteHeaderBlockAsync(streamId, headers, true);
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetReverseProxy();
         proxy.EnableHttp2 = true;
 
@@ -101,7 +116,7 @@ public class Http2TransparentTests
             await connection.WriteHeaderBlockAsync(streamId, headers, true);
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetReverseProxy();
         proxy.EnableHttp2 = true;
 
@@ -134,7 +149,7 @@ public class Http2TransparentTests
     {
         using var rawServer = new Http11OnlyOriginServer(CreateOriginCertificate());
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetReverseProxy();
         proxy.EnableHttp2 = true;
 
@@ -178,7 +193,7 @@ public class Http2TransparentTests
     [Timeout(30 * 1000)]
     public async Task Http2_Transparent_Completed_Stream_Fires_BeforeRequest_BeforeResponse_AfterResponse_Exactly_Once()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
 
@@ -215,7 +230,7 @@ public class Http2TransparentTests
     [Timeout(30 * 1000)]
     public async Task Http2_Transparent_Many_Concurrent_Streams_With_Distinct_Headers_Do_Not_Cross_Contaminate()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
         {
@@ -256,7 +271,7 @@ public class Http2TransparentTests
     [Timeout(30 * 1000)]
     public async Task Http2_Transparent_Ok_From_BeforeRequest_Answers_Client_And_Origin_Never_Sees_Request()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var originContacted = false;
         server.HandleRequest(context =>
@@ -290,7 +305,7 @@ public class Http2TransparentTests
     [Timeout(30 * 1000)]
     public async Task Http2_Transparent_RespondStreaming_Generates_Body_Without_Contacting_Server()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var serverCalled = false;
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -357,7 +372,7 @@ public class Http2TransparentTests
         using var h11OriginCert = CreateOriginCertificate();
         using var h11Server = new Http11OnlyOriginServer(h11OriginCert);
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetReverseProxy();
         proxy.EnableHttp2 = true;
 

@@ -53,6 +53,9 @@ public class TestServer : IDisposable
 
                     options.Listen(IPAddress.Loopback, 0, listenOptions =>
                     {
+                        // TestCertificateAuthority.ServerCertificate vends a fresh, independent
+                        // X509Certificate2 each time (backed by cached PKCS12 bytes), so Kestrel
+                        // can safely dispose it without affecting any other TestServer instance.
                         listenOptions.UseHttps(serverCertificate);
                     });
                     options.Listen(IPAddress.Loopback, 0, listenOptions =>

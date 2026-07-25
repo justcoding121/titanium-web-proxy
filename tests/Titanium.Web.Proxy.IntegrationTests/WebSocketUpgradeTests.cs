@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -24,9 +24,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     and that a <c>BeforeResponse</c> subscriber's changes to the upgrade response actually take effect
 ///     (including denying the upgrade outright) rather than being silently dropped.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class WebSocketUpgradeTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private const string OriginGreetingText = "hello-from-origin";
     private const string ClientPingText = "ping-from-client";
     private static readonly Encoding AsciiEncoding = Encoding.ASCII;
@@ -35,7 +50,7 @@ public class WebSocketUpgradeTests
     [Timeout(30 * 1000)]
     public async Task WebSocketUpgrade_RelaysFramesBothWays_AndProxyCanDecodeThemViaPublicApi()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -155,7 +170,7 @@ public class WebSocketUpgradeTests
     [Timeout(30 * 1000)]
     public async Task WebSocketUpgrade_FrameIntercept_CanDropAndReplace_WhileDataEventsStillFire()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -265,7 +280,7 @@ public class WebSocketUpgradeTests
         // Regression test for the fix to WebSocketHandler.HandleWebSocketUpgrade: BeforeResponse used to
         // fire only *after* the original 101 response had already been written to the client, so any
         // change made here was silently lost. It must now take effect.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -312,7 +327,7 @@ public class WebSocketUpgradeTests
         // Regression test: previously the original 101 was already on the wire before BeforeResponse ran,
         // so a handler trying to deny the upgrade via args.Respond/GenericResponse had no effect on what
         // the client received, and the proxy still went on to relay raw bytes as if it had succeeded.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -378,7 +393,7 @@ public class WebSocketUpgradeTests
     [Timeout(30 * 1000)]
     public async Task WebSocketUpgrade_RequestUriRewrite_PreservesHostSchemePathAndNestedQuery()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         string capturedRequest = null;
@@ -455,7 +470,7 @@ public class WebSocketUpgradeTests
     [Timeout(30 * 1000)]
     public async Task WebSocketUpgrade_RequestUriRewrite_ThroughUpstreamProxy_PreservesNestedQuery()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         string capturedRequest = null;

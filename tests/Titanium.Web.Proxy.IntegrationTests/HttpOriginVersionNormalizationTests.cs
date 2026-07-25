@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
@@ -9,6 +9,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.Models;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
@@ -16,16 +17,31 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     the origin than the one the client itself declared, so a compliant origin can be pooled/reused as a
 ///     persistent HTTP/1.1 connection regardless of whether individual clients are still speaking HTTP/1.0.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class HttpOriginVersionNormalizationTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private const int SendReceiveTimeoutMs = 2000;
 
     [TestMethod]
     [Timeout(30 * 1000)]
     public async Task Default_PreserveClientVersion_DeclaresClientVersionToOrigin_AndDoesNotPoolHttp10WithoutKeepAlive()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var origin = new HttpVersionMirroringOriginServer();
         server.HandleTcpRequest(origin.HandleRequest);
@@ -56,7 +72,7 @@ public class HttpOriginVersionNormalizationTests
     [Timeout(30 * 1000)]
     public async Task NormalizeToHttp11_DeclaresHttp11ToOrigin_AndPoolsAcrossHttp10AndHttp11Clients()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var origin = new HttpVersionMirroringOriginServer();
         server.HandleTcpRequest(origin.HandleRequest);
@@ -94,7 +110,7 @@ public class HttpOriginVersionNormalizationTests
     [Timeout(30 * 1000)]
     public async Task Http10ClientWithExplicitKeepAlive_DefaultPolicy_StillPoolsAtOrigin()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var origin = new HttpVersionMirroringOriginServer();
         server.HandleTcpRequest(origin.HandleRequest);
@@ -126,7 +142,7 @@ public class HttpOriginVersionNormalizationTests
     [Timeout(30 * 1000)]
     public async Task Http10OriginResponse_WithoutContentLength_IsReadUntilConnectionClose()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         const string responseBody = "no-content-length-body-read-until-close";

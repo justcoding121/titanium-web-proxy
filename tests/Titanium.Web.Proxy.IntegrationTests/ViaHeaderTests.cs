@@ -1,14 +1,30 @@
-using System;
+﻿using System;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+[DoNotParallelize]
 [TestClass]
 public class ViaHeaderTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     public void ProxyServer_ViaHeaderPseudonym_DefaultIsTitaniumWebProxy()
     {
@@ -21,7 +37,7 @@ public class ViaHeaderTests
     [Timeout(30_000)]
     public async Task ViaHeader_AddedToForwardedRequest_WhenPseudonymSet()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         string? capturedVia = null;
 
@@ -49,7 +65,7 @@ public class ViaHeaderTests
     [Timeout(30_000)]
     public async Task ViaHeader_AddedToResponse_WhenPseudonymSet()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
         {
@@ -76,7 +92,7 @@ public class ViaHeaderTests
     [Timeout(30_000)]
     public async Task ViaHeader_NotAdded_WhenPseudonymEmpty()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         string? capturedVia = null;
 
@@ -101,7 +117,7 @@ public class ViaHeaderTests
     [Timeout(30_000)]
     public async Task ViaHeader_LoopDetection_Returns508()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
         {
@@ -127,7 +143,7 @@ public class ViaHeaderTests
     [Timeout(30_000)]
     public async Task ViaHeader_ExistingVia_Appended()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         string? capturedVia = null;
 

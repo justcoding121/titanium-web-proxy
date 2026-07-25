@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -11,6 +11,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
@@ -18,9 +19,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     milestones change request/response handling. Failing tests here indicate a regression
 ///     in baseline protocol compliance.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class Phase0CharacterizationTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     /// <summary>
     ///     A strict Expect: 100-continue client that waits 500 ms for the 100 response before
     ///     sending the body will deadlock when the proxy has Enable100ContinueBehaviour disabled
@@ -30,7 +46,7 @@ public class Phase0CharacterizationTests
     [Timeout(10000)]
     public async Task ExpectContinue_StrictClient_Deadlocks_When_100ContinueBehaviour_Disabled()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var continueServer = new HttpContinueServer
         {
@@ -65,7 +81,7 @@ public class Phase0CharacterizationTests
     [Timeout(10000)]
     public async Task ExpectContinue_PermissiveClient_Succeeds_When_100ContinueBehaviour_Disabled()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(async context =>
         {
@@ -100,7 +116,7 @@ public class Phase0CharacterizationTests
     [Timeout(15000)]
     public async Task Head_Response_ContentLength_Does_Not_Cause_Body_Read()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -215,7 +231,7 @@ public class Phase0CharacterizationTests
     [Timeout(10000)]
     public async Task Enable100Continue_True_StrictClient_Succeeds()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var continueServer = new HttpContinueServer
         {
@@ -248,7 +264,7 @@ public class Phase0CharacterizationTests
     [Timeout(10000)]
     public async Task Enable100Continue_False_OriginSilence_TimesOut()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleTcpRequest(async context =>
         {
@@ -300,7 +316,7 @@ public class Phase0CharacterizationTests
     [Timeout(10000)]
     public async Task Head_Response_Via_HttpClient_Returns_No_Body()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
         {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -11,16 +11,32 @@ using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.Models;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+[DoNotParallelize]
 [TestClass]
 public class ConnectFailureResponseTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     [Timeout(30 * 1000)]
     public async Task Preconnect_DnsFailure_Returns_Http_Error_Before_Tls()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         var endPoint = (ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
 
@@ -59,7 +75,7 @@ public class ConnectFailureResponseTests
         // Bind and immediately close a listener so the port is refused.
         var refusedPort = GetRefusedPort();
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         var endPoint = (ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
 
@@ -80,7 +96,7 @@ public class ConnectFailureResponseTests
     [Timeout(30 * 1000)]
     public async Task Preconnect_UpstreamProxyReject_Surfaces_Typed_Status_To_Client()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         using var upstreamProxy = new RejectingUpstreamProxy(403, "Forbidden", "access denied by upstream");
@@ -119,7 +135,7 @@ public class ConnectFailureResponseTests
     [Timeout(30 * 1000)]
     public async Task Default_No_Preconnect_Still_Sends_200_For_Unreachable_Host()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         // EstablishServerConnectionBeforeResponse stays false (default).
 
