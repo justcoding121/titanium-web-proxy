@@ -193,4 +193,51 @@ public class MultipartStreamObserverTests
             null, null);
         Assert.IsNotNull(observer, "Boundary should be parsed even with additional parameters before it.");
     }
+
+    [TestMethod]
+    public void Observe_StandardInitialBoundary_ParsesHeadersWithoutBodyFalsePositive()
+    {
+        HeaderCollection? captured = null;
+        var partCompletions = 0;
+        var observer = MultipartStreamObserver.TryCreate(
+            "multipart/form-data; boundary=BOUND",
+            headers => captured = headers,
+            () => partCompletions++);
+        Assert.IsNotNull(observer);
+
+        var body = ToBytes(
+            "--BOUND\r\n" +
+            "Content-Disposition: form-data; name=\"field\"\r\n" +
+            "Content-Type: text/plain\r\n\r\n" +
+            "body contains --BOUND but it is not a delimiter\r\n" +
+            "--BOUND--\r\n");
+
+        var active = observer!.Observe(body);
+
+        Assert.IsFalse(active);
+        Assert.AreEqual(1, partCompletions);
+        Assert.AreEqual("form-data; name=\"field\"",
+            captured?.GetFirstHeader("Content-Disposition")?.Value);
+        Assert.AreEqual("text/plain", captured?.GetFirstHeader("Content-Type")?.Value);
+    }
+
+    [TestMethod]
+    public void Observe_OverlongPartHeaders_DoesNotStall()
+    {
+        var callbacks = 0;
+        var observer = MultipartStreamObserver.TryCreate(
+            "multipart/form-data; boundary=B",
+            _ => callbacks++,
+            null);
+        Assert.IsNotNull(observer);
+
+        var body = ToBytes(
+            "--B\r\nX-Large: " + new string('a', 9000) +
+            "\r\n\r\nvalue\r\n--B--\r\n");
+
+        var active = observer!.Observe(body);
+
+        Assert.IsFalse(active);
+        Assert.AreEqual(1, callbacks);
+    }
 }

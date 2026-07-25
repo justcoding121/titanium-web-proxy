@@ -166,7 +166,7 @@ public partial class ProxyServer
             response.Headers.FixProxyHeaders();
             // Via injection on outgoing response (RFC 9110 §7.6.3).
             if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
-                AddViaHeader(response.Headers, args.HttpClient.Request.HttpVersion, ViaHeaderPseudonym);
+                AddViaHeader(response.Headers, args.HttpClient.Response.HttpVersion, ViaHeaderPseudonym);
         }
         else
         {

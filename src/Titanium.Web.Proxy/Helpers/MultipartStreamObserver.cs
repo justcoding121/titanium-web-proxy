@@ -22,14 +22,17 @@ internal sealed class MultipartStreamObserver
 {
     private const int MaxBoundaryLength = 70;
 
-    private readonly byte[] _boundary;       // "--" + boundary bytes
-    private readonly byte[] _closingBoundary; // "--" + boundary + "--"
+    private readonly byte[] _openingBoundary;        // CRLF + "--" + boundary + CRLF
+    private readonly byte[] _closingBoundary;        // CRLF + "--" + boundary + "--"
+    private readonly byte[] _initialOpeningBoundary; // "--" + boundary + CRLF, valid only at offset zero
+    private readonly byte[] _initialClosingBoundary; // "--" + boundary + "--", valid only at offset zero
     private readonly Action<HeaderCollection>? _onPartHeaders;
     private readonly Action? _onPartComplete;
 
     // Look-behind ring buffer state
     private readonly byte[] _lookBehind;
     private int _lookBehindFill;
+    private long _bytesObserved;
 
     private bool _inBody;    // past the preamble
     private bool _finished;  // closing boundary seen
@@ -56,26 +59,36 @@ internal sealed class MultipartStreamObserver
 
         var boundaryBytes = Encoding.ASCII.GetBytes(boundaryString);
 
-        // Delimiter token: \r\n "--" boundary  (the leading \r\n is part of the delimiter per RFC 2046).
-        // Including \r\n prevents body content from false-matching the boundary string.
-        // The very first boundary (at preamble start) has no preceding \r\n and is not detected;
-        // that is acceptable because the first boundary is just the preamble separator.
-        _boundary = new byte[4 + boundaryBytes.Length];
-        _boundary[0] = (byte)'\r';
-        _boundary[1] = (byte)'\n';
-        _boundary[2] = (byte)'-';
-        _boundary[3] = (byte)'-';
-        Buffer.BlockCopy(boundaryBytes, 0, _boundary, 4, boundaryBytes.Length);
+        var delimiter = new byte[4 + boundaryBytes.Length];
+        delimiter[0] = (byte)'\r';
+        delimiter[1] = (byte)'\n';
+        delimiter[2] = (byte)'-';
+        delimiter[3] = (byte)'-';
+        Buffer.BlockCopy(boundaryBytes, 0, delimiter, 4, boundaryBytes.Length);
 
-        _closingBoundary = new byte[_boundary.Length + 2];
-        Buffer.BlockCopy(_boundary, 0, _closingBoundary, 0, _boundary.Length);
-        _closingBoundary[_boundary.Length] = (byte)'-';
-        _closingBoundary[_boundary.Length + 1] = (byte)'-';
+        _openingBoundary = Append(delimiter, (byte)'\r', (byte)'\n');
+        _closingBoundary = Append(delimiter, (byte)'-', (byte)'-');
+
+        var initialDelimiter = new byte[2 + boundaryBytes.Length];
+        initialDelimiter[0] = (byte)'-';
+        initialDelimiter[1] = (byte)'-';
+        Buffer.BlockCopy(boundaryBytes, 0, initialDelimiter, 2, boundaryBytes.Length);
+        _initialOpeningBoundary = Append(initialDelimiter, (byte)'\r', (byte)'\n');
+        _initialClosingBoundary = Append(initialDelimiter, (byte)'-', (byte)'-');
 
         // The look-behind window must hold at least the closing boundary so we can detect it.
-        _lookBehind = new byte[_closingBoundary.Length + 2]; // +2 for possible trailing CRLF
+        _lookBehind = new byte[Math.Max(_openingBoundary.Length, _closingBoundary.Length)];
 
         _headerBuffer = new byte[MaxPartHeaderBytesPerPart];
+    }
+
+    private static byte[] Append(byte[] prefix, byte first, byte second)
+    {
+        var result = new byte[prefix.Length + 2];
+        Buffer.BlockCopy(prefix, 0, result, 0, prefix.Length);
+        result[prefix.Length] = first;
+        result[prefix.Length + 1] = second;
+        return result;
     }
 
     /// <summary>
@@ -134,6 +147,8 @@ internal sealed class MultipartStreamObserver
 
     private void ObserveByte(byte b)
     {
+        _bytesObserved++;
+
         // Feed the byte into the look-behind sliding window.
         if (_lookBehindFill < _lookBehind.Length)
         {
@@ -175,52 +190,38 @@ internal sealed class MultipartStreamObserver
 
     private void CheckForBoundary()
     {
-        // We need at least enough bytes to match the opening boundary token.
-        if (_lookBehindFill < _boundary.Length) return;
-
-        // First check for closing boundary (longer token) to avoid false positives.
-        if (_lookBehindFill >= _closingBoundary.Length)
+        // Closing delimiters are checked first. Opening delimiters include their trailing
+        // CRLF, so MIME header collection starts at the first header byte rather than
+        // accidentally treating the delimiter line ending as an empty header block.
+        if (EndsWith(_closingBoundary) ||
+            (_bytesObserved == _initialClosingBoundary.Length && EndsWith(_initialClosingBoundary)))
         {
-            var offset = _lookBehindFill - _closingBoundary.Length;
-            var match = true;
-            for (var i = 0; i < _closingBoundary.Length; i++)
-            {
-                if (_lookBehind[offset + i] != _closingBoundary[i])
-                {
-                    match = false;
-                    break;
-                }
-            }
-
-            if (match)
-            {
-                _finished = true;
-                if (_inBody) _onPartComplete?.Invoke();
-                return;
-            }
+            _finished = true;
+            if (_inBody) _onPartComplete?.Invoke();
+            return;
         }
 
-        // Check for opening boundary token.
+        if (EndsWith(_openingBoundary) ||
+            (_bytesObserved == _initialOpeningBoundary.Length && EndsWith(_initialOpeningBoundary)))
         {
-            var offset = _lookBehindFill - _boundary.Length;
-            var match = true;
-            for (var i = 0; i < _boundary.Length; i++)
-            {
-                if (_lookBehind[offset + i] != _boundary[i])
-                {
-                    match = false;
-                    break;
-                }
-            }
-
-            if (match)
-            {
-                if (_inBody) _onPartComplete?.Invoke();
-                _inBody = true;
-                _inPartHeaders = true;
-                _headerFill = 0;
-            }
+            if (_inBody) _onPartComplete?.Invoke();
+            _inBody = true;
+            _inPartHeaders = true;
+            _headerFill = 0;
         }
+    }
+
+    private bool EndsWith(byte[] token)
+    {
+        if (_lookBehindFill < token.Length) return false;
+
+        var offset = _lookBehindFill - token.Length;
+        for (var i = 0; i < token.Length; i++)
+        {
+            if (_lookBehind[offset + i] != token[i]) return false;
+        }
+
+        return true;
     }
 
     private HeaderCollection ParsePartHeaders()
