@@ -1184,7 +1184,7 @@ namespace Titanium.Web.Proxy.Http2
                     }
 
                     // HTTP/2 multipart/form-data boundary-aware streaming observation (purely observational).
-                    if (isClient && args.MultipartRequestPartSent != null)
+                    if (isClient && args.HasMulipartEventSubscribers)
                     {
                         var mpContentType = args.HttpClient.Request.ContentType;
                         if (mpContentType != null &&
