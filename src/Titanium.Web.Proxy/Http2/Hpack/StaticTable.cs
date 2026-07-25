@@ -40,6 +40,9 @@ internal static class StaticTable
 
     public static ByteString KnownHeaderStatus = (ByteString)":status";
 
+    /// <summary>RFC 8441 §5: the :protocol pseudo-header for extended CONNECT requests.</summary>
+    public static ByteString KnownHeaderProtocol = (ByteString)":protocol";
+
     static StaticTable()
     {
         const int entryCount = 61;
