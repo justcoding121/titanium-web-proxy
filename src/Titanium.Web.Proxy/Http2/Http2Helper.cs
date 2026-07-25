@@ -700,11 +700,32 @@ namespace Titanium.Web.Proxy.Http2
                             // bridge's tunnel task (which manages its own response). Do not forward
                             // the CONNECT HEADERS to the (null) origin - the tunnel task sends the
                             // actual WebSocket upgrade request and response independently.
-                            bool isExtendedConnectTunnel =
-                                connectionState.Streams.TryGetValue(hbStreamId, out var ecTunnelState)
-                                && ecTunnelState.IsExtendedConnect
+                            connectionState.Streams.TryGetValue(hbStreamId, out var ecTunnelState);
+                            bool isExtendedConnectTunnel = ecTunnelState?.IsExtendedConnect == true
                                 && ecTunnelState.InboundTunnelChannel != null;
-                            if (!isExtendedConnectTunnel)
+                            bool isNativeExtendedConnect = ecTunnelState?.IsExtendedConnect == true
+                                && ecTunnelState.InboundTunnelChannel == null;
+
+                            if (isExtendedConnectTunnel)
+                            {
+                                // h2→h1 bridge: the tunnel task owns the origin connection; skip.
+                            }
+                            else if (isNativeExtendedConnect && output is not NullOriginStream
+                                && !connectionState.ServerSettings.EnableConnectProtocol)
+                            {
+                                // Native h2↔h2: origin did not advertise SETTINGS_ENABLE_CONNECT_PROTOCOL=1.
+                                // Refuse deterministically so the client can retry or fall back; do NOT leak
+                                // the extended-CONNECT HEADERS to an unsupporting origin.
+                                ReportException(logger, new ProxyHttpException(
+                                    "HTTP/2 extended CONNECT refused: origin did not advertise " +
+                                    "SETTINGS_ENABLE_CONNECT_PROTOCOL=1.",
+                                    null, sessionArgs));
+                                RemoveAndFinalizeStream(hbStreamId);
+                                await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                    hbStreamId, Http2ErrorCode.RefusedStream, input));
+                                return false;
+                            }
+                            else
                             {
                                 await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                     request, endStreamFlag, output, isPromise));
@@ -1616,7 +1637,14 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             // RFC 8441 §3: the proxy manages ENABLE_CONNECT_PROTOCOL independently per leg.
                             sawEnableConnectProtocol = true;
-                            if (isClient)
+
+                            // RFC 8441 §3: value MUST be 0 or 1; any other value is a connection error.
+                            if (value != 0 && value != 1)
+                            {
+                                invalidSettings = true;
+                                invalidSettingsError = Http2ErrorCode.ProtocolError;
+                            }
+                            else if (isClient)
                             {
                                 // Suppress the client's ENABLE_CONNECT_PROTOCOL preference - do not relay
                                 // it to the server; the proxy negotiates RFC 8441 with each leg independently.
@@ -1627,13 +1655,26 @@ namespace Titanium.Web.Proxy.Http2
                             }
                             else
                             {
-                                // Server advertises its RFC 8441 support - record it.
-                                localSettings.EnableConnectProtocol = (value == 1);
-                                // Overwrite with what the proxy chooses to advertise to the client.
-                                buffer[valueOffset] = 0;
-                                buffer[valueOffset + 1] = 0;
-                                buffer[valueOffset + 2] = 0;
-                                buffer[valueOffset + 3] = (byte)(enableRfc8441 ? 1 : 0);
+                                // RFC 8441 §3: a sender MUST NOT send 0 after previously sending 1.
+                                if (value == 0 && localSettings.EnableConnectProtocolEverSet)
+                                {
+                                    invalidSettings = true;
+                                    invalidSettingsError = Http2ErrorCode.ProtocolError;
+                                }
+                                else
+                                {
+                                    localSettings.EnableConnectProtocol = (value == 1);
+                                    if (value == 1) localSettings.EnableConnectProtocolEverSet = true;
+
+                                    // Overwrite with what the proxy chooses to advertise to the client.
+                                    int wireValue = enableRfc8441 ? 1 : 0;
+                                    buffer[valueOffset] = 0;
+                                    buffer[valueOffset + 1] = 0;
+                                    buffer[valueOffset + 2] = 0;
+                                    buffer[valueOffset + 3] = (byte)wireValue;
+                                    if (wireValue == 1)
+                                        connectionState.DownstreamAdvertisedEnableConnect = true;
+                                }
                             }
                         }
                     }
@@ -1677,6 +1718,7 @@ namespace Titanium.Web.Proxy.Http2
                         buffer[length + 5] = 1;
                         length += 6;
                         frameHeader.Length = length;
+                        connectionState.DownstreamAdvertisedEnableConnect = true;
                     }
                 }
 
