@@ -160,12 +160,27 @@ public class Request : RequestResponseBase
     internal bool CancelRequest { get; set; }
 
     /// <summary>
+    ///     RFC 8441: the value of the <c>:protocol</c> pseudo-header for HTTP/2 extended CONNECT
+    ///     requests (e.g. <c>"websocket"</c>). <see langword="null"/> for all other requests.
+    ///     This property allows <c>BeforeRequest</c> handlers to identify a WebSocket-over-HTTP/2
+    ///     upgrade and inspect or modify it before the tunnel is established.
+    /// </summary>
+    public string? ExtendedConnectProtocol { get; internal set; }
+
+    /// <summary>
     ///     Does this request has an upgrade to websocket header?
+    ///     Returns <see langword="true"/> for both HTTP/1.1 WebSocket upgrades (<c>Upgrade: websocket</c>)
+    ///     and HTTP/2 extended CONNECT tunnels (<c>CONNECT :protocol=websocket</c>, RFC 8441).
     /// </summary>
     public bool UpgradeToWebSocket
     {
         get
         {
+            // HTTP/2 extended CONNECT (RFC 8441)
+            if (ExtendedConnectProtocol != null)
+                return string.Equals(ExtendedConnectProtocol, "websocket", StringComparison.OrdinalIgnoreCase);
+
+            // HTTP/1.1 Upgrade header
             var headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
 
             if (headerValue == null) return false;
