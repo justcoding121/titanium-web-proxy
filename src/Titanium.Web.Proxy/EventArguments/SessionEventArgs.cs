@@ -69,7 +69,7 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     public TimeSpan? RequestTimeout { get; set; }
 
-    private bool HasMulipartEventSubscribers => MultipartRequestPartSent != null;
+    internal bool HasMulipartEventSubscribers => MultipartRequestPartSent != null;
 
     /// <summary>
     /// Should we send the request again ?
