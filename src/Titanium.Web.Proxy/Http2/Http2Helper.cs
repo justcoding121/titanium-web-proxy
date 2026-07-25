@@ -1164,111 +1164,146 @@ namespace Titanium.Web.Proxy.Http2
                     // safe regardless of what happens to the payload below.
                     await GrantReceiveCreditAsync(streamId, length);
 
-                    if (isClient)
-                        args.OnDataSent(buffer, 0, read);
-                    else
-                        args.OnDataReceived(buffer, 0, read);
-
-                    rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
-
-                    bool padded = (flags & Http2FrameFlag.Padded) != 0;
-                    bool endStreamFlag = (flags & Http2FrameFlag.EndStream) != 0;
-                    if (endStreamFlag)
+                    // RFC 8441: extended CONNECT tunnel - route frame payload directly to the per-stream
+                    // channel rather than the normal body-buffering path. The channel is created by
+                    // BridgeOnBeforeRequest before the tunnel task starts, so it is always populated
+                    // before the first DATA frame for the stream can be processed here.
+                    if (isClient
+                        && connectionState.Streams.TryGetValue(streamId, out var tunnelStreamState)
+                        && tunnelStreamState.IsExtendedConnect
+                        && tunnelStreamState.InboundTunnelChannel != null)
                     {
-                        endStream = true;
-
-                        // Matches HTTP/1.x's RequestSentAt/MarkComplete timing marks for the with-body case
-                        // (the headers-only/trailer-terminated case is stamped above).
-                        if (isClient) args.Timing?.MarkRequestSent();
-                        else args.Timing?.MarkComplete();
-                    }
-
-                    // HTTP/2 multipart/form-data boundary-aware streaming observation (purely observational).
-                    if (isClient && args.HasMulipartEventSubscribers)
-                    {
-                        var mpContentType = args.HttpClient.Request.ContentType;
-                        if (mpContentType != null &&
-                            mpContentType.Contains("multipart/form-data", StringComparison.OrdinalIgnoreCase))
+                        bool endStreamFlag = (flags & Http2FrameFlag.EndStream) != 0;
+                        if (endStreamFlag)
                         {
-                            if (!connectionState.MultipartObservers.TryGetValue(streamId, out var mpObserver))
+                            endStream = true;
+                            tunnelStreamState.InboundTunnelChannel.Writer.TryComplete();
+                        }
+                        else
+                        {
+                            int dataOff = (flags & Http2FrameFlag.Padded) != 0 ? 1 : 0;
+                            int dataLen = (flags & Http2FrameFlag.Padded) != 0 ? length - 1 - buffer[0] : length;
+                            if (dataLen < 0) dataLen = 0;
+                            if (dataLen > 0)
                             {
-                                var mpBoundary = HttpHelper.GetBoundaryFromContentType(mpContentType).ToString();
-                                var newObserver = MultipartStreamObserver.TryCreate(
-                                    mpContentType,
-                                    headers => args.OnMultipartRequestPartSent(mpBoundary.AsSpan(), headers),
-                                    null);
-                                if (newObserver != null)
+                                var chunk = new byte[dataLen];
+                                Buffer.BlockCopy(buffer, dataOff, chunk, 0, dataLen);
+                                await tunnelStreamState.InboundTunnelChannel.Writer.WriteAsync(
+                                    new ReadOnlyMemory<byte>(chunk), cancellationToken);
+                            }
+                        }
+
+                        rr = args.HttpClient.Request; // required for the endStream cleanup block below
+                        sendPacket = false;
+                    }
+                    else
+                    {
+                        if (isClient)
+                            args.OnDataSent(buffer, 0, read);
+                        else
+                            args.OnDataReceived(buffer, 0, read);
+
+                        rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
+
+                        bool padded = (flags & Http2FrameFlag.Padded) != 0;
+                        bool endStreamFlag = (flags & Http2FrameFlag.EndStream) != 0;
+                        if (endStreamFlag)
+                        {
+                            endStream = true;
+
+                            // Matches HTTP/1.x's RequestSentAt/MarkComplete timing marks for the with-body case
+                            // (the headers-only/trailer-terminated case is stamped above).
+                            if (isClient) args.Timing?.MarkRequestSent();
+                            else args.Timing?.MarkComplete();
+                        }
+
+                        // HTTP/2 multipart/form-data boundary-aware streaming observation (purely observational).
+                        if (isClient && args.HasMulipartEventSubscribers)
+                        {
+                            var mpContentType = args.HttpClient.Request.ContentType;
+                            if (mpContentType != null &&
+                                mpContentType.Contains("multipart/form-data", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (!connectionState.MultipartObservers.TryGetValue(streamId, out var mpObserver))
                                 {
-                                    connectionState.MultipartObservers.TryAdd(streamId, newObserver);
-                                    mpObserver = newObserver;
+                                    var mpBoundary = HttpHelper.GetBoundaryFromContentType(mpContentType).ToString();
+                                    var newObserver = MultipartStreamObserver.TryCreate(
+                                        mpContentType,
+                                        headers => args.OnMultipartRequestPartSent(mpBoundary.AsSpan(), headers),
+                                        null);
+                                    if (newObserver != null)
+                                    {
+                                        connectionState.MultipartObservers.TryAdd(streamId, newObserver);
+                                        mpObserver = newObserver;
+                                    }
+                                }
+
+                                if (mpObserver != null)
+                                {
+                                    int mpOffset = padded ? 1 : 0;
+                                    int mpLength = padded ? length - 1 - buffer[0] : length;
+                                    if (mpLength > 0)
+                                        mpObserver.Observe(new ReadOnlySpan<byte>(buffer, mpOffset, mpLength));
                                 }
                             }
+                        }
 
-                            if (mpObserver != null)
+                        if (rr.Http2IgnoreBodyFrames)
+                        {
+                            sendPacket = false;
+                        }
+
+                        if (rr.ReadHttp2BodyTaskCompletionSource != null)
+                        {
+                            // Get body method was called in the "before" event handler
+
+                            var data = rr.Http2BodyData;
+                            int offset = 0;
+                            if (padded)
                             {
-                                int mpOffset = padded ? 1 : 0;
-                                int mpLength = padded ? length - 1 - buffer[0] : length;
-                                if (mpLength > 0)
-                                    mpObserver.Observe(new ReadOnlySpan<byte>(buffer, mpOffset, mpLength));
+                                offset++;
+                                length--;
+                                length -= buffer[0];
                             }
+
+                            if (data == null)
+                                throw new InvalidOperationException("HTTP/2 body buffering was requested without a buffer.");
+
+                            data.Write(buffer, offset, length);
                         }
-                    }
-
-                    if (rr.Http2IgnoreBodyFrames)
-                    {
-                        sendPacket = false;
-                    }
-
-                    if (rr.ReadHttp2BodyTaskCompletionSource != null)
-                    {
-                        // Get body method was called in the "before" event handler
-
-                        var data = rr.Http2BodyData;
-                        int offset = 0;
-                        if (padded)
+                        else if (!rr.Http2IgnoreBodyFrames && !rr.IsBodyRead &&
+                                 (isClient
+                                     ? args.Server.ShouldCallBeforeRequestBodyWrite()
+                                     : args.Server.ShouldCallBeforeResponseBodyWrite()))
                         {
-                            offset++;
-                            length--;
-                            length -= buffer[0];
+                            // per-DATA-frame inspection/modification hook (streams without buffering the whole body)
+                            int dataOffset = 0;
+                            int dataLength = length;
+                            if (padded)
+                            {
+                                var padLength = buffer[0];
+                                dataOffset = 1;
+                                dataLength = length - 1 - padLength;
+                                if (dataLength < 0) dataLength = 0;
+                            }
+
+                            var dataBytes = new byte[dataLength];
+                            Buffer.BlockCopy(buffer, dataOffset, dataBytes, 0, dataLength);
+
+                            var bodyWriteArgs = new BeforeBodyWriteEventArgs(args, dataBytes, true, endStreamFlag);
+                            if (isClient)
+                                await args.Server.OnBeforeRequestBodyWrite(bodyWriteArgs);
+                            else
+                                await args.Server.OnBeforeResponseBodyWrite(bodyWriteArgs);
+
+                            var outBytes = bodyWriteArgs.BodyBytes ?? Array.Empty<byte>();
+
+                            await lockedOutputWrite(() => SendData(frameHeader, frameHeaderBuffer, streamId, outBytes,
+                                endStreamFlag, remoteSettings.MaxFrameSize, outboundFlow, output, cancellationToken));
+
+                            // we have emitted our own (possibly re-sized) DATA frame(s); suppress the default relay
+                            sendPacket = false;
                         }
-
-                        if (data == null)
-                            throw new InvalidOperationException("HTTP/2 body buffering was requested without a buffer.");
-
-                        data.Write(buffer, offset, length);
-                    }
-                    else if (!rr.Http2IgnoreBodyFrames && !rr.IsBodyRead &&
-                             (isClient
-                                 ? args.Server.ShouldCallBeforeRequestBodyWrite()
-                                 : args.Server.ShouldCallBeforeResponseBodyWrite()))
-                    {
-                        // per-DATA-frame inspection/modification hook (streams without buffering the whole body)
-                        int dataOffset = 0;
-                        int dataLength = length;
-                        if (padded)
-                        {
-                            var padLength = buffer[0];
-                            dataOffset = 1;
-                            dataLength = length - 1 - padLength;
-                            if (dataLength < 0) dataLength = 0;
-                        }
-
-                        var dataBytes = new byte[dataLength];
-                        Buffer.BlockCopy(buffer, dataOffset, dataBytes, 0, dataLength);
-
-                        var bodyWriteArgs = new BeforeBodyWriteEventArgs(args, dataBytes, true, endStreamFlag);
-                        if (isClient)
-                            await args.Server.OnBeforeRequestBodyWrite(bodyWriteArgs);
-                        else
-                            await args.Server.OnBeforeResponseBodyWrite(bodyWriteArgs);
-
-                        var outBytes = bodyWriteArgs.BodyBytes ?? Array.Empty<byte>();
-
-                        await lockedOutputWrite(() => SendData(frameHeader, frameHeaderBuffer, streamId, outBytes,
-                            endStreamFlag, remoteSettings.MaxFrameSize, outboundFlow, output, cancellationToken));
-
-                        // we have emitted our own (possibly re-sized) DATA frame(s); suppress the default relay
-                        sendPacket = false;
                     }
                 }
                 else if (type == Http2FrameType.WindowUpdate)
@@ -1579,6 +1614,9 @@ namespace Titanium.Web.Proxy.Http2
                     connectionState.MultipartObservers.TryRemove(streamId, out _);
                     if (connectionState.Streams.TryRemove(streamId, out var resetStream))
                     {
+                        // RFC 8441: if the reset stream is an extended CONNECT tunnel, unblock the relay
+                        // that is reading from the inbound channel so it can shut down promptly.
+                        resetStream.InboundTunnelChannel?.Writer.TryComplete();
                         resetStream.Cancellation.Cancel();
                         connectionState.ClientSendFlow.RemoveStream(streamId);
                         connectionState.ServerSendFlow.RemoveStream(streamId);
