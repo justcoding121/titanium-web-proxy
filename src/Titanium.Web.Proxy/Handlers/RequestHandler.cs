@@ -506,12 +506,42 @@ public partial class ProxyServer
         var protocol = httpVersion.Major == 2 ? "2" : $"1.{httpVersion.Minor}";
         var entry = $"{protocol} {pseudonym}";
 
-        var existing = headers.GetFirstHeader("Via");
-        if (existing != null)
-            existing.SetValue($"{existing.Value}, {entry}");
+        var existing = headers.GetHeaders("Via");
+        if (existing is { Count: > 0 })
+        {
+            // Keep this operation idempotent only for the exact received-protocol
+            // entry. The same pseudonym with a different protocol represents a
+            // distinct hop and must not suppress the correct entry.
+            bool alreadyPresent = existing
+                .SelectMany(header => header.Value.Split(','))
+                .Any(value => ViaEntryMatches(value.Trim(), protocol, pseudonym));
+
+            if (!alreadyPresent)
+                existing[0].SetValue($"{existing[0].Value}, {entry}");
+
+            // Re-create all Via fields with a lowercase name. Lowercase is harmless
+            // for HTTP/1.x and mandatory when this collection is HPACK-encoded.
+            headers.RemoveHeader("Via");
+            foreach (var header in existing)
+                headers.AddHeader("via", header.Value);
+        }
         else
+        {
             // Lowercase is valid for HTTP/1.x and required when this collection is encoded as HTTP/2.
             headers.AddHeader("via", entry);
+        }
+    }
+
+    private static bool ViaEntryMatches(string viaEntry, string protocol, string pseudonym)
+    {
+        int separator = viaEntry.IndexOfAny(new[] { ' ', '\t' });
+        if (separator <= 0 ||
+            !string.Equals(viaEntry.Substring(0, separator), protocol, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return ViaTokenMatches(viaEntry, pseudonym);
     }
 
     /// <summary>
@@ -545,18 +575,41 @@ public partial class ProxyServer
         var receivedBy = viaEntry.Substring(receivedByStart, receivedByEnd - receivedByStart);
         if (string.Equals(receivedBy, pseudonym, StringComparison.OrdinalIgnoreCase)) return true;
 
+        // Normalize bracketed IPv6 received-by values before comparing with a bare
+        // IPv6 pseudonym. Any suffix after ']' must be an optional numeric port.
+        if (receivedBy.Length > 2 && receivedBy[0] == '[')
+        {
+            int closingBracket = receivedBy.IndexOf(']');
+            if (closingBracket > 1)
+            {
+                var host = receivedBy.Substring(1, closingBracket - 1);
+                var suffix = receivedBy.Substring(closingBracket + 1);
+                if (string.Equals(host, pseudonym, StringComparison.OrdinalIgnoreCase) &&
+                    (suffix.Length == 0 || IsNumericPortSuffix(suffix)))
+                {
+                    return true;
+                }
+            }
+        }
+
         // A configured pseudonym denotes the received-by host/token. Match an optional
         // numeric port, but never suffixes such as "my-proxy" or "proxy.example".
-        if (receivedBy.Length <= pseudonym.Length + 1 ||
-            receivedBy[pseudonym.Length] != ':' ||
+        if (receivedBy.Length <= pseudonym.Length ||
             !receivedBy.StartsWith(pseudonym, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        for (int i = pseudonym.Length + 1; i < receivedBy.Length; i++)
+        return IsNumericPortSuffix(receivedBy.Substring(pseudonym.Length));
+    }
+
+    private static bool IsNumericPortSuffix(string suffix)
+    {
+        if (suffix.Length < 2 || suffix[0] != ':') return false;
+
+        for (int i = 1; i < suffix.Length; i++)
         {
-            if (receivedBy[i] < '0' || receivedBy[i] > '9') return false;
+            if (suffix[i] < '0' || suffix[i] > '9') return false;
         }
 
         return true;

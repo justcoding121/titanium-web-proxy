@@ -127,6 +127,7 @@ namespace Titanium.Web.Proxy.Http2
                 connectionState.PendingFinalizations.Add(
                     FinalizeStreamAsync(leftover, onAfterResponse, logger));
             }
+            connectionState.MultipartObservers.Clear();
 
             if (!connectionState.PendingFinalizations.IsEmpty)
             {
@@ -305,6 +306,7 @@ namespace Titanium.Web.Proxy.Http2
             {
                 if (connectionState.Streams.TryRemove(removeStreamId, out var removedState))
                 {
+                    connectionState.MultipartObservers.TryRemove(removeStreamId, out _);
                     removedState.InboundTunnelChannel?.Writer.TryComplete(
                         new IOException("HTTP/2 stream removed due to protocol error."));
                     removedState.Cancellation.Cancel();
@@ -638,7 +640,11 @@ namespace Titanium.Web.Proxy.Http2
                         // launching its independent origin round trip, so do not process it twice here.
                         if (!request.CancelRequest)
                         {
-                            prepareRequestHeaders?.Invoke(request.Headers);
+                            // The h2-to-h1 bridge owns request preparation before it starts
+                            // its background origin operation; doing it here afterward races
+                            // with that operation and can mutate headers while they are sent.
+                            if (output is not NullOriginStream)
+                                prepareRequestHeaders?.Invoke(request.Headers);
                             if (output is not NullOriginStream &&
                                 !sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
                                 !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym))
@@ -1042,6 +1048,29 @@ namespace Titanium.Web.Proxy.Http2
                     }
                 }
 
+                if (type == Http2FrameType.Data && args == null)
+                {
+                    // DATA is flow-controlled at the connection level even when it arrives
+                    // for an already-closed stream. Return that connection credit, then reject
+                    // the frame locally instead of relaying it to the other leg.
+                    await GrantReceiveCreditAsync(streamId, length);
+
+                    bool isIdleStream = streamId > connectionState.LastClientStreamId || (streamId & 1) == 0;
+                    if (isIdleStream)
+                    {
+                        ReportException(logger, new ProxyHttpException(
+                            "HTTP/2 protocol error: DATA frame received for an idle stream.", null, null));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(
+                            new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
+                            Http2ErrorCode.ProtocolError, input));
+                        return;
+                    }
+
+                    await lockedOwnLegWrite(() => SendRstStreamAsync(
+                        new Http2FrameHeader(), new byte[9], streamId, Http2ErrorCode.StreamClosed, input));
+                    continue;
+                }
+
                 // HEADERS/CONTINUATION must always be decoded - even for a stream already answered
                 // synthetically - because HPACK's dynamic table is connection-scoped: skipping the decode
                 // of any header block silently desyncs this connection's decoder from the peer's encoder
@@ -1264,15 +1293,18 @@ namespace Titanium.Web.Proxy.Http2
                         }
 
                         // HTTP/2 multipart/form-data boundary-aware streaming observation (purely observational).
-                        if (isClient && args.HasMulipartEventSubscribers)
+                        if (isClient && args.HasMulipartEventSubscribers &&
+                            args.HttpClient.Request.IsMultipartFormData)
                         {
                             var mpContentType = args.HttpClient.Request.ContentType;
-                            if (mpContentType != null &&
-                                mpContentType.Contains("multipart/form-data", StringComparison.OrdinalIgnoreCase))
+                            if (mpContentType != null)
                             {
                                 if (!connectionState.MultipartObservers.TryGetValue(streamId, out var mpObserver))
                                 {
-                                    var mpBoundary = HttpHelper.GetBoundaryFromContentType(mpContentType).ToString();
+                                    var mpBoundaryMemory = HttpHelper.GetBoundaryFromContentType(mpContentType);
+                                    var mpBoundary = mpBoundaryMemory.IsEmpty
+                                        ? string.Empty
+                                        : mpBoundaryMemory.ToString();
                                     var newObserver = MultipartStreamObserver.TryCreate(
                                         mpContentType,
                                         headers => args.OnMultipartRequestPartSent(mpBoundary.AsSpan(), headers),
@@ -1288,6 +1320,7 @@ namespace Titanium.Web.Proxy.Http2
                                 {
                                     int mpOffset = padded ? 1 : 0;
                                     int mpLength = padded ? length - 1 - buffer[0] : length;
+                                    if (mpLength < 0) mpLength = 0;
                                     if (mpLength > 0)
                                         mpObserver.Observe(new ReadOnlySpan<byte>(buffer, mpOffset, mpLength));
                                 }
@@ -1468,6 +1501,7 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             if (kvp.Key > lastStreamId)
                             {
+                                connectionState.MultipartObservers.TryRemove(kvp.Key, out _);
                                 // RFC 8441: unblock any tunnel relay waiting on the inbound channel
                                 // so it can shut down promptly without waiting for more DATA frames
                                 // that the peer has already said it will not send.
@@ -1768,7 +1802,11 @@ namespace Titanium.Web.Proxy.Http2
                     if (connectionState.Streams.TryGetValue(streamId, out var closingStream))
                     {
                         if (isClient)
+                        {
                             closingStream.RequestClosed = true;
+                            if (closingStream.IsExtendedConnect)
+                                closingStream.InboundTunnelChannel?.Writer.TryComplete();
+                        }
                         else
                             closingStream.ResponseClosed = true;
 

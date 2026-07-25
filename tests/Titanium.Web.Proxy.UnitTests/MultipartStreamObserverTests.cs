@@ -35,6 +35,16 @@ public class MultipartStreamObserverTests
     }
 
     [TestMethod]
+    public void TryCreate_EmptyBoundary_ReturnsNull()
+    {
+        var observer = MultipartStreamObserver.TryCreate(
+            "multipart/form-data; boundary=",
+            null, null);
+
+        Assert.IsNull(observer);
+    }
+
+    [TestMethod]
     public void TryCreate_NullContentType_ReturnsNull()
     {
         var observer = MultipartStreamObserver.TryCreate(null, null, null);
@@ -239,5 +249,52 @@ public class MultipartStreamObserverTests
 
         Assert.IsFalse(active);
         Assert.AreEqual(1, callbacks);
+    }
+
+    [TestMethod]
+    public void Observe_BoundaryLikeHeaderLine_DoesNotResetHeaderParser()
+    {
+        HeaderCollection? captured = null;
+        var callbacks = 0;
+        var observer = MultipartStreamObserver.TryCreate(
+            "multipart/form-data; boundary=BOUND",
+            headers =>
+            {
+                captured = headers;
+                callbacks++;
+            },
+            null);
+        Assert.IsNotNull(observer);
+
+        var body = ToBytes(
+            "--BOUND\r\n" +
+            "X-First: one\r\n" +
+            "--BOUND\r\n" +
+            "X-Second: two\r\n\r\n" +
+            "value\r\n--BOUND--\r\n");
+
+        var active = observer!.Observe(body);
+
+        Assert.IsFalse(active);
+        Assert.AreEqual(1, callbacks);
+        Assert.AreEqual("one", captured?.GetFirstHeader("X-First")?.Value);
+        Assert.AreEqual("two", captured?.GetFirstHeader("X-Second")?.Value);
+    }
+
+    [TestMethod]
+    public void TryCreate_UsesBoundaryParameterName_NotSubstringInAnotherParameter()
+    {
+        HeaderCollection? captured = null;
+        var observer = MultipartStreamObserver.TryCreate(
+            "multipart/form-data; note=boundary=decoy; boundary=REAL",
+            headers => captured = headers,
+            null);
+        Assert.IsNotNull(observer);
+
+        observer!.Observe(ToBytes(
+            "--REAL\r\nContent-Disposition: form-data; name=\"field\"\r\n\r\n" +
+            "value\r\n--REAL--\r\n"));
+
+        Assert.IsNotNull(captured);
     }
 }

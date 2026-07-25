@@ -131,6 +131,7 @@ internal sealed class Http2ConnectionState
     public void RemoveStream(int streamId)
     {
         Streams.TryRemove(streamId, out _);
+        MultipartObservers.TryRemove(streamId, out _);
         ClientSendFlow.RemoveStream(streamId);
         ServerSendFlow.RemoveStream(streamId);
     }
