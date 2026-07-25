@@ -14,6 +14,7 @@ using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
 using Titanium.Web.Proxy.Logging;
@@ -1182,6 +1183,37 @@ namespace Titanium.Web.Proxy.Http2
                         else args.Timing?.MarkComplete();
                     }
 
+                    // HTTP/2 multipart/form-data boundary-aware streaming observation (purely observational).
+                    if (isClient && args.MultipartRequestPartSent != null)
+                    {
+                        var mpContentType = args.HttpClient.Request.ContentType;
+                        if (mpContentType != null &&
+                            mpContentType.Contains("multipart/form-data", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (!connectionState.MultipartObservers.TryGetValue(streamId, out var mpObserver))
+                            {
+                                var mpBoundary = HttpHelper.GetBoundaryFromContentType(mpContentType).ToString();
+                                var newObserver = MultipartStreamObserver.TryCreate(
+                                    mpContentType,
+                                    headers => args.OnMultipartRequestPartSent(mpBoundary.AsSpan(), headers),
+                                    null);
+                                if (newObserver != null)
+                                {
+                                    connectionState.MultipartObservers.TryAdd(streamId, newObserver);
+                                    mpObserver = newObserver;
+                                }
+                            }
+
+                            if (mpObserver != null)
+                            {
+                                int mpOffset = padded ? 1 : 0;
+                                int mpLength = padded ? length - 1 - buffer[0] : length;
+                                if (mpLength > 0)
+                                    mpObserver.Observe(new ReadOnlySpan<byte>(buffer, mpOffset, mpLength));
+                            }
+                        }
+                    }
+
                     if (rr.Http2IgnoreBodyFrames)
                     {
                         sendPacket = false;
@@ -1544,6 +1576,7 @@ namespace Titanium.Web.Proxy.Http2
                     // stream error: cancel any waiter/synthetic task scoped to this stream and stop tracking
                     // its flow-control windows and session mapping - regardless of the error code, the
                     // stream is now closed.
+                    connectionState.MultipartObservers.TryRemove(streamId, out _);
                     if (connectionState.Streams.TryRemove(streamId, out var resetStream))
                     {
                         resetStream.Cancellation.Cancel();
@@ -1640,6 +1673,9 @@ namespace Titanium.Web.Proxy.Http2
 
                 if (endStream)
                 {
+                    if (isClient)
+                        connectionState.MultipartObservers.TryRemove(streamId, out _);
+
                     if (connectionState.Streams.TryGetValue(streamId, out var closingStream))
                     {
                         if (isClient)

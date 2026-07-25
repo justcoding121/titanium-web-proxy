@@ -49,6 +49,7 @@ public class ServerRemoteEndPointTests
         server.HandleRequest(context => context.Response.WriteAsync("ok"));
 
         var upstream = testSuite.GetProxy();
+        upstream.ViaHeaderPseudonym = "upstream-proxy";
         var proxy = testSuite.GetProxy(upstream);
 
         IPEndPoint? capturedRemote = null;
