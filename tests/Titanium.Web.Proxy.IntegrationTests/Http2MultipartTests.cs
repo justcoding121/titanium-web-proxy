@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -57,7 +58,20 @@ public class Http2MultipartTests
         // OnMultipartRequestPartSent events as HTTP/1.x does.
         using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
-        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        // The origin handler MUST drain the request body before responding.
+        // Without this, in the H2-to-H2 direct path Kestrel responds immediately (before reading the
+        // body), which lets receiveRelay forward the 200 to the raw client before sendRelay has
+        // processed the DATA frame and fired the multipart observer. Draining first creates a strict
+        // ordering: DATA processed → events fired → Kestrel responds → raw client asserts.
+        var bodyReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        server.HandleRequest(async context =>
+        {
+            await context.Request.Body.CopyToAsync(Stream.Null, context.RequestAborted);
+            bodyReceived.TrySetResult(true);
+            context.Response.StatusCode = 200;
+            await context.Response.WriteAsync("ok");
+        });
 
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
@@ -106,8 +120,9 @@ public class Http2MultipartTests
             } while (frame.Type != Http2FrameType.Data || (frame.Flags & Http2FrameFlag.EndStream) == 0);
         }
 
-        // Give any in-flight observer callbacks a moment to complete
-        await Task.Delay(100);
+        // The body-received signal ensures the proxy's DATA frame (where multipart events fire)
+        // was fully processed before we assert - the origin handler only signals after draining.
+        await bodyReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.IsTrue(partHeaders.Count >= 1,
             $"Expected at least 1 part event, got {partHeaders.Count}. " +
