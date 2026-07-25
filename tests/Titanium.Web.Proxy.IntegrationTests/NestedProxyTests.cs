@@ -24,7 +24,9 @@ public class NestedProxyTests
         });
 
         var proxy1 = testSuite.GetProxy();
+        proxy1.ViaHeaderPseudonym = "proxy1";
         var proxy2 = testSuite.GetProxy(proxy1);
+        proxy2.ViaHeaderPseudonym = "proxy2";
 
         var client = testSuite.GetClient(proxy2);
 
@@ -49,6 +51,7 @@ public class NestedProxyTests
         });
 
         var proxy1 = testSuite.GetProxy();
+        proxy1.ViaHeaderPseudonym = "proxy1";
         proxy1.ProxyBasicAuthenticateFunc = async (session, username, password) =>
         {
             session.UserData = "Test";
@@ -56,6 +59,7 @@ public class NestedProxyTests
         };
 
         var proxy2 = testSuite.GetProxy();
+        proxy2.ViaHeaderPseudonym = "proxy2";
 
         proxy1.GetCustomUpStreamProxyFunc = async session =>
         {
@@ -86,6 +90,7 @@ public class NestedProxyTests
 
         // a working upstream proxy the failover callback will switch to
         var workingUpstream = testSuite.GetProxy();
+        workingUpstream.ViaHeaderPseudonym = "working-upstream";
 
         var proxy = testSuite.GetProxy();
         var failoverInvoked = false;

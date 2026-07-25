@@ -30,6 +30,7 @@ public class SelectiveUpstreamProxyTests
         });
 
         var upstream = testSuite.GetProxy();
+        upstream.ViaHeaderPseudonym = "upstream-proxy";
         var upstreamConnectCount = 0;
         var upstreamEp = upstream.ProxyEndPoints.OfType<ExplicitProxyEndPoint>().First();
         upstreamEp.BeforeTunnelConnectRequest += (_, _) =>
