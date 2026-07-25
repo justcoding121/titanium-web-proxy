@@ -7,8 +7,10 @@ namespace Titanium.Web.Proxy.IntegrationTests.Setup;
 internal static class TestCertificateAuthority
 {
     private static readonly Lazy<X509Certificate2> rootCertificate = new(CreateRootCertificate);
+    private static readonly Lazy<X509Certificate2> serverCertificate = new(CreateServerCertificate);
 
     public static X509Certificate2 RootCertificate => rootCertificate.Value;
+    public static X509Certificate2 ServerCertificate => serverCertificate.Value;
 
     public static bool Validate(X509Certificate certificate, SslPolicyErrors sslPolicyErrors)
     {
@@ -39,6 +41,13 @@ internal static class TestCertificateAuthority
                 loadedCertificate.Dispose();
             }
         }
+    }
+
+    private static X509Certificate2 CreateServerCertificate()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.CertificateManager.RootCertificate = RootCertificate;
+        return proxy.CertificateManager.CreateServerCertificate("localhost").GetAwaiter().GetResult();
     }
 
     private static X509Certificate2 CreateRootCertificate()

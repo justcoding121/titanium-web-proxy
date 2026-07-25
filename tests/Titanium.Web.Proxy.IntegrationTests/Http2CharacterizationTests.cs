@@ -31,9 +31,7 @@ public class Http2CharacterizationTests
 {
     private static X509Certificate2 CreateOriginCertificate()
     {
-        using var dummyProxy = new ProxyServer(false, false, false);
-        dummyProxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
-        return dummyProxy.CertificateManager.CreateServerCertificate("localhost").Result;
+        return TestCertificateAuthority.ServerCertificate;
     }
 
     /// <summary>
